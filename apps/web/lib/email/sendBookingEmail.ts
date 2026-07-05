@@ -6,7 +6,7 @@ import {
   type BookingEmailRowOverlay,
 } from "@/lib/email/resolveBookingEmailFields";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
-import type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
+import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
@@ -26,6 +26,7 @@ import {
   buildSavedQuoteRecoveryTemplateData,
   customerNameFromEmail,
 } from "@/lib/templates/bookingEmailTemplateData";
+import type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
 
 export type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
 export { buildBookingConfirmedTemplateData };
@@ -163,7 +164,7 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   const from = getDefaultFromAddress();
   const total = p.totalPaidZar.toLocaleString("en-ZA");
   const appUrl = getPublicAppUrlBase();
-  const accountBookingsUrl = `${appUrl}/dashboard/bookings`;
+  const accountBookingsUrl = customerAccountBookingsUrl(appUrl);
   const bookAgainUrl = `${appUrl}/book`;
 
   const service = escapeHtml(p.serviceLabel);
@@ -1079,7 +1080,7 @@ export async function sendCustomerTwoHourReminderEmail(params: {
   if (paused) return paused;
   if (!process.env.RESEND_API_KEY?.trim()) return { sent: false, error: "Email not configured" };
   const appUrl = getPublicAppUrlBase();
-  const dashUrl = `${appUrl}/dashboard/bookings`;
+  const dashUrl = customerAccountBookingsUrl(appUrl);
 
   return sendCustomerEmailWithDbTemplateFallback({
     to: params.customerEmail,

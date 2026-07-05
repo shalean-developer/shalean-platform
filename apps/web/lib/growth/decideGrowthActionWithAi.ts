@@ -141,7 +141,7 @@ export async function decideGrowthActionWithAi(
       admin,
     );
 
-    let candidates = buildGrowthRoiCandidates(input, w, baseConvEmail, baseConvSms);
+    const candidates = buildGrowthRoiCandidates(input, w, baseConvEmail, baseConvSms);
 
     if (input.discountBudgetOk === false) {
       for (const c of candidates) {

@@ -31,7 +31,17 @@ export type OpsSnapshotRow = {
   created_at: string | null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
+  is_recurring_generated?: boolean | null;
+  is_monthly_billing_booking?: boolean | null;
+  billing_type?: string | null;
+  monthly_invoice_id?: string | null;
+  recurring_id?: string | null;
+  payment_status?: string | null;
 };
+
+/** Shared select for ops attention counts — keep in sync across admin list + ops-snapshot routes. */
+export const OPS_SNAPSHOT_BOOKING_SELECT =
+  "id,status,date,time,cleaner_id,team_id,dispatch_status,became_pending_at,created_at,total_paid_zar,amount_paid_cents,is_recurring_generated,is_monthly_billing_booking,billing_type,monthly_invoice_id,recurring_id,payment_status";
 
 const DEFAULT_SLA_MIN = 10;
 
@@ -67,6 +77,17 @@ function zar(r: OpsSnapshotRow): number {
 
 function isPaid(r: OpsSnapshotRow): boolean {
   return zar(r) > 0;
+}
+
+/** Recurring / monthly visits are assignable before per-visit Paystack payment lands. */
+export function isRecurringOrMonthlyAssignable(r: OpsSnapshotRow): boolean {
+  if (r.is_recurring_generated === true) return true;
+  if (r.is_monthly_billing_booking === true) return true;
+  if (String(r.billing_type ?? "").toLowerCase() === "monthly") return true;
+  if (String(r.monthly_invoice_id ?? "").trim()) return true;
+  if (String(r.recurring_id ?? "").trim()) return true;
+  const ps = String(r.payment_status ?? "").toLowerCase();
+  return ps === "pending_monthly" || ps === "monthly";
 }
 
 function hasAssignment(r: OpsSnapshotRow): boolean {
@@ -123,7 +144,7 @@ export function classifyAttentionQueue(
 
   if (isSlaBreachRow(r, nowMs, slaMinutes)) return "sla";
   if (ds === "unassignable" && noCleaner) return "unassignable";
-  if (noCleaner && isPaid(r)) return "unassigned";
+  if (noCleaner && (isPaid(r) || isRecurringOrMonthlyAssignable(r))) return "unassigned";
   if (noCleaner) {
     const startsIn = startsInMinutesFromNow(r.date, r.time, nowMs);
     if (startsIn != null && startsIn >= 0 && startsIn < 120) return "starting-soon";

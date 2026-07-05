@@ -14,6 +14,7 @@ import {
   isValidContactPhone,
 } from "@/lib/booking/contactPhoneValidation";
 import { getBookingLocationOptions } from "@/lib/locations/bookingLocations";
+import { useBookingV2LocationResolve } from "@/lib/booking-v2/useBookingV2LocationResolve";
 
 const contactPhoneRules = {
   required: "Enter a contact phone number",
@@ -222,6 +223,8 @@ export function PropertyAddressSection() {
     setSelectedAddressId(null);
     setValue("address", "", { shouldDirty: true, shouldValidate: true });
     setValue("suburb", "", { shouldDirty: true, shouldValidate: true });
+    setValue("serviceAreaLocationId", "", { shouldDirty: true });
+    setValue("serviceAreaCityId", "", { shouldDirty: true });
     setValue("city", "Cape Town", { shouldDirty: true });
     setValue("postalCode", "", { shouldDirty: true });
   }, [setValue]);
@@ -282,7 +285,26 @@ export function PropertyAddressSection() {
 
   const showSavedMode = Boolean(user && hasSavedAddresses && addressMode === "saved" && selectedAddress);
   const addressValue = watch("address");
+  const suburbValue = watch("suburb");
   const showBookForSomeoneHint = addressMode === "custom" && !addressValue?.trim();
+
+  const { location: resolvedLocation, loading: locationLoading, error: locationError } =
+    useBookingV2LocationResolve(suburbValue ?? "");
+
+  useEffect(() => {
+    if (!suburbValue?.trim()) {
+      setValue("serviceAreaLocationId", "", { shouldDirty: true });
+      setValue("serviceAreaCityId", "", { shouldDirty: true });
+      return;
+    }
+    if (resolvedLocation) {
+      setValue("serviceAreaLocationId", resolvedLocation.locationId, { shouldDirty: true });
+      setValue("serviceAreaCityId", resolvedLocation.cityId ?? "", { shouldDirty: true });
+    } else if (!locationLoading) {
+      setValue("serviceAreaLocationId", "", { shouldDirty: true });
+      setValue("serviceAreaCityId", "", { shouldDirty: true });
+    }
+  }, [suburbValue, resolvedLocation, locationLoading, setValue]);
 
   return (
     <section className="space-y-4">
@@ -429,6 +451,12 @@ export function PropertyAddressSection() {
                 )}
               />
               <FieldError message={errors.suburb?.message} />
+              {locationLoading && suburbValue?.trim() ? (
+                <p className="mt-1 text-xs text-slate-500">Checking service area…</p>
+              ) : null}
+              {!locationLoading && locationError && suburbValue?.trim() ? (
+                <p className="mt-1 text-xs text-red-500">{locationError}</p>
+              ) : null}
             </div>
             <div>
               <FieldLabel htmlFor="contactPhone" required>

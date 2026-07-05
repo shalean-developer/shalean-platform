@@ -64,7 +64,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const cleanerIds = [...new Set((rows ?? []).map((r) => String((r as { cleaner_id?: string }).cleaner_id ?? "")))].filter(
     Boolean,
   );
-  let cleanerNames = new Map<string, string>();
+  const cleanerNames = new Map<string, string>();
   if (cleanerIds.length > 0) {
     const { data: cleaners } = await admin.from("cleaners").select("id, full_name").in("id", cleanerIds);
     for (const c of cleaners ?? []) {

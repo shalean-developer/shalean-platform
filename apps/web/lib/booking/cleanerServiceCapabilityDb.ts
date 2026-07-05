@@ -16,7 +16,7 @@ export async function loadCleanerCapabilityColumnsById(
   if (ids.length === 0) return { ok: true, map };
 
   const sel = "id, can_do_deep_cleaning, can_do_move_cleaning";
-  let r = await admin.from("cleaners").select(sel).in("id", ids);
+  const r = await admin.from("cleaners").select(sel).in("id", ids);
   if (
     r.error &&
     (isUnknownColumnError(r.error, "can_do_deep_cleaning") ||

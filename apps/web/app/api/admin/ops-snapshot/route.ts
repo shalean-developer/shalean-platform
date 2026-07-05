@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { computeOpsSnapshotFromRows, type OpsSnapshotRow } from "@/lib/admin/opsSnapshot";
+import { computeOpsSnapshotFromRows, OPS_SNAPSHOT_BOOKING_SELECT, type OpsSnapshotRow } from "@/lib/admin/opsSnapshot";
 import { requireAdminFromRequest } from "@/lib/admin/requireAdmin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -19,9 +19,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await admin
     .from("bookings")
-    .select(
-      "id,status,date,time,cleaner_id,team_id,dispatch_status,became_pending_at,created_at,total_paid_zar,amount_paid_cents",
-    )
+    .select(OPS_SNAPSHOT_BOOKING_SELECT)
     .not("status", "in", "(completed,cancelled,failed)")
     .limit(3500);
 

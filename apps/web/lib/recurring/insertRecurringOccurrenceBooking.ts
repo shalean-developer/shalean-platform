@@ -21,6 +21,7 @@ import {
   resolveRecurringPreferredCleanerId,
 } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import { fetchLastAssignedCleanerForRecurringPlan } from "@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan";
+import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
 import { scheduleBookingPaymentRecoveryJobs } from "@/lib/booking/bookingPaymentRecoveryJobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -228,6 +229,14 @@ export async function insertRecurringOccurrenceBooking(
     customerEmail: email,
     createdAt: new Date().toISOString(),
   });
+
+  if (preferredCleanerId) {
+    await applyRecurringOccurrenceRosterContinuity(admin, {
+      bookingId: id,
+      recurringId: params.recurring.id,
+      leadCleanerId: preferredCleanerId,
+    });
+  }
 
   return { ok: true, bookingId: id, paystackReference };
 }

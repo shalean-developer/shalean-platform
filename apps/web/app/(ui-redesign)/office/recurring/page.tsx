@@ -323,13 +323,24 @@ export default function RecurringPage() {
   const { data, loading, error, refetch } = useAdminData<{ recurring: RecurringPlan[]; summary?: RecurringPageSummary }>(
     "/api/admin/recurring",
   );
-  const { data: cronHealth, refetch: refetchCronHealth } = useAdminData<{ jobs?: CronHealthJob[] }>(
-    "/api/admin/cron-health",
-  );
-  const cronWarning = recurringGeneratorCronWarning(
-    cronHealth?.jobs?.find((j) => j.job_name === "generate-recurring-bookings"),
-    formatCronTs,
-  );
+  const {
+    data: cronHealth,
+    loading: cronHealthLoading,
+    error: cronHealthError,
+    refetch: refetchCronHealth,
+  } = useAdminData<{ jobs?: CronHealthJob[] }>("/api/admin/cron-health");
+  const cronWarning = cronHealthLoading
+    ? null
+    : cronHealthError
+      ? {
+          show: true as const,
+          severity: "amber" as const,
+          message: `Could not load cron health (${cronHealthError}). The generator may still be running — check Ops Health or retry.`,
+        }
+      : recurringGeneratorCronWarning(
+          cronHealth?.jobs?.find((j) => j.job_name === "generate-recurring-bookings"),
+          formatCronTs,
+        );
   const plans = data?.recurring ?? [];
 
   const filtered = useMemo(() => {
@@ -625,7 +636,7 @@ export default function RecurringPage() {
             value={loading ? "—" : formatCurrency(draftTotalCents, "ZAR")}
             icon={FileText}
             cls="bg-blue-50 text-blue-700"
-            tooltip="Total on current-month draft invoices for active recurring customers. Compare with Outstanding on /office/invoices when all drafts are unpaid."
+            tooltip="Total on current-month draft invoices for active recurring customers. Compare with Unpaid on Monthly invoices when all drafts are unpaid."
             hint={loading || draftInvoiceCount === 0 ? undefined : `${draftInvoiceCount} draft invoice${draftInvoiceCount === 1 ? "" : "s"}`}
             href="/office/invoices"
           />

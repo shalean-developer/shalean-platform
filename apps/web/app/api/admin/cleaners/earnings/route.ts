@@ -210,7 +210,7 @@ export async function GET(request: Request) {
     });
   }
 
-  let q = admin
+  const q = admin
     .from("cleaner_earnings")
     .select("id, cleaner_id, booking_id, amount_cents, status, created_at, approved_at, paid_at, disbursement_id")
     .eq("cleaner_id", cleanerFilter)

@@ -23,36 +23,26 @@ test.describe("booking smoke", () => {
     await expect(page).toHaveURL(/\/book(\/|$|\?)/);
   });
 
-  test("widget quote API returns 200 with total_paid_zar", async ({ request }) => {
+  test("widget quote API returns 410 (retired)", async ({ request }) => {
     const res = await request.post("/api/booking/widget-quote", {
       data: widgetQuoteBody,
       headers: { "Content-Type": "application/json" },
     });
     const text = await res.text();
-    expect(res.status(), `body: ${text.slice(0, 500)}`).toBe(200);
-    const json = JSON.parse(text) as { total_paid_zar?: number };
-    expect(typeof json.total_paid_zar).toBe("number");
-    expect(json.total_paid_zar).toBeGreaterThan(0);
+    expect(res.status(), `body: ${text.slice(0, 500)}`).toBe(410);
+    const json = JSON.parse(text) as { retired?: boolean; successor?: string };
+    expect(json.retired).toBe(true);
+    expect(json.successor).toBe("/book");
   });
 
-  test("widget draft API returns 200 when E2E_WIDGET_DRAFT=1 and server has Supabase admin", async ({
-    request,
-  }) => {
-    const enabled = process.env.E2E_WIDGET_DRAFT === "1";
-    test.skip(
-      !enabled,
-      "Set E2E_WIDGET_DRAFT=1 to run this assertion. Requires apps/web env with working getSupabaseAdmin() " +
-        "(e.g. NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY on the server process).",
-    );
-
+  test("widget draft API returns 410 (retired)", async ({ request }) => {
     const res = await request.post("/api/booking/widget-draft", {
       data: widgetDraftBody,
       headers: { "Content-Type": "application/json" },
     });
     const text = await res.text();
-    expect(res.status(), `body: ${text.slice(0, 800)}`).toBe(200);
-    const json = JSON.parse(text) as { ok?: boolean; bookingId?: string };
-    expect(json.ok).toBe(true);
-    expect(json.bookingId).toMatch(/^[0-9a-f-]{36}$/i);
+    expect(res.status(), `body: ${text.slice(0, 800)}`).toBe(410);
+    const json = JSON.parse(text) as { retired?: boolean };
+    expect(json.retired).toBe(true);
   });
 });

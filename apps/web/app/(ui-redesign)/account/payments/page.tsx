@@ -1,9 +1,11 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo } from "react";
 import {
   AlertCircle,
   CheckCircle2,
+  Clock,
   CreditCard,
   Lock,
   ShieldCheck,
@@ -13,22 +15,41 @@ import { useBookings } from "@/hooks/useBookings";
 import { HelpCard } from "@/components/account/HelpCard";
 import { StatCard } from "@/components/account/StatCard";
 import { Button } from "@/components/ui/button";
+import {
+  customerPaymentRowDisplay,
+  type CustomerPaymentBadgeTone,
+} from "@/lib/dashboard/customerPaymentDisplay";
+import {
+  CUSTOMER_ACCOUNT_INVOICES_PATH,
+  customerBookingDetailPath,
+} from "@/lib/customer/customerAccountPaths";
 import { cn } from "@/lib/utils";
 
-function PaymentStatusBadge({ status }: { status: string }) {
-  const s = status?.toLowerCase() ?? "";
-  if (s === "cancelled" || s === "failed") {
-    return (
-      <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-semibold text-red-700">
-        <XCircle className="h-3 w-3" />
-        {s === "cancelled" ? "Refunded" : "Failed"}
-      </span>
-    );
-  }
+const BADGE_TONE_CLASS: Record<CustomerPaymentBadgeTone, string> = {
+  success: "bg-green-100 text-green-700",
+  warning: "bg-amber-100 text-amber-800",
+  neutral: "bg-gray-100 text-gray-700",
+  error: "bg-red-100 text-red-700",
+};
+
+const BADGE_ICON: Record<CustomerPaymentBadgeTone, typeof CheckCircle2> = {
+  success: CheckCircle2,
+  warning: Clock,
+  neutral: XCircle,
+  error: XCircle,
+};
+
+function PaymentStatusBadge({ label, tone }: { label: string; tone: CustomerPaymentBadgeTone }) {
+  const Icon = BADGE_ICON[tone];
   return (
-    <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-semibold text-green-700">
-      <CheckCircle2 className="h-3 w-3" />
-      Paid
+    <span
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold",
+        BADGE_TONE_CLASS[tone],
+      )}
+    >
+      <Icon className="h-3 w-3" />
+      {label}
     </span>
   );
 }
@@ -41,13 +62,18 @@ export default function AccountPaymentsPage() {
     [bookings],
   );
 
+  const rowDisplays = useMemo(
+    () => rows.map((b) => ({ booking: b, display: customerPaymentRowDisplay(b) })),
+    [rows],
+  );
+
   const stats = useMemo(() => {
-    const paid = rows.filter((b) => b.status !== "cancelled" && b.status !== "failed");
-    const totalPaid = paid.reduce((s, b) => s + b.priceZar, 0);
-    const txCount = paid.length;
+    const paidRows = rowDisplays.filter((r) => r.display.countsAsPaidTransaction);
+    const totalPaid = paidRows.reduce((s, r) => s + r.booking.priceZar, 0);
+    const txCount = paidRows.length;
     const avgSpend = txCount > 0 ? Math.round(totalPaid / txCount) : 0;
     return { totalPaid, txCount, avgSpend };
-  }, [rows]);
+  }, [rowDisplays]);
 
   if (loading) {
     return (
@@ -63,7 +89,6 @@ export default function AccountPaymentsPage() {
 
   return (
     <div className="space-y-8 pb-8">
-      {/* Header */}
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-gray-900">Payments</h1>
         <p className="mt-1 text-sm text-gray-500">
@@ -71,7 +96,6 @@ export default function AccountPaymentsPage() {
         </p>
       </div>
 
-      {/* Error */}
       {error ? (
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
           <AlertCircle className="h-4 w-4 shrink-0" />
@@ -82,7 +106,6 @@ export default function AccountPaymentsPage() {
         </div>
       ) : null}
 
-      {/* Stats */}
       {rows.length > 0 ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <StatCard
@@ -109,7 +132,6 @@ export default function AccountPaymentsPage() {
         </div>
       ) : null}
 
-      {/* Payment method info */}
       <div className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
         <div className="flex items-start justify-between gap-4">
           <div className="flex items-start gap-4">
@@ -117,25 +139,18 @@ export default function AccountPaymentsPage() {
               <CreditCard className="h-6 w-6 text-blue-600" strokeWidth={1.75} />
             </div>
             <div>
-              <p className="font-semibold text-gray-900">Paystack Payments</p>
+              <p className="font-semibold text-gray-900">Paystack &amp; monthly billing</p>
               <p className="mt-1 text-sm text-gray-500">
-                All payments are processed securely via Paystack — South Africa&apos;s trusted payment platform. We support card, EFT, and mobile payments.
+                One-off bookings are paid securely via Paystack at checkout. Monthly plan visits appear on your invoice until billed.
               </p>
             </div>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0 rounded-xl"
-            onClick={() => alert("Payment method management coming soon.")}
-          >
-            Manage
+          <Button asChild variant="outline" size="sm" className="shrink-0 rounded-xl">
+            <Link href={CUSTOMER_ACCOUNT_INVOICES_PATH}>View invoices</Link>
           </Button>
         </div>
       </div>
 
-      {/* Payment history */}
       {rows.length === 0 ? (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-12 text-center shadow-sm">
           <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-blue-50">
@@ -151,30 +166,42 @@ export default function AccountPaymentsPage() {
           <h2 className="mb-4 text-base font-semibold text-gray-900">Payment history</h2>
           <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
             <div className="divide-y divide-gray-100">
-              {rows.map((b) => {
-                const paid = b.status !== "cancelled" && b.status !== "failed";
+              {rowDisplays.map(({ booking: b, display }) => {
                 const dateLabel = new Date(b.createdAt).toLocaleDateString("en-ZA", {
                   year: "numeric",
                   month: "short",
                   day: "numeric",
                 });
+                const iconTone = display.countsAsPaidTransaction ? "success" : display.rowMuted ? "error" : "warning";
                 return (
-                  <div
+                  <Link
                     key={b.id}
+                    href={customerBookingDetailPath(b.id)}
                     className={cn(
-                      "flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between",
-                      !paid && "bg-red-50/30",
+                      "flex flex-col gap-3 px-5 py-4 transition-colors hover:bg-gray-50 sm:flex-row sm:items-center sm:justify-between",
+                      display.rowMuted && "bg-red-50/30",
                     )}
                   >
                     <div className="flex items-center gap-4">
                       <div
                         className={cn(
                           "flex h-10 w-10 shrink-0 items-center justify-center rounded-xl",
-                          paid ? "bg-green-100" : "bg-red-100",
+                          iconTone === "success"
+                            ? "bg-green-100"
+                            : iconTone === "warning"
+                              ? "bg-amber-100"
+                              : "bg-red-100",
                         )}
                       >
                         <CreditCard
-                          className={cn("h-5 w-5", paid ? "text-green-600" : "text-red-500")}
+                          className={cn(
+                            "h-5 w-5",
+                            iconTone === "success"
+                              ? "text-green-600"
+                              : iconTone === "warning"
+                                ? "text-amber-600"
+                                : "text-red-500",
+                          )}
                           strokeWidth={1.75}
                         />
                       </div>
@@ -190,9 +217,9 @@ export default function AccountPaymentsPage() {
                       <p className="text-lg font-bold tabular-nums text-gray-900">
                         R {b.priceZar.toLocaleString("en-ZA")}
                       </p>
-                      <PaymentStatusBadge status={b.status} />
+                      <PaymentStatusBadge label={display.badgeLabel} tone={display.badgeTone} />
                     </div>
-                  </div>
+                  </Link>
                 );
               })}
             </div>
@@ -200,7 +227,6 @@ export default function AccountPaymentsPage() {
         </section>
       )}
 
-      {/* Security reassurance */}
       <div className="grid gap-4 sm:grid-cols-2">
         <div className="flex items-start gap-4 rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-green-100">
@@ -226,7 +252,6 @@ export default function AccountPaymentsPage() {
         </div>
       </div>
 
-      {/* Help */}
       <HelpCard />
     </div>
   );

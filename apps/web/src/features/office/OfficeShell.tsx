@@ -7,6 +7,7 @@ import Link from "next/link";
 import { signOut } from "@/lib/auth/authClient";
 import { RoleGuardRetryBanner, useRoleRouteGuard } from "@/lib/auth/useRoleRouteGuard";
 import { getSupabaseBrowser, getSupabaseSession } from "@/lib/supabase/browser";
+import { scheduleAppRouterPush, scheduleAppRouterRefresh } from "@/lib/navigation/scheduleAppRouterNavigation";
 import { AdminToastHost } from "@/components/admin/AdminToastHost";
 import { cn } from "@/lib/utils";
 import {
@@ -178,8 +179,8 @@ export function OfficeShell({ children }: { children: ReactNode }) {
 
   async function handleLogout() {
     await signOut();
-    router.push("/");
-    router.refresh();
+    scheduleAppRouterPush(router, "/");
+    scheduleAppRouterRefresh(router);
   }
 
   if (roleState.status === "unauthenticated" || roleState.status === "missing_profile" || roleState.status === "wrong_role") {

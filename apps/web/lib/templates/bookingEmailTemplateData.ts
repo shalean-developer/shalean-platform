@@ -2,6 +2,7 @@ import type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
 import type { LifecycleEmailBookingContext } from "@/lib/email/lifecycleEmails";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { getGoogleReviewWriteUrl } from "@/lib/seo/googleReviews";
+import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 
 export function customerNameFromEmail(email: string, name?: string | null): string {
   if (name?.trim()) return name.trim().slice(0, 120);
@@ -15,7 +16,7 @@ function reviewUrlForBooking(bookingId: string): string {
 }
 
 function accountUrl(): string {
-  return `${getPublicAppUrlBase().replace(/\/$/, "")}/dashboard/bookings`;
+  return customerAccountBookingsUrl(getPublicAppUrlBase());
 }
 
 function bookAgainUrl(): string {

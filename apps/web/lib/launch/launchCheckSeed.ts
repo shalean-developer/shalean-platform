@@ -36,6 +36,8 @@ export function buildLaunchCheckConfirmPayload(params: {
     serviceDetails: { bedrooms: 2, bathrooms: 1, extraRooms: 0 },
     address: "42 Launch Check Street",
     suburb: "Sea Point",
+    serviceAreaLocationId: "",
+    serviceAreaCityId: "",
     city: "Cape Town",
     postalCode: "8005",
     accessInstructions: "",

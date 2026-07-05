@@ -2,15 +2,15 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import { getServiceLabel, parseBookingServiceId } from "@/components/booking/serviceCategories";
 import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
 import { insertBookingRowUnified } from "@/lib/booking/createBookingUnified";
-import { canonicalizeBookingServiceSlug } from "@/lib/booking/canonicalizeBookingServiceSlug";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { ensureSalesDocumentCustomer } from "@/lib/salesDocument/ensureSalesDocumentCustomer";
+import { resolveSalesDocumentBookingServiceSlug } from "@/lib/salesDocument/resolveSalesDocumentBookingServiceSlug";
 import type {
+  SalesDocumentLineItem,
   SalesDocumentQuoteRequestDetails,
   SalesDocumentQuoteRequestSelectedItem,
 } from "@/lib/salesDocument/types";
@@ -29,12 +29,6 @@ function resolveBookingDate(preferred: string | null | undefined, dueDate: strin
   const due = String(dueDate ?? "").trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(due)) return due;
   return addDaysYmd(new Date(), 7);
-}
-
-function resolveServiceSlug(items: SalesDocumentQuoteRequestSelectedItem[]): string {
-  const service = items.find((i) => i.kind === "service");
-  if (service?.slug) return adminBookingServiceSlug(service.slug);
-  return "standard";
 }
 
 function resolveExtraSlugs(items: SalesDocumentQuoteRequestSelectedItem[]): string[] {
@@ -95,7 +89,7 @@ export async function createBookingFromSalesQuoteInvoice(
   const { data: quote, error: quoteErr } = await admin
     .from("sales_documents")
     .select(
-      "id, customer_id, customer_name, customer_email, customer_phone, request_details, notes, due_date, total_cents",
+      "id, customer_id, customer_name, customer_email, customer_phone, request_details, notes, due_date, total_cents, line_items",
     )
     .eq("id", quoteId)
     .maybeSingle();
@@ -118,6 +112,7 @@ export async function createBookingFromSalesQuoteInvoice(
     customer_email: string;
     customer_phone: string | null;
     request_details?: SalesDocumentQuoteRequestDetails | null;
+    line_items?: SalesDocumentLineItem[] | null;
     notes: string | null;
     due_date: string | null;
     total_cents: number;
@@ -128,7 +123,8 @@ export async function createBookingFromSalesQuoteInvoice(
 
   const requestDetails = q.request_details ?? null;
   const selectedItems = requestDetails?.selected_items ?? [];
-  const serviceSlug = canonicalizeBookingServiceSlug(resolveServiceSlug(selectedItems));
+  const lineItems = Array.isArray(q.line_items) ? q.line_items : [];
+  const serviceSlug = resolveSalesDocumentBookingServiceSlug({ requestDetails, lineItems });
   const serviceId = parseBookingServiceId(serviceSlug) ?? "standard";
   const rooms = Math.min(20, Math.max(1, Math.round(Number(requestDetails?.bedrooms ?? 1))));
   const bathrooms = Math.min(20, Math.max(1, Math.round(Number(requestDetails?.bathrooms ?? 1))));

@@ -1,9 +1,11 @@
 /**
  * Declarative channel fallback policy (Stripe-style).
  *
- * Implemented in code today:
- * - **Cleaner** `assigned` / `reminder_2h`: SMS only via `sendSmsFallback` with idempotency (`notifyBookingEvent.ts`).
- * - **Customer** `payment_confirmed`: **email first**; SMS only if there is no email or email send failed; **no customer WhatsApp** (policy: Meta WA → cleaners only).
+ * Implemented in code today (`communicationPolicy.ts`):
+ * - **SMS:** disabled globally unless `SMS_OUTBOUND_ENABLED=true`. When enabled, **cleaners only** (no admin/customer SMS).
+ * - **Email:** **admin and customers only** — cleaner profile emails are synthetic auth addresses and must not receive mail.
+ * - **Customer** `payment_confirmed`: email first; SMS paths remain in code but are blocked by policy; no customer WhatsApp.
+ * - **Cleaner** `assigned` / `reminder_2h` / dispatch: SMS when re-enabled; WhatsApp where configured.
  *
  * Future: mirror rows in a `notification_rules` table (event_type, primary_channel, fallback_channel) and hydrate here.
  */

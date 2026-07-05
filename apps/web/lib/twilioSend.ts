@@ -1,4 +1,8 @@
 import twilio from "twilio";
+import {
+  getSmsOutboundDecision,
+  type CommunicationRecipientKind,
+} from "@/lib/notifications/communicationPolicy";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 
 function normalizeToE164(raw: string): string | null {
@@ -57,7 +61,17 @@ export function describeTwilioSendError(e: unknown): string {
  * Sends SMS via Twilio. Server-only.
  * Env: TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER (or TWILIO_FROM_NUMBER).
  */
-export async function sendSms(params: { toPhone: string; message: string }): Promise<SendSmsResult> {
+export async function sendSms(params: {
+  toPhone: string;
+  message: string;
+  /** Defaults to `cleaner` (dispatch offer SMS). */
+  recipientKind?: CommunicationRecipientKind;
+}): Promise<SendSmsResult> {
+  const smsDecision = getSmsOutboundDecision(params.recipientKind ?? "cleaner");
+  if (!smsDecision.allowed) {
+    return { ok: false, error: smsDecision.reason };
+  }
+
   const sid = process.env.TWILIO_ACCOUNT_SID?.trim();
   const token = process.env.TWILIO_AUTH_TOKEN?.trim();
   const from =

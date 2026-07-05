@@ -24,15 +24,10 @@ const imageRemotePatterns = [
 ];
 
 /**
- * Phase 4 cutover redirects — toggle via ENABLE_PORTAL_REDIRECTS=1 env var.
- * Set to "1" in production Vercel once each portal reaches full parity.
- *
- * /dashboard  → /account   (customer portal)
- * /cleaner    → /jobs       (cleaner workspace)  
- * /admin      → /office     (admin console)
+ * Customer portal cutover — legacy `/dashboard/*` → `/account/*`.
+ * Cleaner and admin cutovers are handled separately below.
  */
 function portalCutoverRedirects() {
-  if (process.env.ENABLE_PORTAL_REDIRECTS !== "1") return [];
   return [
     {
       source: "/dashboard",
@@ -42,26 +37,6 @@ function portalCutoverRedirects() {
     {
       source: "/dashboard/:path*",
       destination: "/account/:path*",
-      permanent: false,
-    },
-    {
-      source: "/cleaner/dashboard",
-      destination: "/jobs",
-      permanent: false,
-    },
-    {
-      source: "/cleaner/dashboard/:path*",
-      destination: "/jobs/:path*",
-      permanent: false,
-    },
-    {
-      source: "/admin",
-      destination: "/office",
-      permanent: false,
-    },
-    {
-      source: "/admin/:path*",
-      destination: "/office/:path*",
       permanent: false,
     },
   ];

@@ -37,6 +37,7 @@ export type FunnelIntelMetrics = {
   conversionRatePct: number;
   funnelStartSessions: number;
   reachedPaymentSessions: number;
+  completedPaymentSessions?: number;
   paystackAbandonmentPct: number;
   paystackOpened: number;
   paystackCompleted: number;
@@ -75,6 +76,20 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
     });
   }
 
+  const paid = m.completedPaymentSessions ?? m.paystackCompleted;
+  if (m.reachedPaymentSessions >= 5 && paid < m.reachedPaymentSessions) {
+    const dropPct = pct(m.reachedPaymentSessions - paid, m.reachedPaymentSessions);
+    if (dropPct >= 15) {
+      out.push({
+        id: "payment_completion_dropoff",
+        severity: dropPct >= 30 ? "warning" : "info",
+        category: "Payments",
+        title: "Checkout-to-paid drop-off",
+        detail: `${dropPct.toFixed(1)}% of sessions that reached checkout did not complete payment (${paid}/${m.reachedPaymentSessions}).`,
+      });
+    }
+  }
+
   const errTotal = m.errorsByStep.reduce((s, r) => s + r.count, 0);
   if (errTotal >= 15) {
     const top = [...m.errorsByStep].sort((a, b) => b.count - a.count)[0];
@@ -105,7 +120,10 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
       severity: "info",
       category: "Funnel",
       title: "No acute funnel regressions detected",
-      detail: `Overall checkout reach from quote starts is ${m.conversionRatePct.toFixed(1)}% with ${m.funnelStartSessions} starters in-window.`,
+      detail:
+        paid > 0 && m.reachedPaymentSessions > paid
+          ? `${paid}/${m.reachedPaymentSessions} checkout sessions completed payment; quote-to-checkout reach is ${m.conversionRatePct.toFixed(1)}%.`
+          : `Overall checkout reach from quote starts is ${m.conversionRatePct.toFixed(1)}% with ${m.funnelStartSessions} starters in-window.`,
     });
   }
 

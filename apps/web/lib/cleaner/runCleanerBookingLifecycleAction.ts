@@ -141,7 +141,7 @@ async function handleRecurringPendingPaymentAccept(params: {
   let resp = String(bRow.cleaner_response_status ?? "")
     .trim()
     .toLowerCase();
-  let acceptedAt = String(bRow.accepted_at ?? "").trim();
+  const acceptedAt = String(bRow.accepted_at ?? "").trim();
   const dispatchLower = String(bRow.dispatch_status ?? "").trim().toLowerCase();
 
   const orphanAcceptedAt =
@@ -561,7 +561,7 @@ export async function runCleanerBookingLifecycleAction(params: {
     let resp = String(bRow.cleaner_response_status ?? "")
       .trim()
       .toLowerCase();
-    let acceptedAt = String(bRow.accepted_at ?? "").trim();
+    const acceptedAt = String(bRow.accepted_at ?? "").trim();
     let dispatchLower = String(bRow.dispatch_status ?? "").trim().toLowerCase();
 
     /** Narrow DB self-heal: `accepted_at` written but response column still pre-accept (never widen from declined/started). */

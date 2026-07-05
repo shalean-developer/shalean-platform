@@ -36,6 +36,7 @@ import { BookingCard } from "@/components/dashboard/booking-card";
 import { CustomerBookingsTable } from "@/components/dashboard/customer-bookings-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { CUSTOMER_ACCOUNT_BOOK_PATH } from "@/lib/customer/customerAccountPaths";
 import { cn } from "@/lib/utils";
 
 
@@ -192,15 +193,13 @@ export default function AccountBookingsPage() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">My Bookings</h1>
-            <p className="mt-1 text-sm text-gray-500">
-              Upcoming visits and past cleans — per visit or on a monthly plan.
-            </p>
+            <p className="mt-1 text-sm text-gray-500">Upcoming and past cleans.</p>
           </div>
           <Button
             asChild
             className="rounded-xl bg-blue-600 px-5 text-white shadow-sm hover:bg-blue-700"
           >
-            <Link href="/account/book">Book a clean</Link>
+            <Link href={CUSTOMER_ACCOUNT_BOOK_PATH}>Book a clean</Link>
           </Button>
         </div>
 
@@ -326,7 +325,7 @@ export default function AccountBookingsPage() {
                     size="sm"
                     className="mt-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700"
                   >
-                    <Link href="/account/book">
+                    <Link href={CUSTOMER_ACCOUNT_BOOK_PATH}>
                       <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                       Book your next clean
                     </Link>

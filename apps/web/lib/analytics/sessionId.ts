@@ -32,7 +32,7 @@ export function getAnalyticsSessionId(): string {
   if (typeof window === "undefined") return "server";
   try {
     const ls = window.localStorage;
-    let id = ls.getItem(ANALYTICS_SESSION_STORAGE_KEY)?.trim();
+    const id = ls.getItem(ANALYTICS_SESSION_STORAGE_KEY)?.trim();
     if (id && id.length >= 8) {
       syncCookie(id);
       return id;

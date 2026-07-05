@@ -1,4 +1,8 @@
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import {
+  getSmsOutboundDecision,
+  type CommunicationRecipientKind,
+} from "@/lib/notifications/communicationPolicy";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import type { SmsRole } from "@/lib/notifications/smsPolicy";
@@ -77,17 +81,25 @@ export async function sendSmsFallback(params: {
   deliveryLog?: SmsFallbackDeliveryLog;
   /** When set, merged into `context` for logs / notification payload. */
   smsRole?: SmsRole;
-  /** Blocks SMS entirely for admin recipients (email-only policy). */
-  recipientKind?: "customer" | "cleaner" | "admin";
+  recipientKind?: CommunicationRecipientKind;
 }): Promise<SmsFallbackResult> {
-  if (params.recipientKind === "admin") {
+  const recipientKind: CommunicationRecipientKind | undefined =
+    params.recipientKind ??
+    (params.deliveryLog?.role === "cleaner"
+      ? "cleaner"
+      : params.deliveryLog?.role === "customer"
+        ? "customer"
+        : undefined);
+
+  const smsDecision = getSmsOutboundDecision(recipientKind);
+  if (!smsDecision.allowed) {
     await logSystemEvent({
-      level: "warn",
+      level: "info",
       source: "sms_fallback_blocked",
-      message: "admin_sms_disabled_by_policy",
-      context: { ...params.context },
+      message: smsDecision.reason,
+      context: { ...params.context, recipientKind: recipientKind ?? null },
     });
-    return { sent: false, error: "admin_sms_disabled_by_policy", messageSid: null };
+    return { sent: false, error: smsDecision.reason, messageSid: null };
   }
 
   const isCustomerRecipient =

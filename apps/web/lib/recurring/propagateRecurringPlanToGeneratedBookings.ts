@@ -15,7 +15,11 @@ import {
   reconcileRecurringPlanOccurrences,
 } from "@/lib/recurring/reconcileRecurringPlanOccurrences";
 import { cloneSnapshotTemplate } from "@/lib/recurring/insertRecurringOccurrenceBooking";
-import { recurringOccurrenceCleanerPatch } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
+import {
+  recurringOccurrenceCleanerPatch,
+  recurringPropagateCleanerOperationalStatus,
+} from "@/lib/recurring/resolveRecurringPreferredCleanerId";
+import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
 import { normalizeUuidCandidate } from "@/lib/booking/userSelectedCleanerFromSnapshot";
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -214,7 +218,9 @@ export async function propagateRecurringPlanToGeneratedBookings(
     if (preferredCleanerId) {
       Object.assign(
         bookingUpdate,
-        recurringOccurrenceCleanerPatch(preferredCleanerId, { operationalStatus: booking.status }),
+        recurringOccurrenceCleanerPatch(preferredCleanerId, {
+          operationalStatus: recurringPropagateCleanerOperationalStatus(booking.status),
+        }),
       );
     }
 
@@ -229,7 +235,14 @@ export async function propagateRecurringPlanToGeneratedBookings(
     }
 
     result.bookings_updated++;
-    if (preferredCleanerId) result.bookings_cleaner_updated++;
+    if (preferredCleanerId) {
+      result.bookings_cleaner_updated++;
+      await applyRecurringOccurrenceRosterContinuity(admin, {
+        bookingId: booking.id,
+        recurringId: plan.id,
+        leadCleanerId: preferredCleanerId,
+      });
+    }
 
     if (booking.monthly_invoice_id) {
       invoiceIds.add(booking.monthly_invoice_id);

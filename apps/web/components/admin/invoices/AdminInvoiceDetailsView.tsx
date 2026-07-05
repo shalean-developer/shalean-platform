@@ -40,6 +40,7 @@ export function AdminInvoiceDetailsView({
 }) {
   const [state, setState] = useState<LoadState>({ status: "loading" });
   const [zohoRefreshBusy, setZohoRefreshBusy] = useState(false);
+  const [zohoSyncBusy, setZohoSyncBusy] = useState(false);
   const [zohoRefreshToast, setZohoRefreshToast] = useState<{ text: string; error?: boolean } | null>(null);
 
   const load = useCallback(async () => {
@@ -110,6 +111,36 @@ export function AdminInvoiceDetailsView({
       });
     } finally {
       setZohoRefreshBusy(false);
+    }
+  }, [getAccessToken, invoiceId, load]);
+
+  const syncToZoho = useCallback(async () => {
+    setZohoSyncBusy(true);
+    setZohoRefreshToast(null);
+    try {
+      const token = await getAccessToken();
+      if (!token) throw new Error("Not signed in.");
+
+      const res = await fetch(`/api/admin/invoices/${encodeURIComponent(invoiceId)}/sync-zoho`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const j = (await res.json().catch(() => ({}))) as { error?: string; zohoInvoiceId?: string };
+      if (!res.ok) throw new Error(j.error ?? `Request failed (${res.status})`);
+
+      setZohoRefreshToast({
+        text: j.zohoInvoiceId
+          ? `Synced to Zoho. You can download the PDF now.`
+          : "Synced to Zoho.",
+      });
+      await load();
+    } catch (e) {
+      setZohoRefreshToast({
+        text: e instanceof Error ? e.message : "Zoho sync failed.",
+        error: true,
+      });
+    } finally {
+      setZohoSyncBusy(false);
     }
   }, [getAccessToken, invoiceId, load]);
 
@@ -241,10 +272,24 @@ export function AdminInvoiceDetailsView({
   const accountBillingRisk: "ok" | "at_risk" = billingRiskRaw === "at_risk" ? "at_risk" : "ok";
 
   const hasInvoicePdf = typeof invoice.zoho_invoice_id === "string" && invoice.zoho_invoice_id.trim().length > 0;
-  const canRefreshZohoPdf = status === "draft" && !isClosed;
+  const canRefreshZohoPdf = status === "draft" && !isClosed && hasInvoicePdf;
+  const canSyncToZoho = !hasInvoicePdf && totalCents > 0;
 
   const headerActions = (
     <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:justify-end">
+      {canSyncToZoho ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={zohoSyncBusy}
+          className="w-full justify-center border-amber-300 text-amber-800 hover:bg-amber-50 sm:w-auto"
+          title="Create this invoice in Zoho Books and link the PDF."
+          onClick={() => void syncToZoho()}
+        >
+          {zohoSyncBusy ? "Syncing…" : "Sync to Zoho"}
+        </Button>
+      ) : null}
       {canRefreshZohoPdf ? (
         <Button
           type="button"

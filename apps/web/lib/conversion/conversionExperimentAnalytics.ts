@@ -53,7 +53,7 @@ export async function learnConversionExperimentPerformance(
     ? [params.experimentKey.trim()]
     : ([...CONVERSION_EXPERIMENT_KEYS] as string[]);
 
-  let expQ = admin
+  const expQ = admin
     .from("ai_experiment_exposures")
     .select("experiment_key, variant, created_at")
     .gte("created_at", since)
@@ -61,7 +61,7 @@ export async function learnConversionExperimentPerformance(
   const { data: exposures, error: e1 } = await expQ;
   if (e1) return [];
 
-  let resQ = admin
+  const resQ = admin
     .from("conversion_experiment_results")
     .select("experiment_key, variant, converted, revenue_cents, metadata")
     .gte("created_at", since)

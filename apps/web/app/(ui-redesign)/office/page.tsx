@@ -2,7 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { useAdminData } from "@/hooks/useAdminData";
 import type { OpsSnapshot } from "@/lib/admin/opsSnapshot";
@@ -15,17 +15,14 @@ import {
 import {
   AlertTriangle,
   ArrowUpRight,
-  ArrowDownRight,
   BarChart3,
-  Bell,
   Calendar,
   CheckCircle2,
   ChevronRight,
   Clock,
   CreditCard,
   DollarSign,
-  Mail,
-  MessageSquare,
+  ExternalLink,
   RefreshCw,
   Send,
   Shield,
@@ -33,8 +30,6 @@ import {
   UserCheck,
   Users,
   Zap,
-  CircleDot,
-  AlertCircle,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -96,104 +91,34 @@ type DashboardStats = {
   };
 };
 
-// ─── Sub-components ─────────────────────────────────────────────────────────
-
-function SectionHeader({ title }: { title: string }) {
-  return (
-    <h2 className="text-xs font-bold uppercase tracking-widest text-slate-500">{title}</h2>
-  );
-}
-
-function KpiCard({
-  label,
-  value,
-  sub,
-  trend,
-  trendDir,
-  icon: Icon,
-  iconColor = "bg-blue-50 text-blue-600",
-}: {
+type BreakdownSegment = {
+  key: string;
   label: string;
-  value: string | number;
-  sub?: string;
-  trend?: string;
-  trendDir?: "up" | "down";
-  icon: React.ComponentType<{ className?: string }>;
-  iconColor?: string;
-}) {
-  return (
-    <div className="rounded-2xl bg-white p-5 shadow-sm border border-slate-100">
-      <div className="flex items-start justify-between">
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-          <p className="mt-1.5 text-2xl font-bold tabular-nums text-slate-900">{value}</p>
-          {sub ? <p className="mt-0.5 text-xs text-slate-400">{sub}</p> : null}
-          {trend ? (
-            <div className={cn("mt-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold",
-              trendDir === "up" ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-600"
-            )}>
-              {trendDir === "up"
-                ? <ArrowUpRight className="h-3 w-3" />
-                : <ArrowDownRight className="h-3 w-3" />}
-              {trend}
-            </div>
-          ) : null}
-        </div>
-        <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", iconColor)}>
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </div>
-  );
-}
+  value: number;
+  color: string;
+  legendColor: string;
+};
 
-function StatusBadge({ status }: { status: "operational" | "degraded" | "down" | "warning" }) {
-  const map = {
-    operational: "bg-emerald-50 text-emerald-700 border-emerald-200",
-    degraded: "bg-orange-50 text-orange-700 border-orange-200",
-    down: "bg-red-50 text-red-700 border-red-200",
-    warning: "bg-yellow-50 text-yellow-700 border-yellow-200",
-  };
-  const labels = { operational: "Operational", degraded: "Degraded", down: "Down", warning: "Warning" };
-  return (
-    <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold", map[status])}>
-      <span className={cn("h-1.5 w-1.5 rounded-full",
-        status === "operational" ? "bg-emerald-500" :
-        status === "degraded" ? "bg-orange-500" :
-        status === "warning" ? "bg-yellow-500" : "bg-red-500"
-      )} />
-      {labels[status]}
-    </span>
-  );
-}
+type ActionItem = {
+  key: string;
+  label: string;
+  count: number;
+  detail: string;
+  href: string;
+  tone: "critical" | "warning" | "info" | "clear";
+};
+
+type StatusAlert = {
+  key: string;
+  label: string;
+  tone: "ok" | "warning" | "critical";
+  href?: string;
+};
+
+// ─── Helpers ───────────────────────────────────────────────────────────────
 
 function zar(value: number): string {
   return `R ${Math.round(value).toLocaleString("en-ZA")}`;
-}
-
-function formatActivityTime(iso: string): string {
-  const d = new Date(iso);
-  if (!Number.isFinite(d.getTime())) return "—";
-  return d.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", hour12: false });
-}
-
-function severityDot(severity: string): string {
-  if (severity === "success") return "bg-emerald-500";
-  if (severity === "warning") return "bg-orange-500";
-  if (severity === "error") return "bg-red-500";
-  return "bg-blue-500";
-}
-
-type SystemCheckStatus = "operational" | "degraded" | "down" | "warning";
-
-function resolveSystemCheckStatus(
-  value: SystemCheckStatus | undefined,
-  loading: boolean,
-  hasStats: boolean,
-): SystemCheckStatus | null {
-  if (loading && !hasStats) return null;
-  if (value) return value;
-  return "warning";
 }
 
 function johannesburgTodayYmd(): string {
@@ -226,6 +151,183 @@ function rosterIncludesWeekday(raw: unknown, weekday: number): boolean {
   });
 }
 
+function pct(part: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.round((part / total) * 1000) / 10;
+}
+
+// ─── Zoho-style sub-components ─────────────────────────────────────────────
+
+function ZohoPanel({
+  title,
+  href,
+  linkLabel = "View report",
+  children,
+  className,
+}: {
+  title: string;
+  href?: string;
+  linkLabel?: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <section className={cn("rounded-lg border border-slate-200 bg-white shadow-sm", className)}>
+      <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+        <h2 className="text-sm font-semibold text-slate-800">{title}</h2>
+        {href ? (
+          <Link href={href} className="text-xs font-medium text-[#2c79ff] hover:underline">
+            {linkLabel}
+          </Link>
+        ) : null}
+      </div>
+      <div className="p-5">{children}</div>
+    </section>
+  );
+}
+
+function HorizontalBreakdownBar({ segments, total }: { segments: BreakdownSegment[]; total: number }) {
+  const safeTotal = Math.max(total, segments.reduce((sum, s) => sum + s.value, 0), 1);
+
+  return (
+    <div>
+      <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
+        {segments.map((segment) => {
+          const width = (segment.value / safeTotal) * 100;
+          if (width <= 0) return null;
+          return (
+            <div
+              key={segment.key}
+              className={cn("h-full transition-all", segment.color)}
+              style={{ width: `${width}%` }}
+              title={`${segment.label}: ${segment.value}`}
+            />
+          );
+        })}
+      </div>
+      <div className="mt-4 space-y-2.5">
+        {segments.map((segment) => (
+          <div key={segment.key} className="flex items-center justify-between gap-3 text-sm">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className={cn("h-2.5 w-2.5 shrink-0 rounded-full", segment.legendColor)} />
+              <span className="truncate text-slate-600">{segment.label}</span>
+            </div>
+            <div className="flex shrink-0 items-center gap-3 tabular-nums">
+              <span className="font-semibold text-slate-900">{segment.value}</span>
+              <span className="w-10 text-right text-xs text-slate-400">{pct(segment.value, safeTotal)}%</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function StatusStrip({ alerts }: { alerts: StatusAlert[] }) {
+  const hasIssues = alerts.some((a) => a.tone !== "ok");
+
+  return (
+    <div
+      className={cn(
+        "flex flex-wrap items-center gap-2 rounded-lg border px-4 py-2.5 text-xs",
+        hasIssues ? "border-amber-200 bg-amber-50/80" : "border-emerald-200 bg-emerald-50/80",
+      )}
+    >
+      <span className="mr-1 font-semibold uppercase tracking-wide text-slate-500">Status</span>
+      {alerts.map((alert) => {
+        const toneClass =
+          alert.tone === "critical"
+            ? "border-red-200 bg-white text-red-700"
+            : alert.tone === "warning"
+              ? "border-amber-200 bg-white text-amber-800"
+              : "border-emerald-200 bg-white text-emerald-700";
+
+        const content = (
+          <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium", toneClass)}>
+            <span
+              className={cn(
+                "h-1.5 w-1.5 rounded-full",
+                alert.tone === "critical" ? "bg-red-500" : alert.tone === "warning" ? "bg-amber-500" : "bg-emerald-500",
+              )}
+            />
+            {alert.label}
+          </span>
+        );
+
+        if (alert.href) {
+          return (
+            <Link key={alert.key} href={alert.href} className="hover:opacity-80">
+              {content}
+            </Link>
+          );
+        }
+        return <span key={alert.key}>{content}</span>;
+      })}
+    </div>
+  );
+}
+
+function ActionQueueRow({ item }: { item: ActionItem }) {
+  const toneStyles = {
+    critical: "border-red-100 bg-red-50/50 hover:bg-red-50",
+    warning: "border-amber-100 bg-amber-50/50 hover:bg-amber-50",
+    info: "border-blue-100 bg-blue-50/50 hover:bg-blue-50",
+    clear: "border-slate-100 bg-slate-50/50 hover:bg-slate-50",
+  };
+  const countStyles = {
+    critical: "text-red-700",
+    warning: "text-amber-700",
+    info: "text-blue-700",
+    clear: "text-emerald-700",
+  };
+
+  return (
+    <Link
+      href={item.href}
+      className={cn(
+        "group flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
+        toneStyles[item.tone],
+      )}
+    >
+      <p className={cn("w-10 shrink-0 text-xl font-bold tabular-nums", countStyles[item.tone])}>{item.count}</p>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-semibold text-slate-800">{item.label}</p>
+        <p className="text-xs text-slate-500">{item.detail}</p>
+      </div>
+      <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 group-hover:text-slate-500" />
+    </Link>
+  );
+}
+
+function QuickLinkFooter() {
+  const links = [
+    { label: "Full schedule", href: "/office/schedule" },
+    { label: "Ops health", href: "/office/ops-health" },
+    { label: "Analytics", href: "/office/analytics" },
+    { label: "Payouts", href: "/office/payouts" },
+    { label: "Notification logs", href: "/office/notification-logs" },
+    { label: "Cleaners", href: "/office/cleaners" },
+  ];
+
+  return (
+    <footer className="rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
+      <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Quick links</p>
+      <div className="flex flex-wrap gap-x-5 gap-y-2">
+        {links.map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            className="inline-flex items-center gap-1 text-sm font-medium text-[#2c79ff] hover:underline"
+          >
+            {link.label}
+            <ExternalLink className="h-3 w-3 opacity-60" />
+          </Link>
+        ))}
+      </div>
+    </footer>
+  );
+}
+
 // ─── Main Page ───────────────────────────────────────────────────────────────
 
 export default function OfficeDashboardPage() {
@@ -233,10 +335,8 @@ export default function OfficeDashboardPage() {
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  // Real-time ops counts for attention cards
   const { data: opsData, refetch: refetchOps } = useAdminData<OpsSnapshot>("/api/admin/ops-snapshot");
 
-  // Today's schedule for the schedule panel
   const todayYmd = johannesburgTodayYmd();
   const { data: scheduleData } = useAdminData<{
     bookings: Array<{
@@ -261,6 +361,7 @@ export default function OfficeDashboardPage() {
 
   const todayBookings = scheduleData?.bookings ?? [];
   const todayStats = scheduleData?.summary ?? computeOfficeTodayScheduleStats(todayBookings);
+
   const activeCleanerIds = new Set(
     todayBookings
       .filter((b) => {
@@ -293,11 +394,6 @@ export default function OfficeDashboardPage() {
     busy: cleanerStates.filter((s) => s.stateKey === "booked" || s.stateKey === "in-job").length,
     notReceiving: cleanerStates.filter((s) => s.stateKey === "paused" || s.stateKey === "offline" || s.stateKey === "off-today").length,
   };
-  const busyCleaners = cleanerStats.busy;
-  const offlineCleaners = cleanerStats.notReceiving;
-  const availablePct = cleanerStats.total > 0 ? Math.round((cleanerStats.availableIdle / cleanerStats.total) * 1000) / 10 : 0;
-  const busyPct = cleanerStats.total > 0 ? Math.round((busyCleaners / cleanerStats.total) * 1000) / 10 : 0;
-  const offlinePct = Math.max(0, 100 - availablePct - busyPct);
 
   useEffect(() => {
     let cancelled = false;
@@ -308,90 +404,202 @@ export default function OfficeDashboardPage() {
         const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
         const res = await globalThis.fetch("/api/admin/dashboard-stats", { headers });
         if (res.ok) {
-          const data = await res.json() as DashboardStats;
+          const data = (await res.json()) as DashboardStats;
           if (!cancelled) setStats(data);
         }
-      } catch {}
-      finally { if (!cancelled) setLoading(false); }
+      } catch {
+        // dashboard remains usable with schedule + ops data
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [lastRefresh]);
 
   const todayLabel = new Date().toLocaleDateString("en-ZA", {
-    weekday: "short", day: "numeric", month: "short", year: "numeric",
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
   });
 
-  // Real ops counts
   const slaBreachCount = opsData?.slaBreaches ?? 0;
   const unassignedCount = opsData?.unassigned ?? 0;
   const startingSoonCount = opsData?.startingSoon ?? 0;
   const unassignableCount = opsData?.unassignable ?? 0;
   const oldestBreachMinutes = opsData?.oldestBreachMinutes ?? 0;
 
-  function formatOldestBreach(mins: number): string {
-    if (mins === 0) return "All clear";
-    if (mins < 60) return `Oldest: ${mins}m overdue`;
-    return `Oldest: ${Math.floor(mins / 60)}h ${mins % 60}m overdue`;
-  }
-
   const revenueToday = stats?.revenueTodayZar ?? 0;
-  const bookings30d = stats?.totalBookingsWindow ?? 0;
-  const avgBooking = stats?.avgBookingValueZar ?? 0;
   const paymentsSnapshot = stats?.paymentsSnapshot;
-  const recentActivity = stats?.recentActivity ?? [];
   const systemStatus = stats?.systemStatus;
+  const overdueZar = paymentsSnapshot?.overdueZar ?? 0;
+  const pendingZar = paymentsSnapshot?.pendingZar ?? 0;
 
-  const emailSent = stats?.notificationsToday?.email.sent ?? 0;
-  const emailFailed = stats?.notificationsToday?.email.failed ?? 0;
-  const waSent = stats?.notificationsToday?.whatsapp.sent ?? 0;
-  const waFailed = stats?.notificationsToday?.whatsapp.failed ?? 0;
-  const smsSent = stats?.notificationsToday?.sms.sent ?? 0;
   const smsFailed = stats?.notificationsToday?.sms.failed ?? 0;
+  const cronErrors = systemStatus?.cronErrorsLast24h ?? 0;
 
-  const systemChecks: Array<{
-    name: string;
-    status: SystemCheckStatus | null;
-    icon: React.ComponentType<{ className?: string }>;
-  }> = [
-    {
-      name: "Website",
-      status: resolveSystemCheckStatus(systemStatus?.website, loading, stats != null),
-      icon: CircleDot,
-    },
-    {
-      name: "Booking engine",
-      status: resolveSystemCheckStatus(systemStatus?.bookingEngine, loading, stats != null),
-      icon: Calendar,
-    },
-    {
-      name: "Payment gateway",
-      status: resolveSystemCheckStatus(systemStatus?.paymentGateway, loading, stats != null),
-      icon: CreditCard,
-    },
-  ];
   const allSystemsOperational =
     stats != null &&
     systemStatus?.website === "operational" &&
     systemStatus?.bookingEngine === "operational" &&
     systemStatus?.paymentGateway === "operational";
 
+  const scheduleSegments: BreakdownSegment[] = [
+    { key: "completed", label: "Completed", value: todayStats.completed, color: "bg-emerald-500", legendColor: "bg-emerald-500" },
+    { key: "in_progress", label: "In progress", value: todayStats.inProgress, color: "bg-violet-500", legendColor: "bg-violet-500" },
+    { key: "upcoming", label: "Upcoming", value: todayStats.upcoming, color: "bg-sky-400", legendColor: "bg-sky-400" },
+    { key: "unassigned", label: "Unassigned", value: todayStats.unassigned, color: "bg-amber-500", legendColor: "bg-amber-500" },
+  ];
+
+  const cleanerSegments: BreakdownSegment[] = [
+    { key: "available", label: "Available", value: cleanerStats.availableIdle, color: "bg-emerald-500", legendColor: "bg-emerald-500" },
+    { key: "busy", label: "Booked / in job", value: cleanerStats.busy, color: "bg-blue-500", legendColor: "bg-blue-500" },
+    { key: "offline", label: "Not receiving", value: cleanerStats.notReceiving, color: "bg-slate-300", legendColor: "bg-slate-300" },
+  ];
+
+  const cashSegments: BreakdownSegment[] = [
+    { key: "paid", label: "Collected today", value: revenueToday, color: "bg-emerald-500", legendColor: "bg-emerald-500" },
+    { key: "pending", label: "Pending", value: pendingZar, color: "bg-sky-400", legendColor: "bg-sky-400" },
+    { key: "overdue", label: "Overdue", value: overdueZar, color: "bg-amber-500", legendColor: "bg-amber-500" },
+  ];
+  const cashTotal = revenueToday + pendingZar + overdueZar;
+
+  const actionItems: ActionItem[] = useMemo(() => {
+    const items: ActionItem[] = [
+      {
+        key: "unassigned",
+        label: "Unassigned bookings",
+        count: unassignedCount,
+        detail: unassignedCount > 0 ? "Assign cleaners before start time" : "All bookings have cleaners",
+        href: "/office/bookings?filter=unassigned",
+        tone: unassignedCount > 0 ? "warning" : "clear",
+      },
+      {
+        key: "starting-soon",
+        label: "Starting within 2 hours",
+        count: startingSoonCount,
+        detail: startingSoonCount > 0 ? "No cleaner assigned yet" : "No urgent gaps",
+        href: "/office/bookings?filter=starting-soon",
+        tone: startingSoonCount > 0 ? "critical" : "clear",
+      },
+      {
+        key: "sla",
+        label: "SLA breaches",
+        count: slaBreachCount,
+        detail:
+          slaBreachCount > 0
+            ? oldestBreachMinutes < 60
+              ? `Oldest: ${oldestBreachMinutes}m overdue`
+              : `Oldest: ${Math.floor(oldestBreachMinutes / 60)}h ${oldestBreachMinutes % 60}m overdue`
+            : "All SLAs on track",
+        href: "/office/sla-breaches",
+        tone: slaBreachCount > 0 ? "critical" : "clear",
+      },
+      {
+        key: "unassignable",
+        label: "Unassignable",
+        count: unassignableCount,
+        detail: unassignableCount > 0 ? "Review dispatch constraints" : "No blocked assignments",
+        href: "/office/bookings?filter=unassignable",
+        tone: unassignableCount > 0 ? "warning" : "clear",
+      },
+    ];
+    return items.sort((a, b) => {
+      const toneRank = { critical: 0, warning: 1, info: 2, clear: 3 };
+      const rankDiff = toneRank[a.tone] - toneRank[b.tone];
+      if (rankDiff !== 0) return rankDiff;
+      return b.count - a.count;
+    });
+  }, [unassignedCount, startingSoonCount, slaBreachCount, unassignableCount, oldestBreachMinutes]);
+
+  const statusAlerts: StatusAlert[] = useMemo(() => {
+    const alerts: StatusAlert[] = [];
+
+    if (allSystemsOperational) {
+      alerts.push({ key: "ops", label: "Ops healthy", tone: "ok" });
+    } else if (systemStatus?.website === "down" || systemStatus?.bookingEngine === "down") {
+      alerts.push({ key: "ops", label: "Ops degraded", tone: "critical", href: "/office/ops-health" });
+    } else if (stats != null) {
+      alerts.push({ key: "ops", label: "Ops needs attention", tone: "warning", href: "/office/ops-health" });
+    }
+
+    if (unassignedCount > 0) {
+      alerts.push({
+        key: "unassigned",
+        label: `${unassignedCount} unassigned`,
+        tone: "warning",
+        href: "/office/bookings?filter=unassigned",
+      });
+    }
+
+    if (overdueZar > 0) {
+      alerts.push({
+        key: "overdue",
+        label: `${zar(overdueZar)} overdue`,
+        tone: "critical",
+        href: "/office/payouts",
+      });
+    }
+
+    if (startingSoonCount > 0) {
+      alerts.push({
+        key: "starting",
+        label: `${startingSoonCount} starting soon`,
+        tone: "critical",
+        href: "/office/bookings?filter=starting-soon",
+      });
+    }
+
+    if (smsFailed > 0) {
+      alerts.push({
+        key: "sms",
+        label: "SMS failing",
+        tone: "warning",
+        href: "/office/notification-logs",
+      });
+    }
+
+    if (cronErrors > 0) {
+      alerts.push({
+        key: "cron",
+        label: `${cronErrors} cron errors (24h)`,
+        tone: "warning",
+        href: "/office/ops-health",
+      });
+    }
+
+    if (alerts.length === 0) {
+      alerts.push({ key: "all-clear", label: "All clear today", tone: "ok" });
+    }
+
+    return alerts;
+  }, [allSystemsOperational, systemStatus, stats, unassignedCount, overdueZar, startingSoonCount, smsFailed, cronErrors]);
+
+  const sortedBookings = [...todayBookings].sort((a, b) => String(a.time ?? "").localeCompare(String(b.time ?? "")));
+
   return (
-    <div className="space-y-6">
-      {/* ── Page Header ────────────────────────────────────────────────── */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
+    <div className="space-y-5">
+      {/* ── Zoho-style greeting header ─────────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Admin Dashboard</h1>
-          <p className="mt-0.5 text-sm text-slate-500">Overview of operations, bookings, revenue and system health.</p>
+          <h1 className="text-xl font-semibold text-slate-900">Hello, Shalean Cleaning Services</h1>
+          <p className="mt-0.5 text-sm text-slate-500">Command center — today&apos;s operations at a glance.</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm">
+          <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
             <Calendar className="h-4 w-4 text-slate-400" />
-            <span>Today, {todayLabel}</span>
+            <span>{todayLabel}</span>
           </div>
           <button
             type="button"
-            onClick={() => { setLoading(true); setLastRefresh(new Date()); void refetchOps(); }}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 transition-colors"
+            onClick={() => {
+              setLoading(true);
+              setLastRefresh(new Date());
+              void refetchOps();
+            }}
+            className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
           >
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             Refresh
@@ -399,441 +607,241 @@ export default function OfficeDashboardPage() {
         </div>
       </div>
 
-      {/* ── Attention Required ─────────────────────────────────────────── */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <SectionHeader title="Attention required" />
-          <Link href="/office/sla-breaches" className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
-            View all ({slaBreachCount}) <ChevronRight className="h-3 w-3" />
-          </Link>
-        </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          {/* SLA Breaches */}
-          <Link href="/office/sla-breaches" className="group rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", slaBreachCount > 0 ? "bg-red-100" : "bg-emerald-100")}>
-                <Shield className={cn("h-4 w-4", slaBreachCount > 0 ? "text-red-600" : "text-emerald-600")} />
-              </div>
-              <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
-            </div>
-            <p className="mt-3 text-3xl font-bold tabular-nums text-slate-900">{slaBreachCount}</p>
-            <p className="text-sm font-semibold text-slate-700">SLA breaches</p>
-            <p className={cn("mt-1 text-xs font-medium", slaBreachCount > 0 ? "text-red-600" : "text-emerald-600")}>
-              {formatOldestBreach(oldestBreachMinutes)}
-            </p>
-          </Link>
+      {/* ── Slim status strip (Option C) ───────────────────────────────── */}
+      <StatusStrip alerts={statusAlerts} />
 
-          {/* Unassigned */}
-          <Link href="/office/bookings?filter=unassigned" className="group rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", unassignedCount > 0 ? "bg-orange-100" : "bg-emerald-100")}>
-                <Users className={cn("h-4 w-4", unassignedCount > 0 ? "text-orange-600" : "text-emerald-600")} />
-              </div>
-              <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
-            </div>
-            <p className="mt-3 text-3xl font-bold tabular-nums text-slate-900">{unassignedCount}</p>
-            <p className="text-sm font-semibold text-slate-700">Unassigned bookings</p>
-            <p className={cn("mt-1 text-xs font-medium", unassignedCount > 0 ? "text-orange-600" : "text-emerald-600")}>
-              {unassignedCount > 0 ? "Needs attention" : "All clear"}
-            </p>
-          </Link>
-
-          {/* Starting soon */}
-          <Link href="/office/bookings?filter=starting-soon" className="group rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", startingSoonCount > 0 ? "bg-blue-100" : "bg-emerald-100")}>
-                <Clock className={cn("h-4 w-4", startingSoonCount > 0 ? "text-blue-600" : "text-emerald-600")} />
-              </div>
-              <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
-            </div>
-            <p className="mt-3 text-3xl font-bold tabular-nums text-slate-900">{startingSoonCount}</p>
-            <p className="text-sm font-semibold text-slate-700">Starting &lt;2h, no cleaner</p>
-            <p className={cn("mt-1 text-xs font-medium", startingSoonCount > 0 ? "text-blue-600" : "text-emerald-600")}>
-              {startingSoonCount > 0 ? "Assign now" : "All clear"}
-            </p>
-          </Link>
-
-          {/* Unassignable */}
-          <Link href="/office/bookings?filter=unassignable" className="group rounded-2xl bg-white border border-slate-100 p-4 shadow-sm hover:shadow-md transition-shadow">
-            <div className="flex items-center justify-between">
-              <div className={cn("flex h-8 w-8 items-center justify-center rounded-lg", unassignableCount > 0 ? "bg-red-100" : "bg-emerald-100")}>
-                <CheckCircle2 className={cn("h-4 w-4", unassignableCount > 0 ? "text-red-600" : "text-emerald-600")} />
-              </div>
-              <ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-500 transition-colors" />
-            </div>
-            <p className="mt-3 text-3xl font-bold tabular-nums text-slate-900">{unassignableCount}</p>
-            <p className="text-sm font-semibold text-slate-700">Unassignable</p>
-            <p className={cn("mt-1 text-xs font-medium", unassignableCount > 0 ? "text-red-600" : "text-emerald-600")}>
-              {unassignableCount > 0 ? "Review dispatch" : "All clear"}
-            </p>
-          </Link>
-        </div>
-      </section>
-
-      {/* ── Quick Actions ──────────────────────────────────────────────── */}
-      <section className="rounded-2xl bg-white border border-slate-100 p-4 shadow-sm">
-        <div className="mb-3">
-          <p className="text-sm font-bold text-slate-800">Quick actions</p>
-          <p className="text-xs text-slate-500">Common tasks to keep operations running smoothly.</p>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/office/cleaners"
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors">
-            <UserCheck className="h-4 w-4 text-blue-600" />
-            Assign cleaners
-          </Link>
-          <Link href="/office/schedule"
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors">
-            <Calendar className="h-4 w-4 text-blue-600" />
-            Today&apos;s schedule
-          </Link>
-          <Link href="/office/payouts"
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors">
-            <CreditCard className="h-4 w-4 text-blue-600" />
-            Review payments
-          </Link>
-          <Link href="/office/notifications"
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-100 transition-colors">
-            <Send className="h-4 w-4 text-blue-600" />
-            Send notification
-          </Link>
-          <Link href="/office/bookings/create"
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 transition-colors shadow-sm">
-            <TrendingUp className="h-4 w-4" />
-            Create booking
-          </Link>
-        </div>
-      </section>
-
-      {/* ── Revenue KPIs ───────────────────────────────────────────────── */}
-      <section>
-        <div className="mb-3">
-          <SectionHeader title="Revenue overview" />
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <KpiCard
-            label="Revenue today"
-            value={stats != null ? zar(revenueToday) : loading ? "…" : "—"}
-            sub={`Paid bookings: ${stats?.paidBookingsToday ?? 0}`}
-            icon={DollarSign}
-            iconColor="bg-emerald-50 text-emerald-600"
-          />
-          <KpiCard
-            label="Bookings (30d window)"
-            value={stats != null ? bookings30d : loading ? "…" : "—"}
-            sub="Revenue-eligible paid bookings"
-            icon={BarChart3}
-            iconColor="bg-violet-50 text-violet-600"
-          />
-          <KpiCard
-            label="Avg booking value"
-            value={stats != null ? zar(avgBooking) : loading ? "…" : "—"}
-            sub="Among paid bookings in window"
-            icon={Zap}
-            iconColor="bg-orange-50 text-orange-600"
-          />
-          <KpiCard
-            label="Today: bookings"
-            value={todayStats.total}
-            sub={`${todayStats.completed} completed · ${todayStats.unassigned} unassigned`}
-            icon={TrendingUp}
-            iconColor="bg-blue-50 text-blue-600"
-          />
-        </div>
-      </section>
-
-      {/* ── Schedule + Availability ─────────────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-5">
-        {/* Today's Schedule */}
-        <section className="lg:col-span-3 rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h3 className="text-sm font-bold text-slate-800">Today&apos;s schedule</h3>
-              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-700">LIVE</span>
-            </div>
-            <Link href="/office/schedule" className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
-              View full schedule <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-5 gap-2 mb-4">
-            {[
-              { label: "Total bookings",    value: String(todayStats.total) },
-              { label: "Completed",         value: String(todayStats.completed) },
-              { label: "In progress",       value: String(todayStats.inProgress) },
-              { label: "Upcoming",          value: String(todayStats.upcoming) },
-              { label: "Unassigned",        value: String(todayStats.unassigned), alert: todayStats.unassigned > 0 },
-            ].map((s) => (
-              <div key={s.label} className="rounded-xl bg-slate-50 p-2.5 text-center">
-                <p className={cn("text-lg font-bold tabular-nums", s.alert ? "text-red-600" : "text-slate-800")}>{s.value}</p>
-                <p className="text-[10px] text-slate-500 leading-tight">{s.label}</p>
-              </div>
-            ))}
-          </div>
-
-          <div>
-            <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">Today&apos;s bookings</p>
-            <div className="space-y-2">
-              {todayBookings.length === 0 ? (
-                <p className="text-center text-xs text-slate-400 py-4">No bookings for today.</p>
-              ) : (
-                todayBookings.slice(0, 4).map((b) => {
-                  const { label: statusLabel, tone } = officeScheduleStatusPresentation(b);
-                  const statusColor =
-                    tone === "unassigned" ? "bg-orange-100 text-orange-700" :
-                    tone === "completed" ? "bg-emerald-100 text-emerald-700" :
-                    tone === "in_progress" ? "bg-violet-100 text-violet-700" :
-                    tone === "assigned" ? "bg-blue-100 text-blue-700" :
-                    "bg-slate-100 text-slate-700";
-                  return (
-                    <div key={b.id} className="flex items-center gap-3 rounded-xl border border-slate-100 px-3 py-2.5">
-                      <span className="w-12 shrink-0 text-xs font-bold text-slate-600">{b.time?.slice(0, 5) ?? "—"}</span>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-semibold text-slate-800 capitalize">{(b.service ?? "Service").replace(/-/g, " ")}</p>
-                        <p className="text-xs text-slate-400 truncate">{b.location ?? "—"}</p>
-                      </div>
-                      <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold", statusColor)}>{statusLabel}</span>
-                    </div>
-                  );
-                })
-              )}
-              {todayBookings.length > 4 && (
-                <Link href="/office/schedule" className="block w-full text-center text-xs font-semibold text-blue-600 hover:underline pt-1">
-                  + {todayBookings.length - 4} more bookings
-                </Link>
-              )}
-            </div>
-          </div>
-        </section>
-
-        {/* Cleaner Availability */}
-        <section className="lg:col-span-2 rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-800">Cleaner availability</h3>
-            <Link href="/office/cleaners" className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
-              View all <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
-
-          {/* Donut chart (CSS) */}
-          <div className="flex items-center justify-center py-2">
-            <div className="relative flex h-32 w-32 items-center justify-center">
-              <svg viewBox="0 0 36 36" className="h-32 w-32 -rotate-90">
-                {/* Track */}
-                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#f1f5f9" strokeWidth="3.5" />
-                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#22c55e" strokeWidth="3.5"
-                  strokeDasharray={`${availablePct} ${100 - availablePct}`} strokeLinecap="round" />
-                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#3b82f6" strokeWidth="3.5"
-                  strokeDasharray={`${busyPct} ${100 - busyPct}`} strokeDashoffset={String(-availablePct)} strokeLinecap="round" />
-                <circle cx="18" cy="18" r="15.9155" fill="none" stroke="#e2e8f0" strokeWidth="3.5"
-                  strokeDasharray={`${offlinePct} ${100 - offlinePct}`} strokeDashoffset={String(-(availablePct + busyPct))} />
-              </svg>
-              <div className="absolute text-center">
-                <p className="text-xl font-bold text-slate-800">{cleanerStats.total}</p>
-                <p className="text-[10px] text-slate-400">Total cleaners</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-2 space-y-2">
-            {[
-              { label: "Available", count: cleanerStats.availableIdle, color: "bg-emerald-500" },
-              { label: "Booked / in job", count: busyCleaners, color: "bg-blue-500" },
-              { label: "Not receiving", count: offlineCleaners, color: "bg-slate-300" },
-            ].map((s) => (
-              <div key={s.label} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className={cn("h-2.5 w-2.5 rounded-full", s.color)} />
-                  <span className="text-sm text-slate-600">{s.label}</span>
-                </div>
-                <span className="text-sm font-bold text-slate-800">{s.count}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-4 flex items-start gap-2 rounded-xl bg-blue-50 border border-blue-100 p-3">
-            <AlertCircle className="h-4 w-4 shrink-0 text-blue-600 mt-0.5" />
-            <div>
-              <p className="text-xs font-semibold text-blue-800">{startingSoonCount} bookings start within 2 hours without a cleaner</p>
-              <p className="text-xs text-blue-600">{startingSoonCount > 0 ? "Review and assign where needed." : "No urgent cleaner gaps right now."}</p>
-            </div>
-            <Link href="/office/schedule" className="ml-auto shrink-0 rounded-lg bg-blue-600 px-2.5 py-1 text-[11px] font-bold text-white hover:bg-blue-700 transition-colors whitespace-nowrap">
-              Review now
-            </Link>
-          </div>
-        </section>
-      </div>
-
-      {/* ── Payments + Notifications ────────────────────────────────────── */}
+      {/* ── Top row: Today's ops + Needs action (Zoho receivables/payables) ─ */}
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Payments Snapshot */}
-        <section className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-800">Payments snapshot</h3>
-            <Link href="/office/payouts" className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
-              View all payments <ChevronRight className="h-3 w-3" />
-            </Link>
+        <ZohoPanel title="Today's operations" href="/office/schedule" linkLabel="View schedule">
+          <div className="mb-4 flex items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Total bookings today</p>
+              <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{todayStats.total}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-xs text-slate-400">Revenue collected</p>
+              <p className="text-lg font-bold tabular-nums text-emerald-700">
+                {stats != null ? zar(revenueToday) : loading ? "…" : "—"}
+              </p>
+              <p className="text-[11px] text-slate-400">{stats?.paidBookingsToday ?? 0} paid bookings</p>
+            </div>
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {[
-              { label: "Paid (today)", value: zar(revenueToday), icon: CheckCircle2, iconColor: "text-emerald-600 bg-emerald-50" },
-              { label: "Pending", value: zar(paymentsSnapshot?.pendingZar ?? 0), icon: Clock, iconColor: "text-orange-600 bg-orange-50" },
-              { label: "Overdue", value: zar(paymentsSnapshot?.overdueZar ?? 0), icon: AlertTriangle, iconColor: "text-red-600 bg-red-50" },
-              { label: "Refunds (30d)", value: zar(paymentsSnapshot?.refunds30dZar ?? 0), icon: CreditCard, iconColor: "text-slate-600 bg-slate-100" },
-            ].map((p) => {
-              const PIcon = p.icon;
-              return (
-                <div key={p.label} className="rounded-xl bg-slate-50 p-3">
-                  <div className={cn("mb-2 flex h-7 w-7 items-center justify-center rounded-lg", p.iconColor)}>
-                    <PIcon className="h-4 w-4" />
-                  </div>
-                  <p className="text-xs text-slate-500">{p.label}</p>
-                  <p className="mt-0.5 text-base font-bold text-slate-800">{p.value}</p>
-                </div>
-              );
-            })}
-          </div>
-        </section>
+          <HorizontalBreakdownBar segments={scheduleSegments} total={todayStats.total} />
+        </ZohoPanel>
 
-        {/* Notifications Health */}
-        <section className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-800">Notifications health <span className="text-slate-400 font-normal">(Today)</span></h3>
-            <Link href="/office/notification-logs" className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
-              View logs <ChevronRight className="h-3 w-3" />
-            </Link>
+        <ZohoPanel title="Needs action" href="/office/bookings" linkLabel="View all bookings">
+          <div className="mb-4">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Priority queue</p>
+            <p className="mt-1 text-sm text-slate-500">Ranked by urgency — tap to resolve.</p>
           </div>
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Email", sent: emailSent, failed: emailFailed, icon: Mail, iconColor: "bg-blue-50 text-blue-600" },
-              { label: "WhatsApp", sent: waSent, failed: waFailed, icon: MessageSquare, iconColor: "bg-emerald-50 text-emerald-600" },
-              { label: "SMS", sent: smsSent, failed: smsFailed, icon: Bell, iconColor: "bg-violet-50 text-violet-600" },
-            ].map((ch) => {
-              const CIcon = ch.icon;
-              const successRate = ch.sent + ch.failed > 0
-                ? Math.round((ch.sent / (ch.sent + ch.failed)) * 100)
-                : null;
-              return (
-                <div key={ch.label} className="rounded-xl bg-slate-50 p-3">
-                  <div className={cn("mb-2 flex h-7 w-7 items-center justify-center rounded-lg", ch.iconColor)}>
-                    <CIcon className="h-4 w-4" />
-                  </div>
-                  <p className="text-xs font-semibold text-slate-500">{ch.label}</p>
-                  <p className="mt-0.5 text-xl font-bold text-slate-800">{ch.sent}</p>
-                  <p className="text-[10px] text-slate-400">Delivered</p>
-                  {successRate !== null ? (
-                    <p className="text-[10px] text-emerald-600 font-semibold">{successRate}% success</p>
-                  ) : (
-                    <p className="text-[10px] text-slate-400">—</p>
-                  )}
-                </div>
-              );
-            })}
+          <div className="space-y-2">
+            {actionItems.map((item) => (
+              <ActionQueueRow key={item.key} item={item} />
+            ))}
           </div>
-        </section>
+        </ZohoPanel>
       </div>
 
-      {/* ── Recent Activity + System Status ────────────────────────────── */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        {/* Recent Activity */}
-        <section className="lg:col-span-2 rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-bold text-slate-800">Recent activity</h3>
-            <Link href="/office/notification-logs" className="text-xs font-semibold text-blue-600 hover:underline flex items-center gap-1">
-              View all activity <ChevronRight className="h-3 w-3" />
-            </Link>
-          </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="pb-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">Time</th>
-                  <th className="pb-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">Activity</th>
-                  <th className="pb-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400 hidden sm:table-cell">Details</th>
-                  <th className="pb-2 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">User</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {recentActivity.length === 0 ? (
-                  <tr>
-                    <td colSpan={4} className="py-6 text-center text-xs text-slate-400">No recent activity found.</td>
-                  </tr>
-                ) : (
-                  recentActivity.map((a, i) => (
-                    <tr key={`${a.createdAt}-${a.type}-${i}`} className="group">
-                      <td className="py-2.5 pr-3 text-xs font-mono text-slate-500">{formatActivityTime(a.createdAt)}</td>
-                      <td className="py-2.5 pr-3">
-                        <div className="flex items-center gap-1.5">
-                          <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", severityDot(a.severity))} />
-                          <span className="text-xs font-semibold text-slate-700 whitespace-nowrap">{a.type}</span>
-                        </div>
-                      </td>
-                      <td className="py-2.5 pr-3 text-xs text-slate-500 hidden sm:table-cell max-w-[220px] truncate">{a.details}</td>
-                      <td className="py-2.5 text-xs text-slate-400">{a.user}</td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        {/* System Status */}
-        <section className="rounded-2xl bg-white border border-slate-100 p-5 shadow-sm">
-          <h3 className="mb-4 text-sm font-bold text-slate-800">System status</h3>
-          <div className="space-y-2.5">
-            {systemChecks.map((s) => (
-              <div key={s.name} className="flex items-center justify-between rounded-xl border border-slate-100 px-3 py-2.5">
-                <div className="flex items-center gap-2">
-                  <s.icon className="h-4 w-4 text-slate-400" />
-                  <span className="text-sm font-medium text-slate-700">{s.name}</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  {s.status ? (
-                    <StatusBadge status={s.status} />
-                  ) : (
-                    <span className="text-xs font-medium text-slate-400">Checking…</span>
-                  )}
-                  <ChevronRight className="h-3.5 w-3.5 text-slate-300" />
-                </div>
+      {/* ── Full-width schedule (Zoho cash flow anchor) ─────────────────── */}
+      <ZohoPanel title="Today's schedule" href="/office/schedule" linkLabel="Full schedule">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap gap-4">
+            {[
+              { label: "Total", value: todayStats.total },
+              { label: "Completed", value: todayStats.completed },
+              { label: "In progress", value: todayStats.inProgress },
+              { label: "Upcoming", value: todayStats.upcoming },
+              { label: "Unassigned", value: todayStats.unassigned, alert: todayStats.unassigned > 0 },
+            ].map((stat) => (
+              <div key={stat.label} className="min-w-[72px]">
+                <p className={cn("text-lg font-bold tabular-nums", stat.alert ? "text-amber-700" : "text-slate-900")}>
+                  {stat.value}
+                </p>
+                <p className="text-[11px] text-slate-500">{stat.label}</p>
               </div>
             ))}
           </div>
-          {systemStatus?.productionHealth ? (
-            <Link href="/office/ops-health" className="mt-3 block rounded-xl bg-slate-50 px-3 py-2 text-xs text-slate-600 hover:bg-slate-100">
-              <span className="font-semibold text-slate-800">
-                {systemStatus.productionHealth.totalFindings ?? 0} production findings
-              </span>
-              {systemStatus.cronErrorsLast24h ? ` · ${systemStatus.cronErrorsLast24h} cron errors in 24h` : " · cron clean in 24h"}
-            </Link>
-          ) : null}
-          <div className={cn(
-            "mt-4 flex items-center justify-center gap-1.5 rounded-xl border py-2.5",
-            loading && !stats
-              ? "bg-slate-50 border-slate-100"
-              : allSystemsOperational
-                ? "bg-emerald-50 border-emerald-100"
-                : "bg-orange-50 border-orange-100",
-          )}>
-            {loading && !stats ? (
-              <>
-                <RefreshCw className="h-4 w-4 animate-spin text-slate-400" />
-                <span className="text-xs font-semibold text-slate-500">Loading system status…</span>
-              </>
-            ) : allSystemsOperational ? (
-              <>
-                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                <span className="text-xs font-semibold text-emerald-700">All systems operational</span>
-              </>
-            ) : (
-              <>
-                <AlertTriangle className="h-4 w-4 text-orange-600" />
-                <span className="text-xs font-semibold text-orange-700">Some checks need attention</span>
-              </>
-            )}
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
+            Live
+          </span>
+        </div>
+
+        <div className="divide-y divide-slate-100 rounded-lg border border-slate-100">
+          {sortedBookings.length === 0 ? (
+            <p className="px-4 py-8 text-center text-sm text-slate-400">No bookings scheduled for today.</p>
+          ) : (
+            sortedBookings.slice(0, 8).map((booking) => {
+              const { label: statusLabel, tone } = officeScheduleStatusPresentation(booking);
+              const statusColor =
+                tone === "unassigned"
+                  ? "bg-amber-100 text-amber-800"
+                  : tone === "completed"
+                    ? "bg-emerald-100 text-emerald-800"
+                    : tone === "in_progress"
+                      ? "bg-violet-100 text-violet-800"
+                      : tone === "assigned"
+                        ? "bg-blue-100 text-blue-800"
+                        : "bg-slate-100 text-slate-700";
+
+              return (
+                <Link
+                  key={booking.id}
+                  href={`/office/bookings/${booking.id}`}
+                  className="group flex items-center gap-4 px-4 py-3 hover:bg-slate-50"
+                >
+                  <span className="w-14 shrink-0 text-sm font-semibold tabular-nums text-slate-700">
+                    {booking.time?.slice(0, 5) ?? "—"}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium capitalize text-slate-900">
+                      {(booking.service ?? "Service").replace(/-/g, " ")}
+                    </p>
+                    <p className="truncate text-xs text-slate-500">{booking.location ?? "No location"}</p>
+                  </div>
+                  <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold", statusColor)}>
+                    {statusLabel}
+                  </span>
+                  <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100" />
+                </Link>
+              );
+            })
+          )}
+        </div>
+        {sortedBookings.length > 8 ? (
+          <Link
+            href="/office/schedule"
+            className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#2c79ff] hover:underline"
+          >
+            + {sortedBookings.length - 8} more bookings
+            <ArrowUpRight className="h-3.5 w-3.5" />
+          </Link>
+        ) : null}
+      </ZohoPanel>
+
+      {/* ── Second row: Cleaner capacity + Revenue & cash ───────────────── */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <ZohoPanel title="Cleaner capacity" href="/office/cleaners" linkLabel="Manage cleaners">
+          <div className="mb-4 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Workforce today</p>
+              <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{cleanerStats.total}</p>
+              <p className="text-xs text-slate-500">total cleaners on roster</p>
+            </div>
+            <div className="rounded-lg bg-emerald-50 px-3 py-2 text-right">
+              <p className="text-xs text-emerald-700">Available now</p>
+              <p className="text-xl font-bold tabular-nums text-emerald-800">{cleanerStats.availableIdle}</p>
+            </div>
           </div>
-        </section>
+          <HorizontalBreakdownBar segments={cleanerSegments} total={cleanerStats.total} />
+        </ZohoPanel>
+
+        <ZohoPanel title="Revenue & cash" href="/office/payouts" linkLabel="View payments">
+          <div className="mb-4 flex items-end justify-between">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Cash position</p>
+              <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">
+                {stats != null ? zar(cashTotal) : loading ? "…" : "—"}
+              </p>
+            </div>
+            {overdueZar > 0 ? (
+              <div className="rounded-lg bg-amber-50 px-3 py-2 text-right">
+                <p className="text-xs text-amber-700">At risk</p>
+                <p className="text-lg font-bold tabular-nums text-amber-800">{zar(overdueZar)}</p>
+              </div>
+            ) : null}
+          </div>
+          <HorizontalBreakdownBar segments={cashSegments} total={cashTotal} />
+
+          <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
+            <Link
+              href="/office/cleaners"
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              <UserCheck className="h-3.5 w-3.5 text-[#2c79ff]" />
+              Assign cleaners
+            </Link>
+            <Link
+              href="/office/bookings/create"
+              className="inline-flex items-center gap-1.5 rounded-md bg-[#2c79ff] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1a68ee]"
+            >
+              <TrendingUp className="h-3.5 w-3.5" />
+              Create booking
+            </Link>
+            <Link
+              href="/office/notifications"
+              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
+            >
+              <Send className="h-3.5 w-3.5 text-[#2c79ff]" />
+              Notify
+            </Link>
+          </div>
+        </ZohoPanel>
       </div>
+
+      {/* ── Compact KPI strip (Zoho income/expense row) ───────────────────── */}
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        {[
+          {
+            label: "Bookings (30d)",
+            value: stats != null ? String(stats.totalBookingsWindow ?? 0) : loading ? "…" : "—",
+            sub: "Paid, revenue-eligible",
+            icon: BarChart3,
+            href: "/office/analytics",
+          },
+          {
+            label: "Avg booking value",
+            value: stats != null ? zar(stats.avgBookingValueZar ?? 0) : loading ? "…" : "—",
+            sub: "30-day window",
+            icon: Zap,
+            href: "/office/analytics",
+          },
+          {
+            label: "Pending payments",
+            value: stats != null ? zar(pendingZar) : loading ? "…" : "—",
+            sub: `${paymentsSnapshot?.pendingCount ?? 0} invoices`,
+            icon: Clock,
+            href: "/office/payouts",
+          },
+          {
+            label: "System health",
+            value: allSystemsOperational ? "Healthy" : cronErrors > 0 ? `${cronErrors} errors` : "Attention",
+            sub: allSystemsOperational ? "All services operational" : "View ops health",
+            icon: allSystemsOperational ? CheckCircle2 : Shield,
+            href: "/office/ops-health",
+            tone: allSystemsOperational ? "ok" : "warn",
+          },
+        ].map((kpi) => {
+          const KpiIcon = kpi.icon;
+          return (
+            <Link
+              key={kpi.label}
+              href={kpi.href}
+              className="group rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
+            >
+              <div className="flex items-start justify-between">
+                <div>
+                  <p className="text-xs font-medium text-slate-500">{kpi.label}</p>
+                  <p
+                    className={cn(
+                      "mt-1 text-xl font-bold tabular-nums",
+                      kpi.tone === "ok" ? "text-emerald-700" : kpi.tone === "warn" ? "text-amber-700" : "text-slate-900",
+                    )}
+                  >
+                    {kpi.value}
+                  </p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">{kpi.sub}</p>
+                </div>
+                <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 text-slate-500 group-hover:bg-blue-50 group-hover:text-[#2c79ff]">
+                  <KpiIcon className="h-4 w-4" />
+                </div>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+
+      <QuickLinkFooter />
     </div>
   );
 }

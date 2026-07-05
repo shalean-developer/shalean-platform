@@ -8,6 +8,10 @@ export { customerPreferredDispatchNotice } from "@/lib/dispatch/preferredCleaner
 
 export type CustomerBookingStatusLabel =
   | "Scheduled"
+  | "Cleaner assigned"
+  | "On the way"
+  | "In progress"
+  | "Awaiting payment"
   | "Completed"
   | "Completed (billed monthly)"
   | "Billed monthly"
@@ -30,6 +34,13 @@ export function customerBookingStatusLabel(b: DashboardBooking): CustomerBooking
   if (st === "cancelled") return "Cancelled";
   if (st === "failed") return "Failed";
   if (ps === "pending_monthly") return "Billed monthly";
+
+  const phase = describeDashboardBookingOperational(b).operationalPhase;
+  if (phase === "pending_payment" || phase === "pending_payment_recurring") return "Awaiting payment";
+  if (phase === "travelling") return "On the way";
+  if (phase === "active") return "In progress";
+  if (phase === "accepted" || phase === "assigned") return "Cleaner assigned";
+
   return "Scheduled";
 }
 

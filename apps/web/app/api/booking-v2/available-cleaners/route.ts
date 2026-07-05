@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
-import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
+import {
+  canonicalServiceSlugFromBookingV2,
+  deriveDurationMinutesFromBookingV2,
+} from "@/lib/booking-v2/bookingV2ServiceSlug";
 import type { AvailableCleanerV2, CleanerBadge } from "@/src/features/booking-v2/types";
 
 export const runtime = "nodejs";
@@ -17,15 +20,6 @@ const AVATAR_COLORS = [
   "bg-orange-100 text-orange-700",
   "bg-pink-100 text-pink-700",
 ];
-
-const SERVICE_SLUG_TO_TYPE: Record<string, string> = {
-  "regular-cleaning": "standard",
-  "deep-cleaning": "deep",
-  "moving-cleaning": "move",
-  "office-cleaning": "office",
-  "carpet-cleaning": "carpet",
-  "airbnb-cleaning": "airbnb",
-};
 
 function toInitials(name: string): string {
   return name
@@ -60,30 +54,35 @@ export async function GET(request: Request) {
   const date = url.searchParams.get("date") ?? "";
   const time = url.searchParams.get("time") ?? "";
   const serviceSlug = url.searchParams.get("serviceSlug") ?? "";
+  const locationId = url.searchParams.get("locationId")?.trim() ?? "";
   const durationParam = url.searchParams.get("durationMinutes");
 
-  const serviceType = SERVICE_SLUG_TO_TYPE[serviceSlug] ?? null;
-
-  // Derive duration: from param, or from static service config, fallback to 180 min
-  let durationMinutes = durationParam ? parseInt(durationParam, 10) : 0;
-  if (!durationMinutes || isNaN(durationMinutes)) {
-    const staticConfig = SERVICE_CONFIG[serviceSlug as keyof typeof SERVICE_CONFIG];
-    durationMinutes = staticConfig ? Math.round(staticConfig.estimatedDurationHours * 60) : 180;
-  }
+  const serviceType = canonicalServiceSlugFromBookingV2(serviceSlug);
+  const durationMinutes = deriveDurationMinutesFromBookingV2(
+    serviceSlug,
+    durationParam ? parseInt(durationParam, 10) : null,
+  );
 
   const hasDateAndTime =
     /^\d{4}-\d{2}-\d{2}$/.test(date) && /^\d{2}:\d{2}$/.test(time);
 
   if (hasDateAndTime) {
+    if (!locationId) {
+      return NextResponse.json(
+        { error: "locationId is required when date and time are set." },
+        { status: 400 },
+      );
+    }
+
     let eligibleCleaners;
     try {
       eligibleCleaners = await getEligibleCleaners(admin, {
         date,
         startTime: time,
         durationMinutes,
-        locationId: "",
-        locationExpandedIds: null,
-        serviceType: serviceType ?? undefined,
+        locationId,
+        locationExpandedIds: [locationId],
+        serviceType,
         enforcePublicDailyWorkloadLimit: true,
         limit: 20,
       });
@@ -111,7 +110,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ cleaners: result });
   }
 
-  // Graceful fallback: basic list when date/time not yet selected
   const { data: rows, error } = await admin
     .from("cleaners")
     .select("id, full_name, rating, jobs_completed, status, is_available, location")

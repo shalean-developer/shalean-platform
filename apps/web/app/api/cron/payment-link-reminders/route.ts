@@ -20,6 +20,8 @@ import {
   resolvePaymentLinkDispatchDecision,
 } from "@/lib/pay/paymentDecisionDispatch";
 import { priorPaymentConversionBucketForCustomer } from "@/lib/pay/priorPaymentConversionBucket";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 
@@ -36,7 +38,8 @@ function isoPlusMinutes(baseMs: number, min: number): string {
 
 type Row = {
   id: string;
-  user_id: string | null;
+  customer_id?: string | null;
+  user_id?: string | null;
   customer_name: string | null;
   customer_phone: string | null;
   customer_email: string | null;
@@ -89,10 +92,11 @@ export async function POST(request: Request) {
   try {
   const now = Date.now();
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: candidates, error } = await admin
     .from("bookings")
     .select(
-      "id, user_id, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link, paystack_reference, payment_link_expires_at, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel",
+      `id, ${ownershipColumn}, customer_name, customer_phone, customer_email, service, date, time, total_paid_zar, payment_link, paystack_reference, payment_link_expires_at, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, booking_snapshot, payment_link_send_count, payment_link_first_sent_at, payment_link_delivery, payment_conversion_bucket, payment_last_touch_channel`,
     )
     .eq("status", "pending_payment")
     .not("payment_link_expires_at", "is", null)
@@ -244,7 +248,7 @@ export async function POST(request: Request) {
         mode: "chain",
         supabaseAdmin: admin,
         bookingId: row.id,
-        userId: row.user_id,
+        userId: bookingCustomerKey(row) || null,
         phoneTryOrder: decision.phoneTryOrder.length ? decision.phoneTryOrder : undefined,
         emailPayload: {
           customerEmail: email,

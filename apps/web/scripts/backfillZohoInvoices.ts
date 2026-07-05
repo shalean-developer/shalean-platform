@@ -16,6 +16,8 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
+import { bookingCustomerKey } from "../lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "../lib/customer/customerBookingsForUser";
 import { createZohoInvoice, markZohoInvoicePaid, todayYmdJhb, zohoInvoiceExists } from "../lib/zoho/zohoBooksService";
 import {
   isShaleanSystemLoginEmail,
@@ -35,7 +37,8 @@ const ZOHO_THROTTLE_MS = 400;
 
 type Row = {
   id: string;
-  user_id: string | null;
+  customer_id?: string | null;
+  user_id?: string | null;
   customer_email: string | null;
   customer_name: string | null;
   customer_phone: string | null;
@@ -49,15 +52,19 @@ type Row = {
   paystack_reference: string | null;
   payment_status: string | null;
   is_monthly_billing_booking: boolean | null;
+  sales_document_id?: string | null;
+  payment_method?: string | null;
   zoho_invoice_id: string | null;
 };
 
 function isPaidPerVisit(r: Row): boolean {
   if (r.is_monthly_billing_booking === true) return false;
   if (String(r.payment_status ?? "").toLowerCase() === "pending_monthly") return false;
+  if (String(r.sales_document_id ?? "").trim()) return false;
+  if (String(r.payment_method ?? "").toLowerCase() === "zoho") return false;
   const totalZar = r.total_paid_zar ?? (r.amount_paid_cents ?? 0) / 100;
   if (totalZar <= 0) return false;
-  return Boolean(String(r.user_id ?? "").trim() || String(r.customer_email ?? "").trim());
+  return Boolean(bookingCustomerKey(r) || String(r.customer_email ?? "").trim());
 }
 
 async function repairStaleBookingZohoIds(admin: SupabaseClient): Promise<number> {
@@ -135,6 +142,27 @@ async function main() {
   }
 
   const admin: SupabaseClient = createClient(url, key, { auth: { persistSession: false } });
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  const bookingSelectFields = [
+    "id",
+    ownershipColumn,
+    "customer_email",
+    "customer_name",
+    "customer_phone",
+    "booking_snapshot",
+    "service",
+    "date",
+    "location",
+    "suburb",
+    "total_paid_zar",
+    "amount_paid_cents",
+    "paystack_reference",
+    "payment_status",
+    "is_monthly_billing_booking",
+    "sales_document_id",
+    "payment_method",
+    "zoho_invoice_id",
+  ].join(", ");
 
   console.log(apply ? "Mode: APPLY (will write to Zoho + Supabase)" : "Mode: DRY-RUN (no writes)");
 
@@ -161,9 +189,7 @@ async function main() {
   for (;;) {
     const { data, error } = await admin
       .from("bookings")
-      .select(
-        "id, user_id, customer_email, customer_name, customer_phone, booking_snapshot, service, date, location, suburb, total_paid_zar, amount_paid_cents, paystack_reference, payment_status, is_monthly_billing_booking, zoho_invoice_id",
-      )
+      .select(bookingSelectFields)
       .is("zoho_invoice_id", null)
       .not("payment_completed_at", "is", null)
       .order("created_at", { ascending: true })
@@ -174,7 +200,7 @@ async function main() {
       break;
     }
 
-    const rows = (data ?? []) as Row[];
+    const rows = (data ?? []) as unknown as Row[];
     for (const r of rows) {
       scanned += 1;
       if (!isPaidPerVisit(r)) continue;

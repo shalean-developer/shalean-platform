@@ -20,10 +20,59 @@ import { serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/
 import { resolveCustomerPhoneFromAuthAdmin, trimCustomerPhone } from "@/lib/admin/adminBookingCustomerContact";
 import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
+import {
+  resolveBookingV2LocationContext,
+  type BookingV2LocationContext,
+} from "@/lib/booking-v2/bookingV2LocationContext";
+import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
+import {
+  bookingV2SlotHasEligibleCleaners,
+} from "@/lib/booking-v2/bookingV2SlotEligibility";
+import {
+  canonicalServiceSlugFromBookingV2,
+  deriveDurationMinutesFromBookingV2,
+} from "@/lib/booking-v2/bookingV2ServiceSlug";
 
 export const runtime = "nodejs";
 
 type SupabaseAdmin = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+async function resolveConfirmLocationContext(
+  supabase: SupabaseAdmin,
+  data: {
+    suburb: string;
+    serviceAreaLocationId?: string;
+    serviceAreaCityId?: string;
+    equipmentQuote?: EquipmentQuoteResult | null;
+  },
+): Promise<BookingV2LocationContext | null> {
+  const clientLocId = data.serviceAreaLocationId?.trim() ?? "";
+  if (clientLocId && UUID_RE.test(clientLocId)) {
+    const ctx = await resolveBookingV2LocationContext(supabase, data.suburb);
+    if (ctx && ctx.locationId === clientLocId) {
+      const eqLat = data.equipmentQuote?.customer_latitude;
+      const eqLng = data.equipmentQuote?.customer_longitude;
+      if (typeof eqLat === "number" && typeof eqLng === "number") {
+        return { ...ctx, latitude: eqLat, longitude: eqLng };
+      }
+      return ctx;
+    }
+  }
+  return resolveBookingV2LocationContext(supabase, data.suburb);
+}
+
+function locationPersistFields(ctx: BookingV2LocationContext) {
+  return {
+    location_id: ctx.locationId,
+    city_id: ctx.cityId,
+    ...(ctx.latitude != null && ctx.longitude != null
+      ? { latitude: ctx.latitude, longitude: ctx.longitude }
+      : {}),
+  };
+}
 
 /**
  * Saves the property address captured in Step 1 of the booking flow to the
@@ -268,6 +317,83 @@ export async function POST(request: Request) {
 
   const persistPricing = pricingPersistFields(serverBreakdown);
 
+  const canonicalServiceSlug = canonicalServiceSlugFromBookingV2(data.serviceSlug);
+  const durationMinutes = deriveDurationMinutesFromBookingV2(
+    data.serviceSlug,
+    serverBreakdown.estimated_duration_minutes ?? null,
+  );
+  const timeHm = data.time.trim().slice(0, 5);
+
+  const locationCtx = await resolveConfirmLocationContext(supabase, {
+    suburb: data.suburb,
+    serviceAreaLocationId: data.serviceAreaLocationId,
+    serviceAreaCityId: data.serviceAreaCityId,
+    equipmentQuote: serverEquipmentQuote ?? (data.equipmentQuote as EquipmentQuoteResult | null),
+  });
+
+  if (!locationCtx) {
+    return NextResponse.json(
+      {
+        error:
+          "We could not match your suburb to a service area. Choose a suburb from the list or contact us to book.",
+      },
+      { status: 422 },
+    );
+  }
+
+  if (locationCtx.latitude == null || locationCtx.longitude == null) {
+    return NextResponse.json(
+      {
+        error:
+          "Your service area is missing map coordinates. Please contact us to complete this booking.",
+      },
+      { status: 422 },
+    );
+  }
+
+  if (data.cleanerMode === "individual_cleaners") {
+    const hasEligible = await bookingV2SlotHasEligibleCleaners(supabase, {
+      serviceSlug: data.serviceSlug,
+      date: data.date,
+      time: timeHm,
+      location: locationCtx,
+      serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
+      durationMinutes,
+    });
+    if (!hasEligible) {
+      return NextResponse.json(
+        {
+          error:
+            "No cleaners are available for this date and time in your area. Please choose another slot or contact us.",
+        },
+        { status: 409 },
+      );
+    }
+
+    const selectedId = data.selectedCleanerIds?.[0]?.trim();
+    if (selectedId) {
+      const pickedEligible = await getEligibleCleaners(supabase, {
+        date: data.date,
+        startTime: timeHm,
+        durationMinutes,
+        locationId: locationCtx.locationId,
+        locationExpandedIds: [locationCtx.locationId],
+        serviceType: canonicalServiceSlug,
+        cleanerIds: [selectedId],
+        enforcePublicDailyWorkloadLimit: true,
+        limit: 1,
+      });
+      if (pickedEligible.length === 0) {
+        return NextResponse.json(
+          { error: "Your selected cleaner is no longer available for this slot." },
+          { status: 409 },
+        );
+      }
+    }
+  }
+
+  const locationFields = locationPersistFields(locationCtx);
+
   // ── 7. Generate Paystack reference ────────────────────────────────────────────
   const paystackReference = `bv2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -294,7 +420,7 @@ export async function POST(request: Request) {
     .eq(ownershipColumn, userId)
     .eq("date", data.date)
     .eq("time", data.time)
-    .eq("service_slug", data.serviceSlug)
+    .eq("service_slug", canonicalServiceSlug)
     .eq("status", "pending_payment")
     .eq("slot_duplicate_exempt", false)
     .maybeSingle();
@@ -307,7 +433,9 @@ export async function POST(request: Request) {
         customer_phone: customerPhone,
         ...persistPricing,
         ...equipmentPersist,
+        ...locationFields,
         price_snapshot: priceSnapshot,
+        service_slug: canonicalServiceSlug,
       })
       .eq("id", existingBooking.id);
 
@@ -347,16 +475,18 @@ export async function POST(request: Request) {
 
       // Service
       service: data.serviceSlug,
-      service_slug: data.serviceSlug,
+      service_slug: canonicalServiceSlug,
 
       // Status
       status: "pending_payment",
       payment_status: "pending",
+      dispatch_status: "searching",
 
       // Location
       location: data.address,
       suburb: data.suburb,
       postal_code: data.postalCode,
+      ...locationFields,
       access_instructions: data.accessInstructions || null,
       parking_instructions: data.parkingInstructions || null,
       gate_code: data.gateCode || null,

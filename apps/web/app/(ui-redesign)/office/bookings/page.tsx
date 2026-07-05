@@ -6,12 +6,15 @@ import { useSearchParams } from "next/navigation";
 import {
   Search,
   Calendar,
+  CalendarDays,
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Download,
   Eye,
   UserCheck,
   Users,
+  UserX,
   XCircle,
   RefreshCw,
   Loader2,
@@ -21,6 +24,16 @@ import {
   Filter,
   Plus,
 } from "lucide-react";
+import {
+  OfficeZohoMetricCard,
+  OfficeZohoMetricsRow,
+  OfficeZohoPageHeader,
+  OfficeZohoPillTabs,
+  OfficeZohoSecondaryButton,
+  OfficeZohoSegmentTabs,
+  OfficeZohoTableShell,
+  OfficeZohoToggle,
+} from "@/components/admin/office/OfficeZohoChrome";
 import { cn } from "@/lib/utils";
 import { useAdminData, adminFetch } from "@/hooks/useAdminData";
 import {
@@ -36,7 +49,13 @@ import {
 import { OfficeDeleteBookingDialog } from "@/components/admin/office/OfficeDeleteBookingDialog";
 import { OfficeAssignTeamDialog } from "@/components/admin/office/OfficeAssignTeamDialog";
 import { adminBookingAssignmentDisplay } from "@/lib/admin/adminBookingAssignmentDisplay";
+import { johannesburgCalendarMonthDateRangeYmd } from "@/lib/dashboard/johannesburgMonth";
 import { isTeamService } from "@/lib/dispatch/teamServiceDetection";
+
+function defaultBookingsMonthRange() {
+  const { startYmd, endYmd } = johannesburgCalendarMonthDateRangeYmd();
+  return { startYmd, endYmd };
+}
 
 const STATUS_MAP: Record<string, { label: string; className: string }> = {
   confirmed:       { label: "Confirmed",       className: "bg-blue-100 text-blue-700" },
@@ -46,6 +65,7 @@ const STATUS_MAP: Record<string, { label: string; className: string }> = {
   cancelled:       { label: "Cancelled",       className: "bg-slate-100 text-slate-600" },
   pending_payment: { label: "Awaiting Payment",className: "bg-amber-100 text-amber-700" },
   pending:         { label: "Pending",         className: "bg-orange-100 text-orange-700" },
+  pending_assignment: { label: "Awaiting assign", className: "bg-sky-100 text-sky-800" },
 };
 
 type BookingRow = {
@@ -107,6 +127,7 @@ type DateScope = "all" | "today" | "upcoming" | "completed";
 type OpsQuick = "" | "monthly_only" | "awaiting_payment" | "today" | "tomorrow";
 type AttentionFilter = "all" | "sla" | "follow_up" | "unassigned" | "unassignable" | "starting_soon";
 type ServiceFilter = "all" | "standard" | "deep" | "move" | "airbnb" | "carpet";
+type ViewSegment = "overview" | "attention" | "schedule";
 
 type CityOption = { id: string; name: string };
 
@@ -176,12 +197,12 @@ function bookingSupportsTeamAssign(row: BookingRow): boolean {
   return st !== "cancelled" && st !== "pending_payment" && st !== "payment_expired";
 }
 
-function LoadingRows() {
+function LoadingRows({ colSpan }: { colSpan: number }) {
   return (
     <>
       {Array.from({ length: 6 }).map((_, i) => (
         <tr key={i}>
-          <td colSpan={8} className="px-4 py-3">
+          <td colSpan={colSpan} className="px-4 py-3">
             <div className="h-5 w-full animate-pulse rounded-lg bg-slate-100" />
           </td>
         </tr>
@@ -200,8 +221,8 @@ export default function BookingsPage() {
   const [dateScope, setDateScope] = useState<DateScope>("all");
   const [attentionFilter, setAttentionFilter] = useState<AttentionFilter>("all");
   const [opsQuick, setOpsQuick] = useState<OpsQuick>("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(() => defaultBookingsMonthRange().startYmd);
+  const [dateTo, setDateTo] = useState(() => defaultBookingsMonthRange().endYmd);
   const [serviceFilter, setServiceFilter] = useState<ServiceFilter>("all");
   const [cityId, setCityId] = useState("all");
   const [cities, setCities] = useState<CityOption[]>([]);
@@ -215,6 +236,11 @@ export default function BookingsPage() {
   const [teamAssignTarget, setTeamAssignTarget] = useState<BookingRow | null>(null);
   const [exporting, setExporting] = useState(false);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [viewSegment, setViewSegment] = useState<ViewSegment>("overview");
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
+  const [restoringRecurring, setRestoringRecurring] = useState(false);
 
   useEffect(() => {
     const f = (searchParams.get("filter") ?? "").trim().toLowerCase();
@@ -268,14 +294,17 @@ export default function BookingsPage() {
     };
   }, []);
 
+  const defaultMonthRange = useMemo(() => defaultBookingsMonthRange(), []);
+  const hasCustomDateRange =
+    dateFrom !== defaultMonthRange.startYmd || dateTo !== defaultMonthRange.endYmd;
+
   const listFilter = buildListFilter(dateScope, attentionFilter);
   const hasExtraFilters =
     !recurringIdFilter &&
     (dateScope !== "all" ||
       attentionFilter !== "all" ||
       opsQuick !== "" ||
-      dateFrom !== "" ||
-      dateTo !== "" ||
+      hasCustomDateRange ||
       serviceFilter !== "all" ||
       cityId !== "all");
 
@@ -300,8 +329,20 @@ export default function BookingsPage() {
       const label = OPS_QUICK_OPTIONS.find((o) => o.key === opsQuick)?.label ?? opsQuick;
       chips.push({ key: "opsQuick", label, clear: () => setOpsQuick("") });
     }
-    if (dateFrom) chips.push({ key: "from", label: `From ${dateFrom}`, clear: () => setDateFrom("") });
-    if (dateTo) chips.push({ key: "to", label: `To ${dateTo}`, clear: () => setDateTo("") });
+    if (dateFrom && dateFrom !== defaultMonthRange.startYmd) {
+      chips.push({
+        key: "from",
+        label: `From ${dateFrom}`,
+        clear: () => setDateFrom(defaultMonthRange.startYmd),
+      });
+    }
+    if (dateTo && dateTo !== defaultMonthRange.endYmd) {
+      chips.push({
+        key: "to",
+        label: `To ${dateTo}`,
+        clear: () => setDateTo(defaultMonthRange.endYmd),
+      });
+    }
     if (serviceFilter !== "all") {
       const label = SERVICE_OPTIONS.find((o) => o.key === serviceFilter)?.label ?? serviceFilter;
       chips.push({ key: "service", label, clear: () => setServiceFilter("all") });
@@ -311,14 +352,15 @@ export default function BookingsPage() {
       chips.push({ key: "city", label, clear: () => setCityId("all") });
     }
     return chips;
-  }, [attentionFilter, cities, cityId, dateFrom, dateScope, dateTo, opsQuick, recurringIdFilter, serviceFilter]);
+  }, [attentionFilter, cities, cityId, dateFrom, dateScope, dateTo, defaultMonthRange, opsQuick, recurringIdFilter, serviceFilter]);
 
   function clearAllFilters() {
+    const month = defaultBookingsMonthRange();
     setDateScope("all");
     setAttentionFilter("all");
     setOpsQuick("");
-    setDateFrom("");
-    setDateTo("");
+    setDateFrom(month.startYmd);
+    setDateTo(month.endYmd);
     setServiceFilter("all");
     setCityId("all");
     setActiveFilter("all");
@@ -339,6 +381,7 @@ export default function BookingsPage() {
     if (hasExtraFilters || activeFilter !== "all" || debouncedSearch) {
       clearAllFilters();
     }
+    setViewSegment("overview");
     scrollToBookingsTable();
   }
 
@@ -351,6 +394,7 @@ export default function BookingsPage() {
       setOpsQuick("");
       setActiveFilter("all");
     }
+    setViewSegment("attention");
     scrollToBookingsTable();
   }
 
@@ -363,6 +407,7 @@ export default function BookingsPage() {
       setOpsQuick("");
       setActiveFilter("all");
     }
+    setViewSegment("attention");
     scrollToBookingsTable();
   }
 
@@ -376,7 +421,43 @@ export default function BookingsPage() {
       setActiveFilter("completed");
       setOpsQuick("");
     }
+    setViewSegment("schedule");
     scrollToBookingsTable();
+  }
+
+  function applyViewSegment(next: ViewSegment) {
+    setViewSegment(next);
+    if (next === "overview") {
+      setAttentionFilter("all");
+      setDateScope("all");
+      setOpsQuick("");
+    } else if (next === "attention") {
+      setDateScope("all");
+      setOpsQuick("");
+      if (attentionFilter === "all") setAttentionFilter("unassigned");
+    } else if (next === "schedule") {
+      setAttentionFilter("all");
+      setOpsQuick("");
+      if (dateScope === "all") setDateScope("upcoming");
+    }
+    scrollToBookingsTable();
+  }
+
+  function toggleBookingSelection(id: string) {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function toggleSelectAllVisible() {
+    setSelectedIds((prev) => {
+      const allSelected = bookings.length > 0 && bookings.every((b) => prev.has(b.id));
+      if (allSelected) return new Set();
+      return new Set(bookings.map((b) => b.id));
+    });
   }
 
   const totalBookingsActive =
@@ -415,6 +496,10 @@ export default function BookingsPage() {
     "/api/admin/bookings",
     { params: listQueryParams },
   );
+
+  useEffect(() => {
+    if (!loading && data) setLastRefreshedAt(new Date());
+  }, [loading, data]);
 
   const serverBookings = data?.bookings ?? [];
   const removedIds = useMemo(() => new Set(pendingRemovals.map((b) => b.id)), [pendingRemovals]);
@@ -474,6 +559,44 @@ export default function BookingsPage() {
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok });
     setTimeout(() => setToast(null), 3000);
+  }
+
+  async function handleRestoreRecurringAssignments() {
+    if (restoringRecurring || loading) return;
+    setRestoringRecurring(true);
+    try {
+      const res = await adminFetch<{
+        ok?: boolean;
+        updated?: number;
+        skipped?: number;
+        remaining?: number;
+        plansUpdated?: number;
+        error?: string;
+      }>("/api/admin/bookings/restore-recurring-assignments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      if (!res.ok || !res.data?.ok) {
+        showToast(res.data?.error ?? res.error ?? "Restore failed", false);
+        return;
+      }
+      const updated = res.data.updated ?? 0;
+      const remaining = res.data.remaining ?? 0;
+      showToast(
+        updated > 0
+          ? `Assigned ${updated} recurring booking${updated === 1 ? "" : "s"}${remaining > 0 ? ` · ${remaining} still need a cleaner` : ""}`
+          : remaining > 0
+            ? `${remaining} recurring booking${remaining === 1 ? "" : "s"} still need a manual cleaner pick`
+            : "All recurring bookings are assigned",
+        updated > 0,
+      );
+      void refetch();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : "Restore failed", false);
+    } finally {
+      setRestoringRecurring(false);
+    }
   }
 
   async function handleExport() {
@@ -575,6 +698,42 @@ export default function BookingsPage() {
   const unassignedCount = data?.attention?.unassigned ?? 0;
   const overdueCount = data?.attention?.slaBreaches ?? 0;
   const completedTodayCount = data?.statusCounts?.completedToday ?? 0;
+  const attentionTotal = unassignedCount + overdueCount;
+  const revenueTodayZar = data?.metrics?.revenueTodayZar ?? 0;
+
+  const statusPillTabs = useMemo(
+    () =>
+      (["all", ...ALL_STATUSES] as const).map((s) => ({
+        key: s,
+        label: s === "all" ? "All" : (STATUS_MAP[s]?.label ?? s),
+        count: counts[s] ?? 0,
+      })),
+    [counts],
+  );
+
+  const segmentTabs = useMemo(
+    () =>
+      [
+        {
+          key: "overview",
+          title: "All bookings",
+          subtitle: "Operations overview",
+        },
+        {
+          key: "attention",
+          title: attentionTotal === 1 ? "Needs attention" : "Need attention",
+          subtitle: "Unassigned & SLA breaches",
+          badge: attentionTotal > 0 ? attentionTotal : undefined,
+          badgeTone: "warn" as const,
+        },
+        {
+          key: "schedule",
+          title: "Today & upcoming",
+          subtitle: "By visit date",
+        },
+      ] satisfies Parameters<typeof OfficeZohoSegmentTabs>[0]["tabs"],
+    [attentionTotal],
+  );
 
   return (
     <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden">
@@ -618,39 +777,29 @@ export default function BookingsPage() {
       )}
 
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Bookings</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Manage all customer bookings, assignments and actions.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Link
-            href="/office/bookings/create"
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 shadow-sm"
-          >
-            <Plus className="h-4 w-4" /> Create booking
-          </Link>
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-            Refresh
-          </button>
-          <button
-            type="button"
-            disabled={exporting || loading}
-            onClick={() => void handleExport()}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
-            Export
-          </button>
-        </div>
-      </div>
+      <OfficeZohoPageHeader
+        title="Bookings"
+        subtitle="Manage customer bookings, assignments, and dispatch."
+        live
+        actions={
+          <>
+            <Link
+              href="/office/bookings/create"
+              className="inline-flex items-center gap-2 rounded-md bg-[var(--sidebar-active)] px-4 py-2 text-sm font-semibold text-white shadow-sm hover:brightness-95"
+            >
+              <Plus className="h-4 w-4" /> Create booking
+            </Link>
+            <OfficeZohoSecondaryButton disabled={exporting || loading} onClick={() => void handleExport()}>
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+              Export
+            </OfficeZohoSecondaryButton>
+            <OfficeZohoSecondaryButton onClick={() => void refetch()} disabled={loading}>
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+              Refresh
+            </OfficeZohoSecondaryButton>
+          </>
+        }
+      />
 
       {recurringIdFilter && (
         <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3">
@@ -688,63 +837,104 @@ export default function BookingsPage() {
         </div>
       )}
 
-      {/* KPI Row */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          {
-            label: "Total bookings",
-            value: loading ? "—" : counts.all,
-            sub: "Matching filters",
-            color: "text-slate-800",
-            onClick: applyTotalBookingsView,
-            active: totalBookingsActive,
-          },
-          {
-            label: "Unassigned",
-            value: loading ? "—" : unassignedCount,
-            sub: "Need attention",
-            color: "text-orange-600",
-            onClick: applyUnassignedView,
-            active: attentionFilter === "unassigned",
-          },
-          {
-            label: "SLA breaches",
-            value: loading ? "—" : overdueCount,
-            sub: "Overdue dispatch",
-            color: overdueCount > 0 ? "text-red-600" : "text-slate-400",
-            onClick: applySlaView,
-            active: attentionFilter === "sla",
-          },
-          {
-            label: "Completed (today)",
-            value: loading ? "—" : completedTodayCount,
-            sub: "Successfully done",
-            color: "text-emerald-600",
-            onClick: applyCompletedTodayView,
-            active: dateScope === "today" && activeFilter === "completed" && attentionFilter === "all",
-          },
-        ].map((k) => (
-          <button
-            key={k.label}
-            type="button"
-            onClick={k.onClick}
-            className={cn(
-              "rounded-2xl border bg-white p-4 text-left shadow-sm transition cursor-pointer",
-              "hover:border-blue-200 hover:bg-blue-50/30",
-              k.active ? "border-blue-300 ring-2 ring-blue-100" : "border-slate-100",
-            )}
+      {/* Summary metrics — Zoho Books style */}
+      <OfficeZohoMetricsRow
+        meta={
+          <>
+            <p>
+              List last refreshed
+              {lastRefreshedAt
+                ? ` on ${lastRefreshedAt.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`
+                : ""}
+            </p>
+            <button
+              type="button"
+              onClick={() => void refetch()}
+              className="mt-1 font-semibold text-[--sidebar-active] hover:underline"
+            >
+              Refresh list
+            </button>
+          </>
+        }
+      >
+        <OfficeZohoMetricCard
+          icon={BookOpen}
+          label="Total bookings"
+          value={loading ? "—" : counts.all.toLocaleString("en-ZA")}
+          onClick={applyTotalBookingsView}
+          active={totalBookingsActive}
+        />
+        <OfficeZohoMetricCard
+          icon={UserX}
+          iconClassName="bg-orange-50 text-orange-600"
+          label="Unassigned"
+          value={loading ? "—" : unassignedCount.toLocaleString("en-ZA")}
+          onClick={applyUnassignedView}
+          active={attentionFilter === "unassigned"}
+        />
+        <OfficeZohoMetricCard
+          icon={CalendarDays}
+          iconClassName="bg-emerald-50 text-emerald-600"
+          label="Completed today"
+          value={loading ? "—" : completedTodayCount.toLocaleString("en-ZA")}
+          onClick={applyCompletedTodayView}
+          active={dateScope === "today" && activeFilter === "completed" && attentionFilter === "all"}
+        />
+      </OfficeZohoMetricsRow>
+
+      {!loading && revenueTodayZar > 0 ? (
+        <p className="text-xs text-slate-500">
+          Revenue collected today:{" "}
+          <span className="font-semibold tabular-nums text-slate-800">
+            R {Math.round(revenueTodayZar).toLocaleString("en-ZA")}
+          </span>
+        </p>
+      ) : null}
+
+      {!loading && unassignedCount > 0 ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+          <p>
+            <span className="font-semibold">{unassignedCount.toLocaleString("en-ZA")} unassigned</span>
+            {" — "}
+            recurring visits often stall in <code className="rounded bg-amber-100 px-1 text-xs">pending_assignment</code> even
+            when a continuity cleaner exists. Restore assigns them from plan history.
+          </p>
+          <OfficeZohoSecondaryButton
+            disabled={restoringRecurring || loading}
+            onClick={() => void handleRestoreRecurringAssignments()}
+            className="shrink-0 border-amber-300 bg-white text-amber-900 hover:bg-amber-100"
           >
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
-            <p className={cn("mt-1 text-2xl font-bold tabular-nums", k.color)}>{k.value}</p>
-            <p className="text-xs text-slate-400">{k.sub}</p>
-          </button>
-        ))}
-      </div>
+            {restoringRecurring ? <Loader2 className="h-4 w-4 animate-spin" /> : <UserCheck className="h-4 w-4" />}
+            Assign recurring cleaners
+          </OfficeZohoSecondaryButton>
+        </div>
+      ) : null}
+
+      {/* Segment navigation */}
+      <OfficeZohoSegmentTabs tabs={segmentTabs} activeKey={viewSegment} onChange={(k) => applyViewSegment(k as ViewSegment)} />
+
+      {/* Status pill tabs + multi-select toggle */}
+      <OfficeZohoPillTabs
+        tabs={statusPillTabs}
+        activeKey={activeFilter}
+        onChange={setActiveFilter}
+        trailing={
+          <OfficeZohoToggle
+            label="Multi-select"
+            checked={multiSelectMode}
+            onChange={(checked) => {
+              setMultiSelectMode(checked);
+              if (!checked) setSelectedIds(new Set());
+            }}
+          />
+        }
+      />
 
       {/* Table card */}
-      <div id="bookings-table" className="rounded-2xl bg-white border border-slate-100 shadow-sm scroll-mt-4">
+      <OfficeZohoTableShell>
+        <div id="bookings-table" className="scroll-mt-4">
         {/* Search + filters */}
-        <div className="space-y-3 border-b border-slate-100 px-4 py-3">
+        <div className="space-y-3 border-b border-slate-200 bg-slate-50/40 px-4 py-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative min-w-[200px] flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -826,6 +1016,16 @@ export default function BookingsPage() {
                 >
                   Payment follow-up
                 </button>
+                <button
+                  type="button"
+                  onClick={() => void applySlaView()}
+                  className={cn(
+                    "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
+                    attentionFilter === "sla" ? "bg-red-600 text-white" : "text-slate-500 hover:bg-slate-100",
+                  )}
+                >
+                  SLA breaches{overdueCount > 0 ? ` (${overdueCount})` : ""}
+                </button>
               </div>
 
               <div className="flex flex-wrap items-center gap-2">
@@ -876,38 +1076,22 @@ export default function BookingsPage() {
           )}
         </div>
 
-        {/* Status tabs */}
-        <div className="flex flex-wrap gap-1 border-b border-slate-100 px-4 py-2">
-          {(["all", ...ALL_STATUSES] as const).map((s) => (
-            <button
-              key={s}
-              type="button"
-              onClick={() => setActiveFilter(s)}
-              className={cn(
-                "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
-                activeFilter === s
-                  ? "bg-blue-600 text-white"
-                  : "text-slate-500 hover:bg-slate-100",
-              )}
-            >
-              {s === "all" ? "All" : (STATUS_MAP[s]?.label ?? s)}
-              <span
-                className={cn(
-                  "ml-1.5 rounded-full px-1.5 py-0.5 text-[10px]",
-                  activeFilter === s ? "bg-blue-500 text-blue-100" : "bg-slate-100 text-slate-500",
-                )}
-              >
-                {counts[s] ?? 0}
-              </span>
-            </button>
-          ))}
-        </div>
-
         {/* Table */}
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50">
+              <tr className="border-b border-slate-200 bg-slate-50">
+                {multiSelectMode ? (
+                  <th className="w-10 px-3 py-3">
+                    <input
+                      type="checkbox"
+                      checked={bookings.length > 0 && bookings.every((b) => selectedIds.has(b.id))}
+                      onChange={toggleSelectAllVisible}
+                      aria-label="Select all visible bookings"
+                      className="h-4 w-4 rounded border-slate-300 text-[--sidebar-active] focus:ring-[--sidebar-active]"
+                    />
+                  </th>
+                ) : null}
                 {[
                   { label: "Booking", className: "" },
                   { label: "Customer", className: "" },
@@ -930,12 +1114,12 @@ export default function BookingsPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <LoadingRows />
+                <LoadingRows colSpan={multiSelectMode ? 9 : 8} />
               ) : bookings.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-sm text-slate-400">
+                  <td colSpan={multiSelectMode ? 9 : 8} className="py-12 text-center text-sm text-slate-400">
                     {error ? "Failed to load bookings." : "No bookings match your search."}
                   </td>
                 </tr>
@@ -948,9 +1132,27 @@ export default function BookingsPage() {
                   const isCancelling = isActing && actionLoading?.action === "cancel";
                   const isDeleting = isActing && actionLoading?.action === "delete";
                   const teamAssignable = bookingSupportsTeamAssign(b);
+                  const isSelected = selectedIds.has(b.id);
 
                   return (
-                    <tr key={b.id} className="group hover:bg-slate-50/50 transition-colors">
+                    <tr
+                      key={b.id}
+                      className={cn(
+                        "group transition-colors hover:bg-slate-50/80",
+                        isSelected && "bg-blue-50/40",
+                      )}
+                    >
+                      {multiSelectMode ? (
+                        <td className="px-3 py-3">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleBookingSelection(b.id)}
+                            aria-label={`Select booking ${b.id.slice(0, 8)}`}
+                            className="h-4 w-4 rounded border-slate-300 text-[--sidebar-active] focus:ring-[--sidebar-active]"
+                          />
+                        </td>
+                      ) : null}
                       <td className="px-4 py-3">
                         <Link
                           href={`/office/bookings/${b.id}`}
@@ -1082,11 +1284,13 @@ export default function BookingsPage() {
         </div>
 
         {/* Footer */}
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
-          <p className="text-xs text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 bg-slate-50/40 px-4 py-3">
+          <p className="text-xs text-slate-500">
             {loading
               ? "Loading…"
-              : `Showing ${adjustedPagination.from}-${adjustedPagination.to} of ${adjustedPagination.total} bookings`}
+              : multiSelectMode && selectedIds.size > 0
+                ? `${selectedIds.size} selected · Showing ${adjustedPagination.from}-${adjustedPagination.to} of ${adjustedPagination.total}`
+                : `Showing ${adjustedPagination.from}-${adjustedPagination.to} of ${adjustedPagination.total} bookings`}
           </p>
           <div className="flex items-center gap-2">
             <label className="flex items-center gap-2 text-xs text-slate-500">
@@ -1124,7 +1328,8 @@ export default function BookingsPage() {
             </button>
           </div>
         </div>
-      </div>
+        </div>
+      </OfficeZohoTableShell>
     </div>
   );
 }

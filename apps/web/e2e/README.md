@@ -14,8 +14,11 @@
 | `E2E_WIDGET_DRAFT` | Set to `1` to enable the **widget-draft insert** smoke test (needs Supabase admin on the server). |
 | `E2E_PAYSTACK` | Set to `1` to enable **Paystack sandbox** API tests under `e2e/paystack/` (see `e2e/paystack/README.md`). |
 | `E2E_DISPATCH` | Set to `1` where specs gate on dispatch lifecycle (staging only; not run in default CI). |
+| `E2E_REVENUE_PATH` | Set to `1` for full revenue-path smoke under `e2e/smoke/` (also requires `E2E_DISPATCH=1`; see `e2e/smoke/README.md`). |
 
 Revenue E2E is intentionally **env-gated**. For staging runs, set `PLAYWRIGHT_BASE_URL` to the preview URL and supply Supabase service role on the server. See also [`docs/PLATFORM_ISSUES.md`](../../docs/PLATFORM_ISSUES.md) (REV-012).
+
+**PowerShell note:** use `$env:E2E_DISPATCH = "1"`, not `set E2E_DISPATCH=1` (`set` is cmd.exe only).
 
 Server-side (for quote + widget-draft to succeed):
 
@@ -63,3 +66,7 @@ See **[e2e/paystack/README.md](./paystack/README.md)** for `E2E_PAYSTACK`, `E2E_
 ### Dispatch + dashboard lifecycle (Gap 4)
 
 See **[e2e/dispatch/README.md](./dispatch/README.md)** and **[e2e/dashboard/README.md](./dashboard/README.md)** for `E2E_DISPATCH`, JWT env vars, and `/api/test/create-booking` linkage fields.
+
+### Revenue path smoke (Phase D)
+
+See **[e2e/smoke/README.md](./smoke/README.md)** for `E2E_REVENUE_PATH=1` staging run (`dispatch → cleaner accept → complete → customer`).

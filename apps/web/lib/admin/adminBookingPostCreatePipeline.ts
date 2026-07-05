@@ -39,7 +39,7 @@ export async function ensureBookingAssignedStatusInvariant(
   const { data: r, error } = await admin
     .from("bookings")
     .select(
-      "cleaner_id, selected_cleaner_id, status, assigned_at, cleaner_response_status, dispatch_status, assignment_type",
+      "cleaner_id, selected_cleaner_id, status, assigned_at, cleaner_response_status, dispatch_status, assignment_type, is_recurring_generated, is_monthly_billing_booking, billing_type",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -47,8 +47,15 @@ export async function ensureBookingAssignedStatusInvariant(
 
   const st = String((r as { status?: string | null }).status ?? "").trim().toLowerCase();
   const asgType = String((r as { assignment_type?: string | null }).assignment_type ?? "").trim().toLowerCase();
+  const isRecurringMonthlyContinuity =
+    (r as { is_recurring_generated?: boolean | null }).is_recurring_generated === true &&
+    ((r as { is_monthly_billing_booking?: boolean | null }).is_monthly_billing_booking === true ||
+      String((r as { billing_type?: string | null }).billing_type ?? "")
+        .trim()
+        .toLowerCase() === "recurring_invoice");
+
   /** Marketplace user-pick: assignment only via {@link acceptDispatchOffer}; do not mirror selected → cleaner_id here. */
-  if (asgType === "user_selected" || st === "pending_assignment") {
+  if ((asgType === "user_selected" || st === "pending_assignment") && !isRecurringMonthlyContinuity) {
     return;
   }
   const cleanerId = String((r as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
@@ -62,7 +69,9 @@ export async function ensureBookingAssignedStatusInvariant(
   }
 
   const hasCleanerRef = cleanerOk || selectedOk;
-  if (st === "pending" && hasCleanerRef) {
+  const shouldPromotePending =
+    (st === "pending" || (isRecurringMonthlyContinuity && st === "pending_assignment")) && hasCleanerRef;
+  if (shouldPromotePending) {
     patch.status = "assigned";
     const crsRaw = (r as { cleaner_response_status?: string | null }).cleaner_response_status;
     patch.cleaner_response_status =

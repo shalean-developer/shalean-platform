@@ -12,6 +12,21 @@ export const dynamic = "force-dynamic";
 /** Must match client {@link bookingRouteToFunnelStep} labels used in `booking_events.step`. */
 const FUNNEL_ORDER = ["entry", "quote", "extras", "datetime", "payment"] as const;
 
+/** Semantic `user_events` mapped to coarse funnel steps when `booking_events` views are sparse. */
+const USER_EVENT_FUNNEL_STEP: Record<string, (typeof FUNNEL_ORDER)[number]> = {
+  booking_step_details_started: "entry",
+  [ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED]: "quote",
+  booking_addon_selected: "extras",
+  booking_continue_schedule: "extras",
+  [ANALYTICS_EVENTS.BOOKING_DATE_SELECTED]: "datetime",
+  [ANALYTICS_EVENTS.BOOKING_TIME_SELECTED]: "datetime",
+  [ANALYTICS_EVENTS.BOOKING_CLEANER_SELECTED]: "datetime",
+  [ANALYTICS_EVENTS.BOOKING_PAYMENT_STARTED]: "payment",
+  [ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED]: "payment",
+  [ANALYTICS_EVENTS.PAYMENT_COMPLETED]: "payment",
+  [ANALYTICS_EVENTS.BOOKING_COMPLETED]: "payment",
+};
+
 type Row = { session_id: string; step: string; event_type: string; analytics_session_id?: string | null };
 type BookingEventRow = Row & { created_at?: string | null; metadata?: Record<string, unknown> | null };
 type UserEventRow = { event_type?: string | null; created_at?: string | null; payload?: Record<string, unknown> | null };
@@ -277,6 +292,33 @@ export async function GET(request: Request) {
 
   const viewedStepBySession = new Map<string, Set<string>>();
   const funnelStepSet = new Set<string>(FUNNEL_ORDER);
+
+  function recordFunnelStepViews(sessionId: string, step: (typeof FUNNEL_ORDER)[number]) {
+    const idx = FUNNEL_ORDER.indexOf(step);
+    if (idx < 0) return;
+    let s = viewedStepBySession.get(sessionId);
+    if (!s) {
+      s = new Set();
+      viewedStepBySession.set(sessionId, s);
+    }
+    s.add(step);
+  }
+
+  function sessionsReachedStep(step: (typeof FUNNEL_ORDER)[number]): number {
+    const idx = FUNNEL_ORDER.indexOf(step);
+    if (idx < 0) return 0;
+    let n = 0;
+    for (const [, steps] of viewedStepBySession) {
+      for (let i = idx; i < FUNNEL_ORDER.length; i++) {
+        if (steps.has(FUNNEL_ORDER[i]!)) {
+          n++;
+          break;
+        }
+      }
+    }
+    return n;
+  }
+
   for (const r of rows) {
     const cid = bookingEventCorrelationId(r);
     const createdAtMs = r.created_at ? new Date(r.created_at).getTime() : NaN;
@@ -339,6 +381,8 @@ export async function GET(request: Request) {
         if (Number.isFinite(createdAtMs)) t.completedAt = createdAtMs;
         break;
     }
+    const mappedStep = USER_EVENT_FUNNEL_STEP[String(event.event_type ?? "")];
+    if (mappedStep) recordFunnelStepViews(sessionId, mappedStep);
   }
 
   const reachedPayment = new Set<string>();
@@ -347,6 +391,11 @@ export async function GET(request: Request) {
       reachedPayment.add(bookingEventCorrelationId(r));
     }
   }
+  for (const sid of paymentStartedSessions) reachedPayment.add(sid);
+  for (const sid of paystackOpenedSessions) reachedPayment.add(sid);
+  for (const [sid, steps] of viewedStepBySession) {
+    if (steps.has("payment")) reachedPayment.add(sid);
+  }
 
   const startedQuote = new Set<string>();
   for (const r of rows) {
@@ -354,9 +403,18 @@ export async function GET(request: Request) {
   }
   for (const event of userEvents) {
     const sessionId = correlationSessionId(event);
-    if (sessionId && event.event_type === ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED) startedQuote.add(sessionId);
+    if (!sessionId) continue;
+    if (
+      event.event_type === ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED ||
+      event.event_type === "booking_step_details_started"
+    ) {
+      startedQuote.add(sessionId);
+    }
   }
-  const funnelStart = startedQuote.size;
+  for (const [sid, steps] of viewedStepBySession) {
+    if (steps.has("quote")) startedQuote.add(sid);
+  }
+  const funnelStart = Math.max(startedQuote.size, sessionsReachedStep("quote"));
   const paidOrCheckout = reachedPayment.size;
   const conversionRatePct = funnelStart > 0 ? Math.round((paidOrCheckout / funnelStart) * 1000) / 10 : 0;
 
@@ -364,13 +422,8 @@ export async function GET(request: Request) {
   for (let i = 0; i < FUNNEL_ORDER.length - 1; i++) {
     const cur = FUNNEL_ORDER[i]!;
     const next = FUNNEL_ORDER[i + 1]!;
-    let viewed = 0;
-    let progressed = 0;
-    for (const [, steps] of viewedStepBySession) {
-      if (!steps.has(cur)) continue;
-      viewed++;
-      if (steps.has(next)) progressed++;
-    }
+    const viewed = sessionsReachedStep(cur);
+    const progressed = sessionsReachedStep(next);
     const dropped = Math.max(0, viewed - progressed);
     const dropOffPct = viewed > 0 ? Math.round((dropped / viewed) * 1000) / 10 : 0;
     dropOffByStep.push({ step: cur, viewed, dropped, dropOffPct });
@@ -395,29 +448,13 @@ export async function GET(request: Request) {
     .sort((a, b) => b[1] - a[1])
     .map(([step, count]) => ({ step, count }));
 
-  const viewsByStep = FUNNEL_ORDER.map((step) => {
-    let n = 0;
-    for (const [, steps] of viewedStepBySession) {
-      if (steps.has(step)) n++;
-    }
-    return { step, views: n };
-  });
+  const viewsByStep = FUNNEL_ORDER.map((step) => ({
+    step,
+    views: sessionsReachedStep(step),
+  }));
 
-  /** Distinct sessions with ≥1 `view` on a funnel step — aligns with `viewsByStep` (unlike `sessions`, which counts any event type). */
+  /** Distinct sessions with ≥1 funnel step signal — aligns with `viewsByStep`. */
   const sessionsWithFunnelView = viewedStepBySession.size;
-
-  const stepConversion = dropOffByStep.map((row, i) => {
-    const next = FUNNEL_ORDER[i + 1] ?? "complete";
-    const progressed = Math.max(0, row.viewed - row.dropped);
-    return {
-      from: row.step,
-      to: next,
-      viewed: row.viewed,
-      progressed,
-      conversionPct: pct(progressed, row.viewed),
-      dropOffPct: row.dropOffPct,
-    };
-  });
 
   const durations = [...sessionTraits.values()]
     .map((t) => (t.firstAt && t.completedAt && t.completedAt >= t.firstAt ? Math.round((t.completedAt - t.firstAt) / 1000) : null))
@@ -477,6 +514,7 @@ export async function GET(request: Request) {
 
   function segmentRows(kind: "device" | "service" | "suburb") {
     const buckets = new Map<string, { label: string; starts: Set<string>; completed: Set<string>; reachedPayment: Set<string>; addOns: Set<string> }>();
+    const sessionCountsAsStart = (sid: string) => (startedQuote.size > 0 ? startedQuote.has(sid) : sessionsAny.has(sid));
     for (const sid of sessionsAny) {
       const traits = sessionTraits.get(sid);
       const raw = kind === "device" ? traits?.device : kind === "service" ? traits?.service : traits?.suburb;
@@ -486,13 +524,13 @@ export async function GET(request: Request) {
         b = { label, starts: new Set(), completed: new Set(), reachedPayment: new Set(), addOns: new Set() };
         buckets.set(label, b);
       }
-      if (startedQuote.has(sid)) b.starts.add(sid);
+      if (sessionCountsAsStart(sid)) b.starts.add(sid);
       if (completedSessions.has(sid)) b.completed.add(sid);
       if (reachedPayment.has(sid) || paymentStartedSessions.has(sid)) b.reachedPayment.add(sid);
       if (addonAttachedSessions.has(sid)) b.addOns.add(sid);
     }
     return [...buckets.values()]
-      .filter((b) => b.starts.size > 0)
+      .filter((b) => b.starts.size > 0 || b.completed.size > 0 || b.reachedPayment.size > 0)
       .sort((a, b) => b.starts.size - a.starts.size)
       .slice(0, 8)
       .map((b) => ({
@@ -518,6 +556,33 @@ export async function GET(request: Request) {
   const analyticsCompletedSessions = completedSessions.size;
   /** Session-correlated completions only — paid booking volume is exposed separately as `paidBookingsCount`. */
   const completedPaymentSessions = Math.max(analyticsCompletedSessions, paystackCompleted);
+
+  const stepConversion = [
+    ...dropOffByStep.map((row, i) => {
+      const next = FUNNEL_ORDER[i + 1] ?? "complete";
+      const progressed = Math.max(0, row.viewed - row.dropped);
+      return {
+        from: row.step,
+        to: next,
+        viewed: row.viewed,
+        progressed,
+        conversionPct: pct(progressed, row.viewed),
+        dropOffPct: row.dropOffPct,
+      };
+    }),
+    ...(paidOrCheckout > 0
+      ? [
+          {
+            from: "payment",
+            to: "paid",
+            viewed: paidOrCheckout,
+            progressed: completedPaymentSessions,
+            conversionPct: pct(completedPaymentSessions, paidOrCheckout),
+            dropOffPct: pct(Math.max(0, paidOrCheckout - completedPaymentSessions), paidOrCheckout),
+          },
+        ]
+      : []),
+  ];
 
   type DemandBucket = {
     label: string;
@@ -695,6 +760,7 @@ export async function GET(request: Request) {
     conversionRatePct,
     funnelStartSessions: funnelStart,
     reachedPaymentSessions: paidOrCheckout,
+    completedPaymentSessions,
     paystackAbandonmentPct,
     paystackOpened,
     paystackCompleted,
@@ -722,6 +788,9 @@ export async function GET(request: Request) {
   const narrativeSummary = buildFunnelNarrativeSummary({
     conversionRatePct,
     funnelStartSessions: funnelStart,
+    reachedPaymentSessions: paidOrCheckout,
+    completedPaymentSessions,
+    paidBookingsCount: paidBookingsInWindow.length,
     insights,
     anomalies,
   });

@@ -14,15 +14,23 @@ type CleanerFetchParams = {
   date: string;
   time: string;
   durationMinutes: number;
+  locationId: string;
 };
 
-function useAvailableCleaners({ serviceSlug, date, time, durationMinutes }: CleanerFetchParams) {
+function useAvailableCleaners({ serviceSlug, date, time, durationMinutes, locationId }: CleanerFetchParams) {
   const [cleaners, setCleaners] = useState<AvailableCleanerV2[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!serviceSlug) return;
+    if (date && time && !locationId) {
+      setCleaners([]);
+      setLoading(false);
+      setError("Select a suburb in Step 1 to see cleaners for your area.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -30,6 +38,7 @@ function useAvailableCleaners({ serviceSlug, date, time, durationMinutes }: Clea
     if (date) params.set("date", date);
     if (time) params.set("time", time);
     if (durationMinutes) params.set("durationMinutes", String(durationMinutes));
+    if (locationId) params.set("locationId", locationId);
 
     fetch(`/api/booking-v2/available-cleaners?${params.toString()}`)
       .then((r) => r.json())
@@ -46,8 +55,8 @@ function useAvailableCleaners({ serviceSlug, date, time, durationMinutes }: Clea
         setLoading(false);
       });
   // Re-fetch when date or time changes so the list stays slot-accurate
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [serviceSlug, date, time, durationMinutes]);
+   
+  }, [serviceSlug, date, time, durationMinutes, locationId]);
 
   return { cleaners, loading, error };
 }
@@ -57,6 +66,7 @@ type Props = {
   date: string;
   time: string;
   durationMinutes: number;
+  locationId: string;
   selectedIds: string[];
   /** Current stored cleaner details — used to detect when a resync is needed. */
   selectedDetails: AvailableCleanerV2[];
@@ -77,6 +87,7 @@ export function CleanerPreferenceSection({
   date,
   time,
   durationMinutes,
+  locationId,
   selectedIds,
   selectedDetails,
   maxSelect,
@@ -89,6 +100,7 @@ export function CleanerPreferenceSection({
     date,
     time,
     durationMinutes,
+    locationId,
   });
 
   // After cleaners load, resync details if selectedIds exist but details are stale/missing.

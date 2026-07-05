@@ -26,7 +26,7 @@ export function PostBookingTipPrompt({ bookingId }: Props) {
         like to arrange a tip for your team.
       </p>
       <Link
-        href={`/dashboard/bookings/${id}`}
+        href={`/account/bookings/${id}`}
         className="mt-3 inline-flex text-sm font-semibold text-blue-700 underline-offset-2 hover:underline dark:text-blue-400"
       >
         View booking

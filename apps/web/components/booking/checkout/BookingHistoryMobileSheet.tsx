@@ -108,7 +108,7 @@ export function BookingHistoryMobileSheet() {
                   {rows.map((b) => (
                     <li key={b.id}>
                       <Link
-                        href={`/dashboard/bookings/${b.id}`}
+                        href={`/account/bookings/${b.id}`}
                         className="block rounded-xl border border-zinc-200 bg-zinc-50/80 p-3 transition hover:border-zinc-300 hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-950/50 dark:hover:border-zinc-600 dark:hover:bg-zinc-800/80"
                       >
                         <div className="flex items-start justify-between gap-2">
@@ -137,7 +137,7 @@ export function BookingHistoryMobileSheet() {
             {user && !userLoading && (
               <div className="shrink-0 border-t border-zinc-200 p-3 dark:border-zinc-800">
                 <Button asChild variant="outline" className="w-full" size="default">
-                  <Link href="/dashboard/bookings">View all bookings</Link>
+                  <Link href="/account/bookings">View all bookings</Link>
                 </Button>
               </div>
             )}

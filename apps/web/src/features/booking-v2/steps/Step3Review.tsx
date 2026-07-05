@@ -398,6 +398,7 @@ function ScheduleEditPanel() {
   const selectedCleanerIds = watch("selectedCleanerIds") ?? [];
   const selectedCleanerDetails = watch("selectedCleanerDetails") ?? [];
   const assignedTeamId = watch("assignedTeamId") ?? "";
+  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
 
   const durationMinutes = Math.round(
     (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
@@ -615,6 +616,7 @@ function ScheduleEditPanel() {
             date={date}
             time={time}
             durationMinutes={durationMinutes}
+            locationId={serviceAreaLocationId.trim()}
             selectedIds={selectedCleanerIds}
             selectedDetails={selectedCleanerDetails}
             maxSelect={cleanerCount}
@@ -807,6 +809,7 @@ export function Step3Review() {
     const details = getValues("selectedCleanerDetails") ?? [];
     if (ids.length === 0 || details.length >= ids.length) return;
 
+    const locationId = getValues("serviceAreaLocationId")?.trim() ?? "";
     const params = new URLSearchParams({ serviceSlug });
     const date = getValues("date");
     const time = getValues("time");
@@ -814,6 +817,7 @@ export function Step3Review() {
     if (date) params.set("date", date);
     if (time) params.set("time", time);
     params.set("durationMinutes", String(duration));
+    if (locationId) params.set("locationId", locationId);
 
     fetch(`/api/booking-v2/available-cleaners?${params.toString()}`)
       .then((r) => r.json())

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { Loader2, Search } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { getServiceLabel, parseBookingServiceId, type BookingServiceId } from "@/components/booking/serviceCategories";
@@ -239,7 +239,7 @@ async function openAdminBookingAndCopyUrl(bookingId: string): Promise<void> {
   }
 }
 
-export default function AdminCreateBookingPage() {
+function AdminCreateBookingPage() {
   const searchParams = useSearchParams();
   const [form, setForm] = useState<FormState>(emptyForm);
   const [pricingExtras, setPricingExtras] = useState<{ slug: string; name: string; price: number }[]>([]);
@@ -2108,5 +2108,19 @@ export default function AdminCreateBookingPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AdminCreateBookingPageRoute() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[40vh] items-center justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        </div>
+      }
+    >
+      <AdminCreateBookingPage />
+    </Suspense>
   );
 }

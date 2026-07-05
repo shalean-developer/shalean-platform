@@ -1,5 +1,6 @@
 import type { BookingRow } from "@/lib/dashboard/types";
 import type { StoredPriceLine } from "@/lib/dashboard/storedPriceBreakdown";
+import { getServiceLabel, parseBookingServiceId } from "@/components/booking/serviceCategories";
 import { customerPriceLinesFromPricingSummary } from "@/lib/booking-v2/adminPricingDisplay";
 
 /** Service labels for booking-v2 slugs (keep in sync with `SERVICE_CONFIG`). */
@@ -53,20 +54,23 @@ export function humanizeBookingToken(raw: string): string {
     .join(" ");
 }
 
-function bookingServiceSlugFromRow(row: Pick<BookingRow, "service" | "service_slug">): string | null {
-  const slug = row.service_slug?.trim();
-  if (slug) return slug;
-  const direct = row.service?.trim();
-  if (!direct) return null;
-  if (BOOKING_V2_SERVICE_LABELS[direct]) return direct;
-  if (direct.includes("-") && !/\s/.test(direct)) return direct;
-  return null;
-}
-
 export function serviceLabelFromBookingRow(row: Pick<BookingRow, "service" | "service_slug">): string | null {
-  const slug = bookingServiceSlugFromRow(row);
-  if (slug) return BOOKING_V2_SERVICE_LABELS[slug] ?? humanizeBookingToken(slug);
+  const slug = row.service_slug?.trim();
   const direct = row.service?.trim();
+
+  if (slug && BOOKING_V2_SERVICE_LABELS[slug]) {
+    return BOOKING_V2_SERVICE_LABELS[slug];
+  }
+  if (direct && BOOKING_V2_SERVICE_LABELS[direct]) {
+    return BOOKING_V2_SERVICE_LABELS[direct];
+  }
+
+  const catalogId = parseBookingServiceId(slug) ?? parseBookingServiceId(direct);
+  if (catalogId) return getServiceLabel(catalogId);
+
+  const v2Like = slug || (direct && direct.includes("-") && !/\s/.test(direct) ? direct : null);
+  if (v2Like) return BOOKING_V2_SERVICE_LABELS[v2Like] ?? humanizeBookingToken(v2Like);
+
   return direct || null;
 }
 

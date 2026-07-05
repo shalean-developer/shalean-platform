@@ -175,7 +175,7 @@ export function CleanerRouteShell({ children }: { children: ReactNode }) {
           </p>
           <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-center">
             <Button asChild className="rounded-xl">
-              <Link href="/dashboard/bookings">Customer dashboard</Link>
+              <Link href="/account/bookings">Customer dashboard</Link>
             </Button>
             <Button type="button" variant="outline" className="rounded-xl" onClick={() => void leaveWrongPortal()}>
               Sign out — switch account

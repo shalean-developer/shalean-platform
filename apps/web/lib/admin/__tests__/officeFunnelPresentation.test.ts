@@ -5,6 +5,7 @@ import {
   buildOfficeFunnelSteps,
   buildOfficeProductFlowSteps,
   dailyTrendMax,
+  funnelVisitorCount,
   overallFunnelConversionPct,
   paymentCompletedCount,
   sliceDailyTrends,
@@ -94,6 +95,8 @@ describe("buildOfficeProductFlowSteps", () => {
     const flow = buildOfficeProductFlowSteps(SAMPLE);
     expect(flow.find((s) => s.key === "entry")?.views).toBe(300);
     expect(flow.find((s) => s.key === "payment")?.views).toBe(72);
+    expect(flow.find((s) => s.key === "payment")?.label).toBe("Checkout");
+    expect(flow.find((s) => s.key === "payment")?.sub).toBe("48 paid");
   });
 });
 
@@ -102,7 +105,9 @@ describe("buildOfficeFunnelKpis", () => {
     const kpis = buildOfficeFunnelKpis(SAMPLE);
     expect(kpis).toHaveLength(4);
     expect(kpis[0]?.value).toBe("15.5%");
-    expect(kpis[1]?.value).toBe("40.0%");
+    expect(kpis[1]?.label).toBe("Checkout → paid");
+    expect(kpis[1]?.value).toBe("66.7%");
+    expect(kpis[3]?.label).toBe("Paystack drop-off");
     expect(kpis[3]?.value).toBe("20.0%");
   });
 });
@@ -117,6 +122,27 @@ describe("sliceDailyTrends", () => {
 describe("overallFunnelConversionPct", () => {
   it("uses visitors to completed payment sessions", () => {
     expect(overallFunnelConversionPct(SAMPLE)).toBeCloseTo(15.5, 1);
+  });
+
+  it("returns null instead of 100% when funnel views are missing", () => {
+    expect(
+      overallFunnelConversionPct({
+        sessions: 0,
+        completedPaymentSessions: 14,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("funnelVisitorCount", () => {
+  it("falls back to correlated sessions when funnel views are zero", () => {
+    expect(
+      funnelVisitorCount({
+        sessions: 19,
+        sessionsWithFunnelView: 0,
+        funnelStartSessions: 0,
+      }),
+    ).toBe(19);
   });
 });
 

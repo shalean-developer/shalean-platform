@@ -22,6 +22,7 @@ import {
   resolveRecurringPreferredCleanerId,
 } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import { fetchLastAssignedCleanerForRecurringPlan } from "@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan";
+import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FAR_LOCK_DAYS = 120;
@@ -195,5 +196,14 @@ export async function insertMonthlyRecurringOccurrenceBooking(
   }
   const id = data && typeof data === "object" && "id" in data ? String((data as { id: string }).id) : "";
   if (!id) return { ok: false, error: "Insert returned no id." };
+
+  if (preferredCleanerId) {
+    await applyRecurringOccurrenceRosterContinuity(admin, {
+      bookingId: id,
+      recurringId: params.recurring.id,
+      leadCleanerId: preferredCleanerId,
+    });
+  }
+
   return { ok: true, bookingId: id, paystackReference };
 }

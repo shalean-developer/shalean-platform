@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { notifyCustomerBookingReminderSoon } from "@/lib/notifications/customerUserNotifications";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -32,10 +33,11 @@ export async function POST(request: Request) {
   }
 
   const today = todayYmdJohannesburg();
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: rows, error } = await admin
     .from("bookings")
-    .select("id, date, time, status, user_id")
-    .not("user_id", "is", null)
+    .select(`id, date, time, status, ${ownershipColumn}`)
+    .not(ownershipColumn, "is", null)
     .in("status", ["pending", "confirmed", "assigned"])
     .not("date", "is", null)
     .not("time", "is", null)

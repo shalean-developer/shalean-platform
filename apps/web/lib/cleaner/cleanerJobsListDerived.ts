@@ -77,7 +77,7 @@ export function formatJobScopeCompactLine(row: CleanerBookingRow): string | null
   }
   const join = (a: string[]) => a.filter(Boolean).join(" • ");
   const max = 52;
-  let extras = [...extraTokens];
+  const extras = [...extraTokens];
   let line = join([...core, ...extras]);
   while (line.length > max && extras.length > 0) {
     extras.pop();

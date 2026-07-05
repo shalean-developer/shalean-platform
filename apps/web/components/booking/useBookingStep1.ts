@@ -348,7 +348,7 @@ export function BookingStep1Provider({
   urlPromo,
 }: {
   children: ReactNode;
-  /** Sanitized `promo` query from {@link BookingFlowClient} (avoid nested `useSearchParams` hydration quirks). */
+  /** Sanitized `promo` query from legacy funnel URL prefill (avoid nested `useSearchParams` hydration quirks). */
   urlPromo: string | null;
 }) {
   const value = useBookingStep1Store(urlPromo);

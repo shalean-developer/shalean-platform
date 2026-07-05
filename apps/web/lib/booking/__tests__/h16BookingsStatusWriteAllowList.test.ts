@@ -176,6 +176,7 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
   "lib/payout/adminBookingAssignmentEarningsGate.ts",
   "lib/booking/adminEditBookingDetails.ts",
   "lib/recurring/reconcileRecurringPlanOccurrences.ts",
+  "lib/recurring/applyRecurringOccurrenceRosterContinuity.ts",
   "lib/salesDocument/createBookingFromSalesQuoteInvoice.ts",
 
   // Admin manual safe paths.
@@ -193,7 +194,7 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
   "lib/launch/launchReadinessChecks.ts",
 
   // Customer-facing safe path (auth-gated self-cancel).
-  "app/api/dashboard/bookings/[id]/cancel/route.ts",
+  "lib/customer/customerBookingModifyHandlers.ts",
 
   // Recovery / reconciliation (catch-block only).
   "lib/booking/upsertBookingFromPaystack.ts",

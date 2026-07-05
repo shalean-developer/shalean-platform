@@ -46,7 +46,7 @@ function formatCleanerTemplateTime(raw: string): string {
   const t = raw.trim();
   const m = /^(\d{1,2}):(\d{2})$/.exec(t);
   if (!m) return (t || "Scheduled time").slice(0, TEMPLATE_TIME_DISPLAY_MAX);
-  let h = Number(m[1]);
+  const h = Number(m[1]);
   const mi = Number(m[2]);
   if (!Number.isFinite(h) || !Number.isFinite(mi) || h > 23 || mi > 59) return t.slice(0, TEMPLATE_TIME_DISPLAY_MAX);
   const ampm = h >= 12 ? "PM" : "AM";

@@ -3,7 +3,9 @@ import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { addDaysYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { sendRecurringVisitPrechargeReminderEmail } from "@/lib/email/subscriptionEmails";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveCustomerOutboundEmail } from "@/lib/customer/readCustomerProfileContact";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { pickBillingEmail } from "@/lib/zoho/shaleanBillingContactEmail";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -42,9 +44,10 @@ export async function POST(request: Request) {
 
   try {
   const tomorrow = addDaysYmd(todayJohannesburg(), 1);
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: rows, error } = await admin
     .from("bookings")
-    .select("id, user_id, customer_email, service, date, recurring_precharge_notified_at")
+    .select(`id, ${ownershipColumn}, customer_email, service, date, recurring_precharge_notified_at`)
     .eq("status", "pending_payment")
     .eq("is_recurring_generated", true)
     .eq("date", tomorrow)
@@ -62,14 +65,16 @@ export async function POST(request: Request) {
   for (const raw of rows ?? []) {
     const row = raw as {
       id: string;
-      user_id: string | null;
+      customer_id?: string | null;
+      user_id?: string | null;
       customer_email: string | null;
       service: string | null;
       date: string | null;
     };
 
-    const email = row.user_id
-      ? await resolveCustomerOutboundEmail(admin, row.user_id, { bookingCustomerEmail: row.customer_email })
+    const customerAuthId = bookingCustomerKey(row);
+    const email = customerAuthId
+      ? await resolveCustomerOutboundEmail(admin, customerAuthId, { bookingCustomerEmail: row.customer_email })
       : pickBillingEmail([row.customer_email]);
     if (!email) continue;
 

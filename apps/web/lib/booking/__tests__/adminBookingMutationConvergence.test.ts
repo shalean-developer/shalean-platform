@@ -21,11 +21,11 @@ describe("admin booking mutation convergence (static guard)", () => {
     expect(src).not.toContain("ensureBookingAssignment");
   });
 
-  it("cleaner POST bookings/[id]/accept uses cleanerAcceptBooking", () => {
+  it("cleaner POST bookings/[id]/accept is retired (410) with jobs API successor", () => {
     const cleanerRoot = join(process.cwd(), "app/api/cleaner/bookings");
     const src = readFileSync(join(cleanerRoot, "[id]/accept/route.ts"), "utf8");
-    expect(src).toContain("cleanerAcceptBooking");
-    expect(src).not.toContain("runCleanerBookingLifecycleAction");
+    expect(src).toContain("retiredCleanerBookingRoute");
+    expect(src).not.toContain("cleanerAcceptBooking");
   });
 
   it("assign POST uses adminAssignCleanerToBooking (not performAdminAssignToCleaner)", () => {

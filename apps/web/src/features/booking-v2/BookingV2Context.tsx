@@ -28,6 +28,10 @@ import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2Catalo
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import { bookingV2PrefillPatchFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
 import { buildStep2Schema, step1Schema } from "@/src/features/booking-v2/schemas";
+import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
+import type { BookingRow } from "@/lib/dashboard/types";
+import { bookingServiceSlugFromBookingRow } from "@/lib/booking-v2/bookingV2ServiceSlug";
+import { bookingV2FormPatchFromBookingRow } from "@/lib/booking-v2/rebookFromBookingRow";
 
 export type { LiveServiceConfig };
 
@@ -196,6 +200,32 @@ export function BookingV2Provider({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const rebookId = searchParams.get("rebook")?.trim() ?? "";
+  useEffect(() => {
+    if (!rebookId) return;
+    let cancelled = false;
+    void (async () => {
+      const out = await dashboardFetchJson<{ booking?: BookingRow }>(
+        `/api/customer/bookings/${encodeURIComponent(rebookId)}`,
+      );
+      if (cancelled || !out.ok || !out.data.booking) return;
+
+      const row = out.data.booking;
+      const rowSlug = bookingServiceSlugFromBookingRow(row);
+      if (rowSlug !== serviceSlug) {
+        router.replace(`/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=2`);
+        return;
+      }
+
+      const patch = bookingV2FormPatchFromBookingRow(row, serviceSlug, cleanerMode);
+      form.reset(patch, { keepDefaultValues: false });
+      writeToStorage(patch);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rebookId, serviceSlug, cleanerMode, form, router]);
 
   // Persist to localStorage whenever form changes
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

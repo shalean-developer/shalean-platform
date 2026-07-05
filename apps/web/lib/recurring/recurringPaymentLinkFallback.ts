@@ -2,6 +2,8 @@ import "server-only";
 
 import { getServiceLabel, type BookingServiceId } from "@/components/booking/serviceCategories";
 import { adminPaymentLinkTtlMs } from "@/lib/booking/adminPaymentLinkState";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
 import { deliverAdminPaymentLink } from "@/lib/admin/adminPaymentLinkDelivery";
 import { persistPaymentLinkDelivery } from "@/lib/admin/persistPaymentLinkDelivery";
@@ -33,9 +35,10 @@ const HEAD_SELECT =
  * Phase 1 payment-link + decision engine, invoked when recurring auto-charge fails.
  */
 export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, bookingId: string): Promise<boolean> {
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: row, error } = await admin
     .from("bookings")
-    .select("id, user_id, customer_email, customer_name, customer_phone, booking_snapshot, date, time, total_paid_zar")
+    .select(`id, ${ownershipColumn}, customer_email, customer_name, customer_phone, booking_snapshot, date, time, total_paid_zar`)
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -55,8 +58,7 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
   const email = String((row as { customer_email?: string | null }).customer_email ?? "").trim();
   const name = String((row as { customer_name?: string | null }).customer_name ?? "").trim();
   const phone = String((row as { customer_phone?: string | null }).customer_phone ?? "").trim();
-  const preservedUserId =
-    typeof (row as { user_id?: string | null }).user_id === "string" ? String((row as { user_id: string }).user_id) : null;
+  const preservedUserId = bookingCustomerKey(row as { customer_id?: string | null; user_id?: string | null }) || null;
 
   if (!email || name.length < 2 || phone.length < 5) {
     await reportOperationalIssue("warn", "recurring/fallback", "incomplete customer contact for Paystack init", {

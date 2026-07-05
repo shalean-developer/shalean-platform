@@ -126,7 +126,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
             <Link href={`${base}/dashboard/reviews`}>Reviews in dashboard</Link>
           </Button>
           <Button asChild variant="outline" className="rounded-xl">
-            <Link href={`${base}/dashboard/bookings`}>Your bookings</Link>
+            <Link href={`${base}/account/bookings`}>Your bookings</Link>
           </Button>
         </div>
       </div>
@@ -167,7 +167,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
         <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">Your review was saved. It helps us improve and recognize great cleaners.</p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button asChild className="rounded-xl">
-            <Link href={`${base}/dashboard/bookings`}>Your bookings</Link>
+            <Link href={`${base}/account/bookings`}>Your bookings</Link>
           </Button>
           <Button asChild variant="outline" className="rounded-xl">
             <Link href={`${base}/book`}>Book again</Link>

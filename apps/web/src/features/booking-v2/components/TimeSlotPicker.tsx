@@ -1,6 +1,6 @@
 "use client";
 
-import { Phone } from "lucide-react";
+import { Loader2, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   buildCustomerBookingTimeSlots,
@@ -17,13 +17,49 @@ type TimeSlotPickerProps = {
   onChange: (slot: string) => void;
   compact?: boolean;
   scheduling?: Partial<BookingV2SchedulingConfig>;
+  /** Per `HH:mm` — false = unavailable (no eligible cleaners or area unknown). */
+  availability?: Record<string, boolean>;
+  loading?: boolean;
+  areaResolved?: boolean;
 };
 
-export function TimeSlotPicker({ dateYmd, value, onChange, compact, scheduling }: TimeSlotPickerProps) {
-  const slots = filterCustomerOnlineBookingTimeSlots(dateYmd, { scheduling });
+export function TimeSlotPicker({
+  dateYmd,
+  value,
+  onChange,
+  compact,
+  scheduling,
+  availability,
+  loading = false,
+  areaResolved = true,
+}: TimeSlotPickerProps) {
+  const leadTimeSlots = filterCustomerOnlineBookingTimeSlots(dateYmd, { scheduling });
+  const slots =
+    availability != null
+      ? leadTimeSlots.filter((slot) => availability[slot] === true)
+      : areaResolved
+        ? leadTimeSlots
+        : [];
   const lastSlot =
     buildCustomerBookingTimeSlots(scheduling).at(-1) ?? CUSTOMER_ONLINE_BOOKING_LAST_SLOT;
   const callHref = `tel:${CUSTOMER_SUPPORT_TELEPHONE_E164.replace(/\D/g, "")}`;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-10 text-sm text-slate-500">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+        Checking available times…
+      </div>
+    );
+  }
+
+  if (!areaResolved) {
+    return (
+      <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
+        Select a suburb in Step 1 so we can show times with available cleaners in your area.
+      </p>
+    );
+  }
 
   return (
     <div className="space-y-3">
@@ -51,7 +87,8 @@ export function TimeSlotPicker({ dateYmd, value, onChange, compact, scheduling }
         </div>
       ) : (
         <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-          No online slots left for this date. Please choose another day or call us to arrange a time.
+          No cleaners are available online for this date in your area. Please choose another day or call us to arrange a
+          time.
         </p>
       )}
 

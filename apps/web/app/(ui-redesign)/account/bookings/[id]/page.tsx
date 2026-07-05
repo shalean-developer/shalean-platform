@@ -5,7 +5,9 @@ import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { Calendar, CalendarDays, Clock, MapPin, MessageCircle, Phone } from "lucide-react";
 import { useBookingDetail } from "@/hooks/useBookings";
+import { useReviews } from "@/hooks/useReviews";
 import { trackBookingPriceBreakdownShown } from "@/lib/analytics/bookingPricing";
+import { rebookBookUrlFromBookingRow } from "@/lib/booking-v2/rebookFromBookingRow";
 import { customerAccountBookingReference } from "@/lib/booking/customerBookingReference";
 import { formatBookingLocation, formatBookingWhen } from "@/lib/dashboard/bookingUtils";
 import { filterBookableTimeSlots, johannesburgTodayYmd, lastYmdInSameMonthAs } from "@/lib/dashboard/bookingSlotTimes";
@@ -21,7 +23,9 @@ import { CustomerBookingStatusBadge } from "@/components/dashboard/customer-book
 import {
   canCustomerModifyDashboardBooking,
   customerBookingDetailTimelineConfirmedDone,
+  dashboardBookingCustomerSurface,
 } from "@/lib/dashboard/dashboardBookingOperational";
+import { leaveReviewHrefForBooking } from "@/lib/dashboard/customerBookingReviewUi";
 import {
   customerBookingDetailHeaderDataAttributes,
   customerBookingDetailOperationalPhase,
@@ -84,6 +88,8 @@ export default function AccountBookingDetailPage() {
   const searchParams = useSearchParams();
   const id = typeof params.id === "string" ? params.id : undefined;
   const { booking, loading, error, refetch, cancelBooking, rescheduleBooking } = useBookingDetail(id);
+  const { reviews, loading: revLoading } = useReviews();
+  const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
   const toast = useDashboardToast();
   const [cancelOpen, setCancelOpen] = useState(false);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
@@ -211,6 +217,8 @@ export default function AccountBookingDetailPage() {
     ? formatBookingWhen(current.date, current.time)
     : "Date & time to be confirmed";
   const modifiable = canCustomerModifyDashboardBooking(current);
+  const { showRebook } = dashboardBookingCustomerSurface(current);
+  const reviewHref = leaveReviewHrefForBooking(current, reviewedIds, revLoading);
 
   async function confirmCancel() {
     setBusy(true);
@@ -494,6 +502,16 @@ export default function AccountBookingDetailPage() {
                   Cancel booking
                 </Button>
               </>
+            ) : null}
+            {showRebook ? (
+              <Button asChild variant="outline" size="lg" className="w-full rounded-xl">
+                <Link href={rebookBookUrlFromBookingRow(current.raw)}>Rebook this clean</Link>
+              </Button>
+            ) : null}
+            {reviewHref ? (
+              <Button asChild variant="outline" size="lg" className="w-full rounded-xl text-amber-800">
+                <Link href={reviewHref}>Leave review</Link>
+              </Button>
             ) : null}
             <Button
               asChild

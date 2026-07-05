@@ -6,6 +6,7 @@ import { fetchUserRoleClient } from "@/lib/auth/resolvePostAuthDestination";
 import type { AppUserRole } from "@/lib/auth/userRole";
 import { readCachedUserRole } from "@/lib/auth/userRole";
 import { getSupabaseAccessToken, getSupabaseBrowser } from "@/lib/supabase/browser";
+import { scheduleAppRouterReplace } from "@/lib/navigation/scheduleAppRouterNavigation";
 
 export type RoleRouteGuardState =
   | { status: "checking" }
@@ -111,15 +112,15 @@ export function useRoleRouteGuard({ requiredRole, trustCache = true }: Options):
   useEffect(() => {
     if (state.status === "unauthenticated") {
       const next = encodeURIComponent(pathname);
-      router.replace(`/login?redirect=${next}`);
+      scheduleAppRouterReplace(router, `/login?redirect=${next}`);
       return;
     }
     if (state.status === "missing_profile") {
-      router.replace("/complete-profile");
+      scheduleAppRouterReplace(router, "/complete-profile");
       return;
     }
     if (state.status === "wrong_role") {
-      router.replace(state.actualRoute);
+      scheduleAppRouterReplace(router, state.actualRoute);
     }
   }, [state, pathname, router]);
 

@@ -102,11 +102,11 @@ describe("customerBookingCardOperationalDisplay", () => {
     expect(d.operationalPhase).not.toBe("completed");
   });
 
-  it("status label text unchanged for representative assigned booking", () => {
+  it("status label reflects cleaner assignment for accepted bookings", () => {
     const raw = attachCanonicalCustomerBookingLifecycle(baseRaw());
     const b = dashboardFromRaw(raw);
-    expect(customerBookingStatusLabel(b)).toBe("Scheduled");
-    expect(customerBookingCardOperationalDisplay(b).statusLabel).toBe("Scheduled");
+    expect(customerBookingStatusLabel(b)).toBe("Cleaner assigned");
+    expect(customerBookingCardOperationalDisplay(b).statusLabel).toBe("Cleaner assigned");
   });
 });
 

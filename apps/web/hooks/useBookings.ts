@@ -87,7 +87,7 @@ export function useBookings(): {
   const bookings = useMemo(() => rows.map((r) => mapBookingRow(r)), [rows]);
 
   const cancelBooking = useCallback(async (id: string) => {
-    const out = await dashboardFetchJson<{ ok?: boolean; error?: string }>(`/api/dashboard/bookings/${id}/cancel`, {
+    const out = await dashboardFetchJson<{ ok?: boolean; error?: string }>(`/api/customer/bookings/${id}/cancel`, {
       method: "POST",
     });
     if (!out.ok) {
@@ -102,7 +102,7 @@ export function useBookings(): {
   const rescheduleBooking = useCallback(
     async (id: string, date: string, time: string) => {
       const timeNorm = time.trim().length >= 5 ? time.trim().slice(0, 5) : time.trim();
-      const out = await dashboardFetchJson<{ ok?: boolean; error?: string }>(`/api/dashboard/bookings/${id}/reschedule`, {
+      const out = await dashboardFetchJson<{ ok?: boolean; error?: string }>(`/api/customer/bookings/${id}/reschedule`, {
         method: "PATCH",
         json: { date: date.trim(), time: timeNorm },
       });
@@ -198,7 +198,7 @@ export function useBookingDetail(id: string | undefined): {
 
   const cancelBooking = useCallback(
     async (bid: string) => {
-      const out = await dashboardFetchJson<{ ok?: boolean; error?: string }>(`/api/dashboard/bookings/${bid}/cancel`, {
+      const out = await dashboardFetchJson<{ ok?: boolean; error?: string }>(`/api/customer/bookings/${bid}/cancel`, {
         method: "POST",
       });
       if (!out.ok) {
@@ -213,7 +213,7 @@ export function useBookingDetail(id: string | undefined): {
   const rescheduleBooking = useCallback(
     async (bid: string, date: string, time: string) => {
       const timeNorm = time.trim().length >= 5 ? time.trim().slice(0, 5) : time.trim();
-      const out = await dashboardFetchJson<{ ok?: boolean; error?: string }>(`/api/dashboard/bookings/${bid}/reschedule`, {
+      const out = await dashboardFetchJson<{ ok?: boolean; error?: string }>(`/api/customer/bookings/${bid}/reschedule`, {
         method: "PATCH",
         json: { date: date.trim(), time: timeNorm },
       });

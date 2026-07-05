@@ -53,7 +53,7 @@ export function allocateDisplayCentsAcrossLineItems(
   }
   if (sumW <= 0) {
     const base = Math.floor(d / eligible.length);
-    let rem = d - base * eligible.length;
+    const rem = d - base * eligible.length;
     return eligible.map((i, idx) => ({
       booking_line_item_id: i.id,
       allocated_display_earnings_cents: base + (idx < rem ? 1 : 0),

@@ -1,4 +1,8 @@
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
+import {
+  getSmsOutboundDecision,
+  type CommunicationRecipientKind,
+} from "@/lib/notifications/communicationPolicy";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { abortWhatsAppQueueJob, enqueueWhatsApp, flushWhatsAppJobById } from "@/lib/whatsapp/queue";
@@ -236,10 +240,14 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
   }
 
   if (row.channel === "sms" && row.provider === "twilio") {
-    if (String(row.role ?? "").toLowerCase() === "admin") {
+    const roleRaw = String(row.role ?? "").trim().toLowerCase();
+    const recipientKind: CommunicationRecipientKind | undefined =
+      roleRaw === "cleaner" ? "cleaner" : roleRaw === "admin" ? "admin" : roleRaw === "customer" ? "customer" : undefined;
+    const smsDecision = getSmsOutboundDecision(recipientKind);
+    if (!smsDecision.allowed) {
       return {
         ok: false,
-        error: "Admin SMS retry is disabled by communication policy.",
+        error: `SMS retry blocked: ${smsDecision.reason}.`,
         httpStatus: 400,
       };
     }

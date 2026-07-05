@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams, usePathname, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,7 +24,7 @@ type CustomerDetail = {
   last_booking_at: string | null;
 };
 
-export default function AdminCustomerDetailPage() {
+function AdminCustomerDetailPage() {
   const params = useParams();
   const pathname = usePathname();
   const router = useRouter();
@@ -246,5 +246,13 @@ export default function AdminCustomerDetailPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AdminCustomerDetailPageRoute() {
+  return (
+    <Suspense fallback={<div className="p-8 text-sm text-muted-foreground">Loading…</div>}>
+      <AdminCustomerDetailPage />
+    </Suspense>
   );
 }

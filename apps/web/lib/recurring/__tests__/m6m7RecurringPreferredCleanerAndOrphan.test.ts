@@ -20,6 +20,10 @@ vi.mock("@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan", () => ({
   fetchLastAssignedCleanerForRecurringPlan: vi.fn().mockResolvedValue(null),
 }));
 
+vi.mock("@/lib/recurring/applyRecurringOccurrenceRosterContinuity", () => ({
+  applyRecurringOccurrenceRosterContinuity: vi.fn().mockResolvedValue({ applied: false, cleanerCount: 0 }),
+}));
+
 vi.mock("@/lib/recurring/autoChargeRetryPolicy", () => ({
   recurringAutoChargeMaxRetries: () => 3,
 }));
@@ -244,6 +248,19 @@ describe("M-6: recurringOccurrenceCleanerPatch (booking row patch shape)", () =>
     expect(patch.dispatch_status).toBe("assigned");
     expect(patch.cleaner_response_status).toBe("pending");
     expect(typeof patch.assigned_at).toBe("string");
+  });
+
+  it("repairs stuck pending_assignment rows to assigned (monthly continuity / ack-timeout recovery)", () => {
+    const patch = recurringOccurrenceCleanerPatch(VALID_CLEANER_A, { operationalStatus: "pending_assignment" });
+    expect(patch.status).toBe("assigned");
+    expect(patch.cleaner_id).toBe(VALID_CLEANER_A);
+    expect(patch.selected_cleaner_id).toBe(VALID_CLEANER_A);
+  });
+
+  it("does not clear cleaner_id when propagating onto already-assigned rows", () => {
+    const patch = recurringOccurrenceCleanerPatch(VALID_CLEANER_A, { operationalStatus: "assigned" });
+    expect(patch.cleaner_id).toBe(VALID_CLEANER_A);
+    expect(patch.status).toBe("assigned");
   });
 
   it("returns empty patch when no preferred cleaner (preserves dispatch-from-scratch behaviour)", () => {

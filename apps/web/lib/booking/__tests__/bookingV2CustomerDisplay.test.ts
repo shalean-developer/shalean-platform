@@ -17,6 +17,12 @@ describe("bookingV2CustomerDisplay", () => {
     expect(serviceLabelFromBookingRow({ service: "Standard Cleaning", service_slug: null })).toBe("Standard Cleaning");
   });
 
+  it("normalizes legacy catalog slugs to catalog labels", () => {
+    expect(serviceLabelFromBookingRow({ service: "Standard", service_slug: "standard" })).toBe("Standard Cleaning");
+    expect(serviceLabelFromBookingRow({ service: "Standard", service_slug: null })).toBe("Standard Cleaning");
+    expect(serviceLabelFromBookingRow({ service: null, service_slug: "deep" })).toBe("Deep Cleaning");
+  });
+
   it("reads rooms from service_details strings", () => {
     expect(
       roomsLinesFromServiceDetails({

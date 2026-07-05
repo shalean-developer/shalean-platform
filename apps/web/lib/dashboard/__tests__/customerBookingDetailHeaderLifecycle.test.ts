@@ -113,9 +113,9 @@ describe("customer booking detail header lifecycle", () => {
     expect(attrs["data-detail-operational-phase"]).toBe(describeDashboardBookingOperational(b).operationalPhase);
   });
 
-  it("visible customer status label unchanged for representative assigned booking", () => {
+  it("visible customer status label reflects cleaner assignment", () => {
     const raw = attachCanonicalCustomerBookingLifecycle(baseRaw());
     const b = dash(raw);
-    expect(customerBookingStatusLabel(b)).toBe("Scheduled");
+    expect(customerBookingStatusLabel(b)).toBe("Cleaner assigned");
   });
 });

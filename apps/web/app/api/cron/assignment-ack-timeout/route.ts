@@ -44,14 +44,21 @@ export async function POST(request: Request) {
       timeoutMinutes: ASSIGNMENT_ACK_TIMEOUT_MINUTES,
     });
   }
-  const { processed, errors } = lockResult.ranIt;
+  const { processed, errors, skipped, skipReason } = lockResult.ranIt;
 
   await logSystemEvent({
     level: errors > 0 ? "warn" : "info",
     source: "cron/assignment-ack-timeout",
-    message: "Assignment ack timeout tick complete",
-    context: { processed, errors, timeoutMinutes: ASSIGNMENT_ACK_TIMEOUT_MINUTES },
+    message: skipped ? "Assignment ack timeout paused (SMS degraded)" : "Assignment ack timeout tick complete",
+    context: { processed, errors, skipped: Boolean(skipped), skipReason: skipReason ?? null, timeoutMinutes: ASSIGNMENT_ACK_TIMEOUT_MINUTES },
   });
 
-  return NextResponse.json({ ok: true, processed, errors, timeoutMinutes: ASSIGNMENT_ACK_TIMEOUT_MINUTES });
+  return NextResponse.json({
+    ok: true,
+    processed,
+    errors,
+    skipped: Boolean(skipped),
+    skipReason: skipReason ?? null,
+    timeoutMinutes: ASSIGNMENT_ACK_TIMEOUT_MINUTES,
+  });
 }

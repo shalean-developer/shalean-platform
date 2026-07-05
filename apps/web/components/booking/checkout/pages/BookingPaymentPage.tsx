@@ -67,7 +67,7 @@ export function BookingPaymentPage({ serverPayload }: Props) {
   const onBack =
     unifiedMode === "funnel"
       ? () => router.push(withBookingQuery(checkoutSegmentPath("cleaner"), searchParams))
-      : () => router.push("/dashboard/bookings");
+      : () => router.push("/account/bookings");
 
   return (
     <ExistingBookingPaymentPanel

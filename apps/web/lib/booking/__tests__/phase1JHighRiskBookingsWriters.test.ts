@@ -206,9 +206,15 @@ const CLASSIFIED_RUNTIME_DIRECT_WRITERS: readonly RuntimeClassification[] = [
     rationale: "Recurring occurrence reconciler cancels orphan bookings after payout-safety checks.",
   },
   {
-    file: "app/api/dashboard/bookings/[id]/cancel/route.ts",
+    file: "lib/recurring/applyRecurringOccurrenceRosterContinuity.ts",
+    category: "legacy_cron_exception",
+    rationale:
+      "Recurring roster continuity copies the prior visit multi-cleaner roster onto generated occurrences and sets assigned status.",
+  },
+  {
+    file: "lib/customer/customerBookingModifyHandlers.ts",
     category: "legacy_customer_exception",
-    rationale: "Customer self-cancel endpoint.",
+    rationale: "Customer self-cancel handler (POST /api/customer/bookings/[id]/cancel).",
   },
 ];
 

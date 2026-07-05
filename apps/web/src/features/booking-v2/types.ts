@@ -46,6 +46,9 @@ export type BookingV2FormData = {
   serviceDetails: Record<string, string | number | boolean>;
   address: string;
   suburb: string;
+  /** Resolved `locations.id` from suburb — set after Step 1 area pick. */
+  serviceAreaLocationId: string;
+  serviceAreaCityId: string;
   city?: string;
   postalCode?: string;
   accessInstructions: string;
@@ -87,6 +90,8 @@ export function defaultBookingFormData(serviceSlug: ServiceSlug, cleanerMode: Cl
     serviceDetails: {},
     address: "",
     suburb: "",
+    serviceAreaLocationId: "",
+    serviceAreaCityId: "",
     city: "Cape Town",
     postalCode: "",
     accessInstructions: "",

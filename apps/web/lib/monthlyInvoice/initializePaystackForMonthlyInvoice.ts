@@ -137,7 +137,7 @@ export async function initializePaystackForMonthlyInvoice(
     return { ok: false, error: "invalid_customer_email" };
   }
 
-  let { data: inv, error } = await loadInvoiceRow(admin, params.invoiceId);
+  const { data: inv, error } = await loadInvoiceRow(admin, params.invoiceId);
 
   if (error) return { ok: false, error: error.message };
   if (!inv) return { ok: false, error: "invoice_not_found" };

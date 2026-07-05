@@ -3,6 +3,7 @@
 import { useRouter, usePathname } from "next/navigation";
 import { useEffect } from "react";
 import { useAuth } from "@/lib/auth/useAuth";
+import { scheduleAppRouterReplace } from "@/lib/navigation/scheduleAppRouterNavigation";
 
 type Props = { children: React.ReactNode };
 
@@ -18,7 +19,7 @@ export function AuthGuard({ children }: Props) {
     if (loading) return;
     if (user) return;
 
-    router.replace(`/login?redirect=${encodeURIComponent(pathname)}`);
+    scheduleAppRouterReplace(router, `/login?redirect=${encodeURIComponent(pathname)}`);
   }, [loading, user, router, pathname]);
 
   if (loading) {

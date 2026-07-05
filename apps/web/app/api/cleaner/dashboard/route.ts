@@ -31,12 +31,13 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DASHBOARD_BOOKING_SELECT =
-  "id, date, time, location, status, dispatch_status, service, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, is_team_job, team_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, payment_needs_follow_up, is_recurring_generated, billing_type, monthly_invoice_id";
+  "id, date, time, location, status, dispatch_status, service, service_slug, customer_name, completed_at, created_at, cleaner_response_status, assigned_at, accepted_at, en_route_at, started_at, cleaner_earnings_total_cents, payout_frozen_cents, display_earnings_cents, is_team_job, team_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, payment_needs_follow_up, is_recurring_generated, billing_type, monthly_invoice_id";
 
 function wireDashboardJob(raw: Record<string, unknown>): CleanerBookingRow {
   return {
     id: String(raw.id ?? ""),
     service: (raw.service as string | null | undefined) ?? null,
+    service_slug: (raw.service_slug as string | null | undefined) ?? null,
     date: (raw.date as string | null | undefined) ?? null,
     time: (raw.time as string | null | undefined) ?? null,
     location: (raw.location as string | null | undefined) ?? null,

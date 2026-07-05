@@ -132,8 +132,8 @@ export async function readLaunchCheckConfig(
 ): Promise<LaunchCheckConfigResolved> {
   const customerFromEnv = readUuidEnv("LAUNCH_CHECK_CUSTOMER_USER_ID");
   const cleanerFromEnv = readUuidEnv("LAUNCH_CHECK_CLEANER_ID");
-  let cleanerUserFromEnv = readUuidEnv("LAUNCH_CHECK_CLEANER_USER_ID");
-  let adminFromEnv = readUuidEnv("LAUNCH_CHECK_ADMIN_USER_ID");
+  const cleanerUserFromEnv = readUuidEnv("LAUNCH_CHECK_CLEANER_USER_ID");
+  const adminFromEnv = readUuidEnv("LAUNCH_CHECK_ADMIN_USER_ID");
   const adminEmail = process.env.LAUNCH_CHECK_ADMIN_EMAIL?.trim() || null;
 
   let customerUserId = customerFromEnv;

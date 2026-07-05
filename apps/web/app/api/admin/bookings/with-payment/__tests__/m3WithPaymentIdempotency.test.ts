@@ -130,7 +130,7 @@ function makeIdempotencyBuilder() {
   let pendingInsert: Omit<IdempotencyRow, "id" | "created_at"> | null = null;
   let pendingMatch: Partial<IdempotencyRow> | null = null;
   let pendingUpdate: Partial<IdempotencyRow> | null = null;
-  let pendingFilter: { eqId?: string } = {};
+  const pendingFilter: { eqId?: string } = {};
   let mode: "insert" | "select_match" | "update" | "delete" | null = null;
 
   const builder: Record<string, unknown> = {

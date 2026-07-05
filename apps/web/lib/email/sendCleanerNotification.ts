@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
+import { isCleanerEmailOutboundAllowed } from "@/lib/notifications/communicationPolicy";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 function getResend() {
@@ -32,6 +33,10 @@ export async function sendCleanerNewJobEmail(params: {
   /** Human-readable lines, e.g. `Inside Oven (R59)` — from `bookings.extras` jsonb. */
   extrasRequired?: string[];
 }): Promise<{ sent: boolean; error?: string }> {
+  if (!isCleanerEmailOutboundAllowed()) {
+    return { sent: false, error: "cleaner_email_disabled_by_policy" };
+  }
+
   const resend = getResend();
   if (!resend) {
     await reportOperationalIssue("warn", "sendCleanerNewJobEmail", "RESEND_API_KEY not set", {
@@ -105,6 +110,10 @@ export async function sendCleanerBookingCancelledEmail(params: {
   timeLabel: string;
   location: string;
 }): Promise<{ sent: boolean; error?: string }> {
+  if (!isCleanerEmailOutboundAllowed()) {
+    return { sent: false, error: "cleaner_email_disabled_by_policy" };
+  }
+
   const resend = getResend();
   if (!resend) {
     await reportOperationalIssue("warn", "sendCleanerBookingCancelledEmail", "RESEND_API_KEY not set", {

@@ -28,7 +28,7 @@ describe("buildBookingConfirmedTemplateData", () => {
     expect(data.payment_reference).toBe("PSK-ABC-123");
     expect(data.booking_reference).toBe("00000000-0000-4000-8000-000000000099");
     expect(data.book_again_url).toContain("/book");
-    expect(data.account_url).toContain("/dashboard/bookings");
+    expect(data.account_url).toContain("/account/bookings");
   });
 
   it("keeps SMS backward-compatible aliases", () => {

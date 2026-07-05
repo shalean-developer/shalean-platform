@@ -16,6 +16,7 @@ import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { markBookingPaidFromAdminSettlement } from "@/lib/booking/paymentFinalizationBookingCommands";
 import { cancelUnsentBookingPaymentRecoveryJobs } from "@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
+import { syncPaidBookingSideEffects } from "@/lib/booking/syncPaidBookingSideEffects";
 import { resolvePersistCleanerIdForBooking, type BookingPersistIdsRow } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { processCustomerReferralAfterFirstPaidBooking } from "@/lib/referrals/server";
@@ -441,6 +442,12 @@ export async function adminMarkBookingPaid(
       bookingId,
     });
   }
+
+  void syncPaidBookingSideEffects(admin, {
+    bookingId,
+    reference: preservedPaystackReference ?? externalRef,
+    amountCents,
+  });
 
   const cityId = typeof b.city_id === "string" && b.city_id.trim() ? b.city_id.trim() : null;
   void syncUserPrimaryCityFromBooking(admin, userIdForEffects, cityId);

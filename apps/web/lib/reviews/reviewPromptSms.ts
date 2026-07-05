@@ -6,6 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { getSmsOutboundDecision } from "@/lib/notifications/communicationPolicy";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
 import { logReviewKpiEvent } from "@/lib/reviews/reviewKpiServer";
@@ -143,6 +144,12 @@ export async function processReviewSmsPromptQueue(
   supabase: SupabaseClient,
   opts?: { limit?: number },
 ): Promise<ProcessReviewSmsPromptQueueResult> {
+  const smsDecision = getSmsOutboundDecision("customer");
+  if (!smsDecision.allowed) {
+    await supabase.from("review_sms_prompt_queue").delete().not("booking_id", "is", null);
+    return { firstSent: 0, remindersSent: 0, skipped: 0 };
+  }
+
   const limit = opts?.limit ?? 25;
   const nowIso = new Date().toISOString();
   let firstSent = 0;
@@ -208,7 +215,7 @@ export async function processReviewSmsPromptQueue(
         if (ok) {
           firstSent++;
         } else {
-          await supabase.from("review_sms_prompt_queue").update({ first_sent_at: null }).eq("booking_id", bid);
+          await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
           skipped++;
         }
       }
@@ -276,7 +283,7 @@ export async function processReviewSmsPromptQueue(
         if (ok) {
           remindersSent++;
         } else {
-          await supabase.from("review_sms_prompt_queue").update({ reminder_sent_at: null }).eq("booking_id", bid);
+          await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
           skipped++;
         }
       }

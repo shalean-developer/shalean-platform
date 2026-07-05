@@ -79,7 +79,7 @@ const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
 export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   const admin = getSupabaseAdmin();
 
-  let dbServices: Record<
+  const dbServices: Record<
     string,
     {
       base_price: number;
@@ -90,7 +90,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
     }
   > = {};
 
-  let dbExtras: Record<string, DbExtraRow> = {};
+  const dbExtras: Record<string, DbExtraRow> = {};
   let configJson: unknown = null;
 
   if (admin) {

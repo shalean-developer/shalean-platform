@@ -25,7 +25,7 @@ export function formatCheckoutAddress(args: {
   displayLocation?: string | null;
 }): string {
   const area = args.serviceAreaName?.trim() ?? "";
-  let street = dedupeCommaSegments(args.streetAddress?.trim() ?? "");
+  const street = dedupeCommaSegments(args.streetAddress?.trim() ?? "");
 
   if (area && street) {
     const areaLower = area.toLowerCase();

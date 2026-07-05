@@ -43,13 +43,41 @@ export function resolveRecurringPreferredCleanerId(input: {
 }
 
 /**
+ * Recurring continuity assigns immediately for every open operational status except
+ * `pending_payment` (per-booking Paystack — assign after payment finalize).
+ */
+export function recurringOccurrenceShouldDirectAssign(operationalStatus: string | null | undefined): boolean {
+  const st = String(operationalStatus ?? "").trim().toLowerCase();
+  if (!st || st === "pending_payment") return false;
+  return (
+    st === "pending" ||
+    st === "pending_assignment" ||
+    st === "assigned" ||
+    st === "offered" ||
+    st === "in_progress"
+  );
+}
+
+/**
+ * Maps a generated booking's current status to the patch mode used when propagating
+ * plan edits onto existing occurrences.
+ */
+export function recurringPropagateCleanerOperationalStatus(bookingStatus: string | null | undefined):
+  | "pending"
+  | "pending_payment" {
+  const st = String(bookingStatus ?? "").trim().toLowerCase();
+  if (st === "pending_payment") return "pending_payment";
+  return "pending";
+}
+
+/**
  * Builds the partial `bookings` row patch that propagates the preferred cleaner onto a
  * generated occurrence.
  *
  * - `pending_payment` (per-booking Paystack): records customer intent via
  *   `selected_cleaner_id`; `cleaner_id` stays null until post-payment dispatch.
- * - `pending` (monthly invoice): DB constraint forbids cleaner refs on operational
- *   pending — promote to `assigned` with both ids when reusing a prior cleaner.
+ * - All other open statuses (monthly invoice, repair, propagate): direct-assign for
+ *   continuity — including `pending_assignment` rows stuck by ack-timeout / propagate.
  */
 export function recurringOccurrenceCleanerPatch(
   preferredCleanerId: string | null,
@@ -66,7 +94,15 @@ export function recurringOccurrenceCleanerPatch(
   if (!preferredCleanerId) return {};
 
   const st = String(options?.operationalStatus ?? "").trim().toLowerCase();
-  if (st === "pending") {
+  if (st === "pending_payment") {
+    return {
+      selected_cleaner_id: preferredCleanerId,
+      assignment_type: "user_selected" as const,
+      cleaner_id: null,
+    };
+  }
+
+  if (recurringOccurrenceShouldDirectAssign(st)) {
     const now = new Date().toISOString();
     return {
       selected_cleaner_id: preferredCleanerId,

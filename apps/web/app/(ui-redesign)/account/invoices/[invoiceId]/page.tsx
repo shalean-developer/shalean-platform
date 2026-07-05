@@ -2,7 +2,10 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useMonthlyInvoiceDetail } from "@/hooks/useMonthlyInvoices";
+import { useMonthlyInvoiceBookings, useMonthlyInvoiceDetail } from "@/hooks/useMonthlyInvoices";
+import { serviceLabelFromBookingRow } from "@/lib/booking/bookingV2CustomerDisplay";
+import { formatBookingWhen } from "@/lib/dashboard/bookingUtils";
+import { customerBookingDetailPath } from "@/lib/customer/customerAccountPaths";
 import { formatZarFromCents } from "@/lib/dashboard/formatZar";
 import { daysPastDueJhb, invoiceOverdueEscalationText } from "@/lib/dashboard/invoiceOverdueEscalation";
 import { customerMonthlyInvoiceStatusLabel } from "@/lib/dashboard/monthlyInvoiceUi";
@@ -29,6 +32,11 @@ export default function AccountInvoiceDetailPage() {
   const rawId = params?.invoiceId;
   const invoiceId = typeof rawId === "string" ? rawId : Array.isArray(rawId) ? rawId[0] : undefined;
   const { invoice, loading, error, refetch } = useMonthlyInvoiceDetail(invoiceId);
+  const {
+    bookings: invoiceBookings,
+    loading: bookingsLoading,
+    error: bookingsError,
+  } = useMonthlyInvoiceBookings(invoiceId);
 
   if (loading) {
     return (
@@ -159,6 +167,47 @@ export default function AccountInvoiceDetailPage() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="rounded-2xl border-border bg-card shadow-sm">
+        <CardContent className="p-6">
+          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Visits on this invoice</h2>
+          {bookingsLoading ? (
+            <p className="mt-4 text-sm text-muted-foreground">Loading visits…</p>
+          ) : bookingsError ? (
+            <p className="mt-4 text-sm text-red-600">{bookingsError}</p>
+          ) : invoiceBookings.length === 0 ? (
+            <p className="mt-4 text-sm text-muted-foreground">No visits linked yet.</p>
+          ) : (
+            <ul className="mt-4 divide-y divide-border">
+              {invoiceBookings.map((b) => {
+                const label =
+                  serviceLabelFromBookingRow({ service: b.service, service_slug: b.service_slug }) ??
+                  b.service ??
+                  "Cleaning visit";
+                const when = formatBookingWhen(b.date ?? "", b.time ?? "");
+                const amount =
+                  typeof b.total_paid_zar === "number" && Number.isFinite(b.total_paid_zar)
+                    ? `R ${Math.round(b.total_paid_zar).toLocaleString("en-ZA")}`
+                    : null;
+                return (
+                  <li key={b.id} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
+                    <div>
+                      <p className="text-sm font-semibold text-foreground">{label}</p>
+                      <p className="text-xs text-muted-foreground">{when}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {amount ? <p className="text-sm font-semibold tabular-nums text-foreground">{amount}</p> : null}
+                      <Button asChild variant="ghost" size="sm" className="rounded-lg text-blue-600">
+                        <Link href={customerBookingDetailPath(b.id)}>View booking</Link>
+                      </Button>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -21,6 +21,7 @@ import { isAdmin } from "@/lib/auth/admin";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import {
   computeOpsSnapshotFromRows,
+  OPS_SNAPSHOT_BOOKING_SELECT,
   getDispatchSlaBreachMinutes,
   rowMatchesAttentionFilter,
   slaBreachOverdueMinutes,
@@ -157,7 +158,9 @@ type Row = {
   cleaner_response_status?: string | null;
   accepted_at?: string | null;
   is_recurring_generated?: boolean | null;
+  is_monthly_billing_booking?: boolean | null;
   billing_type?: string | null;
+  recurring_id?: string | null;
   payout_status?: string | null;
   payout_paid_at?: string | null;
   admin_recurring_unpaid_completion_override_at?: string | null;
@@ -191,6 +194,12 @@ function toOpsSnapshotRow(r: Row): OpsSnapshotRow {
     created_at: r.created_at,
     total_paid_zar: r.total_paid_zar,
     amount_paid_cents: r.amount_paid_cents,
+    is_recurring_generated: r.is_recurring_generated,
+    is_monthly_billing_booking: r.is_monthly_billing_booking,
+    billing_type: r.billing_type,
+    monthly_invoice_id: r.monthly_invoice_id,
+    recurring_id: r.recurring_id,
+    payment_status: r.payment_status,
   };
 }
 
@@ -440,7 +449,7 @@ export async function GET(request: Request) {
   const today = todayYmdJohannesburg();
 
   const bookingSelect =
-    "id, customer_name, customer_email, service, service_slug, date, time, location, total_paid_zar, amount_paid_cents, total_price, base_amount_cents, service_fee_cents, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, customer_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, cleaner_response_status, accepted_at, is_recurring_generated, billing_type, payout_status, payout_paid_at, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, monthly_invoice_id, admin_force_slot_override, team_id, is_team_job, team_member_count_snapshot";
+    "id, customer_name, customer_email, service, service_slug, date, time, location, total_paid_zar, amount_paid_cents, total_price, base_amount_cents, service_fee_cents, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, company_revenue_cents, payout_percentage, payout_type, is_test, status, dispatch_status, surge_multiplier, surge_reason, customer_id, cleaner_id, selected_cleaner_id, assignment_type, fallback_reason, attempted_cleaner_id, became_pending_at, assigned_at, en_route_at, started_at, completed_at, created_at, paystack_reference, city_id, duration_minutes, dispatch_attempt_count, created_by_admin, created_by, booking_source, created_by_admin_id, ignore_cleaner_conflict, cleaner_slot_override_reason, payment_link, payment_link_expires_at, payment_link_last_sent_at, payment_link_delivery, payment_link_reminder_1h_sent_at, payment_link_reminder_15m_sent_at, payment_link_send_count, payment_link_first_sent_at, payment_needs_follow_up, payment_completed_at, payment_conversion_seconds, payment_conversion_bucket, conversion_channel, payment_first_touch_channel, payment_last_touch_channel, payment_assist_channels, booking_priority, last_decision_snapshot, payment_status, cleaner_response_status, accepted_at, is_recurring_generated, is_monthly_billing_booking, billing_type, recurring_id, payout_status, payout_paid_at, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by, monthly_invoice_id, admin_force_slot_override, team_id, is_team_job, team_member_count_snapshot";
 
   let bookingQuery = admin.from("bookings").select(bookingSelect, paginationRequested ? { count: "exact" } : undefined);
   bookingQuery = applyAdminBookingDbFilters({
@@ -689,7 +698,7 @@ export async function GET(request: Request) {
   const { data: attentionRows } = await applyAdminBookingDbFilters({
     query: admin
       .from("bookings")
-      .select("id,status,date,time,cleaner_id,team_id,dispatch_status,became_pending_at,created_at,total_paid_zar,amount_paid_cents")
+      .select(OPS_SNAPSHOT_BOOKING_SELECT)
       .not("status", "in", "(completed,cancelled,failed,payment_expired)")
       .limit(3500),
     cityId,

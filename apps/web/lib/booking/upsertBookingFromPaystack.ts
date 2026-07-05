@@ -32,6 +32,7 @@ import {
 import { buildSnapshotFlat, mergeSnapshotWithFlat } from "@/lib/booking/snapshotFlat";
 import { getDemandSupplySnapshotByCity, getSurgeLabel } from "@/lib/pricing/demandSupplySurge";
 import { refreshRecurringPaymentStateForBooking } from "@/lib/recurring/refreshRecurringPaymentStateForBooking";
+import { recurringOccurrenceCleanerPatch } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import { promoteV2TeamBookingAfterPayment } from "@/lib/booking/promoteV2TeamBookingAfterPayment";
 import { learnFromPaymentSuccess } from "@/lib/ai-autonomy/learningLoop";
 import { recordConversionExperimentResultsOnPayment } from "@/lib/conversion/conversionExperimentOutcomes";
@@ -542,30 +543,53 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
    * Customer-chosen cleaner: must NOT assign on payment (DB + product require offer → accept).
    * `bookings_assigned_requires_status` forbids `status=pending` with `selected_cleaner_id`; use
    * `pending_assignment` until `acceptDispatchOffer` sets `assigned` + `cleaner_id`.
+   *
+   * Recurring generated occurrences are the exception: continuity assign immediately (same as monthly insert).
    */
-  const userSelectedCheckoutRow =
-    checkoutResolution.kind === "honor" && userConfirmedCleanerId != null
-      ? {
-          selected_cleaner_id: userConfirmedCleanerId,
-          attempted_cleaner_id: userConfirmedCleanerId,
-          assignment_type: "user_selected" as const,
-          cleaner_id: null as string | null,
-          status: "pending_assignment" as const,
-          dispatch_status: "searching",
-          cleaner_response_status: CLEANER_RESPONSE.NONE,
-        }
+  const existingIsRecurringGenerated =
+    existing &&
+    typeof existing === "object" &&
+    (existing as { is_recurring_generated?: boolean | null }).is_recurring_generated === true;
+
+  const recurringDirectAssignCleanerId = existingIsRecurringGenerated
+    ? checkoutResolution.kind === "honor" && userConfirmedCleanerId != null
+      ? userConfirmedCleanerId
       : checkoutResolution.kind === "fallback" && normalizedPickedCleaner != null
+        ? normalizedPickedCleaner
+        : normalizeUuidCandidate(existingPersistedSelectedCleanerId ?? null)
+    : null;
+
+  const userSelectedCheckoutRow =
+    recurringDirectAssignCleanerId != null
+      ? {
+          ...recurringOccurrenceCleanerPatch(recurringDirectAssignCleanerId, { operationalStatus: "pending" }),
+          attempted_cleaner_id: recurringDirectAssignCleanerId,
+          ...(checkoutResolution.kind === "fallback" && checkoutFallbackReason
+            ? { fallback_reason: checkoutFallbackReason }
+            : {}),
+        }
+      : checkoutResolution.kind === "honor" && userConfirmedCleanerId != null
         ? {
-            selected_cleaner_id: normalizedPickedCleaner,
-            attempted_cleaner_id: normalizedPickedCleaner,
+            selected_cleaner_id: userConfirmedCleanerId,
+            attempted_cleaner_id: userConfirmedCleanerId,
             assignment_type: "user_selected" as const,
             cleaner_id: null as string | null,
             status: "pending_assignment" as const,
             dispatch_status: "searching",
             cleaner_response_status: CLEANER_RESPONSE.NONE,
-            fallback_reason: checkoutResolution.reason,
           }
-        : {};
+        : checkoutResolution.kind === "fallback" && normalizedPickedCleaner != null
+          ? {
+              selected_cleaner_id: normalizedPickedCleaner,
+              attempted_cleaner_id: normalizedPickedCleaner,
+              assignment_type: "user_selected" as const,
+              cleaner_id: null as string | null,
+              status: "pending_assignment" as const,
+              dispatch_status: "searching",
+              cleaner_response_status: CLEANER_RESPONSE.NONE,
+              fallback_reason: checkoutResolution.reason,
+            }
+          : {};
 
   let paymentConversionSeconds: number | null = null;
   let paymentAttribution = {
@@ -976,7 +1000,9 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     }
 
     /** Customer-picked cleaner: dispatch offer first; assignment finalizes on accept (see `acceptDispatchOffer`). */
-    const dispatchOfferCleanerId = checkoutPaidDispatchOfferCleanerId({
+    const dispatchOfferCleanerId = recurringDirectAssignCleanerId
+      ? null
+      : checkoutPaidDispatchOfferCleanerId({
       checkoutResolution,
       userConfirmedCleanerId,
       normalizedPickedCleaner,

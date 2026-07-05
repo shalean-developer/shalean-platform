@@ -5,7 +5,7 @@ import {
   type OfficeScheduleDayCleaner,
 } from "@/lib/admin/officeScheduleDayPresentation";
 import { computeOfficeTodayScheduleStats, type OfficeScheduleBookingRow } from "@/lib/admin/officeTodayScheduleStats";
-import { computeOpsSnapshotFromRows, getDispatchSlaBreachMinutes, type OpsSnapshot, type OpsSnapshotRow } from "@/lib/admin/opsSnapshot";
+import { computeOpsSnapshotFromRows, getDispatchSlaBreachMinutes, OPS_SNAPSHOT_BOOKING_SELECT, type OpsSnapshot, type OpsSnapshotRow } from "@/lib/admin/opsSnapshot";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { runProductionHealthScan } from "@/lib/observability/productionHealthMetrics";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -150,15 +150,13 @@ const PRIORITY_RANK: Record<OfficeOperationsIssue["priority"], number> = {
 };
 
 async function fetchPaginatedOpenBookingRows(admin: SupabaseClient): Promise<OpsSnapshotRow[]> {
-  const select =
-    "id,status,date,time,cleaner_id,team_id,dispatch_status,became_pending_at,created_at,total_paid_zar,amount_paid_cents";
   const rows: OpsSnapshotRow[] = [];
 
   for (let from = 0; from < OPEN_BOOKINGS_MAX_ROWS; from += OPEN_BOOKINGS_PAGE_SIZE) {
     const to = from + OPEN_BOOKINGS_PAGE_SIZE - 1;
     const { data, error } = await admin
       .from("bookings")
-      .select(select)
+      .select(OPS_SNAPSHOT_BOOKING_SELECT)
       .not("status", "in", "(completed,cancelled,failed)")
       .order("created_at", { ascending: false })
       .range(from, to);

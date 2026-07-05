@@ -13,6 +13,8 @@ import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { compareYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -88,10 +90,11 @@ export async function POST(request: Request) {
   const todayYmd = todayJohannesburg();
 
   try {
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: bookings, error } = await admin
     .from("bookings")
     .select(
-      "id, date, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, user_id, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking",
+      `id, date, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, ${ownershipColumn}, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking`,
     )
     .eq("status", "pending_payment")
     .eq("is_recurring_generated", true)
@@ -125,7 +128,6 @@ export async function POST(request: Request) {
       paystack_reference: string | null;
       booking_snapshot: unknown;
       total_paid_zar: number | string | null;
-      user_id: string | null;
       recurring_retry_count: number | null;
       recurring_first_failure_at: string | null;
       payment_link_first_sent_at?: string | null;
@@ -173,8 +175,9 @@ export async function POST(request: Request) {
     }
 
     let email = normalizeEmail(String(row.customer_email ?? ""));
-    if (!email && row.user_id) {
-      const userRes = await admin.auth.admin.getUserById(row.user_id);
+    const customerAuthId = bookingCustomerKey(row as { customer_id?: string | null; user_id?: string | null });
+    if (!email && customerAuthId) {
+      const userRes = await admin.auth.admin.getUserById(customerAuthId);
       email = normalizeEmail(String(userRes.data.user?.email ?? ""));
     }
     if (!email) {

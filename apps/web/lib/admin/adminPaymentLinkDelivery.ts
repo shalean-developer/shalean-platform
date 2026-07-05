@@ -95,7 +95,7 @@ export async function deliverAdminPaymentLink(params: {
 }): Promise<AdminPaymentLinkDeliveryResult> {
   const phone = params.phone?.trim() || "";
   const email = params.email?.trim() || "";
-  let whatsappOk: boolean | null = null;
+  const whatsappOk: boolean | null = null;
   let smsOk: boolean | null = null;
   let emailOk: boolean | null = null;
   let primaryChannel: AdminPaymentLinkDeliveryResult["primaryChannel"] = "none";

@@ -24,6 +24,7 @@ import {
 } from "@/src/features/booking-v2/config/recurringScheduleOptions";
 import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
 import { filterCustomerOnlineBookingTimeSlots } from "@/lib/booking-v2/customerBookingTimeSlots";
+import { useBookingV2ScheduleAvailability } from "@/lib/booking-v2/useBookingV2ScheduleAvailability";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -258,6 +259,10 @@ export function Step2Schedule() {
   const bookingType = watch("bookingType");
   const date = watch("date");
   const time = watch("time");
+  const suburb = watch("suburb");
+  const serviceAreaLocationId = watch("serviceAreaLocationId");
+  const serviceDetails = watch("serviceDetails") ?? {};
+  const selectedExtras = watch("selectedExtras") ?? [];
   const cleanerCount = watch("cleanerCount") ?? 1;
   const recurringFrequency = watch("recurringFrequency");
   const selectedCleanerIds = watch("selectedCleanerIds") ?? [];
@@ -268,6 +273,18 @@ export function Step2Schedule() {
     (watch("pricingSummary")?.estimated_duration_minutes ??
       (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60),
   );
+
+  const areaResolved = Boolean(serviceAreaLocationId?.trim());
+  const { availability, loading: slotsLoading, fetchError: slotsFetchError } =
+    useBookingV2ScheduleAvailability({
+      dateYmd: date || null,
+      locationId: serviceAreaLocationId?.trim() || null,
+      serviceSlug,
+      serviceDetails,
+      selectedExtras,
+      durationMinutes,
+      scheduling,
+    });
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -280,11 +297,18 @@ export function Step2Schedule() {
 
   useEffect(() => {
     if (!date) return;
-    const available = filterCustomerOnlineBookingTimeSlots(date, { scheduling });
+    const available =
+      availability != null
+        ? Object.entries(availability)
+            .filter(([, ok]) => ok)
+            .map(([slot]) => slot)
+        : areaResolved
+          ? filterCustomerOnlineBookingTimeSlots(date, { scheduling })
+          : [];
     if (time && !available.includes(time)) {
       setValue("time", available[0] ?? "", { shouldValidate: true });
     }
-  }, [date, time, setValue, scheduling]);
+  }, [date, time, setValue, scheduling, availability, areaResolved]);
 
   function toggleCleaner(cleaner: AvailableCleanerV2) {
     const ids = selectedCleanerIds;
@@ -386,7 +410,15 @@ export function Step2Schedule() {
               Pick a time <span className="text-red-500">*</span>
             </p>
             <p className="mb-3 text-xs text-slate-500">
-              {date ? "Online until 12:30" : "Select a date first."}
+              {date
+                ? areaResolved
+                  ? slotsFetchError
+                    ? "Could not load live availability — try again or call us."
+                    : "Times shown have at least one available cleaner in your area."
+                  : suburb?.trim()
+                    ? "Confirm your suburb in Step 1 to see available times."
+                    : "Select a suburb in Step 1 first."
+                : "Select a date first."}
             </p>
             <Controller
               name="time"
@@ -399,6 +431,9 @@ export function Step2Schedule() {
                     value={field.value ?? ""}
                     onChange={field.onChange}
                     scheduling={scheduling}
+                    availability={availability}
+                    loading={slotsLoading}
+                    areaResolved={areaResolved}
                   />
                 ) : (
                   <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
@@ -583,6 +618,7 @@ export function Step2Schedule() {
             date={date}
             time={time}
             durationMinutes={durationMinutes}
+            locationId={serviceAreaLocationId?.trim() ?? ""}
             selectedIds={selectedCleanerIds}
             selectedDetails={selectedCleanerDetails}
             maxSelect={cleanerCount}

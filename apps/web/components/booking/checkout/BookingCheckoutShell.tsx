@@ -23,7 +23,7 @@ import { formatCheckoutAddress } from "@/lib/booking/formatCheckoutAddress";
 import type { PriceSummaryCardProps } from "@/components/booking/PriceSummaryCard";
 import { checkoutSidebarPriceDisplay } from "@/lib/booking/checkoutSidebarPricing";
 import { isBookingPaymentUuid } from "@/lib/booking/bookingPaymentUuid";
-import { bookingEntryPatchFromSearchParams, buildPostIntakePaymentUrl, withBookingQuery } from "@/lib/booking/bookingUrl";
+import { bookingEntryPatchFromSearchParams, withBookingQuery } from "@/lib/booking/bookingUrl";
 import { reconcileCheckoutPersistedSlice, validateCheckoutStoreForPayment } from "@/lib/booking/reconcileBookingState";
 import {
   BOOKING_CHECKOUT_SEGMENTS,
@@ -38,7 +38,6 @@ import {
 } from "@/lib/booking/bookingCheckoutGuards";
 import { validateCustomerDetails } from "@/lib/booking/customerDetailsValidation";
 import { useBookingCheckoutStore } from "@/lib/booking/bookingCheckoutStore";
-import { submitBooking } from "@/lib/booking/submitBooking";
 import { todayBookingYmd } from "@/lib/booking/bookingTimeSlots";
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { usePricingCatalog } from "@/lib/pricing/usePricingCatalog";
@@ -294,54 +293,7 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
       return;
     }
 
-    const s = useBookingCheckoutStore.getState();
-    try {
-      validateCheckoutStoreForPayment(s);
-    } catch {
-      setCleanerContinueError("Complete schedule and address first.");
-      router.push(withBookingQuery(checkoutSegmentPath("details"), searchParams));
-      return;
-    }
-
-    const cv = validateCustomerDetails({
-      customerName: s.customerName,
-      customerEmail: s.customerEmail,
-      customerPhone: s.customerPhone,
-    });
-    if (!cv.ok) {
-      setCleanerContinueError(cv.error);
-      return;
-    }
-
-    setCleanerContinueError(null);
-    setCleanerContinueBusy(true);
-    void (async () => {
-      const r = await submitBooking({
-        service: s.service,
-        bedrooms: s.bedrooms,
-        bathrooms: s.bathrooms,
-        extraRooms: s.extraRooms,
-        extras: s.extras,
-        date: s.date,
-        time: s.time,
-        location: s.location,
-        locationSlug: s.locationSlug,
-        serviceAreaLocationId: s.serviceAreaLocationId,
-        serviceAreaCityId: s.serviceAreaCityId,
-        serviceAreaName: s.serviceAreaName,
-        cleanerId: s.cleanerId,
-        cleanerDisplayName: s.cleanerDisplayName,
-        customerName: s.customerName,
-        customerEmail: s.customerEmail,
-        customerPhone: s.customerPhone,
-      });
-      setCleanerContinueBusy(false);
-      if (r.success) {
-        router.push(buildPostIntakePaymentUrl(new URLSearchParams(searchParams.toString()), r.bookingId));
-        return;
-      }
-      setCleanerContinueError(r.error);
-    })();
+    router.push("/book");
   }, [segment, continueDisabled, cleanerContinueBusy, nextSeg, router, searchParams]);
 
   const goBack = useCallback(() => {

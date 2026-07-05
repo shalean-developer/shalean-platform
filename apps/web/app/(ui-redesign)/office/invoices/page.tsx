@@ -106,7 +106,7 @@ function InvoiceCard({ inv }: { inv: AdminInvoiceListRow }) {
 }
 
 const OUTSTANDING_TOOLTIP =
-  "Sum of unpaid balances on all invoices in the list (every month). For current recurring billing, compare with the month draft total on /office/recurring.";
+  "Sum of unpaid balances on all invoices in the list (every month). For current recurring billing, compare with the month draft total on Recurring.";
 
 function SummaryStatCard({
   label,
@@ -264,8 +264,10 @@ export default function InvoicesPage() {
     <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Monthly billing</h1>
-          <p className="mt-0.5 text-sm text-slate-500">Consolidated monthly invoices for recurring customers.</p>
+          <h1 className="text-2xl font-bold text-slate-900">Monthly invoices</h1>
+          <p className="mt-0.5 text-sm text-slate-500">
+            Send invoices, track balances, and follow up on overdue recurring customers.
+          </p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -293,6 +295,21 @@ export default function InvoicesPage() {
           </button>
         </div>
       )}
+
+      <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+        <p>
+          <span className="font-semibold text-slate-900">Billing operations.</span> Work through invoices by month —
+          send, mark paid, adjust, and collect. Each invoice detail page has <strong>Sync to Zoho</strong> when
+          accounting needs updating.
+        </p>
+        <p className="mt-1">
+          For quotes, booking invoices, or bulk Zoho gaps, use{" "}
+          <Link href="/office/billing?tab=missing_zoho" className="font-medium text-blue-600 hover:underline">
+            Zoho sync
+          </Link>
+          .
+        </p>
+      </div>
 
       <TooltipProvider delayDuration={200}>
         <div className="-mx-1 flex gap-2.5 overflow-x-auto px-1 pb-1 md:mx-0 md:grid md:grid-cols-2 md:gap-3 md:overflow-visible lg:grid-cols-4">

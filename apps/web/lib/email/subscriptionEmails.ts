@@ -1,4 +1,5 @@
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 
@@ -52,7 +53,7 @@ export async function sendRecurringVisitPrechargeReminderEmail(params: {
   serviceLabel: string;
   visitDateYmd: string;
 }): Promise<SubscriptionEmailSendResult> {
-  const url = `${getPublicAppUrlBase()}/dashboard/bookings`;
+  const url = customerAccountBookingsUrl(getPublicAppUrlBase());
   return send(
     params.to,
     "Payment for your upcoming cleaning",
@@ -66,7 +67,7 @@ export async function sendSubscriptionChargeSuccessEmail(params: {
   serviceLabel: string;
   dateYmd: string;
 }): Promise<SubscriptionEmailSendResult> {
-  const url = `${getPublicAppUrlBase()}/dashboard/bookings`;
+  const url = customerAccountBookingsUrl(getPublicAppUrlBase());
   return send(
     params.to,
     "Payment successful — your cleaning is scheduled",

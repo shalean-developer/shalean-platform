@@ -241,7 +241,7 @@ export function BookingCheckoutHeader({ currentStep }: BookingCheckoutHeaderProp
             </Link>
           </DropdownMenuItem>
           <DropdownMenuItem asChild>
-            <Link href="/dashboard/bookings" className="cursor-pointer">
+            <Link href="/account/bookings" className="cursor-pointer">
               Bookings
             </Link>
           </DropdownMenuItem>

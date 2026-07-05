@@ -33,6 +33,7 @@ import { Select } from "@/components/ui/select";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
 import { cn } from "@/lib/utils";
 import { dashboardBookingCustomerSurface } from "@/lib/dashboard/dashboardBookingOperational";
+import { rebookBookUrlFromBookingRow } from "@/lib/booking-v2/rebookFromBookingRow";
 
 function formatTime12(time: string): string | null {
   const trimmed = time.trim();
@@ -447,7 +448,7 @@ export function BookingCard({
                     variant="outline"
                     className="rounded-xl border-gray-200 text-gray-700 hover:bg-gray-50"
                   >
-                    <Link href="/book">Rebook</Link>
+                    <Link href={rebookBookUrlFromBookingRow(booking.raw)}>Rebook</Link>
                   </Button>
                 ) : null}
               </div>

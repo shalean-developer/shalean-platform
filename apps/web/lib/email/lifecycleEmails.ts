@@ -3,6 +3,7 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 import { sendCustomerEmailWithDbTemplateFallback } from "@/lib/email/customerEmailFromTemplate";
 import { buildLifecycleTemplateData } from "@/lib/templates/bookingEmailTemplateData";
 
@@ -79,7 +80,7 @@ async function sendLifecycle(
 
 function buildReminderHtml(ctx: LifecycleEmailBookingContext): string {
   const base = getPublicAppUrlBase();
-  const accountUrl = `${base}/dashboard/bookings`;
+  const accountUrl = customerAccountBookingsUrl(base);
   const bookUrl = `${base}/book`;
   const reviewUrl = `${base}/review?booking=${encodeURIComponent(ctx.bookingId)}`;
 
@@ -136,7 +137,7 @@ export async function sendReminderEmail(ctx: LifecycleEmailBookingContext): Prom
 
 function buildReviewHtml(ctx: LifecycleEmailBookingContext): string {
   const base = getPublicAppUrlBase();
-  const accountUrl = `${base}/dashboard/bookings`;
+  const accountUrl = customerAccountBookingsUrl(base);
   const bookUrl = `${base}/book`;
   const reviewUrl = `${base}/review?booking=${encodeURIComponent(ctx.bookingId)}`;
   const externalReview = process.env.NEXT_PUBLIC_REVIEW_URL?.trim();
@@ -192,7 +193,7 @@ export async function sendReviewEmail(ctx: LifecycleEmailBookingContext): Promis
 
 function buildRebookHtml(ctx: LifecycleEmailBookingContext): string {
   const base = getPublicAppUrlBase();
-  const accountUrl = `${base}/dashboard/bookings`;
+  const accountUrl = customerAccountBookingsUrl(base);
   const bookUrl = `${base}/book`;
   const reviewUrl = `${base}/review?booking=${encodeURIComponent(ctx.bookingId)}`;
 
@@ -222,7 +223,7 @@ export async function sendRebookEmail(ctx: LifecycleEmailBookingContext): Promis
 
 function buildRebookReminderHtml(ctx: LifecycleEmailBookingContext): string {
   const base = getPublicAppUrlBase();
-  const accountUrl = `${base}/dashboard/bookings`;
+  const accountUrl = customerAccountBookingsUrl(base);
   const bookUrl = `${base}/book`;
 
   const inner = `

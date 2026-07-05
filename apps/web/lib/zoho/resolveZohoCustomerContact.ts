@@ -9,6 +9,7 @@ import {
   resolveAdminBookingCustomerName,
   trimCustomerPhone,
 } from "@/lib/admin/adminBookingCustomerContact";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { pickBillingEmail, phoneFromSystemLoginEmail } from "@/lib/zoho/shaleanBillingContactEmail";
 
 export type ZohoCustomerContact = {
@@ -158,6 +159,7 @@ export async function resolveZohoCustomerContactForUser(
 export async function resolveZohoCustomerContactForBooking(
   admin: SupabaseClient,
   booking: {
+    customer_id?: string | null;
     user_id?: string | null;
     customer_email?: string | null;
     customer_name?: string | null;
@@ -165,7 +167,7 @@ export async function resolveZohoCustomerContactForBooking(
     booking_snapshot?: unknown;
   },
 ): Promise<{ ok: true; contact: ZohoCustomerContact } | { ok: false; error: string }> {
-  const userId = String(booking.user_id ?? "").trim();
+  const userId = bookingCustomerKey(booking);
   if (userId) {
     return resolveZohoCustomerContactForUser(admin, userId, {
       bookingCustomerEmail: booking.customer_email,

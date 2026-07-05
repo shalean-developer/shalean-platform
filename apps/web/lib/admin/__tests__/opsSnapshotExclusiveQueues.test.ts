@@ -24,6 +24,12 @@ function row(overrides: Partial<OpsSnapshotRow>): OpsSnapshotRow {
     created_at: overrides.created_at ?? "2026-05-14T07:50:00.000Z",
     total_paid_zar: overrides.total_paid_zar ?? null,
     amount_paid_cents: overrides.amount_paid_cents ?? null,
+    is_recurring_generated: overrides.is_recurring_generated ?? null,
+    is_monthly_billing_booking: overrides.is_monthly_billing_booking ?? null,
+    billing_type: overrides.billing_type ?? null,
+    monthly_invoice_id: overrides.monthly_invoice_id ?? null,
+    recurring_id: overrides.recurring_id ?? null,
+    payment_status: overrides.payment_status ?? null,
   };
 }
 
@@ -76,6 +82,23 @@ describe("exclusive admin attention queue classification", () => {
 
     expect(classifyAttentionQueue(r, NOW_MS, SLA_MINUTES)).toBe("unassigned");
     expect(matchingQueues(r)).toEqual(["unassigned"]);
+  });
+
+  it("counts monthly recurring without per-visit payment as unassigned", () => {
+    const r = row({
+      status: "pending",
+      dispatch_status: "searching",
+      became_pending_at: "2026-05-14T07:55:00.000Z",
+      amount_paid_cents: null,
+      total_paid_zar: null,
+      is_recurring_generated: true,
+      is_monthly_billing_booking: true,
+      payment_status: "pending_monthly",
+      time: "14:00",
+    });
+
+    expect(classifyAttentionQueue(r, NOW_MS, SLA_MINUTES)).toBe("unassigned");
+    expect(computeOpsSnapshotFromRows([r], NOW_MS).unassigned).toBe(1);
   });
 
   it("does not count assigned booking as unassignable when dispatch_status is stale", () => {

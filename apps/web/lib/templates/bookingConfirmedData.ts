@@ -1,5 +1,6 @@
 import type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 
 function escapeAttr(s: string): string {
   return s
@@ -25,7 +26,7 @@ export function buildBookingConfirmedTemplateData(payload: BookingEmailPayload):
   const address = payload.location?.trim() ?? "";
   const cleanerName = payload.cleanerName?.trim() ?? "";
   const bookAgainUrl = `${appUrl}/book`;
-  const accountUrl = `${appUrl}/dashboard/bookings`;
+  const accountUrl = customerAccountBookingsUrl(appUrl);
 
   const cleanerSubstitutionNotice = payload.showCleanerSubstitutionNotice
     ? `<div style="border:1px solid #fcd34d;background:#fffbeb;border-radius:12px;padding:14px 16px;margin-bottom:18px;color:#78350f;font-size:14px;line-height:1.45;"><strong>Cleaner update:</strong> Your selected cleaner isn&apos;t available at that time — we&apos;ve assigned a similar top-rated cleaner.</div>`

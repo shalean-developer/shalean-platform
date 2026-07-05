@@ -5,6 +5,18 @@ import { getSupabaseClient } from "@/lib/supabaseClient";
 import type { CustomerMonthlyInvoiceRow } from "@/lib/dashboard/monthlyInvoiceTypes";
 import { useUser } from "@/hooks/useUser";
 
+export type CustomerInvoiceBookingRow = {
+  id: string;
+  date: string | null;
+  time: string | null;
+  service: string | null;
+  service_slug: string | null;
+  total_paid_zar: number | null;
+  status: string | null;
+};
+
+const BOOKING_SELECT = "id, date, time, service, service_slug, total_paid_zar, status";
+
 const SELECT = [
   "id",
   "customer_id",
@@ -135,5 +147,60 @@ export function useMonthlyInvoiceDetail(invoiceId: string | undefined): {
     loading: userLoading || loading,
     error,
     refetch: fetchOne,
+  };
+}
+
+export function useMonthlyInvoiceBookings(invoiceId: string | undefined): {
+  bookings: CustomerInvoiceBookingRow[];
+  loading: boolean;
+  error: string | null;
+  refetch: () => Promise<void>;
+} {
+  const { user, loading: userLoading } = useUser();
+  const userId = user?.id;
+  const [bookings, setBookings] = useState<CustomerInvoiceBookingRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchBookings = useCallback(async () => {
+    if (!userId || !invoiceId) {
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
+    const sb = getSupabaseClient();
+    if (!sb) {
+      setError("Supabase is not configured.");
+      setBookings([]);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    const res = await sb
+      .from("bookings")
+      .select(BOOKING_SELECT)
+      .eq("monthly_invoice_id", invoiceId)
+      .order("date", { ascending: true })
+      .order("time", { ascending: true });
+    if (res.error) {
+      setError(res.error.message);
+      setBookings([]);
+    } else {
+      setBookings(((res.data ?? []) as unknown) as CustomerInvoiceBookingRow[]);
+    }
+    setLoading(false);
+  }, [userId, invoiceId]);
+
+  useEffect(() => {
+    if (userLoading) return;
+    void fetchBookings();
+  }, [userLoading, fetchBookings]);
+
+  return {
+    bookings,
+    loading: userLoading || loading,
+    error,
+    refetch: fetchBookings,
   };
 }

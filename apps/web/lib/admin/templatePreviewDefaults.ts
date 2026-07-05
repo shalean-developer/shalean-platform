@@ -1,4 +1,5 @@
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 
 const SAMPLE_BOOKING_ID = "00000000-0000-4000-8000-000000000001";
 
@@ -23,7 +24,7 @@ export function buildDefaultTemplatePreviewData(): Record<string, unknown> {
     payment_reference: "PSK-TEST-REF-001",
     cleaner_name: "Sarah M.",
     book_again_url: `${appUrl}/book`,
-    account_url: `${appUrl}/dashboard/bookings`,
+    account_url: customerAccountBookingsUrl(appUrl),
     payment_url: `${appUrl}/pay/${SAMPLE_BOOKING_ID}`,
     review_url: `${appUrl}/review?booking=${SAMPLE_BOOKING_ID}`,
     cleaner_substitution_notice: "",

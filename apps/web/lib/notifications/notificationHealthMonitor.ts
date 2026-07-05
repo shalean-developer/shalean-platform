@@ -26,9 +26,12 @@ const WA_AUTO_PAUSE_MIN_ATTEMPTS = 6;
 const WA_RESUME_RATE = 0.85;
 const WA_RESUME_MIN_ATTEMPTS = 6;
 const EMAIL_FAIL_THRESHOLD = 6;
-const SMS_FAIL_SPIKE = 10;
 const ALL_CHANNELS_SMS_FAIL_MIN = 3;
 const ALL_CHANNELS_EMAIL_FAIL_MIN = 3;
+
+function smsHealthAlertsEnabled(): boolean {
+  return process.env.NOTIFICATION_HEALTH_SMS_ALERTS === "true";
+}
 
 function whatsappPauseMinutes(): number {
   const n = Number(process.env.NOTIFICATION_WHATSAPP_PAUSE_MINUTES ?? "45");
@@ -188,14 +191,14 @@ export async function runNotificationHealthCheck(params: {
     }
   }
 
-  if (smsFailed >= SMS_FAIL_SPIKE) {
+  if (smsHealthAlertsEnabled() && smsFailed >= 10) {
     const key = "sms_failures_spike";
     if (!(await wasAlertSentRecently(admin, key, dedupeSince))) {
       alerts.push(key);
       await recordAlert(key, { smsFailed, sinceIso });
       await notifyAdminsHtml(
         `[ALERT] SMS failures spike (${smsFailed} failures)`,
-        `<p>SMS failed sends in the window: <strong>${smsFailed}</strong> (threshold ${SMS_FAIL_SPIKE}).</p>
+        `<p>SMS failed sends in the window: <strong>${smsFailed}</strong> (threshold 10).</p>
         <pre style="font-size:12px">${JSON.stringify(window.sms, null, 2)}</pre>`,
       );
     }

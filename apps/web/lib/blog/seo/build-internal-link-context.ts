@@ -50,7 +50,7 @@ export function buildInjectInternalLinksContext(params: {
     locationSlug = citySlug;
   }
 
-  let serviceSlug = facets?.serviceSlug ?? "standard-cleaning";
+  const serviceSlug = facets?.serviceSlug ?? "standard-cleaning";
   const serviceName = serviceLabelFromSlug(serviceSlug);
 
   const pk = (params.primaryKeyword ?? "").trim();

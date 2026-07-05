@@ -183,7 +183,8 @@ async function enqueueNotificationDeliveryFailure(payload: {
  * Admin mail: skips admin HTML when `ADMIN_NOTIFICATION_EMAIL` is unset (logged); never throws.
  * Optional `ADMIN_NOTIFICATION_LEVEL=critical` limits admin mail to payment_confirmed, sla_breach, and cancelled.
  *
- * Channel policy: `notificationChannelRules.ts` (cleaner: SMS only; no cleaner SMS on `payment_confirmed`; customer payment_confirmed: email first, SMS only if email missing or failed; no customer WhatsApp).
+ * Channel policy: `communicationPolicy.ts` / `notificationChannelRules.ts` — email for admin + customers only (no cleaner email);
+ * SMS disabled globally unless `SMS_OUTBOUND_ENABLED=true`, then cleaners only; no customer WhatsApp.
  *
  * Idempotency: `reminder_2h_sent`, `assigned_sent`, `completed_sent`, `sla_breach_sent` claims use migration
  * `20260493_system_logs_notification_dedupe_idx.sql` (claim-first insert). Cleaner assignment/reminder SMS also uses

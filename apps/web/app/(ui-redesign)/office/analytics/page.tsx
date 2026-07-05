@@ -176,17 +176,19 @@ export default function AnalyticsPage() {
         ) : chartData.length === 0 ? (
           <p className="py-10 text-center text-sm text-slate-500">No paid revenue in this period yet.</p>
         ) : (
-          <div className="flex h-40 items-end gap-3">
+          <div className="flex h-40 gap-3">
             {chartData.map((d) => (
-              <div key={d.label} className="flex flex-1 flex-col items-center gap-1">
-                <span className="text-[10px] text-slate-500">
+              <div key={d.label} className="flex h-full min-w-0 flex-1 flex-col items-center gap-1">
+                <span className="shrink-0 text-[10px] text-slate-500">
                   {d.value >= 1000 ? `R${(d.value / 1000).toFixed(1)}k` : `R${Math.round(d.value)}`}
                 </span>
-                <div
-                  className="w-full cursor-default rounded-t-lg bg-blue-200 transition-colors hover:bg-blue-500"
-                  style={{ height: `${Math.max((d.value / maxVal) * 100, d.value > 0 ? 4 : 0)}%` }}
-                />
-                <span className="text-[10px] font-medium text-slate-500">{d.label}</span>
+                <div className="flex min-h-0 w-full flex-1 items-end">
+                  <div
+                    className="w-full cursor-default rounded-t-lg bg-blue-200 transition-colors hover:bg-blue-500"
+                    style={{ height: `${Math.max((d.value / maxVal) * 100, d.value > 0 ? 4 : 0)}%` }}
+                  />
+                </div>
+                <span className="shrink-0 text-[10px] font-medium text-slate-500">{d.label}</span>
               </div>
             ))}
           </div>

@@ -10,6 +10,8 @@ import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/process
 import { evaluateLifecycleEmailAlerts } from "@/lib/admin/lifecycleEmailMonitoring";
 import { logSystemEvent, reportOperationalIssue, logCronRun } from "@/lib/logging/systemLog";
 import { completeCleanerReferralOnFirstJob } from "@/lib/referrals/server";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordAssignmentOutcomeAndLearn } from "@/lib/marketplace-intelligence/assignmentOutcomeFeedback";
 import { buildBookingEvent } from "@/lib/booking/bookingEvents";
@@ -35,9 +37,10 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
   if (!admin) return { completed: 0 };
 
   const today = todayYmdJohannesburg();
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: past, error } = await admin
     .from("bookings")
-    .select("id, user_id, cleaner_id, payout_owner_cleaner_id, is_team_job, date, status, customer_email, dispatch_status, recurring_id, is_recurring_generated")
+    .select(`id, ${ownershipColumn}, cleaner_id, payout_owner_cleaner_id, is_team_job, date, status, customer_email, dispatch_status, recurring_id, is_recurring_generated`)
     .in("status", ["pending", "assigned", "in_progress"])
     .not("date", "is", null)
     .lt("date", today)
@@ -59,7 +62,7 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
 
     if (ev) continue;
 
-    const uid = typeof b.user_id === "string" ? b.user_id : null;
+    const uid = bookingCustomerKey(b as { customer_id?: string | null; user_id?: string | null }) || null;
     const row = b as {
       cleaner_id?: string | null;
       payout_owner_cleaner_id?: string | null;

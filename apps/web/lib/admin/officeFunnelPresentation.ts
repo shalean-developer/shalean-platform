@@ -111,6 +111,7 @@ export type OfficeProductFlowStep = {
   key: string;
   label: string;
   views: number;
+  sub?: string;
 };
 
 export const OFFICE_FUNNEL_STEP_LABELS: Record<string, string> = {
@@ -119,7 +120,8 @@ export const OFFICE_FUNNEL_STEP_LABELS: Record<string, string> = {
   extras: "Extras",
   datetime: "Schedule",
   details: "Details",
-  payment: "Payment",
+  payment: "Checkout",
+  paid: "Paid",
 };
 
 const STEP_COLORS = ["bg-blue-500", "bg-blue-400", "bg-violet-400", "bg-emerald-500"] as const;
@@ -193,19 +195,28 @@ export function paymentCompletedSourceLabel(source: PaymentCompletedSource): str
 }
 
 export function funnelVisitorCount(data: BookingFunnelApiPayload): number {
-  return Math.max(data.sessionsWithFunnelView ?? 0, data.funnelStartSessions ?? 0);
+  const fromFunnelViews = Math.max(data.sessionsWithFunnelView ?? 0, data.funnelStartSessions ?? 0);
+  if (fromFunnelViews > 0) return fromFunnelViews;
+  return data.sessions ?? 0;
 }
 
 export function overallFunnelConversionPct(data: BookingFunnelApiPayload): number | null {
   const visitors = funnelVisitorCount(data);
   const completed = paymentCompletedCount(data);
-  if (visitors <= 0) return completed > 0 ? 100 : null;
+  if (visitors <= 0) return null;
   return pct(completed, visitors);
+}
+
+export function checkoutToPaidConversionPct(data: BookingFunnelApiPayload): number | null {
+  const checkout = data.reachedPaymentSessions ?? 0;
+  const paid = paymentCompletedCount(data);
+  if (checkout <= 0) return null;
+  return pct(paid, checkout);
 }
 
 export function buildOfficeFunnelSteps(data: BookingFunnelApiPayload): OfficeFunnelStep[] {
   const visitors = funnelVisitorCount(data);
-  const quoteStarted = data.funnelStartSessions ?? 0;
+  const quoteStarted = Math.max(data.funnelStartSessions ?? 0, data.reachedPaymentSessions ?? 0 > 0 ? Math.min(funnelVisitorCount(data), data.reachedPaymentSessions ?? 0) : 0);
   const checkoutReached = data.reachedPaymentSessions ?? 0;
   const paymentCompleted = paymentCompletedCount(data);
 
@@ -216,7 +227,7 @@ export function buildOfficeFunnelSteps(data: BookingFunnelApiPayload): OfficeFun
     { label: "Payment completed", value: paymentCompleted },
   ];
 
-  const top = Math.max(visitors, paymentCompleted, 1);
+  const top = Math.max(visitors, 1);
 
   return values.map((row, index) => {
     const prev = index > 0 ? values[index - 1]!.value : null;
@@ -236,33 +247,43 @@ export function buildOfficeFunnelSteps(data: BookingFunnelApiPayload): OfficeFun
   });
 }
 
+export function hasSparseFunnelTracking(data: BookingFunnelApiPayload): boolean {
+  const bookingEventRows = data.rows ?? 0;
+  const hasInferredFunnel = (data.funnelStartSessions ?? 0) > 0 && bookingEventRows < 10;
+  return hasInferredFunnel && bookingEventRows < (data.sessions ?? 0);
+}
+
 export function buildOfficeProductFlowSteps(data: BookingFunnelApiPayload): OfficeProductFlowStep[] {
   const views = new Map((data.viewsByStep ?? []).map((row) => [row.step, row.views]));
-  const paidCount = paymentCompletedCount(data);
+  const paid = paymentCompletedCount(data);
   return PRODUCT_FLOW_ORDER.map((key) => ({
     key,
-    label: key === "payment" ? "Payment (paid)" : funnelStepLabel(key),
-    views: key === "payment" ? Math.max(views.get(key) ?? 0, paidCount) : (views.get(key) ?? 0),
+    label: funnelStepLabel(key),
+    views: views.get(key) ?? 0,
+    sub: key === "payment" && paid > 0 ? `${paid} paid` : undefined,
   }));
 }
 
 export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunnelKpi[] {
   const overall = overallFunnelConversionPct(data);
+  const checkoutPaid = checkoutToPaidConversionPct(data);
   const paystack = data.intelligence?.paystack;
   const time = data.intelligence?.timeToComplete;
   const revenue = data.intelligence?.revenue;
+  const checkout = data.reachedPaymentSessions ?? 0;
+  const paid = paymentCompletedCount(data);
 
   return [
     {
       label: "Visitor → paid",
       value: overall != null ? `${overall}%` : "—",
-      sub: `${paymentCompletedCount(data)} paid · ${funnelVisitorCount(data)} visitors`,
+      sub: `${paid} paid · ${funnelVisitorCount(data)} visitors`,
       tone: "emerald",
     },
     {
-      label: "Quote → checkout",
-      value: pctLabel(data.conversionRatePct),
-      sub: `${data.reachedPaymentSessions ?? 0} of ${data.funnelStartSessions ?? 0} quote starts`,
+      label: "Checkout → paid",
+      value: pctLabel(checkoutPaid),
+      sub: `${paid} of ${checkout} reached checkout`,
       tone: "blue",
     },
     {
@@ -272,9 +293,9 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
       tone: "violet",
     },
     {
-      label: "Paystack abandonment",
+      label: "Paystack drop-off",
       value: pctLabel(paystack?.abandonmentPct),
-      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} completed · ${zarLabel(revenue?.totalZar)} revenue`,
+      sub: `${paystack?.completed ?? 0}/${paystack?.opened ?? 0} Paystack sessions · ${zarLabel(revenue?.totalZar)} revenue`,
       tone: "orange",
     },
   ];
