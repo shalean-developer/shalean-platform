@@ -156,6 +156,12 @@ const CLASSIFIED_ASSIGNMENT_MUTATION_FILES: Classification[] = [
     rationale: "Recurring monthly occurrence spawn; same pre-payment lifecycle as per-booking spawn.",
   },
   {
+    file: "apps/web/lib/recurring/applyRecurringOccurrenceRosterContinuity.ts",
+    coverage: "primitive_caller_handles",
+    rationale:
+      "Copies prior recurring roster onto a generated occurrence; callers (insert*OccurrenceBooking, propagate, restore) own any post-assignment snapshot.",
+  },
+  {
     file: "apps/web/lib/launch/launchCheckSeed.ts",
     coverage: "intake_only",
     rationale: "Launch-check seed helper inserts synthetic pending-payment bookings for admin verification.",

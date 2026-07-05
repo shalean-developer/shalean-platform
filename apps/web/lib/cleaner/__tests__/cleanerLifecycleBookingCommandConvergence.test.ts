@@ -77,7 +77,7 @@ describe("cleaner lifecycle booking command convergence (Phase 1G)", () => {
   it("preserves payout persistence timing before the completed-state write", () => {
     const src = readFileSync(lifecycle, "utf8");
     const completeBlock = src.indexOf('if (action === "complete")');
-    const payoutIdx = src.indexOf("persistCleanerPayoutIfUnset({ admin, bookingId, cleanerId })", completeBlock);
+    const payoutIdx = src.indexOf("persistCleanerPayoutIfUnset({", completeBlock);
     const updateIdx = src.indexOf("updateCleanerLifecycleBookingState({", payoutIdx);
 
     expect(completeBlock).toBeGreaterThan(-1);

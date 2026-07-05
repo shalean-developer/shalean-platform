@@ -8,26 +8,29 @@ import { describe, expect, it } from "vitest";
 describe("cleaner lifecycle mutation convergence (static guard)", () => {
   const cleanerApi = join(process.cwd(), "app/api/cleaner");
 
-  it("bookings accept uses cleanerAcceptBooking", () => {
+  it("legacy bookings accept route delegates to retiredCleanerBookingRoute", () => {
     const src = readFileSync(join(cleanerApi, "bookings/[id]/accept/route.ts"), "utf8");
-    expect(src).toContain("cleanerAcceptBooking");
-    expect(src).not.toContain("runCleanerBookingLifecycleAction");
+    expect(src).toContain("retiredCleanerBookingRoute");
+    expect(src).toContain('"accept"');
   });
 
-  it("bookings complete uses markBookingCompleted", () => {
+  it("legacy bookings complete route delegates to retiredCleanerBookingRoute", () => {
     const src = readFileSync(join(cleanerApi, "bookings/[id]/complete/route.ts"), "utf8");
-    expect(src).toContain("markBookingCompleted");
+    expect(src).toContain("retiredCleanerBookingRoute");
+    expect(src).toContain('"complete"');
   });
 
-  it("bookings en-route uses markCleanerOnTheWay (not runCleanerBookingLifecycleAction in route)", () => {
+  it("legacy bookings en-route route delegates to retiredCleanerBookingRoute", () => {
     const enRoute = readFileSync(join(cleanerApi, "bookings/[id]/en-route/route.ts"), "utf8");
-    expect(enRoute).toContain("markCleanerOnTheWay");
+    expect(enRoute).toContain("retiredCleanerBookingRoute");
+    expect(enRoute).toContain('"en-route"');
     expect(enRoute).not.toContain("runCleanerBookingLifecycleAction");
   });
 
-  it("bookings start uses markBookingStarted (not runCleanerBookingLifecycleAction in route)", () => {
+  it("legacy bookings start route delegates to retiredCleanerBookingRoute", () => {
     const start = readFileSync(join(cleanerApi, "bookings/[id]/start/route.ts"), "utf8");
-    expect(start).toContain("markBookingStarted");
+    expect(start).toContain("retiredCleanerBookingRoute");
+    expect(start).toContain('"start"');
     expect(start).not.toContain("runCleanerBookingLifecycleAction");
   });
 

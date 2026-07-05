@@ -189,10 +189,10 @@ describe("triggerAssignmentEarningsSnapshotForBooking (M-8)", () => {
   });
 
   /**
-   * Per-booking (non-monthly) bookings must NOT be touched by the M-8
-   * snapshot — earnings persist on completion, not on assignment.
+   * Assigned per-booking rows now snapshot on active-on-site assignment basis so
+   * cleaners see earnings before completion.
    */
-  it("does not snapshot per-booking (non-monthly) assigned bookings", async () => {
+  it("snapshots per-booking (non-monthly) assigned bookings", async () => {
     await triggerAssignmentEarningsSnapshotForBooking(
       fakeAdminWithBooking(
         monthlyAssignedRow({
@@ -204,7 +204,7 @@ describe("triggerAssignmentEarningsSnapshotForBooking (M-8)", () => {
       BID,
       "test_per_booking",
     );
-    expect(persistCleanerPayoutIfUnsetMock).not.toHaveBeenCalled();
+    expect(persistCleanerPayoutIfUnsetMock).toHaveBeenCalledTimes(1);
   });
 
   /**

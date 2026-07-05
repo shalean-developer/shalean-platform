@@ -91,7 +91,7 @@ function SalesDocumentListItem({
             </p>
           ) : null}
         </div>
-        <SalesDocumentRowActions doc={doc} onDelete={onDelete} layout="stack" />
+        <SalesDocumentRowActions doc={doc} onDelete={() => onDelete(doc)} layout="stack" />
       </div>
     </div>
   );
@@ -132,7 +132,7 @@ function SalesDocumentTableRow({
         ) : null}
       </td>
       <td className="px-4 py-3 text-right">
-        <SalesDocumentRowActions doc={doc} onDelete={onDelete} />
+        <SalesDocumentRowActions doc={doc} onDelete={() => onDelete(doc)} />
       </td>
     </tr>
   );

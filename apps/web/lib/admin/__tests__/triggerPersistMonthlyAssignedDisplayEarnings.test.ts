@@ -89,7 +89,7 @@ describe("triggerPersistMonthlyAssignedDisplayEarnings (Fix 3 — pre-completion
     expect(persistCleanerPayoutIfUnsetMock).toHaveBeenCalledTimes(1);
   });
 
-  it("no-op for per-booking (non-monthly) assigned row", async () => {
+  it("snapshots assigned per-booking rows on active-on-site assignment basis", async () => {
     await triggerPersistMonthlyAssignedDisplayEarnings(
       fakeAdminWithBooking({
         status: "assigned",
@@ -102,7 +102,7 @@ describe("triggerPersistMonthlyAssignedDisplayEarnings (Fix 3 — pre-completion
       BID,
       "test_source",
     );
-    expect(persistCleanerPayoutIfUnsetMock).not.toHaveBeenCalled();
+    expect(persistCleanerPayoutIfUnsetMock).toHaveBeenCalledTimes(1);
   });
 
   it("no-op for completed booking (handled by triggerPersistCleanerPayoutIfCompleted)", async () => {

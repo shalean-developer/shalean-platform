@@ -381,7 +381,11 @@ describe("M-15: source-level contract — review hooks/route surface the cleaner
     "utf8",
   );
   const reviewsPageSrc = readFileSync(
-    path.resolve(__dirname, "..", "..", "..", "app", "dashboard", "reviews", "page.tsx"),
+    path.resolve(__dirname, "..", "..", "..", "app", "(ui-redesign)", "account", "reviews", "page.tsx"),
+    "utf8",
+  );
+  const reviewFormSrc = readFileSync(
+    path.resolve(__dirname, "..", "..", "..", "components", "review", "PublicReviewForm.tsx"),
     "utf8",
   );
   const customerLoaderSrc = readFileSync(
@@ -401,18 +405,14 @@ describe("M-15: source-level contract — review hooks/route surface the cleaner
     expect(useReviewsSrc).toMatch(/cleanerName:\s*string\s*\|\s*null/);
   });
 
-  it("reviews page renders the selected-cleaner subtitle inside the modal", () => {
-    expect(reviewsPageSrc).toMatch(/data-testid="rev-selected-cleaner"/);
-    expect(reviewsPageSrc).toMatch(/You(?:'|&apos;)re reviewing/);
+  it("account reviews page links pending visits to the dedicated review form", () => {
+    expect(reviewsPageSrc).toMatch(/useReviews/);
+    expect(reviewsPageSrc).toMatch(/\/review\?booking=/);
   });
 
-  it("reviews page renders the cleaner name on each review-list card", () => {
-    expect(reviewsPageSrc).toMatch(/r\.cleanerName/);
-  });
-
-  it("reviews page wires the M-11 single-eligible auto-open helper (not the legacy ?booking-only effect)", () => {
-    expect(reviewsPageSrc).toMatch(/chooseReviewModalAutoOpenIntent/);
-    expect(reviewsPageSrc).toMatch(/single_eligible|reviewableIds/);
+  it("public review form accepts a booking id from the query string", () => {
+    expect(reviewFormSrc).toMatch(/initialBookingId/);
+    expect(reviewFormSrc).toMatch(/\/api\/bookings\/.*review/);
   });
 
   it("customer-bookings loader queries cleaners by id IN (lead_uuids) — never a roster table", () => {
