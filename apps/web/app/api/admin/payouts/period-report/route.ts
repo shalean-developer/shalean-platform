@@ -27,6 +27,7 @@ export async function GET(request: Request) {
     return NextResponse.json(report);
   } catch (e) {
     const message = e instanceof Error ? e.message : "Failed to load payout period report.";
+    console.error("[period-report]", message, e);
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

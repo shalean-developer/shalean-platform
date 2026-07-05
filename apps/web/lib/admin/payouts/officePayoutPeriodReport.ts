@@ -24,6 +24,11 @@ export type OfficePayoutPeriodTotals = {
   paid_visits: number;
   batch_count: number;
   batch_cents: number;
+  /** Customer revenue collected on completed visits in the period. */
+  total_revenue_cents: number;
+  /** Company share (stored `company_revenue_cents`) on those visits. */
+  company_earnings_cents: number;
+  margin_percent: number | null;
 };
 
 export type OfficePayoutCleanerRow = {
@@ -75,6 +80,10 @@ type BookingPeriodRow = {
   display_earnings_cents: number | null;
   cleaner_earnings_total_cents: number | null;
   cleaner_payout_cents: number | null;
+  total_paid_zar: number | null;
+  amount_paid_cents: number | null;
+  total_paid_cents: number | null;
+  company_revenue_cents: number | null;
   earnings_summary?: unknown;
 };
 
@@ -190,7 +199,38 @@ function emptyTotals(): OfficePayoutPeriodTotals {
     paid_visits: 0,
     batch_count: 0,
     batch_cents: 0,
+    total_revenue_cents: 0,
+    company_earnings_cents: 0,
+    margin_percent: null,
   };
+}
+
+/** Customer revenue for a completed visit — stored payment fields, then earnings summary. */
+export function bookingCustomerRevenueCents(
+  b: Pick<BookingPeriodRow, "total_paid_zar" | "amount_paid_cents" | "total_paid_cents" | "earnings_summary">,
+): number {
+  const z = Number(b.total_paid_zar);
+  if (Number.isFinite(z) && z > 0) return Math.max(0, Math.round(z * 100));
+  for (const raw of [b.amount_paid_cents, b.total_paid_cents]) {
+    const paid = Number(raw);
+    if (Number.isFinite(paid) && paid > 0) return Math.max(0, Math.round(paid));
+  }
+  const summary = parseBookingEarningsSummary(b.earnings_summary);
+  const customer = Number(summary?.customer_total_cents);
+  return Number.isFinite(customer) && customer > 0 ? Math.round(customer) : 0;
+}
+
+/** Company share for a completed visit — stored column, then earnings summary. */
+export function bookingCompanyEarningsCents(
+  b: Pick<BookingPeriodRow, "company_revenue_cents" | "earnings_summary">,
+): number {
+  if (b.company_revenue_cents != null) {
+    const stored = Number(b.company_revenue_cents);
+    if (Number.isFinite(stored) && stored >= 0) return Math.round(stored);
+  }
+  const summary = parseBookingEarningsSummary(b.earnings_summary);
+  const fromSummary = Number(summary?.company_revenue_cents);
+  return Number.isFinite(fromSummary) && fromSummary >= 0 ? Math.round(fromSummary) : 0;
 }
 
 function applyBucket(row: OfficePayoutCleanerRow, bucket: PayoutBucket, cents: number) {
@@ -331,7 +371,7 @@ export async function loadOfficePayoutPeriodReport(
     admin
       .from("bookings")
       .select(
-        "id, date, cleaner_id, payout_owner_cleaner_id, payout_status, payout_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, earnings_summary",
+        "id, date, cleaner_id, payout_owner_cleaner_id, payout_status, payout_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, total_paid_zar, total_paid_cents, amount_paid_cents, company_revenue_cents, earnings_summary",
       )
       .eq("status", "completed")
       .eq("is_test", false)
@@ -416,6 +456,8 @@ export async function loadOfficePayoutPeriodReport(
 
     totals.visit_count += 1;
     totals.earned_cents += bookingCents;
+    totals.total_revenue_cents += bookingCustomerRevenueCents(b);
+    totals.company_earnings_cents += bookingCompanyEarningsCents(b);
     applyBookingBucketToTotals(totals, bucket, bookingCents);
 
     for (const alloc of allocations) {
@@ -458,6 +500,10 @@ export async function loadOfficePayoutPeriodReport(
 
   totals.batch_count = payouts.length;
   totals.batch_cents = payouts.reduce((s, p) => s + (p.total_amount_cents ?? 0), 0);
+  totals.margin_percent =
+    totals.total_revenue_cents > 0
+      ? Math.round((totals.company_earnings_cents / totals.total_revenue_cents) * 10000) / 100
+      : null;
 
   const cleaners = [...byCleaner.values()].sort(
     (a, b) =>

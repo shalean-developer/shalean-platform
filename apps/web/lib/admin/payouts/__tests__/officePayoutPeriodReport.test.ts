@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
+  bookingCompanyEarningsCents,
+  bookingCustomerRevenueCents,
   classifyBookingPayoutBucket,
   defaultOfficePayoutPeriodRange,
   normalizeOfficePayoutPeriodRange,
@@ -50,6 +52,10 @@ describe("officePayoutPeriodReport", () => {
         display_earnings_cents: 30000,
         cleaner_earnings_total_cents: 42700,
         cleaner_payout_cents: null,
+        total_paid_zar: 730,
+        amount_paid_cents: null,
+        total_paid_cents: null,
+        company_revenue_cents: 13000,
         earnings_summary: {
           model_version: "v3",
           per_cleaner_earnings: [
@@ -66,5 +72,47 @@ describe("officePayoutPeriodReport", () => {
       { cleaner_id: nyasha, cents: 30000 },
       { cleaner_id: ethel, cents: 30000 },
     ]);
+  });
+
+  it("derives customer revenue from paid columns and earnings summary fallback", () => {
+    expect(
+      bookingCustomerRevenueCents({
+        total_paid_zar: 450,
+        amount_paid_cents: null,
+        total_paid_cents: null,
+        earnings_summary: null,
+      }),
+    ).toBe(45000);
+    expect(
+      bookingCustomerRevenueCents({
+        total_paid_zar: null,
+        amount_paid_cents: 51200,
+        total_paid_cents: null,
+        earnings_summary: null,
+      }),
+    ).toBe(51200);
+    expect(
+      bookingCustomerRevenueCents({
+        total_paid_zar: null,
+        amount_paid_cents: null,
+        total_paid_cents: null,
+        earnings_summary: { model_version: "v3", customer_total_cents: 60000, per_cleaner_earnings: [] },
+      }),
+    ).toBe(60000);
+  });
+
+  it("derives company earnings from stored column and summary fallback", () => {
+    expect(
+      bookingCompanyEarningsCents({
+        company_revenue_cents: 12500,
+        earnings_summary: null,
+      }),
+    ).toBe(12500);
+    expect(
+      bookingCompanyEarningsCents({
+        company_revenue_cents: null,
+        earnings_summary: { model_version: "v3", company_revenue_cents: 9800, per_cleaner_earnings: [] },
+      }),
+    ).toBe(9800);
   });
 });

@@ -13,8 +13,26 @@ import {
   ExternalLink,
   ChevronLeft,
   ChevronRight,
-  CalendarRange,
+  Calendar,
+  ClipboardList,
+  DollarSign,
+  Clock,
+  Zap,
+  Layers,
+  Wallet,
+  Loader2,
+  Building2,
+  TrendingUp,
 } from "lucide-react";
+import {
+  OfficeZohoMetricCard,
+  OfficeZohoMetricsRow,
+  OfficeZohoPageHeader,
+  OfficeZohoPillTabs,
+  OfficeZohoPrimaryButton,
+  OfficeZohoSecondaryButton,
+  OfficeZohoTableShell,
+} from "@/components/admin/office/OfficeZohoChrome";
 import { OfficePayoutDetailPanel } from "@/components/admin/office/OfficePayoutDetailPanel";
 import { defaultOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import type {
@@ -51,6 +69,11 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 
 function formatZar(cents: number): string {
   return `R ${Math.round(cents / 100).toLocaleString("en-ZA")}`;
+}
+
+function earningsSharePercent(partCents: number, totalCents: number): number {
+  if (totalCents <= 0) return 0;
+  return Math.round((partCents / totalCents) * 1000) / 10;
 }
 
 function formatPeriod(start: string, end: string): string {
@@ -139,6 +162,20 @@ function buildCleanerSummaryCsv(rows: OfficePayoutCleanerRow[], from: string, to
   return lines.join("\n");
 }
 
+function LoadingRows({ colSpan }: { colSpan: number }) {
+  return (
+    <>
+      {Array.from({ length: 6 }).map((_, i) => (
+        <tr key={i}>
+          <td colSpan={colSpan} className="px-4 py-3">
+            <div className="h-5 w-full animate-pulse rounded-lg bg-slate-100" />
+          </td>
+        </tr>
+      ))}
+    </>
+  );
+}
+
 export default function PayoutsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -154,6 +191,7 @@ export default function PayoutsPage() {
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   const reportParams = useMemo(
     () => ({ from: fromDate, to: toDate }),
@@ -164,6 +202,10 @@ export default function PayoutsPage() {
     "/api/admin/payouts/period-report",
     { params: reportParams },
   );
+
+  useEffect(() => {
+    if (!loading && data) setLastRefreshedAt(new Date());
+  }, [loading, data]);
 
   const payouts = data?.payouts ?? [];
   const cleaners = data?.cleaners ?? [];
@@ -228,6 +270,19 @@ export default function PayoutsPage() {
   const totalPendingBatchCents = payouts
     .filter((p) => (p.status ?? "").toLowerCase() === "pending")
     .reduce((s, p) => s + (p.total_amount_cents ?? 0), 0);
+
+  const statusPillTabs = useMemo(
+    () =>
+      STATUS_FILTERS.map((s) => ({
+        key: s,
+        label: s === "all" ? "All" : (STATUS_MAP[s]?.label ?? s),
+        count:
+          s === "all"
+            ? payouts.length
+            : payouts.filter((p) => (p.status ?? "").toLowerCase() === s).length,
+      })),
+    [payouts],
+  );
 
   function showToast(msg: string, ok: boolean) {
     setToast({ msg, ok });
@@ -343,7 +398,7 @@ export default function PayoutsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden">
       {toast && (
         <div
           className={cn(
@@ -355,93 +410,46 @@ export default function PayoutsPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Cleaner Payouts</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Visit earnings and weekly batches for a date range (Johannesburg calendar).
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void refreshAll()}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          </button>
-          <button
-            type="button"
-            disabled={actionLoading === "generate"}
-            onClick={() => void handleGenerate()}
-            className="flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 shadow-sm disabled:opacity-50"
-          >
-            <Sparkles className={cn("h-4 w-4", actionLoading === "generate" && "animate-pulse")} />
-            {actionLoading === "generate" ? "Generating…" : "Generate weekly payouts"}
-          </button>
-          <button
-            type="button"
-            disabled={filteredCleaners.length === 0}
-            onClick={handleExportCleaners}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" /> Summary CSV
-          </button>
-          <button
-            type="button"
-            disabled={filtered.length === 0}
-            onClick={handleExportBatches}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm disabled:opacity-50"
-          >
-            <Download className="h-4 w-4" /> Batches CSV
-          </button>
-          <Link
-            href="/office/payouts/phase15a-diagnostics"
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-600 hover:bg-slate-50 shadow-sm"
-          >
-            Full hub
-            <ExternalLink className="h-3.5 w-3.5" />
-          </Link>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-700">
-          <CalendarRange className="h-4 w-4 text-slate-400" />
-          Period
-        </div>
-        <label className="text-xs font-semibold text-slate-500">
-          From
-          <input
-            type="date"
-            value={fromDate}
-            onChange={(e) => setFromDate(e.target.value)}
-            className="mt-1 block rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-          />
-        </label>
-        <label className="text-xs font-semibold text-slate-500">
-          To
-          <input
-            type="date"
-            value={toDate}
-            onChange={(e) => setToDate(e.target.value)}
-            className="mt-1 block rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-800"
-          />
-        </label>
-        <button
-          type="button"
-          onClick={resetToThisMonth}
-          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50"
-        >
-          This month
-        </button>
-        <p className="text-xs text-slate-400 sm:ml-auto">
-          {loading ? "Loading…" : `Showing ${formatRangeLabel(range.from, range.to)}`}
-        </p>
-      </div>
+      <OfficeZohoPageHeader
+        title="Cleaner Payouts"
+        subtitle="Visit earnings and weekly batches for a date range (Johannesburg calendar)."
+        live
+        actions={
+          <>
+            <OfficeZohoPrimaryButton
+              disabled={actionLoading === "generate"}
+              onClick={() => void handleGenerate()}
+            >
+              {actionLoading === "generate" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Sparkles className="h-4 w-4" />
+              )}
+              {actionLoading === "generate" ? "Generating…" : "Generate weekly payouts"}
+            </OfficeZohoPrimaryButton>
+            <OfficeZohoSecondaryButton disabled={filteredCleaners.length === 0} onClick={handleExportCleaners}>
+              <Download className="h-4 w-4" /> Summary CSV
+            </OfficeZohoSecondaryButton>
+            <OfficeZohoSecondaryButton disabled={filtered.length === 0} onClick={handleExportBatches}>
+              <Download className="h-4 w-4" /> Batches CSV
+            </OfficeZohoSecondaryButton>
+            <Link
+              href="/office/payouts/phase15a-diagnostics"
+              className="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              Full hub
+              <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+            <OfficeZohoSecondaryButton onClick={() => void refreshAll()} disabled={loading}>
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+              Refresh
+            </OfficeZohoSecondaryButton>
+          </>
+        }
+      />
 
       {error && (
-        <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
+        <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
           <AlertCircle className="h-5 w-5 shrink-0 text-red-600" />
           <p className="text-sm text-red-700">{error}</p>
           <button type="button" onClick={() => void refreshAll()} className="ml-auto text-xs font-semibold text-red-600 hover:underline">
@@ -450,8 +458,36 @@ export default function PayoutsPage() {
         </div>
       )}
 
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm">
+        <span className="inline-flex items-center gap-2 text-sm font-semibold text-slate-700">
+          <Calendar className="h-4 w-4 text-slate-400" />
+          Period
+        </span>
+        <input
+          type="date"
+          value={fromDate}
+          onChange={(e) => setFromDate(e.target.value)}
+          className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+          aria-label="From date"
+        />
+        <span className="text-xs text-slate-400">to</span>
+        <input
+          type="date"
+          value={toDate}
+          onChange={(e) => setToDate(e.target.value)}
+          className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+          aria-label="To date"
+        />
+        <OfficeZohoSecondaryButton onClick={resetToThisMonth} className="px-3 py-2 text-xs">
+          This month
+        </OfficeZohoSecondaryButton>
+        <p className="text-xs text-slate-500 sm:ml-auto">
+          {loading ? "Loading…" : `Showing ${formatRangeLabel(range.from, range.to)}`}
+        </p>
+      </div>
+
       {showEligibleBanner && (
-        <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="font-semibold text-amber-950">Eligible earnings in this period</p>
             <p className="mt-1 text-sm text-amber-900/90">
@@ -459,14 +495,13 @@ export default function PayoutsPage() {
               {formatZar(totals?.eligible_cents ?? 0)}) are paid-invoice ready but not yet in a weekly batch.
             </p>
           </div>
-          <button
-            type="button"
+          <OfficeZohoPrimaryButton
             disabled={actionLoading === "generate"}
             onClick={() => void handleGenerate()}
-            className="shrink-0 rounded-xl bg-amber-700 px-4 py-2 text-sm font-semibold text-white hover:bg-amber-800 disabled:opacity-50"
+            className="shrink-0 bg-amber-700 hover:brightness-95"
           >
             Generate now
-          </button>
+          </OfficeZohoPrimaryButton>
         </div>
       )}
 
@@ -479,64 +514,199 @@ export default function PayoutsPage() {
         />
       ) : null}
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
-        {[
-          { label: "Visits", value: loading ? "—" : String(totals?.visit_count ?? 0), color: "text-slate-800" },
-          { label: "Earned", value: loading ? "—" : formatZar(totals?.earned_cents ?? 0), color: "text-slate-800" },
-          {
-            label: "Pending invoice",
-            value: loading ? "—" : formatZar(totals?.pending_cents ?? 0),
-            sub: loading ? undefined : `${totals?.pending_visits ?? 0} visits`,
-            color: "text-amber-700",
-          },
-          {
-            label: "Eligible",
-            value: loading ? "—" : formatZar(totals?.eligible_cents ?? 0),
-            sub: loading ? undefined : `${totals?.eligible_visits ?? 0} visits`,
-            color: "text-violet-700",
-          },
-          {
-            label: "Batched (open)",
-            value: loading ? "—" : formatZar(totals?.batched_open_cents ?? 0),
-            sub: loading ? undefined : `${totals?.batched_open_visits ?? 0} visits`,
-            color: "text-blue-700",
-          },
-          {
-            label: "Paid out",
-            value: loading ? "—" : formatZar(totals?.paid_cents ?? 0),
-            sub: loading ? undefined : `${totals?.paid_visits ?? 0} visits`,
-            color: "text-emerald-600",
-          },
-        ].map((k) => (
-          <div key={k.label} className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
-            <p className={cn("mt-1 text-xl font-bold tabular-nums", k.color)}>{k.value}</p>
-            {"sub" in k && k.sub ? <p className="mt-0.5 text-xs font-medium text-slate-500">{k.sub}</p> : null}
-          </div>
-        ))}
-      </div>
+      <OfficeZohoMetricsRow
+        meta={
+          <>
+            <p>
+              Report last refreshed
+              {lastRefreshedAt
+                ? ` on ${lastRefreshedAt.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`
+                : ""}
+            </p>
+            <button
+              type="button"
+              onClick={() => void refreshAll()}
+              className="mt-1 font-semibold text-[--sidebar-active] hover:underline"
+            >
+              Refresh report
+            </button>
+          </>
+        }
+      >
+        <OfficeZohoMetricCard icon={ClipboardList} label="Visits" value={loading ? "—" : String(totals?.visit_count ?? 0)} />
+        <OfficeZohoMetricCard icon={DollarSign} label="Earned" value={loading ? "—" : formatZar(totals?.earned_cents ?? 0)} />
+        <OfficeZohoMetricCard
+          icon={Clock}
+          iconClassName="bg-amber-50 text-amber-600"
+          label="Pending invoice"
+          value={
+            loading ? (
+              "—"
+            ) : (
+              <>
+                {formatZar(totals?.pending_cents ?? 0)}
+                <span className="block text-xs font-medium text-slate-500">{totals?.pending_visits ?? 0} visits</span>
+              </>
+            )
+          }
+        />
+        <OfficeZohoMetricCard
+          icon={Zap}
+          iconClassName="bg-violet-50 text-violet-600"
+          label="Eligible"
+          value={
+            loading ? (
+              "—"
+            ) : (
+              <>
+                {formatZar(totals?.eligible_cents ?? 0)}
+                <span className="block text-xs font-medium text-slate-500">{totals?.eligible_visits ?? 0} visits</span>
+              </>
+            )
+          }
+        />
+        <OfficeZohoMetricCard
+          icon={Layers}
+          iconClassName="bg-blue-50 text-blue-600"
+          label="Batched (open)"
+          value={
+            loading ? (
+              "—"
+            ) : (
+              <>
+                {formatZar(totals?.batched_open_cents ?? 0)}
+                <span className="block text-xs font-medium text-slate-500">{totals?.batched_open_visits ?? 0} visits</span>
+              </>
+            )
+          }
+        />
+        <OfficeZohoMetricCard
+          icon={Wallet}
+          iconClassName="bg-emerald-50 text-emerald-600"
+          label="Paid out"
+          value={
+            loading ? (
+              "—"
+            ) : (
+              <>
+                {formatZar(totals?.paid_cents ?? 0)}
+                <span className="block text-xs font-medium text-slate-500">{totals?.paid_visits ?? 0} visits</span>
+              </>
+            )
+          }
+        />
+      </OfficeZohoMetricsRow>
 
-      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
-          <div>
-            <h2 className="text-sm font-bold text-slate-900">By cleaner</h2>
-            <p className="text-xs text-slate-500">Completed visits by booking date — includes roster partners on paired jobs</p>
+      <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
+          <h2 className="text-sm font-semibold text-slate-800">Earnings split</h2>
+          <p className="text-xs text-slate-500">
+            {loading ? "Loading…" : `${totals?.visit_count ?? 0} completed visit${(totals?.visit_count ?? 0) === 1 ? "" : "s"} in period`}
+          </p>
+        </div>
+        <div className="p-5">
+          <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Total earnings</p>
+              <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">
+                {loading ? "—" : formatZar(totals?.total_revenue_cents ?? 0)}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">Customer revenue on completed visits</p>
+            </div>
+            <div className="rounded-lg bg-emerald-50 px-4 py-3 text-right">
+              <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Company earnings</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-800">
+                {loading ? "—" : formatZar(totals?.company_earnings_cents ?? 0)}
+              </p>
+              {!loading && totals?.margin_percent != null ? (
+                <p className="mt-0.5 text-xs text-emerald-700">{totals.margin_percent}% margin</p>
+              ) : null}
+            </div>
           </div>
-          <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Search cleaners…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm placeholder:text-slate-400 focus:border-blue-300 focus:outline-none"
-            />
+
+          {!loading && (totals?.total_revenue_cents ?? 0) > 0 ? (
+            <>
+              {(() => {
+                const revenue = totals?.total_revenue_cents ?? 0;
+                const company = totals?.company_earnings_cents ?? 0;
+                const cleaner = totals?.earned_cents ?? 0;
+                const companyWidth = Math.min(100, earningsSharePercent(company, revenue));
+                const cleanerWidth = Math.min(100 - companyWidth, earningsSharePercent(cleaner, revenue));
+                return (
+                  <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
+                    {company > 0 ? (
+                      <div
+                        className="h-full bg-emerald-500"
+                        style={{ width: `${companyWidth}%` }}
+                        title={`Company: ${formatZar(company)}`}
+                      />
+                    ) : null}
+                    {cleaner > 0 ? (
+                      <div
+                        className="h-full bg-blue-500"
+                        style={{ width: `${cleanerWidth}%` }}
+                        title={`Cleaner payouts: ${formatZar(cleaner)}`}
+                      />
+                    ) : null}
+                  </div>
+                );
+              })()}
+              <div className="mt-4 space-y-2.5">
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Building2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span className="text-slate-600">Company earnings</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3 tabular-nums">
+                    <span className="font-semibold text-slate-900">{formatZar(totals?.company_earnings_cents ?? 0)}</span>
+                    <span className="w-10 text-right text-xs text-slate-400">
+                      {earningsSharePercent(totals?.company_earnings_cents ?? 0, totals?.total_revenue_cents ?? 0)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <TrendingUp className="h-4 w-4 shrink-0 text-blue-600" />
+                    <span className="text-slate-600">Cleaner payouts</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3 tabular-nums">
+                    <span className="font-semibold text-slate-900">{formatZar(totals?.earned_cents ?? 0)}</span>
+                    <span className="w-10 text-right text-xs text-slate-400">
+                      {earningsSharePercent(totals?.earned_cents ?? 0, totals?.total_revenue_cents ?? 0)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </>
+          ) : !loading ? (
+            <p className="text-sm text-slate-400">No revenue recorded for completed visits in this period.</p>
+          ) : null}
+        </div>
+      </section>
+
+      <OfficeZohoTableShell>
+        <div className="border-b border-slate-200 bg-slate-50/40 px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold text-slate-800">By cleaner</h2>
+              <p className="text-xs text-slate-500">Completed visits by booking date — includes roster partners on paired jobs</p>
+            </div>
+            <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search cleaners…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="w-full rounded-md border border-slate-200 bg-white py-2 pl-9 pr-4 text-sm text-slate-700 placeholder:text-slate-400 focus:border-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-100"
+              />
+            </div>
           </div>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50">
+              <tr className="border-b border-slate-200 bg-slate-50">
                 {["Cleaner", "Visits", "Earned", "Pending", "Eligible", "Batched", "Paid"].map((h) => (
                   <th
                     key={h}
@@ -547,24 +717,18 @@ export default function PayoutsPage() {
                 ))}
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-50">
+            <tbody className="divide-y divide-slate-100">
               {loading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}>
-                    <td colSpan={7} className="px-4 py-3">
-                      <div className="h-5 animate-pulse rounded-lg bg-slate-100" />
-                    </td>
-                  </tr>
-                ))
+                <LoadingRows colSpan={7} />
               ) : cleanerPageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-10 text-center text-sm text-slate-400">
+                  <td colSpan={7} className="py-12 text-center text-sm text-slate-400">
                     No completed visits in this period.
                   </td>
                 </tr>
               ) : (
                 cleanerPageRows.map((c) => (
-                  <tr key={c.cleaner_id} className="hover:bg-slate-50/50">
+                  <tr key={c.cleaner_id} className="transition-colors hover:bg-slate-50/80">
                     <td className="px-4 py-3 font-semibold text-slate-800">{c.cleaner_name}</td>
                     <td className="px-4 py-3 tabular-nums text-slate-700">{c.visit_count}</td>
                     <td className="px-4 py-3 font-semibold tabular-nums text-slate-800">{formatZar(c.earned_cents)}</td>
@@ -586,8 +750,8 @@ export default function PayoutsPage() {
             </tbody>
           </table>
         </div>
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
-          <p className="text-xs text-slate-400">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
+          <p className="text-xs text-slate-500">
             {loading
               ? "Loading…"
               : filteredCleaners.length === 0
@@ -598,194 +762,173 @@ export default function PayoutsPage() {
             <span className="text-xs font-medium text-slate-500">
               Page {safeCleanerPage} of {cleanerTotalPages}
             </span>
-            <button
-              type="button"
+            <OfficeZohoSecondaryButton
               disabled={loading || safeCleanerPage <= 1}
               onClick={() => setCleanerPage((p) => Math.max(1, p - 1))}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              className="px-2.5 py-1.5 text-xs"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
               Prev
-            </button>
-            <button
-              type="button"
+            </OfficeZohoSecondaryButton>
+            <OfficeZohoSecondaryButton
               disabled={loading || safeCleanerPage >= cleanerTotalPages}
               onClick={() => setCleanerPage((p) => Math.min(cleanerTotalPages, p + 1))}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
+              className="px-2.5 py-1.5 text-xs"
             >
               Next
               <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+            </OfficeZohoSecondaryButton>
           </div>
         </div>
-      </div>
+      </OfficeZohoTableShell>
 
-      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+      <div className="space-y-3">
+        <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-sm font-bold text-slate-900">Weekly payout batches</h2>
+            <h2 className="text-sm font-semibold text-slate-800">Weekly payout batches</h2>
             <p className="text-xs text-slate-500">
-              Batches whose week overlaps the period ({loading ? "…" : `${pendingBatchCount} pending · ${paidBatchCount} paid · ${formatZar(totalPendingBatchCents)} pending amount`})
+              Batches whose week overlaps the period (
+              {loading ? "…" : `${pendingBatchCount} pending · ${paidBatchCount} paid · ${formatZar(totalPendingBatchCents)} pending amount`})
             </p>
           </div>
-          <div className="flex flex-wrap gap-1">
-            {STATUS_FILTERS.map((s) => (
-              <button
-                key={s}
-                type="button"
-                onClick={() => setStatusFilter(s)}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
-                  statusFilter === s ? "bg-blue-600 text-white" : "text-slate-500 hover:bg-slate-100",
-                )}
-              >
-                {s === "all" ? "All" : (STATUS_MAP[s]?.label ?? s)}
-              </button>
-            ))}
-          </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-slate-100 bg-slate-50/50">
-                {["Cleaner", "Period", "Jobs", "Net payout", "Status", "Actions"].map((h) => (
-                  <th
-                    key={h}
-                    className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400"
-                  >
-                    {h}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-50">
-              {loading ? (
-                Array.from({ length: 6 }).map((_, i) => (
-                  <tr key={i}>
-                    <td colSpan={6} className="px-4 py-3">
-                      <div className="h-5 animate-pulse rounded-lg bg-slate-100" />
+        <OfficeZohoPillTabs tabs={statusPillTabs} activeKey={statusFilter} onChange={setStatusFilter} />
+
+        <OfficeZohoTableShell>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  {["Cleaner", "Period", "Jobs", "Net payout", "Status", "Actions"].map((h) => (
+                    <th
+                      key={h}
+                      className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400"
+                    >
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {loading ? (
+                  <LoadingRows colSpan={6} />
+                ) : filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} className="py-12 text-center text-sm text-slate-400">
+                      {(totals?.eligible_visits ?? 0) > 0
+                        ? "No weekly batches overlap this period — eligible visits may still need Generate weekly payouts."
+                        : "No payout batches overlap this period."}
                     </td>
                   </tr>
-                ))
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="py-12 text-center text-sm text-slate-400">
-                    {(totals?.eligible_visits ?? 0) > 0
-                      ? "No weekly batches overlap this period — eligible visits may still need Generate weekly payouts."
-                      : "No payout batches overlap this period."}
-                  </td>
-                </tr>
-              ) : (
-                pageRows.map((p) => {
-                  const statusKey = (p.status ?? "pending").toLowerCase();
-                  const s = STATUS_MAP[statusKey] ?? { label: p.status ?? "—", cls: "bg-slate-100 text-slate-600" };
-                  const isPending = statusKey === "pending";
-                  const rowBusy = actionLoading === p.id || actionLoading === `export:${p.id}`;
+                ) : (
+                  pageRows.map((p) => {
+                    const statusKey = (p.status ?? "pending").toLowerCase();
+                    const s = STATUS_MAP[statusKey] ?? { label: p.status ?? "—", cls: "bg-slate-100 text-slate-600" };
+                    const isPending = statusKey === "pending";
+                    const rowBusy = actionLoading === p.id || actionLoading === `export:${p.id}`;
 
-                  return (
-                    <tr
-                      key={p.id}
-                      className={cn(
-                        "group transition-colors hover:bg-slate-50/50",
-                        selectedPayoutId === p.id && "bg-blue-50/60",
-                      )}
-                    >
-                      <td className="px-4 py-3">
-                        <p className="text-sm font-semibold text-slate-800">{p.cleaner_name}</p>
-                        <p className="font-mono text-xs text-slate-400">{p.id.slice(0, 8).toUpperCase()}</p>
-                      </td>
-                      <td className="px-4 py-3 text-xs text-slate-600">{formatPeriod(p.period_start, p.period_end)}</td>
-                      <td className="px-4 py-3 text-sm text-slate-700">{p.booking_count}</td>
-                      <td className="px-4 py-3">
-                        <span className="text-sm font-bold text-slate-800">{formatZar(p.total_amount_cents)}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", s.cls)}>{s.label}</span>
-                      </td>
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100">
-                          {isPending && (
-                            <button
-                              type="button"
+                    return (
+                      <tr
+                        key={p.id}
+                        className={cn(
+                          "group transition-colors hover:bg-slate-50/80",
+                          selectedPayoutId === p.id && "bg-blue-50/40",
+                        )}
+                      >
+                        <td className="px-4 py-3">
+                          <p className="text-sm font-semibold text-slate-800">{p.cleaner_name}</p>
+                          <p className="font-mono text-xs text-slate-400">{p.id.slice(0, 8).toUpperCase()}</p>
+                        </td>
+                        <td className="px-4 py-3 text-xs text-slate-600">{formatPeriod(p.period_start, p.period_end)}</td>
+                        <td className="px-4 py-3 text-sm text-slate-700">{p.booking_count}</td>
+                        <td className="px-4 py-3">
+                          <span className="text-sm font-bold tabular-nums text-slate-800">{formatZar(p.total_amount_cents)}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", s.cls)}>{s.label}</span>
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+                            {isPending && (
+                              <button
+                                type="button"
+                                disabled={rowBusy}
+                                onClick={() => void handleApprove(p.id)}
+                                className="flex items-center gap-1.5 rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5" />
+                                Approve
+                              </button>
+                            )}
+                            <OfficeZohoSecondaryButton
                               disabled={rowBusy}
-                              onClick={() => void handleApprove(p.id)}
-                              className="flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+                              onClick={() => void handleExportOne(p.id)}
+                              className="px-3 py-1.5 text-xs"
                             >
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              Approve
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            disabled={rowBusy}
-                            onClick={() => void handleExportOne(p.id)}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50 disabled:opacity-50"
-                          >
-                            Export
-                          </button>
-                          <Link
-                            href={`/office/payouts?payout=${encodeURIComponent(p.id)}`}
-                            className="rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
-                          >
-                            View
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-4 py-3">
-          <p className="text-xs text-slate-400">
-            {loading
-              ? "Loading…"
-              : filtered.length === 0
-                ? "No batches in period"
-                : `Showing ${pageFrom}–${pageTo} of ${filtered.length} batch${filtered.length === 1 ? "" : "es"}`}
-          </p>
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-2 text-xs text-slate-500">
-              Rows
-              <select
-                value={pageSize}
-                onChange={(e) => setPageSize(Number(e.target.value))}
-                className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
-              >
-                {PAGE_SIZE_OPTIONS.map((size) => (
-                  <option key={size} value={size}>
-                    {size}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <span className="text-xs font-medium text-slate-500">
-              Page {safePage} of {totalPages}
-            </span>
-            <button
-              type="button"
-              disabled={loading || safePage <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-            >
-              <ChevronLeft className="h-3.5 w-3.5" />
-              Prev
-            </button>
-            <button
-              type="button"
-              disabled={loading || safePage >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-            >
-              Next
-              <ChevronRight className="h-3.5 w-3.5" />
-            </button>
+                              Export
+                            </OfficeZohoSecondaryButton>
+                            <Link
+                              href={`/office/payouts?payout=${encodeURIComponent(p.id)}`}
+                              className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+                            >
+                              View
+                            </Link>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
           </div>
-        </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-4 py-3">
+            <p className="text-xs text-slate-500">
+              {loading
+                ? "Loading…"
+                : filtered.length === 0
+                  ? "No batches in period"
+                  : `Showing ${pageFrom}–${pageTo} of ${filtered.length} batch${filtered.length === 1 ? "" : "es"}`}
+            </p>
+            <div className="flex items-center gap-2">
+              <label className="flex items-center gap-2 text-xs text-slate-500">
+                Rows
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="rounded-md border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
+                >
+                  {PAGE_SIZE_OPTIONS.map((size) => (
+                    <option key={size} value={size}>
+                      {size}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="text-xs font-medium text-slate-500">
+                Page {safePage} of {totalPages}
+              </span>
+              <OfficeZohoSecondaryButton
+                disabled={loading || safePage <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="px-2.5 py-1.5 text-xs"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Prev
+              </OfficeZohoSecondaryButton>
+              <OfficeZohoSecondaryButton
+                disabled={loading || safePage >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="px-2.5 py-1.5 text-xs"
+              >
+                Next
+                <ChevronRight className="h-3.5 w-3.5" />
+              </OfficeZohoSecondaryButton>
+            </div>
+          </div>
+        </OfficeZohoTableShell>
       </div>
     </div>
   );
