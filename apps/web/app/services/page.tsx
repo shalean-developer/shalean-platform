@@ -19,6 +19,7 @@ import {
   CAPE_TOWN_SERVICE_SEO,
   type CapeTownSeoServiceSlug,
 } from "@/lib/seo/capeTownSeoPages";
+import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import { buildPrimaryLocalBusinessMoneyPageNode } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
@@ -62,6 +63,7 @@ const HUB_SERVICE_SLUGS: CapeTownSeoServiceSlug[] = [
   "airbnb-cleaning-cape-town",
   "office-cleaning-cape-town",
   "carpet-cleaning-cape-town",
+  "window-cleaning-cape-town",
 ];
 
 const title = generateCtrTitle({
@@ -223,8 +225,8 @@ export default function ServicesHubPage() {
               </p>
               <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-600 sm:text-base">
                 Need recurring home help? Browse{" "}
-                <Link href="/maid-services-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  maid services in Cape Town
+                <Link href={p["standard-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+                  standard home cleaning in Cape Town
                 </Link>{" "}
                 for weekly, bi-weekly, or daily domestic cleaning—same instant quote flow as below.
               </p>
@@ -284,7 +286,7 @@ export default function ServicesHubPage() {
             </h2>
             <p className="mt-2 max-w-2xl text-sm text-zinc-600 md:text-base">
               Seven Cape Town guides — same booking flow, scoped to how your space is used.{" "}
-              <Link href="/cleaning-prices-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
                 See our cleaning prices in Cape Town
               </Link>{" "}
               before you book.

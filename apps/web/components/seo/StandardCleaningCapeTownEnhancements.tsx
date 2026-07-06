@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { STANDARD_CLEANING_SNIPPET_FAQS } from "@/lib/seo/standardCleaningMoneyPageFaqs";
+import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
 
 type Props = {
   bookingPath: string;
@@ -106,8 +107,8 @@ export function StandardCleaningCapeTownEnhancements({ bookingPath }: Props) {
 
           <p className="mt-10 text-sm leading-relaxed text-zinc-600">
             Apartment vs house pricing nuances — plus deep-clean uplifts — are spelled out in our{" "}
-            <Link href="/cleaning-prices-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              cleaning prices hub
+            <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              cleaning prices guide
             </Link>
             , with itemised totals for your bedrooms, bathrooms, and add-ons before checkout.
           </p>

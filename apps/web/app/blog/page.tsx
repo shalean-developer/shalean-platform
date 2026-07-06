@@ -24,6 +24,7 @@ import { BLOG_SERP_TITLE_MAX, generateCtrTitle } from "@/lib/seo/metaTitle";
 import { absoluteCanonicalUrl, SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW, SEO_NOINDEX_FOLLOW } from "@/lib/site/seoRobots";
 import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
+import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
 
 const CANONICAL_ABS = absoluteCanonicalUrl("/blog");
 const PAGE_URL = CANONICAL_ABS;
@@ -301,12 +302,12 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
           </h2>
           <p className="mt-3 max-w-3xl text-sm leading-relaxed text-zinc-600">
             Browse suburb hubs—cleaners near me across Claremont, the Atlantic Seaboard, Southern Suburbs, and
-            Durbanville—then pair local coverage with the guides above. For citywide scope and booking, start from the{" "}
+            Durbanville—then pair local coverage with the guides above. For citywide scope and booking, start from{" "}
             <SafeInternalLink
-              href="/cleaning-services-cape-town"
+              href="/services"
               className="font-semibold text-blue-800 underline-offset-2 hover:underline"
             >
-              Cape Town cleaning services hub
+              Cape Town cleaning services
             </SafeInternalLink>
             .
           </p>
@@ -315,10 +316,12 @@ export default async function BlogIndexPage({ searchParams }: BlogPageProps) {
             {BLOG_INDEX_LOCATION_HUBS.map((hub) => (
               <li key={hub.slug}>
                 <SafeInternalLink
-                  href={`/locations/${hub.slug}`}
+                  href={
+                    SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS ? "/book" : `/locations/${hub.slug}`
+                  }
                   className="inline-flex rounded-full border border-zinc-200 bg-zinc-50 px-4 py-2 text-sm font-medium text-zinc-800 transition hover:border-blue-200 hover:bg-blue-50 hover:text-blue-900"
                 >
-                  {hub.name}
+                  {SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS ? `Book in ${hub.name}` : hub.name}
                 </SafeInternalLink>
               </li>
             ))}

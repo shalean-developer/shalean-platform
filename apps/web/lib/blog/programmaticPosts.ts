@@ -1,5 +1,6 @@
 import { CAPE_TOWN_SERVICE_SEO, type CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { hubSlugFromPlaceName } from "@/lib/seo/location-hub-from-blog";
+import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
 import type { BlogTocEntry } from "@/lib/blog/extract-blog-toc";
 import { programmaticBlogCleanupRedirects } from "@/lib/seo/programmaticBlogCleanupRedirects";
 import { BLOG_POST_SLUGS } from "./posts";
@@ -1237,25 +1238,26 @@ const AREA_HUB_LINK_LABEL_PHRASE: Record<ProgrammaticServiceForAreaHub, string> 
   carpet: "Carpet cleaning",
 };
 
-/** Editorial `blog_posts` rows that supersede thin PROGRAMMATIC_POSTS URLs for a given service × area. */
-/** Internal links from Cape Town service SEO pages: programmatic guides when present, else suburb hubs. */
+/** Internal links from Cape Town service SEO pages: programmatic guides when present, else suburb hubs (unless suppressed). */
 export function getAreaProgrammaticBlogLinksForCapeTownService(
   slug: CapeTownSeoServiceSlug,
 ): { href: string; label: string }[] | null {
   const svc = CAPE_TOWN_SERVICE_SLUG_TO_PROGRAMMATIC_SERVICE[slug];
   if (!svc) return null;
   const phrase = AREA_HUB_LINK_LABEL_PHRASE[svc];
-  return AREA_BLOG_HUB_LOCATIONS.map((loc) => {
+  const links: { href: string; label: string }[] = [];
+  for (const loc of AREA_BLOG_HUB_LOCATIONS) {
     const post = ROUTED_PROGRAMMATIC_POSTS.find((p) => p.service === svc && p.location === loc);
     if (post) {
-      return { href: `/blog/${post.slug}`, label: `${phrase} in ${loc}` };
+      links.push({ href: `/blog/${post.slug}`, label: `${phrase} in ${loc}` });
+      continue;
     }
+    if (SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS) continue;
     const hubKey = hubSlugFromPlaceName(loc);
-    if (!hubKey) {
-      throw new Error(`Missing location hub for service "${svc}" in ${loc}`);
-    }
-    return { href: `/locations/${hubKey}`, label: `${phrase} in ${loc}` };
-  });
+    if (!hubKey) continue;
+    links.push({ href: `/locations/${hubKey}`, label: `${phrase} in ${loc}` });
+  }
+  return links.length > 0 ? links : null;
 }
 
 export function getNearbySuburbsForProgrammaticPost(location: string | undefined): string[] {

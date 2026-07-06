@@ -1,8 +1,10 @@
 import type { FaqCategoryGroup, FaqStructuredItem } from "@/lib/faq/faq-page-types";
 import { CUSTOMER_SUPPORT_EMAIL, CUSTOMER_SUPPORT_WHATSAPP_URL } from "@/lib/site/customerSupport";
-import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
+import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
+import { SEO_REBUILD_PHASE } from "@/lib/seo/seoRebuildPhase1";
 
 const STD = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"].path;
+const SEA_POINT_HUB = LOCATION_SEO_PAGES["sea-point-cleaning-services"].path;
 const DEEP = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
 const MOVE = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
 const AIRBNB = CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path;
@@ -15,7 +17,9 @@ export const FAQ_FEATURED: readonly FaqStructuredItem[] = [
     lead: "Cleaning services in Cape Town typically cost between R300 and R900 depending on home size, service tier, bathrooms, and add-ons.",
     paragraphs: [
       "Your total is calculated online from bedrooms, bathrooms, service type (standard, deep, move-out, Airbnb, etc.), and extras—so you approve a locked quote before we dispatch.",
-      "Coastal and premium-band suburbs can trend higher when scope or routing is heavier; see any hub like [Sea Point cleaning services](/locations/sea-point-cleaning-services) for local context, then open [Get your exact price](/book) with your address.",
+      SEO_REBUILD_PHASE >= 2
+        ? `Coastal and premium-band suburbs can trend higher when scope or routing is heavier; see [Sea Point cleaning services](${SEA_POINT_HUB}) for local context, then open [Get your exact price](/book) with your address.`
+        : `Coastal and premium-band suburbs can trend higher when scope or routing is heavier; browse [cleaning services in Cape Town](${STD}) for scope and pricing bands, then open [Get your exact price](/book) with your address.`,
     ],
     bullets: [
       "Small apartments often start lower; larger homes and deep cleans need more crew time.",
@@ -191,7 +195,9 @@ export const FAQ_CATEGORY_GROUPS: readonly FaqCategoryGroup[] = [
         question: "What about parking, lifts, and access?",
         lead: "Add codes, boom gates, bay numbers, and pet notes in your booking so teams arrive prepared—not circling the block.",
         paragraphs: [
-          "Suburb hubs like [Sea Point](/locations/sea-point-cleaning-services) spell out typical access patterns for coastal apartments.",
+          SEO_REBUILD_PHASE >= 2
+            ? "Suburb hubs like [Sea Point](/locations/sea-point-cleaning-services) spell out typical access patterns for coastal apartments."
+            : "Coastal apartments often need lift codes and parking notes—add those in your booking so teams arrive prepared.",
         ],
         keywords: ["parking", "access", "lift", "estate"],
       },

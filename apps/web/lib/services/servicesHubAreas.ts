@@ -1,5 +1,6 @@
 import { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
 import { LOCATION_SEO_PAGES, type LocationSeoSlug } from "@/lib/seo/capeTownSeoPages";
+import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
 
 export type ServicesHubAreaLink = {
   label: string;
@@ -24,7 +25,7 @@ export function getServicesHubAreasByRegion(): { region: string; items: Services
     const region = row.region.trim();
     const link: ServicesHubAreaLink = {
       label: row.name,
-      href: block.path,
+      href: SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS ? "/book" : block.path,
     };
     const list = bucket.get(region) ?? [];
     list.push(link);

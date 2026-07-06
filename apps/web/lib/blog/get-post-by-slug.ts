@@ -397,6 +397,7 @@ export async function getPublishedBlogSitemapRows(): Promise<PublishedBlogSitema
     .from("blog_posts")
     .select("slug, published_at, updated_at")
     .eq("status", "published")
+    .eq("indexed_for_search", true)
     .lte("published_at", nowIso)
     .not("content_json", "is", null);
 

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { LegalPageShell } from "@/components/legal/LegalPageShell";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import { buildMarketingSocialMetadata } from "@/lib/seo/marketingPageSocialMeta";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { CUSTOMER_SUPPORT_EMAIL } from "@/lib/site/customerSupport";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
@@ -18,17 +19,12 @@ export const metadata: Metadata = {
   description: META_DESC,
   robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL },
-  openGraph: {
-    type: "website",
+  ...buildMarketingSocialMetadata({
     url: CANONICAL,
     title: "Privacy Policy | Shalean Cleaning Services",
     description: META_DESC,
-  },
-  twitter: {
-    card: "summary",
-    title: "Privacy Policy | Shalean Cleaning Services",
-    description: META_DESC,
-  },
+    imageAlt: "Shalean Cleaning Services — privacy policy",
+  }),
 };
 
 export default function PrivacyPolicyPage() {

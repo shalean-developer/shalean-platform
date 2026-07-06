@@ -389,11 +389,6 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
         blogPath: "/locations/sea-point-cleaning-services",
         linkAnchorText: "standard cleaning guide for Sea Point",
       },
-      {
-        areaName: "Observatory",
-        blogPath: "/blog/standard-cleaning-observatory-cape-town",
-        linkAnchorText: "standard cleaning guide for Observatory",
-      },
     ],
     areasSectionIntro:
       "We serve Sea Point, Claremont, Observatory, and suburbs across the metro—add your address at checkout to confirm availability and get suburb-aware routing notes.",

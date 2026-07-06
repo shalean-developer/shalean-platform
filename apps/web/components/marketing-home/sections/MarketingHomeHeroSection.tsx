@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { preload } from "react-dom";
 import { ShieldCheck, ThumbsUp, MousePointerClick, Star, Users } from "lucide-react";
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
 import { GET_FREE_QUOTE_HREF, getFreeQuoteButtonClass } from "@/lib/marketing/getFreeQuote";
@@ -12,13 +13,14 @@ const HERO_MAIN = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
 export function MarketingHomeHeroSection() {
   const bookHref = marketingHomeBookingHref();
   const avg = publicTrustAverageDisplay(null);
+  preload(HERO_MAIN, { as: "image", fetchPriority: "high" });
 
   return (
     <section className="relative w-full bg-white py-8 md:py-8 lg:py-10">
       <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-8 px-4 sm:gap-10 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8">
 
-        {/* Left column */}
-        <div className="flex flex-col items-center gap-5 text-center sm:items-start sm:gap-6 sm:text-left">
+        {/* Left column — below hero image on mobile for faster LCP */}
+        <div className="order-2 flex flex-col items-center gap-5 text-center sm:items-start sm:gap-6 sm:text-left lg:order-1">
 
           {/* Badge */}
           <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-blue-700">
@@ -114,8 +116,8 @@ export function MarketingHomeHeroSection() {
           </div>
         </div>
 
-        {/* Right column — image + floating card */}
-        <div className="relative mx-auto w-full max-w-lg lg:mx-0 lg:max-w-none">
+        {/* Right column — image first on mobile (LCP) */}
+        <div className="relative order-1 mx-auto w-full max-w-lg lg:order-2 lg:mx-0 lg:max-w-none">
           <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl shadow-xl">
             <Image
               src={HERO_MAIN}

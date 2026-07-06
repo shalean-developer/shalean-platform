@@ -1,8 +1,13 @@
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
+import {
+  CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF,
+  CAPE_TOWN_PRICING_AUTHORITY_HREF,
+} from "@/lib/seo/internalLinks";
 import { nearbyProgrammaticLocations, PROGRAMMATIC_LOCATIONS } from "@/lib/seo/locations";
 import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH } from "@/lib/seo/capeTownLocations";
 import { CAPE_TOWN_SERVICE_SEO, type CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
+import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
 import { linkInNavClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 
@@ -33,7 +38,20 @@ function pickServiceLinks(exclude?: CapeTownSeoServiceSlug) {
   return rows.slice(0, 3);
 }
 
+const PHASE1_AREA_FALLBACK_LINKS: { slug: string; href: string; label: string }[] = [
+  { slug: "services-hub", href: CAPE_TOWN_PRICING_AUTHORITY_HREF, label: "Cleaning services in Cape Town" },
+  {
+    slug: "pricing-guide",
+    href: CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF,
+    label: "Cleaning prices guide (Cape Town)",
+  },
+  { slug: "faq", href: "/faq", label: "Cleaning FAQs" },
+];
+
 function pickLocationLinks(excludeSlug?: string, max = 3) {
+  if (SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS) {
+    return PHASE1_AREA_FALLBACK_LINKS.slice(0, max);
+  }
   if (excludeSlug) {
     return nearbyProgrammaticLocations(excludeSlug, max).map((loc) => ({
       slug: loc.slug,
@@ -53,6 +71,9 @@ function capeTownHubFirst(
   placement: RelatedLinksPlacement,
   currentLocationSlug: string | undefined,
 ): { slug: string; href: string; label: string }[] {
+  if (SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS) {
+    return [];
+  }
   if (placement === "blog") {
     return [{ slug: "cape-town-hub", href: CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, label: CAPE_TOWN_SEO_HUB_LABEL }];
   }

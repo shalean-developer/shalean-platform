@@ -5,27 +5,32 @@ import { QuotePageHeader } from "@/components/quote/QuotePageHeader";
 import { QuoteRequestForm } from "@/components/quote/QuoteRequestForm";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
+import { buildMarketingSocialMetadata } from "@/lib/seo/marketingPageSocialMeta";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const PATH = "/quote";
 const CANONICAL = absoluteCanonicalUrl(PATH);
 
+const QUOTE_TITLE = "Get a Free Cleaning Quote | Shalean Cape Town";
+const QUOTE_META_DESC = clampMetaDescription(
+  "Request a free, no-obligation cleaning quote for your home or office in Cape Town. Tell us what you need — we'll email your personalised quote.",
+);
+const QUOTE_OG_DESC = clampMetaDescription(
+  "Free cleaning quotes for Cape Town homes and offices — personalised pricing from Shalean.",
+);
+
 export const metadata: Metadata = {
-  title: "Get a Free Cleaning Quote | Shalean Cape Town",
-  description: clampMetaDescription(
-    "Request a free, no-obligation cleaning quote for your home or office in Cape Town. Tell us what you need — we'll email your personalised quote.",
-  ),
+  title: QUOTE_TITLE,
+  description: QUOTE_META_DESC,
   robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL },
-  openGraph: {
-    type: "website",
+  ...buildMarketingSocialMetadata({
     url: CANONICAL,
     title: "Get a Free Cleaning Quote | Shalean",
-    description: clampMetaDescription(
-      "Free cleaning quotes for Cape Town homes and offices — personalised pricing from Shalean.",
-    ),
-  },
+    description: QUOTE_OG_DESC,
+    imageAlt: "Request a free cleaning quote from Shalean Cape Town",
+  }),
 };
 
 export default function QuoteRequestPage() {

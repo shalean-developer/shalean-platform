@@ -14,6 +14,7 @@ import { buildFaqPageJsonLd } from "@/lib/faq/faq-jsonld";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { clipSerpTitle } from "@/lib/seo/metaTitle";
+import { buildMarketingSocialMetadata } from "@/lib/seo/marketingPageSocialMeta";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
@@ -26,9 +27,6 @@ const FAQ_META_DESC = clampMetaDescription(
 const FAQ_OG_DESC = clampMetaDescription(
   "Straight answers on pricing, standard vs deep cleans, same-day slots, supplies, trust, and logistics—then book with transparent totals.",
 );
-const FAQ_TWITTER_DESC = clampMetaDescription(
-  "Pricing, booking, supplies, and trust—quick answers before you lock a quote.",
-);
 
 const FAQ_PAGE_TITLE = clipSerpTitle("Cleaning FAQs Cape Town | Pricing & Booking | Shalean");
 
@@ -37,19 +35,13 @@ export const metadata: Metadata = {
   description: FAQ_META_DESC,
   robots: SEO_INDEX_FOLLOW,
   alternates: { canonical: CANONICAL },
-  openGraph: {
-    type: "website",
+  ...buildMarketingSocialMetadata({
     url: CANONICAL,
     title: FAQ_PAGE_TITLE,
     description: FAQ_OG_DESC,
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: FAQ_PAGE_TITLE,
-    description: FAQ_TWITTER_DESC,
-  },
+    imageAlt: "Shalean cleaning FAQs — Cape Town pricing and booking",
+  }),
 };
-
 export default function FaqPage() {
   const bookingHref = marketingHomeBookingHref();
   const faqJsonLd = buildFaqPageJsonLd(flattenAllFaqItems());
