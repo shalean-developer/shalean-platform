@@ -1,6 +1,6 @@
 /**
  * Live production SEO integrity checks against a deployed origin.
- * Requires AUDIT_BASE_URL (e.g. https://shalean.co.za).
+ * Defaults to AUDIT_BASE_URL=https://shalean.co.za when unset.
  *
  * `npm run validate:live-seo`
  *
@@ -12,24 +12,19 @@
  * Optional `LIVE_SEO_EXTENDED=1`: flag `robots` noindex on sitemap URLs and `og:url` vs canonical mismatches.
  */
 
-const baseEnv = process.env.AUDIT_BASE_URL?.trim().replace(/\/+$/, "");
+import {
+  fetchWithNoRedirect,
+  normalizeUrlPath,
+  resolveAuditBaseUrl,
+} from "@/lib/seo/liveSeoCrawl";
+
+const baseEnv = resolveAuditBaseUrl(process.env.AUDIT_BASE_URL);
 const maxUrls = Math.min(
   2000,
   Math.max(10, parseInt(process.env.LIVE_SEO_MAX_URLS ?? "400", 10) || 400),
 );
 const concurrency = Math.min(12, Math.max(1, parseInt(process.env.LIVE_SEO_CONCURRENCY ?? "6", 10) || 6));
 const extendedChecks = process.env.LIVE_SEO_EXTENDED === "1";
-
-function normalizeUrlPath(url: string): string {
-  try {
-    const u = new URL(url);
-    u.hash = "";
-    u.pathname = u.pathname.replace(/\/+$/, "") || "/";
-    return `${u.origin}${u.pathname}${u.search}`;
-  } catch {
-    return url;
-  }
-}
 
 function extractCanonical(html: string): string | null {
   const head = html.slice(0, 180_000);
@@ -70,35 +65,13 @@ function extractOgUrl(html: string): string | null {
   return null;
 }
 
-async function fetchWithNoRedirect(url: string): Promise<{ status: number; location: string | null; body: string }> {
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), 25_000);
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      redirect: "manual",
-      signal: ac.signal,
-      headers: {
-        "user-agent": "ShaleanLiveSeoValidator/1.0",
-        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-    });
-    const location = res.headers.get("location");
-    const buf = res.status === 200 ? await res.text() : "";
-    return { status: res.status, location, body: buf.slice(0, 250_000) };
-  } finally {
-    clearTimeout(t);
-  }
+async function fetchPage(url: string): Promise<{ status: number; location: string | null; body: string }> {
+  return fetchWithNoRedirect(url);
 }
 
 async function main(): Promise<void> {
-  if (!baseEnv) {
-    console.error("[validate-live-seo] AUDIT_BASE_URL is required (e.g. https://shalean.co.za)");
-    process.exit(1);
-  }
-
   const sitemapUrl = `${baseEnv}/sitemap.xml`;
-  const smRes = await fetchWithNoRedirect(sitemapUrl);
+  const smRes = await fetchPage(sitemapUrl);
   if (smRes.status !== 200) {
     console.error(`[validate-live-seo] sitemap fetch failed: ${sitemapUrl} → ${smRes.status}`);
     process.exit(1);
@@ -127,7 +100,7 @@ async function main(): Promise<void> {
       const i = idx++;
       if (i >= targets.length) return;
       const url = targets[i]!;
-      const r = await fetchWithNoRedirect(url);
+      const r = await fetchPage(url);
       if (r.status >= 300 && r.status < 400) {
         failures.push(`${url} → redirect ${r.status} location=${r.location ?? "?"}`);
         continue;

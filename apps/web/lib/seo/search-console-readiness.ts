@@ -8,6 +8,7 @@
  *
  * Wire site verification via `<meta name="google-site-verification">` in root layout or DNS —
  * keep tokens out of git; use `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` only if you intentionally expose it.
+ * CI probe: `npm run validate:search-console-readiness` (warns by default; set `REQUIRE_GSC_VERIFICATION=1` to fail).
  */
 import { SITE_ORIGIN } from "@/lib/site/canonical";
 

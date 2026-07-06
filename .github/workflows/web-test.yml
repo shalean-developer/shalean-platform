@@ -49,9 +49,17 @@ jobs:
         run: npm run report:blog-seo-governance
       - name: Canonical purity report
         run: npm run report:canonical-purity
-      - name: Live SEO validation (optional)
-        if: ${{ vars.AUDIT_BASE_URL != '' }}
+      - name: Live SEO validation
         env:
-          AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL }}
-          LIVE_SEO_EXTENDED: ${{ vars.LIVE_SEO_EXTENDED }}
+          AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
+          LIVE_SEO_EXTENDED: ${{ vars.LIVE_SEO_EXTENDED || '1' }}
         run: npm run validate:live-seo
+      - name: Live internal link crawl
+        env:
+          AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
+        run: npm run validate:live-internal-links
+      - name: Search Console readiness
+        env:
+          AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
+          REQUIRE_GSC_VERIFICATION: ${{ vars.REQUIRE_GSC_VERIFICATION || '0' }}
+        run: npm run validate:search-console-readiness
