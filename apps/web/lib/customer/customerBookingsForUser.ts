@@ -25,8 +25,10 @@ import {
 } from "@/lib/reviews/teamLeadCleanerNameEnrichment";
 import {
   applyCustomerDisplayCleanerNamesToRows,
+  applyPairedRosterDisplayCleanerNames,
   extractCustomerDisplayCleanerIds,
 } from "@/lib/customer/customerCleanerNameEnrichment";
+import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 
 async function enrichCustomerBookingRowFromSavedAddress(
   admin: SupabaseClient,
@@ -215,6 +217,15 @@ async function enrichRowsWithCleanerDisplayNames(
     }
     applyTeamLeadCleanerNamesToRows(rows, nameById);
     applyCustomerDisplayCleanerNamesToRows(rows, nameById);
+
+    const pairedBookingIds = rows
+      .filter((row) => (Number(row.cleaner_count ?? 1) || 1) >= 2)
+      .map((row) => String(row.id ?? "").trim())
+      .filter(Boolean);
+    if (pairedBookingIds.length > 0) {
+      const rosterByBookingId = await fetchTeamRosterByBookingIds(admin, pairedBookingIds);
+      applyPairedRosterDisplayCleanerNames(rows, rosterByBookingId);
+    }
   } catch (e) {
     void reportOperationalIssue(
       "warn",

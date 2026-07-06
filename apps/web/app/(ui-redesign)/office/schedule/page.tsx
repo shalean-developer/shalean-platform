@@ -58,6 +58,7 @@ type RangeBookingsResponse = {
     service_slug?: string | null;
     location: string | null;
     dispatch_status: string | null;
+    booking_cleaners?: Array<{ cleaner_id: string; full_name: string | null; role: string }>;
   }>;
 };
 
@@ -83,6 +84,7 @@ function mapRangeBooking(row: RangeBookingsResponse["bookings"][number]): Office
     service_slug: row.service_slug,
     location: row.location,
     dispatch_status: row.dispatch_status,
+    booking_cleaners: row.booking_cleaners,
   };
 }
 

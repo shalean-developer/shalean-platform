@@ -19,6 +19,7 @@ export type OfficeScheduleDayBooking = OfficeScheduleBookingRow & {
   dispatch_status: string | null;
   team_id?: string | null;
   is_team_job?: boolean | null;
+  booking_cleaners?: readonly { cleaner_id: string; full_name: string | null; role: string }[] | null;
 };
 
 export type OfficeScheduleDayCleaner = {
@@ -144,14 +145,41 @@ export function buildOfficeScheduleCleanersById(
   return new Map(cleaners.map((cleaner) => [cleaner.id, cleaner.full_name ?? null]));
 }
 
+function officeScheduleRosterCleanerIds(
+  booking: Pick<OfficeScheduleDayBooking, "cleaner_id" | "selected_cleaner_id" | "booking_cleaners">,
+): string[] {
+  const fromRoster = (booking.booking_cleaners ?? [])
+    .map((member) => String(member.cleaner_id ?? "").trim())
+    .filter(Boolean);
+  if (fromRoster.length > 0) return fromRoster;
+  return [booking.cleaner_id, booking.selected_cleaner_id]
+    .map((id) => String(id ?? "").trim())
+    .filter(Boolean);
+}
+
 /** Display label for the cleaner (or team) assigned to a schedule booking. */
 export function officeScheduleAssignedCleanerLabel(
-  booking: Pick<OfficeScheduleDayBooking, "cleaner_id" | "selected_cleaner_id" | "team_id">,
+  booking: Pick<
+    OfficeScheduleDayBooking,
+    "cleaner_id" | "selected_cleaner_id" | "team_id" | "booking_cleaners"
+  >,
   cleanersById: ReadonlyMap<string, string | null>,
 ): string | null {
   if (String(booking.team_id ?? "").trim()) {
     return "Team assigned";
   }
+
+  const roster = booking.booking_cleaners ?? [];
+  if (roster.length > 0) {
+    const names = roster.map((member) => {
+      const fromRoster = member.full_name?.trim();
+      if (fromRoster) return fromRoster;
+      const fromLookup = cleanersById.get(member.cleaner_id)?.trim();
+      return fromLookup || "Cleaner";
+    });
+    return names.join(", ");
+  }
+
   const cleanerId = String(booking.cleaner_id ?? booking.selected_cleaner_id ?? "").trim();
   if (!cleanerId) return null;
   const name = cleanersById.get(cleanerId)?.trim();
@@ -202,15 +230,15 @@ export function computeOfficeScheduleCleanerStats(params: {
         const st = String(b.status ?? "").toLowerCase();
         return st === "in_progress" || st === "en_route";
       })
-      .flatMap((b) => [b.cleaner_id, b.selected_cleaner_id].filter(Boolean) as string[]),
+      .flatMap((b) => officeScheduleRosterCleanerIds(b)),
   );
   const bookedCleanerIds = new Set(
     params.bookings
       .filter((b) => {
         const st = String(b.status ?? "").toLowerCase();
-        return (st === "assigned" || st === "confirmed") && (b.cleaner_id || b.selected_cleaner_id);
+        return (st === "assigned" || st === "confirmed") && officeScheduleRosterCleanerIds(b).length > 0;
       })
-      .flatMap((b) => [b.cleaner_id, b.selected_cleaner_id].filter(Boolean) as string[]),
+      .flatMap((b) => officeScheduleRosterCleanerIds(b)),
   );
   const weekday = weekdayIndexForScheduleYmd(params.dateYmd);
   const cleanerStates = params.cleaners.map((cleaner) =>
@@ -261,7 +289,7 @@ export function countOfficeScheduleStartingSoonUnassigned(
   return bookings.filter((b) => {
     const st = String(b.status ?? "").toLowerCase();
     if (st === "cancelled" || st === "failed" || st === "completed") return false;
-    if (b.cleaner_id || b.selected_cleaner_id || b.team_id) return false;
+    if (officeScheduleRosterCleanerIds(b).length > 0 || b.team_id) return false;
     const time = b.time?.slice(0, 5);
     if (!time) return false;
     const start = new Date(`${dateYmd}T${time}:00+02:00`).getTime();

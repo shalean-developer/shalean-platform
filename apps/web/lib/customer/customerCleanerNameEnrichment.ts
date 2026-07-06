@@ -2,7 +2,7 @@ import type { BookingRow } from "@/lib/dashboard/types";
 
 export type CustomerCleanerEnrichableRow = Pick<
   BookingRow,
-  "cleaner_id" | "selected_cleaner_id" | "display_cleaner_name"
+  "cleaner_id" | "selected_cleaner_id" | "display_cleaner_name" | "id" | "cleaner_count"
 >;
 
 /**
@@ -40,6 +40,27 @@ export function applyCustomerDisplayCleanerNamesToRows(
       r.display_cleaner_name = name.trim();
       mutated += 1;
     }
+  }
+  return mutated;
+}
+
+/** Paired roster jobs (`cleaner_count` >= 2) show every assigned cleaner on the customer dashboard. */
+export function applyPairedRosterDisplayCleanerNames(
+  rows: readonly CustomerCleanerEnrichableRow[],
+  rosterByBookingId: ReadonlyMap<string, readonly { full_name: string | null; role: string }[]>,
+): number {
+  let mutated = 0;
+  for (const row of rows) {
+    const bookingId = String(row.id ?? "").trim();
+    if (!bookingId) continue;
+    const cleanerCount = Number(row.cleaner_count ?? 1) || 1;
+    if (cleanerCount < 2) continue;
+    const roster = rosterByBookingId.get(bookingId);
+    if (!roster || roster.length < 2) continue;
+    row.display_cleaner_name = roster
+      .map((member) => member.full_name?.trim() || "Cleaner")
+      .join(", ");
+    mutated += 1;
   }
   return mutated;
 }

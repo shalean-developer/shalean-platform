@@ -211,4 +211,23 @@ describe("officeScheduleAssignedCleanerLabel", () => {
       ),
     ).toBeNull();
   });
+
+  it("shows all roster cleaner names for paired jobs", () => {
+    expect(
+      officeScheduleAssignedCleanerLabel(
+        scheduleBooking({
+          id: "1",
+          status: "assigned",
+          cleaner_id: "c1",
+          time: "09:00",
+          date: "2026-06-19",
+          booking_cleaners: [
+            { cleaner_id: "c1", full_name: "Nyasha Mudani", role: "lead" },
+            { cleaner_id: "c2", full_name: "Ethel Chizombe", role: "member" },
+          ],
+        }),
+        cleanersById,
+      ),
+    ).toBe("Nyasha Mudani, Ethel Chizombe");
+  });
 });

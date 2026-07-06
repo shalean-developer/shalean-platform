@@ -1,8 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
+import type { OfficeScheduleDayBooking } from "@/lib/admin/officeScheduleDayPresentation";
 import { computeOfficeTodayScheduleStats } from "@/lib/admin/officeTodayScheduleStats";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
+import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -10,6 +12,62 @@ export const dynamic = "force-dynamic";
 
 const BOOKING_SELECT =
   "id, date, time, status, cleaner_id, selected_cleaner_id, team_id, is_team_job, customer_name, service, service_slug, location, ignore_cleaner_conflict, cleaner_slot_override_reason, dispatch_status";
+
+const ROSTER_CHUNK = 200;
+
+type ScheduleDayBookingRow = OfficeScheduleDayBooking & {
+  ignore_cleaner_conflict?: boolean | null;
+  cleaner_slot_override_reason?: string | null;
+};
+
+async function attachRosterToScheduleBookings(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  bookings: ScheduleDayBookingRow[],
+): Promise<ScheduleDayBookingRow[]> {
+  if (!bookings.length) return bookings;
+  const ids = bookings.map((row) => String(row.id ?? "").trim()).filter(Boolean);
+  const rosterMap = new Map<string, Array<{ cleaner_id: string; full_name: string | null; role: string }>>();
+  for (let i = 0; i < ids.length; i += ROSTER_CHUNK) {
+    const slice = ids.slice(i, i + ROSTER_CHUNK);
+    const chunk = await fetchTeamRosterByBookingIds(admin, slice);
+    for (const [bookingId, members] of chunk) rosterMap.set(bookingId, [...members]);
+  }
+
+  const directCleanerIds = [
+    ...new Set(
+      bookings
+        .map((row) => String(row.cleaner_id ?? "").trim())
+        .filter((id) => /^[0-9a-f-]{36}$/i.test(id)),
+    ),
+  ];
+  const directCleanerNameMap = new Map<string, string | null>();
+  for (let i = 0; i < directCleanerIds.length; i += ROSTER_CHUNK) {
+    const slice = directCleanerIds.slice(i, i + ROSTER_CHUNK);
+    const { data: cleanerRows } = await admin.from("cleaners").select("id, full_name").in("id", slice);
+    for (const cleaner of cleanerRows ?? []) {
+      const row = cleaner as { id?: string; full_name?: string | null };
+      const id = String(row.id ?? "").trim();
+      if (id) directCleanerNameMap.set(id, row.full_name?.trim() ? row.full_name.trim() : null);
+    }
+  }
+
+  return bookings.map((row) => {
+    const bookingId = String(row.id ?? "").trim();
+    const directCleanerId = String(row.cleaner_id ?? "").trim();
+    const roster = rosterMap.get(bookingId) ?? [];
+    const booking_cleaners =
+      roster.length > 0 || !directCleanerId
+        ? roster
+        : [
+            {
+              cleaner_id: directCleanerId,
+              full_name: directCleanerNameMap.get(directCleanerId) ?? null,
+              role: "lead",
+            },
+          ];
+    return { ...row, booking_cleaners };
+  });
+}
 
 /**
  * Admin: bookings for a single calendar day (schedule board).
@@ -59,6 +117,8 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: bErr.message }, { status: 500 });
   }
 
+  const bookingsWithRoster = await attachRosterToScheduleBookings(admin, (bookings ?? []) as ScheduleDayBookingRow[]);
+
   const cleanerSelectWithRoster = "id, full_name, phone, is_available, status, availability_weekdays";
   const cleanerSelectBase = "id, full_name, phone, is_available, status";
   let { data: cleanerRows, error: cErr } = await admin
@@ -78,8 +138,8 @@ export async function GET(request: Request) {
 
   return NextResponse.json({
     date,
-    bookings: bookings ?? [],
+    bookings: bookingsWithRoster,
     cleaners: cleanerRows ?? [],
-    summary: computeOfficeTodayScheduleStats(bookings ?? []),
+    summary: computeOfficeTodayScheduleStats(bookingsWithRoster),
   });
 }

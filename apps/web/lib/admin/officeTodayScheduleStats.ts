@@ -5,6 +5,7 @@ export type OfficeScheduleBookingRow = {
   selected_cleaner_id?: string | null;
   team_id?: string | null;
   is_team_job?: boolean | null;
+  booking_cleaners?: readonly { cleaner_id: string; full_name: string | null; role: string }[] | null;
 };
 
 export type OfficeTodayScheduleStats = {
@@ -23,6 +24,7 @@ export function bookingHasAssignment(row: OfficeScheduleBookingRow): boolean {
   if (String(row.cleaner_id ?? "").trim()) return true;
   if (String(row.selected_cleaner_id ?? "").trim()) return true;
   if (String(row.team_id ?? "").trim()) return true;
+  if ((row.booking_cleaners ?? []).length > 0) return true;
   return false;
 }
 
