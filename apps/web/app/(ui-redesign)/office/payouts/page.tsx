@@ -35,6 +35,7 @@ import {
 } from "@/components/admin/office/OfficeZohoChrome";
 import { OfficePayoutDetailPanel } from "@/components/admin/office/OfficePayoutDetailPanel";
 import { defaultOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
+import { cleanerEarningsRulesSummaryText } from "@/lib/admin/cleanerTenureDisplay";
 import type {
   OfficePayoutBatchRow,
   OfficePayoutCleanerRow,
@@ -52,6 +53,19 @@ type GenerateResponse = {
   weeksProcessed?: number;
   periods?: Array<{ start: string; end: string; payoutsCreated: number; bookingsLinked: number }>;
   period?: { start: string; end: string };
+};
+
+type RecalculateEarningsResponse = {
+  ok?: boolean;
+  recomputed?: number;
+  skipped?: number;
+  failed?: number;
+  resetBlocked?: number;
+  attempted?: number;
+  candidates?: number;
+  dryRun?: boolean;
+  skipReasons?: Record<string, number>;
+  error?: string;
 };
 
 const STATUS_FILTERS = ["all", "pending", "frozen", "approved", "paid", "cancelled"] as const;
@@ -180,6 +194,7 @@ export default function PayoutsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedPayoutId = searchParams.get("payout")?.trim() || null;
+  const earningsRules = cleanerEarningsRulesSummaryText();
 
   const defaultRange = defaultOfficePayoutPeriodRange();
   const [fromDate, setFromDate] = useState(defaultRange.from);
@@ -338,6 +353,45 @@ export default function PayoutsPage() {
     await refreshAll();
   }
 
+  async function handleRecalculateEarnings() {
+    const confirmed = globalThis.confirm(
+      `Recalculate cleaner earnings for ${formatRangeLabel(fromDate, toDate)} using current tenure rules (${earningsRules.juniorRateLabel}/${earningsRules.experiencedRateLabel}, R${earningsRules.minZar}–R${earningsRules.maxZar})?\n\nJobs in locked or paid payout batches are skipped.`,
+    );
+    if (!confirmed) return;
+
+    setActionLoading("recalculate");
+    const res = await adminFetch<RecalculateEarningsResponse>("/api/admin/payouts/recalculate-earnings", {
+      method: "POST",
+      body: JSON.stringify({ from: fromDate, to: toDate }),
+    });
+    setActionLoading(null);
+
+    if (!res.ok) {
+      showToast(res.error ?? "Failed to recalculate earnings", false);
+      return;
+    }
+
+    const body = res.data;
+    const recomputed = body?.recomputed ?? 0;
+    const skipped = body?.skipped ?? 0;
+    const failed = body?.failed ?? 0;
+    const blocked = body?.resetBlocked ?? 0;
+
+    if (failed > 0) {
+      showToast(`Recalculated ${recomputed} job(s); ${failed} failed, ${skipped} skipped.`, false);
+    } else if (recomputed === 0) {
+      showToast(
+        blocked > 0
+          ? `No jobs updated — ${blocked} locked by payout batch, ${skipped} skipped.`
+          : `No jobs needed recalculation (${skipped} skipped).`,
+        true,
+      );
+    } else {
+      showToast(`Recalculated ${recomputed} job(s)${skipped > 0 ? `; ${skipped} skipped` : ""}.`, true);
+    }
+    await refreshAll();
+  }
+
   function handleExportBatches() {
     if (filtered.length === 0) {
       showToast("Nothing to export — adjust filters or generate payout batches first.", false);
@@ -416,6 +470,17 @@ export default function PayoutsPage() {
         live
         actions={
           <>
+            <OfficeZohoSecondaryButton
+              disabled={actionLoading === "recalculate"}
+              onClick={() => void handleRecalculateEarnings()}
+            >
+              {actionLoading === "recalculate" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <RefreshCw className="h-4 w-4" />
+              )}
+              {actionLoading === "recalculate" ? "Recalculating…" : "Recalculate earnings"}
+            </OfficeZohoSecondaryButton>
             <OfficeZohoPrimaryButton
               disabled={actionLoading === "generate"}
               onClick={() => void handleGenerate()}
@@ -447,6 +512,32 @@ export default function PayoutsPage() {
           </>
         }
       />
+
+      <details className="rounded-lg border border-violet-200 bg-violet-50/60 px-4 py-3 text-sm text-violet-950">
+        <summary className="cursor-pointer font-semibold">
+          Standard cleaner earnings rules (R{earningsRules.minZar}–R{earningsRules.maxZar})
+        </summary>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-xs leading-relaxed text-violet-900/90">
+          <li>
+            <strong>Junior</strong> (&lt;{earningsRules.tenureMonthsThreshold} months with company):{" "}
+            {earningsRules.juniorRateLabel} of eligible visit total, clamped R{earningsRules.minZar}–R{earningsRules.maxZar}{" "}
+            per job.
+          </li>
+          <li>
+            <strong>Experienced</strong> (≥{earningsRules.tenureMonthsThreshold} months): {earningsRules.experiencedRateLabel},
+            same clamp.
+          </li>
+          <li>Tenure uses each cleaner&apos;s company join date vs the booking appointment date.</li>
+          <li>
+            Manage join dates on{" "}
+            <Link href="/office/cleaners" className="font-semibold underline">
+              Office → Cleaners
+            </Link>
+            . Recalculate a stored booking via Reset earnings on the booking.
+          </li>
+          <li>Deep / move / carpet: fixed R250 (R270 team lead) — tenure does not apply.</li>
+        </ul>
+      </details>
 
       {error && (
         <div className="flex items-center gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
