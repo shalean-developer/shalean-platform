@@ -5,6 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { regenerateCleanerAvailabilityFromStoredWeekdays } from "@/lib/cleaner/regenerateCleanerAvailabilityFromStoredWeekdays";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import { syncCleanerSummary } from "@/lib/cleaner/syncCleanerSummary";
+import { parseAdminJoinedAtInput } from "@/lib/admin/cleanerTenureDisplay";
 import { normalizeSouthAfricaPhone, southAfricaPhoneLookupVariants } from "@/lib/utils/phone";
 
 export const runtime = "nodejs";
@@ -60,7 +61,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   const { data, error } = await auth.admin
     .from("cleaners")
     .select(
-      "id, full_name, phone, email, rating, jobs_completed, is_available, status, city_id, location, availability_start, availability_end, availability_weekdays, auth_user_id",
+      "id, full_name, phone, email, rating, jobs_completed, is_available, status, city_id, location, availability_start, availability_end, availability_weekdays, auth_user_id, joined_at, created_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -136,15 +137,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (body.availability_start !== undefined) updates.availability_start = body.availability_start || null;
   if (body.availability_end !== undefined) updates.availability_end = body.availability_end || null;
   if (body.joined_at !== undefined) {
-    const raw = body.joined_at === null ? "" : String(body.joined_at).trim();
-    if (raw === "") {
+    if (body.joined_at == null || String(body.joined_at).trim() === "") {
       updates.joined_at = null;
     } else {
-      const parsed = new Date(raw);
-      if (Number.isNaN(parsed.getTime())) {
-        return NextResponse.json({ error: "Invalid joined_at date." }, { status: 400 });
+      const parsed = parseAdminJoinedAtInput(String(body.joined_at));
+      if (!parsed) {
+        return NextResponse.json({ error: "Invalid company join date." }, { status: 400 });
       }
-      updates.joined_at = parsed.toISOString();
+      updates.joined_at = parsed;
     }
   }
   if (body.is_available !== undefined) {
