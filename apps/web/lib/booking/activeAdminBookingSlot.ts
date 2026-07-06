@@ -1,5 +1,6 @@
 import "server-only";
 
+import type { BookingCustomerOwnershipColumn } from "@/lib/booking/bookingCustomerIdentity";
 import { terminalStatusesNotInDuplicateProbe } from "@/lib/booking/bookingTerminalStatuses";
 
 /**
@@ -8,6 +9,7 @@ import { terminalStatusesNotInDuplicateProbe } from "@/lib/booking/bookingTermin
  */
 export type ActiveAdminBookingSlotParams = {
   userId: string;
+  ownershipColumn: BookingCustomerOwnershipColumn;
   date: string;
   timeHm: string;
   serviceSlug: string;
@@ -19,7 +21,7 @@ export type ActiveAdminBookingSlotParams = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function applyActiveAdminBookingSlotFilters(query: any, p: ActiveAdminBookingSlotParams): any {
   return query
-    .eq("user_id", p.userId)
+    .eq(p.ownershipColumn, p.userId)
     .eq("date", p.date)
     .eq("time", p.timeHm)
     .eq("service_slug", p.serviceSlug)

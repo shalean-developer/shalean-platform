@@ -994,7 +994,7 @@ export async function POST(request: Request) {
   if (!force) {
     const { data: dupRows, error: dupErr } = await applyActiveAdminBookingSlotFilters(
       admin.from("bookings").select("id, created_at"),
-      { userId, date, timeHm, serviceSlug },
+      { userId, ownershipColumn, date, timeHm, serviceSlug },
     ).limit(1);
 
     if (dupErr) {
@@ -1355,7 +1355,7 @@ export async function POST(request: Request) {
       ) {
         const { data: dupExisting } = await applyActiveAdminBookingSlotFilters(
           admin.from("bookings").select("id, created_at"),
-          { userId, date, timeHm, serviceSlug },
+          { userId, ownershipColumn, date, timeHm, serviceSlug },
         ).limit(1);
         const ex = dupExisting?.[0] as { id: string; created_at?: string | null } | undefined;
         return bail(
@@ -1487,7 +1487,7 @@ export async function POST(request: Request) {
     if (!force) {
       const { count: activeSlotCount, error: invErr } = await applyActiveAdminBookingSlotFilters(
         admin.from("bookings").select("id", { count: "exact", head: true }),
-        { userId, date, timeHm, serviceSlug },
+        { userId, ownershipColumn, date, timeHm, serviceSlug },
       );
       if (!invErr && typeof activeSlotCount === "number" && activeSlotCount > 1) {
         void logSystemEvent({
@@ -1662,7 +1662,7 @@ export async function POST(request: Request) {
     if (paystackResult.duplicateSlot) {
       const { data: dupPay } = await applyActiveAdminBookingSlotFilters(
         admin.from("bookings").select("id, created_at"),
-        { userId, date, timeHm, serviceSlug },
+        { userId, ownershipColumn, date, timeHm, serviceSlug },
       ).limit(1);
       const ex = dupPay?.[0] as { id: string; created_at?: string | null } | undefined;
       if (ex?.id) existing_booking_id = ex.id;
