@@ -11,6 +11,8 @@ import {
   tryReplayBillingSwitchSuccess,
 } from "@/lib/admin/adminBillingSwitchIdempotency";
 import { checkAdminBillingSwitchRateLimit } from "@/lib/admin/adminBillingSwitchRateLimit";
+import type { BookingCustomerOwnershipColumn } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -35,9 +37,27 @@ export type AdminBillingPatchBody = {
   confirm_strict?: boolean;
 };
 
+async function countBookingsThisMonth(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  customerId: string,
+  ownershipColumn: BookingCustomerOwnershipColumn,
+  startYmd: string,
+  endYmd: string,
+): Promise<number> {
+  const { count, error } = await admin
+    .from("bookings")
+    .select("id", { count: "exact", head: true })
+    .eq(ownershipColumn, customerId)
+    .gte("date", startYmd)
+    .lte("date", endYmd);
+  if (error) throw new Error(error.message);
+  return typeof count === "number" ? count : 0;
+}
+
 async function fetchMonthImpact(
   admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
   customerId: string,
+  ownershipColumn: BookingCustomerOwnershipColumn,
 ): Promise<{
   bookings_count: number;
   invoice_status: string | null;
@@ -46,13 +66,7 @@ async function fetchMonthImpact(
   has_month_invoice: boolean;
 }> {
   const { ym, startYmd, endYmd } = johannesburgCalendarMonthDateRangeYmd();
-  const { count: bookingsCount, error: bookErr } = await admin
-    .from("bookings")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", customerId)
-    .gte("date", startYmd)
-    .lte("date", endYmd);
-  if (bookErr) throw new Error(bookErr.message);
+  const bookingsCount = await countBookingsThisMonth(admin, customerId, ownershipColumn, startYmd, endYmd);
 
   const { data: invRow, error: invErr } = await admin
     .from("monthly_invoices")
@@ -100,9 +114,18 @@ export async function GET(request: Request, ctx: { params: Promise<{ userId: str
   }
 
   const p = prof as { billing_type?: string; schedule_type?: string } | null;
+  let ownershipColumn: BookingCustomerOwnershipColumn;
+  try {
+    ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Could not resolve bookings ownership column." },
+      { status: 500 },
+    );
+  }
   let impact;
   try {
-    impact = await fetchMonthImpact(admin, customerId);
+    impact = await fetchMonthImpact(admin, customerId, ownershipColumn);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Impact query failed." }, { status: 500 });
   }
@@ -231,8 +254,18 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
   }
   const schedule_enforced = billing_type === "monthly" && (schedule_in ?? fromSchedule) !== "on_demand";
 
+  let ownershipColumn: BookingCustomerOwnershipColumn;
+  try {
+    ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  } catch (e) {
+    return NextResponse.json(
+      { error: e instanceof Error ? e.message : "Could not resolve bookings ownership column." },
+      { status: 500 },
+    );
+  }
+
   if (fromBilling === billing_type && fromSchedule === toSchedule) {
-    const impactNoop = await fetchMonthImpact(admin, customerId).catch(() => ({
+    const impactNoop = await fetchMonthImpact(admin, customerId, ownershipColumn).catch(() => ({
       bookings_count: 0,
       invoice_status: null,
       invoice_month: null,
@@ -254,17 +287,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
     return NextResponse.json(noopBody);
   }
 
-  const rate = checkAdminBillingSwitchRateLimit(auth.userId, customerId);
-  if (!rate.ok) {
-    return NextResponse.json(
-      { error: rate.error },
-      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } },
-    );
-  }
-
   let impact;
   try {
-    impact = await fetchMonthImpact(admin, customerId);
+    impact = await fetchMonthImpact(admin, customerId, ownershipColumn);
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : "Impact query failed." }, { status: 500 });
   }
@@ -317,6 +342,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ userId: s
       schedule_type: fromSchedule,
       impact,
     });
+  }
+
+  const rate = checkAdminBillingSwitchRateLimit(auth.userId, customerId);
+  if (!rate.ok) {
+    return NextResponse.json(
+      { error: rate.error },
+      { status: 429, headers: { "Retry-After": String(rate.retryAfterSec) } },
+    );
   }
 
   const { data: rpcRaw, error: rpcErr } = await admin.rpc("admin_billing_switch_finalize", {
