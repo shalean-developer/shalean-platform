@@ -9,7 +9,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { fetchAdminTeamMembers, type AdminTeamMemberRow } from "@/lib/admin/dashboard";
+import { fetchAdminTeamMembers, setAdminTeamLead, type AdminTeamMemberRow } from "@/lib/admin/dashboard";
 import { emitAdminToast } from "@/lib/admin/toastBus";
 import { TeamCapacityBar } from "@/components/admin/teams/TeamCapacityBar";
 import { TeamRosterPanel } from "@/components/admin/teams/TeamRosterPanel";
@@ -22,6 +22,7 @@ export type ManageTeamDialogTeam = {
   service_type: string;
   is_active: boolean | null;
   member_count?: number;
+  lead_cleaner_id?: string | null;
 };
 
 type Props = {
@@ -35,8 +36,14 @@ type Props = {
 export function ManageTeamDialog({ team, open, onOpenChange, onTeamUpdated, serviceLabel }: Props) {
   const [roster, setRoster] = useState<AdminTeamMemberRow[]>([]);
   const [rosterLoading, setRosterLoading] = useState(false);
+  const [leadCleanerId, setLeadCleanerId] = useState<string | null>(null);
+  const [leadBusyId, setLeadBusyId] = useState<string | null>(null);
 
   const teamId = team?.id;
+
+  useEffect(() => {
+    setLeadCleanerId(team?.lead_cleaner_id ?? null);
+  }, [team?.id, team?.lead_cleaner_id]);
 
   const reloadRoster = useCallback(async () => {
     if (!teamId) {
@@ -70,6 +77,24 @@ export function ManageTeamDialog({ team, open, onOpenChange, onTeamUpdated, serv
     await onTeamUpdated();
   }, [reloadRoster, onTeamUpdated]);
 
+  const onAppointLead = useCallback(
+    async (cleanerId: string) => {
+      if (!teamId || leadBusyId) return;
+      setLeadBusyId(cleanerId);
+      try {
+        const updated = await setAdminTeamLead(teamId, cleanerId);
+        setLeadCleanerId(updated.lead_cleaner_id ?? cleanerId);
+        emitAdminToast("Team lead updated.", "success");
+        await onTeamUpdated();
+      } catch (e) {
+        emitAdminToast(e instanceof Error ? e.message : "Could not set team lead.", "error");
+      } finally {
+        setLeadBusyId(null);
+      }
+    },
+    [teamId, leadBusyId, onTeamUpdated],
+  );
+
   const onMemberAdded = useCallback(async () => {
     await onAfterRosterChange();
   }, [onAfterRosterChange]);
@@ -99,6 +124,9 @@ export function ManageTeamDialog({ team, open, onOpenChange, onTeamUpdated, serv
               members={roster}
               loading={rosterLoading}
               teamActive={team.is_active !== false}
+              leadCleanerId={leadCleanerId}
+              leadBusyId={leadBusyId}
+              onAppointLead={onAppointLead}
               onAfterChange={onAfterRosterChange}
             />
             <AddMembersPanel

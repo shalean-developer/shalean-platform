@@ -13,12 +13,18 @@ export function TeamRosterPanel({
   members,
   loading,
   teamActive,
+  leadCleanerId,
+  leadBusyId,
+  onAppointLead,
   onAfterChange,
 }: {
   teamId: string;
   members: AdminTeamMemberRow[];
   loading: boolean;
   teamActive: boolean;
+  leadCleanerId: string | null;
+  leadBusyId: string | null;
+  onAppointLead: (cleanerId: string) => Promise<void>;
   onAfterChange: () => Promise<void>;
 }) {
   const [query, setQuery] = useState("");
@@ -142,7 +148,17 @@ export function TeamRosterPanel({
       {!loading && members.length === 0 ? (
         <div className="rounded-xl border border-dashed border-zinc-300 bg-zinc-50/80 px-4 py-8 text-center dark:border-zinc-700 dark:bg-zinc-900/40">
           <p className="text-sm font-medium text-zinc-800 dark:text-zinc-200">No team members yet</p>
-          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Start by adding cleaners below.</p>
+          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">Add cleaners below, then appoint a team lead.</p>
+        </div>
+      ) : null}
+
+      {!loading && members.length > 0 && !leadCleanerId ? (
+        <div
+          className="flex gap-2 rounded-lg border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-xs leading-snug text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100"
+          role="status"
+        >
+          <span className="mt-0.5 shrink-0">⚠</span>
+          <span>Add all cleaners first, then select who should be team lead (payout owner on jobs).</span>
         </div>
       ) : null}
 
@@ -185,6 +201,9 @@ export function TeamRosterPanel({
                 onCancelRemove={() => setPendingRemoveId(null)}
                 teamActive={teamActive}
                 selectionEnabled
+                isLead={leadCleanerId === m.cleaner_id}
+                leadBusy={leadBusyId === m.cleaner_id}
+                onAppointLead={() => void onAppointLead(m.cleaner_id)}
               />
             ))}
           </ul>

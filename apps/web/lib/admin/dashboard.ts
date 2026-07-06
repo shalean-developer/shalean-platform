@@ -193,6 +193,7 @@ export type AdminTeamRow = {
   service_type: string;
   is_active: boolean | null;
   created_at?: string | null;
+  lead_cleaner_id?: string | null;
   /** Roster size (rows in team_members with non-null cleaner_id). */
   member_count?: number;
 };
@@ -356,7 +357,13 @@ export async function deleteAdminTeam(teamId: string): Promise<void> {
 
 export async function patchAdminTeam(
   teamId: string,
-  patch: { name?: string; is_active?: boolean; capacity_per_day?: number; service_type?: "deep_cleaning" | "move_cleaning" },
+  patch: {
+    name?: string;
+    is_active?: boolean;
+    capacity_per_day?: number;
+    service_type?: "deep_cleaning" | "move_cleaning";
+    lead_cleaner_id?: string;
+  },
 ): Promise<AdminTeamRow> {
   const token = await getAdminToken();
   const res = await fetch(`/api/admin/teams/${encodeURIComponent(teamId)}`, {
@@ -370,6 +377,11 @@ export async function patchAdminTeam(
   if (!res.ok) throw new Error(json.error ?? "Failed to update team.");
   if (!json.team) throw new Error("Update response incomplete.");
   return json.team;
+}
+
+/** Appoint team lead after roster is built (drives payout owner on team job assignment). */
+export async function setAdminTeamLead(teamId: string, cleanerId: string): Promise<AdminTeamRow> {
+  return patchAdminTeam(teamId, { lead_cleaner_id: cleanerId });
 }
 
 /** @deprecated Use {@link patchAdminTeam} */
@@ -458,6 +470,17 @@ export async function updateBookingStatus(id: string, status: string) {
   });
   const json = (await res.json()) as AdminActionErrorJson;
   if (!res.ok) throw adminActionError(json, "Failed to update booking status.");
+}
+
+export async function changeBookingStatusAdmin(id: string, status: string, reason: string) {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/bookings/${encodeURIComponent(id)}/change-status`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ status, reason }),
+  });
+  const json = (await res.json()) as AdminActionErrorJson;
+  if (!res.ok) throw adminActionError(json, "Failed to change booking status.");
 }
 
 export async function updateBooking(id: string, patch: { date?: string; time?: string; status?: string }) {

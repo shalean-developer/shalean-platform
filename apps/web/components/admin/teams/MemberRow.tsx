@@ -3,6 +3,7 @@
 import { Crown, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { AdminTeamMemberRow } from "@/lib/admin/dashboard";
+import { cn } from "@/lib/utils";
 
 function formatJoined(iso: string | null): string {
   if (!iso) return "";
@@ -32,6 +33,9 @@ export function MemberRow({
   onCancelRemove,
   teamActive,
   selectionEnabled,
+  isLead,
+  leadBusy,
+  onAppointLead,
 }: {
   member: AdminTeamMemberRow;
   selected: boolean;
@@ -43,13 +47,23 @@ export function MemberRow({
   onCancelRemove: () => void;
   teamActive: boolean;
   selectionEnabled: boolean;
+  isLead?: boolean;
+  leadBusy?: boolean;
+  onAppointLead?: () => void;
 }) {
   const id = member.cleaner_id;
   const pending = pendingRemoveId === id;
   const busy = removingId === id;
 
   return (
-    <li className="rounded-lg border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900/60">
+    <li
+      className={cn(
+        "rounded-lg border bg-white p-3 dark:bg-zinc-900/60",
+        isLead
+          ? "border-amber-300 ring-1 ring-amber-200/80 dark:border-amber-800 dark:ring-amber-900/50"
+          : "border-zinc-200 dark:border-zinc-700",
+      )}
+    >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
         {selectionEnabled ? (
           <label className="flex cursor-pointer items-center gap-2 pt-0.5">
@@ -73,14 +87,28 @@ export function MemberRow({
         <div className="flex shrink-0 flex-wrap items-center gap-2 sm:flex-col sm:items-end">
           <Button
             type="button"
-            variant="ghost"
+            variant={isLead ? "default" : "outline"}
             size="sm"
-            disabled
-            className="h-8 rounded-lg text-xs text-zinc-400"
-            title="Lead role is managed on bookings — coming soon for templates."
+            className={cn(
+              "h-8 rounded-lg text-xs",
+              isLead && "bg-amber-600 hover:bg-amber-700 dark:bg-amber-700 dark:hover:bg-amber-600",
+            )}
+            disabled={!teamActive || leadBusy || isLead}
+            title={
+              isLead
+                ? "Current team lead"
+                : !teamActive
+                  ? "Activate the team to appoint a lead"
+                  : "Appoint as team lead (payout owner on jobs)"
+            }
+            onClick={onAppointLead}
           >
-            <Crown className="mr-1 h-3.5 w-3.5" aria-hidden />
-            Lead
+            {leadBusy ? (
+              <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Crown className="mr-1 h-3.5 w-3.5" aria-hidden />
+            )}
+            {isLead ? "Team lead" : "Make lead"}
           </Button>
           {!pending ? (
             <Button

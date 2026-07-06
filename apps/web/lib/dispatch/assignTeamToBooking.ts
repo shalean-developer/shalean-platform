@@ -13,6 +13,7 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
 import { teamJobSlotsPerTeamPerDay, countPlatformTeamJobsOnDate, MAX_TEAM_BOOKINGS_PER_DAY, TEAM_MIN_ROSTER_MEMBERS } from "@/lib/dispatch/teamJobsPerDay";
 import { newTeamAssignmentErrorId } from "@/lib/dispatch/teamAssignmentErrorId";
+import { resolveTeamPayoutOwnerCleanerId } from "@/lib/dispatch/resolveTeamPayoutOwnerCleanerId";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
 /**
@@ -453,9 +454,25 @@ async function finalizeBookingTeamAssignment(
     return { ok: false, error: "db_error", message: capsForLead.error };
   }
 
-  const payoutOwnerCleanerId =
-    activeSortedIds.find((id) => cleanerPassesServiceCapabilityGate(capsForLead.map.get(id) ?? {}, payoutGate)) ??
-    null;
+  const { data: teamLeadRow, error: teamLeadErr } = await supabase
+    .from("teams")
+    .select("lead_cleaner_id")
+    .eq("id", selected.id)
+    .maybeSingle();
+  if (teamLeadErr) {
+    await supabase.rpc("release_team_capacity_slot", {
+      p_team_id: selected.id,
+      p_booking_date: dateYmd,
+    });
+    return { ok: false, error: "db_error", message: teamLeadErr.message };
+  }
+
+  const payoutOwnerCleanerId = resolveTeamPayoutOwnerCleanerId({
+    teamLeadCleanerId: (teamLeadRow as { lead_cleaner_id?: string | null } | null)?.lead_cleaner_id ?? null,
+    activeCleanerIdsSorted: activeSortedIds,
+    cleanerPassesGate: (id) => cleanerPassesServiceCapabilityGate(capsForLead.map.get(id) ?? {}, payoutGate),
+    allowFallback: true,
+  });
 
   if (!payoutOwnerCleanerId) {
     await supabase.rpc("release_team_capacity_slot", {

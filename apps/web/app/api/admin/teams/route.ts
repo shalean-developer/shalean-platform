@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await admin
     .from("teams")
-    .select("id, name, service_type, capacity_per_day, is_active, created_at")
+    .select("id, name, service_type, capacity_per_day, is_active, created_at, lead_cleaner_id")
     .order("created_at", { ascending: false })
     .limit(200);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

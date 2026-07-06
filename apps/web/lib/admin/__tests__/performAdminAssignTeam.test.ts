@@ -30,13 +30,15 @@ function baseBooking(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-function baseTeam() {
+function baseTeam(overrides: Partial<{ lead_cleaner_id: string | null }> = {}) {
   return {
     id: newTeamId,
     name: "Alpha",
     service_type: "deep_cleaning",
     capacity_per_day: 5,
     is_active: true,
+    lead_cleaner_id: twoMembers[0]!.cleaner_id,
+    ...overrides,
   };
 }
 
@@ -314,6 +316,24 @@ describe("performAdminAssignTeam", () => {
         }),
       }),
     );
+  });
+
+  it("rejects admin assign when team has no appointed lead", async () => {
+    const { admin } = createMockAdmin({
+      booking: baseBooking(),
+      team: baseTeam({ lead_cleaner_id: null }),
+    });
+    const res = await performAdminAssignTeam({
+      admin: admin as never,
+      bookingId,
+      teamId: newTeamId,
+      adminUserId: "admin-uuid",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.httpStatus).toBe(400);
+      expect(res.error).toMatch(/appoint a team lead/i);
+    }
   });
 
   it("reassign replaces old team: release + claim, oldTeamId in result and log", async () => {

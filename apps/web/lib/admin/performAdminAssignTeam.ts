@@ -29,6 +29,7 @@ import {
   buildTeamJobMemberPayoutRowsFromEarningsSummary,
   resolveTeamCleanerPoolCents,
 } from "@/lib/payout/teamRosterPayoutAllocation";
+import { resolveTeamPayoutOwnerCleanerId } from "@/lib/dispatch/resolveTeamPayoutOwnerCleanerId";
 import { resolveBookingCanonicalPayout } from "@/lib/payout/resolveBookingCanonicalPayout";
 
 type BookingRow = {
@@ -123,7 +124,7 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
   const expectedService = teamServiceType(b);
   const { data: team, error: tErr } = await admin
     .from("teams")
-    .select("id, name, service_type, capacity_per_day, is_active")
+    .select("id, name, service_type, capacity_per_day, is_active, lead_cleaner_id")
     .eq("id", tid)
     .maybeSingle();
   if (tErr) return { ok: false, httpStatus: 500, error: tErr.message };
@@ -259,14 +260,21 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     }
   }
 
-  const payoutOwnerCleanerId =
-    activeCleanerIds.find((id) => cleanerPassesServiceCapabilityGate(capsLoaded.map.get(id) ?? {}, capGate)) ?? null;
+  const teamLeadId = String((team as { lead_cleaner_id?: string | null }).lead_cleaner_id ?? "").trim() || null;
+  const payoutOwnerCleanerId = resolveTeamPayoutOwnerCleanerId({
+    teamLeadCleanerId: teamLeadId,
+    activeCleanerIdsSorted: activeCleanerIds,
+    cleanerPassesGate: (id) => cleanerPassesServiceCapabilityGate(capsLoaded.map.get(id) ?? {}, capGate),
+    allowFallback: false,
+  });
   if (!payoutOwnerCleanerId) {
     if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
     return {
       ok: false,
       httpStatus: 400,
-      error: "Cannot assign team: no active member on the service date to use as payout owner.",
+      error: teamLeadId
+        ? "Appointed team lead is inactive on this date or not certified for this service. Update the team lead in Admin → Teams."
+        : "Appoint a team lead in Admin → Teams after adding all cleaners, then assign this team.",
     };
   }
 

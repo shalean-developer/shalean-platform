@@ -15,6 +15,10 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  cleanerWorkloadStatusLabel,
+  replacementAvailabilityDisplayLabel,
+} from "@/lib/cleaner/cleanerWorkloadStatusDisplay";
 import { cn } from "@/lib/utils";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
@@ -93,9 +97,9 @@ function contextFromHit(hit: CleanerHit): DraftContext | undefined {
   const st = (hit.status ?? "").trim().toLowerCase();
   let availability: string | undefined;
   if (hit.is_available === true || st === "available") availability = "Available";
-  else if (st === "busy") availability = "Busy";
-  else if (st === "offline") availability = "Offline";
-  else if (st) availability = st.charAt(0).toUpperCase() + st.slice(1);
+  else if (st === "busy" || st === "offline") {
+    availability = cleanerWorkloadStatusLabel(st, hit.is_available);
+  } else if (st) availability = st.charAt(0).toUpperCase() + st.slice(1);
 
   const has =
     availability ||
@@ -113,7 +117,7 @@ function contextFromHit(hit: CleanerHit): DraftContext | undefined {
 
 function contextFromSuggestion(s: ReplacementSuggestion): DraftContext {
   return {
-    availability: s.availability,
+    availability: replacementAvailabilityDisplayLabel(s.availability),
     distanceKm: s.distanceKm,
     rating: s.rating ?? undefined,
     jobs: s.totalJobs,
@@ -169,7 +173,7 @@ export function EmergencyRosterReassignModal({
     }));
     setDraft(rows);
     const leadRow = initialRoster.find((r) => String(r.role).toLowerCase() === "lead");
-    const syncedLead = leadRow?.cleaner_id ?? rows[0]?.cleanerId ?? null;
+    const syncedLead = leadRow?.cleaner_id ?? null;
     setLeadId(syncedLead);
     setBaselineLeadId(syncedLead);
     setReason("");
@@ -281,7 +285,6 @@ export function EmergencyRosterReassignModal({
 
     if (draft.some((m) => m.cleanerId === id)) return;
     setDraft((prev) => [...prev, { cleanerId: id, label, context: mergedCtx }]);
-    if (!leadId) setLeadId(id);
   };
 
   const removeMember = (cleanerId: string) => {
@@ -289,7 +292,7 @@ export function EmergencyRosterReassignModal({
     setDraft((prev) => {
       const next = prev.filter((m) => m.cleanerId !== cleanerId);
       queueMicrotask(() => {
-        setLeadId((lid) => (lid === cleanerId ? next[0]?.cleanerId ?? null : lid));
+        setLeadId((lid) => (lid === cleanerId ? null : lid));
       });
       return next;
     });
@@ -404,7 +407,15 @@ export function EmergencyRosterReassignModal({
                   role="status"
                 >
                   <span className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400">⚠</span>
-                  <span>No cleaners on this roster. Add team members before you can save.</span>
+                  <span>No cleaners on this roster. Add team members, then select a Team Lead before saving.</span>
+                </div>
+              ) : !leadId ? (
+                <div
+                  className="flex gap-2 rounded-lg border border-amber-200/70 bg-amber-50/60 px-3 py-2 text-xs leading-snug text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/25 dark:text-amber-100"
+                  role="status"
+                >
+                  <span className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400">⚠</span>
+                  <span>Select a Team Lead below after adding all cleaners.</span>
                 </div>
               ) : (
                 <div className="flex gap-2 rounded-lg bg-zinc-50/90 px-3 py-2 text-xs leading-snug text-zinc-600 dark:bg-zinc-900/40 dark:text-zinc-400">
@@ -656,7 +667,7 @@ export function EmergencyRosterReassignModal({
                               ) : null}
                             </div>
                             <p className="mt-0.5 text-[11px] text-zinc-500 dark:text-zinc-400">
-                              {s.availability}
+                              {replacementAvailabilityDisplayLabel(s.availability)}
                               {s.distanceKm != null ? ` · ${s.distanceKm} km` : ""}
                               {typeof s.rating === "number" ? ` · ★ ${s.rating.toFixed(1)}` : ""} · {s.totalJobs} jobs
                             </p>

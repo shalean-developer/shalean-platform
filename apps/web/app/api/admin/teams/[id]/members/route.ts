@@ -501,6 +501,11 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
   const { error } = await admin.from("team_members").delete().eq("team_id", teamId).eq("cleaner_id", cleanerId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const { data: teamRow } = await admin.from("teams").select("lead_cleaner_id").eq("id", teamId).maybeSingle();
+  if (String((teamRow as { lead_cleaner_id?: string | null } | null)?.lead_cleaner_id ?? "") === cleanerId) {
+    await admin.from("teams").update({ lead_cleaner_id: null }).eq("id", teamId);
+  }
+
   void logSystemEvent({
     level: "info",
     source: "TEAM_MEMBER_REMOVED",
