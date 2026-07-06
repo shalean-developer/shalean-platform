@@ -86,7 +86,7 @@ export async function validateAdminManualAssignToCleaner(
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, location_id, service_slug, service",
+      "id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, location_id, service_slug, service, cleaner_response_status, accepted_at",
     )
     .eq("id", bookingId)
     .maybeSingle();

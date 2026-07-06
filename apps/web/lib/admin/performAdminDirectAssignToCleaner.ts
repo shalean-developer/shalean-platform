@@ -4,6 +4,7 @@ import type { AdminAssignOneResult } from "@/lib/admin/performAdminAssignToClean
 import type { AdminWarning } from "@/lib/admin/adminWarningPayload";
 import { triggerAssignmentEarningsSnapshotForBooking } from "@/lib/admin/triggerAssignmentEarningsSnapshot";
 import { validateAdminManualAssignToCleaner } from "@/lib/admin/validateAdminManualAssignToCleaner";
+import { isCleanerAssignmentAcceptedRecord } from "@/lib/cleaner/cleanerBookingAccess";
 import { logAssignmentSuccess } from "@/lib/booking/verifyBookingAssignment";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
 import { assignmentTruthPatchForOfferAccept } from "@/lib/dispatch/assignmentTruth";
@@ -34,8 +35,9 @@ export async function performAdminDirectAssignToCleaner(
   const { booking: b, resolvedCleanerId, prevCleaner, warnings } = validation;
   const prevCleanerId = prevCleaner ? String(prevCleaner).trim() || null : null;
   const st = String(b.status ?? "").toLowerCase();
+  const acceptanceComplete = isCleanerAssignmentAcceptedRecord(b as Record<string, unknown>);
 
-  if (prevCleanerId === resolvedCleanerId && st === "assigned") {
+  if (prevCleanerId === resolvedCleanerId && st === "assigned" && acceptanceComplete) {
     return {
       ok: true,
       cleanerId: resolvedCleanerId,
