@@ -9,7 +9,7 @@ export const QUOTE_UNSURE_SERVICE_SLUG = "unsure";
 export const QUOTE_UNSURE_SERVICE_NAME = "Not sure — recommend for me";
 
 /** Pricing service slugs where optional add-ons are not offered on the quote form. */
-export const QUOTE_SERVICES_WITHOUT_EXTRAS = new Set(["deep", "move"]);
+export const QUOTE_SERVICES_WITHOUT_EXTRAS = new Set<string>();
 
 export function quoteServiceShowsExtras(primaryServiceSlug: string | null): boolean {
   if (!primaryServiceSlug || primaryServiceSlug === QUOTE_UNSURE_SERVICE_SLUG) return false;
@@ -22,6 +22,24 @@ export function extrasForSelectedService(
 ): QuotePublicServiceExtra[] {
   if (!quoteServiceShowsExtras(primaryServiceSlug)) return [];
   return services.find((service) => service.slug === primaryServiceSlug)?.extras ?? [];
+}
+
+/** Union of add-ons allowed across one or more selected pricing services. */
+export function extrasForSelectedServices(
+  selectedServiceSlugs: string[],
+  services: QuotePublicService[],
+  allExtras: QuotePublicExtra[],
+): QuotePublicExtra[] {
+  const allowedSlugs = new Set<string>();
+  for (const slug of selectedServiceSlugs) {
+    const service = services.find((s) => s.slug === slug);
+    if (!service) continue;
+    for (const extra of service.extras) {
+      allowedSlugs.add(extra.slug);
+    }
+  }
+  if (allowedSlugs.size === 0) return [];
+  return allExtras.filter((extra) => allowedSlugs.has(extra.slug));
 }
 
 export function extraAllowedForService(
