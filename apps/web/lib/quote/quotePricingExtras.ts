@@ -7,6 +7,7 @@ import {
   BOOKING_V2_INTERNAL_EXTRA_SLUGS,
   parseBookingV2CatalogConfig,
 } from "@/lib/booking-v2/bookingV2ServiceDefinitions";
+import { extraSlugsForService } from "@/lib/booking-v2/serviceExtraSlugs";
 import { DB_SLUG_MAP, EXTRA_TYPE_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 
@@ -105,7 +106,12 @@ export function filterExtrasForPricingService(
   configJson?: unknown,
 ): QuotePricingServiceExtra[] {
   const serviceDef = bookingV2ServiceDefForPricingSlug(pricingServiceSlug, configJson);
-  const allowlist = serviceDef?.extraSlugs?.map(normalizeExtraSlug).filter(Boolean);
+  const bookingSlug = inferBookingV2SlugFromPricingSlug(pricingServiceSlug);
+  const catalogAllowlist = serviceDef?.extraSlugs?.map(normalizeExtraSlug).filter(Boolean);
+  const staticAllowlist = bookingSlug
+    ? extraSlugsForService(bookingSlug).map(normalizeExtraSlug)
+    : undefined;
+  const allowlist = catalogAllowlist?.length ? catalogAllowlist : staticAllowlist;
   const extraTypes = serviceDef?.extraTypes ?? extraTypesForPricingServiceSlug(pricingServiceSlug, configJson);
 
   return extras
