@@ -2,7 +2,7 @@ import { isAuthShellRoute } from "@/lib/auth/authShellRoutes";
 import { isOfficePortalPath } from "@/lib/auth/officePortalPath";
 
 /**
- * Routes that render `MarketingHomeHeader` (or `LegalPageShell` which includes it).
+ * Routes that render their own marketing header (`MarketingHomeHeader`, `QuotePageHeader`, or `LegalPageShell`).
  * Root `GlobalTopNav` must be hidden on these paths to avoid duplicate headers.
  */
 const MARKETING_HOME_HEADER_PATHS = new Set([
@@ -11,6 +11,7 @@ const MARKETING_HOME_HEADER_PATHS = new Set([
   "/faq",
   "/reviews",
   "/contact",
+  "/quote",
   "/maid-services-cape-town",
   "/cleaning-prices-cape-town",
   "/privacy-policy",

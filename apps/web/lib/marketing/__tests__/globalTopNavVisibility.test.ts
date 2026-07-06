@@ -12,6 +12,7 @@ describe("globalTopNavVisibility", () => {
       "/faq",
       "/reviews",
       "/contact",
+      "/quote",
       "/maid-services-cape-town",
       "/cleaning-prices-cape-town",
       "/privacy-policy",
@@ -26,7 +27,6 @@ describe("globalTopNavVisibility", () => {
     expect(shouldHideGlobalTopNav("/services")).toBe(false);
     expect(shouldHideGlobalTopNav("/locations")).toBe(false);
     expect(shouldHideGlobalTopNav("/blog")).toBe(false);
-    expect(shouldHideGlobalTopNav("/quote")).toBe(false);
   });
 
   it("hides GlobalTopNav on office portal but not office-cleaning SEO landings", () => {
