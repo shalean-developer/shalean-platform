@@ -53,7 +53,7 @@ describe("customerPaymentRowDisplay", () => {
           payment_status: "pending_monthly",
           monthly_invoice_id: "inv-1",
           payment_completed_at: null,
-          paystack_reference: null,
+          paystack_reference: "",
           amount_paid_cents: 0,
         }),
       ),
@@ -74,7 +74,7 @@ describe("customerPaymentRowDisplay", () => {
         raw({
           status: "pending_payment",
           payment_completed_at: null,
-          paystack_reference: null,
+          paystack_reference: "",
           amount_paid_cents: 0,
         }),
       ),

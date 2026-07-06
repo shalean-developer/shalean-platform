@@ -61,7 +61,10 @@ function buildFakeAdmin(opts: {
                   }
                   if (!profileRow) return { data: null, error: null };
                   if (_cols === "id") {
-                    return { data: { id: profileRow.id }, error: null };
+                    return {
+                      data: { id: profileRow.id, billing_type: null, schedule_type: null },
+                      error: null,
+                    };
                   }
                   return {
                     data: {

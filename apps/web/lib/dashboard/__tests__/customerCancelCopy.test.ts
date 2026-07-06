@@ -37,7 +37,7 @@ describe("customerCancelBookingHint", () => {
         status: "pending_payment",
         payment_completed_at: null,
         amount_paid_cents: 0,
-        paystack_reference: null,
+        paystack_reference: "",
       }),
     );
     expect(hint).toContain("before payment is taken");
@@ -51,7 +51,7 @@ describe("customerCancelBookingHint", () => {
         payment_status: "pending_monthly",
         payment_completed_at: null,
         amount_paid_cents: 0,
-        paystack_reference: null,
+        paystack_reference: "",
       }),
     );
     expect(hint.toLowerCase()).toContain("monthly invoice");

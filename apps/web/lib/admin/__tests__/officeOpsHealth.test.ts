@@ -367,7 +367,7 @@ describe("assembleOfficeOpsHealthResponse", () => {
       scanLimit: 100,
       findings: [
         {
-          code: "payment_verified_not_finalized",
+          code: "payment_verified_not_finalized" as const,
           severity: "critical" as const,
           count: 1,
           message: "Verified Paystack payment has an unresolved finalization/reconciliation job.",
@@ -395,6 +395,7 @@ describe("assembleOfficeOpsHealthResponse", () => {
       dbOk: true,
       systemErrorRows: [],
       cronErrorRows: [],
+      cronSuccessRows: [],
       paymentDriftRows: [],
       notificationRows: [],
       whatsappPausedUntil: null,

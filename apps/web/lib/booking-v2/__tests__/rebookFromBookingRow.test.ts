@@ -37,7 +37,7 @@ describe("rebookFromBookingRow", () => {
   });
 
   it("maps row fields and clears schedule/cleaners", () => {
-    const patch = bookingV2FormPatchFromBookingRow(baseRow(), "regular-cleaning", "pick");
+    const patch = bookingV2FormPatchFromBookingRow(baseRow(), "regular-cleaning", "individual_cleaners");
     expect(patch.suburb).toBe("Sea Point");
     expect(patch.address).toBe("12 Main Rd");
     expect(patch.serviceDetails).toEqual({ bedrooms: "3", bathrooms: "2", propertyType: "house" });
