@@ -1,4 +1,7 @@
-import type { BookingV2ExtraTypeFilter } from "@/lib/booking-v2/bookingV2CatalogTypes";
+import type {
+  BookingV2ExtraTypeFilter,
+  BookingV2ServiceDefinition,
+} from "@/lib/booking-v2/bookingV2CatalogTypes";
 import {
   buildDefaultBookingV2CatalogConfig,
   BOOKING_V2_INTERNAL_EXTRA_SLUGS,
@@ -23,8 +26,32 @@ export type QuotePricingServiceExtra = {
   is_popular: boolean;
 };
 
+/**
+ * Quote `pricing_services.slug` → booking v2 service used for add-on resolution.
+ * Matches checkout: each line gets the same extras as its booking flow service card.
+ */
+export const QUOTE_PRICING_TO_BOOKING_V2: Record<string, ServiceSlug> = {
+  quick: "office-cleaning",
+  office: "office-cleaning",
+  standard: "regular-cleaning",
+  airbnb: "airbnb-cleaning",
+  deep: "deep-cleaning",
+  move: "moving-cleaning",
+  carpet: "carpet-cleaning",
+};
+
 function normalizeExtraSlug(slug: string): string {
   return slug.replace(/_/g, "-");
+}
+
+function parseBookingV2Config(configJson?: unknown) {
+  return (
+    parseBookingV2CatalogConfig(
+      configJson && typeof configJson === "object"
+        ? (configJson as Record<string, unknown>).booking_v2
+        : null,
+    ) ?? buildDefaultBookingV2CatalogConfig()
+  );
 }
 
 function extraTypesFromStaticMaps(pricingServiceSlug: string): BookingV2ExtraTypeFilter[] {
@@ -37,42 +64,39 @@ function extraTypesFromStaticMaps(pricingServiceSlug: string): BookingV2ExtraTyp
     }
   }
   if (types.size > 0) return [...types];
-  // Office / quick lines and other admin-added slugs default to maintenance-style add-ons.
   return ["light", "all"];
 }
 
-function serviceDefsForPricingSlug(
+function inferBookingV2SlugFromPricingSlug(pricingServiceSlug: string): ServiceSlug | null {
+  const mapped = QUOTE_PRICING_TO_BOOKING_V2[pricingServiceSlug];
+  if (mapped) return mapped;
+
+  const matches = (Object.entries(DB_SLUG_MAP) as [ServiceSlug, string][])
+    .filter(([, pricingSlug]) => pricingSlug === pricingServiceSlug)
+    .map(([serviceSlug]) => serviceSlug);
+
+  return matches.length === 1 ? matches[0] : null;
+}
+
+/** Single booking v2 service definition for a quote pricing line (same as checkout catalog). */
+export function bookingV2ServiceDefForPricingSlug(
   pricingServiceSlug: string,
-  configJson: unknown,
-): ReturnType<typeof buildDefaultBookingV2CatalogConfig>["services"] {
-  const catalog =
-    parseBookingV2CatalogConfig(
-      configJson && typeof configJson === "object"
-        ? (configJson as Record<string, unknown>).booking_v2
-        : null,
-    ) ?? buildDefaultBookingV2CatalogConfig();
+  configJson?: unknown,
+): BookingV2ServiceDefinition | null {
+  const bookingSlug = inferBookingV2SlugFromPricingSlug(pricingServiceSlug);
+  if (!bookingSlug) return null;
 
-  const matches = catalog.services.filter(
-    (def) =>
-      def.isActive !== false &&
-      (def.pricingSlug === pricingServiceSlug || def.slug === pricingServiceSlug),
-  );
-
-  return matches.length ? matches : [];
+  const catalog = parseBookingV2Config(configJson);
+  return catalog.services.find((def) => def.isActive !== false && def.slug === bookingSlug) ?? null;
 }
 
 export function extraTypesForPricingServiceSlug(
   pricingServiceSlug: string,
   configJson?: unknown,
 ): BookingV2ExtraTypeFilter[] {
-  const defs = serviceDefsForPricingSlug(pricingServiceSlug, configJson);
-  if (!defs.length) return extraTypesFromStaticMaps(pricingServiceSlug);
-
-  const types = new Set<BookingV2ExtraTypeFilter>();
-  for (const def of defs) {
-    for (const type of def.extraTypes) types.add(type);
-  }
-  return types.length ? [...types] : extraTypesFromStaticMaps(pricingServiceSlug);
+  const def = bookingV2ServiceDefForPricingSlug(pricingServiceSlug, configJson);
+  if (def?.extraTypes.length) return [...def.extraTypes];
+  return extraTypesFromStaticMaps(pricingServiceSlug);
 }
 
 export function filterExtrasForPricingService(
@@ -80,12 +104,9 @@ export function filterExtrasForPricingService(
   extras: QuotePricingExtraRow[],
   configJson?: unknown,
 ): QuotePricingServiceExtra[] {
-  const defs = serviceDefsForPricingSlug(pricingServiceSlug, configJson);
-  const allowlists = defs
-    .map((def) => def.extraSlugs?.map(normalizeExtraSlug).filter(Boolean))
-    .filter((list): list is string[] => Boolean(list?.length));
-  const allowlist = allowlists.length === 1 ? allowlists[0] : undefined;
-  const extraTypes = extraTypesForPricingServiceSlug(pricingServiceSlug, configJson);
+  const serviceDef = bookingV2ServiceDefForPricingSlug(pricingServiceSlug, configJson);
+  const allowlist = serviceDef?.extraSlugs?.map(normalizeExtraSlug).filter(Boolean);
+  const extraTypes = serviceDef?.extraTypes ?? extraTypesForPricingServiceSlug(pricingServiceSlug, configJson);
 
   return extras
     .filter((extra) => !BOOKING_V2_INTERNAL_EXTRA_SLUGS.has(extra.slug))
