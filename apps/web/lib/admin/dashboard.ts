@@ -629,6 +629,8 @@ export async function updateCleanerProfile(
     is_available?: boolean;
     status?: "available" | "busy" | "offline";
     availability_weekdays?: string[];
+    /** Canonical tenure anchor for payout tier (admin Office panel). */
+    joined_at?: string | null;
   },
 ) {
   const token = await getAdminToken();

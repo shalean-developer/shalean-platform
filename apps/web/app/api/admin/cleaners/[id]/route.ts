@@ -93,6 +93,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     availability_end?: string | null;
     is_available?: boolean;
     availability_weekdays?: string[];
+    joined_at?: string | null;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -134,6 +135,18 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
   if (body.availability_start !== undefined) updates.availability_start = body.availability_start || null;
   if (body.availability_end !== undefined) updates.availability_end = body.availability_end || null;
+  if (body.joined_at !== undefined) {
+    const raw = body.joined_at === null ? "" : String(body.joined_at).trim();
+    if (raw === "") {
+      updates.joined_at = null;
+    } else {
+      const parsed = new Date(raw);
+      if (Number.isNaN(parsed.getTime())) {
+        return NextResponse.json({ error: "Invalid joined_at date." }, { status: 400 });
+      }
+      updates.joined_at = parsed.toISOString();
+    }
+  }
   if (body.is_available !== undefined) {
     updates.is_available = Boolean(body.is_available);
     if (body.status === undefined) {
