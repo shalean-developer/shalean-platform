@@ -183,6 +183,7 @@ export async function updatePendingPaymentBookingForInit(
     /** Admin create: preferred cleaner before payment (`cleaners.id`). */
     selected_cleaner_id?: string | null;
     assignment_type?: string | null;
+    cleaner_count?: number | null;
     price_snapshot?: Record<string, unknown> | null;
     /** When set, persisted to `booking_line_items` after the row update (must sum to `totalPriceZar` in cents). */
     checkoutLineItems?: readonly BookingLineItemInsert[] | null;
@@ -262,6 +263,11 @@ export async function updatePendingPaymentBookingForInit(
             selected_cleaner_id: params.selected_cleaner_id,
             assignment_type: params.assignment_type ?? "user_selected",
           }
+        : {}),
+      ...(typeof params.cleaner_count === "number" &&
+      Number.isFinite(params.cleaner_count) &&
+      params.cleaner_count > 1
+        ? { cleaner_count: Math.round(params.cleaner_count) }
         : {}),
       ...(tenureShare != null ? { cleaner_share_percentage: tenureShare } : {}),
     })

@@ -66,6 +66,7 @@ export type ProvisionV2RecurringPlanParams = {
   suburb: string;
   rooms: number;
   bathrooms: number;
+  preferredCleanerIds?: readonly string[];
 };
 
 export type ProvisionV2RecurringPlanResult =
@@ -153,6 +154,9 @@ export async function provisionV2RecurringPlan(
       email: "",
     },
     total_zar: params.totalPaidZar,
+    ...(params.preferredCleanerIds && params.preferredCleanerIds.length > 0
+      ? { selectedCleanerIds: [...params.preferredCleanerIds] }
+      : {}),
   };
 
   const { data: plan, error: insertErr } = await admin
@@ -168,6 +172,7 @@ export async function provisionV2RecurringPlan(
       next_run_date: nextRun,
       booking_snapshot_template: bookingSnapshotTemplate,
       monthly_pattern: "mirror_start_date",
+      ...(params.preferredCleanerIds?.[0] ? { preferred_cleaner_id: params.preferredCleanerIds[0] } : {}),
     })
     .select("id")
     .single();

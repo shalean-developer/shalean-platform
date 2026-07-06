@@ -85,6 +85,7 @@ import {
   buildCanonicalPaystackCheckoutMetadata,
   PAYSTACK_CHECKOUT_METADATA_CONTRACT_VERSION,
 } from "@/lib/booking/bookingPaystackCheckoutMetadataFlat";
+import { normalizePreferredCleanerIds } from "@/lib/booking/persistPreferredCleaners";
 import { canonicalizeBookingServiceSlug } from "@/lib/booking/canonicalizeBookingServiceSlug";
 
 export { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE };
@@ -97,6 +98,18 @@ function boolishInit(raw: unknown): boolean {
 
 function clamp(n: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, n));
+}
+
+function parsePreferredCleanerIdsFromInitializeBody(b: Record<string, unknown>): string[] {
+  const raw: string[] = [];
+  if (Array.isArray(b.selected_cleaner_ids)) {
+    for (const x of b.selected_cleaner_ids) {
+      if (typeof x === "string") raw.push(x);
+    }
+  }
+  const legacy = typeof b.cleanerId === "string" ? b.cleanerId.trim() : "";
+  if (legacy) raw.unshift(legacy);
+  return normalizePreferredCleanerIds(raw);
 }
 
 function buildBookingSnapshot(params: {
@@ -118,6 +131,7 @@ function buildBookingSnapshot(params: {
     type: BookingCustomerAuthType;
   };
   subscriptionFrequency: "weekly" | "biweekly" | "monthly" | null;
+  selectedCleanerIds?: string[];
 }) {
   return {
     v: 1,
@@ -130,6 +144,9 @@ function buildBookingSnapshot(params: {
     total_zar: params.totalZar,
     cleaner_id: params.cleanerId,
     cleaner_name: params.cleanerName,
+    ...(params.selectedCleanerIds && params.selectedCleanerIds.length > 0
+      ? { selectedCleanerIds: params.selectedCleanerIds }
+      : {}),
     subscription:
       params.subscriptionFrequency != null
         ? { frequency: params.subscriptionFrequency, discount_zar: params.planDiscountZar }
@@ -585,8 +602,8 @@ export async function processPaystackInitializeBody(
     });
   }
 
-  const cleanerIdRaw = typeof b.cleanerId === "string" ? b.cleanerId.trim() : "";
-  const cleanerId = /^[0-9a-f-]{36}$/i.test(cleanerIdRaw) ? cleanerIdRaw : null;
+  const selectedCleanerIds = parsePreferredCleanerIdsFromInitializeBody(b);
+  const cleanerId = selectedCleanerIds[0] ?? null;
   const cleanerName = typeof b.cleanerName === "string" ? b.cleanerName.trim() : null;
   const subscriptionFrequency =
     (b as { metadata?: { subscriptionFrequency?: unknown } }).metadata?.subscriptionFrequency === "weekly" ||
@@ -608,6 +625,7 @@ export async function processPaystackInitializeBody(
     cleanerName,
     customer,
     subscriptionFrequency,
+    ...(selectedCleanerIds.length > 0 ? { selectedCleanerIds } : {}),
   });
 
   const pricingTarget = checkout.ok
@@ -706,6 +724,7 @@ export async function processPaystackInitializeBody(
       ...(slotF?.slotDuplicateExempt ? { slotDuplicateExempt: true } : {}),
       ...(slotF?.adminForceSlotOverride ? { adminForceSlotOverride: true } : {}),
       ...(cleanerId ? { selected_cleaner_id: cleanerId, assignment_type: "user_selected" } : {}),
+      ...(selectedCleanerIds.length > 1 ? { cleaner_count: selectedCleanerIds.length } : {}),
     });
     if (!upd.ok) {
       if (createdPendingBookingId && createdPendingBookingId === pricingTarget.bookingId) {

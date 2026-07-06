@@ -4,7 +4,7 @@ import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { calculateNextRunDate } from "@/lib/recurring/calculateNextRunDate";
 import { previewFromBookingTemplate } from "@/lib/recurring/previewFromBookingTemplate";
 import { recurringAdminPatchFromBody } from "@/lib/recurring/recurringAdminPatchFromBody";
-import { parsePreferredCleanerIdFromBody } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
+import { parsePreferredCleanerIdsFromBody } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
 import { propagateRecurringPlanToGeneratedBookings } from "@/lib/recurring/propagateRecurringPlanToGeneratedBookings";
 import {
   recurringPlanScheduleChanged,
@@ -100,12 +100,19 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   const patch = recurringAdminPatchFromBody(body, existing as Record<string, unknown>);
 
-  const preferredCleanerParse = await parsePreferredCleanerIdFromBody(body.preferred_cleaner_id, admin);
-  if (!preferredCleanerParse.ok) {
-    return NextResponse.json({ error: preferredCleanerParse.error }, { status: 400 });
+  const preferredCleanerIdsParse = await parsePreferredCleanerIdsFromBody(body, admin);
+  if (!preferredCleanerIdsParse.ok) {
+    return NextResponse.json({ error: preferredCleanerIdsParse.error }, { status: 400 });
   }
-  if (preferredCleanerParse.value !== undefined) {
-    patch.preferred_cleaner_id = preferredCleanerParse.value;
+  if (preferredCleanerIdsParse.ids.length > 0 || "preferred_cleaner_id" in body || "preferred_cleaner_ids" in body) {
+    patch.preferred_cleaner_id = preferredCleanerIdsParse.ids[0] ?? null;
+    const tpl = patch.booking_snapshot_template ?? existing.booking_snapshot_template;
+    if (tpl && typeof tpl === "object" && !Array.isArray(tpl)) {
+      patch.booking_snapshot_template = {
+        ...(tpl as Record<string, unknown>),
+        selectedCleanerIds: preferredCleanerIdsParse.ids,
+      };
+    }
   }
 
   if (Object.keys(patch).length === 0) {

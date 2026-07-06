@@ -8,6 +8,7 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { createZohoInvoice, markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 import { resolveZohoCustomerContactForBooking } from "@/lib/zoho/resolveZohoCustomerContact";
 import { provisionV2RecurringPlan } from "@/lib/recurring/provisionV2RecurringPlan";
+import { preferredCleanerIdsFromSnapshot } from "@/lib/booking/persistPreferredCleaners";
 
 /**
  * Idempotent post-payment side effects for a paid booking:
@@ -45,6 +46,7 @@ type PaidBookingRow = {
   recurring_days?: string[] | null;
   recurring_start_date?: string | null;
   recurring_end_date?: string | null;
+  selected_cleaner_id?: string | null;
 };
 
 function shouldCreateBookingZohoInvoice(row: PaidBookingRow): boolean {
@@ -84,6 +86,7 @@ async function loadPaidBookingRow(
     "recurring_days",
     "recurring_start_date",
     "recurring_end_date",
+    "selected_cleaner_id",
   ].join(", ");
 
   const { data } = await admin.from("bookings").select(select).eq("id", bookingId).maybeSingle();
@@ -210,6 +213,7 @@ export async function syncPaidBookingSideEffects(
         suburb: row.suburb ?? "",
         rooms: row.rooms ?? 0,
         bathrooms: row.bathrooms ?? 0,
+        preferredCleanerIds: preferredCleanerIdsFromSnapshot(row.booking_snapshot, row.selected_cleaner_id),
       });
 
       if (!planResult.ok) {

@@ -65,6 +65,7 @@ export function buildAdminRecurringQuickSnapshot(params: {
   customerEmail: string;
   customerPhone: string;
   userId: string;
+  selectedCleanerIds?: readonly string[];
 }): BookingSnapshotV1 | null {
   const email = normalizeEmail(params.customerEmail);
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return null;
@@ -108,5 +109,8 @@ export function buildAdminRecurringQuickSnapshot(params: {
     discount_zar: 0,
     promo_code: null,
     total_zar: Math.max(1, Math.round(params.priceZar)),
+    ...(params.selectedCleanerIds && params.selectedCleanerIds.length > 0
+      ? { selectedCleanerIds: [...params.selectedCleanerIds] }
+      : {}),
   };
 }

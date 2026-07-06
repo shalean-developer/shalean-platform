@@ -1,3 +1,4 @@
+import { syncPreferredCleanerRosterFromBookingRow } from "@/lib/booking/persistPreferredCleaners";
 import { resolveCustomerPhoneFromAuthAdmin } from "@/lib/admin/adminBookingCustomerContact";
 import { bookingCustomerKey, bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
@@ -643,6 +644,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     cleaner_count?: number | null;
     assigned_team_id?: string | null;
     booking_type?: string | null;
+    selected_cleaner_id?: string | null;
   };
   const pendingExisting = (existing ?? null) as PendingPersistedRow | null;
   const locationSource: BookingLocationSource = {
@@ -970,6 +972,16 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         paystackReference: input.paystackReference,
       });
     }
+
+    await syncPreferredCleanerRosterFromBookingRow(supabase, id, {
+      booking_snapshot: pendingExisting?.booking_snapshot ?? bookingSnapshotMerged,
+      selected_cleaner_id:
+        userConfirmedCleanerId ??
+        normalizedPickedCleaner ??
+        (typeof existingPersistedSelectedCleanerId === "string" ? existingPersistedSelectedCleanerId : null) ??
+        pendingExisting?.selected_cleaner_id ??
+        null,
+    });
 
     const referralCode = String(input.paystackMetadata?.referral_code ?? input.paystackMetadata?.client_referralCode ?? "").trim();
     if (referralCode) {

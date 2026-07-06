@@ -13,6 +13,12 @@ import { adminBookingLocationFingerprint, adminBookingServiceSlug } from "@/lib/
 import { resolveMonthlyBookingDuplicateRace } from "@/lib/admin/adminBookingPostInsertRace";
 import { invalidateCleanerAvailabilityCache } from "@/lib/admin/cleanerAvailabilityCache";
 import { findCleanerSlotConflict } from "@/lib/admin/adminCleanerSlotConflict";
+import { parseAdminSelectedCleanerIds } from "@/lib/admin/parseAdminSelectedCleanerIds";
+import {
+  adminPreferredCleanerInsertExtras,
+  patchAdminPerBookingPreferredCleaners,
+  syncAdminPreferredCleanerRoster,
+} from "@/lib/admin/persistAdminPreferredCleaners";
 import { applyActiveAdminBookingSlotFilters } from "@/lib/booking/activeAdminBookingSlot";
 import { buildAdminPaystackLockedPayload } from "@/lib/admin/buildAdminPaystackLockedPayload";
 import { assertAdminBookingSlotAllowed, normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
@@ -815,7 +821,9 @@ export async function GET(request: Request) {
 const ADMIN_BOOKING_SERVICE_IDS = new Set<string>(["standard", "airbnb", "deep", "move", "carpet"]);
 
 /**
- * Admin: create a booking for an existing customer (monthly → no Paystack; per_booking → Paystack + notifications).
+ * Admin: create a booking for an existing customer.
+ * `billing_type` in the body (`per_booking` | `monthly`) selects the create path; defaults to the customer profile.
+ * Monthly → no Paystack; per_booking → Paystack + notifications.
  */
 export async function POST(request: Request) {
   const auth = await requireAdminApi(request);
@@ -928,7 +936,6 @@ export async function POST(request: Request) {
     body.admin_slot_override === true ||
     body.admin_slot_override === "true" ||
     (typeof body.admin_slot_override === "string" && body.admin_slot_override.trim().toLowerCase() === "true");
-  const selectedCleanerRaw = typeof body.selected_cleaner_id === "string" ? body.selected_cleaner_id.trim() : "";
   const ignoreCleanerSlotConflict =
     body.ignore_cleaner_slot_conflict === true ||
     body.ignore_cleaner_slot_conflict === "true" ||
@@ -953,30 +960,28 @@ export async function POST(request: Request) {
 
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
 
-  let selectedCleanerId: string | null = null;
-  if (selectedCleanerRaw && /^[0-9a-f-]{36}$/i.test(selectedCleanerRaw)) {
-    const { data: clRow } = await admin.from("cleaners").select("id").eq("id", selectedCleanerRaw).maybeSingle();
-    if (clRow && typeof (clRow as { id?: unknown }).id === "string") {
-      selectedCleanerId = selectedCleanerRaw;
-    }
-  }
+  const selectedCleanerIds = await parseAdminSelectedCleanerIds(body, admin);
+  const selectedCleanerId = selectedCleanerIds[0] ?? null;
+  const preferredCleanerExtras = adminPreferredCleanerInsertExtras(selectedCleanerIds);
 
-  if (selectedCleanerId && !ignoreCleanerSlotConflict) {
-    const conflictBookingId = await findCleanerSlotConflict(admin, {
-      cleanerId: selectedCleanerId,
-      dateYmd: date,
-      timeHm,
-    });
-    if (conflictBookingId) {
-      return NextResponse.json(
-        {
-          error:
-            "This cleaner already has an active booking (or reserved slot) at this date and time. Open the conflicting row, or submit again with ignore_cleaner_slot_conflict=true after acknowledging the overlap.",
-          cleaner_slot_conflict: true,
-          conflicting_booking_id: conflictBookingId,
-        },
-        { status: 409 },
-      );
+  if (selectedCleanerIds.length > 0 && !ignoreCleanerSlotConflict) {
+    for (const cleanerId of selectedCleanerIds) {
+      const conflictBookingId = await findCleanerSlotConflict(admin, {
+        cleanerId,
+        dateYmd: date,
+        timeHm,
+      });
+      if (conflictBookingId) {
+        return NextResponse.json(
+          {
+            error:
+              "A selected cleaner already has an active booking (or reserved slot) at this date and time. Open the conflicting row, or submit again with ignore_cleaner_slot_conflict=true after acknowledging the overlap.",
+            cleaner_slot_conflict: true,
+            conflicting_booking_id: conflictBookingId,
+          },
+          { status: 409 },
+        );
+      }
     }
   }
 
@@ -1059,8 +1064,11 @@ export async function POST(request: Request) {
     return bail(NextResponse.json({ error: profResult.error }, { status: 500 }));
   }
 
-  const billingType = String(profResult.billing_type ?? "per_booking").toLowerCase();
+  const profileBillingType = String(profResult.billing_type ?? "per_booking").toLowerCase();
   const scheduleType = String(profResult.schedule_type ?? "on_demand").toLowerCase();
+  const billingTypeRaw = typeof body.billing_type === "string" ? body.billing_type.trim().toLowerCase() : "";
+  const createBillingType =
+    billingTypeRaw === "monthly" || billingTypeRaw === "per_booking" ? billingTypeRaw : profileBillingType;
 
   const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(userId);
   if (authErr || !authUser?.user?.email) {
@@ -1077,7 +1085,7 @@ export async function POST(request: Request) {
   const serviceId: BookingServiceId = parseBookingServiceId(serviceRaw) ?? "standard";
   const paymentLinkTtlHours = Math.max(1, Math.round(adminPaymentLinkTtlMs() / (60 * 60 * 1000)));
 
-  if (billingType === "monthly") {
+  if (createBillingType === "monthly") {
     if (selectedCleanerId && !ignoreCleanerSlotConflict) {
       const lateConflictMonthly = await findCleanerSlotConflict(admin, {
         cleanerId: selectedCleanerId,
@@ -1287,6 +1295,7 @@ export async function POST(request: Request) {
         booking_source: "admin",
         created_by_admin_id: auth.userId,
         ...equipmentPatch,
+        ...preferredCleanerExtras.rowExtras,
         ...(selectedCleanerId
           ? {
               selected_cleaner_id: selectedCleanerId,
@@ -1319,6 +1328,9 @@ export async function POST(request: Request) {
               admin_force_slot_override: true,
             }
           : {}),
+        is_monthly_billing_booking: true,
+        payment_status: "pending_monthly",
+        billing_type: "recurring_invoice",
       },
       rooms,
       bathrooms,
@@ -1331,6 +1343,7 @@ export async function POST(request: Request) {
         admin_notes: notes,
         customer_notes: notes,
         service_slug: serviceSlug,
+        ...preferredCleanerExtras.snapshotExtension,
         ...(ignoreCleanerSlotConflict && cleanerSlotOverrideReasonForDb
           ? { cleaner_slot_override_reason: cleanerSlotOverrideReasonForDb }
           : {}),
@@ -1510,6 +1523,7 @@ export async function POST(request: Request) {
     }
 
     await runAdminBookingPostCreateNormalizationAndEarnings(admin, newBookingId, "admin_booking_create_monthly");
+    await syncAdminPreferredCleanerRoster(admin, newBookingId, selectedCleanerIds);
 
     void logSystemEvent({
       level: "info",
@@ -1554,36 +1568,12 @@ export async function POST(request: Request) {
     return NextResponse.json(monthlyBody);
   }
 
-  if (billingType !== "per_booking") {
-    return bail(NextResponse.json({ error: "Unsupported billing_type on profile." }, { status: 400 }));
+  if (createBillingType !== "per_booking") {
+    return bail(NextResponse.json({ error: "Unsupported billing_type for this booking." }, { status: 400 }));
   }
 
   // Per-booking / Paystack: intentionally no post-insert race cleanup; rely on idempotency + duplicate pre-check.
   // If duplicates slip through after payment, reconcile Paystack before deleting rows.
-
-  const { data: profPaystackGate, error: profGateErr } = await admin
-    .from("user_profiles")
-    .select("billing_type")
-    .eq("id", userId)
-    .maybeSingle();
-  if (profGateErr) {
-    await reportOperationalIssue("error", "api/admin/bookings POST paystack_gate", profGateErr.message);
-    return bail(NextResponse.json({ error: profGateErr.message }, { status: 500 }));
-  }
-  const gateBilling = String((profPaystackGate as { billing_type?: string } | null)?.billing_type ?? "per_booking")
-    .trim()
-    .toLowerCase();
-  if (gateBilling === "monthly") {
-    return bail(
-      NextResponse.json(
-        {
-          error:
-            "This customer is on monthly billing — Paystack checkout is disabled. Refresh the customer card and try again.",
-        },
-        { status: 409 },
-      ),
-    );
-  }
 
   /**
    * Paystack per-booking creates a `pending_payment` row with `amount_paid_cents=0` and
@@ -1605,24 +1595,26 @@ export async function POST(request: Request) {
     );
   }
 
-  if (selectedCleanerId && !ignoreCleanerSlotConflict) {
-    const lateConflictPaystack = await findCleanerSlotConflict(admin, {
-      cleanerId: selectedCleanerId,
-      dateYmd: date,
-      timeHm,
-    });
-    if (lateConflictPaystack) {
-      return bail(
-        NextResponse.json(
-          {
-            error:
-              "Another booking took this cleaner for this slot while you were submitting. Try again, or acknowledge the overlap.",
-            cleaner_slot_conflict: true,
-            conflicting_booking_id: lateConflictPaystack,
-          },
-          { status: 409 },
-        ),
-      );
+  if (selectedCleanerIds.length > 0 && !ignoreCleanerSlotConflict) {
+    for (const cleanerId of selectedCleanerIds) {
+      const lateConflictPaystack = await findCleanerSlotConflict(admin, {
+        cleanerId,
+        dateYmd: date,
+        timeHm,
+      });
+      if (lateConflictPaystack) {
+        return bail(
+          NextResponse.json(
+            {
+              error:
+                "Another booking took a selected cleaner for this slot while you were submitting. Try again, or acknowledge the overlap.",
+              cleaner_slot_conflict: true,
+              conflicting_booking_id: lateConflictPaystack,
+            },
+            { status: 409 },
+          ),
+        );
+      }
     }
   }
 
@@ -1649,7 +1641,9 @@ export async function POST(request: Request) {
     locked,
     relaxedLockValidation: true,
     tip: 0,
-    ...(selectedCleanerId ? { cleanerId: selectedCleanerId } : {}),
+    ...(selectedCleanerIds.length > 0
+      ? { cleanerId: selectedCleanerIds[0], selected_cleaner_ids: selectedCleanerIds }
+      : {}),
   };
 
   const paystackResult = await processPaystackInitializeBody(paystackBody, {
@@ -1719,6 +1713,7 @@ export async function POST(request: Request) {
       createdPaystackBookingId,
       "admin_booking_create_per_booking",
     );
+    await patchAdminPerBookingPreferredCleaners(admin, createdPaystackBookingId, selectedCleanerIds);
   }
 
   const perBody: Record<string, unknown> = {

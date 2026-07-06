@@ -7,7 +7,7 @@ import { compareYmd, todayJohannesburg } from "@/lib/recurring/johannesburgCalen
 import { firstOccurrenceOnOrAfter, type MonthlyPattern, type RecurringScheduleRow } from "@/lib/recurring/calculateNextRunDate";
 import { buildAdminRecurringQuickSnapshot, normalizeVisitTimeHm } from "@/lib/recurring/buildAdminRecurringQuickSnapshot";
 import { loadRecurringPageSummary } from "@/lib/recurring/loadRecurringPageSummary";
-import { parsePreferredCleanerIdFromBody } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
+import { parsePreferredCleanerIdsFromBody } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
 import { previewFromBookingTemplate } from "@/lib/recurring/previewFromBookingTemplate";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -115,6 +115,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "days_of_week must be a non-empty array of integers 1–7 (Mon–Sun)." }, { status: 400 });
   }
 
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+
+  const preferredCleanerIdsParse = await parsePreferredCleanerIdsFromBody(body, admin);
+  if (!preferredCleanerIdsParse.ok) {
+    return NextResponse.json({ error: preferredCleanerIdsParse.error }, { status: 400 });
+  }
+  const preferredCleanerIds = preferredCleanerIdsParse.ids;
+  const preferred_cleaner_id = preferredCleanerIds[0] ?? null;
+
   const quickCust = body.customer;
   const quickAddress = typeof body.address === "string" ? body.address.trim() : "";
   const isQuickCreate =
@@ -146,8 +156,7 @@ export async function POST(request: Request) {
     const svc: BookingServiceId = parseBookingServiceId(serviceRaw) ?? "standard";
     const visitHm = normalizeVisitTimeHm(typeof body.visit_time === "string" ? body.visit_time : undefined);
 
-    const adminEarly = getSupabaseAdmin();
-    if (!adminEarly) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+    const adminEarly = admin;
 
     let uid = customer_id_input;
     if (uid && /^[0-9a-f-]{36}$/i.test(uid)) {
@@ -178,6 +187,7 @@ export async function POST(request: Request) {
       customerEmail: emailRaw,
       customerPhone: phoneRaw,
       userId: uid,
+      ...(preferredCleanerIds.length > 0 ? { selectedCleanerIds: preferredCleanerIds } : {}),
     });
     if (!snap) {
       return NextResponse.json({ error: "Could not build booking snapshot from supplied fields." }, { status: 400 });
@@ -244,15 +254,14 @@ export async function POST(request: Request) {
       ? body.next_run_date
       : firstOccurrenceOnOrAfter(schedule, anchor);
 
-  const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-
-  const preferredCleanerParse = await parsePreferredCleanerIdFromBody(body.preferred_cleaner_id, admin);
-  if (!preferredCleanerParse.ok) {
-    return NextResponse.json({ error: preferredCleanerParse.error }, { status: 400 });
+  if (
+    preferredCleanerIds.length > 0 &&
+    template &&
+    typeof template === "object" &&
+    !Array.isArray(template)
+  ) {
+    template = { ...(template as Record<string, unknown>), selectedCleanerIds: preferredCleanerIds };
   }
-  const preferred_cleaner_id =
-    preferredCleanerParse.value === undefined ? null : preferredCleanerParse.value;
 
   const { data: created, error } = await admin
     .from("recurring_bookings")

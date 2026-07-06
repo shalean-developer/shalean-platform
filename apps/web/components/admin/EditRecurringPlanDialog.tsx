@@ -16,7 +16,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
-import { AdminRecurringCleanerSelect } from "@/components/admin/AdminRecurringCleanerSelect";
+import { AdminPreferredCleanerSelect } from "@/components/admin/create-booking/AdminPreferredCleanerSelect";
 import { cn } from "@/lib/utils";
 
 const WEEKDAY_SHORT = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"] as const;
@@ -66,7 +66,7 @@ function formFromPlan(plan: EditRecurringPlanTarget) {
     address: plan.template_location ?? "",
     service: serviceFromLabel(plan.service_label),
     visitTime: normalizeTimeInput(plan.template_visit_time),
-    preferredCleanerId: plan.preferred_cleaner_id ?? "",
+    preferredCleanerIds: plan.preferred_cleaner_id ? [plan.preferred_cleaner_id] : [],
   };
 }
 
@@ -141,7 +141,7 @@ export function EditRecurringPlanDialog({ open, plan, onOpenChange, onUpdated }:
           address,
           visit_time: form.visitTime || "09:00",
           service: form.service,
-          preferred_cleaner_id: form.preferredCleanerId.trim() || null,
+          preferred_cleaner_ids: form.preferredCleanerIds,
         }),
       });
       if (!res.ok) {
@@ -359,11 +359,11 @@ export function EditRecurringPlanDialog({ open, plan, onOpenChange, onUpdated }:
               />
             </div>
 
-            <AdminRecurringCleanerSelect
+            <AdminPreferredCleanerSelect
               id="er-cleaner"
-              value={form.preferredCleanerId}
-              onChange={(preferredCleanerId) =>
-                setForm((s) => (s ? { ...s, preferredCleanerId } : s))
+              value={form.preferredCleanerIds}
+              onChange={(preferredCleanerIds) =>
+                setForm((s) => (s ? { ...s, preferredCleanerIds } : s))
               }
               visitDate={form.startDate}
               visitTime={form.visitTime}

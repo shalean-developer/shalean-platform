@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from "react";
 import { Loader2, Search } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
@@ -31,9 +31,13 @@ import {
   type AdminEquipmentFieldsValue,
 } from "@/components/admin/create-booking/AdminEquipmentFields";
 import { AdminCustomerBillingSwitch } from "@/components/admin/create-booking/AdminCustomerBillingSwitch";
+import {
+  AdminBookingBillingMode,
+  type BookingBillingMode,
+} from "@/components/admin/create-booking/AdminBookingBillingMode";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
-import { fetchCleaners, type AdminCleanerRow } from "@/lib/admin/dashboard";
+import { AdminPreferredCleanerSelect } from "@/components/admin/create-booking/AdminPreferredCleanerSelect";
 import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 
 const LAST_BOOKING_STORAGE = "admin_create_booking_last_v1";
@@ -111,8 +115,8 @@ type FormState = {
   allowAdminSlotOverride: boolean;
   /** Extra slugs aligned with `pricing_extras.slug` / booking lock. */
   selectedExtras: string[];
-  /** Optional `cleaners.id` — stored as `selected_cleaner_id` for dispatch. */
-  selectedCleanerId: string;
+  /** Optional `cleaners.id` list — first is `selected_cleaner_id` for dispatch. */
+  selectedCleanerIds: string[];
   equipmentRequired: "yes" | "no" | "";
   equipmentQuote: EquipmentQuoteResult | null;
   equipmentFeeOverrideZar: string;
@@ -135,12 +139,16 @@ function emptyForm(): FormState {
     totalPaidZar: "",
     allowAdminSlotOverride: false,
     selectedExtras: [],
-    selectedCleanerId: "",
+    selectedCleanerIds: [],
     equipmentRequired: "",
     equipmentQuote: null,
     equipmentFeeOverrideZar: "",
     equipmentOverrideReason: "",
   };
+}
+
+function normBookingBillingMode(s: string): BookingBillingMode {
+  return s.toLowerCase() === "monthly" ? "monthly" : "per_booking";
 }
 
 function billingLabel(t: string): string {
@@ -229,7 +237,8 @@ function writeResendPrimaryPreference(bookingId: string, channel: "email" | "sms
 }
 
 async function openAdminBookingAndCopyUrl(bookingId: string): Promise<void> {
-  const path = `/admin/bookings/${bookingId}`;
+  const officeUi = typeof window !== "undefined" && window.location.pathname.startsWith("/office");
+  const path = officeUi ? `/office/bookings/${bookingId}` : `/admin/bookings/${bookingId}`;
   const url = typeof window !== "undefined" ? `${window.location.origin}${path}` : path;
   window.open(url, "_blank", "noopener,noreferrer");
   try {
@@ -240,16 +249,15 @@ async function openAdminBookingAndCopyUrl(bookingId: string): Promise<void> {
 }
 
 function AdminCreateBookingPage() {
+  const pathname = usePathname();
   const searchParams = useSearchParams();
+  const officeUi = pathname.startsWith("/office");
+  const bookingsListHref = officeUi ? "/office/bookings" : "/admin/bookings";
+  const customersCreateBase = officeUi ? "/office/customers/create" : "/admin/customers/create";
+  const bookingDetailPath = (bookingId: string) =>
+    officeUi ? `/office/bookings/${bookingId}` : `/admin/bookings/${bookingId}`;
   const [form, setForm] = useState<FormState>(emptyForm);
   const [pricingExtras, setPricingExtras] = useState<{ slug: string; name: string; price: number }[]>([]);
-  const [cleaners, setCleaners] = useState<AdminCleanerRow[]>([]);
-  /** When loaded, preferred-cleaner dropdown is grouped (available vs busy). */
-  const [slotAvailability, setSlotAvailability] = useState<{
-    available: AdminCleanerRow[];
-    busy: (AdminCleanerRow & { conflicting_booking_id: string })[];
-  } | null>(null);
-  const [slotAvailabilityLoading, setSlotAvailabilityLoading] = useState(false);
   const [searchHits, setSearchHits] = useState<CustomerHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [fieldError, setFieldError] = useState<string | null>(null);
@@ -277,6 +285,7 @@ function AdminCreateBookingPage() {
   const [paymentExpiryTick, setPaymentExpiryTick] = useState(0);
   const [savedAddresses, setSavedAddresses] = useState<CustomerAddressRow[]>([]);
   const [lastVisitPriceZar, setLastVisitPriceZar] = useState<number | null>(null);
+  const [bookingBillingType, setBookingBillingType] = useState<BookingBillingMode>("per_booking");
   const submitGuard = useRef(false);
   const forceDuplicateNextSubmit = useRef(false);
   const forceIgnoreCleanerSlotConflictNextSubmit = useRef(false);
@@ -337,6 +346,7 @@ function AdminCreateBookingPage() {
       const json = (await res.json().catch(() => ({}))) as { customers?: CustomerHit[] };
       const hit = (json.customers ?? [])[0];
       if (!hit || cancelled) return;
+      setBookingBillingType(normBookingBillingMode(hit.billing_type));
       setForm((s) => {
         if (s.selectedCustomer?.id === hit.id) return s;
         return {
@@ -351,21 +361,6 @@ function AdminCreateBookingPage() {
       cancelled = true;
     };
   }, [userPrefill]);
-
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      try {
-        const list = await fetchCleaners();
-        if (!cancelled) setCleaners(list ?? []);
-      } catch {
-        if (!cancelled) setCleaners([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -421,51 +416,7 @@ function AdminCreateBookingPage() {
     setCleanerSlotConflictId(null);
     setCleanerSlotConflictAck(false);
     setCleanerSlotOverrideReason("");
-  }, [form.selectedCleanerId, form.date, form.time]);
-
-  useEffect(() => {
-    const d = form.date.trim();
-    const timeHm = normalizeTimeHm(form.time);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(d) || !/^\d{2}:\d{2}$/.test(timeHm)) {
-      setSlotAvailability(null);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      setSlotAvailabilityLoading(true);
-      try {
-        const sb = getSupabaseBrowser();
-        const token = (await sb?.auth.getSession())?.data.session?.access_token;
-        if (!token) {
-          if (!cancelled) setSlotAvailability(null);
-          return;
-        }
-        const res = await fetch(
-          `/api/admin/cleaners/available?date=${encodeURIComponent(d)}&time=${encodeURIComponent(timeHm)}`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
-        const json = (await res.json().catch(() => ({}))) as {
-          available?: AdminCleanerRow[];
-          busy?: (AdminCleanerRow & { conflicting_booking_id: string })[];
-        };
-        if (!res.ok || cancelled) {
-          if (!cancelled) setSlotAvailability(null);
-          return;
-        }
-        setSlotAvailability({
-          available: Array.isArray(json.available) ? json.available : [],
-          busy: Array.isArray(json.busy) ? json.busy : [],
-        });
-      } catch {
-        if (!cancelled) setSlotAvailability(null);
-      } finally {
-        if (!cancelled) setSlotAvailabilityLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [form.date, form.time]);
+  }, [form.selectedCleanerIds, form.date, form.time]);
 
   useEffect(() => {
     if (!perBookingPay?.bookingId) return;
@@ -685,7 +636,8 @@ function AdminCreateBookingPage() {
         saved_address_id: f.savedAddressId || null,
         allow_admin_slot_override: f.allowAdminSlotOverride,
         selected_extras: f.selectedExtras,
-        selected_cleaner_id: f.selectedCleanerId.trim() || null,
+        selected_cleaner_ids: f.selectedCleanerIds.length > 0 ? f.selectedCleanerIds : null,
+        selected_cleaner_id: f.selectedCleanerIds[0] ?? null,
       };
       window.sessionStorage.setItem(LAST_BOOKING_STORAGE, JSON.stringify(payload));
       if (f.savedAddressId) {
@@ -772,6 +724,7 @@ function AdminCreateBookingPage() {
         const extrasFromStore = Array.isArray(extrasRaw)
           ? extrasRaw.filter((x): x is string => typeof x === "string" && BOOKING_EXTRA_ID_SET.has(x))
           : [];
+        setBookingBillingType(normBookingBillingMode(hit.billing_type));
         setForm({
           customerQuery: hit.email ?? hit.full_name ?? userId,
           selectedCustomer: hit,
@@ -793,7 +746,11 @@ function AdminCreateBookingPage() {
           totalPaidZar: typeof o.totalPaidZar === "number" ? String(o.totalPaidZar) : "",
           allowAdminSlotOverride: o.allow_admin_slot_override === true,
           selectedExtras: extrasFromStore,
-          selectedCleanerId: typeof o.selected_cleaner_id === "string" ? o.selected_cleaner_id : "",
+          selectedCleanerIds: Array.isArray(o.selected_cleaner_ids)
+            ? o.selected_cleaner_ids.filter((x): x is string => typeof x === "string" && x.trim().length > 0)
+            : typeof o.selected_cleaner_id === "string" && o.selected_cleaner_id.trim()
+              ? [o.selected_cleaner_id.trim()]
+              : [],
           equipmentRequired: "",
           equipmentQuote: null,
           equipmentFeeOverrideZar: "",
@@ -906,9 +863,10 @@ function AdminCreateBookingPage() {
         location: form.location.trim(),
         notes: form.notes.trim(),
         totalPaidZar: Math.round(Number(form.totalPaidZar)),
+        billing_type: bookingBillingType,
         ...(form.selectedExtras.length > 0 ? { extras: form.selectedExtras } : {}),
         ...(form.allowAdminSlotOverride ? { admin_slot_override: true } : {}),
-        ...(form.selectedCleanerId.trim() ? { selected_cleaner_id: form.selectedCleanerId.trim() } : {}),
+        ...(form.selectedCleanerIds.length > 0 ? { selected_cleaner_ids: form.selectedCleanerIds } : {}),
         ...(sendIgnoreCleanerSlot
           ? {
               ignore_cleaner_slot_conflict: true,
@@ -1022,9 +980,12 @@ function AdminCreateBookingPage() {
         setDuplicateOverrideReason("");
         lastSlotConflictSigRef.current = null;
         lastSlotConflictAtRef.current = 0;
-        setSuccess(json.message ?? (cust.billing_type.toLowerCase() === "monthly" ? "Booking created (billed monthly)" : "Payment link sent"));
+        setSuccess(
+          json.message ??
+            (bookingBillingType === "monthly" ? "Booking created (billed monthly)" : "Payment link sent"),
+        );
         if (typeof json.bookingId === "string") setLastBookingId(json.bookingId);
-        if (cust.billing_type.toLowerCase() === "monthly") {
+        if (bookingBillingType === "monthly") {
           setPerBookingPay(null);
           setPaymentLinkMeta(null);
         } else if (typeof json.bookingId === "string" && typeof json.authorizationUrl === "string") {
@@ -1061,7 +1022,7 @@ function AdminCreateBookingPage() {
         setSubmitting(false);
       }
     },
-    [duplicateOverrideReason, form, persistLastBooking, slotOptions, todayJhb],
+    [bookingBillingType, duplicateOverrideReason, form, persistLastBooking, slotOptions, todayJhb],
   );
 
   const resendPaymentLink = useCallback(async () => {
@@ -1209,7 +1170,7 @@ function AdminCreateBookingPage() {
     }
   }, [loadLastBooking, todayJhb]);
 
-  const monthly = form.selectedCustomer?.billing_type.toLowerCase() === "monthly";
+  const monthly = bookingBillingType === "monthly";
 
   useEffect(() => {
     if (!success || !form.selectedCustomer) return;
@@ -1248,7 +1209,8 @@ function AdminCreateBookingPage() {
         <div>
           <h1 className="text-xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">Create booking</h1>
           <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-            Select an existing customer. Monthly accounts skip Paystack; per-booking sends a payment link.
+            Select an existing customer. Choose per-booking or monthly billing for each visit — no need to change the
+            customer account unless you want to.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1259,7 +1221,7 @@ function AdminCreateBookingPage() {
             Copy visit from last
           </Button>
           <Link
-            href="/admin/bookings"
+            href={bookingsListHref}
             className="inline-flex h-9 items-center text-sm font-medium text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300"
           >
             ← Back to bookings
@@ -1286,6 +1248,7 @@ function AdminCreateBookingPage() {
                   onChange={(e) => {
                     setSlotAdjustHint(null);
                     slotAutoFixTargetRef.current = null;
+                    setBookingBillingType("per_booking");
                     setForm((s) => ({
                       ...s,
                       customerQuery: e.target.value,
@@ -1318,6 +1281,7 @@ function AdminCreateBookingPage() {
                         onClick={() => {
                           const stored = readStoredBilling(h.id);
                           const hit = stored ? { ...h, ...stored } : h;
+                          setBookingBillingType(normBookingBillingMode(hit.billing_type));
                           setForm((s) => ({
                             ...s,
                             selectedCustomer: hit,
@@ -1346,8 +1310,8 @@ function AdminCreateBookingPage() {
                     const digits = raw.replace(/\D/g, "");
                     const looksLikePhone = digits.length >= 9 || raw.startsWith("+");
                     const href = looksLikePhone
-                      ? `/admin/customers/create?phone=${encodeURIComponent(raw)}`
-                      : `/admin/customers/create?full_name=${encodeURIComponent(raw)}`;
+                      ? `${customersCreateBase}?phone=${encodeURIComponent(raw)}`
+                      : `${customersCreateBase}?full_name=${encodeURIComponent(raw)}`;
                     return (
                       <p>
                         <Link
@@ -1376,15 +1340,25 @@ function AdminCreateBookingPage() {
                       setForm((s) => {
                         if (!s.selectedCustomer) return s;
                         writeStoredBilling(s.selectedCustomer.id, next.billing_type, next.schedule_type);
+                        setBookingBillingType(normBookingBillingMode(next.billing_type));
                         return { ...s, selectedCustomer: { ...s.selectedCustomer, ...next } };
                       })
                     }
                   />
+                  <div className="mt-3 border-t border-zinc-200 pt-3 dark:border-zinc-700">
+                    <AdminBookingBillingMode
+                      value={bookingBillingType}
+                      profileBillingType={form.selectedCustomer.billing_type}
+                      disabled={submitting}
+                      onChange={setBookingBillingType}
+                    />
+                  </div>
                   <button
                     type="button"
                     className="mt-2 text-xs font-medium text-blue-600 hover:underline dark:text-blue-400"
                     onClick={() => {
                       hydratedSessionAddressUserRef.current = null;
+                      setBookingBillingType("per_booking");
                       setForm((s) => ({
                         ...s,
                         selectedCustomer: null,
@@ -1560,77 +1534,13 @@ function AdminCreateBookingPage() {
               Shown to cleaners on the job card. Required for per-booking payment links.
             </p>
 
-            <div className="space-y-2 border-l-4 border-amber-400/80 pl-3">
-              <Label htmlFor="admin-cleaner">Preferred cleaner (optional)</Label>
-              <Select
-                id="admin-cleaner"
-                label=""
-                value={form.selectedCleanerId}
-                onChange={(e) => setForm((s) => ({ ...s, selectedCleanerId: e.target.value }))}
-                disabled={submitting}
-              >
-                <option value="">Dispatch later / no preference</option>
-                {(() => {
-                  const sel = form.selectedCleanerId.trim();
-                  const hasBuckets =
-                    slotAvailability != null &&
-                    (slotAvailability.available.length > 0 || slotAvailability.busy.length > 0);
-                  const inBuckets =
-                    hasBuckets &&
-                    [...slotAvailability!.available, ...slotAvailability!.busy].some((c) => c.id === sel);
-                  const orphan = sel && hasBuckets && !inBuckets ? cleaners.find((c) => c.id === sel) : null;
-                  if (hasBuckets) {
-                    return (
-                      <>
-                        <optgroup label="Available">
-                          {slotAvailability!.available.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.full_name}
-                              {c.phone ? ` · ${c.phone}` : ""}
-                            </option>
-                          ))}
-                        </optgroup>
-                        <optgroup label="Busy at this time">
-                          {slotAvailability!.busy.map((c) => (
-                            <option key={c.id} value={c.id}>
-                              {c.full_name}
-                              {c.phone ? ` · ${c.phone}` : ""} (busy)
-                            </option>
-                          ))}
-                        </optgroup>
-                        {orphan ? (
-                          <optgroup label="Other">
-                            <option value={orphan.id}>
-                              {orphan.full_name}
-                              {orphan.phone ? ` · ${orphan.phone}` : ""}
-                            </option>
-                          </optgroup>
-                        ) : null}
-                      </>
-                    );
-                  }
-                  return cleaners.map((c) => (
-                    <option key={c.id} value={c.id}>
-                      {c.full_name}
-                      {c.phone ? ` · ${c.phone}` : ""}
-                    </option>
-                  ));
-                })()}
-              </Select>
-              {slotAvailabilityLoading ? (
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">Checking cleaner availability…</p>
-              ) : null}
-              {slotAvailability?.busy.some((c) => c.id === form.selectedCleanerId.trim()) ? (
-                <p className="text-xs font-medium text-amber-800 dark:text-amber-200/90">
-                  Cleaner already has a booking at this time. You can still submit — you&apos;ll see the overlap flow
-                  if required.
-                </p>
-              ) : null}
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Stored as the customer&apos;s chosen cleaner for dispatch (including before payment on per-booking
-                links).
-              </p>
-            </div>
+            <AdminPreferredCleanerSelect
+              value={form.selectedCleanerIds}
+              onChange={(selectedCleanerIds) => setForm((s) => ({ ...s, selectedCleanerIds }))}
+              visitDate={form.date}
+              visitTime={form.time}
+              disabled={submitting}
+            />
 
             {pricingExtras.length > 0 ? (
               <div className="space-y-2 border-l-4 border-amber-400/80 pl-3">
@@ -1774,7 +1684,7 @@ function AdminCreateBookingPage() {
                 <p className="font-medium">This cleaner already has an active booking at this date and time.</p>
                 <div className="mt-1 flex flex-wrap gap-2 text-xs">
                   <Link
-                    href={`/admin/bookings/${cleanerSlotConflictId}`}
+                    href={bookingDetailPath(cleanerSlotConflictId)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-medium text-rose-900 underline decoration-rose-800/40 hover:decoration-rose-800 dark:text-rose-100"
@@ -1869,7 +1779,7 @@ function AdminCreateBookingPage() {
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                       <Button asChild size="sm" className="h-8">
                         <Link
-                          href={`/admin/bookings/${duplicateExistingId}`}
+                          href={bookingDetailPath(duplicateExistingId)}
                           target="_blank"
                           rel="noopener noreferrer"
                         >
@@ -1890,7 +1800,7 @@ function AdminCreateBookingPage() {
                 ) : (
                   <div className="mt-1 flex flex-wrap gap-2 text-xs">
                     <Link
-                      href={`/admin/bookings/${duplicateExistingId}`}
+                      href={bookingDetailPath(duplicateExistingId)}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="font-mono underline decoration-amber-800/40 hover:decoration-amber-800"
@@ -1966,7 +1876,7 @@ function AdminCreateBookingPage() {
                   <p className="mt-1 text-xs opacity-90">
                     Booking ID:{" "}
                     <Link
-                      href={`/admin/bookings/${lastBookingId}`}
+                      href={bookingDetailPath(lastBookingId)}
                       className="font-mono underline decoration-emerald-700/50 hover:decoration-emerald-700"
                     >
                       {lastBookingId}
@@ -2097,7 +2007,7 @@ function AdminCreateBookingPage() {
                   </>
                 ) : !form.selectedCustomer ? (
                   "Select a customer"
-                ) : form.selectedCustomer.billing_type.toLowerCase() === "monthly" ? (
+                ) : bookingBillingType === "monthly" ? (
                   "Create booking (billed monthly)"
                 ) : (
                   "Create & send payment link"

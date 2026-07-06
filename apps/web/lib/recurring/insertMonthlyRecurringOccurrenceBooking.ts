@@ -23,6 +23,8 @@ import {
 } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import { fetchLastAssignedCleanerForRecurringPlan } from "@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan";
 import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
+import { syncPreferredCleanerRoster } from "@/lib/booking/persistPreferredCleaners";
+import { resolveRecurringPreferredCleanerIds } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 const FAR_LOCK_DAYS = 120;
@@ -46,6 +48,11 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     return { ok: false, error: "recurring_bookings.booking_snapshot_template missing valid locked payload." };
   }
 
+  const preferredCleanerIds = resolveRecurringPreferredCleanerIds({
+    recurringPreferredCleanerId: params.recurring.preferred_cleaner_id ?? null,
+    snapshotTemplate: template,
+  });
+
   const priceZar = Math.max(1, Math.round(Number(params.recurring.price)));
   const lockedNow = new Date().toISOString();
   const lockExpiresAt = addDaysYmd(params.occurrenceDateYmd, FAR_LOCK_DAYS);
@@ -68,6 +75,7 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     discount_zar: template.discount_zar ?? 0,
     promo_code: template.promo_code ?? null,
     total_zar: priceZar,
+    ...(preferredCleanerIds.length > 0 ? { selectedCleanerIds: preferredCleanerIds } : {}),
   };
 
   const email = normalizeEmail(params.customerEmail);
@@ -144,6 +152,7 @@ export async function insertMonthlyRecurringOccurrenceBooking(
     billing_type: "recurring_invoice" as const,
     payment_status: "pending_monthly" as const,
     recurring_retry_count: 0,
+    ...(preferredCleanerIds.length > 1 ? { cleaner_count: preferredCleanerIds.length } : {}),
     ...cleanerPatch,
   };
 
@@ -197,7 +206,16 @@ export async function insertMonthlyRecurringOccurrenceBooking(
   const id = data && typeof data === "object" && "id" in data ? String((data as { id: string }).id) : "";
   if (!id) return { ok: false, error: "Insert returned no id." };
 
-  if (preferredCleanerId) {
+  if (preferredCleanerIds.length >= 2) {
+    const continuity = await applyRecurringOccurrenceRosterContinuity(admin, {
+      bookingId: id,
+      recurringId: params.recurring.id,
+      leadCleanerId: preferredCleanerId,
+    });
+    if (!continuity.applied) {
+      await syncPreferredCleanerRoster(admin, id, preferredCleanerIds, "recurring_preferred");
+    }
+  } else if (preferredCleanerId) {
     await applyRecurringOccurrenceRosterContinuity(admin, {
       bookingId: id,
       recurringId: params.recurring.id,

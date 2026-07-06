@@ -22,6 +22,8 @@ import {
 } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import { fetchLastAssignedCleanerForRecurringPlan } from "@/lib/recurring/fetchLastAssignedCleanerForRecurringPlan";
 import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
+import { syncPreferredCleanerRoster } from "@/lib/booking/persistPreferredCleaners";
+import { resolveRecurringPreferredCleanerIds } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
 import { scheduleBookingPaymentRecoveryJobs } from "@/lib/booking/bookingPaymentRecoveryJobs";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -75,6 +77,11 @@ export async function insertRecurringOccurrenceBooking(
     return { ok: false, error: "recurring_bookings.booking_snapshot_template missing valid locked payload." };
   }
 
+  const preferredCleanerIds = resolveRecurringPreferredCleanerIds({
+    recurringPreferredCleanerId: params.recurring.preferred_cleaner_id ?? null,
+    snapshotTemplate: template,
+  });
+
   const priceZar = Math.max(1, Math.round(Number(params.recurring.price)));
   const lockedNow = new Date().toISOString();
   const lockExpiresAt = addDaysYmd(params.occurrenceDateYmd, FAR_LOCK_DAYS);
@@ -97,6 +104,7 @@ export async function insertRecurringOccurrenceBooking(
     discount_zar: template.discount_zar ?? 0,
     promo_code: template.promo_code ?? null,
     total_zar: priceZar,
+    ...(preferredCleanerIds.length > 0 ? { selectedCleanerIds: preferredCleanerIds } : {}),
   };
 
   const email = normalizeEmail(params.customerEmail);
@@ -171,6 +179,7 @@ export async function insertRecurringOccurrenceBooking(
     is_recurring_generated: true,
     payment_status: "pending" as const,
     recurring_retry_count: 0,
+    ...(preferredCleanerIds.length > 1 ? { cleaner_count: preferredCleanerIds.length } : {}),
     ...cleanerPatch,
   };
 
@@ -230,7 +239,16 @@ export async function insertRecurringOccurrenceBooking(
     createdAt: new Date().toISOString(),
   });
 
-  if (preferredCleanerId) {
+  if (preferredCleanerIds.length >= 2) {
+    const continuity = await applyRecurringOccurrenceRosterContinuity(admin, {
+      bookingId: id,
+      recurringId: params.recurring.id,
+      leadCleanerId: preferredCleanerId,
+    });
+    if (!continuity.applied) {
+      await syncPreferredCleanerRoster(admin, id, preferredCleanerIds, "recurring_preferred");
+    }
+  } else if (preferredCleanerId) {
     await applyRecurringOccurrenceRosterContinuity(admin, {
       bookingId: id,
       recurringId: params.recurring.id,

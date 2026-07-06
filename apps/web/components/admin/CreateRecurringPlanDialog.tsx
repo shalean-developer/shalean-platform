@@ -8,7 +8,7 @@ import { emitAdminToast } from "@/lib/admin/toastBus";
 import { buildAdminBookingLocationString } from "@/lib/admin/buildBookingLocationFromSavedAddress";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
 import { AdminPropertySelector } from "@/components/admin/create-booking/AdminPropertySelector";
-import { AdminRecurringCleanerSelect } from "@/components/admin/AdminRecurringCleanerSelect";
+import { AdminPreferredCleanerSelect } from "@/components/admin/create-booking/AdminPreferredCleanerSelect";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -65,7 +65,7 @@ function emptyCreateForm() {
     address: "",
     service: "standard" as CreateSvc,
     visitTime: "09:00",
-    preferredCleanerId: "",
+    preferredCleanerIds: [] as string[],
   };
 }
 
@@ -245,7 +245,7 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
           ...(form.savedAddressId && !form.useCustomAddress ? { address_id: form.savedAddressId } : {}),
           service: form.service,
           visit_time: form.visitTime || "09:00",
-          ...(form.preferredCleanerId.trim() ? { preferred_cleaner_id: form.preferredCleanerId.trim() } : {}),
+          ...(form.preferredCleanerIds.length > 0 ? { preferred_cleaner_ids: form.preferredCleanerIds } : {}),
         }),
       });
       const json = (await res.json()) as { error?: string };
@@ -536,10 +536,10 @@ export function CreateRecurringPlanDialog({ open, onOpenChange, onCreated }: Cre
             ) : null}
           </div>
 
-          <AdminRecurringCleanerSelect
+          <AdminPreferredCleanerSelect
             id="cr-cleaner"
-            value={form.preferredCleanerId}
-            onChange={(preferredCleanerId) => setForm((s) => ({ ...s, preferredCleanerId }))}
+            value={form.preferredCleanerIds}
+            onChange={(preferredCleanerIds) => setForm((s) => ({ ...s, preferredCleanerIds }))}
             visitDate={form.startDate}
             visitTime={form.visitTime}
             disabled={submitting}

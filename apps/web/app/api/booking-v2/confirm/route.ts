@@ -24,7 +24,11 @@ import {
   resolveBookingV2LocationContext,
   type BookingV2LocationContext,
 } from "@/lib/booking-v2/bookingV2LocationContext";
-import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
+import {
+  preferredCleanerAssignmentFields,
+  preferredCleanerInsertExtras,
+} from "@/lib/booking/persistPreferredCleaners";
+import { validatePreferredCleanersForSlot } from "@/lib/booking/validatePreferredCleanersForSlot";
 import {
   bookingV2SlotHasEligibleCleaners,
 } from "@/lib/booking-v2/bookingV2SlotEligibility";
@@ -351,6 +355,9 @@ export async function POST(request: Request) {
     );
   }
 
+  let preferredCleanerIds: string[] = [];
+  let preferredExtras = preferredCleanerInsertExtras([]);
+
   if (data.cleanerMode === "individual_cleaners") {
     const hasEligible = await bookingV2SlotHasEligibleCleaners(supabase, {
       serviceSlug: data.serviceSlug,
@@ -370,26 +377,21 @@ export async function POST(request: Request) {
       );
     }
 
-    const selectedId = data.selectedCleanerIds?.[0]?.trim();
-    if (selectedId) {
-      const pickedEligible = await getEligibleCleaners(supabase, {
-        date: data.date,
-        startTime: timeHm,
-        durationMinutes,
-        locationId: locationCtx.locationId,
-        locationExpandedIds: [locationCtx.locationId],
-        serviceType: canonicalServiceSlug,
-        cleanerIds: [selectedId],
-        enforcePublicDailyWorkloadLimit: true,
-        limit: 1,
-      });
-      if (pickedEligible.length === 0) {
-        return NextResponse.json(
-          { error: "Your selected cleaner is no longer available for this slot." },
-          { status: 409 },
-        );
-      }
+    const preferredValidation = await validatePreferredCleanersForSlot({
+      admin: supabase,
+      selectedCleanerIds: data.selectedCleanerIds ?? [],
+      maxSelect: data.cleanerCount,
+      date: data.date,
+      timeHm,
+      durationMinutes,
+      locationId: locationCtx.locationId,
+      serviceType: canonicalServiceSlug,
+    });
+    if (!preferredValidation.ok) {
+      return NextResponse.json({ error: preferredValidation.error }, { status: 409 });
     }
+    preferredCleanerIds = preferredValidation.ids;
+    preferredExtras = preferredCleanerInsertExtras(preferredCleanerIds);
   }
 
   const locationFields = locationPersistFields(locationCtx);
@@ -436,6 +438,36 @@ export async function POST(request: Request) {
         ...locationFields,
         price_snapshot: priceSnapshot,
         service_slug: canonicalServiceSlug,
+        ...(data.cleanerMode === "individual_cleaners"
+          ? {
+              cleaner_count: Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount,
+              ...preferredCleanerAssignmentFields(preferredCleanerIds),
+            }
+          : {}),
+        booking_snapshot: {
+          serviceSlug: data.serviceSlug,
+          serviceDetails: data.serviceDetails,
+          address: data.address,
+          suburb: data.suburb,
+          city: data.city,
+          date: data.date,
+          time: data.time,
+          cleanerMode: data.cleanerMode,
+          cleanerCount: data.cleanerCount,
+          assignedTeamId: data.assignedTeamId,
+          selectedExtras: data.selectedExtras,
+          equipmentRequired: data.equipmentRequired,
+          equipmentQuote: serverEquipmentQuote,
+          pricingSummary: serverBreakdown,
+          contactPhone: customerPhone,
+          customer: {
+            name: customerName || null,
+            email,
+            phone: customerPhone,
+          },
+          ...preferredExtras.snapshotExtension,
+          confirmedAt: new Date().toISOString(),
+        },
       })
       .eq("id", existingBooking.id);
 
@@ -505,16 +537,13 @@ export async function POST(request: Request) {
       // Cleaner / team
       cleaner_mode: data.cleanerMode,
       assigned_team_id: data.cleanerMode === "team" ? data.assignedTeamId : null,
-      cleaner_count: data.cleanerMode === "individual_cleaners" ? data.cleanerCount : null,
-      // Save first selected cleaner preference for dispatch
-      selected_cleaner_id:
-        data.cleanerMode === "individual_cleaners" && data.selectedCleanerIds?.length
-          ? data.selectedCleanerIds[0]
+      cleaner_count:
+        data.cleanerMode === "individual_cleaners"
+          ? Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount
           : null,
-      assignment_type:
-        data.cleanerMode === "individual_cleaners" && data.selectedCleanerIds?.length
-          ? "user_selected"
-          : null,
+      ...preferredCleanerAssignmentFields(
+        data.cleanerMode === "individual_cleaners" ? preferredCleanerIds : [],
+      ),
 
       // Service-specific
       service_details: data.serviceDetails,
@@ -548,6 +577,7 @@ export async function POST(request: Request) {
           email,
           phone: customerPhone,
         },
+        ...preferredExtras.snapshotExtension,
         confirmedAt: new Date().toISOString(),
       },
     })
