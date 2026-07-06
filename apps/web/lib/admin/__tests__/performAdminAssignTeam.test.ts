@@ -47,6 +47,17 @@ const twoMembers = [
   { cleaner_id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", active_from: "2020-01-01", active_to: null },
 ];
 
+function emptyMaybeSingleChain() {
+  const root: Record<string, unknown> = {};
+  const chain = () => root;
+  root.select = chain;
+  root.eq = chain;
+  root.neq = chain;
+  root.in = chain;
+  root.maybeSingle = () => Promise.resolve({ data: null, error: null });
+  return root;
+}
+
 function countChain(count: number) {
   const p = Promise.resolve({ count, error: null });
   const root: Record<string, unknown> = {
@@ -125,6 +136,9 @@ function createMockAdmin(opts: {
         }
         if (bookingsFrom === 3) {
           return withUpdate(countChain(slotCount) as Record<string, unknown>);
+        }
+        if (bookingsFrom === 4 || bookingsFrom === 5) {
+          return withUpdate(emptyMaybeSingleChain() as Record<string, unknown>);
         }
         return withUpdate({
           select: () => ({

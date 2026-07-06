@@ -12,7 +12,9 @@ import { logPostBookingGrowthDecision } from "@/lib/growth/postBookingGrowthHint
 import { syncUserPrimaryCityFromBooking } from "@/lib/growth/syncPrimaryCity";
 import { assignBestCleaner } from "@/lib/marketplace-intelligence/assignBestCleaner";
 import { metrics } from "@/lib/metrics/counters";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { markBookingPaidFromAdminSettlement } from "@/lib/booking/paymentFinalizationBookingCommands";
 import { cancelUnsentBookingPaymentRecoveryJobs } from "@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
@@ -252,10 +254,11 @@ export async function adminMarkBookingPaid(
 ): Promise<AdminMarkBookingPaidResult> {
   const { bookingId, method, reference, amountCentsOverride, adminUserId } = params;
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: row, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_status, payment_completed_at, customer_email, user_id, created_at, booking_snapshot, date, time, city_id, total_price, total_paid_cents, amount_paid_cents, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, is_team_job, paystack_reference, dispatch_status, assignment_type, payment_mismatch, monthly_invoice_id, is_monthly_billing_booking, billing_type",
+      `id, status, payment_status, payment_completed_at, customer_email, ${ownershipColumn}, created_at, booking_snapshot, date, time, city_id, total_price, total_paid_cents, amount_paid_cents, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, is_team_job, paystack_reference, dispatch_status, assignment_type, payment_mismatch, monthly_invoice_id, is_monthly_billing_booking, billing_type`,
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -269,6 +272,7 @@ export async function adminMarkBookingPaid(
     payment_status?: string | null;
     payment_completed_at?: string | null;
     customer_email?: string | null;
+    customer_id?: string | null;
     user_id?: string | null;
     created_at?: string | null;
     booking_snapshot?: unknown;
@@ -412,7 +416,7 @@ export async function adminMarkBookingPaid(
   await runCheckoutLikeAutoDispatchAfterPaid(admin, bookingId);
 
   const emailStored = normalizeEmail(typeof b.customer_email === "string" ? b.customer_email : "");
-  const userIdForEffects = typeof b.user_id === "string" && b.user_id.trim() ? b.user_id.trim() : null;
+  const userIdForEffects = bookingCustomerKey(b) || null;
   const createdAt = typeof b.created_at === "string" && b.created_at.trim() ? b.created_at.trim() : paidMoment;
   const locked =
     b.booking_snapshot && typeof b.booking_snapshot === "object" && !Array.isArray(b.booking_snapshot)

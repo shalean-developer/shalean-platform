@@ -109,6 +109,11 @@ vi.mock("@/lib/metrics/counters", () => ({
   metrics: { increment: vi.fn() },
 }));
 
+vi.mock("@/lib/customer/customerBookingsForUser", () => ({
+  resolveBookingOwnershipColumn: vi.fn(async () => "customer_id" as const),
+  resetBookingOwnershipColumnCacheForTests: vi.fn(),
+}));
+
 import { adminMarkBookingPaid } from "@/lib/booking/adminMarkBookingPaid";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 
@@ -117,7 +122,7 @@ type StoredRow = {
   status: string | null;
   payment_completed_at: string | null;
   customer_email: string | null;
-  user_id: string | null;
+  customer_id: string | null;
   created_at: string | null;
   booking_snapshot: unknown;
   date: string | null;
@@ -148,7 +153,7 @@ function makeRow(overrides: Partial<StoredRow>): StoredRow {
     status: "pending_payment",
     payment_completed_at: null,
     customer_email: "customer@example.com",
-    user_id: "00000000-0000-4000-8000-000000000abc",
+    customer_id: "00000000-0000-4000-8000-000000000abc",
     created_at: "2026-05-01T08:00:00.000Z",
     booking_snapshot: { locked: { date: "2026-05-10", time: "10:00" } },
     date: "2026-05-10",

@@ -9,6 +9,7 @@ import {
   teamMemberAddIdempotencyFingerprint,
 } from "@/lib/admin/teamMemberAddIdempotency";
 import { resyncBookingCleanersForTeamNonFinalizedJobs } from "@/lib/booking/syncBookingCleanersForTeamBooking";
+import { reassignPayoutOwnerBeforeTeamMemberRemove } from "@/lib/admin/reassignPayoutOwnerBeforeTeamMemberRemove";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -475,28 +476,26 @@ export async function DELETE(request: Request, ctx: { params: Promise<{ id: stri
     return NextResponse.json({ error: "Team is inactive." }, { status: 400 });
   }
 
-  const { data: payoutOwnerBlock, error: payoutOwnerErr } = await admin
-    .from("bookings")
-    .select("id")
-    .eq("team_id", teamId)
-    .eq("is_team_job", true)
-    .eq("payout_owner_cleaner_id", cleanerId)
-    .limit(1)
-    .maybeSingle();
-  if (payoutOwnerErr) return NextResponse.json({ error: payoutOwnerErr.message }, { status: 500 });
-  if (payoutOwnerBlock) {
-    return NextResponse.json(
-      {
-        error:
-          "This cleaner is the payout owner on at least one team booking. Reassign the payout owner on those bookings before removing them from the team.",
-        code: "payout_owner_team_member",
+  const reassigned = await reassignPayoutOwnerBeforeTeamMemberRemove(admin, { teamId, cleanerId });
+  if (!reassigned.ok) {
+    return NextResponse.json({ error: reassigned.error, code: "payout_owner_team_member" }, { status: reassigned.httpStatus });
+  }
+  if (reassigned.reassigned > 0) {
+    void logSystemEvent({
+      level: "info",
+      source: "TEAM_MEMBER_REMOVE_PAYOUT_REASSIGN",
+      message: "Reassigned payout owner on open team bookings before roster removal",
+      context: {
+        teamId,
+        removedCleanerId: cleanerId,
+        reassigned: reassigned.reassigned,
+        adminId: auth.adminUserId,
+        adminEmail: auth.adminEmail,
       },
-      { status: 409 },
-    );
+    });
   }
 
   // Roster (team_members) is for future capacity / dispatch; live assignments live on booking_cleaners.
-  // Do not block removal on team bookings — existing jobs keep their roster via booking_cleaners.
 
   const { error } = await admin.from("team_members").delete().eq("team_id", teamId).eq("cleaner_id", cleanerId);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

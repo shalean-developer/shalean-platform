@@ -15,6 +15,11 @@ import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb"
 import { CAPACITY_STATUSES } from "@/lib/dispatch/assignTeamToBooking";
 import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
 import {
+  findIndividualCleanerSlotConflict,
+  findTeamJobSlotConflict,
+  formatTeamAssignmentSlotConflictError,
+} from "@/lib/admin/teamAssignmentSlotConflicts";
+import {
   countPlatformTeamJobsOnDate,
   fetchTeamCapacityUsageSlotsByTeam,
   MAX_TEAM_BOOKINGS_PER_DAY,
@@ -35,6 +40,7 @@ import { resolveBookingCanonicalPayout } from "@/lib/payout/resolveBookingCanoni
 type BookingRow = {
   id: string;
   date: string | null;
+  time: string | null;
   service: string | null;
   service_slug?: string | null;
   booking_snapshot?: unknown;
@@ -102,7 +108,9 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, service, booking_snapshot, team_id, is_team_job, status, cleaner_line_earnings_finalized_at")
+    .select(
+      "id, date, time, service, booking_snapshot, team_id, is_team_job, status, cleaner_line_earnings_finalized_at",
+    )
     .eq("id", bookingId)
     .maybeSingle();
   if (bErr) return { ok: false, httpStatus: 500, error: bErr.message };
@@ -142,6 +150,11 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
   const dateYmd = String(b.date ?? "").trim();
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
     return { ok: false, httpStatus: 400, error: "Booking date is required for team assignment." };
+  }
+
+  const timeHm = String(b.time ?? "").trim();
+  if (!/^\d{2}:\d{2}$/.test(timeHm)) {
+    return { ok: false, httpStatus: 400, error: "Booking time is required for team assignment." };
   }
 
   const { data: memberRows, error: mErr } = await admin
@@ -276,6 +289,57 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
         ? "Appointed team lead is inactive on this date or not certified for this service. Update the team lead in Admin → Teams."
         : "Appoint a team lead in Admin → Teams after adding all cleaners, then assign this team.",
     };
+  }
+
+  if (!sameTeam) {
+    try {
+      const teamSlotConflict = await findTeamJobSlotConflict(admin, {
+        teamId: tid,
+        dateYmd,
+        timeHm,
+        excludeBookingId: bookingId,
+      });
+      if (teamSlotConflict) {
+        if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+        return {
+          ok: false,
+          httpStatus: 409,
+          error: formatTeamAssignmentSlotConflictError({
+            kind: "team",
+            dateYmd,
+            timeHm,
+            conflict: teamSlotConflict,
+          }),
+        };
+      }
+
+      const cleanerSlotConflict = await findIndividualCleanerSlotConflict(admin, {
+        cleanerId: payoutOwnerCleanerId,
+        dateYmd,
+        timeHm,
+        excludeBookingId: bookingId,
+      });
+      if (cleanerSlotConflict) {
+        if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+        return {
+          ok: false,
+          httpStatus: 409,
+          error: formatTeamAssignmentSlotConflictError({
+            kind: "cleaner",
+            dateYmd,
+            timeHm,
+            conflict: cleanerSlotConflict,
+          }),
+        };
+      }
+    } catch (slotErr) {
+      if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+      return {
+        ok: false,
+        httpStatus: 500,
+        error: slotErr instanceof Error ? slotErr.message : "Could not verify assignment slot.",
+      };
+    }
   }
 
   const nowIso = new Date().toISOString();
