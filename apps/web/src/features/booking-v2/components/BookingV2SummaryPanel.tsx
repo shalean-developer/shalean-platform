@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { SERVICE_CONFIG, TEAMS } from "@/src/features/booking-v2/config/serviceConfig";
+import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurringScheduleOptions";
 import type { BookingV2FormData, BookingStep } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
@@ -234,7 +234,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             <Section icon={Users} label="Team" onEdit={edit(2)}>
               <p className="text-sm font-medium text-slate-800">
                 {values.assignedTeamId
-                  ? TEAMS.find((t) => t.id === values.assignedTeamId)?.name ?? values.assignedTeamId
+                  ? values.assignedTeamName?.trim() || "Selected team"
                   : "Best available team"}
               </p>
             </Section>

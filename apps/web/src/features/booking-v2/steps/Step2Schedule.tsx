@@ -592,7 +592,10 @@ export function Step2Schedule() {
             date={date}
             serviceSlug={serviceSlug}
             selectedTeamId={assignedTeamId}
-            onSelect={(id) => setValue("assignedTeamId", id)}
+            onSelect={(id, name) => {
+              setValue("assignedTeamId", id);
+              setValue("assignedTeamName", name);
+            }}
           />
           <FieldError message={errors.assignedTeamId?.message} />
         </section>

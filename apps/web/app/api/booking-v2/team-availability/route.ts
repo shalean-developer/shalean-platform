@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { loadDispatchTeamsForBooking } from "@/lib/dispatch/loadDispatchTeamsForBooking";
+import { MAX_TEAM_BOOKINGS_PER_DAY, TEAM_SERVICES } from "@/src/features/booking-v2/config/serviceConfig";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { TEAMS, TEAM_SERVICES, MAX_TEAM_BOOKINGS_PER_DAY } from "@/src/features/booking-v2/config/serviceConfig";
 
 export const runtime = "nodejs";
 
@@ -22,41 +23,29 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Service unavailable." }, { status: 503 });
   }
 
-  // Count bookings per assigned_team_id for both deep and moving on the given date
-  const { data, error } = await supabase
-    .from("bookings")
-    .select("assigned_team_id")
-    .eq("date", date)
-    .in("service", ["deep-cleaning", "moving-cleaning"])
-    .not("status", "in", '("cancelled","refunded")');
-
+  const { teams, platformAtCapacity, error } = await loadDispatchTeamsForBooking(supabase, {
+    dateYmd: date,
+    serviceSlug: service,
+  });
   if (error) {
-    console.error("[booking-v2/team-availability]", error.message);
+    console.error("[booking-v2/team-availability]", error);
     return NextResponse.json({ error: "Could not check availability." }, { status: 500 });
   }
 
-  // Count bookings per team
-  const bookingsByTeam: Record<string, number> = {};
-  for (const row of data ?? []) {
-    if (row.assigned_team_id) {
-      bookingsByTeam[row.assigned_team_id] = (bookingsByTeam[row.assigned_team_id] ?? 0) + 1;
-    }
-  }
-
-  const totalBooked = (data ?? []).length;
-  const available = totalBooked < MAX_TEAM_BOOKINGS_PER_DAY;
-
-  const teams = TEAMS.map((team) => ({
-    id: team.id,
-    name: team.name,
-    // A team is available if it has no booking on this date
-    available: (bookingsByTeam[team.id] ?? 0) === 0,
-  }));
+  const totalBooked = teams.filter((t) => !t.available).length;
+  const availableTeams = teams.filter((t) => t.available);
+  const available = !platformAtCapacity && availableTeams.length > 0;
 
   return NextResponse.json({
     available,
     totalBooked,
     maxSlots: MAX_TEAM_BOOKINGS_PER_DAY,
-    teams,
+    teams: teams.map((team) => ({
+      id: team.id,
+      name: team.name,
+      available: team.available,
+      active_member_count: team.active_member_count,
+      qualified_member_count: team.qualified_member_count,
+    })),
   });
 }

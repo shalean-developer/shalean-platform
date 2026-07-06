@@ -163,11 +163,13 @@ export function OfficeAssignTeamDialog({
                     const qual = t.qualified_member_count ?? t.member_count;
                     const active = t.active_member_count ?? t.member_count;
                     const inactive = t.team_active === false;
+                    const blocked = !t.assignable && t.assign_block_reason ? ` — ${t.assign_block_reason}` : "";
                     return (
                       <option key={t.id} value={t.id} disabled={!t.assignable}>
                         {t.name}
                         {inactive ? " · paused" : ""} · {qual}/{active} qualified · {t.used_slots_today}/
                         {t.capacity_per_day} today
+                        {blocked}
                       </option>
                     );
                   })}

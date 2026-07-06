@@ -75,6 +75,7 @@ export type BookingV2FormData = {
   // Cleaner / team
   cleanerMode: CleanerMode;
   assignedTeamId: string;
+  assignedTeamName: string;
   cleanerCount: number;
   selectedCleanerIds: string[];
   /** Full cleaner objects for selected IDs — populated at selection time so Step 3 can display them without a re-fetch. */
@@ -112,6 +113,7 @@ export function defaultBookingFormData(serviceSlug: ServiceSlug, cleanerMode: Cl
     recurringEndDate: "",
     cleanerMode,
     assignedTeamId: "",
+    assignedTeamName: "",
     cleanerCount: 1,
     selectedCleanerIds: [],
     selectedCleanerDetails: [],

@@ -457,9 +457,34 @@ export type TeamAssignCandidateRow = {
   remaining_slots_today: number;
   /** False when no qualified active cleaner or no spare day slot for this booking to land on this team. */
   assignable: boolean;
+  /** Human-readable reason when `assignable` is false (shown in Office assign-team picker). */
+  assign_block_reason: string | null;
   /** False when the team row is inactive — still listed so admins can see and re-enable in Teams admin. */
   team_active: boolean;
 };
+
+function teamAssignBlockReason(opts: {
+  teamActive: boolean;
+  platformAtCapacity: boolean;
+  activeCount: number;
+  qualifiedCount: number;
+  usedExcl: number;
+  cap: number;
+  qualifiedLabel: string;
+}): string | null {
+  if (!opts.teamActive) return "Team is paused — activate it in Office → Teams.";
+  if (opts.platformAtCapacity) {
+    return `Daily team limit reached (${MAX_TEAM_BOOKINGS_PER_DAY} deep/move jobs per day).`;
+  }
+  if (opts.activeCount < TEAM_MIN_ROSTER_MEMBERS) {
+    return `Only ${opts.activeCount} roster member(s) active on this booking date (need ${TEAM_MIN_ROSTER_MEMBERS}). Members count from their join date — use a later visit date or add members earlier.`;
+  }
+  if (opts.qualifiedCount < 1) {
+    return `No roster member qualified for ${opts.qualifiedLabel} on this date. Enable the capability on at least one active cleaner.`;
+  }
+  if (opts.usedExcl >= opts.cap) return "Team already has a job scheduled on this date.";
+  return null;
+}
 
 function activeCleanerIdsSortedOnDate(members: TeamMemberAvailabilityRow[], dateYmd: string): string[] {
   return [
@@ -573,8 +598,20 @@ export async function listTeamAssignCandidatesForBooking(
     const assignable =
       teamActive &&
       !platformAtCapacity &&
-      qualifiedCount >= TEAM_MIN_ROSTER_MEMBERS &&
+      activeCount >= TEAM_MIN_ROSTER_MEMBERS &&
+      qualifiedCount > 0 &&
       usedExcl < cap;
+    const assign_block_reason = assignable
+      ? null
+      : teamAssignBlockReason({
+          teamActive,
+          platformAtCapacity,
+          activeCount,
+          qualifiedCount,
+          usedExcl,
+          cap,
+          qualifiedLabel,
+        });
     out.push({
       id: row.id,
       name: row.name,
@@ -586,6 +623,7 @@ export async function listTeamAssignCandidatesForBooking(
       used_slots_today: usedFull,
       remaining_slots_today: Math.max(0, cap - usedFull),
       assignable,
+      assign_block_reason,
       team_active: teamActive,
     });
   }

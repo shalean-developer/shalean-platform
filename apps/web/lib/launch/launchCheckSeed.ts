@@ -58,6 +58,7 @@ export function buildLaunchCheckConfirmPayload(params: {
     recurringEndDate: "",
     cleanerMode: "individual_cleaners",
     assignedTeamId: "",
+    assignedTeamName: "",
     cleanerCount: 1,
     selectedCleanerIds: params.selectedCleanerId ? [params.selectedCleanerId] : [],
     pricingSummary: {

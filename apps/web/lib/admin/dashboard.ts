@@ -356,7 +356,7 @@ export async function deleteAdminTeam(teamId: string): Promise<void> {
 
 export async function patchAdminTeam(
   teamId: string,
-  patch: { name?: string; is_active?: boolean; capacity_per_day?: number },
+  patch: { name?: string; is_active?: boolean; capacity_per_day?: number; service_type?: "deep_cleaning" | "move_cleaning" },
 ): Promise<AdminTeamRow> {
   const token = await getAdminToken();
   const res = await fetch(`/api/admin/teams/${encodeURIComponent(teamId)}`, {
@@ -406,6 +406,7 @@ export type AdminTeamAssignCandidate = {
   used_slots_today: number;
   remaining_slots_today: number;
   assignable: boolean;
+  assign_block_reason?: string | null;
   team_active?: boolean;
 };
 

@@ -100,6 +100,7 @@ const step2SchemaBase = z.object({
   recurringEndDate: z.string().optional().default(""),
   cleanerMode: z.enum(["team", "individual_cleaners"]),
   assignedTeamId: z.string().optional().default(""),
+  assignedTeamName: z.string().optional().default(""),
   cleanerCount: z.number().min(1).max(3).default(1),
   selectedCleanerIds: z.array(z.string()).optional().default([]),
 });
@@ -206,6 +207,7 @@ export const bookingV2ConfirmSchema = z.object({
   recurringEndDate: z.string().optional().default(""),
   cleanerMode: z.enum(["team", "individual_cleaners"]),
   assignedTeamId: z.string().optional().default(""),
+  assignedTeamName: z.string().optional().default(""),
   cleanerCount: z.number().min(1).max(3).default(1),
   selectedCleanerIds: z.array(z.string()).optional().default([]),
   pricingSummary: z

@@ -756,4 +756,6 @@ export const TEAMS = [
   { id: "team-3", name: "Team 3" },
 ] as const;
 
+/** @deprecated Booking flows load teams from `public.teams` via `/api/booking-v2/team-availability`. */
+
 export { MAX_TEAM_BOOKINGS_PER_DAY } from "@/lib/dispatch/teamJobsPerDay";

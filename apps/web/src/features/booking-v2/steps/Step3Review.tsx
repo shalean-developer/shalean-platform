@@ -593,7 +593,10 @@ function ScheduleEditPanel() {
           date={date}
           serviceSlug={serviceSlug}
           selectedTeamId={assignedTeamId}
-          onSelect={(id) => setValue("assignedTeamId", id)}
+          onSelect={(id, name) => {
+            setValue("assignedTeamId", id);
+            setValue("assignedTeamName", name);
+          }}
         />
       )}
 
@@ -1059,7 +1062,7 @@ export function Step3Review() {
             {values.cleanerMode === "team" && values.assignedTeamId && (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
                 <Users className="h-3 w-3 text-blue-500" />
-                {values.assignedTeamId.replace(/-/g, " ")}
+                {values.assignedTeamName?.trim() || "Selected team"}
               </span>
             )}
 

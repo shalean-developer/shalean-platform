@@ -2,10 +2,8 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearerAuth";
 import { bookingV2ConfirmSchema } from "@/src/features/booking-v2/schemas";
-import {
-  TEAM_SERVICES,
-  MAX_TEAM_BOOKINGS_PER_DAY,
-} from "@/src/features/booking-v2/config/serviceConfig";
+import { TEAM_SERVICES } from "@/src/features/booking-v2/config/serviceConfig";
+import { loadDispatchTeamsForBooking } from "@/lib/dispatch/loadDispatchTeamsForBooking";
 import { buildCustomerPricingFromForm, pricingPersistFields } from "@/lib/booking-v2/buildCustomerPricingFromForm";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import type { LiveServiceConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
@@ -188,33 +186,23 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: existing, error: teamErr } = await supabase
-      .from("bookings")
-      .select("id, assigned_team_id")
-      .eq("date", data.date)
-      .in("service", ["deep-cleaning", "moving-cleaning"])
-      .not("status", "in", '("cancelled","refunded")');
-
-    if (teamErr) {
+    const teamLoad = await loadDispatchTeamsForBooking(supabase, {
+      dateYmd: data.date,
+      serviceSlug: data.serviceSlug,
+    });
+    if (teamLoad.error) {
       return NextResponse.json({ error: "Could not verify team availability." }, { status: 500 });
     }
 
-    const total = (existing ?? []).length;
-    if (total >= MAX_TEAM_BOOKINGS_PER_DAY) {
-      return NextResponse.json(
-        { error: "No team slots available for this date. Please choose another date." },
-        { status: 409 },
-      );
+    const picked = teamLoad.teams.find((t) => t.id === data.assignedTeamId);
+    if (!picked) {
+      return NextResponse.json({ error: "Selected team was not found. Refresh and try again." }, { status: 422 });
     }
-
-    const teamAlreadyBooked = (existing ?? []).some(
-      (row) => row.assigned_team_id === data.assignedTeamId,
-    );
-    if (teamAlreadyBooked) {
-      return NextResponse.json(
-        { error: `${data.assignedTeamId} is already booked for this date. Please select another team or date.` },
-        { status: 409 },
-      );
+    if (!picked.available) {
+      const reason = teamLoad.platformAtCapacity
+        ? "No team slots available for this date. Please choose another date."
+        : `${picked.name} is not available for this date. Please select another team or date.`;
+      return NextResponse.json({ error: reason }, { status: 409 });
     }
   }
 

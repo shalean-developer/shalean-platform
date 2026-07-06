@@ -31,14 +31,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  let body: { is_active?: boolean; capacity_per_day?: number; name?: string };
+  let body: { is_active?: boolean; capacity_per_day?: number; name?: string; service_type?: string };
   try {
-    body = (await request.json()) as { is_active?: boolean; capacity_per_day?: number; name?: string };
+    body = (await request.json()) as { is_active?: boolean; capacity_per_day?: number; name?: string; service_type?: string };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
 
-  const patch: { is_active?: boolean; capacity_per_day?: number; name?: string } = {};
+  const patch: { is_active?: boolean; capacity_per_day?: number; name?: string; service_type?: string } = {};
   if (typeof body.is_active === "boolean") patch.is_active = body.is_active;
   if (body.name != null) {
     const name = String(body.name).trim();
@@ -52,8 +52,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
     patch.capacity_per_day = clampTeamRosterCapacity(capRaw);
   }
+  if (body.service_type != null) {
+    const serviceType = String(body.service_type).trim();
+    if (!["deep_cleaning", "move_cleaning"].includes(serviceType)) {
+      return NextResponse.json({ error: "service_type must be deep_cleaning or move_cleaning." }, { status: 400 });
+    }
+    patch.service_type = serviceType;
+  }
   if (Object.keys(patch).length === 0) {
-    return NextResponse.json({ error: "Provide name, is_active, and/or capacity_per_day." }, { status: 400 });
+    return NextResponse.json({ error: "Provide name, service_type, is_active, and/or capacity_per_day." }, { status: 400 });
   }
 
   const { data, error } = await admin

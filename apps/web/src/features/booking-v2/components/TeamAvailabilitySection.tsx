@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Loader2, AlertCircle } from "lucide-react";
+import { cn } from "@/lib/utils";
 import { TeamCard } from "@/src/features/booking-v2/components/TeamCard";
 
 type Team = { id: string; name: string; available: boolean };
@@ -42,7 +43,7 @@ type Props = {
   date: string;
   serviceSlug: string;
   selectedTeamId: string;
-  onSelect: (teamId: string) => void;
+  onSelect: (teamId: string, teamName: string) => void;
 };
 
 export function TeamAvailabilitySection({
@@ -100,18 +101,33 @@ export function TeamAvailabilitySection({
                   No team available for this date
                 </p>
                 <p className="mt-1 text-xs text-amber-700">
-                  All 3 teams are booked for {date}. Please choose a different date.
+                  All teams are booked for {date}. Please choose a different date.
+                </p>
+              </div>
+            </div>
+          ) : teamAvail.teams.length === 0 ? (
+            <div className="flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-4">
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" aria-hidden />
+              <div>
+                <p className="text-sm font-semibold text-amber-800">No teams are ready for this service yet</p>
+                <p className="mt-1 text-xs text-amber-700">
+                  Ask ops to activate a deep/move team with at least two roster members, then try again.
                 </p>
               </div>
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-3">
+            <div
+              className={cn(
+                "grid gap-3",
+                teamAvail.teams.length >= 3 ? "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" : "grid-cols-1 sm:grid-cols-2",
+              )}
+            >
               {teamAvail.teams.map((team) => (
                 <TeamCard
                   key={team.id}
                   team={team}
                   isSelected={selectedTeamId === team.id}
-                  onSelect={() => team.available && onSelect(team.id)}
+                  onSelect={() => team.available && onSelect(team.id, team.name)}
                 />
               ))}
             </div>

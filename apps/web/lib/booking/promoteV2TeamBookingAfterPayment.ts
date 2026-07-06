@@ -6,8 +6,16 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 export function teamServiceTypeFromBookingSlug(
   serviceSlug: string | null | undefined,
 ): "deep_cleaning" | "move_cleaning" {
-  const slug = String(serviceSlug ?? "").trim().toLowerCase();
-  return slug === "moving-cleaning" ? "move_cleaning" : "deep_cleaning";
+  const slug = String(serviceSlug ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/\//g, "_")
+    .replace(/\s+/g, "_")
+    .replace(/-/g, "_");
+  if (slug === "moving_cleaning" || slug === "move" || slug.startsWith("move_")) {
+    return "move_cleaning";
+  }
+  return "deep_cleaning";
 }
 
 /**

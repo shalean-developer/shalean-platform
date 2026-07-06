@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   AlertCircle,
@@ -74,6 +75,7 @@ export default function OfficeTeamsPage() {
   const [editTeam, setEditTeam] = useState<TeamRow | null>(null);
   const [editName, setEditName] = useState("");
   const [editCapacity, setEditCapacity] = useState("15");
+  const [editService, setEditService] = useState<"deep_cleaning" | "move_cleaning">("deep_cleaning");
   const [editActive, setEditActive] = useState(true);
   const [editBusy, setEditBusy] = useState(false);
 
@@ -149,6 +151,7 @@ export default function OfficeTeamsPage() {
     setEditTeam(row);
     setEditName(row.name);
     setEditCapacity(String(row.capacity_per_day));
+    setEditService(row.service_type === "move_cleaning" ? "move_cleaning" : "deep_cleaning");
     setEditActive(row.is_active !== false);
   }
 
@@ -170,6 +173,7 @@ export default function OfficeTeamsPage() {
         name,
         capacity_per_day: cap,
         is_active: editActive,
+        service_type: editService,
       });
       setEditTeam(null);
       emitAdminToast("Team updated.", "success");
@@ -218,8 +222,11 @@ export default function OfficeTeamsPage() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Teams</h1>
           <p className="mt-0.5 text-sm text-slate-500">
-            Create teams, manage rosters, and control dispatch. Each team takes 1 job/day; up to 3 team bookings per
-            day total.
+            Create teams and manage rosters here. To put a team on a deep or move job, open{" "}
+            <Link href="/office/bookings" className="font-semibold text-blue-600 hover:underline">
+              Office → Bookings
+            </Link>
+            , open the booking, and choose Assign team. Each team takes 1 job/day; up to 3 team bookings per day total.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -434,7 +441,7 @@ export default function OfficeTeamsPage() {
             </div>
             <div className="grid gap-2">
               <label htmlFor="office-team-service" className="text-sm font-medium text-slate-700">
-                Service type
+                Primary service label
               </label>
               <select
                 id="office-team-service"
@@ -445,6 +452,10 @@ export default function OfficeTeamsPage() {
                 <option value="deep_cleaning">Deep cleaning</option>
                 <option value="move_cleaning">Move cleaning</option>
               </select>
+              <p className="text-xs text-slate-500">
+                Teams with at least two roster members can take both deep and move jobs once assigned from Office →
+                Bookings.
+              </p>
             </div>
           </div>
           <DialogFooter className="gap-2">
@@ -502,8 +513,18 @@ export default function OfficeTeamsPage() {
                 />
               </div>
               <div className="grid gap-2">
-                <span className="text-sm font-medium text-slate-700">Service</span>
-                <p className="text-sm text-slate-500">{serviceLabel(editTeam.service_type)}</p>
+                <label htmlFor="office-edit-service" className="text-sm font-medium text-slate-700">
+                  Primary service label
+                </label>
+                <select
+                  id="office-edit-service"
+                  value={editService}
+                  onChange={(e) => setEditService(e.target.value as "deep_cleaning" | "move_cleaning")}
+                  className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-sm focus:border-blue-300 focus:outline-none"
+                >
+                  <option value="deep_cleaning">Deep cleaning</option>
+                  <option value="move_cleaning">Move cleaning</option>
+                </select>
               </div>
               <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
                 <input
