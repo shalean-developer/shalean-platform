@@ -11,6 +11,16 @@
         "light",
         "all"
       ],
+      "extraSlugs": [
+        "inside-cabinets",
+        "inside-oven",
+        "inside-fridge",
+        "interior-walls",
+        "ironing",
+        "laundry",
+        "interior-windows",
+        "water-plants"
+      ],
       "showCleaningProductsQuestion": true,
       "allowsExtraCleaner": true,
       "step1Questions": [
@@ -170,6 +180,14 @@
       "extraTypes": [
         "heavy",
         "all"
+      ],
+      "extraSlugs": [
+        "balcony-cleaning",
+        "carpet-cleaning",
+        "ceiling-cleaning",
+        "garage-cleaning",
+        "mattress-cleaning",
+        "outside-windows"
       ],
       "showCleaningProductsQuestion": false,
       "allowsExtraCleaner": false,
@@ -337,6 +355,15 @@
       "extraTypes": [
         "heavy",
         "all"
+      ],
+      "extraSlugs": [
+        "inside-oven",
+        "inside-cabinets",
+        "interior-walls",
+        "inside-fridge",
+        "balcony-cleaning",
+        "garage-cleaning",
+        "outside-windows"
       ],
       "showCleaningProductsQuestion": false,
       "allowsExtraCleaner": false,
@@ -520,6 +547,12 @@
         "light",
         "all"
       ],
+      "extraSlugs": [
+        "office-kitchen",
+        "interior-windows",
+        "carpet-cleaning",
+        "office-sanitisation"
+      ],
       "showCleaningProductsQuestion": true,
       "allowsExtraCleaner": true,
       "step1Questions": [
@@ -660,6 +693,12 @@
       "extraTypes": [
         "heavy",
         "all"
+      ],
+      "extraSlugs": [
+        "stain-treatment",
+        "pet-odour-treatment",
+        "fabric-protector",
+        "mattress-cleaning"
       ],
       "showCleaningProductsQuestion": true,
       "allowsExtraCleaner": true,
@@ -820,6 +859,13 @@
       "extraTypes": [
         "light",
         "all"
+      ],
+      "extraSlugs": [
+        "laundry",
+        "inside-oven",
+        "welcome-setup",
+        "interior-windows",
+        "inspection-photos"
       ],
       "showCleaningProductsQuestion": true,
       "allowsExtraCleaner": true,
