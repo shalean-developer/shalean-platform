@@ -128,6 +128,9 @@ export default function JobsProfilePage() {
   useEffect(() => { void load(); }, [load]);
 
   const handleLogout = useCallback(async () => {
+    if (typeof window !== "undefined") {
+      window.localStorage.removeItem("cleaner_id");
+    }
     await signOut();
     router.replace("/auth/login");
     router.refresh();
@@ -280,6 +283,7 @@ export default function JobsProfilePage() {
           iconColor="text-blue-600"
           label="Notifications"
           sub="Manage job and payout alerts"
+          onClick={() => router.push("/jobs/profile/notifications")}
         />
         <SettingsRow
           icon={Settings}
@@ -287,6 +291,7 @@ export default function JobsProfilePage() {
           iconColor="text-slate-600"
           label="Availability"
           sub="Manage your working days and hours"
+          onClick={() => router.push("/jobs/profile/availability")}
         />
         <SettingsRow
           icon={CreditCard}
@@ -294,6 +299,7 @@ export default function JobsProfilePage() {
           iconColor="text-green-600"
           label="Bank & payout details"
           sub="Manage your payout account"
+          onClick={() => router.push("/jobs/profile/payout")}
         />
         <SettingsRow
           icon={HelpCircle}
@@ -301,6 +307,7 @@ export default function JobsProfilePage() {
           iconColor="text-orange-500"
           label="Help & support"
           sub="Chat, FAQ, and contact us"
+          onClick={() => router.push("/jobs/profile/help")}
         />
         <SettingsRow
           icon={LogOut}
