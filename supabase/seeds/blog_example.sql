@@ -153,7 +153,7 @@ VALUES (
       "title": "Book a cleaner",
       "description": "Instant quote from real availability—pick bedrooms, bathrooms, and add-ons in under a minute.",
       "button_text": "Get an instant quote",
-      "link": "/booking",
+      "link": "/book",
       "variant": "primary"
     }
   ]
