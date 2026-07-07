@@ -1,3 +1,6 @@
+import { rowsToCsv } from "@/lib/admin/csvExport";
+import { landingDisplayName } from "@/lib/admin/landingPageAttribution";
+
 export type SeoAttributionSourceRow = {
   source: string;
   medium: string;
@@ -27,6 +30,16 @@ export type SeoAttributionChannelBar = {
   bookings: number;
   starts: number;
   pct: number;
+};
+
+export type SeoAttributionDayRow = {
+  date: string;
+  starts: number;
+  completed: number;
+};
+
+export type SeoAttributionTrendPoint = SeoAttributionDayRow & {
+  label: string;
 };
 
 export function seoAttributionChannelLabel(source: string): string {
@@ -72,4 +85,39 @@ export function formatAttributionSince(iso: string | undefined): string | null {
   const d = new Date(iso);
   if (!Number.isFinite(d.getTime())) return null;
   return d.toLocaleDateString("en-ZA", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function formatTrendDayLabel(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  if (!Number.isFinite(d.getTime())) return iso;
+  return d.toLocaleDateString("en-ZA", { month: "short", day: "numeric", timeZone: "UTC" });
+}
+
+/**
+ * Trim leading/trailing empty days from the daily series and attach a short display label.
+ * The API pads the full 30-day window with zeros; showing all of it drowns out real activity.
+ */
+export function buildAttributionTrendSeries(
+  byDay: SeoAttributionDayRow[] | undefined,
+): SeoAttributionTrendPoint[] {
+  const rows = byDay ?? [];
+  let start = 0;
+  let end = rows.length - 1;
+  while (start <= end && rows[start].starts === 0 && rows[start].completed === 0) start += 1;
+  while (end >= start && rows[end].starts === 0 && rows[end].completed === 0) end -= 1;
+  if (start > end) return [];
+  return rows.slice(start, end + 1).map((r) => ({ ...r, label: formatTrendDayLabel(r.date) }));
+}
+
+/** CSV export of the landing-page performance table (all rows, not just the current page). */
+export function buildSeoAttributionLandingCsv(rows: SeoAttributionLandingRow[]): string {
+  const data = rows.map((r) => ({
+    page: landingDisplayName(r.landing),
+    path: r.landing,
+    sessions: r.sessions,
+    starts: r.quoted,
+    completions: r.completed,
+    cvr_pct: r.conversionPct,
+  }));
+  return rowsToCsv(["page", "path", "sessions", "starts", "completions", "cvr_pct"], data);
 }

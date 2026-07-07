@@ -12,14 +12,20 @@ import {
   ChevronLeft,
   ChevronRight,
   Search,
+  Download,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
+import { downloadCsv } from "@/lib/admin/csvExport";
 import { DIRECT_BOOKING_FLOW_LANDING, landingDisplayName } from "@/lib/admin/landingPageAttribution";
+import { SeoAttributionTrendChart } from "@/components/admin/seo-attribution/SeoAttributionTrendChart";
 import {
   buildAttributionChannelBars,
+  buildAttributionTrendSeries,
+  buildSeoAttributionLandingCsv,
   findOrganicAttributionRow,
   formatAttributionSince,
+  type SeoAttributionDayRow,
   type SeoAttributionLandingRow,
   type SeoAttributionServiceRow,
   type SeoAttributionSourceRow,
@@ -39,6 +45,7 @@ type SeoAttributionPayload = {
   byLanding: SeoAttributionLandingRow[];
   bySource: SeoAttributionSourceRow[];
   byService?: SeoAttributionServiceRow[];
+  byDay?: SeoAttributionDayRow[];
 };
 
 const DEFAULT_PAGE_SIZE = 15;
@@ -53,6 +60,7 @@ export default function SeoAttributionPage() {
 
   const organicSource = useMemo(() => findOrganicAttributionRow(data?.bySource), [data]);
   const channelBars = useMemo(() => buildAttributionChannelBars(data?.bySource ?? []), [data]);
+  const trendPoints = useMemo(() => buildAttributionTrendSeries(data?.byDay), [data]);
   const sinceLabel = formatAttributionSince(data?.since);
 
   const allPages = data?.byLanding ?? [];
@@ -82,6 +90,13 @@ export default function SeoAttributionPage() {
   const summary = data?.summary;
   const bySource = data?.bySource ?? [];
   const byService = data?.byService ?? [];
+
+  function handleExportCsv() {
+    if (filteredPages.length === 0) return;
+    const csv = buildSeoAttributionLandingCsv(filteredPages);
+    const stamp = new Date().toISOString().slice(0, 10);
+    downloadCsv(`seo-attribution-landing-${stamp}.csv`, csv);
+  }
 
   return (
     <div className="space-y-5">
@@ -146,6 +161,32 @@ export default function SeoAttributionPage() {
             </div>
           );
         })}
+      </div>
+
+      <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-bold text-slate-800">Booking starts vs completions over time</h3>
+            <p className="mt-0.5 text-xs text-slate-500">Daily analytics sessions that started and completed a booking</p>
+          </div>
+          <div className="flex items-center gap-4 text-xs text-slate-500">
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-blue-600" /> Starts
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="h-2 w-2 rounded-full bg-emerald-600" /> Completions
+            </span>
+          </div>
+        </div>
+        {loading ? (
+          <div className="flex items-center justify-center gap-2 py-16 text-sm text-slate-500">
+            <Loader2 className="h-5 w-5 animate-spin" /> Loading…
+          </div>
+        ) : trendPoints.length === 0 ? (
+          <p className="py-16 text-center text-sm text-slate-500">No booking activity in this window yet.</p>
+        ) : (
+          <SeoAttributionTrendChart points={trendPoints} />
+        )}
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
@@ -220,15 +261,26 @@ export default function SeoAttributionPage() {
               Marketing pages only — funnel steps like /details are grouped as Direct / booking flow
             </p>
           </div>
-          <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-            <input
-              type="search"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search pages…"
-              className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none ring-blue-500 focus:ring-2"
-            />
+          <div className="flex items-center gap-2">
+            <div className="relative min-w-[200px] flex-1 sm:max-w-xs">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="search"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search pages…"
+                className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none ring-blue-500 focus:ring-2"
+              />
+            </div>
+            <button
+              type="button"
+              onClick={handleExportCsv}
+              disabled={loading || filteredPages.length === 0}
+              title="Export the landing page table to CSV"
+              className="flex shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-40"
+            >
+              <Download className="h-4 w-4" /> Export
+            </button>
           </div>
         </div>
 
