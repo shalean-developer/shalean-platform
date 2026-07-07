@@ -5,6 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   createZohoEstimate,
   createZohoInvoice,
+  markZohoEstimateSent,
+  markZohoInvoiceSent,
   updateZohoEstimate,
   updateZohoInvoice,
   todayYmdJhb,
@@ -23,12 +25,35 @@ function ymdOrToday(ymd: string | null | undefined): string {
 }
 
 /**
+ * Resolves the Zoho estimate id of the quote a sales invoice was converted
+ * from, so the new Zoho invoice can be linked back to that estimate.
+ */
+async function resolveSourceZohoEstimateId(
+  admin: SupabaseClient,
+  convertedFromId: string | null | undefined,
+): Promise<string | undefined> {
+  const quoteId = String(convertedFromId ?? "").trim();
+  if (!quoteId) return undefined;
+  const { data } = await admin
+    .from("sales_documents")
+    .select("zoho_estimate_id")
+    .eq("id", quoteId)
+    .maybeSingle();
+  const estimateId = String((data as { zoho_estimate_id?: string | null } | null)?.zoho_estimate_id ?? "").trim();
+  return estimateId || undefined;
+}
+
+/**
  * Creates or updates Zoho Books estimate/invoice for a sales document.
+ *
+ * When `opts.markSent` is set (the document is being emailed to the customer),
+ * the linked Zoho estimate/invoice is also moved out of Zoho draft into "sent"
+ * so Zoho mirrors Shalean's status. Documents that are never sent stay draft.
  */
 export async function syncSalesDocumentToZoho(
   admin: SupabaseClient,
   documentId: string,
-  opts?: { paymentUrl?: string | null },
+  opts?: { paymentUrl?: string | null; markSent?: boolean },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!process.env.ZOHO_CLIENT_ID || !process.env.ZOHO_REFRESH_TOKEN) {
     return { ok: false, error: "zoho_not_configured" };
@@ -66,6 +91,8 @@ export async function syncSalesDocumentToZoho(
     const linked = String(row.zoho_estimate_id ?? "").trim();
     const expiryDate = row.due_date ? ymdOrToday(row.due_date) : undefined;
 
+    let estimateId = linked;
+
     if (linked && editableWithoutPayment) {
       const upd = await updateZohoEstimate({
         zohoEstimateId: linked,
@@ -77,30 +104,34 @@ export async function syncSalesDocumentToZoho(
         currencyCode: row.currency,
       });
       if (!upd.ok) return { ok: false, error: upd.error };
-      return { ok: true };
+    } else if (!linked) {
+      const created = await createZohoEstimate({
+        referenceId: row.id,
+        ...contact,
+        lineItems: zohoLineItems,
+        estimateDate: invoiceDate,
+        expiryDate,
+        notes,
+        currencyCode: row.currency,
+      });
+      if (!created.ok) return { ok: false, error: created.error };
+      estimateId = created.zohoEstimateId;
+      await admin
+        .from("sales_documents")
+        .update({ zoho_estimate_id: created.zohoEstimateId })
+        .eq("id", documentId);
     }
 
-    if (linked) return { ok: true };
-
-    const created = await createZohoEstimate({
-      referenceId: row.id,
-      ...contact,
-      lineItems: zohoLineItems,
-      estimateDate: invoiceDate,
-      expiryDate,
-      notes,
-      currencyCode: row.currency,
-    });
-    if (!created.ok) return { ok: false, error: created.error };
-
-    await admin
-      .from("sales_documents")
-      .update({ zoho_estimate_id: created.zohoEstimateId })
-      .eq("id", documentId);
+    if (opts?.markSent && estimateId) {
+      // Non-fatal: Zoho rejects marking already-sent/invoiced estimates.
+      await markZohoEstimateSent(estimateId);
+    }
     return { ok: true };
   }
 
   const linkedInv = String(row.zoho_invoice_id ?? "").trim();
+  let invoiceId = linkedInv;
+
   if (linkedInv && editableWithoutPayment) {
     const upd = await updateZohoInvoice({
       zohoInvoiceId: linkedInv,
@@ -112,27 +143,31 @@ export async function syncSalesDocumentToZoho(
       currencyCode: row.currency,
     });
     if (!upd.ok) return { ok: false, error: upd.error };
-    return { ok: true };
+  } else if (!linkedInv) {
+    const invoicedEstimateId = await resolveSourceZohoEstimateId(admin, row.converted_from_id);
+    const created = await createZohoInvoice({
+      referenceId: row.id,
+      orderKind: "sales",
+      ...contact,
+      lineItems: zohoLineItems,
+      invoiceDate,
+      dueDate,
+      notes,
+      currencyCode: row.currency,
+      invoicedEstimateId,
+    });
+    if (!created.ok) return { ok: false, error: created.error };
+    invoiceId = created.zohoInvoiceId;
+    await admin
+      .from("sales_documents")
+      .update({ zoho_invoice_id: created.zohoInvoiceId })
+      .eq("id", documentId);
   }
 
-  if (linkedInv) return { ok: true };
-
-  const created = await createZohoInvoice({
-    referenceId: row.id,
-    orderKind: "sales",
-    ...contact,
-    lineItems: zohoLineItems,
-    invoiceDate,
-    dueDate,
-    notes,
-    currencyCode: row.currency,
-  });
-  if (!created.ok) return { ok: false, error: created.error };
-
-  await admin
-    .from("sales_documents")
-    .update({ zoho_invoice_id: created.zohoInvoiceId })
-    .eq("id", documentId);
+  if (opts?.markSent && invoiceId) {
+    // Non-fatal: Zoho rejects marking already-sent/paid invoices.
+    await markZohoInvoiceSent(invoiceId);
+  }
 
   return { ok: true };
 }

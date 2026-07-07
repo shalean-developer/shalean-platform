@@ -136,6 +136,11 @@ export type CreateInvoiceParams = {
   notes?: string;
   /** ISO-4217 currency code. Defaults to "ZAR". */
   currencyCode?: string;
+  /**
+   * Zoho estimate id this invoice was converted from. When set, Zoho links the
+   * new invoice to the estimate and marks the estimate as "Invoiced".
+   */
+  invoicedEstimateId?: string;
 };
 
 /**
@@ -173,6 +178,9 @@ export async function createZohoInvoice(
       line_items: params.lineItems,
       notes,
       currency_code: params.currencyCode ?? "ZAR",
+      ...(params.invoicedEstimateId?.trim()
+        ? { invoiced_estimate_id: params.invoicedEstimateId.trim() }
+        : {}),
     };
 
     const res = await zohoBooksClient.post<ZohoInvoiceCreateResponse>("/invoices", invoiceInput);
@@ -250,6 +258,22 @@ export async function voidZohoInvoice(zohoInvoiceId: string): Promise<ServiceRes
   try {
     await zohoBooksClient.post(`/invoices/${encodeURIComponent(id)}/status/void`, {});
     return { ok: true, voided: true };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
+/**
+ * Marks a Zoho invoice as "sent" so Zoho matches Shalean once the customer has
+ * been emailed. Idempotent from the caller's perspective: Zoho rejects the call
+ * for invoices that are already sent/paid, which callers should treat as noop.
+ */
+export async function markZohoInvoiceSent(zohoInvoiceId: string): Promise<ServiceResult<{ marked: true }>> {
+  const id = zohoInvoiceId.trim();
+  if (!id) return { ok: false, error: "missing_invoice_id" };
+  try {
+    await zohoBooksClient.post(`/invoices/${encodeURIComponent(id)}/status/sent`, {});
+    return { ok: true, marked: true };
   } catch (err) {
     return { ok: false, error: String(err instanceof Error ? err.message : err) };
   }
@@ -388,6 +412,22 @@ export async function updateZohoEstimate(
       zohoEstimateId: res.estimate.estimate_id,
       estimateNumber: res.estimate.estimate_number,
     };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
+/**
+ * Marks a Zoho estimate as "sent" so Zoho matches Shalean once the quote has
+ * been emailed. Zoho rejects the call for estimates that are already sent or
+ * accepted/invoiced, which callers should treat as a noop.
+ */
+export async function markZohoEstimateSent(zohoEstimateId: string): Promise<ServiceResult<{ marked: true }>> {
+  const id = zohoEstimateId.trim();
+  if (!id) return { ok: false, error: "missing_estimate_id" };
+  try {
+    await zohoBooksClient.post(`/estimates/${encodeURIComponent(id)}/status/sent`, {});
+    return { ok: true, marked: true };
   } catch (err) {
     return { ok: false, error: String(err instanceof Error ? err.message : err) };
   }

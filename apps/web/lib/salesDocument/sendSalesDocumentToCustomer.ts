@@ -60,7 +60,10 @@ export async function sendSalesDocumentToCustomer(
     paymentUrlForZoho = trustSalesDocPayPageUrl(row.id, pay.reference, pay.authorizationUrl);
   }
 
-  const zoho = await syncSalesDocumentToZoho(admin, row.id, { paymentUrl: paymentUrlForZoho });
+  const zoho = await syncSalesDocumentToZoho(admin, row.id, {
+    paymentUrl: paymentUrlForZoho,
+    markSent: true,
+  });
   if (!zoho.ok) return { ok: false, error: `zoho:${zoho.error}` };
 
   const mail = await sendSalesDocumentEmail({

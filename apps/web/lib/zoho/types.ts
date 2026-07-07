@@ -23,6 +23,12 @@ export type ZohoInvoiceInput = {
   /** ISO-4217 currency code, e.g. "ZAR" */
   currency_code?: string;
   reference_number?: string;
+  /**
+   * Links this invoice back to the estimate it was converted from so Zoho marks
+   * the source estimate as "Invoiced" — keeps Zoho in step with Shalean's own
+   * quote→invoice conversion.
+   */
+  invoiced_estimate_id?: string;
 };
 
 export type ZohoInvoice = {

@@ -14,6 +14,7 @@ import { initializePaystackForMonthlyInvoice } from "@/lib/monthlyInvoice/initia
 import { sendMonthlyInvoiceEmail } from "@/lib/monthlyInvoice/sendMonthlyInvoiceEmail";
 import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
 import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
+import { markZohoInvoiceSent } from "@/lib/zoho/zohoBooksService";
 import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
 import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -317,6 +318,11 @@ export async function finalizeAndSendMonthlyInvoice(
       .update({ initial_invoice_email_dispatch_claimed: false })
       .eq("id", row.id);
     return { ok: false, error: evAppend.error ?? "email_event_failed" };
+  }
+
+  if (zohoInvoiceId) {
+    // Non-fatal: keep Zoho in step with the now-sent monthly invoice.
+    await markZohoInvoiceSent(zohoInvoiceId);
   }
 
   return { ok: true, outcome: "sent", paymentUrl: brandedPayUrl, sentAt, alreadyEmailed: false };
