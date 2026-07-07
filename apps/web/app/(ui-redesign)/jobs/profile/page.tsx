@@ -21,6 +21,7 @@ import { useRouter } from "next/navigation";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { mapCleanerMeToMobileProfile } from "@/lib/cleaner/cleanerMobileProfileFromMe";
+import { CleanerReportFeedbackSection } from "@/components/cleaner/CleanerReportFeedbackSection";
 import { ProfileSummaryCard } from "@/components/cleaner/ProfileSummaryCard";
 import type { CleanerMeRow } from "@/lib/cleaner/cleanerMobileProfileFromMe";
 import { cn } from "@/lib/utils";
@@ -263,6 +264,8 @@ export default function JobsProfilePage() {
           </div>
         </div>
       </div>
+
+      <CleanerReportFeedbackSection />
 
       {/* Settings */}
       <div className="rounded-2xl border border-gray-100 bg-white shadow-sm overflow-hidden divide-y divide-gray-50">

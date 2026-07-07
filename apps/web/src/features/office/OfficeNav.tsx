@@ -118,6 +118,7 @@ export const OFFICE_NAV_MODULES: NavModule[] = [
       { label: "SLA Breaches", href: "/office/sla-breaches", icon: AlertTriangle },
       { label: "Cleaner Performance", href: "/office/cleaner-performance", icon: Award },
       { label: "Earnings disputes", href: "/office/disputes", icon: Shield },
+      { label: "Cleaner reports & feedback", href: "/office/cleaner-report-feedback", icon: MessageCircle },
       { label: "Dispatch metrics", href: "/office/metrics", icon: Zap },
       { label: "Operations", href: "/office/operations", icon: Settings },
     ],
