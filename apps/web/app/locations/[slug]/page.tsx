@@ -10,6 +10,12 @@ import {
   resolveLocationSeoMetaFieldsAsync,
 } from "@/lib/seo/capeTownSeoPages";
 import { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
+import {
+  HOME_OG_IMAGE,
+  HOME_OG_IMAGE_ALT,
+  HOME_OG_IMAGE_HEIGHT,
+  HOME_OG_IMAGE_WIDTH,
+} from "@/lib/seo/homePageMeta";
 import { getLocationHubBlogCards } from "@/lib/seo/location-hub-blog-cards";
 import { resolveLocationHubUiPatch } from "@/lib/seo/resolve-location-hub-ui-patch";
 import { resolveLocationTitleVariant } from "@/lib/seo/resolve-location-title-variant";
@@ -51,13 +57,24 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     openGraph: {
       type: "website",
       url: `${SITE_ORIGIN}${path}`,
+      locale: "en_ZA",
+      siteName: "Shalean Cleaning Services",
       title,
       description,
+      images: [
+        {
+          url: HOME_OG_IMAGE,
+          width: HOME_OG_IMAGE_WIDTH,
+          height: HOME_OG_IMAGE_HEIGHT,
+          alt: HOME_OG_IMAGE_ALT,
+        },
+      ],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
+      images: [HOME_OG_IMAGE],
     },
   };
 }
