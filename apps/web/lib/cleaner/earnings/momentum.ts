@@ -1,5 +1,4 @@
 import { earningsPeriodBucketYmd } from "@/lib/cleaner/cleanerEarningsPeriodTotals";
-import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 import { getJhbIsoWeekStartYmd } from "@/lib/cleaner/earnings/weekBounds";
 import type { CleanerEarningsRowWire } from "@/lib/cleaner/earnings/types";
@@ -10,7 +9,6 @@ function cents(n: unknown): number {
 
 /** Completed-job earnings bucketed in the ISO week *before* the current one (Mon–Sun, JHB). */
 export function priorIsoWeekEarnedCents(rows: readonly CleanerEarningsRowWire[], now = new Date()): number {
-  const todayY = johannesburgCalendarYmd(now);
   const thisWeekStart = getJhbIsoWeekStartYmd(now);
   const prevWeekEnd = addDaysYmd(thisWeekStart, -1);
   const prevWeekStart = addDaysYmd(prevWeekEnd, -6);

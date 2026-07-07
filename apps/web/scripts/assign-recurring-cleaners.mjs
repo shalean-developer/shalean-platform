@@ -79,7 +79,6 @@ async function main() {
 
   const planCache = new Map();
   let wouldUpdate = 0;
-  let updated = 0;
   let skipped = 0;
   let failed = 0;
 
@@ -124,7 +123,6 @@ async function main() {
       failed++;
       console.error(`FAIL ${label}:`, upErr.message);
     } else {
-      updated++;
       console.log(`ASSIGNED ${label}`);
     }
   }

@@ -266,12 +266,6 @@ export async function GET(request: Request) {
     const bonusCents = facing?.bonus_cents ?? 0;
     bonus_total_cents += bonusCents;
     const customerPaid = bookingTotalCents(b);
-    const platformFee =
-      customerPaid != null
-        ? customerPaid < cents
-          ? null
-          : Math.max(0, customerPaid - cents)
-        : null;
     if (customerPaid != null && customerPaid < cents) {
       metrics.increment("cleaner.earnings_negative_estimate_seen", {
         booking_id: b.id,

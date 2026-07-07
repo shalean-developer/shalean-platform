@@ -175,7 +175,7 @@ const withSelected = await admin
   .gte("date", "2026-07-01");
 console.log("Unassigned with selected_cleaner_id set:", withSelected.count);
 
-const { data: plans } = await admin
+await admin
   .from("recurring_bookings")
   .select("id, preferred_cleaner_id, status")
   .eq("status", "active")

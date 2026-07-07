@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekdays";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
-import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
+import { isStrictAvailabilityEnabled } from "@/lib/booking/availabilityFlags";
 import {
   buildDailyCleanerWorkloadShadowReport,
   reportDailyCleanerWorkloadShadow,
@@ -150,7 +150,7 @@ export async function getEligibleCleaners(
   admin: SupabaseClient,
   params: GetEligibleCleanersParams,
 ): Promise<AvailableCleaner[]> {
-  const strict = params.strictAvailability ?? useStrictAvailability();
+  const strict = params.strictAvailability ?? isStrictAvailabilityEnabled();
   const limit = params.limit ?? 500;
   const capabilityGate = serviceCapabilityGateFromBookingFields(
     params.serviceType,

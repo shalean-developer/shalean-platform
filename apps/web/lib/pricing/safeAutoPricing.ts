@@ -328,7 +328,7 @@ export async function submitPricingSuggestions(
 export async function approvePricingChange(
   admin: SupabaseClient,
   changeId: string,
-  opts: { createdBy?: string | null } = {},
+  _opts: { createdBy?: string | null } = {},
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: row, error: fErr } = await admin.from("pricing_changes").select("*").eq("id", changeId).maybeSingle();
   if (fErr || !row) return { ok: false, error: fErr?.message ?? "Change not found." };

@@ -18,7 +18,6 @@ const runbookPath = path.join(
 );
 
 const migrationSql = readFileSync(migrationPath, "utf8");
-const migrationSqlLower = migrationSql.toLowerCase();
 const runbookSql = readFileSync(runbookPath, "utf8");
 const runbookSqlLower = runbookSql.toLowerCase();
 

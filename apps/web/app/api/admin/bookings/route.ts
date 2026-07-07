@@ -42,7 +42,6 @@ import {
   buildEquipmentPricingSnapshot,
   equipmentPersistFields,
   quoteEquipmentForAddress,
-  type EquipmentQuoteResult,
 } from "@/lib/booking-v2/equipmentPricing";
 import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";

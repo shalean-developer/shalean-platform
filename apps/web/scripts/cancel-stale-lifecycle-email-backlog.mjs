@@ -94,7 +94,7 @@ const BATCH = 100;
 let updated = 0;
 for (let i = 0; i < ids.length; i += BATCH) {
   const batch = ids.slice(i, i + BATCH);
-  const { error: upErr, count } = await admin
+  const { error: upErr } = await admin
     .from("booking_lifecycle_jobs")
     .update({ status: "cancelled", last_error: CANCEL_REASON })
     .in("id", batch)

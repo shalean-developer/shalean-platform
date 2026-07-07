@@ -138,13 +138,19 @@ export function percentileLinear(sortedAsc: number[], p: number): number | null 
   return a + (b - a) * (pos - lo);
 }
 
+function logsCountBaseQuery(admin: SupabaseClient, startIso: string) {
+  return admin.from("system_logs").select("id", { count: "exact", head: true }).gte("created_at", startIso);
+}
+
+type LogsCountQuery = ReturnType<typeof logsCountBaseQuery>;
+
 async function countLogsBetween(
   admin: SupabaseClient,
   startIso: string,
   endIsoExclusive: string | null,
-  build: (q: any) => any,
+  build: (q: LogsCountQuery) => LogsCountQuery,
 ): Promise<number> {
-  let q = admin.from("system_logs").select("id", { count: "exact", head: true }).gte("created_at", startIso);
+  let q = logsCountBaseQuery(admin, startIso);
   if (endIsoExclusive) q = q.lt("created_at", endIsoExclusive);
   const { count, error } = (await build(q)) as unknown as { count: number | null; error: PostgrestError | null };
   if (error) throw new Error(error.message);

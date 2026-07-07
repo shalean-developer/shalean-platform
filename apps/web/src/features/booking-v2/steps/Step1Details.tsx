@@ -270,9 +270,9 @@ function groupQuestions(questions: FormQuestion[]): QuestionGroup[] {
 // ─── Step 1 ─────────────────────────────────────────────────────────────────────
 
 export function Step1Details() {
-  const { serviceSlug, liveConfig, catalogLoading } = useBookingV2();
+  const { serviceSlug, liveConfig } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
-  const { register, control, formState: { errors }, watch, setValue } = useFormContext<BookingV2FormData>();
+  const { register, watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
 
   const extras = liveConfig?.extras ?? [];

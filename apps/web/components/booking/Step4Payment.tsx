@@ -102,7 +102,6 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
   const urlPromoAppliedRef = useRef(false);
   const { catalog, canonicalTotalZar } = useBookingPrice();
 
-  const [promoOpen, setPromoOpen] = useState(false);
   const [promoInput, setPromoInput] = useState("");
   const [promoApplied, setPromoApplied] = useState<{
     code: string;

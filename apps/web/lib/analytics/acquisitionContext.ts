@@ -30,7 +30,6 @@ export function captureAcquisitionFirstTouchIfNeeded(): void {
     if (window.localStorage.getItem(FIRST_TOUCH_KEY)) return;
     const params = new URLSearchParams(window.location.search);
     const utmSource = readParam(params, "utm_source");
-    const utmMedium = readParam(params, "utm_medium");
     const body: AcquisitionFirstTouch = {
       landing_pathname: window.location.pathname.slice(0, 500),
       landing_search: window.location.search ? window.location.search.slice(0, 2000) : null,

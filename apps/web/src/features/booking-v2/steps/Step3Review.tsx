@@ -14,7 +14,6 @@ import {
   X,
   ChevronLeft,
   ChevronRight,
-  AlertCircle,
   RefreshCw,
   Package,
 } from "lucide-react";
@@ -389,7 +388,7 @@ function ScheduleEditPanel() {
   const config = SERVICE_CONFIG[serviceSlug];
   const isTeamMode = (liveConfig?.cleanerMode ?? config.cleanerMode) === "team";
 
-  const { control, watch, setValue, getValues } = useFormContext<BookingV2FormData>();
+  const { control, watch, setValue } = useFormContext<BookingV2FormData>();
   const bookingType = watch("bookingType");
   const date = watch("date");
   const time = watch("time");
@@ -641,7 +640,7 @@ function ScheduleEditPanel() {
 // ─── Extras edit panel ─────────────────────────────────────────────────────────
 
 function ExtrasEditPanel() {
-  const { serviceSlug, liveConfig } = useBookingV2();
+  const { liveConfig } = useBookingV2();
   const { watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
 

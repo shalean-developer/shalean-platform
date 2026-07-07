@@ -1,6 +1,5 @@
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import {
-  normalizeBillingEmail,
   pickBillingEmail,
 } from "@/lib/zoho/shaleanBillingContactEmail";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";

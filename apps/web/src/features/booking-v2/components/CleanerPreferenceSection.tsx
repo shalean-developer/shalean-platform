@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, AlertCircle, Users, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
+import { AlertCircle, Users, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PREFERRED_CLEANER_CUSTOMER_DISCLAIMER } from "@/lib/dispatch/preferredCleanerDispatchPolicy";
 import { CleanerCard } from "@/src/features/booking-v2/components/CleanerCard";

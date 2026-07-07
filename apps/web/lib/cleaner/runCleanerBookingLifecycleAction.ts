@@ -37,10 +37,65 @@ import {
 import { deriveBookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
 import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
 import { isBookingCompletedRouterEnabled } from "@/lib/notifications/notificationRouter";
+import {
+  buildViewerRosterContext,
+  pairedRosterMemberShouldShowComplete,
+  type BookingCleanerRosterLifecycleRow,
+} from "@/lib/cleaner/pairedRosterMemberLifecycle";
+import { isPairedRosterSoloJob } from "@/lib/payout/pairedRosterPayout";
 
 export type CleanerLifecycleAction = "accept" | "reject" | "en_route" | "start" | "complete";
 
 export type CleanerLifecycleResult = { status: number; json: Record<string, unknown> };
+
+async function loadBookingRosterLifecycleRows(
+  admin: SupabaseClient,
+  bookingId: string,
+): Promise<BookingCleanerRosterLifecycleRow[]> {
+  const { data, error } = await admin
+    .from("booking_cleaners")
+    .select("cleaner_id, role, completed_at")
+    .eq("booking_id", bookingId);
+  if (error || !data?.length) return [];
+  return (data as { cleaner_id?: string; role?: string; completed_at?: string | null }[])
+    .map((r) => ({
+      cleaner_id: String(r.cleaner_id ?? "").trim(),
+      role: String(r.role ?? "member"),
+      completed_at: r.completed_at ?? null,
+    }))
+    .filter((r) => r.cleaner_id);
+}
+
+async function incrementCleanerJobsCompleted(admin: SupabaseClient, cleanerId: string): Promise<void> {
+  const { data: cj } = await admin.from("cleaners").select("jobs_completed").eq("id", cleanerId).maybeSingle();
+  const prev = cj && typeof cj === "object" ? Number((cj as { jobs_completed?: number }).jobs_completed ?? 0) : 0;
+  await admin.from("cleaners").update({ jobs_completed: prev + 1 }).eq("id", cleanerId);
+}
+
+async function markRosterCleanerVisitComplete(params: {
+  admin: SupabaseClient;
+  bookingId: string;
+  cleanerId: string;
+  now: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await params.admin
+    .from("booking_cleaners")
+    .update({ completed_at: params.now })
+    .eq("booking_id", params.bookingId)
+    .eq("cleaner_id", params.cleanerId);
+  if (error) return { ok: false, error: error.message };
+  return { ok: true };
+}
+
+function pairedRosterLeadCleaner(
+  ctx: ReturnType<typeof buildViewerRosterContext>,
+  bRow: BookingLifecycleRow,
+  cleanerId: string,
+): boolean {
+  if (ctx.viewerRosterRole === "lead") return true;
+  const cid = cleanerId.trim();
+  return String(bRow.cleaner_id ?? "").trim() === cid || String(bRow.payout_owner_cleaner_id ?? "").trim() === cid;
+}
 
 function traceCleanerLifecycle(params: {
   outcome: "entered" | "blocked" | "success" | "duplicate";
@@ -1120,6 +1175,82 @@ export async function runCleanerBookingLifecycleAction(params: {
   }
 
   if (action === "complete") {
+    const rosterRows = await loadBookingRosterLifecycleRows(admin, bookingId);
+    const pairedRosterSolo = isPairedRosterSoloJob({
+      isTeamJob: bRow.is_team_job === true,
+      rosterRows,
+    });
+    if (pairedRosterSolo) {
+      const rosterCtx = buildViewerRosterContext({
+        booking: { is_team_job: bRow.is_team_job === true },
+        rosterRows,
+        viewerCleanerId: cleanerId,
+      });
+      const isLead = pairedRosterLeadCleaner(rosterCtx, bRow, cleanerId);
+
+      if (rosterCtx.viewerRosterCompletedAt) {
+        traceCleanerLifecycle({
+          outcome: "duplicate",
+          bookingId,
+          cleanerId,
+          action,
+          bookingStatus: st,
+          cleanerResponseStatus: bRow.cleaner_response_status,
+          dispatchStatus: bRow.dispatch_status,
+          httpStatus: 200,
+          reasonCode: "roster_complete_duplicate",
+        });
+        return { status: 200, json: { ok: true, duplicate: true, status: "roster_completed" } };
+      }
+
+      if (
+        !isLead &&
+        pairedRosterMemberShouldShowComplete(bRow as Record<string, unknown>, rosterCtx)
+      ) {
+        const marked = await markRosterCleanerVisitComplete({ admin, bookingId, cleanerId, now });
+        if (!marked.ok) {
+          return { status: 500, json: { error: marked.error, code: "roster_complete_update_failed" } };
+        }
+        await incrementCleanerJobsCompleted(admin, cleanerId);
+        await syncCleanerBusyFromBookings(admin, cleanerId);
+        traceCleanerLifecycle({
+          outcome: "success",
+          bookingId,
+          cleanerId,
+          action,
+          bookingStatus: st,
+          cleanerResponseStatus: bRow.cleaner_response_status,
+          dispatchStatus: bRow.dispatch_status,
+          httpStatus: 200,
+        });
+        return { status: 200, json: { ok: true, status: "roster_completed", roster_member: true } };
+      }
+
+      if (
+        !isLead &&
+        !pairedRosterMemberShouldShowComplete(bRow as Record<string, unknown>, rosterCtx)
+      ) {
+        traceCleanerLifecycle({
+          outcome: "blocked",
+          bookingId,
+          cleanerId,
+          action,
+          bookingStatus: st,
+          cleanerResponseStatus: bRow.cleaner_response_status,
+          dispatchStatus: bRow.dispatch_status,
+          httpStatus: 400,
+          reasonCode: CLEANER_LIFECYCLE_CODE.COMPLETE_REQUIRES_IN_PROGRESS,
+        });
+        return {
+          status: 400,
+          json: {
+            error: "Wait for the lead cleaner to start the job before completing your visit.",
+            code: CLEANER_LIFECYCLE_CODE.COMPLETE_REQUIRES_IN_PROGRESS,
+          },
+        };
+      }
+    }
+
     if (st !== "in_progress") {
       traceCleanerLifecycle({
         outcome: "blocked",
@@ -1449,6 +1580,10 @@ export async function runCleanerBookingLifecycleAction(params: {
     await admin.from("cleaners").update({ jobs_completed: prev + 1 }).eq("id", cleanerId);
 
     await syncCleanerBusyFromBookings(admin, cleanerId);
+
+    if (pairedRosterSolo) {
+      await markRosterCleanerVisitComplete({ admin, bookingId, cleanerId, now });
+    }
 
     const { recordAssignmentOutcomeAndLearn } = await import("@/lib/marketplace-intelligence/assignmentOutcomeFeedback");
     try {

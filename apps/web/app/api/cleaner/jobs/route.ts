@@ -33,6 +33,7 @@ import {
   DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
 } from "@/lib/cleaner/applyPreviewEarningsToCleanerJobRows";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -82,7 +83,7 @@ export async function GET(request: Request) {
   }
 
   const bookingSelect =
-    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
+    "id, service, service_slug, rooms, bathrooms, date, time, location, status, dispatch_status, pricing_version_id, customer_name, customer_phone, extras, assigned_at, accepted_at, en_route_at, started_at, completed_at, created_at, booking_snapshot, is_team_job, team_id, team_member_count_snapshot, cleaner_id, payout_owner_cleaner_id, cleaner_count, cleaner_response_status, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, payout_status, payout_paid_at, payout_frozen_cents, total_paid_zar, total_price, amount_paid_cents, payment_completed_at, is_recurring_generated, billing_type, monthly_invoice_id, admin_recurring_unpaid_completion_override_at, admin_recurring_unpaid_completion_override_by";
 
   const { data: jobsRaw, error } = directAssignments
     ? await admin
@@ -343,10 +344,16 @@ export async function GET(request: Request) {
       }))
     : jobsWithRoster;
 
+  const jobsWithPairedContext = await augmentCleanerJobsWithViewerRosterContext(
+    admin,
+    jobsPayload as Record<string, unknown>[],
+    viewerCleanerId,
+  );
+
   if (cardView) {
     const out = await applyPreviewEarningsToCleanerJobRows(admin, {
       cleanerId: viewerCleanerId,
-      rows: jobsPayload as Record<string, unknown>[],
+      rows: jobsWithPairedContext,
       maxPreviews: DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
     });
     return NextResponse.json({ jobs: out });
@@ -355,11 +362,11 @@ export async function GET(request: Request) {
   if (!lite) {
     const out = await applyPreviewEarningsToCleanerJobRows(admin, {
       cleanerId: viewerCleanerId,
-      rows: jobsPayload as Record<string, unknown>[],
+      rows: jobsWithPairedContext,
       maxPreviews: DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP,
     });
     return NextResponse.json({ jobs: out });
   }
 
-  return NextResponse.json({ jobs: jobsPayload });
+  return NextResponse.json({ jobs: jobsWithPairedContext });
 }

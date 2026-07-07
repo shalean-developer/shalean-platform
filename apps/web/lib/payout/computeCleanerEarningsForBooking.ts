@@ -7,7 +7,7 @@ import {
   type EarningsLineItemInput,
 } from "@/lib/payout/computeEarningsFromLineItems";
 import { resolveEffectiveLineCleanerSharePercentageForBooking } from "@/lib/payout/tenureBasedCleanerLineShare";
-import { useLegacyPayoutEngine } from "@/lib/payout/canonicalCleanerPayout";
+import { isLegacyPayoutEngineEnabled } from "@/lib/payout/canonicalCleanerPayout";
 
 export type ComputeCleanerEarningsForBookingResult =
   | { ok: true; skipped: true; reason: string }
@@ -76,10 +76,10 @@ export async function computeCleanerEarningsForBooking(params: {
     return { ok: true, skipped: true, reason: "no_line_items" };
   }
 
-  const useCanonicalLines =
-    !useLegacyPayoutEngine() && canonicalDisplayCents != null && Number.isFinite(Number(canonicalDisplayCents));
+  const shouldUseCanonicalLines =
+    !isLegacyPayoutEngineEnabled() && canonicalDisplayCents != null && Number.isFinite(Number(canonicalDisplayCents));
 
-  if (useCanonicalLines) {
+  if (shouldUseCanonicalLines) {
     const target = Math.max(0, Math.floor(Number(canonicalDisplayCents)));
     const lineInputs: EarningsLineItemInput[] = items
       .map(

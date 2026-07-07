@@ -157,20 +157,6 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
     return { delta: Math.round(zar * 100), next: props.totalAmountCents + Math.round(zar * 100) };
   })();
 
-  async function run(label: string, fn: () => Promise<void>) {
-    setBusy(label);
-    setToast(null);
-    try {
-      await fn();
-      setToast({ text: "Done." });
-      await props.onDone();
-    } catch (e) {
-      setToast({ text: e instanceof Error ? e.message : "Action failed.", error: true });
-    } finally {
-      setBusy(null);
-    }
-  }
-
   async function copyLink() {
     const url = props.paymentLink?.trim();
     if (!url) return;

@@ -81,7 +81,6 @@ async function main() {
       console.error("Missing Supabase env for write mode.");
       process.exit(1);
     }
-    const admin = createClient(url, key, { auth: { persistSession: false } });
     for (const item of top) {
       const post = generateProgrammaticPost({
         location: item.locationName,

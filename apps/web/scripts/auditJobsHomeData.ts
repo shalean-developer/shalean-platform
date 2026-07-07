@@ -46,7 +46,6 @@ async function main() {
     .maybeSingle();
   console.log("KNOWN_BOOKING", JSON.stringify(known, null, 2));
 
-  const princessId = "7b0182c9-0d1b-4dfc-9597-e278854251bd";
   const [{ data: owner }, { data: roster }] = await Promise.all([
     sb.from("cleaners").select("id, full_name, user_id").eq("id", "015e91e8-df25-4fde-8db1-a5901b005ae3").maybeSingle(),
     sb.from("booking_cleaners").select("cleaner_id, role").eq("booking_id", bid),

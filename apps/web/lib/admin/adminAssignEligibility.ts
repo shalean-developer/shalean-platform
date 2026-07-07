@@ -1,7 +1,7 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { cleanerWorksOnScheduledWeekday } from "@/lib/cleaner/availabilityWeekdays";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
-import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
+import { isStrictAvailabilityEnabled } from "@/lib/booking/availabilityFlags";
 import { cleanerAreasAllowJob, jobFitsAvailabilityWindows } from "@/lib/booking/getEligibleCleaners";
 import { cleanerAccountEligibleForCustomerBooking } from "@/lib/booking/cleanerSlotEligibility";
 import {
@@ -28,7 +28,7 @@ type AvRow = { start_time: string; end_time: string; is_available: boolean };
 export function cleanerSlotMatchesCalendar(windows: AvRow[], bookingTimeHm: string): boolean {
   const t = hmToMinutes(bookingTimeHm.trim().slice(0, 5));
   if (t == null) return false;
-  return jobFitsAvailabilityWindows(windows, t, t + DEFAULT_ASSIGN_JOB_DURATION_MIN, !useStrictAvailability());
+  return jobFitsAvailabilityWindows(windows, t, t + DEFAULT_ASSIGN_JOB_DURATION_MIN, !isStrictAvailabilityEnabled());
 }
 
 function intervalsOverlap(a0: number, a1: number, b0: number, b1: number): boolean {
@@ -98,7 +98,7 @@ export function nextAvailableBookingStartHm(
   windows: AvRow[],
   others: Array<{ time: string | null; duration_minutes?: number | null }>,
 ): string | null {
-  const strict = useStrictAvailability();
+  const strict = isStrictAvailabilityEnabled();
   let t = Math.ceil(startFromMin / NEXT_SLOT_STEP_MIN) * NEXT_SLOT_STEP_MIN;
   for (; t + durationMin <= NEXT_SLOT_SEARCH_END_MIN; t += NEXT_SLOT_STEP_MIN) {
     const winObjs = windows.map((w) => ({
@@ -370,7 +370,7 @@ export async function computeAssignEligibility(
   } = params;
   const capabilityGate = serviceCapabilityGateFromBookingFields(bookingCapabilitySlug, bookingCapabilityLabel);
   const startMin = dayMinutes(bookingTimeHm);
-  const strict = useStrictAvailability();
+  const strict = isStrictAvailabilityEnabled();
   if (!cleanerIds.length || startMin == null) {
     for (const id of cleanerIds) {
       out.set(id, {

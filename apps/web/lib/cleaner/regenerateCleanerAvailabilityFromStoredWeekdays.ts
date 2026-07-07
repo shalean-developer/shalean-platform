@@ -6,7 +6,6 @@ import { replaceCleanerAvailabilityFromWeekly } from "@/lib/admin/replaceCleaner
 import {
   CLEANER_WEEKDAY_CODE_TO_UTC_JS_DAY,
   parseCleanerAvailabilityWeekdaysStrict,
-  type CleanerWeekdayCode,
 } from "@/lib/cleaner/availabilityWeekdays";
 import type { WeeklyScheduleWindow } from "@/lib/booking/weeklyAvailability";
 

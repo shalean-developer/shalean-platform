@@ -21,7 +21,6 @@ import {
 } from "@/lib/salesDocument/createBookingFromSalesQuoteInvoice";
 
 function mockAdmin(invoices: Array<Record<string, unknown>>, existingBookingId: string | null = null) {
-  let bookingsCall = 0;
   const listChain = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
@@ -36,7 +35,6 @@ function mockAdmin(invoices: Array<Record<string, unknown>>, existingBookingId: 
         return {
           select: vi.fn().mockReturnThis(),
           eq: vi.fn().mockImplementation(() => {
-            bookingsCall += 1;
             return {
               maybeSingle: vi.fn().mockResolvedValue({
                 data: existingBookingId ? { id: existingBookingId } : null,

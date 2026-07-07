@@ -23,8 +23,6 @@ const optionalContactPhoneField = z
 
 // ─── Step 1: Details ───────────────────────────────────────────────────────────
 
-import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
-
 const equipmentQuoteSchema = z
   .object({
     distance_km: z.number(),

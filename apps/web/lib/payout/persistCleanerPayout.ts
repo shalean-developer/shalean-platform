@@ -1,5 +1,4 @@
 import {
-  calculateCleanerPayoutFromBookingRow,
   type CleanerPayoutResult,
   resolvePayoutBaseAndServiceFeeCents,
 } from "@/lib/payout/calculateCleanerPayout";
@@ -8,7 +7,7 @@ import {
   FIXED_SPECIAL_PAYOUT_CENTS,
   normalizeBookingServiceIdForPayout,
   resolveCanonicalCleanerPayout,
-  useLegacyPayoutEngine,
+  isLegacyPayoutEngineEnabled,
 } from "@/lib/payout/canonicalCleanerPayout";
 import {
   bookingSignalsPaidForZeroDisplayRecompute,
@@ -478,7 +477,6 @@ export async function resolvePersistEarningsComputation(params: {
 
   let earnings: ComputeBookingEarningsOutput | null = null;
   let usedFallback = false;
-  let computeRejectReason: string | null = null;
   let usedLineItemBasis = false;
 
   async function tryComputeEarnings(servicePriceCents: number, team: boolean): Promise<ComputeBookingEarningsOutput | null> {
@@ -492,9 +490,8 @@ export async function resolvePersistEarningsComputation(params: {
         teamCleanerCount: team ? teamCleanerCountForCanonical : undefined,
       });
       if (isValidEarningsShape(computed)) return computed;
-      computeRejectReason = "invalid_compute_output";
-    } catch (e) {
-      computeRejectReason = `compute_threw:${String(e)}`;
+    } catch {
+      // compute failed; fall through to fallback path
     }
     return null;
   }
@@ -569,7 +566,7 @@ async function previewTeamMemberAllocatedCents(params: {
   const exp = cleanerId.trim();
   if (!participantIds.includes(exp)) return null;
 
-  if (!useLegacyPayoutEngine()) {
+  if (!isLegacyPayoutEngineEnabled()) {
     const canonical = await resolveBookingCanonicalPayout(admin, {
       bookingId,
       row: params.bookingRow,
@@ -875,7 +872,7 @@ async function persistCleanerPayoutIfUnsetCore(
     });
     return { ok: false, error: earned.error };
   }
-  const { earnings, usedFallback, usedLineItemBasis, lineItemRows, payoutBaseCents, serviceFeeCents, bookingDateIso } =
+  const { earnings, usedFallback, usedLineItemBasis, lineItemRows, payoutBaseCents, serviceFeeCents } =
     earned;
 
   if (isTeamJob) {
@@ -904,7 +901,7 @@ async function persistCleanerPayoutIfUnsetCore(
     if (!participantIds.length) return { ok: false, error: "No team payout participants for booking" };
 
     const poolCents = Math.max(0, Math.floor(Number(earnings.payout_earnings_cents) || 0));
-    const legacyTeamPool = useLegacyPayoutEngine();
+    const legacyTeamPool = isLegacyPayoutEngineEnabled();
     const teamEligibleCents = usedLineItemBasis
       ? sumEligibleLineItemsSubtotalCents(lineItemRows)
       : payoutBaseCents;
@@ -1130,7 +1127,7 @@ async function persistCleanerPayoutIfUnsetCore(
       };
     }
 
-    let pairedUpPatch = {
+    const pairedUpPatch = {
         cleaner_payout_cents: leadPayoutCents,
         cleaner_bonus_cents: leadBonusCents,
         company_revenue_cents: soloCanonical.companyRevenueFromServiceCents,

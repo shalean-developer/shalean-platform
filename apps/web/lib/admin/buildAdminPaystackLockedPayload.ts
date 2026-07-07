@@ -1,4 +1,4 @@
-import type { BookingServiceGroupKey, BookingServiceId, BookingServiceTypeKey } from "@/components/booking/serviceCategories";
+import type { BookingServiceGroupKey, BookingServiceId } from "@/components/booking/serviceCategories";
 import { inferServiceGroupFromServiceId, inferServiceTypeFromServiceId } from "@/components/booking/serviceCategories";
 import { MAX_BOOKING_EXTRAS_ROWS } from "@/lib/booking/bookingExtrasLimits";
 import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";

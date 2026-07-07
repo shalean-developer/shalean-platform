@@ -39,7 +39,7 @@ type GeoHubVariant = (place: string, city: string) => string;
 const GEO_HUB_VARIANTS: GeoHubVariant[] = [
   (place, city) => `cleaning services in ${place}, ${city}`,
   (place, city) => `cleaners in ${place}, ${city}`,
-  (place, city) => `home cleaning in ${place}`,
+  (place, _city) => `home cleaning in ${place}`,
 ];
 
 const GEO_HUB_NATURAL: ((place: string, city: string) => string)[] = [

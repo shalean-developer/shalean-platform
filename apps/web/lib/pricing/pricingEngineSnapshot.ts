@@ -217,7 +217,8 @@ export function normalizeJobSubtotalSplitZar(
   });
 
   const t = Math.round(subtotalZar);
-  let { serviceBaseZar, roomsZar, extrasZar } = split;
+  const { serviceBaseZar, roomsZar } = split;
+  let { extrasZar } = split;
   extrasZar = Math.max(0, extrasZar);
   const total = serviceBaseZar + roomsZar + extrasZar;
   const diff = t - total;

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import {
   BookOpen,
@@ -357,9 +358,9 @@ export default function AccountProfilePage() {
           <div className="p-5">
             <p className="text-sm text-gray-500">
               Invite friends and earn discounts on future cleans.{" "}
-              <a href="/account/referrals" className="font-semibold text-blue-600 hover:underline">
+              <Link href="/account/referrals" className="font-semibold text-blue-600 hover:underline">
                 View your referral page →
-              </a>
+              </Link>
             </p>
           </div>
         </div>

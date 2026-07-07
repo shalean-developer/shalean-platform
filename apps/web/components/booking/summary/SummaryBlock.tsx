@@ -24,7 +24,6 @@ export type SummaryBlockProps = {
 };
 
 function SummaryBlockInner({
-  checkoutStep,
   hours,
   totalZar,
   priceLabel,

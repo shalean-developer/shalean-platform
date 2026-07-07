@@ -11,7 +11,6 @@ import {
   classifyPreferredDispatchContext,
   computePreferredOfferExpiresAt,
   preferredOfferTtlSeconds,
-  type PreferredDispatchStatus,
 } from "@/lib/dispatch/preferredCleanerDispatchPolicy";
 import {
   finalizePreferredDispatchOnOfferAccept,

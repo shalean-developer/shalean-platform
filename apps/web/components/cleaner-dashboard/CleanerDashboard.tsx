@@ -69,7 +69,6 @@ export function CleanerDashboard() {
     offerCards,
     upcomingJobs,
     nextHighlightedJob,
-    nextHighlightedJobRow,
     nextJobPinExtras,
     activeJob,
     activeJobRow,

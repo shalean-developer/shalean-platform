@@ -11,8 +11,6 @@ import {
   quoteCheckoutZarWithSnapshot,
 } from "@/lib/pricing/pricingEngineSnapshot";
 import {
-  calculateHomeWidgetBaseEstimateZar,
-  calculateHomeWidgetQuoteZar,
   type HomeWidgetServiceKey,
 } from "@/lib/pricing/calculateCatalogPrice";
 import { normalizePricingJobInput } from "@/lib/pricing/pricingEngine";

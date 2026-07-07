@@ -15,7 +15,7 @@ export function paymentLinkEmailDelaySecondsCap(): number {
 }
 
 /** When delay > 0, use DB queue unless `PAYMENT_LINK_EXPERIMENT_DELAY_INLINE=true`. */
-export function useAsyncPaymentLinkEmailDelay(): boolean {
+export function isAsyncPaymentLinkEmailDelayEnabled(): boolean {
   if (paymentLinkEmailDelaySecondsCap() <= 0) return false;
   return String(process.env.PAYMENT_LINK_EXPERIMENT_DELAY_INLINE ?? "").toLowerCase() !== "true";
 }

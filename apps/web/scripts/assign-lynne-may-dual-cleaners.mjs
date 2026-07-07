@@ -21,7 +21,7 @@ const PLAN_ID = "a053ea81-185e-4434-9851-9619ee79f1a2";
 const NYASHA_ID = "796e3ad7-07f3-44eb-b4cf-bed439a59f8b";
 const ETHEL_ID = "914b3acf-40e8-4ad5-a5a2-9e2de711849a";
 
-async function assignDualRoster(bookingId, date, status) {
+async function assignDualRoster(bookingId, date, _status) {
   await admin.from("booking_cleaners").delete().eq("booking_id", bookingId);
 
   const { error: e1 } = await admin.from("booking_cleaners").insert({

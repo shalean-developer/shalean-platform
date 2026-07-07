@@ -11,7 +11,7 @@ import {
 import {
   enqueueDeferredPaymentLinkEmail,
   paymentLinkEmailDelaySecondsCap,
-  useAsyncPaymentLinkEmailDelay,
+  isAsyncPaymentLinkEmailDelayEnabled,
 } from "@/lib/conversion/deferredPaymentLinkEmailQueue";
 import { applySendDelayIfNeeded } from "@/lib/ai-autonomy/optimizeTiming";
 import { logSystemEvent } from "@/lib/logging/systemLog";
@@ -144,7 +144,7 @@ export async function deliverAdminPaymentLink(params: {
         !skipEmailTimingDelay &&
         timing.variant === "variant_a" &&
         delaySec > 0 &&
-        useAsyncPaymentLinkEmailDelay();
+        isAsyncPaymentLinkEmailDelayEnabled();
 
       if (!deferAsync && !skipEmailTimingDelay) {
         await maybeDelayPaymentLinkEmailExperiment(timing.variant);

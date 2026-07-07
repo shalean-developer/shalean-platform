@@ -6,7 +6,6 @@ import { Loader2, Search } from "lucide-react";
 import { getAdminToken } from "@/hooks/useAdminData";
 import { emitAdminToast } from "@/lib/admin/toastBus";
 import { buildAdminBookingLocationString } from "@/lib/admin/buildBookingLocationFromSavedAddress";
-import type { CustomerAddressRow } from "@/lib/dashboard/types";
 import { AdminPropertySelector } from "@/components/admin/create-booking/AdminPropertySelector";
 import { AdminPreferredCleanerSelect } from "@/components/admin/create-booking/AdminPreferredCleanerSelect";
 import { Button } from "@/components/ui/button";

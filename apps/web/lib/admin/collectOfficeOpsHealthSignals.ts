@@ -3,7 +3,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OfficeOpsSystemErrorRow } from "@/lib/admin/officeOpsHealth";
 import {
-  filterBookingEngineCronErrors,
   filterBookingEngineCronSuccesses,
   isCronRunNoiseMessage,
   type OfficeOpsCronErrorRow,

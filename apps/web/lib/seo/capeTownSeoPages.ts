@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, locationHubPathFromAreaInput, type CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
+import { locationHubPathFromAreaInput, type CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 import { ensureMetaDescriptionKeyword } from "@/lib/seo/location-keyword";
 import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import {

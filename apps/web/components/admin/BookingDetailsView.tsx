@@ -6,9 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType, 
 import { createPortal } from "react-dom";
 import {
   ArrowLeft,
-  BadgeCheck,
   Bell,
-  Calendar,
   CheckCircle2,
   Circle,
   Clock,
@@ -19,7 +17,6 @@ import {
   Pencil,
   Phone,
   ReceiptText,
-  Send,
   TriangleAlert,
   User,
   Users,
@@ -28,8 +25,6 @@ import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
 import { OfficeBookingDetailsShell, type OfficeTimelineStep } from "@/components/admin/office/OfficeBookingDetailsShell";
 import { BookingNotificationTimeline } from "@/components/admin/office/BookingNotificationTimeline";
 import type { BookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { confirm, showToast } from "@/components/ui/notifications";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -51,6 +46,7 @@ import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
 import { assignmentSourceLabel } from "@/lib/admin/assignmentDisplay";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { getAdminToken } from "@/hooks/useAdminData";
 import { AdminBookingLiveLocation } from "@/components/admin/AdminBookingLiveLocation";
 import {
   EmergencyRosterReassignModal,
@@ -804,10 +800,6 @@ function mergeAdminPricingSnapshotExtras(params: {
   return { rows: [], showBundledExplanation: false };
 }
 
-async function rescheduleBooking(bookingId: string, newDate: string, newTime: string) {
-  return Promise.resolve({ bookingId, newDate, newTime });
-}
-
 function toCleanerAssignOptions(rows: AdminCleanerRow[]): CleanerOption[] {
   return rows.map((c) => ({
     id: c.id,
@@ -1016,10 +1008,9 @@ export default function BookingDetailsView({
       setCustomerContactPhone(null);
       setCustomerContactName(null);
       try {
-        const sb = getSupabaseBrowser();
         let token: string | undefined;
         try {
-          token = (await sb?.auth.getSession())?.data.session?.access_token;
+          token = (await getAdminToken()) ?? undefined;
         } catch {
           if (ac.signal.aborted) return;
           setError("Could not read admin session. Check your connection and try again.");
@@ -1209,8 +1200,7 @@ export default function BookingDetailsView({
       setEarningsPreviewLoading(true);
       setEarningsPreview(null);
       try {
-        const sb = getSupabaseBrowser();
-        const token = (await sb?.auth.getSession())?.data.session?.access_token;
+        const token = (await getAdminToken()) ?? undefined;
         if (!token) {
           if (!cancelled) setEarningsPreviewLoading(false);
           return;
@@ -1243,10 +1233,9 @@ export default function BookingDetailsView({
     void (async () => {
       setNotificationLogsLoading(true);
       try {
-        const sb = getSupabaseBrowser();
         let token: string | undefined;
         try {
-          token = (await sb?.auth.getSession())?.data.session?.access_token;
+          token = (await getAdminToken()) ?? undefined;
         } catch {
           if (!cancelled) setNotificationLogs([]);
           return;
@@ -1285,8 +1274,7 @@ export default function BookingDetailsView({
     if (!bookingId) return;
     setRetryingNotificationLogId(logId);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) return;
       const res = await fetch("/api/admin/notifications/retry", {
         method: "POST",
@@ -1314,8 +1302,7 @@ export default function BookingDetailsView({
     if (!bookingId) return;
     setResendConfirmationBusy(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) return;
       const res = await fetch(
         `/api/admin/bookings/${encodeURIComponent(bookingId)}/resend-confirmation-emails`,
@@ -1359,8 +1346,7 @@ export default function BookingDetailsView({
     if (!bookingId) return;
     setSendReviewRequestBusy(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) return;
       const res = await fetch(
         `/api/admin/bookings/${encodeURIComponent(bookingId)}/send-review-request`,
@@ -1552,8 +1538,7 @@ export default function BookingDetailsView({
       setEditPricePreviewLoading(true);
       setEditPricePreviewHttpError(null);
       try {
-        const sb = getSupabaseBrowser();
-        const token = (await sb?.auth.getSession())?.data.session?.access_token;
+        const token = (await getAdminToken()) ?? undefined;
         if (!token || cancelled) return;
         const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/edit-details/preview`, {
           method: "POST",
@@ -1612,8 +1597,7 @@ export default function BookingDetailsView({
     if (!bookingId) return;
     setTeamModalLoading(true);
     setTeamModalError(null);
-    const sb = getSupabaseBrowser();
-    const token = (await sb?.auth.getSession())?.data.session?.access_token;
+    const token = (await getAdminToken()) ?? undefined;
     if (!token) {
       setTeamModalLoading(false);
       const msg = "Please sign in as an admin.";
@@ -1735,8 +1719,7 @@ export default function BookingDetailsView({
     }
     setEditDetailsBusy(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) {
         setToast({ kind: "error", text: "Please sign in as an admin." });
         return;
@@ -1876,8 +1859,7 @@ export default function BookingDetailsView({
     if (!bookingId) return;
     setIssueResolveBusyId(reportId);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) {
         setToast({ kind: "error", text: "Please sign in as an admin." });
         return;
@@ -1906,8 +1888,7 @@ export default function BookingDetailsView({
     if (!fullBooking?.id) return;
     setResetDispatchBusy(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) {
         setToast({ kind: "error", text: "Please sign in as an admin." });
         return;
@@ -1940,8 +1921,7 @@ export default function BookingDetailsView({
     if (!fullBooking?.id) return;
     setRetryChargeBusy(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) {
         setToast({ kind: "error", text: "Please sign in as an admin." });
         return;
@@ -1966,8 +1946,7 @@ export default function BookingDetailsView({
     if (!fullBooking?.id) return;
     setFixEarningsBusy(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) {
         setToast({ kind: "error", text: "Please sign in as an admin." });
         return;
@@ -2014,8 +1993,7 @@ export default function BookingDetailsView({
     if (!fullBooking?.id) return;
     setMarkPaidBusy(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) {
         setToast({ kind: "error", text: "Please sign in as an admin." });
         return;
@@ -2149,8 +2127,7 @@ export default function BookingDetailsView({
     if (!fullBooking?.id) return;
     setResetEarningsBusy(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) {
         setToast({ kind: "error", text: "Please sign in as an admin." });
         return;
@@ -2300,8 +2277,7 @@ export default function BookingDetailsView({
     if (!fullBooking?.id || !fullBooking.team_id) return;
     setRepairRosterBusy(true);
     try {
-      const sb = getSupabaseBrowser();
-      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      const token = (await getAdminToken()) ?? undefined;
       if (!token) throw new Error("Please sign in as an admin.");
       const res = await fetch(`/api/admin/bookings/${encodeURIComponent(fullBooking.id)}/repair-roster`, {
         method: "POST",
@@ -4610,16 +4586,6 @@ function formatAdminDate(value: string): string {
   });
 }
 
-function formatAdminDateShort(value: string): string {
-  const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-ZA", {
-    weekday: "short",
-    day: "numeric",
-    month: "short",
-  });
-}
-
 function compactScheduleRelative(date: string | null | undefined, time: string | null | undefined): string | null {
   if (!date || !time) return null;
   const dt = new Date(`${date}T${time.slice(0, 5)}:00+02:00`);
@@ -4702,10 +4668,6 @@ function AdminInfoCard({
       {footer ? <CardFooter className="border-t border-slate-100 pt-3">{footer}</CardFooter> : null}
     </Card>
   );
-}
-
-function EmptyAdminState({ children }: { children: ReactNode }) {
-  return <p className="text-sm text-slate-500">{children}</p>;
 }
 
 function OfficeTimelineStepRow({ step, isLast }: { step: OfficeTimelineStep; isLast: boolean }) {

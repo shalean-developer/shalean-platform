@@ -142,8 +142,6 @@ async function main() {
 
   let juneVisitPriceCents = 0;
   let juneEarningsCents = 0;
-  let juneEligibleCents = 0;
-  let juneEligibleCount = 0;
   const payoutStatusCounts = {};
   for (const b of juneRecurring) {
     juneVisitPriceCents += visitPriceCents(b);
@@ -151,8 +149,7 @@ async function main() {
     const ps = String(b.payout_status ?? "null").toLowerCase();
     payoutStatusCounts[ps] = (payoutStatusCounts[ps] ?? 0) + 1;
     if (ps === "eligible") {
-      juneEligibleCount++;
-      juneEligibleCents += resolveEarningsCents(b);
+      resolveEarningsCents(b);
     }
   }
 

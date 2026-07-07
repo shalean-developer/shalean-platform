@@ -36,6 +36,7 @@ import {
 import { scheduleStuckEarningsRecomputeDebounced } from "@/lib/cleaner/scheduleStuckEarningsRecompute";
 import { fetchBookingLineItemsByBookingIds } from "@/lib/cleaner/fetchBookingLineItemsByBookingIds";
 import { augmentCleanerBookingWire } from "@/lib/cleaner/cleanerJobWireAugment";
+import { augmentCleanerJobsWithViewerRosterContext } from "@/lib/cleaner/pairedRosterMemberLifecycle";
 import {
   cleanerJobAccessDetailLines,
   cleanerJobServiceDetailLines,
@@ -397,34 +398,41 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const jobEarningCents = cleanerFacing?.job_earning_cents ?? displayEarningsCents;
   const bonusCents = cleanerFacing?.bonus_cents ?? 0;
 
+  const jobPayload = {
+    ...safe,
+    ...(banner ? { cleaner_pending_payment_banner: banner } : {}),
+    ...(visMode ? { cleaner_visibility_mode: visMode } : {}),
+    ...jobPayHintWire,
+    server_now_ms: Date.now(),
+    customer_name,
+    customer_phone,
+    location_display,
+    service_detail_lines,
+    access_detail_lines,
+    scope_lines,
+    lineItems: lineItems && lineItems.length > 0 ? lineItems : null,
+    displayEarningsCents: jobEarningCents,
+    displayEarningsIsEstimate,
+    earnings_cents: jobEarningCents,
+    job_earning_cents: jobEarningCents,
+    bonus_cents: bonusCents,
+    earnings_estimated: displayEarningsIsEstimate,
+    earnings_is_estimate: displayEarningsIsEstimate,
+    teamMemberCount,
+    team_roster,
+    team_roster_summary,
+    cleaner_has_issue_report,
+    ...(service_qa ? { service_qa } : {}),
+    ...augmentCleanerBookingWire(record, session.cleanerId),
+  };
+  const [jobWithRosterContext] = await augmentCleanerJobsWithViewerRosterContext(
+    admin,
+    [jobPayload as Record<string, unknown>],
+    session.cleanerId,
+  );
+
   return NextResponse.json({
-    job: {
-      ...safe,
-      ...(banner ? { cleaner_pending_payment_banner: banner } : {}),
-      ...(visMode ? { cleaner_visibility_mode: visMode } : {}),
-      ...jobPayHintWire,
-      server_now_ms: Date.now(),
-      customer_name,
-      customer_phone,
-      location_display,
-      service_detail_lines,
-      access_detail_lines,
-      scope_lines,
-      lineItems: lineItems && lineItems.length > 0 ? lineItems : null,
-      displayEarningsCents: jobEarningCents,
-      displayEarningsIsEstimate,
-      earnings_cents: jobEarningCents,
-      job_earning_cents: jobEarningCents,
-      bonus_cents: bonusCents,
-      earnings_estimated: displayEarningsIsEstimate,
-      earnings_is_estimate: displayEarningsIsEstimate,
-      teamMemberCount,
-      team_roster,
-      team_roster_summary,
-      cleaner_has_issue_report,
-      ...(service_qa ? { service_qa } : {}),
-      ...augmentCleanerBookingWire(record, session.cleanerId),
-    },
+    job: jobWithRosterContext,
   });
 }
 

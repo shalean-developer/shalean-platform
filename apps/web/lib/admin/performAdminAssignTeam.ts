@@ -27,7 +27,7 @@ import {
   teamJobSlotsPerTeamPerDay,
 } from "@/lib/dispatch/teamJobsPerDay";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { CANONICAL_TEAM_POOL_DISPLAY_CENTS, useLegacyPayoutEngine } from "@/lib/payout/canonicalCleanerPayout";
+import { CANONICAL_TEAM_POOL_DISPLAY_CENTS, isLegacyPayoutEngineEnabled } from "@/lib/payout/canonicalCleanerPayout";
 import {
   buildTeamJobMemberFixedPerCleanerPayoutRows,
   buildTeamJobMemberPayoutInsertRows,
@@ -417,7 +417,7 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     }
 
     let payoutRows: ReturnType<typeof buildTeamJobMemberFixedPerCleanerPayoutRows>;
-    if (useLegacyPayoutEngine()) {
+    if (isLegacyPayoutEngineEnabled()) {
       let poolCents = await resolveTeamCleanerPoolCents(admin, bookingId);
       if (poolCents <= 0) poolCents = CANONICAL_TEAM_POOL_DISPLAY_CENTS;
       payoutRows = buildTeamJobMemberPayoutInsertRows({

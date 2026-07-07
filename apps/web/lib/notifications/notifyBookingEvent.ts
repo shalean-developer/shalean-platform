@@ -31,7 +31,6 @@ import {
   type SmsRole,
 } from "@/lib/templates/customerOutbound";
 import { cleanerJobDeepLinkForSms } from "@/lib/cleaner/cleanerJobMagicLink";
-import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { enqueueFailedJob } from "@/lib/booking/failedJobs";

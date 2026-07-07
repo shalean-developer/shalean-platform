@@ -15,8 +15,6 @@ import {
 } from "@/lib/customer/customerProfileContactFields";
 import { pickBillingEmail } from "@/lib/zoho/shaleanBillingContactEmail";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
-import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
-
 const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL;
 const key = process.env.SUPABASE_SERVICE_ROLE_KEY ?? process.env.SUPABASE_SERVICE_KEY;
 const apply = process.argv.includes("--apply");

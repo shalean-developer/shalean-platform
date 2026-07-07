@@ -20,7 +20,7 @@ export function Reviews({ reviews }: ReviewsProps) {
             <Card key={review.id}>
               <CardContent className="p-6">
                 <p className="text-sm font-semibold text-blue-700">{"★".repeat(review.rating)}</p>
-                <blockquote className="mt-4 text-base leading-7 text-zinc-700">"{review.quote}"</blockquote>
+                <blockquote className="mt-4 text-base leading-7 text-zinc-700">&ldquo;{review.quote}&rdquo;</blockquote>
                 {review.author ? <p className="mt-4 text-sm font-semibold text-zinc-950">{review.author}</p> : null}
               </CardContent>
             </Card>

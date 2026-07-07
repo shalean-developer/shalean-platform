@@ -1,7 +1,6 @@
 "use client";
 
 import { HomeBookingLink } from "@/components/home/HomeBookingLink";
-import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
 export function BookCleaningLink({

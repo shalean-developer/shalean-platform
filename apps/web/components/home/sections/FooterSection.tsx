@@ -10,8 +10,10 @@ import { customerSupportWhatsAppHref } from "@/lib/site/customerSupport";
 const waHref = customerSupportWhatsAppHref();
 
 const trackEvent = (eventName: string) => {
-  if (typeof window !== "undefined" && typeof (window as any).gtag === "function") {
-    (window as any).gtag("event", eventName);
+  if (typeof window === "undefined") return;
+  const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
+  if (typeof gtag === "function") {
+    gtag("event", eventName);
   }
 };
 

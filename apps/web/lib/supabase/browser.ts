@@ -74,6 +74,8 @@ export async function getSupabaseAccessToken(): Promise<string | null> {
  * In development, auth uses {@link processLock} instead of the Web Locks API
  * (`navigator.locks` + `steal`). Next.js Fast Refresh / Strict Mode otherwise
  * often surfaces: `AbortError: Lock broken by another request with the 'steal' option`.
+ * We use {@link processLock} in all browser runtimes with `lockAcquireTimeout: -1`
+ * so parallel session reads queue instead of timing out.
  * Use {@link getSupabaseAccessToken} for bearer tokens instead of parallel `getSession()` calls.
  */
 export function getSupabaseBrowser(): SupabaseClient | null {
@@ -85,12 +87,11 @@ export function getSupabaseBrowser(): SupabaseClient | null {
     cached = null;
     return null;
   }
-  const isDev = process.env.NODE_ENV === "development";
   cached = createBrowserClient(url, key, {
     auth: {
-      // Serialize auth storage access; avoid default 10s acquire timeout in dev-heavy pages.
-      lockAcquireTimeout: isDev ? -1 : 30_000,
-      ...(isDev ? { lock: processLock } : {}),
+      // Serialize auth storage; -1 = wait indefinitely (avoids parallel getSession timeouts).
+      lock: processLock,
+      lockAcquireTimeout: -1,
     },
   });
   return cached;

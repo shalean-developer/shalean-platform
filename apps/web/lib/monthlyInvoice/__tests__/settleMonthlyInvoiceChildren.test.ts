@@ -19,7 +19,7 @@ function buildAdmin(failingBookingIds: string[] = []) {
       if (table !== "bookings") throw new Error(`unexpected table ${table}`);
       return {
         select: () => ({
-          eq: (_col: string, bookingId: string) => ({
+          eq: (_col: string, _bookingId: string) => ({
             maybeSingle: async () => ({
               data: { payment_completed_at: null, paid_at: null, completed_at: null },
               error: null,

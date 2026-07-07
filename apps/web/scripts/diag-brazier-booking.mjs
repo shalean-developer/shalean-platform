@@ -101,7 +101,6 @@ for (const b of bookings ?? []) {
 }
 
 // Analytics around Brazier Airbnb booking
-const airbnbId = "5b82af35-022f-43ab-a261-5fc2d1c3e2b1";
 const userId = "068a86dc-ab50-445c-9ca9-2ca6a211c857";
 const { data: events } = await admin
   .from("user_events")

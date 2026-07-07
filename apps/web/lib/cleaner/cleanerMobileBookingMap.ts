@@ -3,11 +3,9 @@ import {
   bookingMatchesRecurringCleanerPendingPayment,
   isCleanerAssignmentAcceptedRecord,
 } from "@/lib/cleaner/cleanerBookingAccess";
-import { bookingIsRecurringPendingPayment } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
 import { cleanerBookingCardDetailsFromRow, cleanerBookingScopeLines } from "@/lib/cleaner/cleanerBookingScopeSummary";
 import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
-import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 import {
   describeBookingOperationalState,
   type CleanerJobUiState,

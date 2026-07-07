@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { QuotePageFooter } from "@/components/quote/QuotePageFooter";
 import { QuotePageHeader } from "@/components/quote/QuotePageHeader";
@@ -55,7 +56,7 @@ export default function QuoteRequestPage() {
         <QuoteRequestForm />
         <p className="mt-8 text-center text-sm text-slate-500">
           Need a price right now?{" "}
-          <a href="/book" className="font-semibold text-blue-600 hover:underline">Get an instant price online</a>
+          <Link href="/book" className="font-semibold text-blue-600 hover:underline">Get an instant price online</Link>
         </p>
       </main>
       <QuotePageFooter />

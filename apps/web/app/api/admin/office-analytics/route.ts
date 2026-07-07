@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import {
   computeOfficeAnalyticsSummary,
   extractPriorCustomerIds,
-  officeAnalyticsQueryStartIso,
+  officeAnalyticsFetchStartIso,
+  officeAnalyticsWindowFromParams,
   priorCustomerQueryEndIso,
   type OfficeAnalyticsBookingRow,
 } from "@/lib/admin/officeAnalytics";
@@ -23,8 +24,14 @@ export async function GET(request: Request) {
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   const now = new Date();
-  const sinceIso = officeAnalyticsQueryStartIso(now);
-  const priorEndIso = priorCustomerQueryEndIso(now);
+  const url = new URL(request.url);
+  const window = officeAnalyticsWindowFromParams(
+    url.searchParams.get("from"),
+    url.searchParams.get("to"),
+    now,
+  );
+  const sinceIso = officeAnalyticsFetchStartIso(window);
+  const priorEndIso = priorCustomerQueryEndIso(window);
 
   const [bookingsRes, priorCustomersRes] = await Promise.all([
     admin
@@ -54,6 +61,7 @@ export async function GET(request: Request) {
     (bookingsRes.data ?? []) as OfficeAnalyticsBookingRow[],
     extractPriorCustomerIds(priorCustomersRes.data ?? []),
     now,
+    window,
   );
 
   return NextResponse.json(summary);

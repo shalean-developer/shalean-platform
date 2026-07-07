@@ -12,7 +12,7 @@ type Props = {
  * Above-the-fold E-E-A-T strip for programmatic hubs — uses verified Google aggregate + operational facts only.
  */
 export function LocationTrustSignals({ location, trustStats }: Props) {
-  const { name, city } = location;
+  const { name } = location;
   const googleAvg = GOOGLE_BUSINESS_REVIEWS.rating;
   const googleCount = GOOGLE_BUSINESS_REVIEWS.count;
   const rpcAvg = trustStats?.avgRating != null ? trustStats.avgRating.toFixed(1) : null;

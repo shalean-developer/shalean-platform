@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { emitAdminToast } from "@/lib/admin/toastBus";
 import { adminFetch } from "@/hooks/useAdminData";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";

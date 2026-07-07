@@ -10,8 +10,6 @@ export type TaxonomyBlogCard = {
   publishedAt: string;
 };
 
-const DEFAULT_HERO = "/images/marketing/cape-town-house-cleaning-kitchen.webp";
-
 function normalizeContentJson(raw: unknown): BlogContentJson {
   const parsed = safeParseBlogContentJson(raw);
   if (!parsed.success) return emptyBlogContentJson();

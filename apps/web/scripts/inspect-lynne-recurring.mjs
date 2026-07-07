@@ -37,7 +37,7 @@ async function main() {
     console.log(JSON.stringify(b, null, 0));
   }
 
-  const { data: plans } = await admin
+  await admin
     .from("recurring_bookings")
     .select("id, customer_id, frequency, status, preferred_cleaner_id, booking_snapshot_template")
     .limit(50);

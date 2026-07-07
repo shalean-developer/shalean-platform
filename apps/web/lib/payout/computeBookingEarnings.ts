@@ -1,5 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { CANONICAL_TEAM_POOL_DISPLAY_CENTS, resolveCanonicalCleanerPayout, useLegacyPayoutEngine } from "@/lib/payout/canonicalCleanerPayout";
+import { CANONICAL_TEAM_POOL_DISPLAY_CENTS, resolveCanonicalCleanerPayout, isLegacyPayoutEngineEnabled } from "@/lib/payout/canonicalCleanerPayout";
 
 type ComputeBookingEarningsInput = {
   servicePriceCents: number;
@@ -212,7 +212,7 @@ function mapCanonicalToEarningsOutput(c: ReturnType<typeof resolveCanonicalClean
 export async function computeBookingEarnings(input: ComputeBookingEarningsInput): Promise<ComputeBookingEarningsOutput> {
   const normalizedServicePriceCents = Math.max(0, Math.floor(input.servicePriceCents));
 
-  if (useLegacyPayoutEngine()) {
+  if (isLegacyPayoutEngineEnabled()) {
     return computeBookingEarningsLegacy(input);
   }
 

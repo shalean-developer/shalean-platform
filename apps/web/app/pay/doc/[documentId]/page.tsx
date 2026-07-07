@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 
 import { GuestDocumentFooter } from "@/components/public/GuestDocumentFooter";
 import { loadPaySalesDocumentLanding } from "@/lib/salesDocument/loadPaySalesDocumentLanding";

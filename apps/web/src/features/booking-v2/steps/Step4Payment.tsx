@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -120,13 +121,13 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
               <label htmlFor="si-password" className="block text-sm font-medium text-slate-700">
                 Password
               </label>
-              <a
+              <Link
                 href="/auth/forgot-password"
                 className="text-xs font-medium text-blue-600 hover:underline"
                 tabIndex={-1}
               >
                 Forgot password?
-              </a>
+              </Link>
             </div>
             <PasswordInput
               id="si-password"
@@ -419,9 +420,9 @@ function PaymentSection({ user }: { user: User }) {
 
       <p className="text-center text-xs text-slate-400">
         By paying, you agree to our{" "}
-        <a href="/terms-of-service" className="underline hover:text-slate-600">Terms of Service</a>
+        <Link href="/terms-of-service" className="underline hover:text-slate-600">Terms of Service</Link>
         {" "}and{" "}
-        <a href="/privacy-policy" className="underline hover:text-slate-600">Privacy Policy</a>.
+        <Link href="/privacy-policy" className="underline hover:text-slate-600">Privacy Policy</Link>.
       </p>
     </div>
   );

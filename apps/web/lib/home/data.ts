@@ -126,7 +126,7 @@ async function readRows(table: string): Promise<DbRow[]> {
   return Array.isArray(data) ? sortRows(data as DbRow[]) : [];
 }
 
-function mapMarketingHomeService(row: DbRow, index: number): MarketingHomeService | null {
+function mapMarketingHomeService(row: DbRow, _index: number): MarketingHomeService | null {
   const rawId = text(row, ["slug", "service_id", "id", "key"]);
   const id = rawId === "move_cleaning" || rawId === "move-in-out" ? "move" : rawId;
   if (!id || !MARKETING_HOME_SERVICE_IDS.has(id)) return null;
@@ -169,7 +169,7 @@ function applyPricingCatalogToMarketingServices(
   });
 }
 
-function mapService(row: DbRow, index: number): HomeService | null {
+function mapService(row: DbRow, _index: number): HomeService | null {
   const rawId = text(row, ["slug", "service_id", "id", "key"]);
   const id = rawId === "move_cleaning" || rawId === "move-in-out" ? "move" : rawId;
   if (!id || !WIDGET_SERVICE_IDS.has(id)) return null;

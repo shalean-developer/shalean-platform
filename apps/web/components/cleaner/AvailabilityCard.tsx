@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, Star, Wallet } from "lucide-react";
+import { Loader2, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type AvailabilityCardProps = {

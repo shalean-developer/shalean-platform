@@ -61,7 +61,7 @@ function buildAdmin(opts: {
       if (table === "bookings") {
         return {
           select: (_cols: string, opts2?: { count?: string; head?: boolean }) => ({
-            eq: (_col: string, bookingId?: string) => ({
+            eq: (_col: string, _bookingId?: string) => ({
               neq: async () =>
                 opts2?.head
                   ? { count: opts.children.length, error: null }

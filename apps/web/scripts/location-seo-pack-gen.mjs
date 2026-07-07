@@ -32,12 +32,6 @@ const L = [
   ["clifton", "Clifton", "Atlantic Seaboard", "luxury", "clifftop"],
 ];
 
-function desc(place, line1, mid, cta) {
-  const core = `${line1} ${mid} cleaning services in ${place}, Cape Town ${cta}`;
-  // tune - actually build manually per row below
-  return core;
-}
-
 const pack = {};
 
 const metas = {

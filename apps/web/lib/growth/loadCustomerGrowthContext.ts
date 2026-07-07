@@ -3,7 +3,6 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { evaluateCustomerRetentionState } from "@/lib/growth/customerRetention";
-import { calculateCustomerLTV } from "@/lib/growth/customerLTV";
 import { segmentCustomer } from "@/lib/growth/customerSegment";
 
 export type CustomerGrowthContext = {

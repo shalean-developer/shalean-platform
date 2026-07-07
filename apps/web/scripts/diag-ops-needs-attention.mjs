@@ -23,7 +23,6 @@ const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUP
   auth: { persistSession: false },
 });
 
-const fetchedAt = new Date().toISOString();
 const since30d = new Date(Date.now() - 30 * 86400000).toISOString();
 const since1h = new Date(Date.now() - 3600000).toISOString();
 const since24h = new Date(Date.now() - 86400000).toISOString();

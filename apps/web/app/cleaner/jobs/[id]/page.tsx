@@ -42,7 +42,7 @@ import type { LifecycleWireLike } from "@/lib/cleaner/cleanerJobLifecyclePhaseRa
 import { wireLikeFromJobDetailCacheBody } from "@/lib/cleaner/cleanerQueuedLifecycleFlushGuard";
 import { buildScheduleHintModel, latenessVsSchedule } from "@/lib/cleaner/cleanerJobDetailScheduleModel";
 import { buildUnifiedJobScope } from "@/lib/cleaner/cleanerJobDetailUnifiedScope";
-import { deriveMobilePhase, isCleanerAssignmentAccepted } from "@/lib/cleaner/cleanerMobileBookingMap";
+import { deriveMobilePhase } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { stripExtraTimeSuffixFromDisplayLabel } from "@/lib/cleaner/cleanerExtraDisplayLabel";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import {

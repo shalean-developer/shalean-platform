@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { format } from "date-fns";
 import {
   BarChart3,
   TrendingUp,
@@ -14,10 +15,27 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
-import type { OfficeAnalyticsPeriod, OfficeAnalyticsSummary } from "@/lib/admin/officeAnalytics";
+import type { OfficeAnalyticsSummary } from "@/lib/admin/officeAnalytics";
+import {
+  AnalyticsDateRangePicker,
+  type AnalyticsRange,
+} from "@/components/admin/office/AnalyticsDateRangePicker";
 
 function zar(value: number): string {
   return `R ${Math.round(value).toLocaleString("en-ZA")}`;
+}
+
+function defaultRange(): AnalyticsRange {
+  const to = new Date();
+  to.setHours(0, 0, 0, 0);
+  const from = new Date(to);
+  from.setDate(from.getDate() - 29);
+  return { from, to };
+}
+
+function rangeLabel(range: AnalyticsRange): string {
+  const sameYear = range.from.getFullYear() === range.to.getFullYear();
+  return `${format(range.from, sameYear ? "d MMM" : "d MMM yyyy")} – ${format(range.to, "d MMM yyyy")}`;
 }
 
 function formatTrend(pct: number | null): { text: string; dir: "up" | "down" } {
@@ -32,15 +50,23 @@ function formatRetention(value: number | null): string {
 }
 
 export default function AnalyticsPage() {
-  const [period, setPeriod] = useState<OfficeAnalyticsPeriod>("30d");
-  const { data, loading, error, refetch } = useAdminData<OfficeAnalyticsSummary>("/api/admin/office-analytics");
+  const [range, setRange] = useState<AnalyticsRange>(defaultRange);
+  const params = useMemo(
+    () => ({ from: format(range.from, "yyyy-MM-dd"), to: format(range.to, "yyyy-MM-dd") }),
+    [range],
+  );
+  const { data, loading, error, refetch } = useAdminData<OfficeAnalyticsSummary>(
+    "/api/admin/office-analytics",
+    { params },
+  );
 
-  const chartData = data?.revenueChart[period] ?? [];
+  const chartData = useMemo(() => data?.revenueChart ?? [], [data]);
   const maxVal = useMemo(
     () => (chartData.length ? Math.max(...chartData.map((d) => d.value), 1) : 1),
     [chartData],
   );
   const chartTotal = useMemo(() => chartData.reduce((sum, d) => sum + d.value, 0), [chartData]);
+  const currentRangeLabel = rangeLabel(range);
 
   const kpis = data
     ? [
@@ -99,21 +125,7 @@ export default function AnalyticsPage() {
             {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
             Refresh
           </button>
-          <div className="flex items-center gap-1 rounded-xl border border-slate-200 bg-white p-1 shadow-sm">
-            {(["7d", "30d", "90d"] as OfficeAnalyticsPeriod[]).map((p) => (
-              <button
-                key={p}
-                type="button"
-                onClick={() => setPeriod(p)}
-                className={cn(
-                  "rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors",
-                  period === p ? "bg-blue-600 text-white" : "text-slate-500 hover:text-slate-700",
-                )}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
+          <AnalyticsDateRangePicker value={range} onChange={setRange} />
         </div>
       </div>
 
@@ -166,7 +178,7 @@ export default function AnalyticsPage() {
 
       <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
         <div className="mb-4 flex items-center justify-between">
-          <h3 className="text-sm font-bold text-slate-800">Revenue — {period}</h3>
+          <h3 className="text-sm font-bold text-slate-800">Revenue — {currentRangeLabel}</h3>
           <span className="text-xs text-slate-400">
             {loading && !data ? "Loading…" : `${zar(chartTotal)} total`}
           </span>
@@ -205,7 +217,7 @@ export default function AnalyticsPage() {
               ))}
             </div>
           ) : (data?.servicePopularity.length ?? 0) === 0 ? (
-            <p className="py-6 text-center text-sm text-slate-500">No paid bookings in the last 30 days.</p>
+            <p className="py-6 text-center text-sm text-slate-500">No paid bookings in the selected range.</p>
           ) : (
             <div className="space-y-3">
               {data!.servicePopularity.map((s) => (
@@ -227,7 +239,7 @@ export default function AnalyticsPage() {
         </div>
 
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <h3 className="mb-4 text-sm font-bold text-slate-800">Booking trends (30d)</h3>
+          <h3 className="mb-4 text-sm font-bold text-slate-800">Booking trends</h3>
           {loading && !data ? (
             <div className="space-y-2.5">
               {Array.from({ length: 4 }).map((_, i) => (

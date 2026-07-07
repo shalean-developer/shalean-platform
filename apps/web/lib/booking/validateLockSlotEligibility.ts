@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { useStrictAvailability } from "@/lib/booking/availabilityFlags";
+import { isStrictAvailabilityEnabled } from "@/lib/booking/availabilityFlags";
 import { slotEligibilityCoreFromLockBody } from "@/lib/booking/canonicalSlotEligibilityParams";
 import { countEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 
@@ -14,7 +14,7 @@ export async function validateLockSlotAgainstEligibility(
   body: Record<string, unknown>,
   opts: { timeHm: string; durationHours: number; catalogServiceId?: string | null },
 ): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  const strict = useStrictAvailability();
+  const strict = isStrictAvailabilityEnabled();
   const loc = String(body.locationId ?? body.location_id ?? "").trim();
   const date = typeof body.date === "string" ? body.date.trim() : "";
 

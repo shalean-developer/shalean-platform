@@ -83,7 +83,6 @@ export async function evaluateLifecycleEmailAlerts(
 ): Promise<LifecycleMonitoringSnapshot> {
   const alertsFired: string[] = [];
   const now = Date.now();
-  const nowIso = new Date(now).toISOString();
 
   const [pendingRes, oldestRes, failuresRes, cronRes] = await Promise.all([
     admin.from("booking_lifecycle_jobs").select("id", { count: "exact", head: true }).eq("status", "pending"),

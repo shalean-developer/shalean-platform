@@ -9,8 +9,6 @@ import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { jobDateHeading } from "@/lib/cleaner/cleanerJobCardFormat";
 import {
-  groupRowsByBookingDateDesc,
-  isActiveCleanerJobRow,
   isCancelledCleanerJobRow,
   isCompletedCleanerJobRow,
   isOpenCleanerJobRow,
@@ -140,10 +138,6 @@ export default function JobsListPage() {
 
   // Derive lists per tab
   const todayRows = useMemo(() => upcomingRaw.filter((r) => isToday(r, now)), [upcomingRaw, now]);
-  const upcomingSorted = useMemo(
-    () => sortUpcomingJobsAsc(upcomingRaw.filter((r) => !isToday(r, now))),
-    [upcomingRaw, now],
-  );
   const completedRows = useMemo(
     () => rows.filter((r) => isPastCleanerJobRow(r) && isCompletedCleanerJobRow(r)),
     [rows],

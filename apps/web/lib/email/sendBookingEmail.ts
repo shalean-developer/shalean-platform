@@ -1123,7 +1123,6 @@ export function buildBookingEmailPayload(params: {
   /** Assigned cleaner display name when known. */
   assignedCleanerName?: string | null;
 }): BookingEmailPayload {
-  const locked = params.snapshot?.locked;
   const custName = params.snapshot?.customer?.name?.trim();
   const totalPaidZar =
     typeof params.snapshot?.total_zar === "number"

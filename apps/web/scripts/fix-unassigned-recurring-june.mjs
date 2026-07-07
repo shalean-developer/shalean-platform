@@ -22,8 +22,6 @@ const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.SUP
 
 const LUCIA_ID = "72642f1a-4745-47e1-9a13-1edbb19b20d0";
 const JARED_PLAN_ID = "938ef56b-e965-4065-b55a-e01a0947201f";
-const JARED_EMAIL = "channingpeace@gmail.com";
-
 function assignPatch(status) {
   const st = String(status ?? "").toLowerCase();
   const now = new Date().toISOString();

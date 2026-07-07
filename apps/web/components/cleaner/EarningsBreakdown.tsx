@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { ChevronRight, TrendingUp, Wallet } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -41,7 +40,6 @@ export function EarningsBreakdown({
   pendingPayout,
   paidPayout,
   bonusTotal,
-  payouts = [],
   onViewPayout,
   className,
 }: EarningsBreakdownProps) {

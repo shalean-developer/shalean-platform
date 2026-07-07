@@ -14,8 +14,6 @@ import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb"
 import { teamJobSlotsPerTeamPerDay, countPlatformTeamJobsOnDate, MAX_TEAM_BOOKINGS_PER_DAY, TEAM_MIN_ROSTER_MEMBERS } from "@/lib/dispatch/teamJobsPerDay";
 import { newTeamAssignmentErrorId } from "@/lib/dispatch/teamAssignmentErrorId";
 import { resolveTeamPayoutOwnerCleanerId } from "@/lib/dispatch/resolveTeamPayoutOwnerCleanerId";
-import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
-
 /**
  * Statuses that consume a team-day slot for allocator + RPC alignment.
  * Keep in sync with `public.claim_team_capacity_slot` / `team_daily_capacity_usage` semantics.
@@ -506,16 +504,6 @@ async function finalizeBookingTeamAssignment(
   const nowIso = new Date().toISOString();
   /** Snapshot from the chosen team at assignment time (post-claim), not a stale pre-sort value. */
   const rosterSnapshot = Math.max(0, Math.floor(selected.rosterSnapshot));
-  const baseUpdate = {
-    cleaner_id: null,
-    payout_owner_cleaner_id: payoutOwnerCleanerId,
-    is_team_job: true,
-    team_id: selected.id,
-    status: "assigned" as const,
-    dispatch_status: "assigned" as const,
-    assigned_at: nowIso,
-    cleaner_response_status: CLEANER_RESPONSE.PENDING,
-  };
 
   let snapshotArg: number | null = rosterSnapshot;
   let atomic = await assignDispatchTeamAndSyncRoster({

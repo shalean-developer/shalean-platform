@@ -2,7 +2,6 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
-  effectiveTeamMembershipDateYmd,
   isTeamMemberActiveOnBookingDate,
   type TeamMemberAvailabilityRow,
 } from "@/lib/cleaner/teamMemberAvailability";

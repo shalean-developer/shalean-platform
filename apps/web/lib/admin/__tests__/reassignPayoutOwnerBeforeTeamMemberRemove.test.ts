@@ -61,7 +61,7 @@ function createAdmin(opts: {
         return {
           update: (patch: Record<string, unknown>) => ({
             eq: (col: string, val: string) => ({
-              eq: async (col2: string, val2: string) => {
+              eq: async (col2: string, _val2: string) => {
                 if (col === "id" && col2 === "payout_owner_cleaner_id") {
                   updates.push({ id: val, patch });
                 }

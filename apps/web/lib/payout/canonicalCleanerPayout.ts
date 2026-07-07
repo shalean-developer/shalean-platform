@@ -146,7 +146,7 @@ export type CanonicalPayoutResult = {
   perCleanerBaseCents: Map<string, number>;
 };
 
-export function useLegacyPayoutEngine(): boolean {
+export function isLegacyPayoutEngineEnabled(): boolean {
   return process.env.USE_LEGACY_PAYOUT_ENGINE === "true";
 }
 

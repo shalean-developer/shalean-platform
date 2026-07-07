@@ -151,7 +151,6 @@ function BookingSummaryInner({
   }
 
   if (paymentDesktopSidebar) {
-    const hoursLine = loading ? "…" : formatSidebarHoursLine(summaryHours);
     const priceLine = loading ? "…" : `R${Math.round(summaryTotalZar).toLocaleString("en-ZA")}`;
     const dateLine = formatSidebarDateLine(bookingDate);
     const timeLine = bookingTime?.trim() ? bookingTime.trim() : "—";

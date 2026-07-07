@@ -17,7 +17,6 @@ import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { logCronRun, logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { resolveCustomerOutboundEmail } from "@/lib/customer/readCustomerProfileContact";
 import {
   buildRecurringGeneratorRunContext,

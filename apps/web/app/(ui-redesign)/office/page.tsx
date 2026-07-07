@@ -17,22 +17,18 @@ import {
   officeScheduleStatusPresentation,
 } from "@/lib/admin/officeTodayScheduleStats";
 import {
-  AlertTriangle,
   ArrowUpRight,
   BarChart3,
   Calendar,
   CheckCircle2,
   ChevronRight,
   Clock,
-  CreditCard,
-  DollarSign,
   ExternalLink,
   RefreshCw,
   Send,
   Shield,
   TrendingUp,
   UserCheck,
-  Users,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";

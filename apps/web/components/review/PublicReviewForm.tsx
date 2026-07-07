@@ -6,9 +6,9 @@ import { Star } from "lucide-react";
 import { getDashboardAccessToken } from "@/lib/dashboard/dashboardFetch";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseBrowser, getSupabaseSession } from "@/lib/supabase/browser";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
-import { customerAccountBookingsUrl, customerAccountReviewsUrl } from "@/lib/customer/customerAccountPaths";
+import { customerAccountReviewsUrl } from "@/lib/customer/customerAccountPaths";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -47,18 +47,13 @@ export function PublicReviewForm({ initialBookingId }: Props) {
   const [done, setDone] = useState(false);
 
   const refreshSession = useCallback(async () => {
-    const sb = getSupabaseClient();
-    if (!sb) {
-      setSignedIn(false);
-      return;
-    }
-    const { data } = await sb.auth.getSession();
-    setSignedIn(Boolean(data.session?.access_token));
+    const session = await getSupabaseSession();
+    setSignedIn(Boolean(session?.access_token));
   }, []);
 
   useEffect(() => {
     void refreshSession();
-    const sb = getSupabaseClient();
+    const sb = getSupabaseBrowser();
     if (!sb) return;
     const { data: sub } = sb.auth.onAuthStateChange(() => {
       void refreshSession();

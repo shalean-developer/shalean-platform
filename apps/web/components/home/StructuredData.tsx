@@ -9,7 +9,6 @@ import {
   HOME_CANONICAL,
   HOME_PAGE_HEADLINE,
   HOME_PAGE_META_DESCRIPTION,
-  HOME_PAGE_TITLE,
 } from "@/lib/seo/homePageMeta";
 import { normalizeSchemaDescription } from "@/lib/seo/metaDescription";
 import { buildWebPageJsonLdNode, buildWebSiteJsonLdNode, pageEntityId } from "@/lib/seo/schemaGraph";

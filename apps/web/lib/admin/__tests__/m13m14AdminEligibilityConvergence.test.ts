@@ -8,7 +8,7 @@
  *     so cleaners with `is_available=false` / `is_active=false` / blocked
  *     lifecycle status appeared assignable in the admin scheduling UI even
  *     though they were excluded from the actual customer-facing pool.
- *   M-14: the `useStrictAvailability` flag governs only calendar-window
+ *   M-14: the `isStrictAvailabilityEnabled` flag governs only calendar-window
  *     emptiness — but `cleaners.is_available=false` (the manual "Go offline"
  *     toggle) is a separate hard flag that must be respected REGARDLESS of
  *     strict mode. Because `computeAssignEligibility` never even fetched

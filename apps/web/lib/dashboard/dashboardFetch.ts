@@ -1,11 +1,7 @@
-import { getSupabaseClient } from "@/lib/supabaseClient";
+import { getSupabaseAccessToken } from "@/lib/supabase/browser";
 
 export async function getDashboardAccessToken(): Promise<string | null> {
-  const sb = getSupabaseClient();
-  if (!sb) return null;
-  const { data, error } = await sb.auth.getSession();
-  if (error || !data.session?.access_token) return null;
-  return data.session.access_token;
+  return getSupabaseAccessToken();
 }
 
 export async function dashboardFetchJson<T>(

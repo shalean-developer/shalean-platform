@@ -15,7 +15,6 @@ import type {
   BookingV2CatalogPayload,
   BookingV2SchedulingConfig,
   LiveExtra,
-  LiveServiceConfig,
   ServicesCatalog,
 } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { DB_SLUG_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";

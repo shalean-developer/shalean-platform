@@ -656,7 +656,7 @@ async function executeRepricingAdminEditBookingDetails(
   params: { bookingId: string; body: AdminEditBookingDetailsBody; adminUserId: string; idempotencyKey?: string | null },
   pre: AdminEditDetailsPreambleOk,
 ): Promise<AdminEditBookingDetailsResult> {
-  const { bookingId, dedupeKey, clientUpdatedAt, wantsRooms, wantsBaths, wantsExtras, wantsPrice, wantsNotes } = pre;
+  const { bookingId, dedupeKey, clientUpdatedAt, wantsRooms, wantsBaths, wantsExtras, wantsPrice } = pre;
 
   const { data: row, error: selErr } = await admin
     .from("bookings")

@@ -19,6 +19,10 @@ import {
   recurringPendingPaymentProgressionBlockedMessage,
 } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
 import { assignedOfferPastAcceptanceDeadline } from "@/lib/cleaner/cleanerAssignedOfferExpiry";
+import {
+  pairedRosterMemberShouldShowComplete,
+  type ViewerRosterContext,
+} from "@/lib/cleaner/pairedRosterMemberLifecycle";
 import { isBookingPayoutPaid } from "@/lib/cleaner/cleanerPayoutPaid";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 
@@ -291,7 +295,27 @@ function payoutStateFromRow(row: Record<string, unknown>): DescribeBookingOperat
   return "pending";
 }
 
+function viewerRosterContextFromAugmentedRow(row: Record<string, unknown>): ViewerRosterContext | null {
+  if (row.viewer_is_paired_roster_member !== true) return null;
+  const roleRaw = String(row.viewer_roster_role ?? "").trim().toLowerCase();
+  return {
+    pairedRosterJob: row.paired_roster_job === true,
+    viewerOnRoster: row.viewer_on_roster === true,
+    viewerRosterRole: roleRaw === "lead" ? "lead" : roleRaw === "member" ? "member" : null,
+    viewerRosterCompletedAt: String(row.viewer_roster_completed_at ?? "").trim() || null,
+    viewerIsPairedRosterMember: true,
+  };
+}
+
 function computeCleanerJobUiStateRecord(row: Record<string, unknown>, nowMs?: number): CleanerJobUiState {
+  const rosterCtx = viewerRosterContextFromAugmentedRow(row);
+  if (rosterCtx?.viewerRosterCompletedAt) {
+    return { phase: "none" };
+  }
+  if (rosterCtx && pairedRosterMemberShouldShowComplete(row, rosterCtx)) {
+    return { phase: "complete" };
+  }
+
   const st = String(row.status ?? "").toLowerCase();
   const dst = String(row.dispatch_status ?? "").trim().toLowerCase();
   if (dst === "expired" && (st === "pending" || st === "offered" || st === "pending_assignment")) {
@@ -330,7 +354,12 @@ function computeCleanerJobUiStateRecord(row: Record<string, unknown>, nowMs?: nu
 
 function lifecycleCapabilitiesForCleaner(row: Record<string, unknown>, ui: CleanerJobUiState): LifecycleCapabilities {
   const st = String(row.status ?? "").trim().toLowerCase();
-  if (isAuthoritativeBookingCompleted(row) || st === "cancelled" || st === "failed") return NO_CAPS;
+  const rosterCtx = viewerRosterContextFromAugmentedRow(row);
+  const pairedMemberCanComplete =
+    rosterCtx != null && pairedRosterMemberShouldShowComplete(row, rosterCtx);
+  if ((isAuthoritativeBookingCompleted(row) || st === "cancelled" || st === "failed") && !pairedMemberCanComplete) {
+    return NO_CAPS;
+  }
   if (st === "pending_payment") {
     return {
       accept: recurringPendingPaymentLifecycleAllowsAction("accept", row).allowed,
@@ -359,6 +388,14 @@ function computeCleanerMobilePhase(
   row: Record<string, unknown>,
   operationalPhase: BookingOperationalPhase,
 ): CleanerMobilePhase {
+  const rosterCtx = viewerRosterContextFromAugmentedRow(row);
+  if (rosterCtx?.viewerRosterCompletedAt) {
+    return "completed";
+  }
+  if (rosterCtx && pairedRosterMemberShouldShowComplete(row, rosterCtx)) {
+    return "in_progress";
+  }
+
   const st = String(row.status ?? "").toLowerCase();
   if (operationalPhase === "completed" || operationalPhase === "cancelled" || operationalPhase === "failed") {
     return "completed";
@@ -378,6 +415,20 @@ function computeCleanerMobilePhase(
 function computeDisplayBadge(row: Record<string, unknown>, ui: CleanerJobUiState): string {
   const st = String(row.status ?? "").toLowerCase();
   if (st === "cancelled") return "Cancelled";
+  const rosterCtx = viewerRosterContextFromAugmentedRow(row);
+  if (
+    rosterCtx &&
+    !Boolean(String(row.viewer_roster_completed_at ?? "").trim()) &&
+    pairedRosterMemberShouldShowComplete(row, rosterCtx)
+  ) {
+    return "Complete your visit";
+  }
+  if (
+    row.viewer_is_paired_roster_member === true &&
+    Boolean(String(row.viewer_roster_completed_at ?? "").trim())
+  ) {
+    return "Completed";
+  }
   if (isAuthoritativeBookingCompleted(row) && overrideAppliedFromRow(row)) return "Completed by admin override";
   if (isAuthoritativeBookingCompleted(row)) return "Completed";
   if (st === "pending_payment") {

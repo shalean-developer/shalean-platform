@@ -19,10 +19,6 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function escapeAttr(s: string): string {
-  return escapeHtml(s).replace(/'/g, "&#39;");
-}
-
 function proseBlockToHtml(block: BlogContentBlock): string {
   switch (block.type) {
     case "rich_text":

@@ -101,9 +101,42 @@ describe("computeOfficeAnalyticsSummary", () => {
     expect(summary.bookingTrends.find((t) => t.label === "New bookings")?.value).toBe(4);
     expect(summary.bookingTrends.find((t) => t.label === "Recurring visits")?.value).toBe(1);
     expect(summary.bookingTrends.find((t) => t.label === "Cancellations")?.value).toBe(1);
-    expect(summary.revenueChart["7d"].length).toBe(7);
-    expect(summary.revenueChart["30d"].length).toBe(4);
-    expect(summary.revenueChart["90d"].length).toBe(3);
+    // Default window is the trailing 30 days → weekly buckets.
+    expect(summary.range.granularity).toBe("week");
+    expect(Array.isArray(summary.revenueChart)).toBe(true);
+    expect(summary.revenueChart.length).toBe(Math.ceil(summary.range.days / 7));
+  });
+
+  it("honours an explicit window and picks daily buckets for short ranges", () => {
+    const summary = computeOfficeAnalyticsSummary(
+      [
+        row({
+          id: "in-window",
+          amount_paid_cents: 40_000,
+          payment_completed_at: "2026-06-17T08:00:00.000Z",
+          created_at: "2026-06-17T07:00:00.000Z",
+        }),
+        row({
+          id: "outside-window",
+          amount_paid_cents: 90_000,
+          payment_completed_at: "2026-05-01T08:00:00.000Z",
+          created_at: "2026-05-01T07:00:00.000Z",
+        }),
+      ],
+      [],
+      NOW,
+      {
+        startMs: Date.parse("2026-06-13T00:00:00+02:00"),
+        endMs: Date.parse("2026-06-20T00:00:00+02:00"),
+      },
+    );
+
+    expect(summary.range.granularity).toBe("day");
+    expect(summary.range.days).toBe(7);
+    expect(summary.revenueChart.length).toBe(7);
+    // Only the booking paid inside the 7-day window contributes.
+    expect(summary.kpis.totalRevenueZar).toBe(400);
+    expect(summary.kpis.totalBookings).toBe(1);
   });
 
   it("uses customer_id when present (production bookings schema)", () => {

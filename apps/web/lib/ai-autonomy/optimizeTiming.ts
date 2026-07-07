@@ -16,10 +16,6 @@ function sleepMs(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-function clamp(n: number, lo: number, hi: number): number {
-  return Math.min(hi, Math.max(lo, n));
-}
-
 export type OptimizeSendTimingContext = {
   price?: number;
   segment?: SegmentKey | "unknown";

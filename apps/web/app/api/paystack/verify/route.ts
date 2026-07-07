@@ -16,7 +16,6 @@ import { normalizePaystackMetadata } from "@/lib/booking/paystackMetadata";
 import { resolvePaystackUserId } from "@/lib/booking/resolvePaystackUserId";
 import type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyResponse";
 import { findBookingIdStatusForPaystackReference, PaystackDecoupledMetadataError } from "@/lib/booking/paystackBookingIdLookup";
-import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import type { UpsertBookingFromPaystackResult } from "@/lib/booking/upsertBookingFromPaystack";
 import {
   runPaystackVerifyFinalizePipeline,

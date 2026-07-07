@@ -191,8 +191,6 @@ async function main() {
     const invoiceTotalCents = Number(inv.total_amount_cents ?? 0);
 
     const expectedDates = expectedDatesInMonth(plan, inv.month);
-    const bookingDates = new Set(bookings.map((b) => String(b.date ?? "").slice(0, 10)));
-    const onSchedule = bookings.filter((b) => expectedDates.includes(String(b.date ?? "").slice(0, 10)));
     const offSchedule = bookings.filter((b) => !expectedDates.includes(String(b.date ?? "").slice(0, 10)));
 
     const planPrice = Math.round(Number(plan.price ?? 0));

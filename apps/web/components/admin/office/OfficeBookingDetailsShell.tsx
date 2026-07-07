@@ -5,7 +5,6 @@ import { useState, type ComponentType, type ReactNode } from "react";
 import {
   ArrowLeft,
   BadgeCheck,
-  Bell,
   Calendar,
   CheckCircle2,
   Circle,

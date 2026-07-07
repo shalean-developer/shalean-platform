@@ -116,13 +116,6 @@ async function main() {
 
   console.log(`Orphan invoices with cleaner/walkin customer name: ${cleanerOrphans.length}`);
 
-  const juneInZoho = allZoho.filter((inv) => {
-    const ref = String(inv.reference_number ?? "");
-    const desc = ref.startsWith("MI-") || ref.startsWith("BK-");
-    const date = String(inv.date ?? "");
-    return date.startsWith("2026-06") || (desc && inv.reference_number?.includes?.(""));
-  });
-
   const junePaidLinked = linked.filter((inv) => {
     const db = linkedByZoho.get(inv.invoice_id);
     if (!db) return false;
@@ -166,7 +159,7 @@ async function main() {
       console.log(
         `  booking ${row.id.slice(0, 8)} row_email=${row.customer_email} → Zoho ${inv?.invoice_number} customer=${inv?.customer_name}`,
       );
-    } catch (e) {
+    } catch {
       console.log(`  booking ${row.id.slice(0, 8)} fetch failed`);
     }
   }

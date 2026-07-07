@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SupabaseClient } from "@supabase/supabase-js";
 
 /**
  * M-2: `adminMarkBookingPaid` previously overwrote `bookings.paystack_reference` with synthetic
@@ -182,8 +183,18 @@ function makeRow(overrides: Partial<StoredRow>): StoredRow {
 
 type Patch = Record<string, unknown>;
 
+type QueryStub = {
+  select(s: string): QueryStub;
+  eq(col: string, val: string): QueryStub;
+  is(col: string, v: null): QueryStub;
+  not(col: string, op: "eq", val: string): QueryStub;
+  update(patch: Patch): QueryStub;
+  maybeSingle(): Promise<{ data: StoredRow | null; error: null }>;
+  then(resolve: (v: unknown) => unknown): Promise<unknown>;
+};
+
 function makeAdminStub(initial: StoredRow): {
-  admin: any;
+  admin: SupabaseClient;
   store: { row: StoredRow };
   patches: Patch[];
 } {
@@ -192,7 +203,7 @@ function makeAdminStub(initial: StoredRow): {
 
   const fromBookings = () => {
     const buf: { selectStr?: string; eqId?: string; updatePatch?: Patch; isNullCol?: string; notEq?: Array<[string, string]>; selectAfter?: boolean } = {};
-    const builder: any = {
+    const builder: QueryStub = {
       select(s: string) {
         buf.selectStr = s;
         buf.selectAfter = true;
@@ -244,7 +255,7 @@ function makeAdminStub(initial: StoredRow): {
     return builder;
   };
 
-  const admin: any = {
+  const admin = {
     from(table: string) {
       if (table === "bookings") return fromBookings();
       return {
@@ -261,7 +272,7 @@ function makeAdminStub(initial: StoredRow): {
         }),
       };
     },
-  };
+  } as unknown as SupabaseClient;
 
   return { admin, store, patches };
 }
@@ -288,7 +299,7 @@ describe("M-2 adminMarkBookingPaid preserves bookings.paystack_reference (regres
     const initial = makeRow({ paystack_reference: "pay_cash-keep-1" });
     const { admin, store, patches } = makeAdminStub(initial);
 
-    const out = await adminMarkBookingPaid(admin as any, {
+    const out = await adminMarkBookingPaid(admin, {
       bookingId: initial.id,
       method: "cash",
       reference: null,
@@ -316,7 +327,7 @@ describe("M-2 adminMarkBookingPaid preserves bookings.paystack_reference (regres
     const initial = makeRow({ paystack_reference: "pay_eft-keep-1" });
     const { admin, store, patches } = makeAdminStub(initial);
 
-    const out = await adminMarkBookingPaid(admin as any, {
+    const out = await adminMarkBookingPaid(admin, {
       bookingId: initial.id,
       method: "eft",
       reference: "EFT-MEMO-7788",
@@ -344,7 +355,7 @@ describe("M-2 adminMarkBookingPaid preserves bookings.paystack_reference (regres
     const initial = makeRow({ paystack_reference: "pay_zoho-keep-1" });
     const { admin, store, patches } = makeAdminStub(initial);
 
-    const out = await adminMarkBookingPaid(admin as any, {
+    const out = await adminMarkBookingPaid(admin, {
       bookingId: initial.id,
       method: "zoho",
       reference: "ZOHO-INV-001",
@@ -372,7 +383,7 @@ describe("M-2 adminMarkBookingPaid preserves bookings.paystack_reference (regres
     const initial = makeRow({ paystack_reference: "adm_mi_aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee" });
     const { admin, store } = makeAdminStub(initial);
 
-    const out = await adminMarkBookingPaid(admin as any, {
+    const out = await adminMarkBookingPaid(admin, {
       bookingId: initial.id,
       method: "zoho",
       reference: "ZOHO-MONTHLY-42",
@@ -392,7 +403,7 @@ describe("M-2 adminMarkBookingPaid preserves bookings.paystack_reference (regres
     const initial = makeRow({ paystack_reference: "pay_side-effect-keep-1" });
     const { admin } = makeAdminStub(initial);
 
-    await adminMarkBookingPaid(admin as any, {
+    await adminMarkBookingPaid(admin, {
       bookingId: initial.id,
       method: "cash",
       reference: null,
@@ -410,7 +421,7 @@ describe("M-2 adminMarkBookingPaid preserves bookings.paystack_reference (regres
     const initial = makeRow({ paystack_reference: "pay_shape-1" });
     const { admin } = makeAdminStub(initial);
 
-    const out = await adminMarkBookingPaid(admin as any, {
+    const out = await adminMarkBookingPaid(admin, {
       bookingId: initial.id,
       method: "cash",
       reference: null,
@@ -441,7 +452,7 @@ describe("M-2 adminMarkBookingPaid preserves bookings.paystack_reference (regres
     const initial = makeRow({ paystack_reference: "pay_webhook-idem-1" });
     const { admin, store } = makeAdminStub(initial);
 
-    await adminMarkBookingPaid(admin as any, {
+    await adminMarkBookingPaid(admin, {
       bookingId: initial.id,
       method: "cash",
       reference: null,
@@ -463,7 +474,7 @@ describe("M-2 adminMarkBookingPaid preserves bookings.paystack_reference (regres
     });
     const { admin, store, patches } = makeAdminStub(initial);
 
-    const out = await adminMarkBookingPaid(admin as any, {
+    const out = await adminMarkBookingPaid(admin, {
       bookingId: initial.id,
       method: "cash",
       reference: null,

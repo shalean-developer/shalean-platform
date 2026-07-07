@@ -16,7 +16,6 @@ export async function fillCleanerAvailabilityGapsFromLegacyColumns(
   if (error) throw new Error(error.message);
 
   const start = new Date();
-  const startYmd = start.toISOString().slice(0, 10);
   let inserted = 0;
 
   for (const raw of cleaners ?? []) {

@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { BlogContentBlock, BlogContentJson } from "@/lib/blog/content-json";
+import type { BlogContentJson } from "@/lib/blog/content-json";
 import {
   blogSlugFromPathname,
   getCanonicalBlogSlug,
