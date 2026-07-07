@@ -10,10 +10,12 @@ type Props = {
   alt: string;
   /** Subtle bottom gradient for brand tone (Shalean blue). */
   overlay?: boolean;
+  /** Above-the-fold hero → eager LCP load. Defaults to true since this renders at the top of the article. */
+  priority?: boolean;
   className?: string;
 };
 
-export function BlogHero({ src, alt, overlay = true, className }: Props) {
+export function BlogHero({ src, alt, overlay = true, priority = true, className }: Props) {
   const remote = isRemoteSrc(src);
 
   return (
@@ -29,8 +31,9 @@ export function BlogHero({ src, alt, overlay = true, className }: Props) {
         fill
         className="object-cover"
         sizes="(max-width: 1024px) 100vw, min(896px, 70vw)"
-        loading="lazy"
-        unoptimized={remote}
+        priority={priority}
+        fetchPriority={priority ? "high" : "auto"}
+        {...(remote ? { unoptimized: true } : {})}
       />
       {overlay ? (
         <div

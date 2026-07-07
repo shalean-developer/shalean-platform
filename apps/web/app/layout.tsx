@@ -6,16 +6,16 @@ import { DeferredGrowthCtaTracking } from "@/components/analytics/DeferredGrowth
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { GoogleTagManager } from "@/components/analytics/GoogleTagManager";
 import { SessionReplayProvider } from "@/components/analytics/SessionReplayProvider";
+import { GlobalTopNav } from "@/components/nav/GlobalTopNav";
 import { geistSans } from "@/lib/fonts/appFonts";
 import { ROOT_METADATA } from "@/lib/site/rootMetadata";
 import "./globals.css";
 
-/** Split heavy client nav from the root layout chunk to avoid dev ChunkLoadError timeouts. */
-const GlobalTopNav = dynamic(
-  () => import("@/components/nav/GlobalTopNav").then((m) => ({ default: m.GlobalTopNav })),
-  { loading: () => null },
-);
-
+/**
+ * Static import (not `dynamic`) so the above-the-fold header renders in the initial HTML and stays
+ * mounted through hydration. A lazy `loading: () => null` fallback briefly unmounts the header on the
+ * client, which shoves `<main>` up then back down ~152px — the ~0.12 CLS seen on all nav pages.
+ */
 const ReferralCapture = dynamic(
   () => import("@/components/referrals/ReferralCapture").then((m) => ({ default: m.ReferralCapture })),
   { loading: () => null },

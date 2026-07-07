@@ -205,11 +205,21 @@ const nextConfig: NextConfig = {
         source: "/(office|login|admin)(.*)",
         headers: [{ key: "X-Frame-Options", value: "DENY" }],
       },
+      {
+        source: "/:all*(svg|jpg|jpeg|png|webp|avif|gif|ico|woff|woff2)",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
     ];
   },
   images: {
     remotePatterns: imageRemotePatterns,
     localPatterns: [{ pathname: "/images/**" }, { pathname: "/marketing/**" }],
+    formats: ["image/avif", "image/webp"],
+    deviceSizes: [360, 480, 640, 768, 828, 1080, 1200, 1440, 1920],
+    imageSizes: [16, 32, 48, 64, 96, 128, 256, 384],
+    minimumCacheTTL: 2678400,
   },
   turbopack: {
     root: turbopackRoot,
