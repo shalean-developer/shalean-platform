@@ -24,6 +24,7 @@ import {
   RotateCcw,
   Send,
   ShieldAlert,
+  Star,
   TriangleAlert,
   User,
   UserCheck,
@@ -122,6 +123,9 @@ export type OfficeBookingDetailsShellProps = {
   onMarkPaid: () => void;
   onResendConfirmationEmails?: () => void;
   resendConfirmationEmailsBusy?: boolean;
+  showSendReviewRequest?: boolean;
+  onSendReviewRequest?: () => void;
+  sendReviewRequestBusy?: boolean;
   onFixEarnings: () => void;
   onResetEarnings: () => void;
   onMarkComplete: () => void;
@@ -534,6 +538,24 @@ function ActionsPanel(props: OfficeBookingDetailsShellProps) {
               <Phone className="h-4 w-4" /> Contact customer
             </Button>
           </ActionGroup>
+
+          {props.showSendReviewRequest && props.onSendReviewRequest ? (
+            <ActionGroup title="Follow-up">
+              <Button
+                variant="outline"
+                className="w-full justify-start border-violet-200 bg-violet-50 text-violet-900 hover:bg-violet-100"
+                disabled={props.sendReviewRequestBusy}
+                onClick={props.onSendReviewRequest}
+              >
+                {props.sendReviewRequestBusy ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Star className="h-4 w-4" />
+                )}
+                Send review request
+              </Button>
+            </ActionGroup>
+          ) : null}
 
           <ActionGroup title="Payment">
             <Button

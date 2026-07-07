@@ -865,6 +865,7 @@ export default function BookingDetailsView({
   const [notificationLogsLoading, setNotificationLogsLoading] = useState(false);
   const [notificationLogRefresh, setNotificationLogRefresh] = useState(0);
   const [resendConfirmationBusy, setResendConfirmationBusy] = useState(false);
+  const [sendReviewRequestBusy, setSendReviewRequestBusy] = useState(false);
   const [retryingNotificationLogId, setRetryingNotificationLogId] = useState<string | null>(null);
   const [cleanerIssueReports, setCleanerIssueReports] = useState<CleanerIssueReportRow[]>([]);
   const [serviceQa, setServiceQa] = useState<ServiceQaAdminWire | null>(null);
@@ -945,6 +946,7 @@ export default function BookingDetailsView({
 
   const showAdminMarkComplete = adminOperational?.lifecycleCapabilities.complete === true;
   const opPhase = adminOperational?.operationalPhase;
+  const showSendReviewRequest = opPhase === "completed" && Boolean(fullBooking?.customer_email?.trim());
   const showAdminMarkCancel =
     adminOperational != null &&
     opPhase !== "completed" &&
@@ -1350,6 +1352,40 @@ export default function BookingDetailsView({
       setToast({ kind: "error", text: "Could not resend confirmation emails." });
     } finally {
       setResendConfirmationBusy(false);
+    }
+  }
+
+  async function sendReviewRequestEmail() {
+    if (!bookingId) return;
+    setSendReviewRequestBusy(true);
+    try {
+      const sb = getSupabaseBrowser();
+      const token = (await sb?.auth.getSession())?.data.session?.access_token;
+      if (!token) return;
+      const res = await fetch(
+        `/api/admin/bookings/${encodeURIComponent(bookingId)}/send-review-request`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        },
+      );
+      const j = (await res.json()) as { ok?: boolean; error?: string; sent_to?: string };
+      if (!res.ok || !j.ok) {
+        setToast({ kind: "error", text: j.error ?? "Could not send review request." });
+        return;
+      }
+      setToast({
+        kind: "success",
+        text: j.sent_to ? `Review request sent to ${j.sent_to}.` : "Review request sent.",
+      });
+      setNotificationLogRefresh((n) => n + 1);
+    } catch {
+      setToast({ kind: "error", text: "Could not send review request." });
+    } finally {
+      setSendReviewRequestBusy(false);
     }
   }
 
@@ -2625,6 +2661,9 @@ export default function BookingDetailsView({
           }}
           onResendConfirmationEmails={() => void resendConfirmationEmails()}
           resendConfirmationEmailsBusy={resendConfirmationBusy}
+          showSendReviewRequest={showSendReviewRequest}
+          onSendReviewRequest={() => void sendReviewRequestEmail()}
+          sendReviewRequestBusy={sendReviewRequestBusy}
           onFixEarnings={() => void handleFixEarnings()}
           onResetEarnings={() => setResetEarningsModalOpen(true)}
           onMarkComplete={() => void setStatusOptimistic("completed")}

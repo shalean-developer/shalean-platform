@@ -10,7 +10,7 @@
  *      links the lifecycle email + dashboard CTA already produce).
  *
  *   2. **Exactly one reviewable booking auto-opens.** Customers landing on
- *      `/dashboard/reviews` from a notification or top-nav with a single
+ *      `/account/reviews` from a notification or top-nav with a single
  *      pending review get the modal opened on it directly — no extra click
  *      hunting through a dropdown.
  *

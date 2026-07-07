@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { signOut } from "@/lib/auth/authClient";
+import { CUSTOMER_ACCOUNT_REVIEWS_PATH } from "@/lib/customer/customerAccountPaths";
 import { useUser } from "@/hooks/useUser";
 import { cn } from "@/lib/utils";
 
@@ -46,7 +47,7 @@ const nav = [
   { href: "/dashboard/book", label: "Book cleaning", icon: Sparkles },
   { href: "/dashboard/addresses", label: "Addresses", icon: MapPin },
   { href: "/dashboard/payments", label: "Payments", icon: CreditCard },
-  { href: "/dashboard/reviews", label: "Reviews", icon: Star },
+  { href: CUSTOMER_ACCOUNT_REVIEWS_PATH, label: "Reviews", icon: Star },
   { href: "/dashboard/notifications", label: "Notifications", icon: Bell },
   { href: "/dashboard/profile", label: "Profile", icon: UserRound },
   { href: "/dashboard/referrals", label: "Referrals", icon: Gift },

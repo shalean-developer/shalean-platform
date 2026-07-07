@@ -6,6 +6,14 @@ import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 import { sendCustomerEmailWithDbTemplateFallback } from "@/lib/email/customerEmailFromTemplate";
 import { buildLifecycleTemplateData } from "@/lib/templates/bookingEmailTemplateData";
+import { logReviewKpiEvent } from "@/lib/reviews/reviewKpiServer";
+
+export type SendReviewEmailOptions = {
+  /** When false, skips funnel `review_prompt_sent` KPI (e.g. admin test sends). Default true. */
+  logPromptKpi?: boolean;
+  promptKind?: "initial" | "reminder" | "manual";
+  source?: string;
+};
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
@@ -162,12 +170,41 @@ function buildReviewHtml(ctx: LifecycleEmailBookingContext): string {
 }
 
 /** A few hours after appointment */
-export async function sendReviewEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
+export async function sendReviewEmail(
+  ctx: LifecycleEmailBookingContext,
+  options?: SendReviewEmailOptions,
+): Promise<{ sent: boolean; error?: string }> {
   const { paused } = await isCustomerOutboundPaused();
-  if (paused) return { sent: false, error: "customer_outbound_paused" };
+  if (paused) {
+    const result = { sent: false, error: "customer_outbound_paused" };
+    if (options?.logPromptKpi !== false) {
+      logReviewKpiEvent("review_prompt_sent", {
+        booking_id: ctx.bookingId,
+        channel: "email",
+        sent: false,
+        error: result.error,
+        prompt_kind: options?.promptKind ?? "initial",
+        source: options?.source,
+        customer_email: ctx.to,
+      });
+    }
+    return result;
+  }
   if (!process.env.RESEND_API_KEY?.trim()) {
     await reportOperationalIssue("warn", "review_email", "RESEND_API_KEY not set", { bookingId: ctx.bookingId });
-    return { sent: false, error: "Email not configured" };
+    const result = { sent: false, error: "Email not configured" };
+    if (options?.logPromptKpi !== false) {
+      logReviewKpiEvent("review_prompt_sent", {
+        booking_id: ctx.bookingId,
+        channel: "email",
+        sent: false,
+        error: result.error,
+        prompt_kind: options?.promptKind ?? "initial",
+        source: options?.source,
+        customer_email: ctx.to,
+      });
+    }
+    return result;
   }
   const result = await sendCustomerEmailWithDbTemplateFallback({
     to: ctx.to,
@@ -186,6 +223,17 @@ export async function sendReviewEmail(ctx: LifecycleEmailBookingContext): Promis
       source: "review_email",
       message: "Email sent",
       context: { bookingId: ctx.bookingId, email: ctx.to },
+    });
+  }
+  if (options?.logPromptKpi !== false) {
+    logReviewKpiEvent("review_prompt_sent", {
+      booking_id: ctx.bookingId,
+      channel: "email",
+      sent: result.sent,
+      error: result.error,
+      prompt_kind: options?.promptKind ?? "initial",
+      source: options?.source,
+      customer_email: ctx.to,
     });
   }
   return result;
@@ -309,7 +357,7 @@ export async function sendTestLifecycleEmail(
     case "reminder_24h":
       return sendReminderEmail(ctx);
     case "review_request":
-      return sendReviewEmail(ctx);
+      return sendReviewEmail(ctx, { logPromptKpi: false });
     case "rebook_offer":
       return sendRebookEmail(ctx);
     case "rebook_reminder":

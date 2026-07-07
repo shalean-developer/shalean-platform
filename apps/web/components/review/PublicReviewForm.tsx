@@ -8,6 +8,7 @@ import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { getSupabaseClient } from "@/lib/supabaseClient";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { customerAccountBookingsUrl, customerAccountReviewsUrl } from "@/lib/customer/customerAccountPaths";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
@@ -123,7 +124,7 @@ export function PublicReviewForm({ initialBookingId }: Props) {
         </p>
         <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:justify-center">
           <Button asChild className="rounded-xl">
-            <Link href={`${base}/dashboard/reviews`}>Reviews in dashboard</Link>
+            <Link href={customerAccountReviewsUrl(base)}>Reviews in your account</Link>
           </Button>
           <Button asChild variant="outline" className="rounded-xl">
             <Link href={`${base}/account/bookings`}>Your bookings</Link>
