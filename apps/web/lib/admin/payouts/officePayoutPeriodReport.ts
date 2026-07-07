@@ -359,6 +359,17 @@ export function perCleanerAllocationsForBooking(
   return [];
 }
 
+/** Whether a cleaner receives payroll credit on a visit (same basis as the payouts visit list). */
+export function cleanerHasPayoutAllocationOnBooking(
+  booking: Parameters<typeof perCleanerAllocationsForBooking>[0],
+  roster: readonly RosterCleanerRef[],
+  cleanerId: string,
+): boolean {
+  const target = String(cleanerId ?? "").trim();
+  if (!target) return false;
+  return perCleanerAllocationsForBooking(booking, roster).some((alloc) => alloc.cleaner_id === target);
+}
+
 export async function loadRosterByBookingIds(
   admin: SupabaseClient,
   bookingIds: string[],

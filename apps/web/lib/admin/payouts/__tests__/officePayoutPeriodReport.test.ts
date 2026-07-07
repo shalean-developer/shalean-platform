@@ -3,6 +3,7 @@ import {
   bookingCompanyEarningsCents,
   bookingCustomerRevenueCents,
   classifyBookingPayoutBucket,
+  cleanerHasPayoutAllocationOnBooking,
   defaultOfficePayoutPeriodRange,
   normalizeOfficePayoutPeriodRange,
   payoutPeriodOverlapsRange,
@@ -76,6 +77,35 @@ describe("officePayoutPeriodReport", () => {
       { cleaner_id: nyasha, cents: 30000 },
       { cleaner_id: ethel, cents: 30000 },
     ]);
+  });
+
+  it("detects payroll attribution from earnings summary even when booking header points elsewhere", () => {
+    const attributed = "914b3acf-40e8-4ad5-a5a2-9e2de711849a";
+    const headerCleaner = "796e3ad7-07f3-44eb-b4cf-bed439a59f8b";
+    const booking = {
+      cleaner_id: headerCleaner,
+      payout_owner_cleaner_id: null,
+      payout_frozen_cents: null,
+      display_earnings_cents: 25000,
+      cleaner_earnings_total_cents: 25000,
+      cleaner_payout_cents: null,
+      earnings_summary: {
+        model_version: "v3",
+        per_cleaner_earnings: [
+          {
+            cleaner_id: attributed,
+            role: "lead",
+            base_earning_cents: 25000,
+            bonus_cents: 0,
+            deduction_cents: 0,
+            total_cents: 25000,
+          },
+        ],
+      },
+    };
+
+    expect(cleanerHasPayoutAllocationOnBooking(booking, [], attributed)).toBe(true);
+    expect(cleanerHasPayoutAllocationOnBooking(booking, [], headerCleaner)).toBe(false);
   });
 
   it("derives customer revenue from paid columns and earnings summary fallback", () => {

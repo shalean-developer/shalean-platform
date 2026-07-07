@@ -1,6 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logAdminEarningsAction } from "@/lib/admin/logAdminEarningsAction";
-import { payrollCleanerId } from "@/lib/admin/payouts/officePayoutPeriodReport";
+import {
+  cleanerHasPayoutAllocationOnBooking,
+  perCleanerAllocationsForBooking,
+  type RosterCleanerRef,
+} from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
@@ -19,7 +23,59 @@ type BookingRow = {
   payout_status: string | null;
   payout_paid_at: string | null;
   is_team_job: boolean | null;
+  display_earnings_cents: number | null;
+  cleaner_payout_cents: number | null;
+  cleaner_earnings_total_cents: number | null;
+  payout_frozen_cents: number | null;
+  earnings_summary?: unknown;
 };
+
+function bookingForAllocations(row: BookingRow) {
+  return {
+    earnings_summary: row.earnings_summary,
+    cleaner_id: row.cleaner_id,
+    payout_owner_cleaner_id: row.payout_owner_cleaner_id,
+    display_earnings_cents: row.display_earnings_cents,
+    cleaner_payout_cents: row.cleaner_payout_cents,
+    cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
+    payout_frozen_cents: row.payout_frozen_cents,
+  };
+}
+
+function rosterRefs(members: readonly RosterRow[]): RosterCleanerRef[] {
+  return members.map((m) => ({ cleaner_id: m.cleaner_id, role: m.role }));
+}
+
+async function thawEligiblePayoutStatus(
+  admin: SupabaseClient,
+  bookingId: string,
+  payoutStatus: string | null | undefined,
+): Promise<{ ok: true } | { ok: false; error: string; code: string }> {
+  if (String(payoutStatus ?? "").trim().toLowerCase() !== "eligible") return { ok: true };
+  const { error } = await admin.from("bookings").update({ payout_status: "pending" }).eq("id", bookingId);
+  if (error) return { ok: false, error: error.message, code: "booking_thaw_failed" };
+  return { ok: true };
+}
+
+async function recomputeVisitEarningsForLead(
+  admin: SupabaseClient,
+  bookingId: string,
+  leadId: string,
+): Promise<{ ok: true } | { ok: false; error: string; code?: string }> {
+  const reset = await resetBookingCleanerLineEarnings(admin, bookingId);
+  if (!reset.ok) return { ok: false, error: reset.error, code: "earnings_reset_failed" };
+
+  const persisted = await persistCleanerPayoutIfUnset({
+    admin,
+    bookingId,
+    cleanerId: leadId,
+    forceDisplayRecompute: true,
+  });
+  if (!persisted.ok) {
+    return { ok: false, error: persisted.error, code: persisted.code ?? "earnings_persist_failed" };
+  }
+  return { ok: true };
+}
 
 type RosterRow = {
   cleaner_id: string;
@@ -80,10 +136,13 @@ async function assertVisitPayoutEditable(
 function clearEarningsPatch(): Record<string, unknown> {
   return {
     ...BOOKING_PAYOUT_COLUMNS_CLEAR,
-    display_earnings_cents: null,
-    cleaner_earnings_total_cents: null,
+    // Completed visits must keep display_earnings_cents non-null (0 = cleared / unassigned).
+    display_earnings_cents: 0,
+    cleaner_earnings_total_cents: 0,
     payout_frozen_cents: null,
     payout_status: "pending",
+    // Drop stale per-cleaner JSON so the visit disappears from payroll visit lists.
+    earnings_summary: null,
   };
 }
 
@@ -113,7 +172,7 @@ export async function removeCleanerFromVisitPayout(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, cleaner_id, payout_owner_cleaner_id, selected_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job",
+      "id, status, cleaner_id, payout_owner_cleaner_id, selected_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, display_earnings_cents, cleaner_payout_cents, cleaner_earnings_total_cents, payout_frozen_cents, earnings_summary",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -137,11 +196,10 @@ export async function removeCleanerFromVisitPayout(
   if (rosterErr) return { ok: false, error: rosterErr.message, code: "roster_load_failed" };
 
   const members = (rosterRows ?? []) as RosterRow[];
-  const rosterHasTarget = members.some((m) => String(m.cleaner_id) === cleanerId);
-  const primary = payrollCleanerId(row);
-  const primaryIsTarget = primary === cleanerId;
+  const roster = rosterRefs(members);
+  const allocationBooking = bookingForAllocations(row);
 
-  if (!primaryIsTarget && !rosterHasTarget) {
+  if (!cleanerHasPayoutAllocationOnBooking(allocationBooking, roster, cleanerId)) {
     return {
       ok: false,
       error: "This cleaner is not attributed on this visit.",
@@ -149,6 +207,9 @@ export async function removeCleanerFromVisitPayout(
     };
   }
 
+  const allocations = perCleanerAllocationsForBooking(allocationBooking, roster);
+  const otherAllocations = allocations.filter((alloc) => alloc.cleaner_id !== cleanerId);
+  const rosterHasTarget = members.some((m) => String(m.cleaner_id) === cleanerId);
   const otherRosterMembers = members.filter((m) => String(m.cleaner_id) !== cleanerId);
 
   if (otherRosterMembers.length > 0) {
@@ -168,24 +229,19 @@ export async function removeCleanerFromVisitPayout(
       return { ok: false, error: rpcErr.message, code: "roster_replace_failed" };
     }
 
-    const reset = await resetBookingCleanerLineEarnings(admin, bookingId);
-    if (!reset.ok) return { ok: false, error: reset.error, code: "earnings_reset_failed" };
-
     const leadId =
       otherRosterMembers.find((m) => String(m.role).toLowerCase() === "lead")?.cleaner_id ??
       otherRosterMembers[0]?.cleaner_id ??
       null;
-    if (leadId) {
-      const persisted = await persistCleanerPayoutIfUnset({
-        admin,
-        bookingId,
-        cleanerId: leadId,
-        forceDisplayRecompute: true,
-      });
-      if (!persisted.ok) {
-        return { ok: false, error: persisted.error, code: persisted.code ?? "earnings_persist_failed" };
-      }
+    if (!leadId) {
+      return { ok: false, error: "No remaining cleaner to recompute earnings.", code: "earnings_persist_failed" };
     }
+
+    const thawed = await thawEligiblePayoutStatus(admin, bookingId, row.payout_status);
+    if (!thawed.ok) return thawed;
+
+    const recomputed = await recomputeVisitEarningsForLead(admin, bookingId, leadId);
+    if (!recomputed.ok) return recomputed;
 
     let batchTotalCents: number | null = null;
     if (payoutId) {
@@ -218,11 +274,69 @@ export async function removeCleanerFromVisitPayout(
     return { ok: true, payoutId, batchTotalCents, mode: "roster_removed" };
   }
 
-  const payoutStatus = String(row.payout_status ?? "").trim().toLowerCase();
-  if (payoutStatus === "eligible") {
-    const { error: thawErr } = await admin.from("bookings").update({ payout_status: "pending" }).eq("id", bookingId);
-    if (thawErr) return { ok: false, error: thawErr.message, code: "booking_thaw_failed" };
+  if (otherAllocations.length > 0) {
+    const thawed = await thawEligiblePayoutStatus(admin, bookingId, row.payout_status);
+    if (!thawed.ok) return thawed;
+
+    if (rosterHasTarget) {
+      const { error: delErr } = await admin
+        .from("booking_cleaners")
+        .delete()
+        .eq("booking_id", bookingId)
+        .eq("cleaner_id", cleanerId);
+      if (delErr) return { ok: false, error: delErr.message, code: "roster_delete_failed" };
+    }
+
+    const assignmentPatch: Record<string, unknown> = {};
+    if (String(row.cleaner_id ?? "") === cleanerId) assignmentPatch.cleaner_id = null;
+    if (String(row.payout_owner_cleaner_id ?? "") === cleanerId) assignmentPatch.payout_owner_cleaner_id = null;
+    if (String(row.selected_cleaner_id ?? "") === cleanerId) assignmentPatch.selected_cleaner_id = null;
+    if (Object.keys(assignmentPatch).length > 0) {
+      const { error: assignErr } = await admin.from("bookings").update(assignmentPatch).eq("id", bookingId);
+      if (assignErr) return { ok: false, error: assignErr.message, code: "booking_update_failed" };
+    }
+
+    const leadId = otherAllocations[0]?.cleaner_id ?? null;
+    if (!leadId) {
+      return { ok: false, error: "No remaining cleaner to recompute earnings.", code: "earnings_persist_failed" };
+    }
+
+    const recomputed = await recomputeVisitEarningsForLead(admin, bookingId, leadId);
+    if (!recomputed.ok) return recomputed;
+
+    let batchTotalCents: number | null = null;
+    if (payoutId) {
+      const synced = await syncPayoutBatchFromBookings(admin, payoutId);
+      if (!synced.ok) return { ok: false, error: synced.error, code: "batch_sync_failed" };
+      batchTotalCents = synced.totalCents;
+    }
+
+    await logAdminEarningsAction(admin, {
+      bookingId,
+      action: "manual_adjust",
+      adminUserId: params.adminUserId,
+    });
+
+    void logSystemEvent({
+      level: "info",
+      source: "BOOKING_CLEANER_VISIT_PAYOUT_REMOVED",
+      message: "Admin removed cleaner from visit payout (earnings attribution)",
+      context: {
+        bookingId,
+        cleanerId,
+        payoutId,
+        adminUserId: params.adminUserId,
+        reason: params.reason?.trim() || null,
+        mode: "roster_removed",
+        batch_total_cents: batchTotalCents,
+      },
+    });
+
+    return { ok: true, payoutId, batchTotalCents, mode: "roster_removed" };
   }
+
+  const thawed = await thawEligiblePayoutStatus(admin, bookingId, row.payout_status);
+  if (!thawed.ok) return thawed;
 
   const assignmentPatch: Record<string, unknown> = {
     ...clearEarningsPatch(),

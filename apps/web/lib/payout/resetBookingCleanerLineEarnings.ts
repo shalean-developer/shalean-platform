@@ -2,6 +2,10 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+function clearedDisplayEarningsCentsForStatus(status: string | null | undefined): number | null {
+  return String(status ?? "").trim().toLowerCase() === "completed" ? 0 : null;
+}
+
 /** Clears derived display/line earnings + pending ledger so {@link persistCleanerPayoutIfUnset} can recompute. */
 export async function resetBookingCleanerLineEarnings(
   admin: SupabaseClient,
@@ -10,11 +14,21 @@ export async function resetBookingCleanerLineEarnings(
   const bid = bookingId.trim();
   if (!/^[0-9a-f-]{36}$/i.test(bid)) return { ok: false, error: "Invalid booking id" };
 
+  const { data: bookingRow, error: loadErr } = await admin
+    .from("bookings")
+    .select("status")
+    .eq("id", bid)
+    .maybeSingle();
+  if (loadErr) return { ok: false, error: loadErr.message };
+  if (!bookingRow) return { ok: false, error: "Booking not found" };
+
+  const clearedDisplay = clearedDisplayEarningsCentsForStatus((bookingRow as { status?: string | null }).status);
+
   const { error: bErr } = await admin
     .from("bookings")
     .update({
-      display_earnings_cents: null,
-      cleaner_earnings_total_cents: null,
+      display_earnings_cents: clearedDisplay,
+      cleaner_earnings_total_cents: clearedDisplay,
       cleaner_line_earnings_finalized_at: null,
     })
     .eq("id", bid);
