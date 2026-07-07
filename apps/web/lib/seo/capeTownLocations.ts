@@ -55,10 +55,10 @@ export const CAPE_TOWN_LOCATIONS = normalizeHubs(hubsFile as LocationHubFile);
 export type CapeTownLocationSlug = (typeof CAPE_TOWN_LOCATIONS)[number]["slug"];
 
 /**
- * City-wide commercial hub (`app/(marketing)/cleaning-services-cape-town/page.tsx`). Legacy
- * `/locations/cape-town-cleaning-services` redirects here — not a row in `location-hubs.json`.
+ * City-wide overview hub. The legacy commercial page `/cleaning-services-cape-town` is retired
+ * (HTTP 410 via `isSeoRebuildGonePath`), so the live city overview is the `/locations` index.
  */
-export const CAPE_TOWN_LOCATIONS_OVERVIEW_PATH = "/cleaning-services-cape-town" as const;
+export const CAPE_TOWN_LOCATIONS_OVERVIEW_PATH = "/locations" as const;
 
 /**
  * Resolve a hub row from user/CMS input: full hub slug (`sea-point-cleaning-services`), short legacy slug

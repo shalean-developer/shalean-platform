@@ -15,6 +15,7 @@ import {
   groupCapeTownLocationsByRegion,
 } from "@/lib/locations/locations-index-config";
 import { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
+import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
@@ -74,7 +75,7 @@ export function LocationsIndexView() {
               Find trusted cleaners in your area with transparent pricing and instant booking.
             </p>
             <p className="mt-3 max-w-2xl text-base leading-relaxed text-zinc-600">
-              <Link href="/cleaning-prices-cape-town" className={linkEmphasisClassName}>
+              <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className={linkEmphasisClassName}>
                 Check cleaning prices in Cape Town
               </Link>{" "}
               for your area, then open your suburb hub below.
@@ -96,7 +97,7 @@ export function LocationsIndexView() {
             </div>
             <p className="mt-6 text-sm text-zinc-600">
               Prefer the city overview?{" "}
-              <Link href="/cleaning-services-cape-town" className={`font-semibold ${linkEmphasisClassName}`}>
+              <Link href="/services" className={`font-semibold ${linkEmphasisClassName}`}>
                 Cape Town cleaning hub
               </Link>
             </p>

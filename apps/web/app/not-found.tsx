@@ -28,7 +28,7 @@ export default function NotFound() {
             ["Home", "/"],
             ["Services", "/services"],
             ["Locations", "/locations"],
-            ["Pricing", "/cleaning-prices-cape-town"],
+            ["Pricing", "/blog/how-much-does-cleaning-cost-cape-town-2026"],
             ["FAQ", "/faq"],
             ["Contact", "/contact"],
           ].map(([label, href]) => (

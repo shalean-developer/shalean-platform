@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
 
 const rows = [
   { service: "Standard clean (2 bed)", from: "From R450" },
@@ -21,7 +22,7 @@ export function PricingPreview() {
         Cleaning prices in Cape Town vary depending on home size and service type. Most bookings start from affordable hourly rates, with full-service options available for deep cleaning and move-out cleaning.
       </p>
       <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-        <Link href="/cleaning-prices-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline dark:text-blue-400">
+        <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className="font-semibold text-blue-700 underline-offset-2 hover:underline dark:text-blue-400">
           Check cleaning prices in Cape Town
         </Link>{" "}
         for your area—including guides by bedroom count and service tier.

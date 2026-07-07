@@ -1,5 +1,4 @@
 import {
-  CAPE_TOWN_LOCATIONS_OVERVIEW_PATH,
   locationHubPathFromAreaInput,
   resolveCapeTownHubRowFromAreaInput,
 } from "@/lib/seo/capeTownLocations";
@@ -25,7 +24,7 @@ export function resolveHubFromCleaningServicesCapeTownBlogSlug(
   if (!m) return null;
   const areaKey = m[1] ?? "";
   const path = locationHubPathFromAreaInput(areaKey);
-  if (path === "/locations" || path === CAPE_TOWN_LOCATIONS_OVERVIEW_PATH) {
+  if (path === "/locations") {
     return null;
   }
   const row = resolveCapeTownHubRowFromAreaInput(areaKey);

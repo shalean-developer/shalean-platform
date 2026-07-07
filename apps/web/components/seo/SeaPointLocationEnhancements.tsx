@@ -3,6 +3,7 @@ import { CheckCircle2 } from "lucide-react";
 import { SeoHubGrowthCtaLink } from "@/components/seo/SeoHubGrowthCtaLink";
 import type { SeoLocationAnalyticsBase } from "@/lib/analytics/track";
 import { CAPE_TOWN_SERVICE_SEO, LOCATION_SEO_PAGES } from "@/lib/seo/capeTownSeoPages";
+import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
 import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
 
 type Props = {
@@ -151,7 +152,7 @@ export function SeaPointLocationEnhancements({ ctx, quoteHref = "/book" }: Props
 
           <p className="mt-6 text-sm leading-relaxed text-zinc-600">
             Cross-check citywide bands on our{" "}
-            <Link href="/cleaning-prices-cape-town" className={lc}>
+            <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className={lc}>
               Cape Town cleaning prices hub
             </Link>
             .

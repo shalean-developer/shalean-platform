@@ -135,12 +135,13 @@ export function getAirbnbAreaLandingByPath(pathname: string): AirbnbAreaLandingB
   return null;
 }
 
-/** Location hub slug → dedicated Airbnb landing path when we maintain one */
-export function airbnbAreaLandingPathForLocationHub(hubSlug: string): string | null {
-  const map: Record<string, string> = {
-    "sea-point-cleaning-services": AIRBNB_AREA_LANDINGS["sea-point"].path,
-    "green-point-cleaning-services": AIRBNB_AREA_LANDINGS["green-point"].path,
-    "claremont-cleaning-services": AIRBNB_AREA_LANDINGS.claremont.path,
-  };
-  return map[hubSlug] ?? null;
+/**
+ * Location hub slug → dedicated Airbnb landing path when we maintain one.
+ *
+ * Suburb Airbnb landing pages (`/services/airbnb-cleaning-{area}`) are retired and return HTTP 410
+ * (see `isSeoRebuildGonePath`). Always return null so location hubs link only to the live central hub
+ * `/services/airbnb-cleaning-cape-town`, which every consumer already renders as the primary Airbnb link.
+ */
+export function airbnbAreaLandingPathForLocationHub(_hubSlug: string): string | null {
+  return null;
 }

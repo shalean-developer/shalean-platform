@@ -42,7 +42,11 @@ import { getLocationGeoHints } from "@/lib/seo/location-geo-enrichment";
 import { primaryLocationKeywordPhrase } from "@/lib/seo/location-keyword";
 import { getLocationSeoPriority, hubContentTierFromPriority } from "@/lib/seo/location-priority";
 import { CAPE_TOWN_SERVICE_SEO, type LocationSeoBlock } from "@/lib/seo/capeTownSeoPages";
-import { getLocationHubAboveFoldServiceLink, getLocationHubRelatedServiceLinks } from "@/lib/seo/internalLinks";
+import {
+  CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF,
+  getLocationHubAboveFoldServiceLink,
+  getLocationHubRelatedServiceLinks,
+} from "@/lib/seo/internalLinks";
 import { pickNearbyHubAnchor } from "@/lib/seo/anchorVariants";
 import {
   getLocationHubPeerContextLine,
@@ -238,7 +242,7 @@ export function ProgrammaticLocationCleaningPage({
           <span className="mx-2 text-zinc-300" aria-hidden>
             ·
           </span>
-          <Link href="/cleaning-prices-cape-town" className={`font-medium ${linkEmphasisClassName}`}>
+          <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className={`font-medium ${linkEmphasisClassName}`}>
             Cleaning prices in Cape Town
           </Link>
           <span className="mx-2 text-zinc-300" aria-hidden>
@@ -349,7 +353,7 @@ export function ProgrammaticLocationCleaningPage({
             {getLocationPricingHeroLine(location)}
           </p>
           <p className="mt-3 text-sm leading-relaxed text-zinc-600">
-            <Link href="/cleaning-prices-cape-town" className={linkEmphasisClassName}>
+            <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className={linkEmphasisClassName}>
               Check cleaning prices in Cape Town
             </Link>{" "}
             for your area.

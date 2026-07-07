@@ -13,11 +13,8 @@ const BOOKING = "/book";
 /** Google Business Profile review URL — aligns on-page trust copy with GBP entity signals. */
 const GOOGLE_BUSINESS_REVIEW_URL = "https://g.page/r/Ceg4n_v9Pr59EBM/review";
 
-const CAPE_TOWN_OVERVIEW_LOCATIONS = "/cleaning-services-cape-town";
+const CAPE_TOWN_OVERVIEW_LOCATIONS = "/locations";
 
-const AIRBNB_SEA_POINT = "/services/airbnb-cleaning-sea-point";
-const AIRBNB_GREEN_POINT = "/services/airbnb-cleaning-green-point";
-const AIRBNB_CLAREMONT = "/services/airbnb-cleaning-claremont";
 const HUB_GARDENS = "/locations/gardens-cleaning-services";
 const HUB_SEA_POINT_LOC = "/locations/sea-point-cleaning-services";
 const HUB_GREEN_POINT_LOC = "/locations/green-point-cleaning-services";
@@ -360,19 +357,19 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </h2>
           <p className="mt-4 text-base leading-relaxed text-zinc-600">
             Short-stay demand clusters on the Atlantic Seaboard, City Bowl, Southern Suburbs, and Northern corridors—each pocket
-            carries different parking, security, and dust profiles. Follow suburb hubs for local SEO context; use dedicated Airbnb
-            suburb guides when you want turnover-first copy.
+            carries different parking, security, and dust profiles. Follow suburb hubs for local context, then book turnovers
+            here with the same guest-ready checklist.
           </p>
           <div className="mt-8 rounded-2xl border border-blue-100 bg-white p-6 shadow-sm">
             <h3 className="text-base font-semibold text-zinc-900">Also serving nearby areas</h3>
             <p className="mt-2 text-sm leading-relaxed text-zinc-600">
-              Turnover crews route across the Seaboard and City Bowl edges every week—start from suburb-specific guides when
+              Turnover crews route across the Seaboard and City Bowl edges every week—start from suburb hubs when
               your listing sits in{" "}
-              <SafeInternalLink href={AIRBNB_SEA_POINT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              <SafeInternalLink href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
                 Sea Point
               </SafeInternalLink>
               ,{" "}
-              <SafeInternalLink href={AIRBNB_GREEN_POINT} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
+              <SafeInternalLink href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
                 Green Point
               </SafeInternalLink>
               , or the{" "}
@@ -384,9 +381,6 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </div>
           <ul className="mt-8 flex flex-wrap gap-3">
             {[
-              { href: AIRBNB_SEA_POINT, label: "Sea Point Airbnb cleaning" },
-              { href: AIRBNB_GREEN_POINT, label: "Green Point Airbnb cleaning" },
-              { href: AIRBNB_CLAREMONT, label: "Claremont Airbnb cleaning" },
               { href: HUB_GARDENS, label: "Gardens cleaning hub" },
               { href: HUB_SEA_POINT_LOC, label: "Sea Point cleaning services" },
               { href: HUB_GREEN_POINT_LOC, label: "Green Point cleaning services" },

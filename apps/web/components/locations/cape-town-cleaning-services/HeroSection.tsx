@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { marketingHeroImage } from "@/lib/marketing/marketingHomeAssets";
+import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
 import { cn } from "@/lib/utils";
 
 const HERO_SRC = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
@@ -15,13 +16,13 @@ export function HeroSection() {
       <div className="grid gap-10 px-6 py-12 md:grid-cols-2 md:items-center md:gap-12 md:px-10 md:py-16 lg:px-12">
         <div className="order-2 flex flex-col gap-6 md:order-1">
           <nav className="flex flex-wrap gap-x-3 gap-y-1 text-xs font-medium text-zinc-500 md:text-sm" aria-label="City hubs">
-            <Link href="/cleaning-services-cape-town" className="text-blue-700 underline-offset-2 hover:underline">
+            <Link href="/services" className="text-blue-700 underline-offset-2 hover:underline">
               Cape Town cleaning hub
             </Link>
             <span aria-hidden className="text-zinc-300">
               ·
             </span>
-            <Link href="/cleaning-prices-cape-town" className="text-blue-700 underline-offset-2 hover:underline">
+            <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className="text-blue-700 underline-offset-2 hover:underline">
               Cleaning prices
             </Link>
             <span aria-hidden className="text-zinc-300">
