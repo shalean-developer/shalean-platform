@@ -52,6 +52,9 @@ export type OfficePayoutBatchRow = {
   cleaner_name: string;
   booking_count: number;
   total_amount_cents: number;
+  calculated_amount_cents: number | null;
+  adjustment_note: string | null;
+  amount_adjusted_at: string | null;
   status: string;
   payment_status: string | null;
   payment_reference: string | null;
@@ -94,6 +97,9 @@ type PayoutDbRow = {
   id: string;
   cleaner_id: string;
   total_amount_cents: number;
+  calculated_amount_cents?: number | null;
+  adjustment_note?: string | null;
+  amount_adjusted_at?: string | null;
   status: string;
   payment_status?: string | null;
   payment_reference?: string | null;
@@ -382,7 +388,7 @@ export async function loadOfficePayoutPeriodReport(
     admin
       .from("cleaner_payouts")
       .select(
-        "id, cleaner_id, total_amount_cents, status, payment_status, payment_reference, period_start, period_end, created_at, approved_at, paid_at",
+        "id, cleaner_id, total_amount_cents, calculated_amount_cents, adjustment_note, amount_adjusted_at, status, payment_status, payment_reference, period_start, period_end, created_at, approved_at, paid_at",
       )
       .lte("period_start", to)
       .gte("period_end", from)
@@ -488,6 +494,9 @@ export async function loadOfficePayoutPeriodReport(
     cleaner_name: cleanerNames.get(p.cleaner_id) ?? p.cleaner_id,
     booking_count: bookingCounts.get(p.id) ?? 0,
     total_amount_cents: p.total_amount_cents,
+    calculated_amount_cents: p.calculated_amount_cents ?? null,
+    adjustment_note: p.adjustment_note ?? null,
+    amount_adjusted_at: p.amount_adjusted_at ?? null,
     status: p.status,
     payment_status: p.payment_status ?? null,
     payment_reference: p.payment_reference ?? null,

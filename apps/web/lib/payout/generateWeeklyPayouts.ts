@@ -19,7 +19,13 @@ import {
 import { bookingUsesAccrualPayoutCap } from "@/lib/payout/bookingPayoutCapCents";
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
-import { completionDayYmd, getPreviousWeekDateBoundsUtc, getUtcWeekBoundsContainingYmd, isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
+import {
+  getJohannesburgMonthBoundsContainingYmd,
+  getPreviousMonthDateBoundsJhb,
+  isMonthlyPayoutPeriod,
+} from "@/lib/payout/monthBounds";
+import { MONTHLY_PAYOUT_START_YMD } from "@/lib/payout/payoutPeriodConfig";
+import { isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
 import {
   listRosterMemberWeeklyPayoutCandidates,
   rosterMemberWeeklyPayoutTotalCents,
@@ -34,7 +40,9 @@ export type GenerateWeeklyPayoutsResult = {
 };
 
 export type GenerateCatchUpWeeklyPayoutsResult = {
+  /** @deprecated Use monthsProcessed — kept for API compatibility. */
   weeksProcessed: number;
+  monthsProcessed: number;
   payoutsCreated: number;
   bookingsLinked: number;
   payoutsBackfilled: number;
@@ -147,7 +155,7 @@ async function ensureNoMissingCompletedPayouts(
   return { backfilled, remaining: 0 };
 }
 
-async function listUnbatchedCompletionWeeks(admin: SupabaseClient): Promise<Array<{ periodStart: string; periodEnd: string }>> {
+async function listUnbatchedCompletionMonths(admin: SupabaseClient): Promise<Array<{ periodStart: string; periodEnd: string }>> {
   const { data, error } = await admin
     .from("bookings")
     .select("completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
@@ -159,16 +167,17 @@ async function listUnbatchedCompletionWeeks(admin: SupabaseClient): Promise<Arra
 
   if (error) throw new Error(error.message);
 
-  const weekStarts = new Set<string>();
+  const monthStarts = new Set<string>();
   for (const row of data ?? []) {
     const ymd = weeklyBatchDayYmd(row as Parameters<typeof weeklyBatchDayYmd>[0]);
-    if (!ymd) continue;
-    weekStarts.add(getUtcWeekBoundsContainingYmd(ymd).periodStart);
+    if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) continue;
+    monthStarts.add(getJohannesburgMonthBoundsContainingYmd(ymd).periodStart);
   }
 
-  return [...weekStarts]
+  return [...monthStarts]
     .sort()
-    .map((periodStart) => getUtcWeekBoundsContainingYmd(periodStart));
+    .filter((periodStart) => isMonthlyPayoutPeriod(periodStart))
+    .map((periodStart) => getJohannesburgMonthBoundsContainingYmd(periodStart));
 }
 
 type GeneratePeriodResult = Omit<GenerateWeeklyPayoutsResult, "period">;
@@ -347,6 +356,7 @@ async function generateWeeklyPayoutsForPeriod(
       .insert({
         cleaner_id: cleanerId,
         total_amount_cents: total,
+        calculated_amount_cents: total,
         status: "pending",
         period_start: periodStart,
         period_end: periodEnd,
@@ -460,8 +470,8 @@ async function generateWeeklyPayoutsForPeriod(
 
     void logSystemEvent({
       level: "info",
-      source: "WEEKLY_PAYOUT_CREATED",
-      message: "Cleaner payout batch created",
+      source: "MONTHLY_PAYOUT_CREATED",
+      message: "Cleaner monthly payout batch created",
       context: {
         cleanerId,
         payoutId,
@@ -505,14 +515,24 @@ async function generateWeeklyPayoutsForPeriod(
 
 /**
  * Aggregates **completed**, non-test jobs with stored cleaner payout + bonus and no `payout_id`,
- * for the **previous UTC Mon–Sun** week (by completion day). Does not recalculate cents.
+ * for the **previous Johannesburg calendar month** (from July 2026 onward). Does not recalculate cents.
  *
  * Phase 12: each booking must satisfy {@link bookingPayableForWeeklyBatch} (invoice-settled accrual vs prepaid
- * customer-settled) before linking into a weekly batch.
+ * customer-settled) before linking into a monthly batch.
  */
 export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<GenerateWeeklyPayoutsResult> {
   const asOf = new Date();
-  const { periodStart, periodEnd } = getPreviousWeekDateBoundsUtc(asOf);
+  const { periodStart, periodEnd } = getPreviousMonthDateBoundsJhb(asOf);
+
+  if (!isMonthlyPayoutPeriod(periodStart)) {
+    return {
+      period: { start: periodStart, end: periodEnd },
+      payoutsCreated: 0,
+      bookingsLinked: 0,
+      payoutsBackfilled: 0,
+      skippedCleaners: 0,
+    };
+  }
 
   const preflight = await ensureNoMissingCompletedPayouts(admin);
   const periodResult = await generateWeeklyPayoutsForPeriod(admin, periodStart, periodEnd, { asOfForCutoffProbe: asOf });
@@ -527,12 +547,12 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
 }
 
 /**
- * Admin catch-up: batch every UTC completion week that still has unlinked payable bookings.
- * Cron continues to use {@link generateWeeklyPayouts} for the previous week only.
+ * Admin catch-up: batch every Johannesburg calendar month (from July 2026) that still has unlinked payable bookings.
+ * Cron continues to use {@link generateWeeklyPayouts} for the previous month only.
  */
 export async function generateCatchUpWeeklyPayouts(admin: SupabaseClient): Promise<GenerateCatchUpWeeklyPayoutsResult> {
   const preflight = await ensureNoMissingCompletedPayouts(admin);
-  const weeks = await listUnbatchedCompletionWeeks(admin);
+  const months = await listUnbatchedCompletionMonths(admin);
 
   let payoutsCreated = 0;
   let bookingsLinked = 0;
@@ -540,8 +560,8 @@ export async function generateCatchUpWeeklyPayouts(admin: SupabaseClient): Promi
   let skippedCleaners = 0;
   const periods: GenerateCatchUpWeeklyPayoutsResult["periods"] = [];
 
-  for (const { periodStart, periodEnd } of weeks) {
-    const asOfForCutoffProbe = new Date(`${periodEnd}T12:00:00Z`);
+  for (const { periodStart, periodEnd } of months) {
+    const asOfForCutoffProbe = new Date(`${periodEnd}T12:00:00+02:00`);
     const periodResult = await generateWeeklyPayoutsForPeriod(admin, periodStart, periodEnd, { asOfForCutoffProbe });
     payoutsCreated += periodResult.payoutsCreated;
     bookingsLinked += periodResult.bookingsLinked;
@@ -558,7 +578,8 @@ export async function generateCatchUpWeeklyPayouts(admin: SupabaseClient): Promi
   }
 
   return {
-    weeksProcessed: weeks.length,
+    weeksProcessed: months.length,
+    monthsProcessed: months.length,
     payoutsCreated,
     bookingsLinked,
     payoutsBackfilled,

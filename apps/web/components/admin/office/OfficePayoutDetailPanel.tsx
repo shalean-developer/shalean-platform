@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, CheckCircle2, Download, Loader2, Wallet } from "lucide-react";
+import { ArrowLeft, CheckCircle2, Download, Loader2, Pencil, Save, Wallet, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { adminFetch, getAdminToken } from "@/hooks/useAdminData";
 
@@ -11,6 +11,9 @@ type PayoutDetailRow = {
   cleaner_id: string;
   cleaner_name: string;
   total_amount_cents: number;
+  calculated_amount_cents: number | null;
+  adjustment_note: string | null;
+  amount_adjusted_at: string | null;
   status: string;
   payment_status: string | null;
   payment_reference: string | null;
@@ -61,6 +64,18 @@ function formatPeriod(start: string, end: string): string {
   return `${s} – ${e}`;
 }
 
+function centsToZarInput(cents: number): string {
+  return String(Math.round(cents / 100));
+}
+
+function zarInputToCents(raw: string): number | null {
+  const cleaned = raw.replace(/[R\s,]/g, "").trim();
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * 100);
+}
+
 type Props = {
   payoutId: string;
   onBack: () => void;
@@ -73,6 +88,9 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [editZar, setEditZar] = useState("");
+  const [editNote, setEditNote] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -98,6 +116,38 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
   useEffect(() => {
     void load();
   }, [load]);
+
+  async function handleSaveAmount() {
+    const cents = zarInputToCents(editZar);
+    if (cents == null) {
+      onToast("Enter a valid payout amount.", false);
+      return;
+    }
+    setBusy("save-amount");
+    const res = await adminFetch(`/api/admin/payouts/${encodeURIComponent(payoutId)}/amount`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        total_amount_cents: cents,
+        adjustment_note: editNote.trim() || null,
+      }),
+    });
+    setBusy(null);
+    if (res.ok) {
+      onToast("Payout amount updated", true);
+      setEditing(false);
+      await load();
+      await onChanged();
+    } else {
+      onToast(res.error ?? "Failed to update amount", false);
+    }
+  }
+
+  function startEditing() {
+    if (!detail) return;
+    setEditZar(centsToZarInput(detail.payout.total_amount_cents));
+    setEditNote(detail.payout.adjustment_note ?? "");
+    setEditing(true);
+  }
 
   async function handleApprove() {
     setBusy("approve");
@@ -181,6 +231,12 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
   const status = STATUS_MAP[statusKey] ?? { label: p.status ?? "—", cls: "bg-slate-100 text-slate-600" };
   const payBlocked = !detail.paymentReadiness.ready;
   const testCount = detail.bookings.filter((b) => b.is_test === true).length;
+  const canEdit = statusKey === "pending" || statusKey === "frozen";
+  const calculatedCents = p.calculated_amount_cents ?? p.total_amount_cents;
+  const bookingTotalCents = detail.bookings.reduce(
+    (sum, b) => sum + Number(b.cleaner_payout_cents ?? 0) + Number(b.cleaner_bonus_cents ?? 0),
+    0,
+  );
 
   return (
     <div className="space-y-4 rounded-2xl border border-blue-100 bg-white shadow-sm">
@@ -209,7 +265,37 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
           </div>
           <div className="text-right">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Net payout</p>
-            <p className="text-2xl font-bold tabular-nums text-slate-900">{formatZar(p.total_amount_cents)}</p>
+            {editing ? (
+              <div className="mt-1 space-y-2">
+                <input
+                  type="number"
+                  min={0}
+                  step={1}
+                  value={editZar}
+                  onChange={(e) => setEditZar(e.target.value)}
+                  className="w-36 rounded-md border border-blue-200 px-2 py-1 text-right text-xl font-bold tabular-nums text-slate-900"
+                />
+                {zarInputToCents(editZar) !== calculatedCents ? (
+                  <input
+                    type="text"
+                    placeholder="Adjustment note"
+                    value={editNote}
+                    onChange={(e) => setEditNote(e.target.value)}
+                    className="w-full rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600"
+                  />
+                ) : null}
+              </div>
+            ) : (
+              <>
+                <p className="text-2xl font-bold tabular-nums text-slate-900">{formatZar(p.total_amount_cents)}</p>
+                {p.amount_adjusted_at ? (
+                  <p className="text-xs text-violet-600">Manually adjusted</p>
+                ) : null}
+                {calculatedCents !== p.total_amount_cents ? (
+                  <p className="text-xs text-slate-400">Calculated: {formatZar(calculatedCents)}</p>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
@@ -222,6 +308,39 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
             {busy === "export" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             Export CSV
           </button>
+          {canEdit && !editing ? (
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={startEditing}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit amount
+            </button>
+          ) : null}
+          {editing ? (
+            <>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void handleSaveAmount()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {busy === "save-amount" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Save
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => setEditing(false)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <X className="h-3.5 w-3.5" />
+                Cancel
+              </button>
+            </>
+          ) : null}
           {statusKey === "pending" ? (
             <button
               type="button"
@@ -253,6 +372,23 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
           </Link>
         </div>
       </div>
+
+      {p.adjustment_note ? (
+        <div className="mx-4 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950 sm:mx-6">
+          <p className="font-semibold">Adjustment note</p>
+          <p className="mt-1 text-xs">{p.adjustment_note}</p>
+        </div>
+      ) : null}
+
+      {bookingTotalCents !== p.total_amount_cents && !p.amount_adjusted_at ? (
+        <div className="mx-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:mx-6">
+          <p className="font-semibold">Amount mismatch</p>
+          <p className="mt-1 text-xs">
+            Booking total is {formatZar(bookingTotalCents)} but batch shows {formatZar(p.total_amount_cents)}. Edit
+            before approving.
+          </p>
+        </div>
+      ) : null}
 
       {!detail.paymentReadiness.ready ? (
         <div className="mx-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:mx-6">

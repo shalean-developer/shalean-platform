@@ -10,6 +10,7 @@ type PayoutRow = {
   status: string;
   payment_status?: string | null;
   payment_reference?: string | null;
+  amount_adjusted_at?: string | null;
 };
 
 type BookingPayoutRow = {
@@ -110,7 +111,7 @@ export async function payCleanerPayoutWithPaystack(
 ): Promise<PaystackTransferResult> {
   const { data: payoutData, error: payoutErr } = await admin
     .from("cleaner_payouts")
-    .select("id, cleaner_id, total_amount_cents, status, payment_status, payment_reference")
+    .select("id, cleaner_id, total_amount_cents, status, payment_status, payment_reference, amount_adjusted_at")
     .eq("id", params.payoutId)
     .maybeSingle();
   if (payoutErr) return { ok: false, error: payoutErr.message };
@@ -182,7 +183,8 @@ export async function payCleanerPayoutWithPaystack(
     0,
   );
   const payoutAmount = cents(payout.total_amount_cents);
-  if (payoutAmount <= 0 || bookingTotal !== payoutAmount) {
+  const manuallyAdjusted = Boolean(payout.amount_adjusted_at);
+  if (payoutAmount <= 0 || (!manuallyAdjusted && bookingTotal !== payoutAmount)) {
     await failPayoutExecution(admin, payout.id);
     return { ok: false, error: "Payout total does not match linked booking totals.", status: 400 };
   }

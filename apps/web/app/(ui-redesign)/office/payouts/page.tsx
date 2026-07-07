@@ -23,6 +23,9 @@ import {
   Loader2,
   Building2,
   TrendingUp,
+  Pencil,
+  Save,
+  X,
 } from "lucide-react";
 import {
   OfficeZohoMetricCard,
@@ -35,6 +38,7 @@ import {
 } from "@/components/admin/office/OfficeZohoChrome";
 import { OfficePayoutDetailPanel } from "@/components/admin/office/OfficePayoutDetailPanel";
 import { defaultOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
+import { MONTHLY_PAYOUT_START_YMD } from "@/lib/payout/payoutPeriodConfig";
 import { cleanerEarningsRulesSummaryText } from "@/lib/admin/cleanerTenureDisplay";
 import type {
   OfficePayoutBatchRow,
@@ -51,6 +55,7 @@ type GenerateResponse = {
   bookingsLinked?: number;
   payoutsBackfilled?: number;
   weeksProcessed?: number;
+  monthsProcessed?: number;
   periods?: Array<{ start: string; end: string; payoutsCreated: number; bookingsLinked: number }>;
   period?: { start: string; end: string };
 };
@@ -83,6 +88,18 @@ const STATUS_MAP: Record<string, { label: string; cls: string }> = {
 
 function formatZar(cents: number): string {
   return `R ${Math.round(cents / 100).toLocaleString("en-ZA")}`;
+}
+
+function zarInputToCents(raw: string): number | null {
+  const cleaned = raw.replace(/[R\s,]/g, "").trim();
+  if (!cleaned) return null;
+  const n = Number(cleaned);
+  if (!Number.isFinite(n) || n < 0) return null;
+  return Math.round(n * 100);
+}
+
+function centsToZarInput(cents: number): string {
+  return String(Math.round(cents / 100));
 }
 
 function earningsSharePercent(partCents: number, totalCents: number): number {
@@ -205,6 +222,8 @@ export default function PayoutsPage() {
   const [cleanerPage, setCleanerPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [editMode, setEditMode] = useState(false);
+  const [edits, setEdits] = useState<Record<string, { zar: string; note: string }>>({});
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
@@ -280,7 +299,11 @@ export default function PayoutsPage() {
     }
   }, [cleanerPage, cleanerTotalPages]);
 
-  const pendingBatchCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "pending").length;
+  const pendingBatches = useMemo(
+    () => payouts.filter((p) => (p.status ?? "").toLowerCase() === "pending"),
+    [payouts],
+  );
+  const pendingBatchCount = pendingBatches.length;
   const paidBatchCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "paid").length;
   const totalPendingBatchCents = payouts
     .filter((p) => (p.status ?? "").toLowerCase() === "pending")
@@ -341,12 +364,12 @@ export default function PayoutsPage() {
     }
     const created = body?.payoutsCreated ?? 0;
     const linked = body?.bookingsLinked ?? 0;
-    const weeks = body?.weeksProcessed ?? 0;
+    const months = body?.monthsProcessed ?? body?.weeksProcessed ?? 0;
     showToast(
       created > 0
-        ? `Created ${created} payout batch${created === 1 ? "" : "es"} (${linked} booking${linked === 1 ? "" : "s"} linked${weeks > 1 ? ` across ${weeks} weeks` : ""}).`
-        : weeks > 0
-          ? "Generation finished — no new payout batches were needed for the eligible weeks."
+        ? `Created ${created} payout batch${created === 1 ? "" : "es"} (${linked} booking${linked === 1 ? "" : "s"} linked${months > 1 ? ` across ${months} months` : ""}).`
+        : months > 0
+          ? "Generation finished — no new payout batches were needed for the eligible months."
           : "Generation finished — no unbatched earnings found.",
       created > 0,
     );
@@ -413,6 +436,67 @@ export default function PayoutsPage() {
     showToast(`Exported ${filteredCleaners.length} cleaner${filteredCleaners.length === 1 ? "" : "s"}.`, true);
   }
 
+  function startEditMode() {
+    const initial: Record<string, { zar: string; note: string }> = {};
+    for (const p of pendingBatches) {
+      initial[p.id] = {
+        zar: centsToZarInput(p.total_amount_cents ?? 0),
+        note: p.adjustment_note ?? "",
+      };
+    }
+    setEdits(initial);
+    setEditMode(true);
+  }
+
+  function cancelEditMode() {
+    setEditMode(false);
+    setEdits({});
+  }
+
+  async function handleSaveAllEdits() {
+    const changed = pendingBatches.filter((p) => {
+      const edit = edits[p.id];
+      if (!edit) return false;
+      const cents = zarInputToCents(edit.zar);
+      return cents != null && cents !== (p.total_amount_cents ?? 0);
+    });
+
+    if (changed.length === 0) {
+      showToast("No payout amounts were changed.", false);
+      return;
+    }
+
+    setActionLoading("save-edits");
+    let saved = 0;
+    let failed = 0;
+    for (const p of changed) {
+      const edit = edits[p.id];
+      const cents = zarInputToCents(edit?.zar ?? "");
+      if (cents == null) {
+        failed += 1;
+        continue;
+      }
+      const res = await adminFetch(`/api/admin/payouts/${encodeURIComponent(p.id)}/amount`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          total_amount_cents: cents,
+          adjustment_note: edit?.note?.trim() || null,
+        }),
+      });
+      if (res.ok) saved += 1;
+      else failed += 1;
+    }
+    setActionLoading(null);
+    if (failed > 0) {
+      showToast(`Saved ${saved} payout${saved === 1 ? "" : "s"}; ${failed} failed.`, false);
+    } else {
+      showToast(`Updated ${saved} payout amount${saved === 1 ? "" : "s"}.`, true);
+      setEditMode(false);
+      setEdits({});
+    }
+    await refreshAll();
+  }
+
   async function handleExportOne(id: string) {
     setActionLoading(`export:${id}`);
     try {
@@ -466,7 +550,7 @@ export default function PayoutsPage() {
 
       <OfficeZohoPageHeader
         title="Cleaner Payouts"
-        subtitle="Visit earnings and weekly batches for a date range (Johannesburg calendar)."
+        subtitle={`Visit earnings and monthly payout batches (Johannesburg calendar, from ${new Date(`${MONTHLY_PAYOUT_START_YMD}T12:00:00`).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}).`}
         live
         actions={
           <>
@@ -490,7 +574,7 @@ export default function PayoutsPage() {
               ) : (
                 <Sparkles className="h-4 w-4" />
               )}
-              {actionLoading === "generate" ? "Generating…" : "Generate weekly payouts"}
+              {actionLoading === "generate" ? "Generating…" : "Generate monthly payouts"}
             </OfficeZohoPrimaryButton>
             <OfficeZohoSecondaryButton disabled={filteredCleaners.length === 0} onClick={handleExportCleaners}>
               <Download className="h-4 w-4" /> Summary CSV
@@ -583,7 +667,7 @@ export default function PayoutsPage() {
             <p className="font-semibold text-amber-950">Eligible earnings in this period</p>
             <p className="mt-1 text-sm text-amber-900/90">
               {totals?.eligible_visits ?? 0} visit{(totals?.eligible_visits ?? 0) === 1 ? "" : "s"} (
-              {formatZar(totals?.eligible_cents ?? 0)}) are paid-invoice ready but not yet in a weekly batch.
+              {formatZar(totals?.eligible_cents ?? 0)}) are paid-invoice ready but not yet in a monthly batch.
             </p>
           </div>
           <OfficeZohoPrimaryButton
@@ -876,12 +960,40 @@ export default function PayoutsPage() {
       <div className="space-y-3">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold text-slate-800">Weekly payout batches</h2>
+            <h2 className="text-sm font-semibold text-slate-800">Monthly payout batches</h2>
             <p className="text-xs text-slate-500">
-              Batches whose week overlaps the period (
+              Batches whose month overlaps the period (
               {loading ? "…" : `${pendingBatchCount} pending · ${paidBatchCount} paid · ${formatZar(totalPendingBatchCents)} pending amount`})
             </p>
           </div>
+          {pendingBatchCount > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {editMode ? (
+                <>
+                  <OfficeZohoPrimaryButton
+                    disabled={actionLoading === "save-edits"}
+                    onClick={() => void handleSaveAllEdits()}
+                  >
+                    {actionLoading === "save-edits" ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Save all changes
+                  </OfficeZohoPrimaryButton>
+                  <OfficeZohoSecondaryButton disabled={actionLoading === "save-edits"} onClick={cancelEditMode}>
+                    <X className="h-4 w-4" />
+                    Cancel
+                  </OfficeZohoSecondaryButton>
+                </>
+              ) : (
+                <OfficeZohoSecondaryButton onClick={startEditMode}>
+                  <Pencil className="h-4 w-4" />
+                  Edit payouts
+                </OfficeZohoSecondaryButton>
+              )}
+            </div>
+          ) : null}
         </div>
 
         <OfficeZohoPillTabs tabs={statusPillTabs} activeKey={statusFilter} onChange={setStatusFilter} />
@@ -908,7 +1020,7 @@ export default function PayoutsPage() {
                   <tr>
                     <td colSpan={6} className="py-12 text-center text-sm text-slate-400">
                       {(totals?.eligible_visits ?? 0) > 0
-                        ? "No weekly batches overlap this period — eligible visits may still need Generate weekly payouts."
+                        ? "No monthly batches overlap this period — eligible visits may still need Generate monthly payouts."
                         : "No payout batches overlap this period."}
                     </td>
                   </tr>
@@ -934,14 +1046,59 @@ export default function PayoutsPage() {
                         <td className="px-4 py-3 text-xs text-slate-600">{formatPeriod(p.period_start, p.period_end)}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{p.booking_count}</td>
                         <td className="px-4 py-3">
-                          <span className="text-sm font-bold tabular-nums text-slate-800">{formatZar(p.total_amount_cents)}</span>
+                          {editMode && isPending ? (
+                            <div className="space-y-1">
+                              <input
+                                type="number"
+                                min={0}
+                                step={1}
+                                value={edits[p.id]?.zar ?? centsToZarInput(p.total_amount_cents ?? 0)}
+                                onChange={(e) =>
+                                  setEdits((prev) => ({
+                                    ...prev,
+                                    [p.id]: { zar: e.target.value, note: prev[p.id]?.note ?? "" },
+                                  }))
+                                }
+                                className="w-28 rounded-md border border-blue-200 bg-white px-2 py-1 text-sm font-bold tabular-nums text-slate-800"
+                                aria-label={`Edit payout for ${p.cleaner_name}`}
+                              />
+                              {(p.calculated_amount_cents ?? p.total_amount_cents) !==
+                              zarInputToCents(edits[p.id]?.zar ?? "") ? (
+                                <input
+                                  type="text"
+                                  placeholder="Adjustment note"
+                                  value={edits[p.id]?.note ?? ""}
+                                  onChange={(e) =>
+                                    setEdits((prev) => ({
+                                      ...prev,
+                                      [p.id]: { zar: prev[p.id]?.zar ?? centsToZarInput(p.total_amount_cents ?? 0), note: e.target.value },
+                                    }))
+                                  }
+                                  className="w-full min-w-[140px] rounded-md border border-slate-200 px-2 py-1 text-xs text-slate-600"
+                                />
+                              ) : null}
+                              {p.calculated_amount_cents != null &&
+                              p.calculated_amount_cents !== p.total_amount_cents ? (
+                                <p className="text-[10px] text-slate-400">
+                                  Calculated: {formatZar(p.calculated_amount_cents)}
+                                </p>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-sm font-bold tabular-nums text-slate-800">
+                              {formatZar(p.total_amount_cents)}
+                              {p.amount_adjusted_at ? (
+                                <span className="ml-1 text-[10px] font-medium text-violet-600">(adjusted)</span>
+                              ) : null}
+                            </span>
+                          )}
                         </td>
                         <td className="px-4 py-3">
                           <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", s.cls)}>{s.label}</span>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                            {isPending && (
+                            {isPending && !editMode && (
                               <button
                                 type="button"
                                 disabled={rowBusy}

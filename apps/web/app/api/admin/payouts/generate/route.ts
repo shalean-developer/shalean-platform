@@ -10,7 +10,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Admin manual trigger for weekly payout generation (catch-up: all unbatched completion weeks).
+ * Admin manual trigger for monthly payout generation (catch-up: all unbatched completion months from July 2026).
  *
  * M-18: shares the same H-15 cron lease (`CRON_LOCK_KEYS.generatePayouts`) as
  * `/api/cron/generate-payouts`, so an admin replay cannot race the scheduled
