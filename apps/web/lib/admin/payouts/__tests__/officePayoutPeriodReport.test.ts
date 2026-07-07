@@ -10,16 +10,28 @@ import {
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
 
 describe("officePayoutPeriodReport", () => {
-  it("defaults to month start through today in Johannesburg", () => {
-    const { from, to } = defaultOfficePayoutPeriodRange(new Date("2026-06-19T10:00:00+02:00"));
-    expect(from).toBe("2026-06-01");
-    expect(to).toBe("2026-06-19");
+  it("defaults to the full monthly payout month from July 2026", () => {
+    expect(defaultOfficePayoutPeriodRange(new Date("2026-06-19T10:00:00+02:00"))).toEqual({
+      from: "2026-07-01",
+      to: "2026-07-31",
+    });
+    expect(defaultOfficePayoutPeriodRange(new Date("2026-07-07T10:00:00+02:00"))).toEqual({
+      from: "2026-07-01",
+      to: "2026-07-31",
+    });
   });
 
-  it("swaps inverted from/to", () => {
-    expect(normalizeOfficePayoutPeriodRange("2026-06-19", "2026-06-01")).toEqual({
-      from: "2026-06-01",
-      to: "2026-06-19",
+  it("clamps report range to the monthly payout epoch", () => {
+    expect(normalizeOfficePayoutPeriodRange("2026-06-01", "2026-06-19")).toEqual({
+      from: "2026-07-01",
+      to: "2026-07-01",
+    });
+  });
+
+  it("swaps inverted from/to after monthly epoch clamp", () => {
+    expect(normalizeOfficePayoutPeriodRange("2026-07-19", "2026-07-01")).toEqual({
+      from: "2026-07-01",
+      to: "2026-07-19",
     });
   });
 

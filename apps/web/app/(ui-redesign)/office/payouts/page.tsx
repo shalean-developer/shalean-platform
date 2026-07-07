@@ -657,6 +657,7 @@ export default function PayoutsPage() {
         <input
           type="date"
           value={fromDate}
+          min={MONTHLY_PAYOUT_START_YMD}
           onChange={(e) => setFromDate(e.target.value)}
           className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
           aria-label="From date"
@@ -665,6 +666,7 @@ export default function PayoutsPage() {
         <input
           type="date"
           value={toDate}
+          min={MONTHLY_PAYOUT_START_YMD}
           onChange={(e) => setToDate(e.target.value)}
           className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
           aria-label="To date"

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { filterMonthlyPayoutBatchRows } from "@/lib/payout/monthBounds";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -34,7 +35,7 @@ export async function GET(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const payouts = (data ?? []) as PayoutRow[];
+  const payouts = filterMonthlyPayoutBatchRows((data ?? []) as PayoutRow[]);
   const cleanerIds = [...new Set(payouts.map((p) => p.cleaner_id).filter(Boolean))];
   const cleanerNames = new Map<string, string>();
   if (cleanerIds.length > 0) {

@@ -3,6 +3,11 @@ import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsReso
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import {
+  getJohannesburgMonthBoundsContainingYmd,
+  isMonthlyPayoutBatchPeriod,
+} from "@/lib/payout/monthBounds";
+import { MONTHLY_PAYOUT_START_YMD } from "@/lib/payout/payoutPeriodConfig";
+import {
   parseBookingEarningsSummary,
   resolveCleanerFacingEarnings,
   type BookingEarningsSummary,
@@ -115,11 +120,12 @@ export function parsePayoutPeriodYmd(raw: string | null | undefined): string | n
   return YMD_RE.test(t) ? t : null;
 }
 
-/** Default report window: 1st of current month (Johannesburg) through today. */
+/** Default report window: full Johannesburg calendar month (from July 2026 epoch). */
 export function defaultOfficePayoutPeriodRange(now = new Date()): { from: string; to: string } {
-  const to = todayYmdJohannesburg(now);
-  const from = `${to.slice(0, 7)}-01`;
-  return { from, to };
+  const todayYmd = todayYmdJohannesburg(now);
+  const anchorYmd = todayYmd < MONTHLY_PAYOUT_START_YMD ? MONTHLY_PAYOUT_START_YMD : todayYmd;
+  const { periodStart, periodEnd } = getJohannesburgMonthBoundsContainingYmd(anchorYmd);
+  return { from: periodStart, to: periodEnd };
 }
 
 export function normalizeOfficePayoutPeriodRange(
@@ -128,8 +134,10 @@ export function normalizeOfficePayoutPeriodRange(
   now = new Date(),
 ): { from: string; to: string } {
   const defaults = defaultOfficePayoutPeriodRange(now);
-  const from = parsePayoutPeriodYmd(fromRaw) ?? defaults.from;
-  const to = parsePayoutPeriodYmd(toRaw) ?? defaults.to;
+  let from = parsePayoutPeriodYmd(fromRaw) ?? defaults.from;
+  let to = parsePayoutPeriodYmd(toRaw) ?? defaults.to;
+  if (from < MONTHLY_PAYOUT_START_YMD) from = MONTHLY_PAYOUT_START_YMD;
+  if (to < MONTHLY_PAYOUT_START_YMD) to = MONTHLY_PAYOUT_START_YMD;
   if (from > to) return { from: to, to: from };
   return { from, to };
 }
@@ -373,6 +381,7 @@ export async function loadOfficePayoutPeriodReport(
   from: string,
   to: string,
 ): Promise<OfficePayoutPeriodReport> {
+  const reportFrom = from < MONTHLY_PAYOUT_START_YMD ? MONTHLY_PAYOUT_START_YMD : from;
   const [{ data: bookingRows, error: bErr }, { data: payoutRows, error: pErr }] = await Promise.all([
     admin
       .from("bookings")
@@ -381,7 +390,7 @@ export async function loadOfficePayoutPeriodReport(
       )
       .eq("status", "completed")
       .eq("is_test", false)
-      .gte("date", from)
+      .gte("date", reportFrom)
       .lte("date", to)
       .order("date", { ascending: true })
       .limit(5000),
@@ -390,8 +399,9 @@ export async function loadOfficePayoutPeriodReport(
       .select(
         "id, cleaner_id, total_amount_cents, calculated_amount_cents, adjustment_note, amount_adjusted_at, status, payment_status, payment_reference, period_start, period_end, created_at, approved_at, paid_at",
       )
+      .gte("period_start", MONTHLY_PAYOUT_START_YMD)
       .lte("period_start", to)
-      .gte("period_end", from)
+      .gte("period_end", reportFrom)
       .order("period_end", { ascending: false })
       .limit(500),
   ]);
@@ -400,7 +410,9 @@ export async function loadOfficePayoutPeriodReport(
   if (pErr) throw new Error(pErr.message);
 
   const bookings = (bookingRows ?? []) as BookingPeriodRow[];
-  const payoutsRaw = (payoutRows ?? []) as PayoutDbRow[];
+  const payoutsRaw = (payoutRows ?? []).filter((p) =>
+    isMonthlyPayoutBatchPeriod(String((p as PayoutDbRow).period_start), String((p as PayoutDbRow).period_end)),
+  ) as PayoutDbRow[];
   const rosterByBooking = await loadRosterByBookingIds(
     admin,
     bookings.map((b) => b.id),
@@ -520,5 +532,5 @@ export async function loadOfficePayoutPeriodReport(
       b.earned_cents - a.earned_cents ||
       a.cleaner_name.localeCompare(b.cleaner_name),
   );
-  return { range: { from, to }, totals, cleaners, payouts };
+  return { range: { from: reportFrom, to }, totals, cleaners, payouts };
 }

@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { filterMonthlyPayoutBatchRows } from "@/lib/payout/monthBounds";
 
 export type AdminPayoutRunListRow = {
   id: string;
@@ -96,7 +97,7 @@ export async function getPayoutDisbursementRunDetail(
 
   if (pErr) throw new Error(pErr.message);
 
-  const payoutRows = payouts ?? [];
+  const payoutRows = filterMonthlyPayoutBatchRows(payouts ?? []);
   const cleanerIds = [...new Set(payoutRows.map((p) => String((p as { cleaner_id?: string }).cleaner_id ?? "")).filter(Boolean))];
   const names = new Map<string, string>();
   const banks = new Map<string, { bank_code: string | null; account_number: string | null }>();

@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
+import { isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 
 export type CleanerPayoutRunRow = {
   id: string;
@@ -26,12 +27,15 @@ export type CleanerPayoutRunRow = {
 export async function createPayoutRun(admin: SupabaseClient): Promise<CleanerPayoutRunRow | null> {
   const { data: payouts, error: selErr } = await admin
     .from("cleaner_payouts")
-    .select("id, total_amount_cents")
+    .select("id, total_amount_cents, period_start, period_end")
     .eq("status", "frozen")
     .is("payout_run_id", null);
 
   if (selErr) throw new Error(selErr.message);
-  const list = payouts ?? [];
+  const list = (payouts ?? []).filter((p) => {
+    const row = p as { period_start?: string; period_end?: string };
+    return isMonthlyPayoutBatchPeriod(String(row.period_start ?? ""), String(row.period_end ?? ""));
+  });
   if (!list.length) return null;
 
   const total = list.reduce((s, p) => s + Math.max(0, Math.floor(Number((p as { total_amount_cents?: number }).total_amount_cents) || 0)), 0);

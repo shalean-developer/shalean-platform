@@ -33,3 +33,19 @@ export function getPreviousMonthDateBoundsJhb(now: Date = new Date()): { periodS
 export function isMonthlyPayoutPeriod(periodStart: string): boolean {
   return periodStart >= MONTHLY_PAYOUT_START_YMD;
 }
+
+/** Full Johannesburg calendar month (1st through last day) for `periodStart`/`periodEnd`. */
+export function isCanonicalJohannesburgMonthPeriod(periodStart: string, periodEnd: string): boolean {
+  if (!YMD_RE.test(periodStart) || !YMD_RE.test(periodEnd)) return false;
+  const bounds = getJohannesburgMonthBoundsContainingYmd(periodStart);
+  return bounds.periodStart === periodStart && bounds.periodEnd === periodEnd;
+}
+
+/** Monthly payout batches must be a full calendar month on/after July 2026. */
+export function isMonthlyPayoutBatchPeriod(periodStart: string, periodEnd: string): boolean {
+  return isMonthlyPayoutPeriod(periodStart) && isCanonicalJohannesburgMonthPeriod(periodStart, periodEnd);
+}
+
+export function filterMonthlyPayoutBatchRows<T extends { period_start: string; period_end: string }>(rows: readonly T[]): T[] {
+  return rows.filter((row) => isMonthlyPayoutBatchPeriod(row.period_start, row.period_end));
+}

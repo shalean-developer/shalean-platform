@@ -22,6 +22,7 @@ import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import {
   getJohannesburgMonthBoundsContainingYmd,
   getPreviousMonthDateBoundsJhb,
+  isMonthlyPayoutBatchPeriod,
   isMonthlyPayoutPeriod,
 } from "@/lib/payout/monthBounds";
 import { MONTHLY_PAYOUT_START_YMD } from "@/lib/payout/payoutPeriodConfig";
@@ -188,6 +189,10 @@ async function generateWeeklyPayoutsForPeriod(
   periodEnd: string,
   opts?: { asOfForCutoffProbe?: Date },
 ): Promise<GeneratePeriodResult> {
+  if (!isMonthlyPayoutBatchPeriod(periodStart, periodEnd)) {
+    return { payoutsCreated: 0, bookingsLinked: 0, payoutsBackfilled: 0, skippedCleaners: 0 };
+  }
+
   const asOf = opts?.asOfForCutoffProbe ?? new Date();
   const batchPayFridayJhb = computeCutoffAssignmentProbe(asOf).batch_pay_friday_jhb_ymd;
   let payoutsCreated = 0;
@@ -225,7 +230,7 @@ async function generateWeeklyPayoutsForPeriod(
     const candidateBookings = (rawBookings ?? []).filter((b) => {
       const br = b as BookingPayoutRow;
       const ymd = weeklyBatchDayYmd(br);
-      if (!ymd) return false;
+      if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) return false;
       return isYmdInInclusiveRange(ymd, periodStart, periodEnd);
     }) as BookingPayoutRow[];
 

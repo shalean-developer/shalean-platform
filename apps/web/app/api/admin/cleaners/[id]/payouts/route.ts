@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { filterMonthlyPayoutBatchRows } from "@/lib/payout/monthBounds";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -30,7 +31,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   if (pErr) return NextResponse.json({ error: pErr.message }, { status: 500 });
 
-  const payoutIds = (payouts ?? []).map((p) => String((p as { id?: string }).id ?? "")).filter(Boolean);
+  const monthlyPayouts = filterMonthlyPayoutBatchRows(
+    (payouts ?? []) as Array<{ period_start: string; period_end: string }>,
+  );
+
+  const payoutIds = monthlyPayouts.map((p) => String((p as { id?: string }).id ?? "")).filter(Boolean);
   const bookingCounts = new Map<string, number>();
   if (payoutIds.length) {
     const { data: bks } = await admin.from("bookings").select("payout_id").in("payout_id", payoutIds);
@@ -40,7 +45,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     }
   }
 
-  const rows = (payouts ?? []).map((p) => {
+  const rows = monthlyPayouts.map((p) => {
     const row = p as {
       id: string;
       total_amount_cents: number;
