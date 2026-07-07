@@ -7,6 +7,7 @@ import { QuoteRequestForm } from "@/components/quote/QuoteRequestForm";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { buildMarketingSocialMetadata } from "@/lib/seo/marketingPageSocialMeta";
+import { buildMarketingWebPageJsonLd } from "@/lib/seo/marketingWebPageJsonLd";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
@@ -34,9 +35,18 @@ export const metadata: Metadata = {
   }),
 };
 
+const JSON_LD = buildMarketingWebPageJsonLd({
+  path: PATH,
+  name: QUOTE_TITLE,
+  description: QUOTE_META_DESC,
+  breadcrumbLabel: "Get a Quote",
+  includeLocalBusinessNode: true,
+});
+
 export default function QuoteRequestPage() {
   return (
     <div className="flex min-h-dvh flex-col bg-slate-50 text-slate-900">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
       <GrowthTracking
         event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{ page_type: "quote_request", content_group: "marketing_quote" }}

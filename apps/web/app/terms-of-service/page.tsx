@@ -3,6 +3,7 @@ import Link from "next/link";
 import { LegalPageShell } from "@/components/legal/LegalPageShell";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { buildMarketingSocialMetadata } from "@/lib/seo/marketingPageSocialMeta";
+import { buildMarketingWebPageJsonLd } from "@/lib/seo/marketingWebPageJsonLd";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
@@ -26,9 +27,17 @@ export const metadata: Metadata = {
   }),
 };
 
+const JSON_LD = buildMarketingWebPageJsonLd({
+  path: PATH,
+  name: "Terms of Service | Shalean Cleaning Services",
+  description: META_DESC,
+  breadcrumbLabel: "Terms of Service",
+});
+
 export default function TermsOfServicePage() {
   return (
     <LegalPageShell>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
       <h1 className="text-3xl font-bold tracking-tight text-slate-900">Terms of Service</h1>
       <p className="mt-4 text-base leading-relaxed text-slate-600">
         By booking with Shalean Cleaning Services, you agree to these terms. Our services are subject to

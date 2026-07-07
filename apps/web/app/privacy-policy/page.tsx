@@ -3,6 +3,7 @@ import Link from "next/link";
 import { LegalPageShell } from "@/components/legal/LegalPageShell";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { buildMarketingSocialMetadata } from "@/lib/seo/marketingPageSocialMeta";
+import { buildMarketingWebPageJsonLd } from "@/lib/seo/marketingWebPageJsonLd";
 import { absoluteCanonicalUrl } from "@/lib/site/canonical";
 import { CUSTOMER_SUPPORT_EMAIL } from "@/lib/site/customerSupport";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
@@ -27,9 +28,17 @@ export const metadata: Metadata = {
   }),
 };
 
+const JSON_LD = buildMarketingWebPageJsonLd({
+  path: PATH,
+  name: "Privacy Policy | Shalean Cleaning Services",
+  description: META_DESC,
+  breadcrumbLabel: "Privacy Policy",
+});
+
 export default function PrivacyPolicyPage() {
   return (
     <LegalPageShell>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
       <h1 className="text-3xl font-bold tracking-tight text-slate-900">Privacy Policy</h1>
       <p className="mt-4 text-base leading-relaxed text-slate-600">
         Shalean Cleaning Services respects your privacy. We collect only the information needed to process
