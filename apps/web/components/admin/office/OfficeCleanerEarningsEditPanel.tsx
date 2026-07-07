@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { ArrowLeft, Loader2, Pencil, Save, X } from "lucide-react";
+import { ArrowLeft, Loader2, Pencil, Save, Trash2, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { adminFetch, getAdminToken } from "@/hooks/useAdminData";
 import type { OfficeCleanerEditableVisitRow } from "@/lib/admin/payouts/officeCleanerEditableVisits";
@@ -119,6 +119,36 @@ export function OfficeCleanerEarningsEditPanel({
   function cancelVisitEditMode() {
     setVisitEditMode(false);
     setVisitEdits({});
+  }
+
+  async function handleRemoveVisit(visit: OfficeCleanerEditableVisitRow) {
+    const label = visit.customer_name ?? visit.date ?? visit.id;
+    const confirmed = globalThis.confirm(
+      `Remove "${label}" from ${detail?.cleaner_name ?? "this cleaner"}'s payout?\n\nThe visit will be unassigned from this cleaner so you can assign it to the correct person. This cannot be undone from this screen.`,
+    );
+    if (!confirmed) return;
+
+    setBusy(`remove:${visit.id}`);
+    const res = await adminFetch(`/api/admin/bookings/${encodeURIComponent(visit.id)}/remove-cleaner-payout`, {
+      method: "POST",
+      body: JSON.stringify({ cleaner_id: cleanerId }),
+    });
+    setBusy(null);
+
+    if (!res.ok) {
+      onToast(res.error ?? "Could not remove visit payout.", false);
+      return;
+    }
+
+    const mode = (res.data as { mode?: string } | undefined)?.mode;
+    onToast(
+      mode === "roster_removed"
+        ? "Cleaner removed from this visit — earnings recalculated for remaining roster."
+        : "Visit removed from this cleaner — reassign to the correct cleaner on the booking page.",
+      true,
+    );
+    await load();
+    await onChanged();
   }
 
   async function handleSaveVisitEdits() {
@@ -272,8 +302,9 @@ export function OfficeCleanerEarningsEditPanel({
           <p className="font-semibold">Edit before generating monthly payouts</p>
           <p className="mt-1 text-xs leading-relaxed">
             Changes update each visit&apos;s stored earnings and appear on the cleaner&apos;s dashboard immediately —
-            whether the job is still open, accepted, or completed. After you&apos;re happy with the amounts, use{" "}
-            <strong>Generate monthly payouts</strong> on the main page.
+            whether the job is still open, accepted, or completed. Use <strong>Remove</strong> when a visit was assigned
+            to the wrong cleaner. After you&apos;re happy with the amounts, use <strong>Generate monthly payouts</strong>{" "}
+            on the main page.
           </p>
         </div>
       ) : null}
@@ -293,12 +324,13 @@ export function OfficeCleanerEarningsEditPanel({
               <th className="py-2 pr-3">Service</th>
               <th className="py-2 pr-3">Status</th>
               <th className="py-2 text-right">Earnings</th>
+              <th className="py-2 pl-2 text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
             {detail.visits.length === 0 ? (
               <tr>
-                <td colSpan={5} className="py-6 text-center text-slate-400">
+                <td colSpan={6} className="py-6 text-center text-slate-400">
                   No completed visits for this cleaner in this period.
                 </td>
               </tr>
@@ -342,6 +374,26 @@ export function OfficeCleanerEarningsEditPanel({
                         />
                       ) : (
                         formatZar(v.earnings_cents)
+                      )}
+                    </td>
+                    <td className="py-2 pl-2 text-right">
+                      {v.editable && !visitEditMode ? (
+                        <button
+                          type="button"
+                          disabled={busy !== null}
+                          onClick={() => void handleRemoveVisit(v)}
+                          className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-1 text-[11px] font-semibold text-red-700 hover:bg-red-100 disabled:opacity-50"
+                          title="Remove wrong assignment from this cleaner"
+                        >
+                          {busy === `remove:${v.id}` ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3 w-3" />
+                          )}
+                          Remove
+                        </button>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
                       )}
                     </td>
                   </tr>
