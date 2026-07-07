@@ -18,20 +18,19 @@ describe("nextPayoutFriday", () => {
     expect(nextFridayYmdJohannesburg(thu)).toBe("2026-05-08");
   });
 
-  it("payout summary before Thursday cutoff targets this Friday", () => {
-    const wed = new Date("2026-05-06T12:00:00+02:00");
-    const s = payoutArrivalSummaryJohannesburg(wed);
+  it("payout summary mid-month describes the monthly Johannesburg period", () => {
+    const midMonth = new Date("2026-07-15T12:00:00+02:00");
+    const s = payoutArrivalSummaryJohannesburg(midMonth);
     expect(s.cutoffPassedForBatch).toBe(false);
-    expect(s.payoutTargetFridayYmd).toBe("2026-05-08");
-    expect(s.headline.toLowerCase()).toContain("this friday");
+    expect(s.headline.toLowerCase()).toContain("monthly payout");
+    expect(s.headline.toLowerCase()).toContain("july 2026");
   });
 
-  it("payout summary on payout Friday after cutoff describes today’s batch and next target", () => {
-    const friMorning = new Date("2026-05-08T10:00:00+02:00");
-    const s = payoutArrivalSummaryJohannesburg(friMorning);
-    expect(s.cutoffPassedForBatch).toBe(true);
-    expect(s.payoutTargetFridayYmd).toBe("2026-05-15");
-    expect(s.headline.toLowerCase()).toContain("today");
+  it("payout summary on the last day of the month shows zero days left", () => {
+    const lastDay = new Date("2026-07-31T12:00:00+02:00");
+    const s = payoutArrivalSummaryJohannesburg(lastDay);
+    expect(s.daysUntil).toBe(0);
+    expect(s.headline.toLowerCase()).toContain("ends today");
   });
 
   it("computeCutoffAssignmentProbe returns UI + batch window fields", () => {

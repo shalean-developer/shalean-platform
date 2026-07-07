@@ -33,6 +33,7 @@ import {
   type CleanerWeekdayCode,
 } from "@/lib/cleaner/availabilityWeekdays";
 import { cn } from "@/lib/utils";
+import { showToast } from "@/components/ui/notifications";
 
 type City = { id: string; name: string; slug: string };
 
@@ -110,7 +111,7 @@ export function OfficeCleanersManageView() {
   const [cities, setCities] = useState<City[]>([]);
   const [loading, setLoading] = useState(true);
   const [backfillBusy, setBackfillBusy] = useState(false);
-  const [toast, setToast] = useState<string | null>(null);
+  const pushToast = useCallback((msg: string) => showToast(msg, "success"), []);
   const [error, setError] = useState<string | null>(null);
 
   const [statusFilter, setStatusFilter] = useState<"all" | "available" | "busy" | "offline">("all");
@@ -166,11 +167,6 @@ export function OfficeCleanersManageView() {
     return () => clearTimeout(handle);
   }, [search]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), 2200);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   async function runAuthBackfill() {
     try {
@@ -180,7 +176,7 @@ export function OfficeCleanersManageView() {
       const cleaners = await fetchCleaners(search.trim() || undefined);
       setRows(cleaners);
       const failNote = r.failed > 0 ? ` ${r.failed} row(s) failed (see server logs).` : "";
-      setToast(`Auth repair complete: linked ${r.linked} of ${r.missingAuth} that needed Auth.${failNote}`);
+      pushToast(`Auth repair complete: linked ${r.linked} of ${r.missingAuth} that needed Auth.${failNote}`);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Auth backfill failed.");
     } finally {
@@ -261,9 +257,9 @@ export function OfficeCleanersManageView() {
       const cleaners = await fetchCleaners(search.trim() || undefined);
       setRows(cleaners);
       setSelected((prev) => (prev ? cleaners.find((c) => c.id === prev.id) ?? prev : null));
-      setToast("Request approved");
+      pushToast("Request approved");
     } catch (e) {
-      setToast(e instanceof Error ? e.message : "Approve failed.");
+      pushToast(e instanceof Error ? e.message : "Approve failed.");
     } finally {
       setChangeRequestBusy(null);
     }
@@ -277,9 +273,9 @@ export function OfficeCleanersManageView() {
       const cleaners = await fetchCleaners(search.trim() || undefined);
       setRows(cleaners);
       setSelected((prev) => (prev ? cleaners.find((c) => c.id === prev.id) ?? prev : null));
-      setToast("Request rejected");
+      pushToast("Request rejected");
     } catch (e) {
-      setToast(e instanceof Error ? e.message : "Reject failed.");
+      pushToast(e instanceof Error ? e.message : "Reject failed.");
     } finally {
       setChangeRequestBusy(null);
     }
@@ -398,7 +394,7 @@ export function OfficeCleanersManageView() {
       setCreateOpen(false);
       setCreateForm(DEFAULT_FORM);
       await load();
-      setToast("Cleaner created successfully");
+      pushToast("Cleaner created successfully");
     } catch (e) {
       setCreateError(e instanceof Error ? e.message : "Could not create cleaner.");
     } finally {
@@ -453,7 +449,7 @@ export function OfficeCleanersManageView() {
       });
       setEditOpen(false);
       await load();
-      setToast("Cleaner updated");
+      pushToast("Cleaner updated");
     } catch (e) {
       setEditError(e instanceof Error ? e.message : "Could not update cleaner.");
     } finally {
@@ -473,9 +469,9 @@ export function OfficeCleanersManageView() {
           r.id === row.id ? { ...r, is_available: isAvailable, status: isAvailable ? "available" : "offline" } : r,
         ),
       );
-      setToast(isAvailable ? "Cleaner enabled" : "Cleaner disabled");
+      pushToast(isAvailable ? "Cleaner enabled" : "Cleaner disabled");
     } catch (e) {
-      setToast(e instanceof Error ? e.message : "Availability update failed.");
+      pushToast(e instanceof Error ? e.message : "Availability update failed.");
     }
   }
 
@@ -499,7 +495,7 @@ export function OfficeCleanersManageView() {
       setRows(cleaners);
       setSelected((s) => (s ? cleaners.find((c) => c.id === s.id) ?? s : null));
       setResetOpen(false);
-      setToast("Password updated successfully");
+      pushToast("Password updated successfully");
     } catch (e) {
       setResetError(e instanceof Error ? e.message : "Could not reset password.");
     } finally {
@@ -514,7 +510,7 @@ export function OfficeCleanersManageView() {
       setResetError(null);
       const link = await requestCleanerRecoveryLink(selected.id);
       await navigator.clipboard.writeText(link);
-      setToast("Recovery link copied to clipboard");
+      pushToast("Recovery link copied to clipboard");
     } catch (e) {
       setResetError(e instanceof Error ? e.message : "Could not generate recovery link.");
     } finally {
@@ -744,7 +740,7 @@ export function OfficeCleanersManageView() {
                                 router.push(`/admin/cleaners/${encodeURIComponent(row.id)}/payouts`);
                               },
                             },
-                            { label: "Assign to booking", onSelect: () => setToast("Assign flow ready to connect.") },
+                            { label: "Assign to booking", onSelect: () => pushToast("Assign flow ready to connect.") },
                             { label: "Edit", onSelect: () => openEdit(row) },
                             { label: "Reset password", onSelect: () => openReset(row) },
                             {
@@ -929,15 +925,15 @@ export function OfficeCleanersManageView() {
               availabilityWeekdaysSnapshot={selected.availability_weekdays ?? null}
               availabilityStartSnapshot={selected.availability_start ?? null}
               availabilityEndSnapshot={selected.availability_end ?? null}
-              onToast={(msg) => setToast(msg)}
+              onToast={(msg) => pushToast(msg)}
               onSaved={() => void refreshSelectedCleanerRow()}
             />
             <AdminCleanerServiceAreasPanel
               cleanerId={selected.id}
-              onToast={(msg) => setToast(msg)}
+              onToast={(msg) => pushToast(msg)}
               onCanonicalSaved={() => void refreshSelectedCleanerRow()}
             />
-            <AdminCleanerPreferencesPanel cleanerId={selected.id} onToast={(msg) => setToast(msg)} />
+            <AdminCleanerPreferencesPanel cleanerId={selected.id} onToast={(msg) => pushToast(msg)} />
             <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Performance metrics</h3>
               <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Acceptance rate: {acceptanceRate(selected)}%</p>
@@ -949,7 +945,7 @@ export function OfficeCleanersManageView() {
               <p className="mt-2 text-sm text-zinc-500">Detailed booking list can be plugged in from `/api/admin/bookings` by cleaner id.</p>
             </section>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => setToast("Assign flow ready to connect.")} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
+              <button type="button" onClick={() => pushToast("Assign flow ready to connect.")} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
                 Assign
               </button>
               <button type="button" onClick={() => void toggleAvailability(selected)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
@@ -1028,11 +1024,6 @@ export function OfficeCleanersManageView() {
         </div>
       ) : null}
 
-      {toast ? (
-        <div className="fixed bottom-4 right-4 z-[80] rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-lg">
-          {toast}
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { Search, MapPin, Download, RefreshCw, AlertCircle, Plus, Pencil, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { confirm } from "@/components/ui/notifications";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getSupabaseAccessToken } from "@/lib/supabase/browser";
 
@@ -167,9 +168,12 @@ export default function CustomersPage() {
   async function deleteCustomer(c: CustomerRow) {
     if (!/^[0-9a-f-]{36}$/i.test(c.id)) return;
     const label = c.full_name ?? c.email;
-    const ok = window.confirm(
-      `Delete customer "${label}"?\n\nOnly accounts with no bookings, invoices, or recurring plans can be removed.`,
-    );
+    const ok = await confirm({
+      title: `Delete customer "${label}"?`,
+      description: "Only accounts with no bookings, invoices, or recurring plans can be removed.",
+      variant: "destructive",
+      confirmLabel: "Delete customer",
+    });
     if (!ok) return;
 
     setActionError(null);
@@ -205,9 +209,13 @@ export default function CustomersPage() {
     const ids = [...selectedIds].filter(isDeletableCustomerId);
     if (ids.length === 0) return;
 
-    const ok = window.confirm(
-      `Delete ${ids.length} selected customer${ids.length === 1 ? "" : "s"}?\n\nOnly accounts with no bookings, invoices, or recurring plans can be removed. Others will be skipped with an error.`,
-    );
+    const ok = await confirm({
+      title: `Delete ${ids.length} selected customer${ids.length === 1 ? "" : "s"}?`,
+      description:
+        "Only accounts with no bookings, invoices, or recurring plans can be removed. Others will be skipped with an error.",
+      variant: "destructive",
+      confirmLabel: "Delete selected",
+    });
     if (!ok) return;
 
     setActionError(null);

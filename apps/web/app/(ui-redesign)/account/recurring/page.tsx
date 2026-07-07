@@ -23,6 +23,7 @@ import {
 import { useCustomerRecurringRealtime } from "@/hooks/useCustomerRecurringRealtime";
 import { useUser } from "@/hooks/useUser";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
+import { confirm } from "@/components/ui/notifications";
 import { Button } from "@/components/ui/button";
 import { HelpCard } from "@/components/account/HelpCard";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
@@ -285,8 +286,24 @@ export default function AccountRecurringPage() {
   }, [userLoading, load]);
 
   async function postAction(id: string, action: "pause" | "resume" | "cancel" | "skip") {
-    if (action === "cancel" && !window.confirm("Cancel this plan? Future visits will not be scheduled.")) return;
-    if (action === "skip" && !window.confirm("Skip the next scheduled visit?")) return;
+    if (
+      action === "cancel" &&
+      !(await confirm({
+        title: "Cancel this plan?",
+        description: "Future visits will not be scheduled.",
+        variant: "destructive",
+        confirmLabel: "Cancel plan",
+      }))
+    )
+      return;
+    if (
+      action === "skip" &&
+      !(await confirm({
+        title: "Skip the next scheduled visit?",
+        confirmLabel: "Skip visit",
+      }))
+    )
+      return;
     const sb = getSupabaseBrowser();
     const token = (await sb?.auth.getSession())?.data.session?.access_token;
     if (!token) {

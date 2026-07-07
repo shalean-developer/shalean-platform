@@ -5,6 +5,7 @@ import { useParams, usePathname, useRouter, useSearchParams } from "next/navigat
 import { useEffect, useMemo, useState, Suspense } from "react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { Button } from "@/components/ui/button";
+import { confirm } from "@/components/ui/notifications";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -123,9 +124,13 @@ function AdminCustomerDetailPage() {
   async function onDelete() {
     if (!row) return;
     const label = row.full_name ?? row.email;
-    const ok = window.confirm(
-      `Delete customer "${label}"?\n\nThis permanently removes their login account. Only allowed when they have no bookings, invoices, or recurring plans.`,
-    );
+    const ok = await confirm({
+      title: `Delete customer "${label}"?`,
+      description:
+        "This permanently removes their login account. Only allowed when they have no bookings, invoices, or recurring plans.",
+      variant: "destructive",
+      confirmLabel: "Delete customer",
+    });
     if (!ok) return;
 
     setActionError(null);

@@ -216,6 +216,31 @@ const CLASSIFIED_RUNTIME_DIRECT_WRITERS: readonly RuntimeClassification[] = [
     category: "legacy_customer_exception",
     rationale: "Customer self-cancel handler (POST /api/customer/bookings/[id]/cancel).",
   },
+  {
+    file: "lib/payout/adjustBookingPayoutEarnings.ts",
+    category: "legacy_payout_exception",
+    rationale: "Admin pre-batch visit earnings adjustment updates payout snapshot columns on a single booking.",
+  },
+  {
+    file: "lib/payout/removeCleanerFromVisitPayout.ts",
+    category: "legacy_payout_exception",
+    rationale: "Admin visit-payout removal clears assignment and payout columns before re-persisting earnings.",
+  },
+  {
+    file: "lib/admin/performAdminBookingStatusChange.ts",
+    category: "legacy_admin_exception",
+    rationale: "Admin booking status override command with completion earnings gate and revert path.",
+  },
+  {
+    file: "lib/admin/reassignPayoutOwnerBeforeTeamMemberRemove.ts",
+    category: "legacy_admin_exception",
+    rationale: "Team roster maintenance reassigns payout owner on in-flight bookings before member removal.",
+  },
+  {
+    file: "lib/admin/setTeamLeadCleaner.ts",
+    category: "legacy_admin_exception",
+    rationale: "Team lead promotion syncs booking header cleaner fields to the appointed lead.",
+  },
 ];
 
 type SqlCategory = "one_time_data_fix" | "runtime_rpc_definition";

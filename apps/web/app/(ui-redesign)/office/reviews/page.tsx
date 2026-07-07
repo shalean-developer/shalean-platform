@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Search, Star, RefreshCw, AlertCircle, EyeOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { showToast } from "@/components/ui/notifications";
 import { useAdminData, adminFetch } from "@/hooks/useAdminData";
 
 type ReviewRow = {
@@ -47,7 +48,6 @@ export default function ReviewsPage() {
   const [search, setSearch] = useState("");
   const [ratingFilter, setRatingFilter] = useState<number | "all">("all");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   const { data, loading, error, refetch } = useAdminData<ReviewsResponse>("/api/admin/reviews", {
     params: { limit: "200" },
@@ -63,12 +63,11 @@ export default function ReviewsPage() {
     });
     setActionLoading(null);
     if (res.ok) {
-      setToast(isHidden ? "Review hidden from public" : "Review visible again");
+      showToast(isHidden ? "Review hidden from public" : "Review visible again", "success");
       void refetch();
     } else {
-      setToast(res.error ?? "Could not update review");
+      showToast(res.error ?? "Could not update review", "error");
     }
-    setTimeout(() => setToast(null), 3000);
   }
 
   const filtered = reviews.filter((r) => {
@@ -92,11 +91,6 @@ export default function ReviewsPage() {
 
   return (
     <div className="space-y-5">
-      {toast ? (
-        <div className="fixed bottom-6 right-6 z-50 rounded-xl bg-slate-900 px-4 py-3 text-sm font-medium text-white shadow-lg">
-          {toast}
-        </div>
-      ) : null}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Reviews</h1>

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowLeft, Loader2, Pencil, Save, Trash2, X } from "lucide-react";
+import { confirm } from "@/components/ui/notifications";
 import { cn } from "@/lib/utils";
 import { adminFetch, getAdminToken } from "@/hooks/useAdminData";
 import type { OfficeCleanerEditableVisitRow } from "@/lib/admin/payouts/officeCleanerEditableVisits";
@@ -123,9 +124,13 @@ export function OfficeCleanerEarningsEditPanel({
 
   async function handleRemoveVisit(visit: OfficeCleanerEditableVisitRow) {
     const label = visit.customer_name ?? visit.date ?? visit.id;
-    const confirmed = globalThis.confirm(
-      `Remove "${label}" from ${detail?.cleaner_name ?? "this cleaner"}'s payout?\n\nThe visit will be unassigned from this cleaner so you can assign it to the correct person. This cannot be undone from this screen.`,
-    );
+    const confirmed = await confirm({
+      title: `Remove "${label}" from ${detail?.cleaner_name ?? "this cleaner"}'s payout?`,
+      description:
+        "The visit will be unassigned from this cleaner so you can assign it to the correct person. This cannot be undone from this screen.",
+      confirmLabel: "Remove visit",
+      variant: "destructive",
+    });
     if (!confirmed) return;
 
     setBusy(`remove:${visit.id}`);

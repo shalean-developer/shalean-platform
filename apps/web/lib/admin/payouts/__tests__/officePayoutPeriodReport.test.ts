@@ -54,20 +54,12 @@ describe("officePayoutPeriodReport", () => {
     const ethel = "914b3acf-40e8-4ad5-a5a2-9e2de711849a";
     const allocs = perCleanerAllocationsForBooking(
       {
-        id: "b1",
-        date: "2026-06-01",
         cleaner_id: nyasha,
         payout_owner_cleaner_id: null,
-        payout_status: "pending",
-        payout_id: null,
         payout_frozen_cents: null,
         display_earnings_cents: 30000,
         cleaner_earnings_total_cents: 42700,
         cleaner_payout_cents: null,
-        total_paid_zar: 730,
-        amount_paid_cents: null,
-        total_paid_cents: null,
-        company_revenue_cents: 13000,
         earnings_summary: {
           model_version: "v3",
           per_cleaner_earnings: [

@@ -35,6 +35,7 @@ import {
   OfficeZohoToggle,
 } from "@/components/admin/office/OfficeZohoChrome";
 import { cn } from "@/lib/utils";
+import { showToast as pushAppToast } from "@/components/ui/notifications";
 import { useAdminData, adminFetch } from "@/hooks/useAdminData";
 import {
   buildOfficeBookingsListCsv,
@@ -235,7 +236,6 @@ export default function BookingsPage() {
   const [pendingRemovals, setPendingRemovals] = useState<BookingRow[]>([]);
   const [teamAssignTarget, setTeamAssignTarget] = useState<BookingRow | null>(null);
   const [exporting, setExporting] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [viewSegment, setViewSegment] = useState<ViewSegment>("overview");
   const [multiSelectMode, setMultiSelectMode] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
@@ -557,8 +557,7 @@ export default function BookingsPage() {
   }, [data?.pagination, page]);
 
   function showToast(msg: string, ok: boolean) {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3000);
+    pushAppToast(msg, ok ? "success" : "error");
   }
 
   async function handleRestoreRecurringAssignments() {
@@ -763,18 +762,6 @@ export default function BookingsPage() {
         }}
         onAssigned={() => void refetch()}
       />
-
-      {/* Toast */}
-      {toast && (
-        <div
-          className={cn(
-            "fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-lg",
-            toast.ok ? "bg-emerald-600" : "bg-red-600",
-          )}
-        >
-          {toast.msg}
-        </div>
-      )}
 
       {/* Header */}
       <OfficeZohoPageHeader

@@ -1,6 +1,7 @@
 "use client";
 
 import { RefreshCw } from "lucide-react";
+import { prompt } from "@/components/ui/notifications";
 import { OpsHealthDashboard, type OpsHealthPayload } from "@/components/admin/OpsHealthDashboard";
 import { getSupabaseAccessToken } from "@/lib/supabase/browser";
 
@@ -29,7 +30,7 @@ export function OpsHealthFullPanel({
       const token = await getSupabaseAccessToken();
       if (!token) return;
       const promptLabel = status === "acknowledged" ? "Optional acknowledgement note" : "Optional resolution note";
-      const note = window.prompt(promptLabel, "")?.trim();
+      const note = (await prompt({ title: promptLabel, defaultValue: "" }))?.trim();
       await fetch("/api/admin/ops-health", {
         method: "POST",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },

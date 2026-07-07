@@ -186,6 +186,29 @@ const CLASSIFIED_ASSIGNMENT_MUTATION_FILES: Classification[] = [
     coverage: "clears_only_then_ensure",
     rationale: "Dispatch offer timeout clears the offer state; downstream redispatch handlers (ensureBookingAssignment) snapshot.",
   },
+  {
+    file: "apps/web/lib/payout/removeCleanerFromVisitPayout.ts",
+    coverage: "snapshot_via_persist",
+    rationale:
+      "Admin visit-payout removal clears assignment fields and roster membership, then persists earnings for remaining cleaners.",
+  },
+  {
+    file: "apps/web/lib/admin/reassignPayoutOwnerBeforeTeamMemberRemove.ts",
+    coverage: "clears_only",
+    rationale:
+      "Team roster maintenance reassigns payout_owner_cleaner_id on open bookings before member removal; no new earnings snapshot on this path.",
+  },
+  {
+    file: "apps/web/lib/admin/setTeamLeadCleaner.ts",
+    coverage: "clears_only",
+    rationale: "Team lead promotion updates booking header cleaner fields to match the appointed lead.",
+  },
+  {
+    file: "apps/web/lib/booking/persistPreferredCleaners.ts",
+    coverage: "primitive_caller_handles",
+    rationale:
+      "Preferred-cleaner roster RPC wrapper; checkout/admin callers own post-assignment earnings snapshot.",
+  },
 ];
 
 const MUST_IMPORT_HELPER: Record<string, RegExp[]> = {

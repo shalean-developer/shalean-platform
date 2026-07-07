@@ -307,7 +307,16 @@ export function rosterMemberShareFallbackCents(
  * members even when earnings JSON only lists the lead (paired / dual-cleaner jobs).
  */
 export function perCleanerAllocationsForBooking(
-  booking: BookingPeriodRow,
+  booking: Pick<
+    BookingPeriodRow,
+    | "earnings_summary"
+    | "cleaner_id"
+    | "payout_owner_cleaner_id"
+    | "display_earnings_cents"
+    | "cleaner_payout_cents"
+    | "cleaner_earnings_total_cents"
+    | "payout_frozen_cents"
+  >,
   roster: readonly RosterCleanerRef[],
 ): CleanerVisitAllocation[] {
   const summary = parseBookingEarningsSummary(booking.earnings_summary);

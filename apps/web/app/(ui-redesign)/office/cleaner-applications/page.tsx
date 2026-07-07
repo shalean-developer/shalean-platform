@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Search, CheckCircle2, XCircle, RefreshCw, AlertCircle, Clock, Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { showToast as pushAppToast } from "@/components/ui/notifications";
 import {
   formatCleanerApplyWorkingAreas,
   formatCleanerApplyWorkingDays,
@@ -42,7 +43,6 @@ export default function CleanerApplicationsPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [actionLoading, setActionLoading] = useState<string | null>(null);
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
 
   const { data, loading, error, refetch } = useAdminData<ApplicationsResponse>(
     "/api/admin/cleaner-applications",
@@ -61,8 +61,7 @@ export default function CleanerApplicationsPage() {
   });
 
   function showToast(msg: string, ok: boolean) {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 3000);
+    pushAppToast(msg, ok ? "success" : "error");
   }
 
   async function handleAction(id: string, action: "approve" | "reject") {
@@ -82,17 +81,6 @@ export default function CleanerApplicationsPage() {
 
   return (
     <div className="space-y-5">
-      {toast && (
-        <div
-          className={cn(
-            "fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-lg",
-            toast.ok ? "bg-emerald-600" : "bg-red-600",
-          )}
-        >
-          {toast.msg}
-        </div>
-      )}
-
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Cleaner Applications</h1>

@@ -26,6 +26,7 @@ import {
   FileText,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { showToast as pushAppToast } from "@/components/ui/notifications";
 import { useAdminData, adminFetch, getAdminToken } from "@/hooks/useAdminData";
 import { CreateRecurringPlanDialog } from "@/components/admin/CreateRecurringPlanDialog";
 import { EditRecurringPlanDialog, type EditRecurringPlanTarget } from "@/components/admin/EditRecurringPlanDialog";
@@ -301,7 +302,6 @@ export default function RecurringPage() {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | PlanStatus>("all");
   const [page, setPage] = useState(1);
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<EditRecurringPlanTarget | null>(null);
@@ -375,8 +375,7 @@ export default function RecurringPage() {
   const confirmPlan = confirmDialog ? (plans.find((p) => p.id === confirmDialog.planId) ?? null) : null;
 
   function showToast(msg: string, ok: boolean) {
-    setToast({ msg, ok });
-    globalThis.setTimeout(() => setToast(null), 3500);
+    pushAppToast(msg, ok ? "success" : "error");
   }
 
   async function handleAction(id: string, action: "pause" | "resume" | "cancel") {
@@ -521,17 +520,6 @@ export default function RecurringPage() {
 
   return (
     <div className="space-y-5">
-      {toast && (
-        <div
-          className={cn(
-            "fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-lg",
-            toast.ok ? "bg-emerald-600" : "bg-red-600",
-          )}
-        >
-          {toast.msg}
-        </div>
-      )}
-
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Recurring Plans</h1>

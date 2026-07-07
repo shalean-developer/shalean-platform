@@ -33,7 +33,7 @@ describe("admin booking POST: admin_mark_completed guard for Paystack per-bookin
 
   it("guard runs after the monthly-billing gate (so monthly path is unaffected)", () => {
     const src = readFileSync(routePath, "utf8");
-    const monthlyGateIdx = src.indexOf("Paystack checkout is disabled");
+    const monthlyGateIdx = src.indexOf('createBillingType === "monthly"');
     const guardIdx = src.indexOf("admin_mark_completed_unsafe_for_payment_link");
     expect(monthlyGateIdx).toBeGreaterThan(-1);
     expect(guardIdx).toBeGreaterThan(monthlyGateIdx);

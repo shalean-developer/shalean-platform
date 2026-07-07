@@ -31,6 +31,7 @@ import type { BookingOperationalPhase } from "@/lib/booking/deriveBookingOperati
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { confirm, showToast } from "@/components/ui/notifications";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   AdminDashboardActionError,
@@ -848,7 +849,9 @@ export default function BookingDetailsView({
   const [cleanerOptions, setCleanerOptions] = useState<AdminCleanerRow[]>([]);
   const [statusBusy, setStatusBusy] = useState<"completed" | "cancelled" | null>(null);
   const [rescheduleOpen, setRescheduleOpen] = useState(false);
-  const [toast, setToast] = useState<ToastState>(null);
+  const setToast = useCallback((next: ToastState) => {
+    if (next) showToast(next.text, next.kind);
+  }, []);
   const [editingSchedule, setEditingSchedule] = useState(false);
   const [draftDate, setDraftDate] = useState("");
   const [draftTime, setDraftTime] = useState("");
@@ -2189,9 +2192,13 @@ export default function BookingDetailsView({
 
   const handleDeleteBooking = async () => {
     if (!fullBooking?.id) return;
-    const ok = window.confirm(
-      "Permanently delete this booking? This cannot be undone. Financially sensitive bookings are blocked, including paid, completed, monthly invoice-backed, payout-linked, payout-eligible, payout-frozen, or earnings-bearing rows.",
-    );
+    const ok = await confirm({
+      title: "Permanently delete this booking?",
+      description:
+        "This cannot be undone. Financially sensitive bookings are blocked, including paid, completed, monthly invoice-backed, payout-linked, payout-eligible, payout-frozen, or earnings-bearing rows.",
+      variant: "destructive",
+      confirmLabel: "Delete permanently",
+    });
     if (!ok) return;
     try {
       await deleteBookingAdmin(fullBooking.id);
@@ -4544,7 +4551,6 @@ export default function BookingDetailsView({
         </div>
       ) : null}
 
-      {toast ? <Toast kind={toast.kind} text={toast.text} onClose={() => setToast(null)} /> : null}
     </>
   );
 }
@@ -4714,24 +4720,4 @@ function FlagPill({ flag }: { flag: string }) {
           ? "bg-rose-100 text-rose-800"
           : "bg-orange-100 text-orange-800";
   return <span className={["rounded-full px-3 py-1 text-xs font-semibold", klass].join(" ")}>{flag}</span>;
-}
-
-function Toast({ kind, text, onClose }: { kind: "success" | "error" | "info"; text: string; onClose: () => void }) {
-  useEffect(() => {
-    const t = setTimeout(onClose, 2800);
-    return () => clearTimeout(t);
-  }, [onClose]);
-  const barClass =
-    kind === "success"
-      ? "bg-emerald-600 text-white"
-      : kind === "error"
-        ? "bg-rose-600 text-white"
-        : "bg-zinc-700 text-white";
-  return (
-    <div className="fixed bottom-4 right-4 z-[100]">
-      <div className={["rounded-lg px-4 py-2 text-sm font-medium shadow-lg", barClass].join(" ")}>
-        {text}
-      </div>
-    </div>
-  );
 }

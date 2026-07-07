@@ -1,30 +1,16 @@
-export type AdminToastKind = "success" | "error" | "info";
+import { showToast } from "@/components/ui/notifications";
+import type { ToastKind } from "@/components/ui/notifications";
 
-const EVENT = "admin-toast";
+export type AdminToastKind = "success" | "error" | "info";
 
 export type AdminToastDetail = { message: string; kind: AdminToastKind };
 
-/** Trailing debounce per kind so bursts coalesce (last message wins). */
-const DEBOUNCE_MS = 280;
-const pending = new Map<AdminToastKind, { message: string; timer: number }>();
-
+/** @deprecated Toast rendering is handled globally by NotificationProvider. */
 export function emitAdminToast(message: string, kind: AdminToastKind = "info"): void {
-  if (typeof window === "undefined") return;
-  const cur = pending.get(kind);
-  if (cur) window.clearTimeout(cur.timer);
-  const timer = window.setTimeout(() => {
-    pending.delete(kind);
-    window.dispatchEvent(new CustomEvent<AdminToastDetail>(EVENT, { detail: { message, kind } }));
-  }, DEBOUNCE_MS) as unknown as number;
-  pending.set(kind, { message, timer });
+  showToast(message, kind as ToastKind);
 }
 
-export function subscribeAdminToast(handler: (d: AdminToastDetail) => void): () => void {
-  if (typeof window === "undefined") return () => {};
-  const fn = (e: Event) => {
-    const ce = e as CustomEvent<AdminToastDetail>;
-    if (ce.detail) handler(ce.detail);
-  };
-  window.addEventListener(EVENT, fn);
-  return () => window.removeEventListener(EVENT, fn);
+/** @deprecated No-op — subscribe via global toast bus in NotificationProvider. */
+export function subscribeAdminToast(_handler: (d: AdminToastDetail) => void): () => void {
+  return () => {};
 }

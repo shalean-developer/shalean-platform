@@ -188,6 +188,7 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
   "lib/admin/adminManualBookingOfferCommand.ts",
   "lib/admin/adminManualDirectAssignCommand.ts",
   "lib/admin/performAdminAssignTeam.ts",
+  "lib/admin/performAdminBookingStatusChange.ts",
   // Admin launch-readiness tooling seeds and tears down synthetic bookings.
   // There is no dedicated dev-only exemption list in this audit, so the
   // runtime-owned status writes stay explicitly allow-listed here.
@@ -235,6 +236,7 @@ const APPROVED_INDIRECT_STATUS_WRITERS: ReadonlySet<string> = new Set([
   "lib/cleaner/cleanerLifecycleBookingCommands.ts",
   "lib/admin/adminManualDirectAssignCommand.ts",
   "lib/admin/performAdminAssignTeam.ts",
+  "lib/admin/performAdminBookingStatusChange.ts",
 ]);
 
 /** Directories scanned for `from("bookings").update(...)` call sites. */

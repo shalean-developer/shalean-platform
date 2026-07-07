@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { Search, RefreshCw, AlertCircle, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { showToast } from "@/components/ui/notifications";
 import { useAdminData } from "@/hooks/useAdminData";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
@@ -57,7 +58,6 @@ export default function DisputesPage() {
   const [adjCents, setAdjCents] = useState("");
   const [adjReason, setAdjReason] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
-  const [toast, setToast] = useState<string | null>(null);
 
   const { data, loading, error, refetch } = useAdminData<DisputesPayload>("/api/admin/cleaner-earnings-disputes", {
     params: { limit: "200" },
@@ -103,11 +103,6 @@ export default function DisputesPage() {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 4000);
-    return () => window.clearTimeout(t);
-  }, [toast]);
 
   const counts = useMemo(() => {
     const fromApi = data?.statusCounts;
@@ -140,14 +135,14 @@ export default function DisputesPage() {
       });
       const json = (await res.json()) as { error?: string };
       if (!res.ok) throw new Error(json.error ?? "Update failed");
-      setToast("Dispute updated.");
+      showToast("Dispute updated.", "success");
       setSelected(null);
       setNote("");
       setAdjCents("");
       setAdjReason("");
       await refetch();
     } catch (e) {
-      setToast(e instanceof Error ? e.message : "Update failed");
+      showToast(e instanceof Error ? e.message : "Update failed", "error");
     } finally {
       setBusy(null);
     }
@@ -448,11 +443,6 @@ export default function DisputesPage() {
         </div>
       ) : null}
 
-      {toast ? (
-        <div className="fixed bottom-4 right-4 z-[60] max-w-sm rounded-lg bg-slate-900 px-4 py-3 text-sm text-white shadow-lg">
-          {toast}
-        </div>
-      ) : null}
     </div>
   );
 }

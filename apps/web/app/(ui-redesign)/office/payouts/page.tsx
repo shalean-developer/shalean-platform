@@ -47,6 +47,7 @@ import type {
   OfficePayoutPeriodReport,
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { cn } from "@/lib/utils";
+import { confirm, showToast as pushAppToast } from "@/components/ui/notifications";
 import { useAdminData, adminFetch, getAdminToken } from "@/hooks/useAdminData";
 
 type GenerateResponse = {
@@ -226,7 +227,6 @@ export default function PayoutsPage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [edits, setEdits] = useState<Record<string, { zar: string; note: string }>>({});
-  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null);
   const [lastRefreshedAt, setLastRefreshedAt] = useState<Date | null>(null);
 
   const reportParams = useMemo(
@@ -341,8 +341,7 @@ export default function PayoutsPage() {
   );
 
   function showToast(msg: string, ok: boolean) {
-    setToast({ msg, ok });
-    setTimeout(() => setToast(null), 4000);
+    pushAppToast(msg, ok ? "success" : "error");
   }
 
   async function refreshAll() {
@@ -395,9 +394,11 @@ export default function PayoutsPage() {
   }
 
   async function handleRecalculateEarnings() {
-    const confirmed = globalThis.confirm(
-      `Recalculate cleaner earnings for ${formatRangeLabel(fromDate, toDate)} using current tenure rules (${earningsRules.juniorRateLabel}/${earningsRules.experiencedRateLabel}, R${earningsRules.minZar}–R${earningsRules.maxZar})?\n\nJobs in locked or paid payout batches are skipped.`,
-    );
+    const confirmed = await confirm({
+      title: `Recalculate cleaner earnings for ${formatRangeLabel(fromDate, toDate)}?`,
+      description: `Uses current tenure rules (${earningsRules.juniorRateLabel}/${earningsRules.experiencedRateLabel}, R${earningsRules.minZar}–R${earningsRules.maxZar}). Jobs in locked or paid payout batches are skipped.`,
+      confirmLabel: "Recalculate",
+    });
     if (!confirmed) return;
 
     setActionLoading("recalculate");
@@ -571,17 +572,6 @@ export default function PayoutsPage() {
 
   return (
     <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden">
-      {toast && (
-        <div
-          className={cn(
-            "fixed bottom-6 right-6 z-50 rounded-xl px-4 py-3 text-sm font-semibold text-white shadow-lg",
-            toast.ok ? "bg-emerald-600" : "bg-red-600",
-          )}
-        >
-          {toast.msg}
-        </div>
-      )}
-
       <OfficeZohoPageHeader
         title="Cleaner Payouts"
         subtitle={`Visit earnings and monthly payout batches (Johannesburg calendar, from ${new Date(`${MONTHLY_PAYOUT_START_YMD}T12:00:00`).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}).`}

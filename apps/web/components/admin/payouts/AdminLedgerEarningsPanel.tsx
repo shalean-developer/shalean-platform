@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { ChevronDown, ChevronRight, Loader2 } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { showToast } from "@/components/ui/notifications";
 import { cn } from "@/lib/utils";
 
 type Totals = {
@@ -93,7 +94,9 @@ export function AdminLedgerEarningsPanel() {
   const [summaryLoading, setSummaryLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
-  const [toast, setToast] = useState<Toast>(null);
+  const setToast = useCallback((next: Toast) => {
+    if (next) showToast(next.text, next.kind);
+  }, []);
   const [payModal, setPayModal] = useState<{ cleanerId: string; name: string; approvedCents: number } | null>(null);
 
   const getToken = useCallback(async () => {
@@ -162,12 +165,6 @@ export function AdminLedgerEarningsPanel() {
     void loadSummary();
     void loadHistory();
   }, [loadSummary, loadHistory]);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = window.setTimeout(() => setToast(null), 4000);
-    return () => window.clearTimeout(t);
-  }, [toast]);
 
   useEffect(() => {
     if (!expandedId) {
@@ -525,16 +522,6 @@ export function AdminLedgerEarningsPanel() {
         </div>
       ) : null}
 
-      {toast ? (
-        <div
-          className={cn(
-            "fixed bottom-4 right-4 z-50 max-w-sm rounded-lg px-4 py-3 text-sm font-medium shadow-lg",
-            toast.kind === "error" ? "bg-rose-700 text-white" : "bg-emerald-800 text-white dark:bg-emerald-700",
-          )}
-        >
-          {toast.text}
-        </div>
-      ) : null}
     </div>
   );
 }

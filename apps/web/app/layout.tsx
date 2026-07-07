@@ -1,6 +1,7 @@
 import type { Viewport } from "next";
 import dynamic from "next/dynamic";
 import { Suspense } from "react";
+import { AppNotificationProviders } from "@/components/ui/notifications/AppNotificationProviders";
 import { DeferredGrowthCtaTracking } from "@/components/analytics/DeferredGrowthCtaTracking";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { GoogleTagManager } from "@/components/analytics/GoogleTagManager";
@@ -41,15 +42,17 @@ export default function RootLayout({
     >
       <head />
       <body className="min-h-full flex flex-col">
-        <SessionReplayProvider />
-        <GlobalTopNav />
-        {children}
+        <AppNotificationProviders>
+          <SessionReplayProvider />
+          <GlobalTopNav />
+          {children}
         <Suspense fallback={null}>
           <ReferralCapture />
         </Suspense>
         <GoogleAnalytics />
         <GoogleTagManager />
-        <DeferredGrowthCtaTracking />
+          <DeferredGrowthCtaTracking />
+        </AppNotificationProviders>
       </body>
     </html>
   );

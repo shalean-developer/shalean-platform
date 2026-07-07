@@ -1,11 +1,8 @@
 "use client";
 
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
-import { cn } from "@/lib/utils";
-
-type ToastKind = "success" | "error";
-
-type ToastState = { message: string; kind: ToastKind } | null;
+import { createContext, useCallback, useContext, useMemo, type ReactNode } from "react";
+import { showToast } from "@/components/ui/notifications";
+import type { ToastKind } from "@/components/ui/notifications";
 
 const DashboardToastContext = createContext<(message: string, kind?: ToastKind) => void>(() => {});
 
@@ -14,31 +11,11 @@ export function useDashboardToast(): (message: string, kind?: ToastKind) => void
 }
 
 export function DashboardToastProvider({ children }: { children: ReactNode }) {
-  const [toast, setToast] = useState<ToastState>(null);
-
   const show = useCallback((message: string, kind: ToastKind = "success") => {
-    setToast({ message, kind });
-    window.setTimeout(() => setToast(null), 4200);
+    showToast(message, kind);
   }, []);
 
   const value = useMemo(() => show, [show]);
 
-  return (
-    <DashboardToastContext.Provider value={value}>
-      {children}
-      {toast ? (
-        <div
-          role="status"
-          className={cn(
-            "fixed bottom-20 left-1/2 z-[60] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 rounded-2xl border px-4 py-3 text-sm font-medium shadow-lg md:bottom-6",
-            toast.kind === "success"
-              ? "border-emerald-200 bg-emerald-50 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/80 dark:text-emerald-100"
-              : "border-red-200 bg-red-50 text-red-900 dark:border-red-900 dark:bg-red-950/80 dark:text-red-100",
-          )}
-        >
-          {toast.message}
-        </div>
-      ) : null}
-    </DashboardToastContext.Provider>
-  );
+  return <DashboardToastContext.Provider value={value}>{children}</DashboardToastContext.Provider>;
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Megaphone,
   TrendingUp,
@@ -14,6 +14,7 @@ import {
   Target,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { showToast } from "@/components/ui/notifications";
 import { adminFetch, useAdminData } from "@/hooks/useAdminData";
 import {
   MARKETING_CHANNEL_LABELS,
@@ -35,7 +36,6 @@ function money(v: number): string {
 
 export default function MarketingPage() {
   const [range, setRange] = useState<Range>("30d");
-  const [toast, setToast] = useState<string | null>(null);
   const [spendForm, setSpendForm] = useState({
     channel: "google_ads" as MarketingChannel,
     amount: "",
@@ -45,12 +45,6 @@ export default function MarketingPage() {
   const { data, loading, error, refetch } = useAdminData<MarketingSummary>("/api/admin/marketing", {
     params: { range },
   });
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = globalThis.setTimeout(() => setToast(null), 2300);
-    return () => globalThis.clearTimeout(t);
-  }, [toast]);
 
   const leadSources = useMemo(() => {
     const channels = data?.channels ?? [];
@@ -79,7 +73,7 @@ export default function MarketingPage() {
     e.preventDefault();
     const amount = Number(spendForm.amount);
     if (!Number.isFinite(amount) || amount < 0) {
-      setToast("Enter a valid spend amount.");
+      showToast("Enter a valid spend amount.", "error");
       return;
     }
 
@@ -88,10 +82,10 @@ export default function MarketingPage() {
       body: JSON.stringify({ ...spendForm, amount }),
     });
     if (!result.ok) {
-      setToast(result.error ?? "Could not save spend.");
+      showToast(result.error ?? "Could not save spend.", "error");
       return;
     }
-    setToast("Spend saved.");
+    showToast("Spend saved.", "success");
     setSpendForm((p) => ({ ...p, amount: "" }));
     await refetch();
   }
@@ -397,11 +391,6 @@ export default function MarketingPage() {
         </div>
       ) : null}
 
-      {toast ? (
-        <div className="fixed bottom-4 right-4 z-50 rounded-xl bg-slate-900 px-4 py-2 text-sm text-white shadow-lg">
-          {toast}
-        </div>
-      ) : null}
     </div>
   );
 }

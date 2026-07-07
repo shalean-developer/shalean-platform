@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
+import { confirm } from "@/components/ui/notifications";
 
 export default function AccountAddressesPage() {
   const toast = useDashboardToast();
@@ -71,7 +72,7 @@ export default function AccountAddressesPage() {
   }
 
   async function handleDelete(id: string) {
-    if (!window.confirm("Remove this property?")) return;
+    if (!(await confirm({ title: "Remove this property?", variant: "destructive", confirmLabel: "Remove" }))) return;
     const r = await deleteAddress(id);
     toast(r.ok ? "Property removed." : r.message, r.ok ? "success" : "error");
   }

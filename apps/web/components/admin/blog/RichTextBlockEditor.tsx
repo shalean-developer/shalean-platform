@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { prompt } from "@/components/ui/notifications";
 import "./rich-text-editor.css";
 
 type Props = {
@@ -105,9 +106,9 @@ export function RichTextBlockEditor({ html, onChange, disabled, variant = "defau
     </Button>
   );
 
-  const setLink = () => {
+  const setLink = async () => {
     const prevUrl = editor.getAttributes("link").href as string | undefined;
-    const url = window.prompt("Link URL", prevUrl ?? "https://");
+    const url = await prompt({ title: "Link URL", defaultValue: prevUrl ?? "https://" });
     if (url === null) return;
     if (url === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();

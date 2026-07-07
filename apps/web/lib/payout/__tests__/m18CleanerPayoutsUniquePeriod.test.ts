@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../../..");
@@ -250,21 +250,21 @@ class StubDb {
 describe("M-18 generateWeeklyPayouts: 23505 unique-violation is handled idempotently", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-05T12:00:00+02:00"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   /**
    * Seeds the DB stub with a single cleaner + 1 completed prepaid booking that
    * passes the Phase-12 `bookingPayableForWeeklyBatch` gate (prepaid +
-   * non-monthly, customer-settled), inside last week's UTC Mon–Sun window.
+   * non-monthly, customer-settled), inside a July 2026 monthly payout period.
    */
   function seedSingleCleanerSinglePayableBooking(db: StubDb) {
-    const now = new Date();
-    const utcMid = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
-    const dow = utcMid.getUTCDay();
-    const daysSinceMonday = (dow + 6) % 7;
-    const lastSunday = new Date(utcMid);
-    lastSunday.setUTCDate(utcMid.getUTCDate() - daysSinceMonday - 1);
-    const completedYmd = lastSunday.toISOString().slice(0, 10);
+    const completedYmd = "2026-07-15";
 
     db.tables.cleaners = [{ id: "cleaner-1" }];
     db.tables.bookings = [
@@ -406,8 +406,22 @@ describe("M-18 createPayoutRun: race-loss against concurrent run is rolled back,
   it("happy path: links frozen payouts and keeps the draft run", async () => {
     const db = new StubDb();
     db.tables.cleaner_payouts = [
-      { id: "cp-1", status: "frozen", payout_run_id: null, total_amount_cents: 10_000 },
-      { id: "cp-2", status: "frozen", payout_run_id: null, total_amount_cents: 5_000 },
+      {
+        id: "cp-1",
+        status: "frozen",
+        payout_run_id: null,
+        total_amount_cents: 10_000,
+        period_start: "2026-07-01",
+        period_end: "2026-07-31",
+      },
+      {
+        id: "cp-2",
+        status: "frozen",
+        payout_run_id: null,
+        total_amount_cents: 5_000,
+        period_start: "2026-07-01",
+        period_end: "2026-07-31",
+      },
     ];
     db.tables.cleaner_payout_runs = [];
 
@@ -428,7 +442,14 @@ describe("M-18 createPayoutRun: race-loss against concurrent run is rolled back,
      * runner won the link, so our update with `is null` guard finds 0 rows.
      */
     db.tables.cleaner_payouts = [
-      { id: "cp-1", status: "frozen", payout_run_id: null, total_amount_cents: 10_000 },
+      {
+        id: "cp-1",
+        status: "frozen",
+        payout_run_id: null,
+        total_amount_cents: 10_000,
+        period_start: "2026-07-01",
+        period_end: "2026-07-31",
+      },
     ];
     db.tables.cleaner_payout_runs = [];
 
