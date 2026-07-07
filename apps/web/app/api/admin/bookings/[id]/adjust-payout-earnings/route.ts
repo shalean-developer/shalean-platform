@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { adjustBookingPayoutEarnings } from "@/lib/payout/adjustBookingPayoutEarnings";
+import { adjustBookingTeamMemberPayoutEarnings } from "@/lib/payout/adjustBookingTeamMemberPayoutEarnings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -13,7 +14,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const { id: bookingId } = await ctx.params;
   if (!bookingId) return NextResponse.json({ error: "Missing booking id." }, { status: 400 });
 
-  let body: { payout_cents?: unknown; bonus_cents?: unknown; adjustment_note?: unknown };
+  let body: { payout_cents?: unknown; bonus_cents?: unknown; cleaner_id?: unknown; adjustment_note?: unknown };
   try {
     body = (await request.json()) as typeof body;
   } catch {
@@ -33,20 +34,40 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const result = await adjustBookingPayoutEarnings(admin, {
-    bookingId,
-    payoutCents,
-    bonusCents,
-    adjustmentNote: typeof body.adjustment_note === "string" ? body.adjustment_note : null,
-    adminUserId: auth.userId,
-  });
+  const cleanerId = typeof body.cleaner_id === "string" ? body.cleaner_id.trim() : "";
+  const { data: bookingMeta } = await admin
+    .from("bookings")
+    .select("is_team_job")
+    .eq("id", bookingId)
+    .maybeSingle();
+  const isTeamJob = (bookingMeta as { is_team_job?: boolean | null } | null)?.is_team_job === true;
+
+  const result = isTeamJob
+    ? await adjustBookingTeamMemberPayoutEarnings(admin, {
+        bookingId,
+        cleanerId,
+        payoutCents,
+        bonusCents,
+        adjustmentNote: typeof body.adjustment_note === "string" ? body.adjustment_note : null,
+        adminUserId: auth.userId,
+      })
+    : await adjustBookingPayoutEarnings(admin, {
+        bookingId,
+        cleanerId: cleanerId || undefined,
+        payoutCents,
+        bonusCents,
+        adjustmentNote: typeof body.adjustment_note === "string" ? body.adjustment_note : null,
+        adminUserId: auth.userId,
+      });
 
   if (!result.ok) {
     const status =
       result.code === "booking_not_found"
         ? 404
         : result.code === "payout_exceeds_financial_cap" ||
-            result.code === "team_job_not_supported" ||
+            result.code === "team_job_requires_cleaner_id" ||
+            result.code === "cleaner_not_on_visit" ||
+            result.code === "team_member_payout_locked" ||
             result.code === "booking_payout_paid" ||
             result.code === "payout_batch_locked"
           ? 409

@@ -39,8 +39,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     const status =
       result.code === "booking_not_found"
         ? 404
-        : result.code === "team_job_not_supported" ||
-            result.code === "booking_payout_paid" ||
+        : result.code === "booking_payout_paid" ||
             result.code === "payout_batch_locked" ||
             result.code === "cleaner_not_on_visit"
           ? 409

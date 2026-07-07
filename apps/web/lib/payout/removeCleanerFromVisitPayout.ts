@@ -10,8 +10,7 @@ import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns"
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 import { syncPayoutBatchFromBookings } from "@/lib/payout/syncPayoutBatchFromBookings";
-
-const EDITABLE_BATCH_STATUSES = new Set(["pending", "frozen"]);
+import { assertBookingVisitPayoutEditable } from "@/lib/payout/visitPayoutEditGuards";
 
 type BookingRow = {
   id: string;
@@ -89,48 +88,22 @@ async function assertVisitPayoutEditable(
   admin: SupabaseClient,
   row: BookingRow,
 ): Promise<{ ok: true; payoutId: string | null } | { ok: false; error: string; code: string }> {
-  if (row.is_team_job === true) {
-    return {
-      ok: false,
-      error: "Team job payouts must be adjusted on the booking detail page (roster split).",
-      code: "team_job_not_supported",
-    };
-  }
+  return assertBookingVisitPayoutEditable(admin, row);
+}
 
-  const payoutStatus = String(row.payout_status ?? "").trim().toLowerCase();
-  if (payoutStatus === "paid" || row.payout_paid_at) {
-    return { ok: false, error: "Visit payout is already paid.", code: "booking_payout_paid" };
-  }
-
-  const payoutId = String(row.payout_id ?? "").trim() || null;
-  if (!payoutId) return { ok: true, payoutId: null };
-
-  const { data: batch, error: batchErr } = await admin
-    .from("cleaner_payouts")
-    .select("status, payout_run_id")
-    .eq("id", payoutId)
-    .maybeSingle();
-  if (batchErr) return { ok: false, error: batchErr.message, code: "payout_lookup_failed" };
-  if (!batch) return { ok: false, error: "Linked payout batch not found.", code: "payout_not_found" };
-
-  const batchStatus = String((batch as { status?: string }).status ?? "").toLowerCase();
-  const payoutRunId = String((batch as { payout_run_id?: string | null }).payout_run_id ?? "").trim();
-  if (payoutRunId) {
-    return {
-      ok: false,
-      error: "Payout is part of a disbursement run; edit the batch before freezing the run.",
-      code: "payout_run_locked",
-    };
-  }
-  if (!EDITABLE_BATCH_STATUSES.has(batchStatus)) {
-    return {
-      ok: false,
-      error: "Payout batch is approved or paid; visit payout cannot be removed.",
-      code: "payout_batch_locked",
-    };
-  }
-
-  return { ok: true, payoutId };
+async function deleteTeamMemberPayoutRow(
+  admin: SupabaseClient,
+  bookingId: string,
+  cleanerId: string,
+): Promise<{ ok: true } | { ok: false; error: string; code: string }> {
+  const { error } = await admin
+    .from("team_job_member_payouts")
+    .delete()
+    .eq("booking_id", bookingId)
+    .eq("cleaner_id", cleanerId)
+    .eq("status", "pending");
+  if (error) return { ok: false, error: error.message, code: "team_member_payout_delete_failed" };
+  return { ok: true };
 }
 
 function clearEarningsPatch(): Record<string, unknown> {
@@ -278,6 +251,11 @@ export async function removeCleanerFromVisitPayout(
     const thawed = await thawEligiblePayoutStatus(admin, bookingId, row.payout_status);
     if (!thawed.ok) return thawed;
 
+    if (row.is_team_job === true) {
+      const deleted = await deleteTeamMemberPayoutRow(admin, bookingId, cleanerId);
+      if (!deleted.ok) return deleted;
+    }
+
     if (rosterHasTarget) {
       const { error: delErr } = await admin
         .from("booking_cleaners")
@@ -337,6 +315,69 @@ export async function removeCleanerFromVisitPayout(
 
   const thawed = await thawEligiblePayoutStatus(admin, bookingId, row.payout_status);
   if (!thawed.ok) return thawed;
+
+  if (row.is_team_job === true) {
+    const deleted = await deleteTeamMemberPayoutRow(admin, bookingId, cleanerId);
+    if (!deleted.ok) return deleted;
+
+    if (rosterHasTarget) {
+      const { error: delErr } = await admin
+        .from("booking_cleaners")
+        .delete()
+        .eq("booking_id", bookingId)
+        .eq("cleaner_id", cleanerId);
+      if (delErr) return { ok: false, error: delErr.message, code: "roster_delete_failed" };
+    }
+
+    const teamPatch: Record<string, unknown> = {
+      earnings_summary: null,
+      display_earnings_cents: 0,
+      cleaner_earnings_total_cents: 0,
+      company_revenue_cents: null,
+      payout_status: "pending",
+      payout_frozen_cents: null,
+    };
+    const { data: teamUpdated, error: teamUpErr } = await admin
+      .from("bookings")
+      .update(teamPatch)
+      .eq("id", bookingId)
+      .select("id");
+    if (teamUpErr) return { ok: false, error: teamUpErr.message, code: "booking_update_failed" };
+    if (!teamUpdated?.length) return { ok: false, error: "Booking could not be updated.", code: "booking_update_failed" };
+
+    const reset = await resetBookingCleanerLineEarnings(admin, bookingId);
+    if (!reset.ok) return { ok: false, error: reset.error, code: "earnings_reset_failed" };
+
+    let batchTotalCents: number | null = null;
+    if (payoutId) {
+      const synced = await syncPayoutBatchFromBookings(admin, payoutId);
+      if (!synced.ok) return { ok: false, error: synced.error, code: "batch_sync_failed" };
+      batchTotalCents = synced.totalCents;
+    }
+
+    await logAdminEarningsAction(admin, {
+      bookingId,
+      action: "manual_adjust",
+      adminUserId: params.adminUserId,
+    });
+
+    void logSystemEvent({
+      level: "info",
+      source: "BOOKING_CLEANER_VISIT_PAYOUT_REMOVED",
+      message: "Admin removed cleaner from team visit payout",
+      context: {
+        bookingId,
+        cleanerId,
+        payoutId,
+        adminUserId: params.adminUserId,
+        reason: params.reason?.trim() || null,
+        mode: "unassigned",
+        batch_total_cents: batchTotalCents,
+      },
+    });
+
+    return { ok: true, payoutId, batchTotalCents, mode: "unassigned" };
+  }
 
   const assignmentPatch: Record<string, unknown> = {
     ...clearEarningsPatch(),

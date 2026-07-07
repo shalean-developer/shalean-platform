@@ -106,12 +106,16 @@ export function OfficeCleanerEarningsEditPanel({
     void load();
   }, [load]);
 
+  function visitEarningsCents(visit: OfficeCleanerEditableVisitRow): number {
+    return visit.earnings_cents;
+  }
+
   function startVisitEditMode() {
     if (!detail) return;
     const initial: Record<string, string> = {};
     for (const v of detail.visits) {
       if (!v.editable) continue;
-      initial[v.id] = centsToZarInput(v.cleaner_payout_cents + v.cleaner_bonus_cents);
+      initial[v.id] = centsToZarInput(visitEarningsCents(v));
     }
     setVisitEdits(initial);
     setVisitEditMode(true);
@@ -163,7 +167,7 @@ export function OfficeCleanerEarningsEditPanel({
       const editZar = visitEdits[v.id];
       if (editZar == null) return false;
       const cents = zarInputToCents(editZar);
-      const current = v.cleaner_payout_cents + v.cleaner_bonus_cents;
+      const current = visitEarningsCents(v);
       return cents != null && cents !== current;
     });
 
@@ -184,7 +188,7 @@ export function OfficeCleanerEarningsEditPanel({
       }
       const res = await adminFetch(`/api/admin/bookings/${encodeURIComponent(v.id)}/adjust-payout-earnings`, {
         method: "PATCH",
-        body: JSON.stringify({ payout_cents: cents, bonus_cents: 0 }),
+        body: JSON.stringify({ payout_cents: cents, bonus_cents: 0, cleaner_id: cleanerId }),
       });
       if (res.ok) saved += 1;
       else {
@@ -307,7 +311,7 @@ export function OfficeCleanerEarningsEditPanel({
           <p className="font-semibold">Edit before generating monthly payouts</p>
           <p className="mt-1 text-xs leading-relaxed">
             Changes update each visit&apos;s stored earnings and appear on the cleaner&apos;s dashboard immediately —
-            whether the job is still open, accepted, or completed. Use <strong>Remove</strong> when a visit was assigned
+            including team jobs (per-member roster split). Use <strong>Remove</strong> when a visit was assigned
             to the wrong cleaner. After you&apos;re happy with the amounts, use <strong>Generate monthly payouts</strong>{" "}
             on the main page.
           </p>
@@ -345,7 +349,7 @@ export function OfficeCleanerEarningsEditPanel({
                   label: v.payout_bucket,
                   cls: "bg-slate-100 text-slate-600",
                 };
-                const lineCents = v.cleaner_payout_cents + v.cleaner_bonus_cents;
+                const lineCents = visitEarningsCents(v);
                 return (
                   <tr key={v.id} className={cn(!v.editable && "opacity-70")}>
                     <td className="py-2 pr-3 text-slate-600">{v.date ?? "—"}</td>

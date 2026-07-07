@@ -255,6 +255,46 @@ export function parseBookingEarningsSummary(raw: unknown): BookingEarningsSummar
   return o;
 }
 
+/** Keep `earnings_summary` aligned when admins manually edit per-visit payout amounts. */
+export function patchEarningsSummaryForCleaner(
+  summary: BookingEarningsSummary,
+  cleanerId: string,
+  payoutCents: number,
+  bonusCents: number,
+): BookingEarningsSummary | null {
+  const target = String(cleanerId ?? "").trim();
+  if (!target) return null;
+  if (!summary.per_cleaner_earnings.some((row) => row.cleaner_id === target)) return null;
+
+  const per_cleaner_earnings = summary.per_cleaner_earnings.map((row) => {
+    if (row.cleaner_id !== target) return row;
+    const deduction = Math.max(0, Math.round(row.deduction_cents ?? 0));
+    const base = Math.max(0, Math.round(payoutCents));
+    const bonus = Math.max(0, Math.round(bonusCents));
+    const total = Math.max(0, base + bonus - deduction);
+    return {
+      ...row,
+      base_earning_cents: base,
+      bonus_cents: bonus,
+      total_cents: total,
+    };
+  });
+  const total_cleaner_earnings_cents = per_cleaner_earnings.reduce((sum, row) => sum + row.total_cents, 0);
+  const company_revenue_cents = Math.max(
+    0,
+    summary.customer_total_cents - total_cleaner_earnings_cents - (summary.costs_cents ?? 0),
+  );
+  const leadRow = per_cleaner_earnings.find((row) => row.role === "lead") ?? per_cleaner_earnings[0] ?? null;
+  return {
+    ...summary,
+    per_cleaner_earnings,
+    total_cleaner_earnings_cents,
+    company_revenue_cents,
+    team_leader_earning_cents: leadRow?.total_cents ?? null,
+    computed_at: new Date().toISOString(),
+  };
+}
+
 export function summaryPerCleanerDisplayCents(
   summary: BookingEarningsSummary | null | undefined,
   cleanerId: string,

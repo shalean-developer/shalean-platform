@@ -57,14 +57,10 @@ export type OfficeCleanerEditableVisitsResult = {
 export function resolveVisitEditBlockedReason(
   row: Pick<
     BookingVisitRow,
-    "is_team_job" | "payout_status" | "payout_paid_at" | "payout_id"
+    "payout_status" | "payout_paid_at" | "payout_id"
   >,
   batchStatusById: ReadonlyMap<string, string>,
 ): string | null {
-  if (row.is_team_job === true) {
-    return "Team job — edit roster split on the booking detail page.";
-  }
-
   const payoutStatus = String(row.payout_status ?? "")
     .trim()
     .toLowerCase();

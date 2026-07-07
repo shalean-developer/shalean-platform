@@ -8,19 +8,10 @@ describe("resolveVisitEditBlockedReason", () => {
     ["batch-approved", "approved"],
   ]);
 
-  it("blocks team jobs", () => {
+  it("allows unbatched eligible visits including team jobs", () => {
     expect(
       resolveVisitEditBlockedReason(
-        { is_team_job: true, payout_status: "eligible", payout_paid_at: null, payout_id: null },
-        batchStatusById,
-      ),
-    ).toMatch(/team job/i);
-  });
-
-  it("allows unbatched eligible visits", () => {
-    expect(
-      resolveVisitEditBlockedReason(
-        { is_team_job: false, payout_status: "eligible", payout_paid_at: null, payout_id: null },
+        { payout_status: "eligible", payout_paid_at: null, payout_id: null },
         batchStatusById,
       ),
     ).toBeNull();
@@ -29,13 +20,13 @@ describe("resolveVisitEditBlockedReason", () => {
   it("allows visits in pending or frozen batches", () => {
     expect(
       resolveVisitEditBlockedReason(
-        { is_team_job: false, payout_status: "eligible", payout_paid_at: null, payout_id: "batch-pending" },
+        { payout_status: "eligible", payout_paid_at: null, payout_id: "batch-pending" },
         batchStatusById,
       ),
     ).toBeNull();
     expect(
       resolveVisitEditBlockedReason(
-        { is_team_job: false, payout_status: "eligible", payout_paid_at: null, payout_id: "batch-frozen" },
+        { payout_status: "eligible", payout_paid_at: null, payout_id: "batch-frozen" },
         batchStatusById,
       ),
     ).toBeNull();
@@ -44,7 +35,7 @@ describe("resolveVisitEditBlockedReason", () => {
   it("blocks visits in approved batches", () => {
     expect(
       resolveVisitEditBlockedReason(
-        { is_team_job: false, payout_status: "eligible", payout_paid_at: null, payout_id: "batch-approved" },
+        { payout_status: "eligible", payout_paid_at: null, payout_id: "batch-approved" },
         batchStatusById,
       ),
     ).toMatch(/approved or paid/i);
@@ -53,7 +44,7 @@ describe("resolveVisitEditBlockedReason", () => {
   it("blocks paid visits", () => {
     expect(
       resolveVisitEditBlockedReason(
-        { is_team_job: false, payout_status: "paid", payout_paid_at: "2026-07-01", payout_id: null },
+        { payout_status: "paid", payout_paid_at: "2026-07-01", payout_id: null },
         batchStatusById,
       ),
     ).toMatch(/already paid/i);

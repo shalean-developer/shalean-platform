@@ -2,9 +2,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logAdminEarningsAction } from "@/lib/admin/logAdminEarningsAction";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { assertHybridPayoutWithinFinancialCap, bookingPayoutConstraintCapCents, type BookingRowForPayoutCap } from "@/lib/payout/bookingPayoutCapCents";
+import { parseBookingEarningsSummary, patchEarningsSummaryForCleaner } from "@/lib/payout/bookingEarningsSummary";
 import { syncPayoutBatchFromBookings } from "@/lib/payout/syncPayoutBatchFromBookings";
-
-const EDITABLE_BATCH_STATUSES = new Set(["pending", "frozen"]);
+import { assertBookingVisitPayoutEditable } from "@/lib/payout/visitPayoutEditGuards";
 
 type BookingRow = BookingRowForPayoutCap & {
   id: string;
@@ -15,6 +15,8 @@ type BookingRow = BookingRowForPayoutCap & {
   status: string | null;
   cleaner_payout_cents: number | null;
   cleaner_bonus_cents: number | null;
+  cleaner_id: string | null;
+  earnings_summary?: unknown;
 };
 
 export async function adjustBookingPayoutEarnings(
@@ -23,6 +25,7 @@ export async function adjustBookingPayoutEarnings(
     bookingId: string;
     payoutCents: number;
     bonusCents?: number;
+    cleanerId?: string | null;
     adjustmentNote?: string | null;
     adminUserId: string;
   },
@@ -37,7 +40,7 @@ export async function adjustBookingPayoutEarnings(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, payout_id, payout_status, payout_paid_at, is_team_job, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id, total_paid_cents, amount_paid_cents, total_paid_zar, cleaner_payout_cents, cleaner_bonus_cents",
+      "id, status, cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id, total_paid_cents, amount_paid_cents, total_paid_zar, cleaner_payout_cents, cleaner_bonus_cents, earnings_summary",
     )
     .eq("id", params.bookingId)
     .maybeSingle();
@@ -48,43 +51,15 @@ export async function adjustBookingPayoutEarnings(
   if (row.is_team_job === true) {
     return {
       ok: false,
-      error: "Team job earnings must be adjusted on the booking detail page (roster split).",
-      code: "team_job_not_supported",
+      error: "Team job earnings require cleaner_id (use team member adjustment).",
+      code: "team_job_requires_cleaner_id",
     };
   }
 
-  const payoutStatus = String(row.payout_status ?? "").trim().toLowerCase();
-  if (payoutStatus === "paid" || row.payout_paid_at) {
-    return { ok: false, error: "Booking payout is already paid.", code: "booking_payout_paid" };
-  }
+  const editable = await assertBookingVisitPayoutEditable(admin, row);
+  if (!editable.ok) return editable;
 
-  const payoutId = String(row.payout_id ?? "").trim() || null;
-  if (payoutId) {
-    const { data: batch, error: batchErr } = await admin
-      .from("cleaner_payouts")
-      .select("status, payout_run_id")
-      .eq("id", payoutId)
-      .maybeSingle();
-    if (batchErr) return { ok: false, error: batchErr.message, code: "payout_lookup_failed" };
-    if (!batch) return { ok: false, error: "Linked payout batch not found.", code: "payout_not_found" };
-
-    const batchStatus = String((batch as { status?: string }).status ?? "").toLowerCase();
-    const payoutRunId = String((batch as { payout_run_id?: string | null }).payout_run_id ?? "").trim();
-    if (payoutRunId) {
-      return {
-        ok: false,
-        error: "Payout is part of a disbursement run; edit the batch before freezing the run.",
-        code: "payout_run_locked",
-      };
-    }
-    if (!EDITABLE_BATCH_STATUSES.has(batchStatus)) {
-      return {
-        ok: false,
-        error: "Payout batch is approved or paid; visit earnings cannot be edited.",
-        code: "payout_batch_locked",
-      };
-    }
-  }
+  const payoutId = editable.payoutId;
 
   const capCheck = assertHybridPayoutWithinFinancialCap({ row, payoutCents, bonusCents });
   if (!capCheck.ok) {
@@ -106,7 +81,22 @@ export async function adjustBookingPayoutEarnings(
     company_revenue_cents: companyRevenueCents,
   };
 
-  const ps = payoutStatus;
+  const summary = parseBookingEarningsSummary(row.earnings_summary);
+  const summaryCleanerId =
+    String(params.cleanerId ?? "").trim() ||
+    String(row.cleaner_id ?? "").trim() ||
+    summary?.per_cleaner_earnings[0]?.cleaner_id ||
+    "";
+  if (summary && summaryCleanerId) {
+    const updatedSummary = patchEarningsSummaryForCleaner(summary, summaryCleanerId, payoutCents, bonusCents);
+    if (updatedSummary) {
+      patch.earnings_summary = updatedSummary;
+      patch.cleaner_earnings_total_cents = updatedSummary.total_cleaner_earnings_cents;
+      patch.company_revenue_cents = updatedSummary.company_revenue_cents;
+    }
+  }
+
+  const ps = String(row.payout_status ?? "").trim().toLowerCase();
   if (ps === "eligible" || ps === "paid") {
     patch.payout_frozen_cents = displayCents;
   }
