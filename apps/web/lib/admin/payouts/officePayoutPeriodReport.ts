@@ -350,7 +350,7 @@ export function perCleanerAllocationsForBooking(
   return [];
 }
 
-async function loadRosterByBookingIds(
+export async function loadRosterByBookingIds(
   admin: SupabaseClient,
   bookingIds: string[],
 ): Promise<Map<string, RosterCleanerRef[]>> {

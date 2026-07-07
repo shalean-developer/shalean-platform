@@ -102,6 +102,7 @@ export async function adjustBookingPayoutEarnings(
     cleaner_payout_cents: payoutCents,
     cleaner_bonus_cents: bonusCents,
     display_earnings_cents: displayCents,
+    cleaner_earnings_total_cents: displayCents,
     company_revenue_cents: companyRevenueCents,
   };
 

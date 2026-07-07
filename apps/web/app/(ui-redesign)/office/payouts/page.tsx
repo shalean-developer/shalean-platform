@@ -37,6 +37,7 @@ import {
   OfficeZohoTableShell,
 } from "@/components/admin/office/OfficeZohoChrome";
 import { OfficePayoutDetailPanel } from "@/components/admin/office/OfficePayoutDetailPanel";
+import { OfficeCleanerEarningsEditPanel } from "@/components/admin/office/OfficeCleanerEarningsEditPanel";
 import { defaultOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { MONTHLY_PAYOUT_START_YMD } from "@/lib/payout/payoutPeriodConfig";
 import { cleanerEarningsRulesSummaryText } from "@/lib/admin/cleanerTenureDisplay";
@@ -211,6 +212,7 @@ export default function PayoutsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const selectedPayoutId = searchParams.get("payout")?.trim() || null;
+  const editCleanerId = searchParams.get("editCleaner")?.trim() || null;
   const earningsRules = cleanerEarningsRulesSummaryText();
 
   const defaultRange = defaultOfficePayoutPeriodRange();
@@ -551,6 +553,22 @@ export default function PayoutsPage() {
     router.push("/office/payouts");
   }
 
+  function openCleanerEarningsEdit(cleanerId: string) {
+    const params = new URLSearchParams();
+    params.set("editCleaner", cleanerId);
+    if (fromDate) params.set("from", fromDate);
+    if (toDate) params.set("to", toDate);
+    router.push(`/office/payouts?${params.toString()}`);
+  }
+
+  function closeCleanerEarningsEdit() {
+    const params = new URLSearchParams();
+    if (fromDate) params.set("from", fromDate);
+    if (toDate) params.set("to", toDate);
+    const q = params.toString();
+    router.push(q ? `/office/payouts?${q}` : "/office/payouts");
+  }
+
   return (
     <div className="min-w-0 max-w-full space-y-5 overflow-x-hidden">
       {toast && (
@@ -686,6 +704,7 @@ export default function PayoutsPage() {
             <p className="mt-1 text-sm text-amber-900/90">
               {totals?.eligible_visits ?? 0} visit{(totals?.eligible_visits ?? 0) === 1 ? "" : "s"} (
               {formatZar(totals?.eligible_cents ?? 0)}) are paid-invoice ready but not yet in a monthly batch.
+              Review and edit per-visit earnings in the <strong>By cleaner</strong> table before generating.
             </p>
           </div>
           <OfficeZohoPrimaryButton
@@ -697,6 +716,17 @@ export default function PayoutsPage() {
           </OfficeZohoPrimaryButton>
         </div>
       )}
+
+      {editCleanerId ? (
+        <OfficeCleanerEarningsEditPanel
+          cleanerId={editCleanerId}
+          fromDate={searchParams.get("from")?.trim() || fromDate}
+          toDate={searchParams.get("to")?.trim() || toDate}
+          onBack={closeCleanerEarningsEdit}
+          onChanged={refreshAll}
+          onToast={showToast}
+        />
+      ) : null}
 
       {selectedPayoutId ? (
         <OfficePayoutDetailPanel
@@ -922,6 +952,7 @@ export default function PayoutsPage() {
               ) : (
                 cleanerPageRows.map((c) => {
                   const editablePayout = editablePayoutByCleanerId.get(c.cleaner_id);
+                  const unbatchedVisits = c.pending_visits + c.eligible_visits;
                   return (
                   <tr key={c.cleaner_id} className="transition-colors hover:bg-slate-50/80">
                     <td className="px-4 py-3 font-semibold text-slate-800">
@@ -947,19 +978,29 @@ export default function PayoutsPage() {
                       {c.paid_visits > 0 ? `${c.paid_visits} · ${formatZar(c.paid_cents)}` : "—"}
                     </td>
                     <td className="px-4 py-3">
-                      {editablePayout ? (
-                        <Link
-                          href={`/office/payouts?payout=${encodeURIComponent(editablePayout.id)}`}
-                          className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
-                        >
-                          <Pencil className="h-3 w-3" />
-                          Edit payout
-                        </Link>
-                      ) : c.eligible_visits > 0 ? (
-                        <span className="text-xs text-slate-400">Generate batch first</span>
-                      ) : (
-                        <span className="text-xs text-slate-300">—</span>
-                      )}
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {unbatchedVisits > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => openCleanerEarningsEdit(c.cleaner_id)}
+                            className="inline-flex items-center gap-1 rounded-md border border-violet-300 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-800 transition-colors hover:bg-violet-100"
+                          >
+                            <Pencil className="h-3 w-3" />
+                            Edit earnings
+                          </button>
+                        ) : null}
+                        {editablePayout ? (
+                          <Link
+                            href={`/office/payouts?payout=${encodeURIComponent(editablePayout.id)}`}
+                            className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                          >
+                            <Pencil className="h-3 w-3" />
+                            Edit payout
+                          </Link>
+                        ) : unbatchedVisits === 0 ? (
+                          <span className="text-xs text-slate-300">—</span>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 );
@@ -1045,8 +1086,9 @@ export default function PayoutsPage() {
           <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
             <p className="font-semibold">How to edit payouts</p>
             <p className="mt-1 text-xs leading-relaxed">
-              Click <strong>View &amp; edit</strong> on a cleaner row to change each visit amount (e.g. all 5 visits
-              to R300), or use <strong>Edit payouts</strong> above for a lump-sum override on the batch total.
+              Use <strong>Edit earnings</strong> in the by-cleaner table to change visit amounts before generating a
+              monthly batch, or click <strong>View &amp; edit</strong> on an existing batch to adjust visits after
+              generation. Use <strong>Edit payouts</strong> above for a lump-sum override on the batch total.
             </p>
           </div>
         ) : null}
