@@ -321,7 +321,7 @@ export function CleanerEarningsScreen() {
   const goalAmt = cents(summary?.suggested_daily_goal_cents);
 
   const periodAmt = period === "today" ? todayAmt : period === "week" ? weekAmt : monthAmt;
-  const periodLabel = period === "today" ? "Today" : period === "week" ? "This week" : "This month";
+  const periodLabel = period === "today" ? "Today" : period === "week" ? "Weekly" : "Monthly";
 
   const { jobs: jobsToday } = useMemo(() => countJobsAndCentsForToday(rows, todayY), [rows, todayY]);
   const jobsWeek = useMemo(() => countJobsInWeek(rows, todayY, weekStart), [rows, todayY, weekStart]);
@@ -471,8 +471,8 @@ export function CleanerEarningsScreen() {
                     (period === "today"
                       ? "Shows earnings from jobs completed today.\n\nUpdates after each completed job."
                       : period === "week"
-                        ? "Shows earnings from jobs completed this week (SAST).\n\nUpdates when you finish a job."
-                        : "Shows earnings from jobs completed this month (SAST).\n\nUpdates when you finish a job.") +
+                        ? "Shows earnings from jobs completed in the current week (SAST).\n\nUpdates when you finish a job."
+                        : "Shows earnings from jobs completed in the current month (SAST).\n\nUpdates when you finish a job.") +
                     `\n\nTotals use South African time (SAST). Data refreshes about every minute while this page is open.` +
                     (updatedAgoLabel ? ` ${updatedAgoLabel}.` : "")
                   }
@@ -498,16 +498,16 @@ export function CleanerEarningsScreen() {
                       Today
                     </TabsTrigger>
                     <TabsTrigger value="week" className="text-xs sm:text-sm">
-                      Week
+                      Weekly
                     </TabsTrigger>
                     <TabsTrigger value="month" className="text-xs sm:text-sm">
-                      Month
+                      Monthly
                     </TabsTrigger>
                   </TabsList>
                 </Tabs>
                 <CleanerDashboardInfoHint
                   label="About period tabs"
-                  text="Switch between your earnings for today, this week, or this month."
+                  text="Switch between your earnings for today, weekly, or monthly."
                   className="pb-0.5"
                 />
               </div>

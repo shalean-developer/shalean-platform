@@ -9,6 +9,7 @@ import {
   type CleanerDashboardEarningsWireRow,
 } from "@/lib/cleaner/cleanerDashboardTodayCents";
 import { earningsPeriodCentsFromRows } from "@/lib/cleaner/cleanerEarningsPeriodTotals";
+import { retiredEpochCleanerDashboardPayoutWire } from "@/lib/cleaner/cleanerPayoutEpoch";
 import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import {
   parseBookingEarningsSummary,
@@ -298,12 +299,25 @@ export async function GET(request: Request) {
 
     const pid = String(b.payout_id ?? "").trim();
     const inLockedWeeklyBatch = Boolean(pid && lockedWeeklyPayoutIds.has(pid));
-    if (inLockedWeeklyBatch) {
-      frozen_batch_cents += cents;
-    } else if (normalized.payout_status === "pending") pending_cents += cents;
-    else if (normalized.payout_status === "eligible") eligible_cents += cents;
-    else if (normalized.payout_status === "paid") paid_cents += cents;
-    else if (normalized.payout_status === "invalid") invalid_cents += cents;
+    const dashboardWire = retiredEpochCleanerDashboardPayoutWire({
+      visitYmd: b.date,
+      normalized,
+      inLockedWeeklyBatch,
+      completedAt: b.completed_at,
+    });
+
+    if (dashboardWire.counts_toward_pipeline) {
+      if (dashboardWire.in_frozen_batch) {
+        frozen_batch_cents += cents;
+      } else if (dashboardWire.payout_status === "pending") pending_cents += cents;
+      else if (dashboardWire.payout_status === "eligible") eligible_cents += cents;
+      else if (dashboardWire.payout_status === "paid") paid_cents += cents;
+      else if (dashboardWire.payout_status === "invalid") invalid_cents += cents;
+    } else if (dashboardWire.payout_status === "paid") {
+      paid_cents += cents;
+    } else if (dashboardWire.payout_status === "invalid") {
+      invalid_cents += cents;
+    }
 
     return {
       booking_id: normalized.booking_id,
@@ -311,14 +325,14 @@ export async function GET(request: Request) {
       completed_at: b.completed_at,
       service: normalized.service,
       location: normalized.location,
-      payout_status: normalized.payout_status,
+      payout_status: dashboardWire.payout_status,
       payout_frozen_cents: normalized.payout_frozen_cents,
       amount_cents: normalized.amount_cents,
       bonus_cents: bonusCents,
       job_earning_cents: facing?.job_earning_cents ?? normalized.amount_cents,
-      payout_paid_at: normalized.payout_paid_at,
-      payout_run_id: normalized.payout_run_id,
-      in_frozen_batch: inLockedWeeklyBatch,
+      payout_paid_at: dashboardWire.payout_paid_at,
+      payout_run_id: dashboardWire.payout_run_id,
+      in_frozen_batch: dashboardWire.in_frozen_batch,
       booking_status: String(b.status ?? "completed").trim().toLowerCase(),
       admin_recurring_unpaid_completion_override_at: b.admin_recurring_unpaid_completion_override_at ?? null,
       is_team_job: Boolean(b.is_team_job),

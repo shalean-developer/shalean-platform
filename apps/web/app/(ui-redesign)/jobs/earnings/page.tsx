@@ -147,7 +147,7 @@ function EarningsPageContent() {
             )}
             onClick={() => setPeriod(p)}
           >
-            {p === "today" ? "Today" : p === "week" ? "This week" : "This month"}
+            {p === "today" ? "Today" : p === "week" ? "Weekly" : "Monthly"}
           </button>
         ))}
       </div>
@@ -155,8 +155,8 @@ function EarningsPageContent() {
       {/* Breakdown + payout */}
       <EarningsBreakdown
         today={{ label: "Today", value: formatZarFromCents(todayCents) }}
-        thisWeek={{ label: "This week", value: formatZarFromCents(weekCents) }}
-        thisMonth={{ label: "This month", value: formatZarFromCents(monthCents) }}
+        thisWeek={{ label: "Weekly", value: formatZarFromCents(weekCents) }}
+        thisMonth={{ label: "Monthly", value: formatZarFromCents(monthCents) }}
         goalProgress={goalProgress}
         goalLabel={`${goalProgress}% of ${formatZarFromCents(goalCents)} daily goal`}
         pendingPayout={pendingCents > 0 ? formatZarFromCents(pendingCents) : undefined}
