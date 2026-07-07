@@ -439,7 +439,7 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
               </button>
             </>
           ) : null}
-          {statusKey === "pending" ? (
+          {statusKey === "pending" || statusKey === "frozen" ? (
             <button
               type="button"
               disabled={busy !== null || testCount > 0}
@@ -470,6 +470,16 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
           </Link>
         </div>
       </div>
+
+      {canEdit ? (
+        <div className="mx-4 rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950 sm:mx-6">
+          <p className="font-semibold">Edit earnings before approval</p>
+          <p className="mt-1 text-xs leading-relaxed">
+            Use <strong>Edit visits</strong> to change each visit amount (e.g. set all 5 visits to R300), or{" "}
+            <strong>Edit batch total</strong> for a single lump-sum override. Then click <strong>Approve</strong>.
+          </p>
+        </div>
+      ) : null}
 
       {p.adjustment_note ? (
         <div className="mx-4 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950 sm:mx-6">

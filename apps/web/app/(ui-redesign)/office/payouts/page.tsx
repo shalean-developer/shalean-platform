@@ -299,11 +299,27 @@ export default function PayoutsPage() {
     }
   }, [cleanerPage, cleanerTotalPages]);
 
-  const pendingBatches = useMemo(
-    () => payouts.filter((p) => (p.status ?? "").toLowerCase() === "pending"),
+  const editableBatches = useMemo(
+    () =>
+      payouts.filter((p) => {
+        const s = (p.status ?? "").toLowerCase();
+        return s === "pending" || s === "frozen";
+      }),
     [payouts],
   );
-  const pendingBatchCount = pendingBatches.length;
+  const pendingBatchCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "pending").length;
+  const frozenBatchCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "frozen").length;
+  const editableBatchCount = editableBatches.length;
+  const editablePayoutByCleanerId = useMemo(() => {
+    const map = new Map<string, OfficePayoutBatchRow>();
+    for (const p of editableBatches) {
+      const existing = map.get(p.cleaner_id);
+      if (!existing || p.period_end > existing.period_end) {
+        map.set(p.cleaner_id, p);
+      }
+    }
+    return map;
+  }, [editableBatches]);
   const paidBatchCount = payouts.filter((p) => (p.status ?? "").toLowerCase() === "paid").length;
   const totalPendingBatchCents = payouts
     .filter((p) => (p.status ?? "").toLowerCase() === "pending")
@@ -438,7 +454,7 @@ export default function PayoutsPage() {
 
   function startEditMode() {
     const initial: Record<string, { zar: string; note: string }> = {};
-    for (const p of pendingBatches) {
+    for (const p of editableBatches) {
       initial[p.id] = {
         zar: centsToZarInput(p.total_amount_cents ?? 0),
         note: p.adjustment_note ?? "",
@@ -454,7 +470,7 @@ export default function PayoutsPage() {
   }
 
   async function handleSaveAllEdits() {
-    const changed = pendingBatches.filter((p) => {
+    const changed = editableBatches.filter((p) => {
       const edit = edits[p.id];
       if (!edit) return false;
       const cents = zarInputToCents(edit.zar);
@@ -882,7 +898,7 @@ export default function PayoutsPage() {
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {["Cleaner", "Visits", "Earned", "Pending", "Eligible", "Batched", "Paid"].map((h) => (
+                {["Cleaner", "Visits", "Earned", "Pending", "Eligible", "Batched", "Paid", "Actions"].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400"
@@ -894,17 +910,26 @@ export default function PayoutsPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <LoadingRows colSpan={7} />
+                <LoadingRows colSpan={8} />
               ) : cleanerPageRows.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-12 text-center text-sm text-slate-400">
+                  <td colSpan={8} className="py-12 text-center text-sm text-slate-400">
                     No completed visits in this period.
                   </td>
                 </tr>
               ) : (
-                cleanerPageRows.map((c) => (
+                cleanerPageRows.map((c) => {
+                  const editablePayout = editablePayoutByCleanerId.get(c.cleaner_id);
+                  return (
                   <tr key={c.cleaner_id} className="transition-colors hover:bg-slate-50/80">
-                    <td className="px-4 py-3 font-semibold text-slate-800">{c.cleaner_name}</td>
+                    <td className="px-4 py-3 font-semibold text-slate-800">
+                      <Link
+                        href={`/office/cleaners/${encodeURIComponent(c.cleaner_id)}`}
+                        className="hover:text-blue-700 hover:underline"
+                      >
+                        {c.cleaner_name}
+                      </Link>
+                    </td>
                     <td className="px-4 py-3 tabular-nums text-slate-700">{c.visit_count}</td>
                     <td className="px-4 py-3 font-semibold tabular-nums text-slate-800">{formatZar(c.earned_cents)}</td>
                     <td className="px-4 py-3 tabular-nums text-amber-800">
@@ -919,8 +944,24 @@ export default function PayoutsPage() {
                     <td className="px-4 py-3 tabular-nums text-emerald-800">
                       {c.paid_visits > 0 ? `${c.paid_visits} · ${formatZar(c.paid_cents)}` : "—"}
                     </td>
+                    <td className="px-4 py-3">
+                      {editablePayout ? (
+                        <Link
+                          href={`/office/payouts?payout=${encodeURIComponent(editablePayout.id)}`}
+                          className="inline-flex items-center gap-1 rounded-md border border-blue-300 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700 transition-colors hover:bg-blue-100"
+                        >
+                          <Pencil className="h-3 w-3" />
+                          Edit payout
+                        </Link>
+                      ) : c.eligible_visits > 0 ? (
+                        <span className="text-xs text-slate-400">Generate batch first</span>
+                      ) : (
+                        <span className="text-xs text-slate-300">—</span>
+                      )}
+                    </td>
                   </tr>
-                ))
+                );
+                })
               )}
             </tbody>
           </table>
@@ -963,10 +1004,10 @@ export default function PayoutsPage() {
             <h2 className="text-sm font-semibold text-slate-800">Monthly payout batches</h2>
             <p className="text-xs text-slate-500">
               Batches whose month overlaps the period (
-              {loading ? "…" : `${pendingBatchCount} pending · ${paidBatchCount} paid · ${formatZar(totalPendingBatchCents)} pending amount`})
+              {loading ? "…" : `${pendingBatchCount} pending · ${frozenBatchCount} frozen · ${paidBatchCount} paid · ${formatZar(totalPendingBatchCents)} pending amount`}
             </p>
           </div>
-          {pendingBatchCount > 0 ? (
+          {editableBatchCount > 0 ? (
             <div className="flex flex-wrap gap-2">
               {editMode ? (
                 <>
@@ -997,6 +1038,16 @@ export default function PayoutsPage() {
         </div>
 
         <OfficeZohoPillTabs tabs={statusPillTabs} activeKey={statusFilter} onChange={setStatusFilter} />
+
+        {editableBatchCount > 0 && !editMode ? (
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-950">
+            <p className="font-semibold">How to edit payouts</p>
+            <p className="mt-1 text-xs leading-relaxed">
+              Click <strong>View &amp; edit</strong> on a cleaner row to change each visit amount (e.g. all 5 visits
+              to R300), or use <strong>Edit payouts</strong> above for a lump-sum override on the batch total.
+            </p>
+          </div>
+        ) : null}
 
         <OfficeZohoTableShell>
           <div className="overflow-x-auto">
@@ -1029,6 +1080,8 @@ export default function PayoutsPage() {
                     const statusKey = (p.status ?? "pending").toLowerCase();
                     const s = STATUS_MAP[statusKey] ?? { label: p.status ?? "—", cls: "bg-slate-100 text-slate-600" };
                     const isPending = statusKey === "pending";
+                    const isFrozen = statusKey === "frozen";
+                    const isEditable = isPending || isFrozen;
                     const rowBusy = actionLoading === p.id || actionLoading === `export:${p.id}`;
 
                     return (
@@ -1046,7 +1099,7 @@ export default function PayoutsPage() {
                         <td className="px-4 py-3 text-xs text-slate-600">{formatPeriod(p.period_start, p.period_end)}</td>
                         <td className="px-4 py-3 text-sm text-slate-700">{p.booking_count}</td>
                         <td className="px-4 py-3">
-                          {editMode && isPending ? (
+                          {editMode && isEditable ? (
                             <div className="space-y-1">
                               <input
                                 type="number"
@@ -1097,8 +1150,8 @@ export default function PayoutsPage() {
                           <span className={cn("rounded-full px-2.5 py-1 text-[11px] font-bold", s.cls)}>{s.label}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <div className="flex items-center gap-1 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
-                            {isPending && !editMode && (
+                          <div className="flex items-center gap-1">
+                            {isEditable && !editMode && (
                               <button
                                 type="button"
                                 disabled={rowBusy}
@@ -1118,9 +1171,14 @@ export default function PayoutsPage() {
                             </OfficeZohoSecondaryButton>
                             <Link
                               href={`/office/payouts?payout=${encodeURIComponent(p.id)}`}
-                              className="inline-flex items-center rounded-md border border-slate-300 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 transition-colors hover:bg-slate-50"
+                              className={cn(
+                                "inline-flex items-center rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors",
+                                isEditable
+                                  ? "border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100"
+                                  : "border-slate-300 bg-white text-slate-600 hover:bg-slate-50",
+                              )}
                             >
-                              View
+                              {isEditable ? "View & edit" : "View"}
                             </Link>
                           </div>
                         </td>

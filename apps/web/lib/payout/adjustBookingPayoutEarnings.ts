@@ -62,18 +62,25 @@ export async function adjustBookingPayoutEarnings(
   if (payoutId) {
     const { data: batch, error: batchErr } = await admin
       .from("cleaner_payouts")
-      .select("status, frozen_at")
+      .select("status, payout_run_id")
       .eq("id", payoutId)
       .maybeSingle();
     if (batchErr) return { ok: false, error: batchErr.message, code: "payout_lookup_failed" };
     if (!batch) return { ok: false, error: "Linked payout batch not found.", code: "payout_not_found" };
 
     const batchStatus = String((batch as { status?: string }).status ?? "").toLowerCase();
-    const frozenAt = (batch as { frozen_at?: string | null }).frozen_at;
-    if (frozenAt || !EDITABLE_BATCH_STATUSES.has(batchStatus)) {
+    const payoutRunId = String((batch as { payout_run_id?: string | null }).payout_run_id ?? "").trim();
+    if (payoutRunId) {
       return {
         ok: false,
-        error: "Payout batch is frozen, approved, or paid; visit earnings cannot be edited.",
+        error: "Payout is part of a disbursement run; edit the batch before freezing the run.",
+        code: "payout_run_locked",
+      };
+    }
+    if (!EDITABLE_BATCH_STATUSES.has(batchStatus)) {
+      return {
+        ok: false,
+        error: "Payout batch is approved or paid; visit earnings cannot be edited.",
         code: "payout_batch_locked",
       };
     }
