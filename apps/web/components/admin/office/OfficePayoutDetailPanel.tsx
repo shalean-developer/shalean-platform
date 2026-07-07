@@ -91,6 +91,8 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
   const [editing, setEditing] = useState(false);
   const [editZar, setEditZar] = useState("");
   const [editNote, setEditNote] = useState("");
+  const [visitEditMode, setVisitEditMode] = useState(false);
+  const [visitEdits, setVisitEdits] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,6 +118,69 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
   useEffect(() => {
     void load();
   }, [load]);
+
+  function startVisitEditMode() {
+    if (!detail) return;
+    const initial: Record<string, string> = {};
+    for (const b of detail.bookings) {
+      initial[b.id] = centsToZarInput(Number(b.cleaner_payout_cents ?? 0) + Number(b.cleaner_bonus_cents ?? 0));
+    }
+    setVisitEdits(initial);
+    setVisitEditMode(true);
+    setEditing(false);
+  }
+
+  function cancelVisitEditMode() {
+    setVisitEditMode(false);
+    setVisitEdits({});
+  }
+
+  async function handleSaveVisitEdits() {
+    if (!detail) return;
+    const changed = detail.bookings.filter((b) => {
+      const editZar = visitEdits[b.id];
+      if (editZar == null) return false;
+      const cents = zarInputToCents(editZar);
+      const current = Number(b.cleaner_payout_cents ?? 0) + Number(b.cleaner_bonus_cents ?? 0);
+      return cents != null && cents !== current;
+    });
+
+    if (changed.length === 0) {
+      onToast("No visit earnings were changed.", false);
+      return;
+    }
+
+    setBusy("save-visits");
+    let saved = 0;
+    let failed = 0;
+    let lastError: string | null = null;
+    for (const b of changed) {
+      const cents = zarInputToCents(visitEdits[b.id] ?? "");
+      if (cents == null) {
+        failed += 1;
+        continue;
+      }
+      const res = await adminFetch(`/api/admin/bookings/${encodeURIComponent(b.id)}/adjust-payout-earnings`, {
+        method: "PATCH",
+        body: JSON.stringify({ payout_cents: cents, bonus_cents: 0 }),
+      });
+      if (res.ok) saved += 1;
+      else {
+        failed += 1;
+        lastError = res.error ?? "Save failed";
+      }
+    }
+    setBusy(null);
+    if (failed > 0) {
+      onToast(lastError ? `${lastError} (${saved} saved, ${failed} failed)` : `Saved ${saved}; ${failed} failed.`, false);
+    } else {
+      onToast(`Updated ${saved} visit${saved === 1 ? "" : "s"} — batch total recalculated.`, true);
+      setVisitEditMode(false);
+      setVisitEdits({});
+    }
+    await load();
+    await onChanged();
+  }
 
   async function handleSaveAmount() {
     const cents = zarInputToCents(editZar);
@@ -308,7 +373,40 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
             {busy === "export" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Download className="h-3.5 w-3.5" />}
             Export CSV
           </button>
-          {canEdit && !editing ? (
+          {canEdit && !editing && !visitEditMode ? (
+            <button
+              type="button"
+              disabled={busy !== null}
+              onClick={startVisitEditMode}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+              Edit visits
+            </button>
+          ) : null}
+          {visitEditMode ? (
+            <>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={() => void handleSaveVisitEdits()}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-blue-600 px-3 py-2 text-xs font-bold text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {busy === "save-visits" ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                Save visits
+              </button>
+              <button
+                type="button"
+                disabled={busy !== null}
+                onClick={cancelVisitEditMode}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                <X className="h-3.5 w-3.5" />
+                Cancel
+              </button>
+            </>
+          ) : null}
+          {canEdit && !editing && !visitEditMode ? (
             <button
               type="button"
               disabled={busy !== null}
@@ -316,7 +414,7 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
               className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
               <Pencil className="h-3.5 w-3.5" />
-              Edit amount
+              Edit batch total
             </button>
           ) : null}
           {editing ? (
@@ -406,6 +504,9 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
       <div className="overflow-x-auto px-4 pb-4 sm:px-6 sm:pb-6">
         <p className="mb-2 text-xs font-bold uppercase tracking-wide text-slate-400">
           Bookings in batch ({detail.bookings.length})
+          {visitEditMode ? (
+            <span className="ml-2 font-medium normal-case text-blue-600">— edit each visit amount (ZAR)</span>
+          ) : null}
         </p>
         <table className="w-full text-sm">
           <thead>
@@ -424,16 +525,35 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
                 </td>
               </tr>
             ) : (
-              detail.bookings.map((b) => (
+              detail.bookings.map((b) => {
+                const lineCents = Number(b.cleaner_payout_cents ?? 0) + Number(b.cleaner_bonus_cents ?? 0);
+                return (
                 <tr key={b.id}>
                   <td className="py-2 pr-3 text-slate-600">{b.date ?? "—"}</td>
-                  <td className="py-2 pr-3 font-medium text-slate-800">{b.customer_name ?? "—"}</td>
+                  <td className="py-2 pr-3 font-medium text-slate-800">
+                    <Link href={`/office/bookings/${encodeURIComponent(b.id)}`} className="hover:text-blue-700 hover:underline">
+                      {b.customer_name ?? "—"}
+                    </Link>
+                  </td>
                   <td className="py-2 pr-3 text-slate-600">{b.service ?? "—"}</td>
                   <td className="py-2 text-right font-semibold tabular-nums text-slate-800">
-                    {formatZar(Number(b.cleaner_payout_cents ?? 0) + Number(b.cleaner_bonus_cents ?? 0))}
+                    {visitEditMode && canEdit ? (
+                      <input
+                        type="number"
+                        min={0}
+                        step={1}
+                        value={visitEdits[b.id] ?? centsToZarInput(lineCents)}
+                        onChange={(e) => setVisitEdits((prev) => ({ ...prev, [b.id]: e.target.value }))}
+                        className="w-24 rounded-md border border-blue-200 bg-white px-2 py-1 text-right text-sm font-bold tabular-nums"
+                        aria-label={`Edit payout for ${b.customer_name ?? b.id}`}
+                      />
+                    ) : (
+                      formatZar(lineCents)
+                    )}
                   </td>
                 </tr>
-              ))
+              );
+              })
             )}
           </tbody>
         </table>

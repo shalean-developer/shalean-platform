@@ -8,7 +8,8 @@ export type AdminEarningsActionKind =
   | "reset"
   | "dispute_review"
   | "dispute_resolve"
-  | "dispute_reject";
+  | "dispute_reject"
+  | "manual_adjust";
 
 /** Best-effort audit row for admin earnings tools (never throws). */
 export async function logAdminEarningsAction(
