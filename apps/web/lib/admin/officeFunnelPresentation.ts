@@ -142,7 +142,7 @@ export function zarLabel(value: number | null | undefined): string {
 }
 
 export function formatFunnelDuration(seconds: number | null | undefined): string {
-  if (seconds == null || !Number.isFinite(seconds)) return "—";
+  if (seconds == null || !Number.isFinite(seconds) || seconds <= 0) return "—";
   if (seconds < 60) return `${Math.round(seconds)}s`;
   const minutes = Math.round(seconds / 60);
   if (minutes < 60) return `${minutes}m`;

@@ -32,6 +32,11 @@ import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import type { BookingRow } from "@/lib/dashboard/types";
 import { bookingServiceSlugFromBookingRow } from "@/lib/booking-v2/bookingV2ServiceSlug";
 import { bookingV2FormPatchFromBookingRow } from "@/lib/booking-v2/rebookFromBookingRow";
+import {
+  BOOKING_FUNNEL_ROW,
+  bookingV2StepToFunnelStep,
+  trackBookingFunnelEvent,
+} from "@/lib/booking/bookingFlowAnalytics";
 
 export type { LiveServiceConfig };
 
@@ -261,6 +266,12 @@ export function BookingV2Provider({
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             form.setError(e.path.join(".") as any, { message: e.message });
           });
+          trackBookingFunnelEvent(bookingV2StepToFunnelStep(step), BOOKING_FUNNEL_ROW.ERROR, {
+            flow: "booking_v2",
+            step,
+            reason: "validation",
+            fields: result.error.errors.map((e) => e.path.join(".")),
+          });
           return false;
         }
 
@@ -273,6 +284,12 @@ export function BookingV2Provider({
           result.error.errors.forEach((e) => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             form.setError(e.path.join(".") as any, { message: e.message });
+          });
+          trackBookingFunnelEvent(bookingV2StepToFunnelStep(step), BOOKING_FUNNEL_ROW.ERROR, {
+            flow: "booking_v2",
+            step,
+            reason: "validation",
+            fields: result.error.errors.map((e) => e.path.join(".")),
           });
           return false;
         }

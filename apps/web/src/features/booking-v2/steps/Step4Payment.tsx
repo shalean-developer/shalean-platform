@@ -15,6 +15,12 @@ import { useFormContext } from "react-hook-form";
 import { CustomerPriceBreakdown } from "@/src/features/booking-v2/components/CustomerPriceBreakdown";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import type { User } from "@supabase/supabase-js";
+import {
+  ANALYTICS_EVENTS,
+  BOOKING_FUNNEL_ROW,
+  trackBookingAnalyticsEvent,
+  trackBookingFunnelEvent,
+} from "@/lib/booking/bookingFlowAnalytics";
 
 // ─── Auth Form ─────────────────────────────────────────────────────────────────
 
@@ -272,13 +278,32 @@ function PaymentSection({ user }: { user: User }) {
       };
 
       if (!confirmRes.ok || !confirmJson.success || !confirmJson.bookingId) {
-        setError(confirmJson.error ?? "Could not create your booking. Please try again.");
+        const message = confirmJson.error ?? "Could not create your booking. Please try again.";
+        setError(message);
+        trackBookingFunnelEvent("payment", BOOKING_FUNNEL_ROW.ERROR, {
+          flow: "booking_v2",
+          action: "confirm_booking",
+          message,
+        });
         setConfirming(false);
         return;
       }
 
-      // 2. Launch Paystack inline checkout
       const { paystackReference, bookingId } = confirmJson;
+      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
+        service: serviceSlug,
+        service_type: serviceSlug,
+        serviceAreaName: values.suburb ?? null,
+        finalPrice: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+        extras: values.selectedExtras ?? null,
+      }, {
+        service_type: serviceSlug,
+        suburb: values.suburb ?? null,
+        estimated_price: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+        booking_id: bookingId,
+      });
+
+      // 2. Launch Paystack inline checkout
 
       const PaystackPop = (await import("@paystack/inline-js")).default;
       const popup = new PaystackPop();
@@ -298,11 +323,22 @@ function PaymentSection({ user }: { user: User }) {
         },
         onCancel: () => {
           setError("Payment cancelled. Your booking is saved — you can retry payment.");
+          trackBookingFunnelEvent("payment", BOOKING_FUNNEL_ROW.EXIT, {
+            flow: "booking_v2",
+            reason: "paystack_cancelled",
+            booking_id: bookingId,
+          });
           setConfirming(false);
         },
       });
     } catch (err) {
-      setError("An unexpected error occurred. Please try again.");
+      const message = "An unexpected error occurred. Please try again.";
+      setError(message);
+      trackBookingFunnelEvent("payment", BOOKING_FUNNEL_ROW.ERROR, {
+        flow: "booking_v2",
+        action: "paystack_launch",
+        message: err instanceof Error ? err.message : message,
+      });
       setConfirming(false);
     }
   }

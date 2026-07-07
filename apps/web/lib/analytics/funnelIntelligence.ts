@@ -52,11 +52,20 @@ function pct(part: number, total: number): number {
   return Math.round((part / total) * 1000) / 10;
 }
 
+/** Scale volume thresholds down for low-traffic windows so cards stay useful. */
+function volumeFloor(m: FunnelIntelMetrics, base: number): number {
+  if (m.funnelStartSessions >= 100) return base;
+  if (m.funnelStartSessions >= 30) return Math.max(3, Math.round(base * 0.6));
+  return Math.max(2, Math.round(base * 0.35));
+}
+
 export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsight[] {
   const out: AnalyticsInsight[] = [];
 
   const worstDrop = [...m.dropOffByStep].sort((a, b) => b.dropOffPct - a.dropOffPct)[0];
-  if (worstDrop && worstDrop.viewed >= 5 && worstDrop.dropOffPct >= 35) {
+  const dropViewFloor = volumeFloor(m, 5);
+  const dropPctFloor = m.funnelStartSessions < 30 ? 15 : 35;
+  if (worstDrop && worstDrop.viewed >= dropViewFloor && worstDrop.dropOffPct >= dropPctFloor) {
     out.push({
       id: "funnel_step_dropoff",
       severity: worstDrop.dropOffPct >= 55 ? "critical" : "warning",
@@ -66,7 +75,7 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
     });
   }
 
-  if (m.paystackOpened >= 10 && m.paystackAbandonmentPct >= 40) {
+  if (m.paystackOpened >= volumeFloor(m, 10) && m.paystackAbandonmentPct >= (m.funnelStartSessions < 30 ? 25 : 40)) {
     out.push({
       id: "paystack_abandon",
       severity: m.paystackAbandonmentPct >= 60 ? "critical" : "warning",
@@ -77,9 +86,11 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
   }
 
   const paid = m.completedPaymentSessions ?? m.paystackCompleted;
-  if (m.reachedPaymentSessions >= 5 && paid < m.reachedPaymentSessions) {
+  const checkoutFloor = volumeFloor(m, 5);
+  const checkoutDropFloor = m.funnelStartSessions < 30 ? 10 : 15;
+  if (m.reachedPaymentSessions >= checkoutFloor && paid < m.reachedPaymentSessions) {
     const dropPct = pct(m.reachedPaymentSessions - paid, m.reachedPaymentSessions);
-    if (dropPct >= 15) {
+    if (dropPct >= checkoutDropFloor) {
       out.push({
         id: "payment_completion_dropoff",
         severity: dropPct >= 30 ? "warning" : "info",
@@ -91,7 +102,7 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
   }
 
   const errTotal = m.errorsByStep.reduce((s, r) => s + r.count, 0);
-  if (errTotal >= 15) {
+  if (errTotal >= volumeFloor(m, 15)) {
     const top = [...m.errorsByStep].sort((a, b) => b.count - a.count)[0];
     out.push({
       id: "booking_errors",
@@ -104,7 +115,7 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
     });
   }
 
-  if (m.mobileUxHint && m.mobileUxHint.starts >= 20 && m.mobileUxHint.conversionPct <= 12) {
+  if (m.mobileUxHint && m.mobileUxHint.starts >= volumeFloor(m, 20) && m.mobileUxHint.conversionPct <= 12) {
     out.push({
       id: "mobile_conversion_soft",
       severity: "info",
@@ -114,7 +125,7 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
     });
   }
 
-  if (out.length === 0 && m.funnelStartSessions >= 10) {
+  if (out.length === 0 && m.funnelStartSessions >= volumeFloor(m, 10)) {
     out.push({
       id: "healthy_baseline",
       severity: "info",
@@ -133,7 +144,8 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
 export function detectFunnelAnomalies(m: FunnelIntelMetrics): FunnelAnomaly[] {
   const anomalies: FunnelAnomaly[] = [];
   const trends = m.dailyTrends.filter((d) => d.starts > 0);
-  if (trends.length >= 10) {
+  const trendDaysRequired = m.funnelStartSessions < 30 ? 6 : 10;
+  if (trends.length >= trendDaysRequired) {
     const mid = Math.floor(trends.length / 2);
     const recent = trends.slice(mid);
     const prior = trends.slice(0, mid);
@@ -153,7 +165,38 @@ export function detectFunnelAnomalies(m: FunnelIntelMetrics): FunnelAnomaly[] {
     }
   }
 
-  if (m.paystackOpened >= 8 && m.paystackAbandonmentPct >= 55) {
+  const paid = m.completedPaymentSessions ?? m.paystackCompleted;
+  if (m.reachedPaymentSessions >= volumeFloor(m, 5) && paid < m.reachedPaymentSessions) {
+    const checkoutDropPct = pct(m.reachedPaymentSessions - paid, m.reachedPaymentSessions);
+    if (checkoutDropPct >= (m.funnelStartSessions < 30 ? 12 : 20)) {
+      anomalies.push({
+        id: "checkout_to_paid_drop",
+        severity: checkoutDropPct >= 30 ? "warning" : "info",
+        metric: "checkout_to_paid_pct",
+        message: `${checkoutDropPct.toFixed(1)}% of checkout sessions did not complete payment.`,
+        observed: checkoutDropPct,
+        baseline: 10,
+      });
+    }
+  }
+
+  const worstDrop = [...m.dropOffByStep].sort((a, b) => b.dropOffPct - a.dropOffPct)[0];
+  if (
+    worstDrop &&
+    worstDrop.viewed >= volumeFloor(m, 4) &&
+    worstDrop.dropOffPct >= (m.funnelStartSessions < 30 ? 12 : 25)
+  ) {
+    anomalies.push({
+      id: "step_dropoff_elevated",
+      severity: worstDrop.dropOffPct >= 40 ? "warning" : "info",
+      metric: `dropoff_${worstDrop.step}`,
+      message: `Elevated drop-off after ${worstDrop.step} (${worstDrop.dropOffPct.toFixed(1)}%).`,
+      observed: worstDrop.dropOffPct,
+      baseline: 15,
+    });
+  }
+
+  if (m.paystackOpened >= volumeFloor(m, 8) && m.paystackAbandonmentPct >= (m.funnelStartSessions < 30 ? 35 : 55)) {
     anomalies.push({
       id: "paystack_failure_spike",
       severity: "critical",
@@ -165,7 +208,7 @@ export function detectFunnelAnomalies(m: FunnelIntelMetrics): FunnelAnomaly[] {
   }
 
   const errTotal = m.errorsByStep.reduce((s, r) => s + r.count, 0);
-  if (errTotal >= 30) {
+  if (errTotal >= volumeFloor(m, 30)) {
     anomalies.push({
       id: "error_volume",
       severity: "warning",

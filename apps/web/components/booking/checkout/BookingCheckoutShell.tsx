@@ -43,6 +43,7 @@ import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
 import { usePricingCatalog } from "@/lib/pricing/usePricingCatalog";
 import { cn } from "@/lib/utils";
 import { bookingCopy } from "@/lib/booking/copy";
+import { useBookingCheckoutFunnelTelemetry } from "@/lib/booking/useBookingCheckoutFunnelTelemetry";
 
 const detailsStepCopy = bookingCopy.details;
 const detailsContinueLabel = detailsStepCopy.cta;
@@ -92,6 +93,8 @@ export function BookingCheckoutShell({ children }: { children: React.ReactNode }
     const key = parts[1];
     return isBookingCheckoutSegment(key) ? key : "details";
   }, [pathname]);
+
+  useBookingCheckoutFunnelTelemetry(segment);
 
   const stepIndex = BOOKING_SEGMENT_INDEX[segment];
 

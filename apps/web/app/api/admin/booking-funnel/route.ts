@@ -15,11 +15,14 @@ const FUNNEL_ORDER = ["entry", "quote", "extras", "datetime", "payment"] as cons
 /** Semantic `user_events` mapped to coarse funnel steps when `booking_events` views are sparse. */
 const USER_EVENT_FUNNEL_STEP: Record<string, (typeof FUNNEL_ORDER)[number]> = {
   booking_step_details_started: "entry",
+  [ANALYTICS_EVENTS.START_BOOKING]: "entry",
   [ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED]: "quote",
+  [ANALYTICS_EVENTS.VIEW_PRICE]: "quote",
   booking_addon_selected: "extras",
   booking_continue_schedule: "extras",
   [ANALYTICS_EVENTS.BOOKING_DATE_SELECTED]: "datetime",
   [ANALYTICS_EVENTS.BOOKING_TIME_SELECTED]: "datetime",
+  [ANALYTICS_EVENTS.SELECT_TIME]: "datetime",
   [ANALYTICS_EVENTS.BOOKING_CLEANER_SELECTED]: "datetime",
   [ANALYTICS_EVENTS.BOOKING_PAYMENT_STARTED]: "payment",
   [ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED]: "payment",
@@ -57,6 +60,9 @@ const BOOKING_ANALYTICS_EVENTS = [
   ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED,
   ANALYTICS_EVENTS.PAYMENT_COMPLETED,
   ANALYTICS_EVENTS.BOOKING_COMPLETED,
+  ANALYTICS_EVENTS.START_BOOKING,
+  ANALYTICS_EVENTS.VIEW_PRICE,
+  ANALYTICS_EVENTS.SELECT_TIME,
 ] as const;
 
 const TERMINAL_UNPAID_STATUSES = new Set(["cancelled", "failed", "payment_expired"]);
@@ -406,7 +412,9 @@ export async function GET(request: Request) {
     if (!sessionId) continue;
     if (
       event.event_type === ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED ||
-      event.event_type === "booking_step_details_started"
+      event.event_type === "booking_step_details_started" ||
+      event.event_type === ANALYTICS_EVENTS.START_BOOKING ||
+      event.event_type === ANALYTICS_EVENTS.VIEW_PRICE
     ) {
       startedQuote.add(sessionId);
     }
@@ -434,10 +442,19 @@ export async function GET(request: Request) {
     if (r.event_type !== "exit") continue;
     exitCounts.set(r.step, (exitCounts.get(r.step) ?? 0) + 1);
   }
-  const topExitSteps = [...exitCounts.entries()]
+  const topExitStepsFromEvents = [...exitCounts.entries()]
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8)
     .map(([step, count]) => ({ step, count }));
+  /** When clients omit explicit `exit` rows, infer exits from step drop-off counts. */
+  const topExitSteps =
+    topExitStepsFromEvents.length > 0
+      ? topExitStepsFromEvents
+      : dropOffByStep
+          .filter((row) => row.dropped > 0)
+          .sort((a, b) => b.dropped - a.dropped)
+          .slice(0, 8)
+          .map((row) => ({ step: row.step, count: row.dropped }));
 
   const errCounts = new Map<string, number>();
   for (const r of rows) {
@@ -458,7 +475,7 @@ export async function GET(request: Request) {
 
   const durations = [...sessionTraits.values()]
     .map((t) => (t.firstAt && t.completedAt && t.completedAt >= t.firstAt ? Math.round((t.completedAt - t.firstAt) / 1000) : null))
-    .filter((v): v is number => v != null)
+    .filter((v): v is number => v != null && v > 0)
     .sort((a, b) => a - b);
   const avgTimeToCompleteSeconds =
     durations.length > 0 ? Math.round(durations.reduce((sum, n) => sum + n, 0) / durations.length) : null;
@@ -476,15 +493,51 @@ export async function GET(request: Request) {
     if (day) paidCompletedByDay.set(day, (paidCompletedByDay.get(day) ?? 0) + 1);
   }
 
+  /**
+   * Per-session day attribution. `booking_events` navigation rows are sparse, so fall back to the
+   * earliest correlated timestamp (from `user_events` too) captured in {@link sessionTraits.firstAt}.
+   */
+  function ymdFromMs(ms: number | undefined): string | null {
+    return typeof ms === "number" && Number.isFinite(ms) ? ymd(new Date(ms).toISOString()) : null;
+  }
+
+  const paymentAtBySession = new Map<string, number>();
+  function notePaymentAt(sid: string, ms: number) {
+    if (!Number.isFinite(ms)) return;
+    const prev = paymentAtBySession.get(sid);
+    if (prev == null || ms < prev) paymentAtBySession.set(sid, ms);
+  }
+  for (const r of rows) {
+    if (r.step !== "payment") continue;
+    const ms = r.created_at ? new Date(r.created_at).getTime() : NaN;
+    if (Number.isFinite(ms)) notePaymentAt(bookingEventCorrelationId(r), ms);
+  }
+  for (const event of userEvents) {
+    const t = String(event.event_type ?? "");
+    if (
+      t !== "booking_payment_started" &&
+      t !== "booking_paystack_opened" &&
+      t !== ANALYTICS_EVENTS.PAYMENT_COMPLETED &&
+      t !== ANALYTICS_EVENTS.BOOKING_COMPLETED
+    ) {
+      continue;
+    }
+    const sid = correlationSessionId(event);
+    const ms = event.created_at ? new Date(event.created_at).getTime() : NaN;
+    if (sid && Number.isFinite(ms)) notePaymentAt(sid, ms);
+  }
+
   const dayMap = initDayMap(since);
   for (const sid of startedQuote) {
-    const day = ymd(
-      rows.find((r) => bookingEventCorrelationId(r) === sid && r.step === "quote" && r.event_type === "view")?.created_at,
-    );
+    const day =
+      ymd(rows.find((r) => bookingEventCorrelationId(r) === sid && r.step === "quote" && r.event_type === "view")?.created_at) ??
+      ymdFromMs(sessionTraits.get(sid)?.firstAt);
     if (day && dayMap.has(day)) dayMap.get(day)!.starts += 1;
   }
   for (const sid of reachedPayment) {
-    const day = ymd(rows.find((r) => bookingEventCorrelationId(r) === sid && r.step === "payment")?.created_at);
+    const day =
+      ymd(rows.find((r) => bookingEventCorrelationId(r) === sid && r.step === "payment")?.created_at) ??
+      ymdFromMs(paymentAtBySession.get(sid) ?? sessionTraits.get(sid)?.firstAt);
     if (day && dayMap.has(day)) dayMap.get(day)!.reachedPayment += 1;
   }
   for (const event of userEvents) {

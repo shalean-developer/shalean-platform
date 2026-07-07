@@ -75,6 +75,40 @@ export function bookingRouteToFunnelStep(route: BookingFlowStep): BookingFunnelS
   }
 }
 
+/** Maps booking-v2 wizard steps (`/book/[service]?step=N`) to `booking_events.step` labels. */
+export function bookingV2StepToFunnelStep(step: 1 | 2 | 3 | 4): BookingFunnelStepLabel {
+  switch (step) {
+    case 1:
+      return "quote";
+    case 2:
+      return "datetime";
+    case 3:
+      return "details";
+    case 4:
+      return "payment";
+    default:
+      return "quote";
+  }
+}
+
+/** Maps legacy checkout URL segments to `booking_events.step` labels. */
+export function bookingCheckoutSegmentToFunnelStep(
+  segment: "details" | "schedule" | "cleaner" | "payment",
+): BookingFunnelStepLabel {
+  switch (segment) {
+    case "details":
+      return "quote";
+    case "schedule":
+      return "datetime";
+    case "cleaner":
+      return "details";
+    case "payment":
+      return "payment";
+    default:
+      return "quote";
+  }
+}
+
 export function getOrCreateBookingFunnelSessionId(): string {
   return getAnalyticsSessionId();
 }

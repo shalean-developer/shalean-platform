@@ -411,7 +411,7 @@ function DailyTrendChart({ rows, max }: { rows: FunnelDailyTrendRow[]; max: numb
             title={`${d.date}: ${d.starts} starts, ${d.completed} completed, ${d.paystackAbandons} Paystack abandons`}
           >
             <div className="relative flex w-full max-w-[14px] flex-col items-center justify-end" style={{ height: `${barHeight}px` }}>
-              <div className="absolute inset-x-0 bottom-0 rounded-t bg-blue-100" style={{ height: `${barHeight}px` }} />
+              <div className="absolute inset-x-0 bottom-0 rounded-t bg-blue-300" style={{ height: `${barHeight}px` }} />
               <div
                 className="absolute inset-x-0 bottom-0 rounded-t bg-emerald-500"
                 style={{ height: `${Math.min(completedHeight, barHeight)}px` }}

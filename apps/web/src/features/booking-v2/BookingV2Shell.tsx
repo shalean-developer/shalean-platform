@@ -9,7 +9,7 @@ import { Step2Schedule } from "@/src/features/booking-v2/steps/Step2Schedule";
 import { Step3Review } from "@/src/features/booking-v2/steps/Step3Review";
 import { Step4Payment } from "@/src/features/booking-v2/steps/Step4Payment";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
-import { useBookingV2GrowthAnalytics } from "@/src/features/booking-v2/hooks/useBookingV2GrowthAnalytics";
+import { useBookingV2FunnelTelemetry } from "@/src/features/booking-v2/hooks/useBookingV2FunnelTelemetry";
 import { useBookingV2Pricing } from "@/src/features/booking-v2/hooks/useBookingV2Pricing";
 import { useClientMounted } from "@/src/features/booking-v2/hooks/useClientMounted";
 
@@ -55,7 +55,7 @@ function BookingV2Inner() {
   const mounted = useClientMounted();
   const { currentStep, goToStep, goNext, goBack, serviceSlug } = useBookingV2();
   useBookingV2Pricing();
-  useBookingV2GrowthAnalytics(currentStep, serviceSlug);
+  useBookingV2FunnelTelemetry(currentStep, serviceSlug);
 
   if (!mounted) {
     return <BookingV2LoadingShell />;
