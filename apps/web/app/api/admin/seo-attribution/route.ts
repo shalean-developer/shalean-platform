@@ -118,6 +118,7 @@ export async function GET(request: Request) {
         message: "`user_events` missing — run analytics migrations.",
         summary: null,
         byLanding: [],
+        byDay: [],
         bySource: [],
         byService: [],
       });
@@ -155,6 +156,8 @@ export async function GET(request: Request) {
     hadQuote: boolean;
     hadComplete: boolean;
     service_type: string | null;
+    quoteDay: string | null;
+    completeDay: string | null;
   };
 
   const sessions = new Map<string, SessionEvents>();
@@ -176,6 +179,8 @@ export async function GET(request: Request) {
         hadQuote: false,
         hadComplete: false,
         service_type: null,
+        quoteDay: null,
+        completeDay: null,
       };
       sessions.set(sid, session);
     } else {
@@ -187,13 +192,16 @@ export async function GET(request: Request) {
     }
 
     const et = row.event_type;
+    const eventDay = typeof row.created_at === "string" ? row.created_at.slice(0, 10) : null;
     if (et === ANALYTICS_EVENTS.PAGE_VIEW) session.hadPageView = true;
     if (isQuoteEvent(et)) {
       session.hadQuote = true;
+      if (!session.quoteDay && eventDay) session.quoteDay = eventDay;
       session.service_type = stringValue(payload.service_type) ?? session.service_type;
     }
     if (isCompleteEvent(et)) {
       session.hadComplete = true;
+      if (!session.completeDay && eventDay) session.completeDay = eventDay;
       session.service_type = stringValue(payload.service_type) ?? session.service_type;
     }
   }
@@ -274,6 +282,30 @@ export async function GET(request: Request) {
     .sort((a, b) => b.quoted - a.quoted)
     .slice(0, 15);
 
+  // Per-day analytics-session series so the daily chart reconciles with the KPI cards.
+  const dayMap = new Map<string, { date: string; starts: number; completed: number }>();
+  const cursor = new Date(Date.UTC(since.getUTCFullYear(), since.getUTCMonth(), since.getUTCDate()));
+  const today = new Date();
+  const endDay = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate()));
+  while (cursor <= endDay) {
+    const key = cursor.toISOString().slice(0, 10);
+    dayMap.set(key, { date: key, starts: 0, completed: 0 });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+
+  for (const session of sessions.values()) {
+    if (session.hadQuote && session.quoteDay) {
+      const bucket = dayMap.get(session.quoteDay);
+      if (bucket) bucket.starts += 1;
+    }
+    if (session.hadQuote && session.hadComplete && session.completeDay) {
+      const bucket = dayMap.get(session.completeDay);
+      if (bucket) bucket.completed += 1;
+    }
+  }
+
+  const byDay = [...dayMap.values()].sort((a, b) => a.date.localeCompare(b.date));
+
   return NextResponse.json({
     since: sinceIso,
     rowsLoaded: rows.length,
@@ -286,6 +318,7 @@ export async function GET(request: Request) {
       sessionsWithLandingCapture,
     },
     byLanding,
+    byDay,
     bySource,
     byService,
   });

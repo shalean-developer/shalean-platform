@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   TrendingUp,
   ShoppingCart,
@@ -15,7 +15,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
-import { type BookingFunnelApiPayload } from "@/lib/admin/officeFunnelPresentation";
 import { DIRECT_BOOKING_FLOW_LANDING, landingDisplayName } from "@/lib/admin/landingPageAttribution";
 
 type SeoLanding = {
@@ -34,6 +33,11 @@ type SeoLanding = {
     completed: number;
     conversionPct: number;
   }>;
+  byDay?: Array<{
+    date: string;
+    starts: number;
+    completed: number;
+  }>;
 };
 
 const DEFAULT_PAGE_SIZE = 15;
@@ -46,20 +50,23 @@ function formatSince(iso: string | undefined): string | null {
   return d.toLocaleDateString("en-ZA", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function formatCount(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return value.toLocaleString("en-ZA");
+}
+
 export default function ConversionPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
 
-  const funnel = useAdminData<BookingFunnelApiPayload>("/api/admin/booking-funnel");
   const seo = useAdminData<SeoLanding>("/api/admin/seo-attribution");
 
-  const loading = funnel.loading || seo.loading;
-  const error = funnel.error ?? seo.error;
-  const funnelData = funnel.data;
-  const allPages = seo.data?.byLanding ?? [];
+  const loading = seo.loading;
+  const error = seo.error;
 
   const filteredPages = useMemo(() => {
+    const allPages = seo.data?.byLanding ?? [];
     const q = search.trim().toLowerCase();
     if (!q) return allPages;
     return allPages.filter(
@@ -67,7 +74,7 @@ export default function ConversionPage() {
         p.landing.toLowerCase().includes(q) ||
         landingDisplayName(p.landing).toLowerCase().includes(q),
     );
-  }, [allPages, search]);
+  }, [seo.data?.byLanding, search]);
 
   const totalPages = Math.max(1, Math.ceil(filteredPages.length / pageSize));
   const safePage = Math.min(page, totalPages);
@@ -75,23 +82,15 @@ export default function ConversionPage() {
   const pageTo = Math.min(safePage * pageSize, filteredPages.length);
   const pageRows = filteredPages.slice((safePage - 1) * pageSize, safePage * pageSize);
 
-  useEffect(() => {
-    setPage(1);
-  }, [search, pageSize]);
-
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
-
   const summary = seo.data?.summary;
   const sessionsTracked = summary?.sessionsTracked ?? null;
   const quoteStarts = summary?.distinctSessionsQuoted ?? null;
   const completions = summary?.distinctSessionsCompleted ?? null;
   const quoteToPaidPct = summary ? summary.overallConversionPct : null;
 
-  const dailyTrends = funnelData?.intelligence?.dailyTrends ?? [];
-  const dailyChart = dailyTrends.slice(-7);
-  const sinceLabel = formatSince(funnelData?.since ?? seo.data?.since);
+  const dailyChart = (seo.data?.byDay ?? []).slice(-7);
+  const dailyMax = dailyChart.reduce((m, d) => Math.max(m, d.starts, d.completed), 1);
+  const sinceLabel = formatSince(seo.data?.since);
 
   return (
     <div className="space-y-5">
@@ -105,7 +104,6 @@ export default function ConversionPage() {
         <button
           type="button"
           onClick={() => {
-            void funnel.refetch();
             void seo.refetch();
           }}
           className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm hover:bg-slate-50"
@@ -123,9 +121,9 @@ export default function ConversionPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          { label: "Sessions tracked", value: sessionsTracked ?? "—", icon: Globe, color: "bg-blue-50 text-blue-600" },
-          { label: "Booking starts", value: quoteStarts ?? "—", icon: ShoppingCart, color: "bg-orange-50 text-orange-600" },
-          { label: "Completions", value: completions ?? "—", icon: CreditCard, color: "bg-emerald-50 text-emerald-600" },
+          { label: "Sessions tracked", value: formatCount(sessionsTracked), icon: Globe, color: "bg-blue-50 text-blue-600" },
+          { label: "Booking starts", value: formatCount(quoteStarts), icon: ShoppingCart, color: "bg-orange-50 text-orange-600" },
+          { label: "Completions", value: formatCount(completions), icon: CreditCard, color: "bg-emerald-50 text-emerald-600" },
           {
             label: "Start → complete",
             value: quoteToPaidPct != null ? `${quoteToPaidPct}%` : "—",
@@ -164,7 +162,10 @@ export default function ConversionPage() {
             <input
               type="search"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               placeholder="Search pages…"
               className="w-full rounded-xl border border-slate-200 py-2 pl-9 pr-3 text-sm outline-none ring-blue-500 focus:ring-2"
             />
@@ -207,9 +208,9 @@ export default function ConversionPage() {
                           : p.landing}
                       </p>
                     </td>
-                    <td className="py-3 pr-4 text-slate-700">{p.sessions}</td>
-                    <td className="py-3 pr-4 text-slate-700">{p.quoted}</td>
-                    <td className="py-3 pr-4 font-semibold text-emerald-600">{p.completed}</td>
+                    <td className="py-3 pr-4 tabular-nums text-slate-700">{formatCount(p.sessions)}</td>
+                    <td className="py-3 pr-4 tabular-nums text-slate-700">{formatCount(p.quoted)}</td>
+                    <td className="py-3 pr-4 font-semibold tabular-nums text-emerald-600">{formatCount(p.completed)}</td>
                     <td className="py-3">
                       <div className="flex items-center gap-2">
                         <div className="h-2 w-20 rounded-full bg-slate-100">
@@ -240,7 +241,10 @@ export default function ConversionPage() {
                 Rows
                 <select
                   value={pageSize}
-                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  onChange={(e) => {
+                    setPageSize(Number(e.target.value));
+                    setPage(1);
+                  }}
                   className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
                 >
                   {PAGE_SIZE_OPTIONS.map((size) => (
@@ -278,30 +282,41 @@ export default function ConversionPage() {
 
       {dailyChart.length > 0 && !loading ? (
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <h3 className="mb-1 text-sm font-bold text-slate-800">Daily funnel activity (last 7 days)</h3>
-          <p className="mb-4 text-xs text-slate-500">Quote starts vs paid completions from booking funnel analytics</p>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-2">
+            <div>
+              <h3 className="mb-1 text-sm font-bold text-slate-800">Daily funnel activity (last 7 days)</h3>
+              <p className="text-xs text-slate-500">Booking starts vs completions — same analytics sessions as above</p>
+            </div>
+            <div className="flex items-center gap-4 text-[11px] text-slate-500">
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm bg-orange-200" /> Booking starts
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" /> Completions
+              </span>
+            </div>
+          </div>
           <div className="flex h-28 items-end gap-3">
-            {dailyChart.map((d) => {
-              const max = Math.max(...dailyChart.map((x) => Math.max(x.starts, x.completed)), 1);
-              return (
-                <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
-                  <span className="text-[10px] text-slate-500">{d.completed} paid</span>
-                  <div className="flex h-20 w-full items-end justify-center gap-0.5">
-                    <div
-                      className="w-[42%] rounded-t bg-orange-200"
-                      style={{ height: `${Math.max(8, (d.starts / max) * 100)}%` }}
-                      title={`${d.starts} starts`}
-                    />
-                    <div
-                      className="w-[42%] rounded-t bg-emerald-400"
-                      style={{ height: `${Math.max(8, (d.completed / max) * 100)}%` }}
-                      title={`${d.completed} completed`}
-                    />
-                  </div>
-                  <span className="text-[10px] text-slate-500">{d.date.slice(5)}</span>
+            {dailyChart.map((d) => (
+              <div key={d.date} className="flex flex-1 flex-col items-center gap-1">
+                <span className="text-[10px] text-slate-500">
+                  {d.completed}/{d.starts}
+                </span>
+                <div className="flex h-20 w-full items-end justify-center gap-0.5">
+                  <div
+                    className="w-[42%] rounded-t bg-orange-200"
+                    style={{ height: d.starts > 0 ? `${Math.max(6, (d.starts / dailyMax) * 100)}%` : "0%" }}
+                    title={`${d.starts} booking start${d.starts === 1 ? "" : "s"}`}
+                  />
+                  <div
+                    className="w-[42%] rounded-t bg-emerald-400"
+                    style={{ height: d.completed > 0 ? `${Math.max(6, (d.completed / dailyMax) * 100)}%` : "0%" }}
+                    title={`${d.completed} completion${d.completed === 1 ? "" : "s"}`}
+                  />
                 </div>
-              );
-            })}
+                <span className="text-[10px] text-slate-500">{d.date.slice(5)}</span>
+              </div>
+            ))}
           </div>
         </div>
       ) : null}
