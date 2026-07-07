@@ -1,4 +1,8 @@
 import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
+import {
+  parseBookingEarningsSummary,
+  resolveCleanerFacingEarnings,
+} from "@/lib/payout/bookingEarningsSummary";
 
 /**
  * Single cleaner-facing earnings amount for jobs and offers: line-ledger total when set,
@@ -20,6 +24,28 @@ export function resolveCleanerEarningsCents(row: {
   if (frozen !== null) return frozen;
   if (display !== null) return display;
   return null;
+}
+
+/**
+ * Per-cleaner amount shown on the cleaner dashboard earnings screen and matched in office payouts.
+ * Uses `earnings_summary` per-cleaner totals when present, else {@link resolveCleanerEarningsCents}.
+ */
+export function resolveCleanerDashboardEarningsCents(
+  booking: {
+    earnings_summary?: unknown;
+    cleaner_earnings_total_cents?: unknown;
+    payout_frozen_cents?: unknown;
+    display_earnings_cents?: unknown;
+  },
+  cleanerId: string,
+): number {
+  const facing = resolveCleanerFacingEarnings(
+    parseBookingEarningsSummary(booking.earnings_summary),
+    cleanerId,
+  );
+  if (facing) return Math.max(0, Math.round(facing.total_cents));
+  const fallback = resolveCleanerEarningsCents(booking);
+  return Math.max(0, Math.round(fallback ?? 0));
 }
 
 /** Basis used when moving a booking to `payout_status = eligible` (cleaner cents only). */

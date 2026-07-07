@@ -20,14 +20,15 @@ import { computeBookingEarnings, type ComputeBookingEarningsOutput } from "@/lib
 import { sumEligibleLineItemsSubtotalCents } from "@/lib/payout/computeEarningsFromLineItems";
 import { persistBookingCleanerEarningsSnapshot } from "@/lib/payout/persistBookingCleanerEarningsSnapshot";
 import { computeCleanerEarningsForBooking } from "@/lib/payout/computeCleanerEarningsForBooking";
-import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import {
   buildTeamJobMemberFixedPerCleanerPayoutRows,
   buildTeamJobMemberPayoutInsertRows,
   buildTeamJobMemberPayoutRowsFromEarningsSummary,
   fetchActiveTeamMemberIdsAtAppointment,
+  fetchActiveTeamMemberIdsForMembershipDate,
   resolveTeamPayoutParticipantIds,
 } from "@/lib/payout/teamRosterPayoutAllocation";
+import { effectiveTeamMembershipDateYmd } from "@/lib/cleaner/teamMemberAvailability";
 import {
   isPairedRosterSoloJob,
   leadEarningsRowFromSummary,
@@ -41,6 +42,7 @@ import {
   type BookingRowForCanonicalPayout,
 } from "@/lib/payout/resolveBookingCanonicalPayout";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
+import { repairBookingCompletionCoherenceIfNeeded } from "@/lib/booking/repairBookingCompletionCoherenceIfNeeded";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import {
   evaluatePersistCleanerPayoutEligibility,
@@ -354,11 +356,17 @@ async function resolveTeamCleanerCountForCanonical(
     team_id?: string | null;
     date?: string | null;
     time?: string | null;
+    assigned_at?: string | null;
     team_member_count_snapshot?: number | null;
   },
   bookingId: string,
 ): Promise<number> {
   const teamId = String(r.team_id ?? "").trim();
+  const membershipDateYmd = effectiveTeamMembershipDateYmd(r.date, r.assigned_at);
+  if (teamId && membershipDateYmd) {
+    const ids = await fetchActiveTeamMemberIdsForMembershipDate(admin, teamId, membershipDateYmd);
+    if (ids.length > 0) return ids.length;
+  }
   const appt = bookingAppointmentIsoUtc(r.date, r.time);
   if (teamId && appt) {
     const ids = await fetchActiveTeamMemberIdsAtAppointment(admin, teamId, appt);
@@ -837,13 +845,13 @@ async function persistCleanerPayoutIfUnsetCore(
       } else if (lineEarly.skipped) {
         lineEarlyReason = lineEarly.reason;
       }
-      if (String(r.status ?? "").toLowerCase() === "completed") {
-        const led = await ensureCleanerEarningsLedgerRow({ admin, bookingId });
-        if (!led.ok) {
-          void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", `ensureCleanerEarningsLedgerRow: ${led.error}`, {
-            bookingId,
-          });
-        }
+      if (String(r.status ?? "").toLowerCase() === "completed" || String(r.completed_at ?? "").trim()) {
+        await repairBookingCompletionCoherenceIfNeeded({
+          admin,
+          bookingId,
+          row: r,
+          ensureLedger: true,
+        });
       }
     }
     const skipReason = isTeamJob
@@ -874,27 +882,13 @@ async function persistCleanerPayoutIfUnsetCore(
     const teamId = String(r.team_id ?? "").trim();
     if (!teamId) return { ok: false, error: "Team job missing team_id" };
 
-    const { data: members, error: membersErr } = await admin
-      .from("team_members")
-      .select("cleaner_id, active_from, active_to")
-      .eq("team_id", teamId)
-      .not("cleaner_id", "is", null);
-    if (membersErr) return { ok: false, error: membersErr.message };
-
-    const bookingMs = new Date(bookingDateIso).getTime();
-    const activeMembers = (members ?? [])
-      .map((m) => m as { cleaner_id?: string | null; active_from?: string | null; active_to?: string | null })
-      .filter((m) => {
-        const cid = String(m.cleaner_id ?? "").trim();
-        if (!cid) return false;
-        const from = m.active_from ? new Date(m.active_from).getTime() : null;
-        const to = m.active_to ? new Date(m.active_to).getTime() : null;
-        if (!Number.isNaN(bookingMs)) {
-          if (from != null && !Number.isNaN(from) && bookingMs < from) return false;
-          if (to != null && !Number.isNaN(to) && bookingMs > to) return false;
-        }
-        return true;
-      });
+    const membershipDateYmd = effectiveTeamMembershipDateYmd(
+      r.date,
+      (r as { assigned_at?: string | null }).assigned_at,
+    );
+    const activeTeamMemberIds = membershipDateYmd
+      ? await fetchActiveTeamMemberIdsForMembershipDate(admin, teamId, membershipDateYmd)
+      : [];
 
     const { data: rosterRows, error: rosterErr } = await admin
       .from("booking_cleaners")
@@ -903,7 +897,6 @@ async function persistCleanerPayoutIfUnsetCore(
       .order("cleaner_id", { ascending: true });
     if (rosterErr) return { ok: false, error: rosterErr.message };
 
-    const activeTeamMemberIds = activeMembers.map((m) => String(m.cleaner_id ?? "").trim()).filter(Boolean);
     const participantIds = resolveTeamPayoutParticipantIds({
       rosterRows: rosterRows ?? [],
       activeTeamMemberIds,
@@ -1332,13 +1325,13 @@ async function persistCleanerPayoutIfUnsetCore(
           : { ok: true, skipped: false, total_cents: lineEarn.total_cents },
     },
   });
-  if (String(r.status ?? "").toLowerCase() === "completed") {
-    const led = await ensureCleanerEarningsLedgerRow({ admin, bookingId });
-    if (!led.ok) {
-      void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", `ensureCleanerEarningsLedgerRow: ${led.error}`, {
-        bookingId,
-      });
-    }
+  if (String(r.status ?? "").toLowerCase() === "completed" || String(r.completed_at ?? "").trim()) {
+    await repairBookingCompletionCoherenceIfNeeded({
+      admin,
+      bookingId,
+      row: r,
+      ensureLedger: true,
+    });
   }
 
   if (usedLineItemBasis && lineItemRows.length > 0) {

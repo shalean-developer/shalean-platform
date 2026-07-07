@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildCompletionCoherencePatch,
+  buildRepairCompletionCoherencePatch,
   listBookingCompletionConsistencyIssues,
   validateAdminMonthlyCompletedAssignee,
 } from "@/lib/booking/bookingCompletionIntegrity";
@@ -153,6 +154,27 @@ describe("bookingCompletionIntegrity", () => {
         cleaner_id: "00000000-0000-4000-8000-000000000001",
       });
       expect(issues.some((i) => i.code === "completed_timestamp_pending_assignment_status")).toBe(true);
+    });
+  });
+
+  describe("buildRepairCompletionCoherencePatch", () => {
+    it("repairs assigned row with completed_at", () => {
+      const patch = buildRepairCompletionCoherencePatch({
+        status: "assigned",
+        completed_at: "2026-05-01T10:00:00Z",
+        dispatch_status: "assigned",
+      });
+      expect(patch?.status).toBe("completed");
+      expect(patch?.cleaner_response_status).toBe("completed");
+    });
+
+    it("returns null when already completed", () => {
+      expect(
+        buildRepairCompletionCoherencePatch({
+          status: "completed",
+          completed_at: "2026-05-01T10:00:00Z",
+        }),
+      ).toBeNull();
     });
   });
 

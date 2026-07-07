@@ -119,7 +119,10 @@ export async function performAdminBookingStatusChange(
   const needsEarningsIntegrityGate = completedViaChange && !wasAlreadyCompleted;
 
   async function revertBookingCompletionOnly(): Promise<void> {
-    const patch: Record<string, unknown> = { status: fromStatus, completed_at: beforeCompletedAt };
+    const patch: Record<string, unknown> = {
+      status: fromStatus,
+      completed_at: fromStatus === "completed" ? beforeCompletedAt : null,
+    };
     if (completionDispatchNormalized) {
       patch.dispatch_status = beforeRow.dispatch_status ?? null;
     }

@@ -1,17 +1,12 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
-import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import {
   getJohannesburgMonthBoundsContainingYmd,
   isMonthlyPayoutBatchPeriod,
 } from "@/lib/payout/monthBounds";
 import { MONTHLY_PAYOUT_START_YMD } from "@/lib/payout/payoutPeriodConfig";
-import {
-  parseBookingEarningsSummary,
-  resolveCleanerFacingEarnings,
-  type BookingEarningsSummary,
-} from "@/lib/payout/bookingEarningsSummary";
+import { parseBookingEarningsSummary } from "@/lib/payout/bookingEarningsSummary";
 const YMD_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 export type PayoutBucket = "pending" | "eligible" | "batched_open" | "paid";
@@ -263,48 +258,44 @@ function applyBucket(row: OfficePayoutCleanerRow, bucket: PayoutBucket, cents: n
   }
 }
 
-function applyBookingBucketToTotals(totals: OfficePayoutPeriodTotals, bucket: PayoutBucket, bookingCents: number) {
+function applyBookingBucketToTotals(totals: OfficePayoutPeriodTotals, bucket: PayoutBucket, allocCents: number) {
   if (bucket === "pending") {
-    totals.pending_cents += bookingCents;
+    totals.pending_cents += allocCents;
     totals.pending_visits += 1;
   } else if (bucket === "eligible") {
-    totals.eligible_cents += bookingCents;
+    totals.eligible_cents += allocCents;
     totals.eligible_visits += 1;
   } else if (bucket === "batched_open") {
-    totals.batched_open_cents += bookingCents;
+    totals.batched_open_cents += allocCents;
     totals.batched_open_visits += 1;
   } else {
-    totals.paid_cents += bookingCents;
+    totals.paid_cents += allocCents;
     totals.paid_visits += 1;
   }
 }
 
-/**
- * Per-cleaner share for roster members missing from earnings_summary.
- * Uses the lead's per_cleaner row or display_earnings_cents — not cleaner_earnings_total_cents,
- * which is a booking-level line ledger total and overstates paired jobs.
- */
-export function rosterMemberShareFallbackCents(
-  booking: Pick<BookingPeriodRow, "display_earnings_cents" | "cleaner_payout_cents">,
-  summary: BookingEarningsSummary | null,
-): number {
-  if (summary?.per_cleaner_earnings?.length) {
-    const lead =
-      summary.per_cleaner_earnings.find(
-        (r) => String(r.role ?? "").trim().toLowerCase() === "lead",
-      ) ?? summary.per_cleaner_earnings[0];
-    if (lead) return Math.max(0, Math.round(lead.total_cents ?? 0));
+/** Roll one booking into period totals using per-cleaner allocations (matches the by-cleaner table). */
+export function accumulateBookingIntoPeriodTotals(
+  totals: OfficePayoutPeriodTotals,
+  bucket: PayoutBucket,
+  allocations: readonly CleanerVisitAllocation[],
+  revenueCents: number,
+  companyCents: number,
+): void {
+  if (!allocations.length) return;
+  totals.visit_count += 1;
+  totals.total_revenue_cents += revenueCents;
+  totals.company_earnings_cents += companyCents;
+  for (const alloc of allocations) {
+    totals.earned_cents += alloc.cents;
+    applyBookingBucketToTotals(totals, bucket, alloc.cents);
   }
-  const display = optionalCentsFromDb(booking.display_earnings_cents);
-  if (display !== null) return display;
-  const payout = optionalCentsFromDb(booking.cleaner_payout_cents);
-  if (payout !== null) return payout;
-  return 0;
 }
 
 /**
  * Split a completed booking across payroll cleaners — includes `booking_cleaners` roster
  * members even when earnings JSON only lists the lead (paired / dual-cleaner jobs).
+ * Per-cleaner cents match {@link resolveCleanerDashboardEarningsCents} (cleaner dashboard).
  */
 export function perCleanerAllocationsForBooking(
   booking: Pick<
@@ -328,8 +319,7 @@ export function perCleanerAllocationsForBooking(
     ),
   ];
   const primary = payrollCleanerId(booking);
-  const rosterShareCents = rosterMemberShareFallbackCents(booking, summary);
-  const soloFallbackCents = resolveCleanerEarningsCents(booking) ?? 0;
+  const centsFor = (cleanerId: string) => resolveCleanerDashboardEarningsCents(booking, cleanerId);
 
   if (summary?.per_cleaner_earnings?.length) {
     const out: CleanerVisitAllocation[] = [];
@@ -338,12 +328,11 @@ export function perCleanerAllocationsForBooking(
       const cid = String(row.cleaner_id ?? "").trim();
       if (!cid || seen.has(cid)) continue;
       seen.add(cid);
-      out.push({ cleaner_id: cid, cents: Math.max(0, Math.round(row.total_cents ?? 0)) });
+      out.push({ cleaner_id: cid, cents: centsFor(cid) });
     }
     for (const cid of rosterIds) {
       if (seen.has(cid)) continue;
-      const facing = resolveCleanerFacingEarnings(summary, cid);
-      out.push({ cleaner_id: cid, cents: facing?.total_cents ?? rosterShareCents });
+      out.push({ cleaner_id: cid, cents: centsFor(cid) });
     }
     if (out.length) return out;
   }
@@ -351,11 +340,11 @@ export function perCleanerAllocationsForBooking(
   if (rosterIds.length > 0) {
     return rosterIds.map((cid) => ({
       cleaner_id: cid,
-      cents: rosterShareCents,
+      cents: centsFor(cid),
     }));
   }
 
-  if (primary) return [{ cleaner_id: primary, cents: soloFallbackCents }];
+  if (primary) return [{ cleaner_id: primary, cents: centsFor(primary) }];
   return [];
 }
 
@@ -489,14 +478,14 @@ export async function loadOfficePayoutPeriodReport(
     const allocations = perCleanerAllocationsForBooking(b, roster);
     if (!allocations.length) continue;
 
-    const bookingCents = resolveCleanerEarningsCents(b) ?? 0;
     const bucket = classifyBookingPayoutBucket(b.payout_status, b.payout_id, batchStatusById);
-
-    totals.visit_count += 1;
-    totals.earned_cents += bookingCents;
-    totals.total_revenue_cents += bookingCustomerRevenueCents(b);
-    totals.company_earnings_cents += bookingCompanyEarningsCents(b);
-    applyBookingBucketToTotals(totals, bucket, bookingCents);
+    accumulateBookingIntoPeriodTotals(
+      totals,
+      bucket,
+      allocations,
+      bookingCustomerRevenueCents(b),
+      bookingCompanyEarningsCents(b),
+    );
 
     for (const alloc of allocations) {
       const name = cleanerNames.get(alloc.cleaner_id) ?? alloc.cleaner_id;

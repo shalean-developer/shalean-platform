@@ -9,7 +9,7 @@ import {
   type CleanerDashboardEarningsWireRow,
 } from "@/lib/cleaner/cleanerDashboardTodayCents";
 import { earningsPeriodCentsFromRows } from "@/lib/cleaner/cleanerEarningsPeriodTotals";
-import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import {
   parseBookingEarningsSummary,
   resolveCleanerFacingEarnings,
@@ -60,14 +60,8 @@ type PaymentDetailsRow = {
   recipient_code: string | null;
 };
 
-function amountCentsForRow(row: BookingEarningsRow): number {
-  return (
-    resolveCleanerEarningsCents({
-      cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
-      payout_frozen_cents: row.payout_frozen_cents,
-      display_earnings_cents: row.display_earnings_cents,
-    }) ?? 0
-  );
+function amountCentsForRow(row: BookingEarningsRow, cleanerId: string): number {
+  return resolveCleanerDashboardEarningsCents(row, cleanerId);
 }
 
 function shortLocation(loc: string | null | undefined, max = 44): string {
@@ -231,8 +225,9 @@ export async function GET(request: Request) {
     cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
     payout_frozen_cents: r.payout_frozen_cents,
     display_earnings_cents: r.display_earnings_cents,
+    earnings_summary: r.earnings_summary,
   }));
-  const suggested_daily_goal_cents = suggestedDailyGoalCentsFromWireRows(goalWire, now);
+  const suggested_daily_goal_cents = suggestedDailyGoalCentsFromWireRows(goalWire, now, cleanerId);
 
   const [{ data: lockedPayouts }, { data: failedTransfers }] = await Promise.all([
     admin.from("cleaner_payouts").select("id").eq("cleaner_id", session.cleanerId).in("status", ["frozen", "approved"]),
@@ -266,7 +261,7 @@ export async function GET(request: Request) {
       enqueuePayoutIntegrityAnomalyLog(admin, "eligible_or_paid_without_frozen", b.id, { payout_status: rawPs });
     }
     const facing = resolveCleanerFacingEarnings(parseBookingEarningsSummary(b.earnings_summary), cleanerId);
-    const cents = facing?.total_cents ?? amountCentsForRow(b);
+    const cents = amountCentsForRow(b, cleanerId);
     const bonusCents = facing?.bonus_cents ?? 0;
     bonus_total_cents += bonusCents;
     const customerPaid = bookingTotalCents(b);
@@ -341,14 +336,16 @@ export async function GET(request: Request) {
       cleaner_earnings_total_cents: b.cleaner_earnings_total_cents,
       payout_frozen_cents: b.payout_frozen_cents,
       display_earnings_cents: b.display_earnings_cents,
+      earnings_summary: b.earnings_summary,
     })),
     now,
+    cleanerId,
   );
   const { week_cents, month_cents } = earningsPeriodCentsFromRows(
     rows.map((b) => ({
       completed_at: b.completed_at,
       schedule_date: b.date,
-      amount_cents: amountCentsForRow(b),
+      amount_cents: amountCentsForRow(b, cleanerId),
     })),
     now,
   );

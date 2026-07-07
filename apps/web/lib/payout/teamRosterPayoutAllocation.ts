@@ -1,6 +1,11 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  effectiveTeamMembershipDateYmd,
+  isTeamMemberActiveOnBookingDate,
+  type TeamMemberAvailabilityRow,
+} from "@/lib/cleaner/teamMemberAvailability";
 
 /**
  * Active `team_members.cleaner_id` values for `teamId` at the booking appointment instant
@@ -39,6 +44,35 @@ export async function fetchActiveTeamMemberIdsAtAppointment(
   return [...new Set(active.map((m) => String(m.cleaner_id ?? "").trim()).filter(Boolean))];
 }
 
+/** Active team members for roster/payout using {@link effectiveTeamMembershipDateYmd}. */
+export async function fetchActiveTeamMemberIdsForMembershipDate(
+  admin: SupabaseClient,
+  teamId: string,
+  membershipDateYmd: string,
+): Promise<string[]> {
+  const tid = String(teamId ?? "").trim();
+  const d = String(membershipDateYmd ?? "").trim().slice(0, 10);
+  if (!tid || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return [];
+
+  const { data: members, error: membersErr } = await admin
+    .from("team_members")
+    .select("cleaner_id, active_from, active_to")
+    .eq("team_id", tid)
+    .not("cleaner_id", "is", null);
+  if (membersErr) return [];
+
+  return [
+    ...new Set(
+      (members ?? [])
+        .filter((m) =>
+          isTeamMemberActiveOnBookingDate(m as TeamMemberAvailabilityRow, d) &&
+          String((m as { cleaner_id?: string | null }).cleaner_id ?? "").trim(),
+        )
+        .map((m) => String((m as { cleaner_id: string }).cleaner_id).trim()),
+    ),
+  ];
+}
+
 /**
  * Cleaner ids that participate in team payout for a booking.
  * When `booking_cleaners` rows exist they are authoritative (roster-assigned jobs);
@@ -52,10 +86,14 @@ export function resolveTeamPayoutParticipantIds(params: {
   const fromRoster = params.rosterRows
     .map((r) => String(r.cleaner_id ?? "").trim())
     .filter((id) => uuid(id));
+  const fromActive = [...new Set(params.activeTeamMemberIds.map((c) => String(c ?? "").trim()).filter(uuid))];
   if (fromRoster.length > 0) {
+    if (fromActive.length > fromRoster.length) {
+      return [...new Set([...fromRoster, ...fromActive])];
+    }
     return [...new Set(fromRoster)];
   }
-  return [...new Set(params.activeTeamMemberIds.map((c) => String(c ?? "").trim()).filter(uuid))];
+  return fromActive;
 }
 
 import type { BookingEarningsSummary } from "@/lib/payout/bookingEarningsSummary";

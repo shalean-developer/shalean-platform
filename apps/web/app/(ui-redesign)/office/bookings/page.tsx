@@ -52,6 +52,7 @@ import { OfficeAssignTeamDialog } from "@/components/admin/office/OfficeAssignTe
 import { adminBookingAssignmentDisplay } from "@/lib/admin/adminBookingAssignmentDisplay";
 import { johannesburgCalendarMonthDateRangeYmd } from "@/lib/dashboard/johannesburgMonth";
 import { isTeamService } from "@/lib/dispatch/teamServiceDetection";
+import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 
 function defaultBookingsMonthRange() {
   const { startYmd, endYmd } = johannesburgCalendarMonthDateRangeYmd();
@@ -81,6 +82,7 @@ type BookingRow = {
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
   status: string | null;
+  completed_at?: string | null;
   cleaner_id: string | null;
   team_id: string | null;
   payment_status: string | null;
@@ -1112,7 +1114,12 @@ export default function BookingsPage() {
                 </tr>
               ) : (
                 bookings.map((b) => {
-                  const statusKey = (b.status ?? "pending").toLowerCase();
+                  const statusKey = isAuthoritativeBookingCompleted({
+                    status: b.status,
+                    completed_at: b.completed_at,
+                  })
+                    ? "completed"
+                    : (b.status ?? "pending").toLowerCase();
                   const s = STATUS_MAP[statusKey] ?? { label: b.status ?? "—", className: "bg-slate-100 text-slate-600" };
                   const assignment = getAssignment(b);
                   const isActing = actionLoading?.id === b.id;

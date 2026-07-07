@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { countActiveTeamMembersOnDate, isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
+import { countActiveTeamMembersOnDate, effectiveTeamMembershipDateYmd, isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
 
 describe("teamMemberAvailability", () => {
   it("counts only members with cleaner_id active on date", () => {
@@ -25,5 +25,10 @@ describe("teamMemberAvailability", () => {
         "2026-04-25",
       ),
     ).toBe(false);
+  });
+
+  it("effectiveTeamMembershipDateYmd uses later of visit and assignment", () => {
+    expect(effectiveTeamMembershipDateYmd("2026-07-01", "2026-07-06T14:44:03.597Z")).toBe("2026-07-06");
+    expect(effectiveTeamMembershipDateYmd("2026-07-06", "2026-07-01T10:00:00Z")).toBe("2026-07-06");
   });
 });

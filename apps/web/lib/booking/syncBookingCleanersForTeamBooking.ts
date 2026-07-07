@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
+import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 const RETRY_MS = [0, 80, 200];
 
@@ -24,6 +26,43 @@ export async function syncBookingCleanersForTeamBooking(
     lastMessage = error.message;
   }
   return { ok: false, message: lastMessage };
+}
+
+/** Re-sync roster then rebuild team visit payouts when line earnings are not finalized. */
+export async function rebuildTeamVisitPayoutsForBooking(
+  admin: SupabaseClient,
+  bookingId: string,
+  source: "admin" | "dispatch" | "sync" = "sync",
+): Promise<{ ok: true } | { ok: false; message: string }> {
+  const sync = await syncBookingCleanersForTeamBooking(admin, bookingId, source);
+  if (!sync.ok) return sync;
+
+  const { data: row, error } = await admin
+    .from("bookings")
+    .select("id, cleaner_id, payout_owner_cleaner_id, is_team_job, cleaner_line_earnings_finalized_at")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error || !row) return { ok: false, message: error?.message ?? "booking_not_found" };
+  if (row.is_team_job !== true) return { ok: true };
+  if (row.cleaner_line_earnings_finalized_at != null && String(row.cleaner_line_earnings_finalized_at).trim()) {
+    return { ok: true };
+  }
+
+  const cleanerId = resolvePersistCleanerIdForBooking(row as {
+    cleaner_id?: string | null;
+    payout_owner_cleaner_id?: string | null;
+    is_team_job?: boolean | null;
+  });
+  if (!cleanerId) return { ok: false, message: "no_payout_owner" };
+
+  const payout = await persistCleanerPayoutIfUnset({
+    admin,
+    bookingId,
+    cleanerId,
+    forceDisplayRecompute: true,
+  });
+  if (!payout.ok) return { ok: false, message: payout.error ?? "payout_persist_failed" };
+  return { ok: true };
 }
 
 const MAX_TEAM_JOBS_RESYNC = 400;
@@ -55,7 +94,7 @@ export async function resyncBookingCleanersForTeamNonFinalizedJobs(
   for (const r of rows) {
     const id = String((r as { id?: string }).id ?? "").trim();
     if (!id) continue;
-    const out = await syncBookingCleanersForTeamBooking(admin, id, source);
+    const out = await rebuildTeamVisitPayoutsForBooking(admin, id, source);
     if (out.ok) synced++;
     else failed++;
   }

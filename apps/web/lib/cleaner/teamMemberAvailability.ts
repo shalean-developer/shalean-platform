@@ -33,3 +33,18 @@ export function countActiveTeamMembersOnDate(
     isTeamMemberActiveOnBookingDate(m, d),
   ).length;
 }
+
+/**
+ * Team membership for roster/payout: when a past service date is assigned later,
+ * members who joined on/after the visit date but before assignment must still count.
+ */
+export function effectiveTeamMembershipDateYmd(
+  bookingDateYmd: string | null | undefined,
+  assignedAtIso?: string | null,
+): string {
+  const booking = String(bookingDateYmd ?? "").trim().slice(0, 10);
+  const assigned = assignedAtIso ? String(assignedAtIso).trim().slice(0, 10) : "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(booking)) return assigned || booking;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(assigned)) return booking;
+  return assigned > booking ? assigned : booking;
+}

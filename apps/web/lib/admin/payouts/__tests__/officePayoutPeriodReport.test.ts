@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  accumulateBookingIntoPeriodTotals,
   bookingCompanyEarningsCents,
   bookingCustomerRevenueCents,
   classifyBookingPayoutBucket,
@@ -8,6 +9,7 @@ import {
   normalizeOfficePayoutPeriodRange,
   payoutPeriodOverlapsRange,
   perCleanerAllocationsForBooking,
+  type OfficePayoutPeriodTotals,
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
 
 describe("officePayoutPeriodReport", () => {
@@ -50,7 +52,7 @@ describe("officePayoutPeriodReport", () => {
     expect(classifyBookingPayoutBucket("pending", null, batches)).toBe("pending");
   });
 
-  it("credits roster members display earnings when earnings JSON lists only the lead", () => {
+  it("credits roster members using dashboard earnings when earnings JSON lists only the lead", () => {
     const nyasha = "796e3ad7-07f3-44eb-b4cf-bed439a59f8b";
     const ethel = "914b3acf-40e8-4ad5-a5a2-9e2de711849a";
     const allocs = perCleanerAllocationsForBooking(
@@ -75,7 +77,7 @@ describe("officePayoutPeriodReport", () => {
     );
     expect(allocs).toEqual([
       { cleaner_id: nyasha, cents: 30000 },
-      { cleaner_id: ethel, cents: 30000 },
+      { cleaner_id: ethel, cents: 42700 },
     ]);
   });
 
@@ -148,5 +150,64 @@ describe("officePayoutPeriodReport", () => {
         earnings_summary: { model_version: "v3", company_revenue_cents: 9800, per_cleaner_earnings: [] },
       }),
     ).toBe(9800);
+  });
+
+  it("rolls period totals from per-cleaner allocations so paired jobs reconcile with revenue", () => {
+    const paired = perCleanerAllocationsForBooking(
+      {
+        cleaner_id: "lead-1",
+        payout_owner_cleaner_id: null,
+        payout_frozen_cents: null,
+        display_earnings_cents: 25000,
+        cleaner_earnings_total_cents: 25000,
+        cleaner_payout_cents: null,
+        earnings_summary: null,
+      },
+      [
+        { cleaner_id: "lead-1", role: "lead" },
+        { cleaner_id: "member-1", role: "member" },
+      ],
+    );
+    const solo = perCleanerAllocationsForBooking(
+      {
+        cleaner_id: "solo-1",
+        payout_owner_cleaner_id: null,
+        payout_frozen_cents: null,
+        display_earnings_cents: 25000,
+        cleaner_earnings_total_cents: null,
+        cleaner_payout_cents: null,
+        earnings_summary: null,
+      },
+      [],
+    );
+
+    const totals: OfficePayoutPeriodTotals = {
+      visit_count: 0,
+      earned_cents: 0,
+      pending_cents: 0,
+      pending_visits: 0,
+      eligible_cents: 0,
+      eligible_visits: 0,
+      batched_open_cents: 0,
+      batched_open_visits: 0,
+      paid_cents: 0,
+      paid_visits: 0,
+      batch_count: 0,
+      batch_cents: 0,
+      total_revenue_cents: 0,
+      company_earnings_cents: 0,
+      margin_percent: null,
+    };
+
+    accumulateBookingIntoPeriodTotals(totals, "pending", paired, 50000, 0);
+    accumulateBookingIntoPeriodTotals(totals, "pending", solo, 50000, 25000);
+
+    expect(totals.visit_count).toBe(2);
+    expect(totals.earned_cents).toBe(75000);
+    expect(totals.pending_cents).toBe(75000);
+    expect(totals.pending_visits).toBe(3);
+    expect(totals.total_revenue_cents).toBe(100000);
+    expect(totals.company_earnings_cents).toBe(25000);
+    expect(totals.total_revenue_cents - totals.company_earnings_cents).toBe(totals.earned_cents);
   });
 });

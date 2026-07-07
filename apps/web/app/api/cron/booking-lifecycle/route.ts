@@ -23,6 +23,7 @@ import {
   resolvePersistCleanerIdForBooking,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
+import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
 import { syncCleanersBusyAfterBookingTerminalChange } from "@/lib/cleaner/syncCleanerStatus";
 
@@ -128,6 +129,8 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
       });
       continue;
     }
+
+    void ensureCleanerEarningsLedgerRow({ admin, bookingId: id });
 
     if (isBookingCompletedRouterEnabled()) {
       const event = buildBookingEvent({

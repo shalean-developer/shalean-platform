@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { resolveCleanerEarningsCents, resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
+import {
+  resolveCleanerDashboardEarningsCents,
+  resolveCleanerEarningsCents,
+  resolveCleanerFrozenCentsForSettlement,
+} from "@/lib/cleaner/resolveCleanerEarnings";
 
 describe("resolveCleanerEarningsCents", () => {
   it("prefers positive cleaner_earnings_total_cents over frozen and display", () => {
@@ -65,6 +69,58 @@ describe("resolveCleanerEarningsCents", () => {
         display_earnings_cents: null,
       }),
     ).toBeNull();
+  });
+});
+
+describe("resolveCleanerDashboardEarningsCents", () => {
+  it("uses per-cleaner earnings_summary total when present", () => {
+    expect(
+      resolveCleanerDashboardEarningsCents(
+        {
+          earnings_summary: {
+            model_version: "v3",
+            per_cleaner_earnings: [
+              {
+                cleaner_id: "c1",
+                role: "lead",
+                base_earning_cents: 25_000,
+                bonus_cents: 500,
+                deduction_cents: 0,
+                total_cents: 25_500,
+              },
+            ],
+          },
+          cleaner_earnings_total_cents: 50_000,
+          display_earnings_cents: 50_000,
+        },
+        "c1",
+      ),
+    ).toBe(25_500);
+  });
+
+  it("falls back to booking columns when cleaner is missing from summary", () => {
+    expect(
+      resolveCleanerDashboardEarningsCents(
+        {
+          earnings_summary: {
+            model_version: "v3",
+            per_cleaner_earnings: [
+              {
+                cleaner_id: "lead",
+                role: "lead",
+                base_earning_cents: 30_000,
+                bonus_cents: 0,
+                deduction_cents: 0,
+                total_cents: 30_000,
+              },
+            ],
+          },
+          cleaner_earnings_total_cents: 42_700,
+          display_earnings_cents: 30_000,
+        },
+        "member",
+      ),
+    ).toBe(42_700);
   });
 });
 

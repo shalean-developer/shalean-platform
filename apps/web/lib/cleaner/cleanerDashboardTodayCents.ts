@@ -4,7 +4,7 @@ import {
 } from "@/lib/cleaner/cleanerEarningsPeriodTotals";
 import { getJhbTodayRange } from "@/lib/dashboard/johannesburgMonth";
 import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
-import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { addDaysYmd } from "@/lib/recurring/johannesburgCalendar";
 
 export type CleanerDashboardEarningsWireRow = {
@@ -17,6 +17,7 @@ export type CleanerDashboardEarningsWireRow = {
   cleaner_earnings_total_cents?: unknown;
   payout_frozen_cents?: unknown;
   display_earnings_cents?: unknown;
+  earnings_summary?: unknown;
 };
 
 /** Tight wire for “today” expandable list (dashboard + client). */
@@ -40,6 +41,18 @@ function dedupeEarningsRows(rows: readonly CleanerDashboardEarningsWireRow[]): C
 const DAILY_GOAL_FALLBACK_CENTS = 40_000;
 const DAILY_GOAL_CEILING_CENTS = 500_000;
 
+function wireRowEarningsCents(row: CleanerDashboardEarningsWireRow, cleanerId: string): number {
+  return resolveCleanerDashboardEarningsCents(
+    {
+      earnings_summary: row.earnings_summary,
+      cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
+      payout_frozen_cents: row.payout_frozen_cents,
+      display_earnings_cents: optionalCentsFromDb(row.display_earnings_cents),
+    },
+    cleanerId,
+  );
+}
+
 /**
  * Rolling 7 Johannesburg calendar days ending today: average daily completed earnings × 1.1.
  * Uses the same booking wire as the dashboard list (capped fetch — best-effort when history is sparse).
@@ -47,6 +60,7 @@ const DAILY_GOAL_CEILING_CENTS = 500_000;
 export function suggestedDailyGoalCentsFromWireRows(
   rows: readonly CleanerDashboardEarningsWireRow[],
   now = new Date(),
+  cleanerId = "",
 ): number {
   const { todayYmd } = getJhbTodayRange(now);
   const dayKeys: string[] = [];
@@ -60,12 +74,7 @@ export function suggestedDailyGoalCentsFromWireRows(
   const unique = dedupeEarningsRows(rows);
   for (const r of unique) {
     if (String(r.status ?? "").trim().toLowerCase() !== "completed") continue;
-    const cents =
-      resolveCleanerEarningsCents({
-        cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
-        payout_frozen_cents: r.payout_frozen_cents,
-        display_earnings_cents: optionalCentsFromDb(r.display_earnings_cents),
-      }) ?? 0;
+    const cents = wireRowEarningsCents(r, cleanerId);
     const rounded = Math.max(0, Math.round(cents));
     if (rounded <= 0) continue;
     const bucket = earningsPeriodBucketYmd({
@@ -114,17 +123,13 @@ function completedAtForBreakdown(row: CleanerDashboardEarningsWireRow): string {
 export function todayCentsAndBreakdownFromBookings(
   rows: readonly CleanerDashboardEarningsWireRow[],
   now = new Date(),
+  cleanerId = "",
 ): { today_cents: number; today_breakdown: CleanerDashboardTodayBreakdownItem[] } {
   const unique = dedupeEarningsRows(rows);
   const completed = unique.filter((r) => String(r.status ?? "").trim().toLowerCase() === "completed");
 
   const periodInputs = completed.map((r) => {
-    const cents =
-      resolveCleanerEarningsCents({
-        cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
-        payout_frozen_cents: r.payout_frozen_cents,
-        display_earnings_cents: optionalCentsFromDb(r.display_earnings_cents),
-      }) ?? 0;
+    const cents = wireRowEarningsCents(r, cleanerId);
     return {
       row: r,
       amount_cents: Math.max(0, Math.round(cents)),

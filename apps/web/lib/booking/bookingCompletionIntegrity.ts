@@ -22,6 +22,8 @@
  * @module bookingCompletionIntegrity
  */
 
+import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+
 function norm(s: string | null | undefined): string {
   return String(s ?? "")
     .trim()
@@ -168,4 +170,27 @@ export function listBookingCompletionConsistencyIssues(row: Record<string, unkno
   }
 
   return issues;
+}
+
+/**
+ * Repairs rows where `completed_at` was set (e.g. cron auto-complete) but a later
+ * assignment/roster write left `status` non-terminal. Returns null when no repair needed.
+ */
+export function buildRepairCompletionCoherencePatch(row: Record<string, unknown>): Record<string, unknown> | null {
+  const st = norm(row.status as string | null | undefined);
+  const completedAt = String(row.completed_at ?? "").trim();
+  if (!completedAt || st === "completed") return null;
+  if (st === "cancelled" || st === "failed" || st === "payment_expired") return null;
+
+  const { patch: completionCoherencePatch } = buildCompletionCoherencePatch({
+    beforeCompletedAt: completedAt,
+    beforeDispatchStatus: (row.dispatch_status as string | null | undefined) ?? null,
+    fillCompletedAtIfMissing: false,
+  });
+
+  return {
+    status: "completed",
+    cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
+    ...completionCoherencePatch,
+  };
 }

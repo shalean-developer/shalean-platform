@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { ReplaceBookingCleanersRpcRow } from "@/lib/admin/bookingRosterReplacePayload";
+import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 import { fetchLastAssignedRosterForRecurringPlan } from "@/lib/recurring/fetchLastAssignedRosterForRecurringPlan";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -30,7 +31,7 @@ export async function applyRecurringOccurrenceRosterContinuity(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, team_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_count, booking_cleaners(cleaner_id)",
+      "id, status, completed_at, team_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_count, booking_cleaners(cleaner_id)",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -38,12 +39,18 @@ export async function applyRecurringOccurrenceRosterContinuity(
   if (loadErr || !booking) return { applied: false, cleanerCount: 0 };
 
   const row = booking as {
+    status?: string | null;
+    completed_at?: string | null;
     team_id?: string | null;
     is_team_job?: boolean | null;
     cleaner_line_earnings_finalized_at?: string | null;
     cleaner_count?: number | null;
     booking_cleaners?: { cleaner_id?: string | null }[] | null;
   };
+
+  if (isAuthoritativeBookingCompleted({ status: row.status, completed_at: row.completed_at })) {
+    return { applied: false, cleanerCount: 0 };
+  }
 
   if (row.is_team_job === true || row.team_id) return { applied: false, cleanerCount: 0 };
   if (row.cleaner_line_earnings_finalized_at) return { applied: false, cleanerCount: 0 };

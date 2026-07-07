@@ -237,11 +237,13 @@ export async function propagateRecurringPlanToGeneratedBookings(
     result.bookings_updated++;
     if (preferredCleanerId) {
       result.bookings_cleaner_updated++;
-      await applyRecurringOccurrenceRosterContinuity(admin, {
-        bookingId: booking.id,
-        recurringId: plan.id,
-        leadCleanerId: preferredCleanerId,
-      });
+      if (!bookingCompleted) {
+        await applyRecurringOccurrenceRosterContinuity(admin, {
+          bookingId: booking.id,
+          recurringId: plan.id,
+          leadCleanerId: preferredCleanerId,
+        });
+      }
     }
 
     if (booking.monthly_invoice_id) {

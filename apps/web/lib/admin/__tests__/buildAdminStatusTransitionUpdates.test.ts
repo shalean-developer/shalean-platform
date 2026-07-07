@@ -26,6 +26,18 @@ describe("buildAdminStatusTransitionUpdates", () => {
     expect(updates.cancelled_by).toBe("system");
   });
 
+  it("clears orphan completed_at when assigned row moves to cancelled", () => {
+    const { updates } = buildAdminStatusTransitionUpdates(
+      {
+        status: "assigned",
+        completed_at: "2026-01-01T12:00:00.000Z",
+        dispatch_status: "assigned",
+      },
+      "cancelled",
+    );
+    expect(updates.completed_at).toBeNull();
+  });
+
   it("fills completed_at when marking completed without prior timestamp", () => {
     const { updates } = buildAdminStatusTransitionUpdates(
       { status: "in_progress", completed_at: null, dispatch_status: "assigned" },

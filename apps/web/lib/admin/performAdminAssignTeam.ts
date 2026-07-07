@@ -9,7 +9,7 @@ import {
   serviceCapabilityGateFromTeamServiceType,
 } from "@/lib/booking/serviceCapabilityEligibility";
 import type { TeamMemberAvailabilityRow } from "@/lib/cleaner/teamMemberAvailability";
-import { isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
+import { isTeamMemberActiveOnBookingDate, effectiveTeamMembershipDateYmd } from "@/lib/cleaner/teamMemberAvailability";
 import { isTeamService, teamServiceType } from "@/lib/dispatch/assignBooking";
 import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
 import { CAPACITY_STATUSES } from "@/lib/dispatch/assignTeamToBooking";
@@ -164,12 +164,16 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     .not("cleaner_id", "is", null);
   if (mErr) return { ok: false, httpStatus: 500, error: mErr.message };
 
+  const membershipDateYmd = effectiveTeamMembershipDateYmd(dateYmd, new Date().toISOString());
   const activeCleanerIds = [
     ...new Set(
       (memberRows ?? [])
         .filter((row) => {
           const r = row as TeamMemberAvailabilityRow;
-          return Boolean(r.cleaner_id && String(r.cleaner_id).trim()) && isTeamMemberActiveOnBookingDate(r, dateYmd);
+          return (
+            Boolean(r.cleaner_id && String(r.cleaner_id).trim()) &&
+            isTeamMemberActiveOnBookingDate(r, membershipDateYmd)
+          );
         })
         .map((row) => String((row as { cleaner_id: string }).cleaner_id).trim()),
     ),
@@ -180,7 +184,7 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     return {
       ok: false,
       httpStatus: 400,
-      error: `Team needs at least ${TEAM_MIN_ROSTER_MEMBERS} active members on the booking date.`,
+      error: `Team needs at least ${TEAM_MIN_ROSTER_MEMBERS} active members on the visit or assignment date.`,
     };
   }
 
@@ -597,6 +601,7 @@ export async function listTeamAssignCandidatesForBooking(
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
     return { teams: [], error: "Booking date invalid.", qualified_for_label: qualifiedLabel };
   }
+  const membershipDateYmd = effectiveTeamMembershipDateYmd(dateYmd, new Date().toISOString());
   const capGate = serviceCapabilityGateFromTeamServiceType(st);
 
   const { data: teamsRaw, error: tErr } = await admin
@@ -635,7 +640,7 @@ export async function listTeamAssignCandidatesForBooking(
 
   const allActiveCleanerIds = new Set<string>();
   for (const arr of membersByTeam.values()) {
-    for (const id of activeCleanerIdsSortedOnDate(arr, dateYmd)) {
+    for (const id of activeCleanerIdsSortedOnDate(arr, membershipDateYmd)) {
       allActiveCleanerIds.add(id);
     }
   }
@@ -657,7 +662,7 @@ export async function listTeamAssignCandidatesForBooking(
   const out: TeamAssignCandidateRow[] = [];
   for (const row of teamRows) {
     const members = membersByTeam.get(row.id) ?? [];
-    const activeCleanerIds = activeCleanerIdsSortedOnDate(members, dateYmd);
+    const activeCleanerIds = activeCleanerIdsSortedOnDate(members, membershipDateYmd);
     const activeCount = activeCleanerIds.length;
     const qualifiedCount = countCleanersPassingServiceCapabilityGate(activeCleanerIds, capsLoaded.map, capGate);
     const { count: usedFromBookings } = await countTeamJobSlotsUsedOnDate(admin, row.id, dateYmd);

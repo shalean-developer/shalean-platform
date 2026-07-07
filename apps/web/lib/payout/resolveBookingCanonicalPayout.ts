@@ -14,8 +14,10 @@ import {
 } from "@/lib/payout/calculateCleanerPayout";
 import {
   fetchActiveTeamMemberIdsAtAppointment,
+  fetchActiveTeamMemberIdsForMembershipDate,
   resolveTeamPayoutParticipantIds,
 } from "@/lib/payout/teamRosterPayoutAllocation";
+import { effectiveTeamMembershipDateYmd } from "@/lib/cleaner/teamMemberAvailability";
 import {
   buildPairedRosterCanonicalInput,
   isPairedRosterSoloJob,
@@ -39,6 +41,7 @@ export type BookingRowForCanonicalPayout = {
   booking_snapshot?: unknown;
   date?: string | null;
   time?: string | null;
+  assigned_at?: string | null;
   price_snapshot?: unknown;
 };
 
@@ -173,8 +176,13 @@ export async function resolveBookingCanonicalPayout(
     .eq("booking_id", bookingId)
     .order("cleaner_id", { ascending: true });
 
+  const membershipDateYmd = effectiveTeamMembershipDateYmd(r.date, r.assigned_at);
   const activeTeamMemberIds =
-    teamId && apptIso ? await fetchActiveTeamMemberIdsAtAppointment(admin, teamId, apptIso) : [];
+    teamId && membershipDateYmd
+      ? await fetchActiveTeamMemberIdsForMembershipDate(admin, teamId, membershipDateYmd)
+      : teamId && apptIso
+        ? await fetchActiveTeamMemberIdsAtAppointment(admin, teamId, apptIso)
+        : [];
   const participantIds = resolveTeamPayoutParticipantIds({
     rosterRows: rosterRows ?? [],
     activeTeamMemberIds,

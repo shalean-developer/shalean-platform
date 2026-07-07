@@ -53,7 +53,7 @@ export function buildAdminStatusTransitionUpdates(
     }
   }
 
-  if (beforeStatus === "completed" && nextStatus !== "completed") {
+  if (nextStatus !== "completed" && beforeCompletedAt) {
     updates.completed_at = null;
   }
 
