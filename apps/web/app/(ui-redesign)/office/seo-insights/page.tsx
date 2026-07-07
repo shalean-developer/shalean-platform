@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Search,
   TrendingUp,
@@ -62,14 +62,6 @@ export default function SeoInsightsPage() {
   const pageFrom = filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1;
   const pageTo = Math.min(safePage * pageSize, filtered.length);
   const tableRows = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
-
-  useEffect(() => {
-    setPage(1);
-  }, [search, pageSize]);
-
-  useEffect(() => {
-    if (page > totalPages) setPage(totalPages);
-  }, [page, totalPages]);
 
   const issues = data?.optimization.recommendations ?? [];
   const sinceLabel = formatSince(data?.since);
@@ -265,7 +257,10 @@ export default function SeoInsightsPage() {
               type="search"
               placeholder="Search location pages…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
               className="min-w-0 flex-1 bg-transparent text-sm text-slate-700 placeholder:text-slate-400 focus:outline-none"
             />
           </div>
@@ -351,7 +346,10 @@ export default function SeoInsightsPage() {
                   Rows
                   <select
                     value={pageSize}
-                    onChange={(e) => setPageSize(Number(e.target.value))}
+                    onChange={(e) => {
+                      setPageSize(Number(e.target.value));
+                      setPage(1);
+                    }}
                     className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
                   >
                     {PAGE_SIZE_OPTIONS.map((size) => (
@@ -367,7 +365,7 @@ export default function SeoInsightsPage() {
                 <button
                   type="button"
                   disabled={safePage <= 1}
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
+                  onClick={() => setPage(Math.max(1, safePage - 1))}
                   className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
                 >
                   <ChevronLeft className="h-3.5 w-3.5" />
@@ -376,7 +374,7 @@ export default function SeoInsightsPage() {
                 <button
                   type="button"
                   disabled={safePage >= totalPages}
-                  onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                  onClick={() => setPage(Math.min(totalPages, safePage + 1))}
                   className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
                 >
                   Next
