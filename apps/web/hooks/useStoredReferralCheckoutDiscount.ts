@@ -28,6 +28,8 @@ export function useStoredReferralCheckoutDiscount(email?: string | null): {
       return;
     }
 
+    const storedCode = code;
+
     let cancelled = false;
 
     async function validate() {
@@ -40,7 +42,7 @@ export function useStoredReferralCheckoutDiscount(email?: string | null): {
             ...(token ? { Authorization: `Bearer ${token}` } : {}),
           },
           body: JSON.stringify({
-            code,
+            code: storedCode,
             email: email?.trim() || undefined,
           }),
         });
@@ -51,7 +53,7 @@ export function useStoredReferralCheckoutDiscount(email?: string | null): {
         };
         if (!cancelled && json.valid && Number(json.discountZar) > 0) {
           setReferralDiscount({
-            code: json.code?.trim().toUpperCase() ?? code,
+            code: json.code?.trim().toUpperCase() ?? storedCode,
             discountZar: Math.round(Number(json.discountZar)),
           });
         } else if (!cancelled) {

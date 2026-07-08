@@ -232,6 +232,11 @@ const CLASSIFIED_RUNTIME_DIRECT_WRITERS: readonly RuntimeClassification[] = [
     rationale: "Admin visit-payout removal clears assignment and payout columns before re-persisting earnings.",
   },
   {
+    file: "lib/payout/repairStrippedTeamBookingRoster.ts",
+    category: "legacy_payout_exception",
+    rationale: "Ops repair restores team roster membership and payout columns after roster sync stripped participants.",
+  },
+  {
     file: "lib/admin/performAdminBookingStatusChange.ts",
     category: "legacy_admin_exception",
     rationale: "Admin booking status override command with completion earnings gate and revert path.",

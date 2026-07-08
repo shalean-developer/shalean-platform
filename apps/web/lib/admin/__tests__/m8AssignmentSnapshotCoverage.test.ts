@@ -193,6 +193,12 @@ const CLASSIFIED_ASSIGNMENT_MUTATION_FILES: Classification[] = [
       "Admin visit-payout removal clears assignment fields and roster membership, then persists earnings for remaining cleaners.",
   },
   {
+    file: "apps/web/lib/payout/repairStrippedTeamBookingRoster.ts",
+    coverage: "snapshot_via_persist",
+    rationale:
+      "Ops repair restores team roster membership and payout_owner_cleaner_id, then re-persists cleaner earnings.",
+  },
+  {
     file: "apps/web/lib/admin/reassignPayoutOwnerBeforeTeamMemberRemove.ts",
     coverage: "clears_only",
     rationale:

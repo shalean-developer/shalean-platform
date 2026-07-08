@@ -29,7 +29,7 @@ export async function POST(request: Request) {
   const userId = auth.kind === "authenticated" ? auth.userId : null;
   const customerEmail =
     auth.kind === "authenticated"
-      ? auth.email
+      ? (auth.email ?? "")
       : String(body.email ?? "").trim();
 
   const result = await validateReferralForCheckout({

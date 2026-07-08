@@ -394,7 +394,7 @@ export async function POST(request: Request) {
         admin: supabase,
         code: referralCodeInput,
         userId,
-        customerEmail: email,
+        customerEmail: email ?? "",
       })
     : ({ valid: false as const } satisfies { valid: false });
   const referralDiscountZar = referralValidation.valid ? referralValidation.discountZar : 0;
