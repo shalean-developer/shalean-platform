@@ -67,9 +67,9 @@ describe("validateInternalBlogLinkTarget", () => {
     ).toEqual({ ok: true });
   });
 
-  it("accepts governed CMS seed slugs without a published DB row", () => {
+  it("accepts SEO traffic seed slugs referenced in related guide overrides", () => {
     expect(
-      validateInternalBlogLinkTarget("how-to-prepare-home-before-cleaner-arrives-cape-town", {
+      validateInternalBlogLinkTarget("how-often-book-home-cleaning-cape-town", {
         publishedSlugSet: empty,
       }),
     ).toEqual({ ok: true });
@@ -171,6 +171,20 @@ describe("validateCmsBlogDocument", () => {
         content,
         canonical_url: "/blog/how-to-prepare-home-before-cleaner-arrives-cape-town",
         related_guide_override_slugs: null,
+      },
+      new Set(),
+    );
+    expect(broken).toEqual([]);
+  });
+
+  it("passes related guide overrides pointing at SEO traffic seed slugs", () => {
+    const content: BlogContentJson = { schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION, blocks: [] };
+    const broken = validateCmsBlogDocument(
+      {
+        slug: "once-off-vs-recurring-cleaning-cape-town",
+        content,
+        canonical_url: "/blog/once-off-vs-recurring-cleaning-cape-town",
+        related_guide_override_slugs: ["how-often-book-home-cleaning-cape-town"],
       },
       new Set(),
     );
