@@ -33,13 +33,14 @@ export function injectRichTextHeadingAnchors(
 ): { html: string; entries: RichTextHeadingTocEntry[] } {
   const entries: RichTextHeadingTocEntry[] = [];
   const safeScope = safeScopeSegment(scope);
-  const re = /<h([23])((?:\s[^>]*)?)>([\s\S]*?)<\/h\1>/gi;
+  const re = /<h([234])((?:\s[^>]*)?)>([\s\S]*?)<\/h\1>/gi;
   let gen = 0;
   let out = "";
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(sanitizedHtml)) !== null) {
     const levelNum = m[1];
+    const isTocHeading = levelNum === "2" || levelNum === "3";
     const level: 2 | 3 = levelNum === "3" ? 3 : 2;
     const attrs = m[2] ?? "";
     const inner = m[3] ?? "";
@@ -49,12 +50,12 @@ export function injectRichTextHeadingAnchors(
 
     const existingId = extractIdFromAttrs(attrs);
     if (existingId) {
-      entries.push({ id: existingId, label, level });
+      if (isTocHeading) entries.push({ id: existingId, label, level });
       out += m[0];
     } else {
       const id = `blog-rich-${safeScope}-${gen}`;
       gen += 1;
-      entries.push({ id, label, level });
+      if (isTocHeading) entries.push({ id, label, level });
       out += `<h${levelNum}${attrs} id="${escapeAttrValue(id)}">${inner}</h${levelNum}>`;
     }
     last = re.lastIndex;

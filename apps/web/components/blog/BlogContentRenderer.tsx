@@ -10,6 +10,7 @@ import { injectRichTextHeadingAnchors } from "@/lib/blog/inject-rich-text-headin
 import { sanitizeBlogRichHtml } from "@/lib/blog/sanitize-blog-html";
 import { sanitizeEditorialHtml, sanitizeEditorialMarkdown } from "@/lib/blog/editorialSanitize";
 import { cn } from "@/lib/utils";
+import "./blog-rich-text.css";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -375,7 +376,9 @@ function Block({
             className={cn(
               "blog-rich-text prose prose-lg prose-zinc max-w-none text-zinc-700",
               "prose-headings:scroll-mt-28 prose-headings:font-bold prose-headings:text-zinc-900",
-              "prose-h2:text-2xl prose-h2:sm:text-3xl prose-h3:text-xl prose-h3:sm:text-2xl",
+              "prose-h2:mt-10 prose-h2:mb-4 sm:prose-h2:text-3xl",
+              "prose-h3:mt-8 prose-h3:mb-3 sm:prose-h3:text-2xl",
+              "prose-h4:mt-6 prose-h4:mb-2 prose-h4:font-semibold prose-h4:text-zinc-800",
               "prose-a:font-medium prose-a:text-blue-600 prose-a:underline prose-a:underline-offset-4 prose-a:hover:text-blue-700",
               "prose-ul:marker:text-blue-600 prose-ol:marker:text-blue-600",
               "prose-img:rounded-lg prose-img:shadow-sm prose-img:my-8",

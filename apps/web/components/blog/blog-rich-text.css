@@ -1,0 +1,94 @@
+/* Live CMS rich text — heading hierarchy matches admin TipTap editor (prose plugin + explicit rules). */
+
+.blog-rich-text h1 {
+  font-size: 1.875rem;
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  margin: 1.5em 0 0.6em;
+  padding: 0.15em 0 0.5em;
+  color: rgb(24 24 27);
+  border-bottom: 1px solid rgb(228 228 231);
+  scroll-margin-top: 7rem;
+}
+
+.blog-rich-text h2 {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.28;
+  letter-spacing: -0.022em;
+  margin: 2.25rem 0 0.85rem;
+  padding: 0.55em 0.85rem 0.55em 0.95rem;
+  color: rgb(24 24 27);
+  background-color: rgb(250 250 250);
+  border-left: 3px solid rgb(161 161 170);
+  border-radius: 0.5rem;
+  scroll-margin-top: 7rem;
+}
+
+@media (min-width: 640px) {
+  .blog-rich-text h2 {
+    font-size: 1.875rem;
+  }
+}
+
+.blog-rich-text h3 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  line-height: 1.32;
+  letter-spacing: -0.018em;
+  margin: 1.75rem 0 0.65rem;
+  padding: 0.15em 0 0.15em 0.65rem;
+  color: rgb(39 39 42);
+  border-left: 2px solid rgb(212 212 216);
+  scroll-margin-top: 7rem;
+}
+
+@media (min-width: 640px) {
+  .blog-rich-text h3 {
+    font-size: 1.5rem;
+  }
+}
+
+.blog-rich-text h4 {
+  font-size: 1.0625rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  margin: 1.35rem 0 0.45rem;
+  padding-left: 0.35rem;
+  color: rgb(63 63 70);
+  scroll-margin-top: 7rem;
+}
+
+.blog-rich-text p {
+  margin: 0.85em 0;
+}
+
+.blog-rich-text ul,
+.blog-rich-text ol {
+  margin: 0.85em 0;
+  padding-left: 1.35rem;
+}
+
+.blog-rich-text li {
+  margin: 0.35em 0;
+}
+
+.blog-rich-text blockquote {
+  margin: 1.25em 0;
+  padding: 0.65rem 1rem;
+  border-left: 4px solid rgb(59 130 246);
+  background: rgb(239 246 255 / 0.55);
+  color: rgb(39 39 42);
+}
+
+.blog-rich-text img.blog-inline-image,
+.blog-rich-text img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  margin: 1.5rem auto;
+  border-radius: 0.5rem;
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.08);
+}

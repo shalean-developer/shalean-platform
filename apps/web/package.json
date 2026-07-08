@@ -79,6 +79,7 @@
     "@radix-ui/react-tooltip": "^1.2.8",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.104.0",
+    "@tailwindcss/typography": "^0.5.20",
     "@tiptap/extension-image": "^3.22.5",
     "@tiptap/extension-link": "^3.22.5",
     "@tiptap/react": "^3.22.5",

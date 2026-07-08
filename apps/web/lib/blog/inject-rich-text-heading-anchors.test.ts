@@ -25,4 +25,11 @@ describe("injectRichTextHeadingAnchors", () => {
     expect(out).toBe('<h2 id="blog-rich-scope-0">Quick answer</h2>');
     expect(out).not.toContain("<h2id=");
   });
+
+  it("assigns ids to h4 without adding TOC entries", () => {
+    const html = `<h4>Detail</h4>`;
+    const { html: out, entries } = injectRichTextHeadingAnchors(html, "scope");
+    expect(out).toBe('<h4 id="blog-rich-scope-0">Detail</h4>');
+    expect(entries).toEqual([]);
+  });
 });
