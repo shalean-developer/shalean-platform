@@ -41,6 +41,7 @@ export type MarketingSummary = {
     totalAdSpend: number;
     totalBookingsFromAds: number;
     revenueFromAds: number;
+    totalAttributedRevenue: number;
     cpa: number;
     roas: number;
   };
@@ -69,7 +70,30 @@ function ymd(d: Date): string {
 }
 
 function pct(numerator: number, denominator: number): number {
-  return denominator > 0 ? (numerator / denominator) * 100 : 0;
+  if (denominator <= 0) return 0;
+  return Math.min(100, (numerator / denominator) * 100);
+}
+
+const FUNNEL_STEPS = ["page_view", "start_booking", "view_price", "select_time", "complete_booking"] as const;
+type FunnelStep = (typeof FUNNEL_STEPS)[number];
+
+function sessionIdFromPayload(payload: Record<string, unknown>): string {
+  return String(payload.session_id ?? payload.analytics_session_id ?? "");
+}
+
+function sessionsReachedStep(sessionFunnel: Map<string, Set<FunnelStep>>, step: FunnelStep): number {
+  const idx = FUNNEL_STEPS.indexOf(step);
+  if (idx < 0) return 0;
+  let count = 0;
+  for (const steps of sessionFunnel.values()) {
+    for (let i = idx; i < FUNNEL_STEPS.length; i++) {
+      if (steps.has(FUNNEL_STEPS[i]!)) {
+        count++;
+        break;
+      }
+    }
+  }
+  return count;
 }
 
 export function aggregateMarketingData(input: {
@@ -81,13 +105,7 @@ export function aggregateMarketingData(input: {
 }): MarketingSummary {
   const { events, spendRows, bookingRevenue, days, since } = input;
 
-  const funnel: MarketingFunnel = {
-    visitors: 0,
-    started: 0,
-    viewedPrice: 0,
-    selectedTime: 0,
-    completed: 0,
-  };
+  const sessionFunnel = new Map<string, Set<FunnelStep>>();
   const sessionsByChannel = new Map<string, MarketingChannel>();
   const channels = new Map<MarketingChannel, { spend: number; bookings: number; revenue: number }>();
   for (const ch of MARKETING_CHANNELS) channels.set(ch, { spend: 0, bookings: 0, revenue: 0 });
@@ -102,14 +120,14 @@ export function aggregateMarketingData(input: {
   for (const ev of events) {
     const type = String(ev.event_type ?? "");
     const payload = (ev.payload ?? {}) as Record<string, unknown>;
-    const sid = String(payload.session_id ?? payload.analytics_session_id ?? "");
+    const sid = sessionIdFromPayload(payload);
     const date = String(ev.created_at ?? "").slice(0, 10);
 
-    if (type === "page_view") funnel.visitors += 1;
-    if (type === "start_booking") funnel.started += 1;
-    if (type === "view_price") funnel.viewedPrice += 1;
-    if (type === "select_time") funnel.selectedTime += 1;
-    if (type === "complete_booking") funnel.completed += 1;
+    if (sid && FUNNEL_STEPS.includes(type as FunnelStep)) {
+      const steps = sessionFunnel.get(sid) ?? new Set<FunnelStep>();
+      steps.add(type as FunnelStep);
+      sessionFunnel.set(sid, steps);
+    }
 
     if (sid) {
       const channel = inferMarketingChannel(payload);
@@ -139,6 +157,14 @@ export function aggregateMarketingData(input: {
     if (day) day.spend += amount;
   }
 
+  const funnel: MarketingFunnel = {
+    visitors: sessionsReachedStep(sessionFunnel, "page_view"),
+    started: sessionsReachedStep(sessionFunnel, "start_booking"),
+    viewedPrice: sessionsReachedStep(sessionFunnel, "view_price"),
+    selectedTime: sessionsReachedStep(sessionFunnel, "select_time"),
+    completed: sessionsReachedStep(sessionFunnel, "complete_booking"),
+  };
+
   const channelRows: MarketingChannelRow[] = MARKETING_CHANNELS.map((channel) => {
     const row = channels.get(channel)!;
     const cpa = row.bookings > 0 ? row.spend / row.bookings : 0;
@@ -150,17 +176,20 @@ export function aggregateMarketingData(input: {
   const totalAdSpend = adChannels.reduce((s, c) => s + c.spend, 0);
   const totalBookingsFromAds = adChannels.reduce((s, c) => s + c.bookings, 0);
   const revenueFromAds = adChannels.reduce((s, c) => s + c.revenue, 0);
+  const totalAttributedRevenue = channelRows.reduce((s, c) => s + c.revenue, 0);
+  const totalSpend = channelRows.reduce((s, c) => s + c.spend, 0);
   const cpa = totalBookingsFromAds > 0 ? totalAdSpend / totalBookingsFromAds : 0;
   const roas = totalAdSpend > 0 ? revenueFromAds / totalAdSpend : 0;
-  const profit = revenueFromAds - totalAdSpend;
+  const profit = totalAttributedRevenue - totalSpend;
 
-  const nonZero = channelRows.filter((c) => c.bookings > 0 || c.spend > 0 || c.revenue > 0);
-  const best = [...nonZero].sort((a, b) => b.roas - a.roas)[0] ?? null;
-  const worst = [...nonZero].sort((a, b) => a.roas - b.roas)[0] ?? null;
+  const paidChannels = channelRows.filter((c) => c.spend > 0);
+  const best = paidChannels.length > 0 ? [...paidChannels].sort((a, b) => b.roas - a.roas)[0] ?? null : null;
+  const worst =
+    paidChannels.length > 1 ? [...paidChannels].sort((a, b) => a.roas - b.roas)[0] ?? null : null;
 
   const insights: string[] = [];
   if (best && best.roas > 0) {
-    insights.push(`${best.channel.replace(/_/g, " ")} has highest ROI`);
+    insights.push(`${best.channel.replace(/_/g, " ")} has highest ROAS among paid channels`);
   }
   const fb = channelRows.find((c) => c.channel === "facebook_ads");
   const google = channelRows.find((c) => c.channel === "google_ads");
@@ -177,7 +206,7 @@ export function aggregateMarketingData(input: {
 
   return {
     range: days === 1 ? "today" : days === 30 ? "30d" : "7d",
-    kpis: { totalAdSpend, totalBookingsFromAds, revenueFromAds, cpa, roas },
+    kpis: { totalAdSpend, totalBookingsFromAds, revenueFromAds, totalAttributedRevenue, cpa, roas },
     channels: channelRows,
     funnel,
     funnelConversion: {

@@ -34,12 +34,17 @@ function money(v: number): string {
   return `R ${Math.round(v).toLocaleString("en-ZA")}`;
 }
 
+function todayLocalYmd(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
 export default function MarketingPage() {
   const [range, setRange] = useState<Range>("30d");
   const [spendForm, setSpendForm] = useState({
     channel: "google_ads" as MarketingChannel,
     amount: "",
-    date: new Date().toISOString().slice(0, 10),
+    date: todayLocalYmd(),
   });
 
   const { data, loading, error, refetch } = useAdminData<MarketingSummary>("/api/admin/marketing", {
@@ -146,8 +151,6 @@ export default function MarketingPage() {
           >
             <option value="google_ads">Google Ads</option>
             <option value="facebook_ads">Facebook Ads</option>
-            <option value="organic_seo">Organic SEO</option>
-            <option value="direct">Direct</option>
           </select>
           <input
             value={spendForm.amount}
@@ -170,13 +173,14 @@ export default function MarketingPage() {
         </form>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
         {[
           { label: "Total ad spend", value: kpis ? money(kpis.totalAdSpend) : "—", icon: DollarSign, color: "bg-red-50 text-red-600" },
           { label: "Bookings from ads", value: kpis?.totalBookingsFromAds ?? "—", icon: Target, color: "bg-orange-50 text-orange-600" },
           { label: "Page views", value: funnel?.visitors ?? "—", icon: MousePointer, color: "bg-blue-50 text-blue-600" },
           { label: "Completions", value: funnel?.completed ?? "—", icon: TrendingUp, color: "bg-emerald-50 text-emerald-600" },
           { label: "Ad revenue", value: kpis ? money(kpis.revenueFromAds) : "—", icon: BarChart3, color: "bg-violet-50 text-violet-600" },
+          { label: "Attributed revenue", value: kpis ? money(kpis.totalAttributedRevenue) : "—", icon: DollarSign, color: "bg-emerald-50 text-emerald-600" },
         ].map((k) => {
           const KIcon = k.icon;
           const [iconBg, iconColor] = k.color.split(" ");
@@ -200,11 +204,15 @@ export default function MarketingPage() {
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Cost per booking (CPA)</p>
-            <p className="mt-1 text-xl font-bold text-slate-800">{money(kpis.cpa)}</p>
+            <p className="mt-1 text-xl font-bold text-slate-800">
+              {kpis.totalAdSpend > 0 && kpis.totalBookingsFromAds > 0 ? money(kpis.cpa) : "—"}
+            </p>
           </div>
           <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Return on ad spend (ROAS)</p>
-            <p className="mt-1 text-xl font-bold text-slate-800">{kpis.roas > 0 ? `${kpis.roas.toFixed(2)}x` : "—"}</p>
+            <p className="mt-1 text-xl font-bold text-slate-800">
+              {kpis.totalAdSpend > 0 && kpis.revenueFromAds > 0 ? `${kpis.roas.toFixed(2)}x` : "—"}
+            </p>
           </div>
         </div>
       ) : null}
@@ -237,8 +245,8 @@ export default function MarketingPage() {
                       <td className="py-2.5 text-slate-600">{money(c.spend)}</td>
                       <td className="py-2.5 text-slate-700">{c.bookings}</td>
                       <td className="py-2.5 font-bold text-slate-800">{money(c.revenue)}</td>
-                      <td className="py-2.5 text-slate-600">{c.bookings > 0 ? money(c.cpa) : "—"}</td>
-                      <td className="py-2.5 text-emerald-600">{c.roas > 0 ? c.roas.toFixed(2) : "—"}</td>
+                      <td className="py-2.5 text-slate-600">{c.spend > 0 && c.bookings > 0 ? money(c.cpa) : "—"}</td>
+                      <td className="py-2.5 text-emerald-600">{c.spend > 0 && c.revenue > 0 ? `${c.roas.toFixed(2)}x` : "—"}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -293,16 +301,21 @@ export default function MarketingPage() {
             <h3 className="mb-3 text-sm font-bold text-slate-800">ROI analysis</h3>
             <div className="space-y-2 text-sm text-slate-700">
               <p>
-                Profit: <span className="font-bold text-slate-900">{money(data.roi.profit)}</span>
+                Attributed revenue:{" "}
+                <span className="font-bold text-slate-900">{money(data.kpis.totalAttributedRevenue)}</span>
               </p>
               <p>
-                Best channel:{" "}
+                Profit (revenue − spend):{" "}
+                <span className="font-bold text-slate-900">{money(data.roi.profit)}</span>
+              </p>
+              <p>
+                Best paid channel:{" "}
                 <span className="font-bold text-slate-900">
                   {data.roi.bestChannel ? MARKETING_CHANNEL_LABELS[data.roi.bestChannel] : "—"}
                 </span>
               </p>
               <p>
-                Weakest channel:{" "}
+                Weakest paid channel:{" "}
                 <span className="font-bold text-slate-900">
                   {data.roi.worstChannel ? MARKETING_CHANNEL_LABELS[data.roi.worstChannel] : "—"}
                 </span>
@@ -410,7 +423,9 @@ function FunnelStat({
     <div className="rounded-xl bg-slate-50 p-3">
       <p className={cn("text-lg font-bold tabular-nums", highlight ? "text-emerald-600" : "text-slate-800")}>{value}</p>
       <p className="text-xs font-medium text-slate-600">{label}</p>
-      <p className="text-[11px] text-slate-400">{pct.toFixed(1)}% step conv.</p>
+      <p className="text-[11px] text-slate-400">
+        {label === "Views" ? "entry point" : `${pct.toFixed(1)}% step conv.`}
+      </p>
     </div>
   );
 }

@@ -93,6 +93,109 @@ describe("aggregateMarketingData", () => {
       revenue: 850,
     });
     expect(summary.kpis.totalAdSpend).toBe(1000);
+    expect(summary.kpis.totalAttributedRevenue).toBe(850);
+    expect(summary.roi.profit).toBe(-150);
     expect(summary.insights.some((i) => i.includes("Organic SEO"))).toBe(true);
+  });
+
+  it("uses cumulative session funnel so completion rate never exceeds 100%", () => {
+    const summary = aggregateMarketingData({
+      events: [
+        {
+          event_type: "complete_booking",
+          booking_id: "b1",
+          created_at: "2026-06-10T10:00:00.000Z",
+          payload: { session_id: "sess-a", pathname: "/booking/success" },
+        },
+        {
+          event_type: "complete_booking",
+          booking_id: "b2",
+          created_at: "2026-06-10T10:01:00.000Z",
+          payload: { session_id: "sess-b", pathname: "/booking/success" },
+        },
+        {
+          event_type: "select_time",
+          booking_id: null,
+          created_at: "2026-06-10T09:00:00.000Z",
+          payload: { session_id: "sess-a", pathname: "/book/deep-cleaning" },
+        },
+      ],
+      spendRows: [],
+      bookingRevenue: new Map([
+        ["b1", 500],
+        ["b2", 600],
+      ]),
+      days: 7,
+      since: new Date("2026-06-04T00:00:00.000Z"),
+    });
+
+    expect(summary.funnel.selectedTime).toBe(2);
+    expect(summary.funnel.completed).toBe(2);
+    expect(summary.funnelConversion.timeToCompletePct).toBeLessThanOrEqual(100);
+  });
+
+  it("ranks best and weakest channels only among paid channels with spend", () => {
+    const summary = aggregateMarketingData({
+      events: [
+        {
+          event_type: "complete_booking",
+          booking_id: "b1",
+          created_at: "2026-06-10T10:00:00.000Z",
+          payload: {
+            session_id: "sess-1",
+            gclid: "click-1",
+            pathname: "/booking/success",
+          },
+        },
+        {
+          event_type: "complete_booking",
+          booking_id: "b2",
+          created_at: "2026-06-10T11:00:00.000Z",
+          payload: {
+            session_id: "sess-2",
+            fbclid: "click-2",
+            pathname: "/booking/success",
+          },
+        },
+      ],
+      spendRows: [
+        { channel: "google_ads", amount: 1000, date: "2026-06-10" },
+        { channel: "facebook_ads", amount: 500, date: "2026-06-10" },
+      ],
+      bookingRevenue: new Map([
+        ["b1", 2000],
+        ["b2", 300],
+      ]),
+      days: 7,
+      since: new Date("2026-06-04T00:00:00.000Z"),
+    });
+
+    expect(summary.roi.bestChannel).toBe("google_ads");
+    expect(summary.roi.worstChannel).toBe("facebook_ads");
+    expect(summary.roi.bestChannel).not.toBe(summary.roi.worstChannel);
+  });
+
+  it("returns null best/worst when no paid spend is recorded", () => {
+    const summary = aggregateMarketingData({
+      events: [
+        {
+          event_type: "complete_booking",
+          booking_id: "b1",
+          created_at: "2026-06-10T10:00:00.000Z",
+          payload: {
+            session_id: "sess-1",
+            pathname: "/services/deep-cleaning-cape-town",
+          },
+        },
+      ],
+      spendRows: [],
+      bookingRevenue: new Map([["b1", 850]]),
+      days: 7,
+      since: new Date("2026-06-04T00:00:00.000Z"),
+    });
+
+    expect(summary.roi.bestChannel).toBeNull();
+    expect(summary.roi.worstChannel).toBeNull();
+    expect(summary.roi.profit).toBe(850);
   });
 });
