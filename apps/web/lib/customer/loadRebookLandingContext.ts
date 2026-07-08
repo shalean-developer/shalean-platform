@@ -11,11 +11,13 @@ import {
   customerRebookTokenSubjectForBooking,
   verifyCustomerRebookToken,
 } from "@/lib/customer/customerRebookLinkToken";
-import { loadCustomerBookingRowForUser } from "@/lib/customer/customerBookingsForUser";
+import {
+  loadCustomerBookingRowForUser,
+  resolveBookingOwnershipColumn,
+} from "@/lib/customer/customerBookingsForUser";
 import { buildCustomerBookingSelect } from "@/lib/dashboard/customerBookingSelect";
 import { normalizeCustomerBookingRow } from "@/lib/dashboard/normalizeCustomerBookingRow";
 import type { BookingRow } from "@/lib/dashboard/types";
-import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 export type RebookLastBookingSummary = {
   id: string;
@@ -84,8 +86,8 @@ function roomLinesFromBookingRow(row: BookingRow): string[] {
   const fromDetails = roomsLinesFromServiceDetails(row.service_details);
   if (fromDetails.length > 0) return fromDetails;
   const parts: string[] = [];
-  if (typeof row.bedrooms === "number" && row.bedrooms > 0) {
-    parts.push(`${row.bedrooms} bedroom${row.bedrooms === 1 ? "" : "s"}`);
+  if (typeof row.rooms === "number" && row.rooms > 0) {
+    parts.push(`${row.rooms} bedroom${row.rooms === 1 ? "" : "s"}`);
   }
   if (typeof row.bathrooms === "number" && row.bathrooms > 0) {
     parts.push(`${row.bathrooms} bathroom${row.bathrooms === 1 ? "" : "s"}`);
@@ -147,7 +149,7 @@ async function loadLastBookingForUser(
     .maybeSingle();
 
   if (error || !data) return null;
-  return normalizeCustomerBookingRow(data as BookingRow);
+  return normalizeCustomerBookingRow(data as unknown as BookingRow);
 }
 
 async function loadBookingByIdForToken(
@@ -160,7 +162,7 @@ async function loadBookingByIdForToken(
   const { data, error } = await admin.from("bookings").select(select).eq("id", bookingId).maybeSingle();
   if (error || !data) return null;
 
-  const row = normalizeCustomerBookingRow(data as BookingRow);
+  const row = normalizeCustomerBookingRow(data as unknown as BookingRow);
   const ownerId = row.user_id?.trim() || row.customer_id?.trim() || "";
 
   if (tokenSub.startsWith("booking:")) {

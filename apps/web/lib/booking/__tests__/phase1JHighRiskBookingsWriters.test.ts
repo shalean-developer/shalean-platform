@@ -222,6 +222,11 @@ const CLASSIFIED_RUNTIME_DIRECT_WRITERS: readonly RuntimeClassification[] = [
     rationale: "Admin pre-batch visit earnings adjustment updates payout snapshot columns on a single booking.",
   },
   {
+    file: "lib/payout/adjustBookingTeamMemberPayoutEarnings.ts",
+    category: "legacy_payout_exception",
+    rationale: "Admin team-member visit earnings adjustment updates payout_frozen_cents on rostered bookings.",
+  },
+  {
     file: "lib/payout/removeCleanerFromVisitPayout.ts",
     category: "legacy_payout_exception",
     rationale: "Admin visit-payout removal clears assignment and payout columns before re-persisting earnings.",
@@ -362,6 +367,11 @@ const CLASSIFIED_SQL_BOOKINGS_HIGH_RISK_MUTATIONS: readonly SqlClassification[] 
     file: "20261033_assign_team_admin_promote_status_on_assign.sql",
     category: "runtime_rpc_definition",
     rationale: "assign_team_and_sync_roster admin variant promotes status when setting cleaner_id.",
+  },
+  {
+    file: "20261045_retire_pre_july_pending_cleaner_earnings.sql",
+    category: "one_time_data_fix",
+    rationale: "One-shot pre-July 2026 payout pipeline retirement marks stale pending rows paid.",
   },
   {
     file: "20260937_h5_legacy_completed_payment_status_repair.sql",
