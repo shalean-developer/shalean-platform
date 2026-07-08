@@ -17,7 +17,7 @@ describe("resolveBlogFeaturedImageSlug", () => {
 describe("resolveBlogFeaturedSrc", () => {
   it("uses pinned hero for governed prepare-home slug", () => {
     expect(resolveBlogFeaturedSrc("how-to-prepare-home-before-cleaner-arrives-cape-town", null)).toBe(
-      "/images/blog/cape-town-apartment-empty-move-in.jpg",
+      "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
     );
   });
 
@@ -27,7 +27,7 @@ describe("resolveBlogFeaturedSrc", () => {
         "how-to-prepare-home-before-cleaner-arrives-cape-town",
         "/images/default-cleaning.jpg",
       ),
-    ).toBe("/images/blog/cape-town-apartment-empty-move-in.jpg");
+    ).toBe("/images/marketing/shalean-cleaner-balcony-cape-town.webp");
   });
 
   it("rejects missing /images/posts CMS paths", () => {
@@ -36,7 +36,7 @@ describe("resolveBlogFeaturedSrc", () => {
         "how-to-prepare-home-before-cleaner-arrives-cape-town",
         "/images/posts/how-to-prepare-your-home-before-cleaner-arrives-cape-town.webp",
       ),
-    ).toBe("/images/blog/cape-town-apartment-empty-move-in.jpg");
+    ).toBe("/images/marketing/shalean-cleaner-balcony-cape-town.webp");
   });
 });
 
@@ -47,7 +47,7 @@ describe("coerceBlogImageSrcForNext", () => {
         "how-to-prepare-home-before-cleaner-arrives-cape-town",
         "/images/posts/how-to-prepare-your-home-before-cleaner-arrives-cape-town.webp",
       ),
-    ).toBe("/images/blog/cape-town-apartment-empty-move-in.jpg");
+    ).toBe("/images/marketing/shalean-cleaner-balcony-cape-town.webp");
   });
 });
 
