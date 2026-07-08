@@ -5,6 +5,7 @@
  * Prefer mapped/local WebPs under `/public/images/blog/` and `/public/images/marketing/`.
  */
 
+import { isBlogMediaPublicUrl } from "@/lib/blog/blog-media-storage";
 import { LOCATION_HUB_SEO_IMAGE_SLUGS } from "@/lib/blog/injectLocationHubSeoImages";
 import { PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
 import { AIRBNB_HOST_GUIDE_POSTS } from "@/lib/blog/airbnbHostGuidePosts";
@@ -127,6 +128,20 @@ export function isTrustedBlogFeaturedLocalPath(src: string): boolean {
   if (!p.startsWith("/")) return false;
   if (p === DEFAULT_BLOG_FEATURED_IMAGE) return false;
   return !UNTRUSTED_BLOG_FEATURED_LOCAL_PREFIXES.some((prefix) => p.startsWith(prefix));
+}
+
+/** CMS or editor-provided featured src (local path or allowed remote host). */
+export function isTrustedBlogFeaturedSrc(src: string): boolean {
+  const s = src.trim();
+  if (!s) return false;
+  if (s.startsWith("/")) return isTrustedBlogFeaturedLocalPath(s);
+  if (!s.startsWith("http://") && !s.startsWith("https://")) return false;
+  if (isBlogMediaPublicUrl(s)) return true;
+  try {
+    return allowedBlogImageRemoteHosts().has(new URL(s).hostname);
+  } catch {
+    return false;
+  }
 }
 
 export const BLOG_IMAGE_MAP_NEW_ADDITIONS: Record<string, string> = {
@@ -556,38 +571,29 @@ function allowedBlogImageRemoteHosts(): ReadonlySet<string> {
 export function coerceBlogImageSrcForNext(slug: string, src: string): string {
   const resolved = (src ?? "").trim();
   if (!resolved) return resolveBlogFeaturedSrc(slug.trim(), null);
-  if (resolved.startsWith("/")) {
-    return isTrustedBlogFeaturedLocalPath(resolved) ? resolved : resolveBlogFeaturedSrc(slug.trim(), null);
-  }
-  try {
-    const u = new URL(resolved);
-    if (allowedBlogImageRemoteHosts().has(u.hostname)) return resolved;
-  } catch {
-    return resolveBlogFeaturedSrc(slug.trim(), null);
-  }
+  if (isTrustedBlogFeaturedSrc(resolved)) return resolved;
   return resolveBlogFeaturedSrc(slug.trim(), null);
 }
 
 export function resolveBlogFeaturedSrc(slug: string, dbFeaturedSrc?: string | null): string {
   const trimmedSlug = slug.trim();
   const imageSlug = resolveBlogFeaturedImageSlug(trimmedSlug);
+  const db = dbFeaturedSrc?.trim();
+  if (db && isTrustedBlogFeaturedSrc(db)) return db;
   const mapped = BLOG_IMAGE_MAP[imageSlug];
   if (mapped) return mapped;
-  const db = dbFeaturedSrc?.trim();
-  if (db && isTrustedBlogFeaturedLocalPath(db)) return db;
-  if (db && (db.startsWith("http://") || db.startsWith("https://"))) return db;
   return DEFAULT_BLOG_FEATURED_IMAGE;
 }
 
 export function resolveBlogFeaturedAlt(slug: string, dbFeaturedAlt?: string | null): string {
   const trimmedSlug = slug.trim();
   const imageSlug = resolveBlogFeaturedImageSlug(trimmedSlug);
+  const dbAlt = dbFeaturedAlt?.trim();
+  if (dbAlt) return dbAlt;
   const override = BLOG_FEATURED_ALT_OVERRIDES[trimmedSlug] ?? BLOG_FEATURED_ALT_OVERRIDES[imageSlug];
   if (override) return override;
   const suburb = extractSuburbFromBlogSlug(trimmedSlug);
-  const seoAlt = generateBlogImageAlt(trimmedSlug, suburb);
-  if (!BLOG_IMAGE_MAP[imageSlug] && dbFeaturedAlt?.trim()) return dbFeaturedAlt.trim();
-  return seoAlt;
+  return generateBlogImageAlt(trimmedSlug, suburb);
 }
 
 export function resolveBlogFeaturedAssets(
