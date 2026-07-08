@@ -309,6 +309,7 @@ export function perCleanerAllocationsForBooking(
     | "payout_frozen_cents"
   >,
   roster: readonly RosterCleanerRef[],
+  teamMemberPayouts?: readonly { cleaner_id: string; payout_cents: number }[],
 ): CleanerVisitAllocation[] {
   const summary = parseBookingEarningsSummary(booking.earnings_summary);
   const rosterIds = [
@@ -334,18 +335,48 @@ export function perCleanerAllocationsForBooking(
       if (seen.has(cid)) continue;
       out.push({ cleaner_id: cid, cents: centsFor(cid) });
     }
+    mergeTeamMemberPayoutAllocations(out, seen, teamMemberPayouts);
     if (out.length) return out;
   }
 
   if (rosterIds.length > 0) {
-    return rosterIds.map((cid) => ({
-      cleaner_id: cid,
-      cents: centsFor(cid),
-    }));
+    const seen = new Set<string>();
+    const out = rosterIds.map((cid) => {
+      seen.add(cid);
+      return {
+        cleaner_id: cid,
+        cents: centsFor(cid),
+      };
+    });
+    mergeTeamMemberPayoutAllocations(out, seen, teamMemberPayouts);
+    return out;
+  }
+
+  if (teamMemberPayouts?.length) {
+    const seen = new Set<string>();
+    const out: CleanerVisitAllocation[] = [];
+    mergeTeamMemberPayoutAllocations(out, seen, teamMemberPayouts);
+    if (out.length) return out;
   }
 
   if (primary) return [{ cleaner_id: primary, cents: centsFor(primary) }];
   return [];
+}
+
+function mergeTeamMemberPayoutAllocations(
+  out: CleanerVisitAllocation[],
+  seen: Set<string>,
+  teamMemberPayouts?: readonly { cleaner_id: string; payout_cents: number }[],
+): void {
+  if (!teamMemberPayouts?.length) return;
+  for (const row of teamMemberPayouts) {
+    const cid = String(row.cleaner_id ?? "").trim();
+    if (!cid || seen.has(cid)) continue;
+    const cents = Math.max(0, Math.round(Number(row.payout_cents) || 0));
+    if (cents <= 0) continue;
+    seen.add(cid);
+    out.push({ cleaner_id: cid, cents });
+  }
 }
 
 /** Whether a cleaner receives payroll credit on a visit (same basis as the payouts visit list). */
@@ -357,6 +388,36 @@ export function cleanerHasPayoutAllocationOnBooking(
   const target = String(cleanerId ?? "").trim();
   if (!target) return false;
   return perCleanerAllocationsForBooking(booking, roster).some((alloc) => alloc.cleaner_id === target);
+}
+
+export async function loadTeamJobMemberPayoutsByBookingIds(
+  admin: SupabaseClient,
+  bookingIds: string[],
+): Promise<Map<string, { cleaner_id: string; payout_cents: number }[]>> {
+  const map = new Map<string, { cleaner_id: string; payout_cents: number }[]>();
+  if (!bookingIds.length) return map;
+
+  for (let i = 0; i < bookingIds.length; i += 120) {
+    const slice = bookingIds.slice(i, i + 120);
+    const { data, error } = await admin
+      .from("team_job_member_payouts")
+      .select("booking_id, cleaner_id, payout_cents")
+      .in("booking_id", slice);
+    if (error) throw new Error(error.message);
+    for (const raw of data ?? []) {
+      const row = raw as { booking_id?: string; cleaner_id?: string; payout_cents?: number | null };
+      const bid = String(row.booking_id ?? "").trim();
+      const cid = String(row.cleaner_id ?? "").trim();
+      if (!bid || !cid) continue;
+      const list = map.get(bid) ?? [];
+      list.push({
+        cleaner_id: cid,
+        payout_cents: Math.max(0, Math.floor(Number(row.payout_cents) || 0)),
+      });
+      map.set(bid, list);
+    }
+  }
+  return map;
 }
 
 export async function loadRosterByBookingIds(
@@ -385,6 +446,7 @@ export async function loadRosterByBookingIds(
   }
   return map;
 }
+
 export async function loadOfficePayoutPeriodReport(
   admin: SupabaseClient,
   from: string,
@@ -426,6 +488,10 @@ export async function loadOfficePayoutPeriodReport(
     admin,
     bookings.map((b) => b.id),
   );
+  const teamPayoutsByBooking = await loadTeamJobMemberPayoutsByBookingIds(
+    admin,
+    bookings.map((b) => b.id),
+  );
   const batchStatusById = new Map<string, string>();
   for (const p of payoutsRaw) {
     if (p.id) batchStatusById.set(p.id, String(p.status ?? ""));
@@ -451,7 +517,11 @@ export async function loadOfficePayoutPeriodReport(
 
   const cleanerIds = new Set<string>();
   for (const b of bookings) {
-    for (const alloc of perCleanerAllocationsForBooking(b, rosterByBooking.get(b.id) ?? [])) {
+    for (const alloc of perCleanerAllocationsForBooking(
+      b,
+      rosterByBooking.get(b.id) ?? [],
+      teamPayoutsByBooking.get(b.id),
+    )) {
       cleanerIds.add(alloc.cleaner_id);
     }
   }
@@ -475,7 +545,7 @@ export async function loadOfficePayoutPeriodReport(
 
   for (const b of bookings) {
     const roster = rosterByBooking.get(b.id) ?? [];
-    const allocations = perCleanerAllocationsForBooking(b, roster);
+    const allocations = perCleanerAllocationsForBooking(b, roster, teamPayoutsByBooking.get(b.id));
     if (!allocations.length) continue;
 
     const bucket = classifyBookingPayoutBucket(b.payout_status, b.payout_id, batchStatusById);

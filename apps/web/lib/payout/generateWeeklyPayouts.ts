@@ -31,6 +31,10 @@ import {
   listRosterMemberWeeklyPayoutCandidates,
   rosterMemberWeeklyPayoutTotalCents,
 } from "@/lib/payout/rosterMemberWeeklyPayoutCandidates";
+import {
+  listTeamJobMemberWeeklyPayoutCandidates,
+  teamJobMemberWeeklyPayoutTotalCents,
+} from "@/lib/payout/teamJobMemberWeeklyPayoutCandidates";
 
 export type GenerateWeeklyPayoutsResult = {
   period: { start: string; end: string };
@@ -344,7 +348,15 @@ async function generateWeeklyPayoutsForPeriod(
       invoiceStatusById: invoiceMap,
     });
 
-    if (!bookings.length && !rosterMemberCandidates.length) continue;
+    const teamJobMemberCandidates = await listTeamJobMemberWeeklyPayoutCandidates({
+      admin,
+      cleanerId,
+      periodStart,
+      periodEnd,
+      invoiceStatusById: invoiceMap,
+    });
+
+    if (!bookings.length && !rosterMemberCandidates.length && !teamJobMemberCandidates.length) continue;
 
     const total =
       bookings.reduce(
@@ -353,7 +365,9 @@ async function generateWeeklyPayoutsForPeriod(
           Math.max(0, Math.floor(Number(b.cleaner_payout_cents) || 0)) +
           Math.max(0, Math.floor(Number(b.cleaner_bonus_cents) || 0)),
         0,
-      ) + rosterMemberWeeklyPayoutTotalCents(rosterMemberCandidates);
+      ) +
+      rosterMemberWeeklyPayoutTotalCents(rosterMemberCandidates) +
+      teamJobMemberWeeklyPayoutTotalCents(teamJobMemberCandidates);
     if (total <= 0) continue;
 
     const { data: payout, error: insErr } = await admin
@@ -464,6 +478,29 @@ async function generateWeeklyPayoutsForPeriod(
       linkedCount += linkedMembers?.length ?? 0;
     }
 
+    if (teamJobMemberCandidates.length > 0) {
+      const teamMemberIds = teamJobMemberCandidates.map((row) => row.id);
+      const { data: linkedTeamMembers, error: teamMemberUpErr } = await admin
+        .from("team_job_member_payouts")
+        .update({ status: "batched" })
+        .in("id", teamMemberIds)
+        .eq("cleaner_id", cleanerId)
+        .eq("status", "pending")
+        .select("id");
+      if (teamMemberUpErr) {
+        await reportOperationalIssue("error", "generateWeeklyPayouts", `link team job member payouts failed: ${teamMemberUpErr.message}`, {
+          cleanerId,
+          payoutId,
+        });
+        if (linkedCount === 0) {
+          await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+        }
+        skippedCleaners += 1;
+        continue;
+      }
+      linkedCount += linkedTeamMembers?.length ?? 0;
+    }
+
     if (linkedCount === 0) {
       await admin.from("cleaner_payouts").delete().eq("id", payoutId);
       skippedCleaners += 1;
@@ -482,6 +519,7 @@ async function generateWeeklyPayoutsForPeriod(
         payoutId,
         bookings: ids.length,
         roster_member_payouts: rosterMemberCandidates.length,
+        team_job_member_payouts: teamJobMemberCandidates.length,
         linked_rows: linkedCount,
         total_amount_cents: total,
         period_start: periodStart,

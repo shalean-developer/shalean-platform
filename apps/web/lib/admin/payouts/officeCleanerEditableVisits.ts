@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   classifyBookingPayoutBucket,
   loadRosterByBookingIds,
+  loadTeamJobMemberPayoutsByBookingIds,
   normalizeOfficePayoutPeriodRange,
   perCleanerAllocationsForBooking,
   type PayoutBucket,
@@ -121,6 +122,10 @@ export async function loadOfficeCleanerEditableVisits(
     admin,
     bookings.map((b) => b.id),
   );
+  const teamPayoutsByBooking = await loadTeamJobMemberPayoutsByBookingIds(
+    admin,
+    bookings.map((b) => b.id),
+  );
 
   const payoutIds = [
     ...new Set(bookings.map((b) => String(b.payout_id ?? "").trim()).filter(Boolean)),
@@ -149,7 +154,7 @@ export async function loadOfficeCleanerEditableVisits(
 
   for (const b of bookings) {
     const roster = rosterByBooking.get(b.id) ?? [];
-    const allocations = perCleanerAllocationsForBooking(b, roster);
+    const allocations = perCleanerAllocationsForBooking(b, roster, teamPayoutsByBooking.get(b.id));
     const alloc = allocations.find((a) => a.cleaner_id === targetCleanerId);
     if (!alloc) continue;
 

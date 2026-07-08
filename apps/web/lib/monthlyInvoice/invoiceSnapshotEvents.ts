@@ -113,6 +113,16 @@ export type InvoiceSnapshotEvent =
       actor: string;
       reference: string;
       note?: string;
+    }
+  | {
+      kind: "invoice_reopened_to_draft";
+      at: string;
+      actor: string;
+      reason: string;
+      attached_booking_ids: string[];
+      zoho_voided: boolean;
+      previous_zoho_invoice_id: string | null;
+      paystack_reference: string;
     };
 
 /** Narrow unknown JSON from DB into a typed event when possible. */
@@ -243,6 +253,25 @@ export function parseInvoiceSnapshotEvent(raw: unknown): InvoiceSnapshotEvent | 
       reference: String(o.reference ?? `reminder:${ch}`),
     };
   }
+  if (kind === "invoice_reopened_to_draft") {
+    const attachedRaw = o.attached_booking_ids;
+    const attached_booking_ids = Array.isArray(attachedRaw)
+      ? attachedRaw.map((id) => String(id))
+      : [];
+    return {
+      kind: "invoice_reopened_to_draft",
+      at: String(o.at ?? ""),
+      actor: String(o.actor ?? "system"),
+      reason: String(o.reason ?? "ops_reopen"),
+      attached_booking_ids,
+      zoho_voided: Boolean(o.zoho_voided),
+      previous_zoho_invoice_id:
+        typeof o.previous_zoho_invoice_id === "string" && o.previous_zoho_invoice_id.trim()
+          ? o.previous_zoho_invoice_id.trim()
+          : null,
+      paystack_reference: String(o.paystack_reference ?? ""),
+    };
+  }
   return null;
 }
 
@@ -271,6 +300,8 @@ export function invoiceSnapshotEventToRpcPayload(ev: InvoiceSnapshotEvent): Reco
       return { ...ev, kind: "invoice_payment_link_email_sent" };
     case "payment_refunded":
       return { ...ev, kind: "payment_refunded" };
+    case "invoice_reopened_to_draft":
+      return { ...ev, kind: "invoice_reopened_to_draft" };
     default: {
       const _x: never = ev;
       return _x as Record<string, unknown>;

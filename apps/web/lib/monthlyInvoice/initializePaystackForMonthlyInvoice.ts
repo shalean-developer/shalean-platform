@@ -164,7 +164,10 @@ export async function initializePaystackForMonthlyInvoice(
     return { ok: false, error: "invoice_nothing_due" };
   }
 
-  const reference = monthlyInvoicePaystackReferenceForInitialize(row);
+  const reference = monthlyInvoicePaystackReferenceForInitialize({
+    ...row,
+    paystack_reference: row.paystack_reference,
+  });
 
   const reuse = tryReuseExistingInitialize({ ...row, reference });
   if (reuse) return reuse;

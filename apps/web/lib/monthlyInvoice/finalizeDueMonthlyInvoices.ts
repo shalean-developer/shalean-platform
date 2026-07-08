@@ -17,10 +17,10 @@ export type FinalizeMonthlyInvoicesResult = {
 
 /**
  * Idempotent finalize when a draft monthly invoice is ready to collect:
- * - Every expected recurring visit for the billing month exists on the invoice, and
- * - Today is on or after the last scheduled visit in that month (no upcoming visits left).
- *
- * Ad-hoc monthly bookings (no recurring plan) finalize once the last visit date has passed.
+ * - Fixed recurring plans: every expected visit for the billing month is on the invoice, and
+ *   today is on or after the last scheduled visit in that month.
+ * - On-demand / ad-hoc monthly (no active recurring plan for the month): wait until the
+ *   Johannesburg calendar month has ended (so Airbnb turnovers can still attach).
  *
  * **Schedule (ops):** run **daily** — recommended **23:55 Africa/Johannesburg**.
  *

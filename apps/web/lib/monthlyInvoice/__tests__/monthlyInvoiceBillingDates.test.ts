@@ -92,6 +92,41 @@ describe("evaluateMonthlyInvoiceFinalizeReadiness", () => {
     expect(result.ready).toBe(false);
     expect(result.reason).toBe("recurring_schedule_incomplete");
   });
+
+  it("holds on-demand monthly invoices until calendar month end", () => {
+    const result = evaluateMonthlyInvoiceFinalizeReadiness({
+      todayYmd: "2026-07-07",
+      invoiceId: "inv-1",
+      invoiceMonthYm: "2026-07",
+      bookingsOnInvoice: [
+        { date: "2026-07-02", recurring_id: null, monthly_invoice_id: "inv-1" },
+        { date: "2026-07-07", recurring_id: null, monthly_invoice_id: "inv-1" },
+      ],
+      recurringPlans: [],
+      allBookingsByPlanId: new Map(),
+    });
+
+    expect(result.ready).toBe(false);
+    expect(result.reason).toBe("invoice_month_not_ended");
+    expect(result.lastVisitYmd).toBe("2026-07-07");
+  });
+
+  it("finalizes on-demand monthly invoices on the last day of the month", () => {
+    const result = evaluateMonthlyInvoiceFinalizeReadiness({
+      todayYmd: "2026-07-31",
+      invoiceId: "inv-1",
+      invoiceMonthYm: "2026-07",
+      bookingsOnInvoice: [
+        { date: "2026-07-02", recurring_id: null, monthly_invoice_id: "inv-1" },
+        { date: "2026-07-07", recurring_id: null, monthly_invoice_id: "inv-1" },
+      ],
+      recurringPlans: [],
+      allBookingsByPlanId: new Map(),
+    });
+
+    expect(result.ready).toBe(true);
+    expect(result.paymentDueDateYmd).toBe("2026-07-31");
+  });
 });
 
 describe("zohoDatesForMonthlyInvoice", () => {

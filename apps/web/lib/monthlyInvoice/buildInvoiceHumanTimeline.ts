@@ -73,6 +73,13 @@ function eventLine(ev: Record<string, unknown>): string | null {
     return `${day} – Invoice finalized (${formatZarFromCents(total)}${bcPart}) · system`;
   }
 
+  if (kind === "invoice_reopened_to_draft") {
+    const actor = String(ev.actor ?? "system").trim() || "system";
+    const attached = Array.isArray(ev.attached_booking_ids) ? ev.attached_booking_ids.length : 0;
+    const attachedPart = attached > 0 ? ` · attached ${attached} booking${attached === 1 ? "" : "s"}` : "";
+    return `${day} – Invoice reopened to draft${attachedPart} · ${actor}`;
+  }
+
   if (kind === "invoice_closed") {
     const via = String(ev.via ?? "manual");
     const note = via === "paid" ? " — after payment" : " — manual";

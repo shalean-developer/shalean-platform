@@ -4,6 +4,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   compareYmd,
+  isInvoiceMonthReadyToFinalize,
   lastDayYmdOfInvoiceMonth,
 } from "@/lib/recurring/johannesburgCalendar";
 import {
@@ -44,6 +45,26 @@ export function evaluateMonthlyInvoiceFinalizeReadiness(input: {
   }
 
   const lastVisitYmd = inMonth.reduce((max, d) => (compareYmd(d, max) > 0 ? d : max));
+
+  /**
+   * On-demand / ad-hoc monthly (Airbnb turnovers, etc.): no active recurring plan for the
+   * billing month — more visits can still be created later. Wait for calendar month-end.
+   */
+  if (input.recurringPlans.length === 0) {
+    if (!isInvoiceMonthReadyToFinalize(input.todayYmd, input.invoiceMonthYm)) {
+      return {
+        ready: false,
+        reason: "invoice_month_not_ended",
+        lastVisitYmd,
+        paymentDueDateYmd: null,
+      };
+    }
+    return {
+      ready: true,
+      lastVisitYmd,
+      paymentDueDateYmd: input.todayYmd,
+    };
+  }
 
   if (compareYmd(input.todayYmd, lastVisitYmd) < 0) {
     return {
