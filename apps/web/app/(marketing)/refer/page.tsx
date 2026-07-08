@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { ReferralLandingView } from "@/components/referrals/ReferralLandingView";
+import { ReferralLandingRouter } from "@/components/referrals/ReferralLandingRouter";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { clipSerpTitle } from "@/lib/seo/metaTitle";
 import {
@@ -57,7 +57,7 @@ export default function ReferPage() {
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <Suspense fallback={<div className="min-h-screen animate-pulse bg-white" />}>
-        <ReferralLandingView />
+        <ReferralLandingRouter />
       </Suspense>
     </>
   );

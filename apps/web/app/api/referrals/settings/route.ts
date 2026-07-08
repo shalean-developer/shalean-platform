@@ -14,6 +14,7 @@ export async function GET() {
   return NextResponse.json({
     enabled: settings.enabled,
     rewardAmountZar: settings.rewardAmountZar,
+    checkoutDiscountZar: settings.checkoutDiscountZar,
     heroHeadline: settings.heroHeadline,
     heroSubheading: settings.heroSubheading,
     promotionalText: settings.promotionalText,
