@@ -378,6 +378,8 @@ function Block({
               "prose-h2:text-2xl prose-h2:sm:text-3xl prose-h3:text-xl prose-h3:sm:text-2xl",
               "prose-a:font-medium prose-a:text-blue-600 prose-a:underline prose-a:underline-offset-4 prose-a:hover:text-blue-700",
               "prose-ul:marker:text-blue-600 prose-ol:marker:text-blue-600",
+              "prose-img:rounded-lg prose-img:shadow-sm prose-img:my-8",
+              "prose-blockquote:border-l-blue-500 prose-blockquote:bg-blue-50/50 prose-blockquote:py-1 prose-blockquote:px-4",
             )}
             data-block-type="rich_text"
             dangerouslySetInnerHTML={{ __html: richHtml }}

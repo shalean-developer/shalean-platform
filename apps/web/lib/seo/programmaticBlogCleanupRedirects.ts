@@ -49,6 +49,12 @@ const coreProgrammaticBlogCleanupRedirects = [
     destination: "/blog/deep-cleaning-vs-regular-cleaning-cape-town",
     permanent: true,
   },
+  /** Legacy HC prepare-home slug → governed CMS cluster-2 article (single canonical URL). */
+  {
+    source: "/blog/prepare-home-before-cleaner-arrives-cape-town",
+    destination: "/blog/how-to-prepare-home-before-cleaner-arrives-cape-town",
+    permanent: true,
+  },
   /** Renamed pricing article slug (seed) → in-repo HC slug. */
   {
     source: "/blog/how-much-does-cleaning-cost-cape-town",

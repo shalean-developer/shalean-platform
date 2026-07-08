@@ -18,6 +18,7 @@ type Props = {
   renderAdvancedBlock: (block: BlogContentBlock, index: number, onChange: (next: BlogContentBlock) => void) => ReactNode;
   newAdvancedBlock: (type: "faq" | "cta") => BlogContentBlock;
   variant?: "default" | "wordpress";
+  uploadSlug?: string;
 };
 
 export function DocumentBodySection({
@@ -28,6 +29,7 @@ export function DocumentBodySection({
   renderAdvancedBlock,
   newAdvancedBlock,
   variant = "default",
+  uploadSlug,
 }: Props) {
   const previewContent: BlogContentJson = {
     schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION,
@@ -59,6 +61,7 @@ export function DocumentBodySection({
         html={documentHtml}
         onChange={onDocumentHtmlChange}
         variant={isWordPress ? "wordpress" : "document"}
+        uploadSlug={uploadSlug}
       />
 
       <details

@@ -55,8 +55,7 @@ export function injectRichTextHeadingAnchors(
       const id = `blog-rich-${safeScope}-${gen}`;
       gen += 1;
       entries.push({ id, label, level });
-      const spacer = attrs.trim().length > 0 ? " " : "";
-      out += `<h${levelNum}${attrs}${spacer}id="${escapeAttrValue(id)}">${inner}</h${levelNum}>`;
+      out += `<h${levelNum}${attrs} id="${escapeAttrValue(id)}">${inner}</h${levelNum}>`;
     }
     last = re.lastIndex;
   }

@@ -119,6 +119,7 @@ async function main() {
 
   let cluster1Id: string | null = null;
   let cluster2Id: string | null = null;
+  let tipsCategoryId: string | null = null;
   if (admin) {
     try {
       await ensureClusterTaxonomyTags(admin);
@@ -140,6 +141,15 @@ async function main() {
     }
     if (!cluster1Id) warnings.push("blog_tags: cluster-1 still missing after upsert.");
     if (!cluster2Id) warnings.push("blog_tags: cluster-2 still missing after upsert.");
+
+    const { data: tipsCat, error: tipsErr } = await admin
+      .from("blog_categories")
+      .select("id")
+      .eq("slug", "tips")
+      .maybeSingle();
+    if (tipsErr) warnings.push(`blog_categories tips lookup: ${tipsErr.message}`);
+    else if ((tipsCat as { id?: string } | null)?.id) tipsCategoryId = (tipsCat as { id: string }).id;
+    else warnings.push("blog_categories: tips slug missing — governed drafts will import without category.");
   }
 
   for (const fileName of SEED_FILES) {
@@ -243,7 +253,7 @@ async function main() {
       secondary_keywords,
       search_intent: "informational" as const,
       seo_internal_link_context: null as Record<string, unknown> | null,
-      category_id: null as string | null,
+      category_id: tipsCategoryId,
       semantic_cluster,
       related_guide_override_slugs,
     };

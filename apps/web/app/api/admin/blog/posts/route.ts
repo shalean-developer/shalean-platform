@@ -23,6 +23,7 @@ import {
 import { slugifyTitle } from "@/lib/blog/slugify-title";
 import { getRelatedPosts, type RelatedPostInput } from "@/lib/blog/seo/get-related-posts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -234,6 +235,9 @@ function buildRow(
   const seo_internal_link_context =
     ctxRaw == null ? null : parseSeoInternalLinkContext(ctxRaw) ?? null;
 
+  const featured_image_url = resolveBlogFeaturedSrc(slug, normalizeEmpty(input.featured_image_url));
+  const featured_image_alt = resolveBlogFeaturedAlt(slug, normalizeEmpty(input.featured_image_alt));
+
   return {
     slug,
     title: titleRow,
@@ -245,8 +249,8 @@ function buildRow(
     meta_title,
     meta_description,
     canonical_url: normalizeEmpty(input.canonical_url),
-    featured_image_url: normalizeEmpty(input.featured_image_url),
-    featured_image_alt: normalizeEmpty(input.featured_image_alt),
+    featured_image_url,
+    featured_image_alt,
     noindex: Boolean(input.noindex),
     content_json: content,
     reading_time_minutes,

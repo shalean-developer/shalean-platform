@@ -99,6 +99,36 @@ const BLOG_IMAGE_MAP_OVERRIDES: Record<string, string> = {
  * Additional slug → JPG entries (append-only; keys must not appear in `BLOG_IMAGE_MAP_OVERRIDES`).
  * Brand photography uses `{location}-{room}-{intent}.jpg` under `/public/images/blog/`.
  */
+/**
+ * Governed CMS slugs that share a pinned hero with an older in-repo slug (no duplicate map paths).
+ */
+export const BLOG_FEATURED_IMAGE_SLUG_ALIASES: Record<string, string> = {
+  "how-to-prepare-home-before-cleaner-arrives-cape-town": "prepare-home-before-cleaner-arrives-cape-town",
+};
+
+/** Human alt text for slugs where `generateBlogImageAlt` reads awkwardly. */
+const BLOG_FEATURED_ALT_OVERRIDES: Record<string, string> = {
+  "prepare-home-before-cleaner-arrives-cape-town":
+    "How to prepare your home before a cleaner arrives in Cape Town",
+  "how-to-prepare-home-before-cleaner-arrives-cape-town":
+    "How to prepare your home before a cleaner arrives in Cape Town",
+};
+
+/** CMS/local paths that must never win over slug-based heroes (missing dirs, generic placeholders). */
+const UNTRUSTED_BLOG_FEATURED_LOCAL_PREFIXES = ["/images/posts/"] as const;
+
+export function resolveBlogFeaturedImageSlug(slug: string): string {
+  const trimmed = slug.trim();
+  return BLOG_FEATURED_IMAGE_SLUG_ALIASES[trimmed] ?? trimmed;
+}
+
+export function isTrustedBlogFeaturedLocalPath(src: string): boolean {
+  const p = src.trim();
+  if (!p.startsWith("/")) return false;
+  if (p === DEFAULT_BLOG_FEATURED_IMAGE) return false;
+  return !UNTRUSTED_BLOG_FEATURED_LOCAL_PREFIXES.some((prefix) => p.startsWith(prefix));
+}
+
 export const BLOG_IMAGE_MAP_NEW_ADDITIONS: Record<string, string> = {
   "same-day-cleaning-cape-town": "/images/blog/cape-town-bedroom-guest-ready.jpg",
   "weekly-cleaning-routine-busy-professionals-cape-town": "/images/blog/cape-town-living-room-floor-deep-clean.jpg",
@@ -242,6 +272,7 @@ export function getSlugCategory(slug: string): ImageCategory {
     s.includes("how-often") ||
     s.includes("frequency") ||
     s.includes("prepare-home") ||
+    s.includes("how-to-prepare-home") ||
     s.includes("cleaning-mistakes") ||
     s.includes("how-long") ||
     s.includes("worth-hiring") ||
@@ -525,7 +556,9 @@ function allowedBlogImageRemoteHosts(): ReadonlySet<string> {
 export function coerceBlogImageSrcForNext(slug: string, src: string): string {
   const resolved = (src ?? "").trim();
   if (!resolved) return resolveBlogFeaturedSrc(slug.trim(), null);
-  if (resolved.startsWith("/")) return resolved;
+  if (resolved.startsWith("/")) {
+    return isTrustedBlogFeaturedLocalPath(resolved) ? resolved : resolveBlogFeaturedSrc(slug.trim(), null);
+  }
   try {
     const u = new URL(resolved);
     if (allowedBlogImageRemoteHosts().has(u.hostname)) return resolved;
@@ -537,18 +570,23 @@ export function coerceBlogImageSrcForNext(slug: string, src: string): string {
 
 export function resolveBlogFeaturedSrc(slug: string, dbFeaturedSrc?: string | null): string {
   const trimmedSlug = slug.trim();
-  const mapped = BLOG_IMAGE_MAP[trimmedSlug];
+  const imageSlug = resolveBlogFeaturedImageSlug(trimmedSlug);
+  const mapped = BLOG_IMAGE_MAP[imageSlug];
   if (mapped) return mapped;
   const db = dbFeaturedSrc?.trim();
-  if (db) return db;
+  if (db && isTrustedBlogFeaturedLocalPath(db)) return db;
+  if (db && (db.startsWith("http://") || db.startsWith("https://"))) return db;
   return DEFAULT_BLOG_FEATURED_IMAGE;
 }
 
 export function resolveBlogFeaturedAlt(slug: string, dbFeaturedAlt?: string | null): string {
   const trimmedSlug = slug.trim();
+  const imageSlug = resolveBlogFeaturedImageSlug(trimmedSlug);
+  const override = BLOG_FEATURED_ALT_OVERRIDES[trimmedSlug] ?? BLOG_FEATURED_ALT_OVERRIDES[imageSlug];
+  if (override) return override;
   const suburb = extractSuburbFromBlogSlug(trimmedSlug);
   const seoAlt = generateBlogImageAlt(trimmedSlug, suburb);
-  if (!BLOG_IMAGE_MAP[trimmedSlug] && dbFeaturedAlt?.trim()) return dbFeaturedAlt.trim();
+  if (!BLOG_IMAGE_MAP[imageSlug] && dbFeaturedAlt?.trim()) return dbFeaturedAlt.trim();
   return seoAlt;
 }
 

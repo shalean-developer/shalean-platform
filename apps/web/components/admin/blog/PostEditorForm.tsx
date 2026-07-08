@@ -31,9 +31,11 @@ import {
   splitBlocksForDocumentMode,
 } from "@/lib/blog/blogDocumentMode";
 import { blogPostViewLabel, buildBlogPostViewPath } from "@/lib/blog/build-blog-post-view-url";
+import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 import { DocumentBodySection } from "./DocumentBodySection";
 import { WordPressPostEditorLayout, WpLabeledField, WpTextareaField } from "./WordPressPostEditorLayout";
 import { WpMetabox } from "./WpMetabox";
+import { BlogFeaturedImageField } from "./BlogFeaturedImageField";
 import { BlogContentRenderer } from "@/components/blog/BlogContentRenderer";
 import { BlogContent } from "@/components/blog/engine/BlogContent";
 import { RichTextBlockEditor } from "./RichTextBlockEditor";
@@ -620,8 +622,18 @@ export function PostEditorForm({
       setMetaTitle(p.meta_title == null ? "" : String(p.meta_title));
       setMetaDescription(p.meta_description == null ? "" : String(p.meta_description));
       setCanonicalUrl(p.canonical_url == null ? "" : String(p.canonical_url));
-      setFeaturedUrl(p.featured_image_url == null ? "" : String(p.featured_image_url));
-      setFeaturedAlt(p.featured_image_alt == null ? "" : String(p.featured_image_alt));
+      setFeaturedUrl(
+        resolveBlogFeaturedSrc(
+          String(p.slug ?? ""),
+          p.featured_image_url == null ? null : String(p.featured_image_url),
+        ),
+      );
+      setFeaturedAlt(
+        resolveBlogFeaturedAlt(
+          String(p.slug ?? ""),
+          p.featured_image_alt == null ? null : String(p.featured_image_alt),
+        ),
+      );
       setNoindex(Boolean(p.noindex));
       setPrimaryKeyword(p.primary_keyword == null ? "" : String(p.primary_keyword));
       const sec = p.secondary_keywords;
@@ -871,17 +883,13 @@ export function PostEditorForm({
         </WpMetabox>
 
         <WpMetabox title="Featured image">
-          <WpLabeledField label="Image URL" htmlFor="wp-feat">
-            <Input
-              id="wp-feat"
-              className="font-mono text-xs"
-              value={featuredUrl}
-              onChange={(e) => setFeaturedUrl(e.target.value)}
-            />
-          </WpLabeledField>
-          <WpLabeledField label="Alt text" htmlFor="wp-feata">
-            <Input id="wp-feata" value={featuredAlt} onChange={(e) => setFeaturedAlt(e.target.value)} />
-          </WpLabeledField>
+          <BlogFeaturedImageField
+            imageUrl={featuredUrl}
+            altText={featuredAlt}
+            onImageUrlChange={setFeaturedUrl}
+            onAltTextChange={setFeaturedAlt}
+            slug={slug}
+          />
         </WpMetabox>
 
         <WpMetabox title="Categories">
@@ -1091,8 +1099,11 @@ export function PostEditorForm({
             onDocumentHtmlChange={setDocumentHtml}
             advancedBlocks={advancedBlocks}
             onAdvancedBlocksChange={setAdvancedBlocks}
-            renderAdvancedBlock={(block, _index, onChange) => <BlockFields block={block} onChange={onChange} />}
+            renderAdvancedBlock={(block, _index, onChange) => (
+              <BlockFields block={block} onChange={onChange} uploadSlug={slug} />
+            )}
             newAdvancedBlock={(type) => newBlock(type)}
+            uploadSlug={slug}
           />
         }
       />
@@ -1465,16 +1476,13 @@ export function PostEditorForm({
             title="Featured image"
             description="Hero image for listings and social sharing."
           >
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="feat">Image URL</Label>
-                <Input id="feat" className="rounded-lg font-mono text-sm" value={featuredUrl} onChange={(e) => setFeaturedUrl(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="feata">Alt text</Label>
-                <Input id="feata" className="rounded-lg" value={featuredAlt} onChange={(e) => setFeaturedAlt(e.target.value)} />
-              </div>
-            </div>
+            <BlogFeaturedImageField
+              imageUrl={featuredUrl}
+              altText={featuredAlt}
+              onImageUrlChange={setFeaturedUrl}
+              onAltTextChange={setFeaturedAlt}
+              slug={slug}
+            />
           </EditorialSectionCard>
 
           <section className="space-y-5">
@@ -1544,7 +1552,7 @@ export function PostEditorForm({
                       </Button>
                     </div>
                   </div>
-                  <BlockFields block={block} onChange={(next) => updateBlock(i, next)} />
+                  <BlockFields block={block} onChange={(next) => updateBlock(i, next)} uploadSlug={slug} />
                 </div>
               ))}
             </div>
@@ -1580,9 +1588,11 @@ export function PostEditorForm({
 function BlockFields({
   block,
   onChange,
+  uploadSlug,
 }: {
   block: BlogContentBlock;
   onChange: (b: BlogContentBlock) => void;
+  uploadSlug?: string;
 }) {
   const lab = "text-xs font-medium text-zinc-600 dark:text-zinc-400";
   const inp = "mt-1 w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-950";
@@ -1895,7 +1905,11 @@ function BlockFields({
       return (
         <div className="space-y-2">
           <label className={lab}>Rich content</label>
-          <RichTextBlockEditor html={block.html} onChange={(html) => onChange({ ...block, html })} />
+          <RichTextBlockEditor
+            html={block.html}
+            onChange={(html) => onChange({ ...block, html })}
+            uploadSlug={uploadSlug}
+          />
         </div>
       );
     case "paragraph":

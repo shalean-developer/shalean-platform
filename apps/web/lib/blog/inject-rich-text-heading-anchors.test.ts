@@ -18,4 +18,11 @@ describe("injectRichTextHeadingAnchors", () => {
     const { entries } = injectRichTextHeadingAnchors(html, "scope");
     expect(entries).toEqual([{ id: "keep-me", label: "Title", level: 2 }]);
   });
+
+  it("inserts a space before id when the heading has no other attributes", () => {
+    const html = `<h2>Quick answer</h2>`;
+    const { html: out } = injectRichTextHeadingAnchors(html, "scope");
+    expect(out).toBe('<h2 id="blog-rich-scope-0">Quick answer</h2>');
+    expect(out).not.toContain("<h2id=");
+  });
 });
