@@ -49,7 +49,11 @@ async function main(): Promise<void> {
   if (singleBookingId) {
     targets.push({ bookingId: singleBookingId });
   } else {
-    const stripped = await listTeamBookingsWithStrippedRoster(admin, { from, to, limit: 500 });
+    const stripped = await listTeamBookingsWithStrippedRoster(admin, {
+      from: from ?? undefined,
+      to: to ?? undefined,
+      limit: 500,
+    });
     for (const row of stripped) {
       const participants =
         row.bookingId === HLENGIWE_BOOKING_ID ? [...HLENGIWE_PARTICIPANTS] : undefined;

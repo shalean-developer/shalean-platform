@@ -99,6 +99,22 @@ export async function sendReferralCampaignEmail(params: {
   if (!resendKey) return { sent: false, error: "Email not configured." };
   const resend = new Resend(resendKey);
 
+  if (!params.isTest) {
+    const monthStart = new Date();
+    monthStart.setUTCDate(1);
+    monthStart.setUTCHours(0, 0, 0, 0);
+    const { data: existingSend } = await params.admin
+      .from("email_campaign_sends")
+      .select("id")
+      .eq("campaign_id", campaignId)
+      .eq("recipient_email", params.email)
+      .gte("created_at", monthStart.toISOString())
+      .in("status", ["pending", "sent"])
+      .limit(1)
+      .maybeSingle();
+    if (existingSend) return { sent: false, error: "Already sent this month." };
+  }
+
   const { data: sendRow, error: insertErr } = await params.admin
     .from("email_campaign_sends")
     .insert({

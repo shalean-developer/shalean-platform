@@ -98,11 +98,11 @@ create table if not exists public.email_campaign_sends (
   created_at timestamptz not null default now()
 );
 
-create unique index if not exists email_campaign_sends_monthly_unique_idx
-  on public.email_campaign_sends (campaign_id, recipient_email, (date_trunc('month', created_at at time zone 'UTC')));
-
 create index if not exists email_campaign_sends_campaign_idx
   on public.email_campaign_sends (campaign_id, created_at desc);
+
+create index if not exists email_campaign_sends_recipient_month_idx
+  on public.email_campaign_sends (campaign_id, recipient_email, created_at desc);
 
 -- Seed default referral monthly campaign
 insert into public.email_campaigns (
