@@ -50,7 +50,7 @@ const nav = [
   { href: CUSTOMER_ACCOUNT_REVIEWS_PATH, label: "Reviews", icon: Star },
   { href: "/dashboard/notifications", label: "Notifications", icon: Bell },
   { href: "/dashboard/profile", label: "Profile", icon: UserRound },
-  { href: "/dashboard/referrals", label: "Referrals", icon: Gift },
+  { href: "/account/referrals", label: "Referrals", icon: Gift },
 ] as const;
 
 export function DashboardShell({ children }: { children: ReactNode }) {

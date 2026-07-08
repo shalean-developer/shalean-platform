@@ -225,6 +225,7 @@ export const bookingV2ConfirmSchema = z.object({
         .optional(),
     })
     .passthrough(),
+  applyCleaningCreditZar: z.number().min(0).optional(),
 });
 
 export type BookingV2ConfirmPayload = z.infer<typeof bookingV2ConfirmSchema>;

@@ -88,6 +88,7 @@ export function GlobalTopNav() {
                       className={cn(navLinkClass, servicesOpen && "bg-blue-50 text-blue-700")}
                       onClick={() => setServicesOpen((v) => !v)}
                       aria-expanded={servicesOpen}
+                      suppressHydrationWarning
                     >
                       {label}
                       <ChevronDown
@@ -151,6 +152,7 @@ export function GlobalTopNav() {
               aria-expanded={mobileOpen}
               aria-controls="mobile-nav"
               aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              suppressHydrationWarning
             >
               {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>

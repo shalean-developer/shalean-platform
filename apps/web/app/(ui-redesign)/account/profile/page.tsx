@@ -27,6 +27,7 @@ import { useUser } from "@/hooks/useUser";
 import { useBookings } from "@/hooks/useBookings";
 import { useAddresses } from "@/hooks/useAddresses";
 import { useReviews } from "@/hooks/useReviews";
+import { useReferralSummary } from "@/hooks/useReferralSummary";
 import { HelpCard } from "@/components/account/HelpCard";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -48,6 +49,7 @@ export default function AccountProfilePage() {
   const { bookings, loading: bookLoading } = useBookings();
   const { addresses } = useAddresses();
   const { reviews } = useReviews();
+  const { data: referralData } = useReferralSummary();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -356,10 +358,27 @@ export default function AccountProfilePage() {
             <h2 className="text-sm font-semibold text-gray-900">Referrals &amp; rewards</h2>
           </div>
           <div className="p-5">
-            <p className="text-sm text-gray-500">
-              Invite friends and earn discounts on future cleans.{" "}
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[
+                { label: "Total referrals", value: referralData?.totalReferrals ?? 0 },
+                { label: "Successful", value: referralData?.successfulReferrals ?? 0 },
+                { label: "Available credit", value: `R ${(referralData?.creditBalance ?? 0).toLocaleString("en-ZA")}` },
+                { label: "Credit used", value: `R ${(referralData?.creditUsed ?? 0).toLocaleString("en-ZA")}` },
+              ].map((s) => (
+                <div key={s.label} className="rounded-xl bg-gray-50 px-3 py-2.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wide text-gray-400">{s.label}</p>
+                  <p className="mt-0.5 text-lg font-bold text-gray-900">{s.value}</p>
+                </div>
+              ))}
+            </div>
+            <p className="mt-4 text-sm text-gray-500">
+              Invite friends and earn Cleaning Credit on future bookings.{" "}
               <Link href="/account/referrals" className="font-semibold text-blue-600 hover:underline">
-                View your referral page →
+                View referrals →
+              </Link>
+              {" · "}
+              <Link href="/refer" className="font-semibold text-blue-600 hover:underline">
+                Refer a friend
               </Link>
             </p>
           </div>

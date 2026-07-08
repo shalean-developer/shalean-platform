@@ -9,8 +9,9 @@ import {
   type ReferralRedemptionSnapshot,
 } from "@/lib/referrals/referralCheckoutEvents";
 import { countPaidBookingsForCustomer, resolveReferrerFromCode } from "@/lib/referrals/server";
+import { getReferralProgramSettingsCached } from "@/lib/referrals/settings";
 
-const REFERRAL_CHECKOUT_DISCOUNT_ZAR = 50;
+const DEFAULT_CHECKOUT_DISCOUNT_ZAR = 50;
 
 export type ValidateReferralForCheckoutResult =
   | { valid: false }
@@ -121,9 +122,12 @@ export async function validateReferralForCheckout(params: {
     }
   }
 
+  const settings = await getReferralProgramSettingsCached(params.admin);
+  if (!settings.enabled) return { valid: false };
+
   return {
     valid: true,
-    discountZar: REFERRAL_CHECKOUT_DISCOUNT_ZAR,
+    discountZar: Math.round(settings.checkoutDiscountZar),
     normalizedCode: normalized,
     referrerType: referrer.referrerType,
     referrerId: referrer.referrerId,
@@ -206,7 +210,7 @@ export async function recordReferralCheckoutRedemption(params: {
   const code = String(params.metadata.referral_checkout_code ?? "").trim().toUpperCase();
   const refType = String(params.metadata.referral_checkout_referrer_type ?? "").trim();
   const refId = String(params.metadata.referral_checkout_referrer_id ?? "").trim();
-  const discRaw = String(params.metadata.referral_checkout_discount_zar ?? String(REFERRAL_CHECKOUT_DISCOUNT_ZAR));
+  const discRaw = String(params.metadata.referral_checkout_discount_zar ?? String(DEFAULT_CHECKOUT_DISCOUNT_ZAR));
   const metaReferral = String(params.metadata.referral_code ?? "").trim().toUpperCase();
   if (!code || (refType !== "customer" && refType !== "cleaner") || !/^[0-9a-f-]{36}$/i.test(refId)) {
     await markBookingReferralReconciliationRequired(params.admin, params.bookingId);
@@ -222,7 +226,7 @@ export async function recordReferralCheckoutRedemption(params: {
     return { outcome: "insert_failed_reconciled", message: "referral_code_mismatch" };
   }
 
-  const discountZar = Math.max(1, Math.round(Number(discRaw)) || REFERRAL_CHECKOUT_DISCOUNT_ZAR);
+  const discountZar = Math.max(1, Math.round(Number(discRaw)) || DEFAULT_CHECKOUT_DISCOUNT_ZAR);
   const email = normalizeEmail(params.customerEmail);
   const redeemedEmail = params.userId ? null : email || null;
   const fp = String(params.metadata.referral_checkout_fingerprint ?? "").trim() || null;

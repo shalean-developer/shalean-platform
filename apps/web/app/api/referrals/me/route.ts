@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { getOrCreateCustomerReferralCode } from "@/lib/referrals/server";
+import { getCreditSummary } from "@/lib/referrals/credits";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -23,27 +24,44 @@ export async function GET(request: Request) {
   const userId = userData.user.id;
 
   const referralCode = await getOrCreateCustomerReferralCode(admin, userId);
-  const [rowsRes, profileRes] = await Promise.all([
+  const [rowsRes, creditSummary] = await Promise.all([
     admin
       .from("referrals")
-      .select("id, status, reward_amount, created_at, code")
+      .select("id, status, reward_amount, created_at, code, referred_email_or_phone, rewarded_at")
       .eq("referrer_type", "customer")
       .eq("referrer_id", userId)
       .order("created_at", { ascending: false })
       .limit(200),
-    admin.from("user_profiles").select("credit_balance_zar").eq("id", userId).maybeSingle(),
+    getCreditSummary(admin, userId),
   ]);
   if (rowsRes.error) return NextResponse.json({ error: rowsRes.error.message }, { status: 500 });
-  if (profileRes.error) return NextResponse.json({ error: profileRes.error.message }, { status: 500 });
 
   const rows = rowsRes.data ?? [];
-  const finalized = (s: string) => {
+  const isRewarded = (s: string) => {
     const x = s.toLowerCase();
     return x === "completed" || x === "rewarded";
   };
-  const totalEarned = rows.filter((r) => finalized(String(r.status ?? ""))).reduce((s, r) => s + Number(r.reward_amount ?? 0), 0);
-  const count = rows.filter((r) => finalized(String(r.status ?? ""))).length;
-  const creditBalance = Number((profileRes.data as { credit_balance_zar?: number } | null)?.credit_balance_zar ?? 0);
+  const isPending = (s: string) => s.toLowerCase() === "pending";
+  const successfulReferrals = rows.filter((r) => isRewarded(String(r.status ?? "")));
+  const pendingReferrals = rows.filter((r) => isPending(String(r.status ?? "")));
+  const totalEarned = successfulReferrals.reduce((s, r) => s + Number(r.reward_amount ?? 0), 0);
 
-  return NextResponse.json({ referralCode, totalEarned, referralsCount: count, creditBalance });
+  return NextResponse.json({
+    referralCode,
+    totalEarned,
+    referralsCount: successfulReferrals.length,
+    creditBalance: creditSummary.balance,
+    creditUsed: creditSummary.totalUsed,
+    totalReferrals: rows.length,
+    pendingReferrals: pendingReferrals.length,
+    successfulReferrals: successfulReferrals.length,
+    referralHistory: rows.map((r) => ({
+      id: r.id,
+      status: r.status,
+      rewardAmount: Number(r.reward_amount ?? 0),
+      referredContact: (r as { referred_email_or_phone?: string }).referred_email_or_phone ?? null,
+      createdAt: r.created_at,
+      rewardedAt: (r as { rewarded_at?: string | null }).rewarded_at ?? null,
+    })),
+  });
 }

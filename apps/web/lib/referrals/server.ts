@@ -6,6 +6,8 @@ import {
   emitCleanerReferralRewardCredited,
   emitCustomerReferralLifecycleRewardEvents,
 } from "@/lib/referrals/referralLifecycleEvents";
+import { creditCleaningCredit } from "@/lib/referrals/credits";
+import { getReferralProgramSettingsCached } from "@/lib/referrals/settings";
 
 function randDigits(len: number): string {
   let out = "";
@@ -137,12 +139,13 @@ export async function createPendingCustomerReferral(params: {
     return;
   }
 
+  const settings = await getReferralProgramSettingsCached(params.admin);
   const { error: insErr } = await params.admin.from("referrals").insert({
     referrer_id: referrer.referrerId,
     referrer_type: "customer",
     referred_email_or_phone: email,
     referred_user_id: params.referredUserId,
-    reward_amount: 50,
+    reward_amount: settings.rewardAmountZar,
     status: "pending",
     code: codeSnapshot,
   });
@@ -250,8 +253,13 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
     return;
   }
 
-  const reward = Number((pending as { reward_amount?: number }).reward_amount ?? 50);
+  const programSettings = await getReferralProgramSettingsCached(params.admin);
+  const reward = Number((pending as { reward_amount?: number }).reward_amount ?? programSettings.rewardAmountZar);
   const now = new Date().toISOString();
+  const creditExpiresAt =
+    programSettings.rewardExpiryDays != null
+      ? new Date(Date.now() + programSettings.rewardExpiryDays * 24 * 60 * 60 * 1000).toISOString()
+      : null;
 
   const { error: upErr } = await params.admin
     .from("referrals")
@@ -259,6 +267,7 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
       status: "rewarded",
       completed_at: now,
       rewarded_at: now,
+      credit_expires_at: creditExpiresAt,
       referred_user_id: params.bookingUserId ?? (pending as { referred_user_id?: string | null }).referred_user_id ?? null,
     })
     .eq("id", pending.id)
@@ -276,16 +285,16 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
     payload: { referral_id: pending.id, booking_id: params.bookingId ?? null, referred_email: email },
   });
 
-  await params.admin.from("user_profiles").upsert({ id: referrerId, credit_balance_zar: 0 }, { onConflict: "id" });
-  const { data: profile } = await params.admin.from("user_profiles").select("credit_balance_zar").eq("id", referrerId).maybeSingle();
-  const bal = Number((profile as { credit_balance_zar?: number } | null)?.credit_balance_zar ?? 0);
   const credit = Math.max(0, reward);
-  const { error: creditErr } = await params.admin
-    .from("user_profiles")
-    .update({ credit_balance_zar: Math.max(0, bal) + credit })
-    .eq("id", referrerId);
-  if (creditErr) {
-    await reportOperationalIssue("warn", "referrals/walletCredit", creditErr.message, {
+  const creditResult = await creditCleaningCredit({
+    admin: params.admin,
+    userId: referrerId,
+    amountZar: credit,
+    referralId: pending.id,
+    note: `Referral reward for ${email}`,
+  });
+  if (!creditResult.ok) {
+    await reportOperationalIssue("warn", "referrals/walletCredit", creditResult.error, {
       referralId: pending.id,
       referrerId,
       bookingId: params.bookingId ?? null,

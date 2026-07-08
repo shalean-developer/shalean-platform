@@ -34,6 +34,7 @@ import {
   canonicalServiceSlugFromBookingV2,
   deriveDurationMinutesFromBookingV2,
 } from "@/lib/booking-v2/bookingV2ServiceSlug";
+import { spendCleaningCredit } from "@/lib/referrals/credits";
 
 export const runtime = "nodejs";
 
@@ -588,9 +589,29 @@ export async function POST(request: Request) {
     postalCode: data.postalCode,
   });
 
+  let payAmountZar = serverBreakdown.estimated_total ?? serverBreakdown.total ?? clientTotal;
+  let creditAppliedZar = 0;
+
+  const requestedCredit = Math.round(Number(data.applyCleaningCreditZar ?? 0));
+  if (requestedCredit > 0) {
+    const spendResult = await spendCleaningCredit({
+      admin: supabase,
+      userId,
+      amountZar: Math.min(requestedCredit, payAmountZar),
+      bookingId: inserted.id,
+      note: "Applied at booking-v2 checkout",
+    });
+    if (spendResult.ok) {
+      creditAppliedZar = spendResult.spent;
+      payAmountZar = Math.max(0, payAmountZar - creditAppliedZar);
+    }
+  }
+
   return NextResponse.json({
     success: true,
     bookingId: inserted.id,
     paystackReference,
+    payAmountZar,
+    creditAppliedZar,
   });
 }

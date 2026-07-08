@@ -248,6 +248,26 @@ function PaymentSection({ user }: { user: User }) {
 
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [creditBalance, setCreditBalance] = useState(0);
+  const [applyCredit, setApplyCredit] = useState(false);
+
+  const baseTotal = values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? config.basePrice;
+  const creditToApply = applyCredit ? Math.min(creditBalance, baseTotal) : 0;
+  const payTotal = Math.max(0, baseTotal - creditToApply);
+
+  useEffect(() => {
+    void (async () => {
+      const session = await getSession();
+      if (!session?.access_token) return;
+      const res = await fetch("/api/referrals/credit", {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      });
+      if (res.ok) {
+        const j = (await res.json()) as { balance?: number };
+        setCreditBalance(Number(j.balance ?? 0));
+      }
+    })();
+  }, []);
 
   async function handleConfirmAndPay() {
     setConfirming(true);
@@ -268,13 +288,18 @@ function PaymentSection({ user }: { user: User }) {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify(values),
+        body: JSON.stringify({
+          ...values,
+          applyCleaningCreditZar: creditToApply,
+        }),
       });
 
       const confirmJson = (await confirmRes.json()) as {
         success?: boolean;
         bookingId?: string;
         paystackReference?: string;
+        payAmountZar?: number;
+        creditAppliedZar?: number;
         error?: string;
       };
 
@@ -291,6 +316,7 @@ function PaymentSection({ user }: { user: User }) {
       }
 
       const { paystackReference, bookingId } = confirmJson;
+      const chargeAmount = confirmJson.payAmountZar ?? payTotal;
       trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
         service: serviceSlug,
         service_type: serviceSlug,
@@ -312,10 +338,7 @@ function PaymentSection({ user }: { user: User }) {
       popup.newTransaction({
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "",
         email: user.email ?? "",
-        amount:
-          (values.pricingSummary?.estimated_total ??
-            values.pricingSummary?.total ??
-            config.basePrice) * 100, // in kobo/cents
+        amount: chargeAmount * 100,
         currency: "ZAR",
         reference: paystackReference,
         onSuccess: () => {
@@ -367,11 +390,29 @@ function PaymentSection({ user }: { user: User }) {
         </div>
         <div className="border-t border-slate-200 pt-3 space-y-3">
           <CustomerPriceBreakdown pricing={values.pricingSummary} compact />
+          {creditBalance > 0 ? (
+            <label className="flex cursor-pointer items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
+              <div>
+                <p className="text-sm font-semibold text-emerald-900">Apply Cleaning Credit</p>
+                <p className="text-xs text-emerald-700">R {creditBalance.toLocaleString("en-ZA")} available</p>
+              </div>
+              <input
+                type="checkbox"
+                checked={applyCredit}
+                onChange={(e) => setApplyCredit(e.target.checked)}
+                className="h-5 w-5 rounded border-emerald-300 text-emerald-600"
+              />
+            </label>
+          ) : null}
+          {creditToApply > 0 ? (
+            <div className="flex items-center justify-between text-sm text-emerald-700">
+              <span>Cleaning Credit</span>
+              <span>- R {creditToApply.toLocaleString("en-ZA")}</span>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between text-base font-bold">
             <span className="text-slate-800">Total to pay</span>
-            <span className="text-blue-700">
-              R{(values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? config.basePrice).toLocaleString("en-ZA")}
-            </span>
+            <span className="text-blue-700">R {payTotal.toLocaleString("en-ZA")}</span>
           </div>
         </div>
       </div>
@@ -399,7 +440,7 @@ function PaymentSection({ user }: { user: User }) {
         ) : (
           <>
             <Lock className="h-5 w-5" aria-hidden />
-            Pay R{(values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? config.basePrice).toLocaleString("en-ZA")} securely
+            Pay R{payTotal.toLocaleString("en-ZA")} securely
           </>
         )}
       </button>

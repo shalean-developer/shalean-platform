@@ -9,6 +9,18 @@ export type ReferralSummary = {
   totalEarned: number;
   referralsCount: number;
   creditBalance: number;
+  creditUsed?: number;
+  totalReferrals?: number;
+  pendingReferrals?: number;
+  successfulReferrals?: number;
+  referralHistory?: {
+    id: string;
+    status: string;
+    rewardAmount: number;
+    referredContact: string | null;
+    createdAt: string;
+    rewardedAt: string | null;
+  }[];
 };
 
 export function useReferralSummary(): {
@@ -48,6 +60,11 @@ export function useReferralSummary(): {
         totalEarned: Number(j.totalEarned ?? 0),
         referralsCount: Number(j.referralsCount ?? 0),
         creditBalance: Number(j.creditBalance ?? 0),
+        creditUsed: Number(j.creditUsed ?? 0),
+        totalReferrals: Number(j.totalReferrals ?? 0),
+        pendingReferrals: Number(j.pendingReferrals ?? 0),
+        successfulReferrals: Number(j.successfulReferrals ?? 0),
+        referralHistory: j.referralHistory ?? [],
       });
     }
     setLoading(false);
