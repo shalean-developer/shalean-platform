@@ -3,7 +3,12 @@ import "server-only";
 import { Resend } from "resend";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { assignConversionExperimentVariant } from "@/lib/conversion/assignConversionExperiment";
+import { customerRebookLandingUrl } from "@/lib/customer/customerRebookLinkToken";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import {
+  buildReengagementEmailHtml,
+  buildReengagementEmailSubject,
+} from "@/lib/email/reengagementEmailHtml";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { customerPhoneToE164 } from "@/lib/notifications/customerPhoneNormalize";
@@ -16,13 +21,15 @@ function getResend(): Resend | null {
   return new Resend(key);
 }
 
-function brandShell(inner: string): string {
-  return `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-  <h2 style="margin-bottom: 8px;">Shalean<span style="color:#2563eb;">.</span></h2>
-  ${inner}
-  <p style="margin-top: 20px; font-size: 12px; color: #9ca3af;">Shalean Cleaning Services</p>
-</div>`;
+async function loadFirstName(admin: SupabaseClient, userId: string): Promise<string | null> {
+  const { data } = await admin.from("user_profiles").select("full_name").eq("id", userId).maybeSingle();
+  const fullName =
+    data && typeof data === "object" && "full_name" in data
+      ? (data as { full_name?: string | null }).full_name
+      : null;
+  const trimmed = fullName?.trim();
+  if (!trimmed) return null;
+  return trimmed.split(/\s+/)[0] ?? null;
 }
 
 async function sendGrowthHtml(params: {
@@ -58,34 +65,53 @@ async function sendGrowthHtml(params: {
   }
 }
 
+function buildGrowthReengagementEmail(params: {
+  userId: string;
+  firstName: string | null;
+  short: boolean;
+}): { subject: string; html: string } {
+  const base = getPublicAppUrlBase();
+  const rebookUrl = customerRebookLandingUrl({ userId: params.userId });
+  const bookUrl = `${base}/book`;
+
+  if (params.short) {
+    return {
+      subject: params.firstName ? `Book your next clean, ${params.firstName}` : "Book your next clean",
+      html: buildReengagementEmailHtml({ rebookUrl, bookUrl, firstName: params.firstName }),
+    };
+  }
+
+  return {
+    subject: buildReengagementEmailSubject(params.firstName),
+    html: buildReengagementEmailHtml({ rebookUrl, bookUrl, firstName: params.firstName }),
+  };
+}
+
 export async function sendGrowthRetentionReminderEmail(params: {
   to: string;
   userId: string;
   supabaseAdmin?: SupabaseClient | null;
 }): Promise<boolean> {
-  const base = getPublicAppUrlBase();
-  const bookUrl = `${base}/book`;
   let short = false;
+  let firstName: string | null = null;
   if (params.supabaseAdmin) {
     const { variant } = await assignConversionExperimentVariant(params.supabaseAdmin, {
       subjectId: params.userId,
       experimentKey: "email_copy_test",
     });
     short = variant === "variant_a";
+    firstName = await loadFirstName(params.supabaseAdmin, params.userId);
   }
-  const html = short
-    ? brandShell(`
-  <p style="font-size:16px;line-height:1.45;font-weight:600;">Ready for your next clean?</p>
-  <p style="margin-top:20px;"><a href="${bookUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700;">Book now</a></p>
-`)
-    : brandShell(`
-  <p style="font-size:15px;line-height:1.5;">We have not seen a booking from you in a little while.</p>
-  <p style="font-size:15px;line-height:1.5;">If you would like to schedule your next clean, you can book in under a minute.</p>
-  <p style="margin-top:18px;"><a href="${bookUrl}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:600;">Book again</a></p>
-`);
+
+  const { subject, html } = buildGrowthReengagementEmail({
+    userId: params.userId,
+    firstName,
+    short,
+  });
+
   return sendGrowthHtml({
     source: "growth_retention_reminder",
-    subject: short ? "Book your next clean" : "Time for your next clean?",
+    subject,
     html,
     to: params.to,
     userId: params.userId,
@@ -97,29 +123,26 @@ export async function sendGrowthWinBackEmail(params: {
   userId: string;
   supabaseAdmin?: SupabaseClient | null;
 }): Promise<boolean> {
-  const base = getPublicAppUrlBase();
-  const bookUrl = `${base}/book`;
   let short = false;
+  let firstName: string | null = null;
   if (params.supabaseAdmin) {
     const { variant } = await assignConversionExperimentVariant(params.supabaseAdmin, {
       subjectId: params.userId,
       experimentKey: "email_copy_test",
     });
     short = variant === "variant_a";
+    firstName = await loadFirstName(params.supabaseAdmin, params.userId);
   }
-  const html = short
-    ? brandShell(`
-  <p style="font-size:16px;line-height:1.45;font-weight:600;">We would love you back.</p>
-  <p style="margin-top:20px;"><a href="${bookUrl}" style="display:inline-block;background:#059669;color:#fff;padding:12px 18px;border-radius:10px;text-decoration:none;font-weight:700;">See slots</a></p>
-`)
-    : brandShell(`
-  <p style="font-size:15px;line-height:1.5;">We would love to welcome you back.</p>
-  <p style="font-size:15px;line-height:1.5;">Here is a limited-time offer to restart your home cleaning routine — use the link below to see current availability.</p>
-  <p style="margin-top:18px;"><a href="${bookUrl}" style="display:inline-block;background:#059669;color:#fff;padding:10px 16px;border-radius:10px;text-decoration:none;font-weight:600;">See availability</a></p>
-`);
+
+  const { subject, html } = buildGrowthReengagementEmail({
+    userId: params.userId,
+    firstName,
+    short,
+  });
+
   return sendGrowthHtml({
     source: "growth_win_back",
-    subject: short ? "Come back — book today" : "We would love to have you back",
+    subject: short ? "Welcome back — book today" : subject,
     html,
     to: params.to,
     userId: params.userId,
@@ -148,12 +171,11 @@ export async function sendGrowthTouchSms(params: {
     });
     return false;
   }
-  const base = getPublicAppUrlBase();
-  const bookUrl = `${base}/book`;
+  const rebookUrl = customerRebookLandingUrl({ userId: params.userId });
   const body =
     params.variant === "win_back"
-      ? `Shalean: We'd love you back — book a clean in a tap: ${bookUrl}`.slice(0, SMS_MAX)
-      : `Shalean: Time for your next clean? Book here: ${bookUrl}`.slice(0, SMS_MAX);
+      ? `Shalean: Welcome back! Book your next clean: ${rebookUrl}`.slice(0, SMS_MAX)
+      : `Shalean: Time for your next clean? Book here: ${rebookUrl}`.slice(0, SMS_MAX);
   const res = await sendSmsFallback({
     toE164: e164,
     body,

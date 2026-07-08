@@ -207,19 +207,36 @@ export function BookingV2Provider({
   }, []);
 
   const rebookId = searchParams.get("rebook")?.trim() ?? "";
+  const rebookToken = searchParams.get("rt")?.trim() ?? "";
   useEffect(() => {
     if (!rebookId) return;
     let cancelled = false;
     void (async () => {
-      const out = await dashboardFetchJson<{ booking?: BookingRow }>(
-        `/api/customer/bookings/${encodeURIComponent(rebookId)}`,
-      );
+      let out: { ok: true; data: { booking?: BookingRow } } | { ok: false; status: number; error: string };
+
+      if (rebookToken) {
+        const res = await fetch(
+          `/api/rebook/prefill?rebook=${encodeURIComponent(rebookId)}&rt=${encodeURIComponent(rebookToken)}`,
+        );
+        const j = (await res.json().catch(() => ({}))) as { booking?: BookingRow; error?: string };
+        out = res.ok
+          ? { ok: true, data: j }
+          : { ok: false, status: res.status, error: j.error ?? res.statusText };
+      } else {
+        out = await dashboardFetchJson<{ booking?: BookingRow }>(
+          `/api/customer/bookings/${encodeURIComponent(rebookId)}`,
+        );
+      }
+
       if (cancelled || !out.ok || !out.data.booking) return;
 
       const row = out.data.booking;
       const rowSlug = bookingServiceSlugFromBookingRow(row);
       if (rowSlug !== serviceSlug) {
-        router.replace(`/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=2`);
+        const redirectUrl = rebookToken
+          ? `/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=2&rt=${encodeURIComponent(rebookToken)}`
+          : `/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=2`;
+        router.replace(redirectUrl);
         return;
       }
 
@@ -230,7 +247,7 @@ export function BookingV2Provider({
     return () => {
       cancelled = true;
     };
-  }, [rebookId, serviceSlug, cleanerMode, form, router]);
+  }, [rebookId, rebookToken, serviceSlug, cleanerMode, form, router]);
 
   // Persist to localStorage whenever form changes
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

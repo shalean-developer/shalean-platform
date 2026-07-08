@@ -2,7 +2,17 @@ import { Resend } from "resend";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
+import {
+  customerRebookLandingUrl,
+  customerRebookTokenSubjectForBooking,
+  isCustomerRebookLinkSigningConfigured,
+  signCustomerRebookToken,
+} from "@/lib/customer/customerRebookLinkToken";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import {
+  buildReengagementEmailHtml,
+  buildReengagementEmailSubject,
+} from "@/lib/email/reengagementEmailHtml";
 import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 import { sendCustomerEmailWithDbTemplateFallback } from "@/lib/email/customerEmailFromTemplate";
 import { buildLifecycleTemplateData } from "@/lib/templates/bookingEmailTemplateData";
@@ -28,6 +38,9 @@ export type LifecycleEmailBookingContext = {
   dateLabel: string;
   timeLabel: string;
   location: string;
+  /** Auth user id when the booking is linked to an account. */
+  userId?: string | null;
+  firstName?: string | null;
 };
 
 function escapeHtml(s: string): string {
@@ -239,56 +252,51 @@ export async function sendReviewEmail(
   return result;
 }
 
+function rebookUrlForLifecycleContext(ctx: LifecycleEmailBookingContext): string {
+  const userId = ctx.userId?.trim();
+  if (userId) {
+    return customerRebookLandingUrl({ userId, bookingId: ctx.bookingId });
+  }
+  const base = getPublicAppUrlBase();
+  if (isCustomerRebookLinkSigningConfigured()) {
+    try {
+      const t = signCustomerRebookToken({
+        userId: customerRebookTokenSubjectForBooking(ctx.bookingId),
+        bookingId: ctx.bookingId,
+      });
+      return `${base}/rebook?t=${encodeURIComponent(t)}`;
+    } catch {
+      // fall through
+    }
+  }
+  return `${base}/rebook`;
+}
+
 function buildRebookHtml(ctx: LifecycleEmailBookingContext): string {
   const base = getPublicAppUrlBase();
-  const accountUrl = customerAccountBookingsUrl(base);
+  const rebookUrl = rebookUrlForLifecycleContext(ctx);
   const bookUrl = `${base}/book`;
-  const reviewUrl = `${base}/review?booking=${encodeURIComponent(ctx.bookingId)}`;
 
-  const inner = `
-  <h1 style="font-size: 22px; margin: 0 0 12px;">Ready for your next clean?</h1>
-  <p style="color:#6b7280; margin-bottom: 16px;">Rebook in seconds — your last details can carry over.</p>
-  <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:16px;">
-    <p><strong>Last service:</strong> ${escapeHtml(ctx.serviceLabel)}</p>
-    <p><strong>When:</strong> ${escapeHtml(ctx.dateLabel)}</p>
-  </div>
-  <p style="margin: 16px 0;">
-    <a href="${escapeAttr(bookUrl)}" style="display:inline-block; background:#2563eb; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Book again</a>
-  </p>
-  <p style="font-size: 14px; color: #374151;">
-    <a href="${escapeAttr(accountUrl)}" style="color:#2563eb;">Account &amp; bookings</a>
-    &nbsp;·&nbsp;
-    <a href="${escapeAttr(reviewUrl)}" style="color:#2563eb;">Leave a review</a>
-  </p>`;
-
-  return brandShell(inner);
+  return buildReengagementEmailHtml({
+    rebookUrl,
+    bookUrl,
+    firstName: ctx.firstName,
+  });
 }
 
 /** ~24h after appointment */
 export async function sendRebookEmail(ctx: LifecycleEmailBookingContext): Promise<{ sent: boolean; error?: string }> {
-  return sendLifecycle("rebook_email", "Book your next clean", buildRebookHtml(ctx), ctx.to, ctx.bookingId);
+  return sendLifecycle(
+    "rebook_email",
+    buildReengagementEmailSubject(ctx.firstName),
+    buildRebookHtml(ctx),
+    ctx.to,
+    ctx.bookingId,
+  );
 }
 
 function buildRebookReminderHtml(ctx: LifecycleEmailBookingContext): string {
-  const base = getPublicAppUrlBase();
-  const accountUrl = customerAccountBookingsUrl(base);
-  const bookUrl = `${base}/book`;
-
-  const inner = `
-  <h1 style="font-size: 22px; margin: 0 0 12px;">Time for your next clean?</h1>
-  <p style="color:#6b7280; margin-bottom: 16px;">Rebook in 10 seconds — your last visit was with Shalean.</p>
-  <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:16px;">
-    <p><strong>Last service:</strong> ${escapeHtml(ctx.serviceLabel)}</p>
-    <p><strong>When:</strong> ${escapeHtml(ctx.dateLabel)}</p>
-  </div>
-  <p style="margin: 16px 0;">
-    <a href="${escapeAttr(bookUrl)}" style="display:inline-block; background:#2563eb; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Rebook in 10 seconds</a>
-  </p>
-  <p style="font-size: 14px; color: #374151;">
-    <a href="${escapeAttr(accountUrl)}" style="color:#2563eb;">Your bookings</a>
-  </p>`;
-
-  return brandShell(inner);
+  return buildRebookHtml(ctx);
 }
 
 /** ~14 days after appointment (retention nudge — same CTA as rebook_offer) */
@@ -297,7 +305,7 @@ export async function sendRebookReminderEmail(
 ): Promise<{ sent: boolean; error?: string }> {
   return sendLifecycle(
     "rebook_reminder_email",
-    "Time for your next clean",
+    buildReengagementEmailSubject(ctx.firstName),
     buildRebookReminderHtml(ctx),
     ctx.to,
     ctx.bookingId,

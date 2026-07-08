@@ -510,6 +510,28 @@ export async function processLifecycleJob(
 
   const { serviceLabel, dateLabel, timeLabel, location } = resolveBookingEmailLabelsFromRow(bookingRow);
 
+  const customerId =
+    typeof bookingRow.customer_id === "string"
+      ? bookingRow.customer_id
+      : typeof bookingRow.user_id === "string"
+        ? bookingRow.user_id
+        : null;
+
+  let firstName: string | null = null;
+  if (customerId) {
+    const { data: profile } = await supabase
+      .from("user_profiles")
+      .select("full_name")
+      .eq("id", customerId)
+      .maybeSingle();
+    const fullName =
+      profile && typeof profile === "object" && "full_name" in profile
+        ? (profile as { full_name?: string | null }).full_name
+        : null;
+    const trimmed = fullName?.trim();
+    if (trimmed) firstName = trimmed.split(/\s+/)[0] ?? null;
+  }
+
   const ctx: LifecycleEmailBookingContext = {
 
     bookingId,
@@ -523,6 +545,10 @@ export async function processLifecycleJob(
     timeLabel,
 
     location,
+
+    userId: customerId,
+
+    firstName,
 
   };
 

@@ -30,6 +30,17 @@ export function rebookBookUrlFromBookingRow(
   return `/book/${slug}?rebook=${encodeURIComponent(row.id)}&step=2`;
 }
 
+/** Same as {@link rebookBookUrlFromBookingRow} but includes a signed `rt` token for unauthenticated prefill. */
+export function rebookBookUrlFromBookingRowWithToken(
+  row: Pick<BookingRow, "id" | "service" | "service_slug">,
+  rebookToken: string,
+): string {
+  const slug = bookingServiceSlugFromBookingRow(row);
+  const rt = rebookToken.trim();
+  const base = `/book/${slug}?rebook=${encodeURIComponent(row.id)}&step=2`;
+  return rt ? `${base}&rt=${encodeURIComponent(rt)}` : base;
+}
+
 /**
  * Maps a persisted booking row into booking-v2 form fields.
  * Clears schedule, cleaner selection, and pricing so the customer picks a new slot.
