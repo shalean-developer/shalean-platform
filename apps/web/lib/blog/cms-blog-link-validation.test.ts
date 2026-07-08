@@ -66,6 +66,14 @@ describe("validateInternalBlogLinkTarget", () => {
       }),
     ).toEqual({ ok: true });
   });
+
+  it("accepts governed CMS seed slugs without a published DB row", () => {
+    expect(
+      validateInternalBlogLinkTarget("how-to-prepare-home-before-cleaner-arrives-cape-town", {
+        publishedSlugSet: empty,
+      }),
+    ).toEqual({ ok: true });
+  });
 });
 
 describe("extractInternalBlogHrefsFromContentJson", () => {
@@ -144,6 +152,29 @@ describe("validateCmsBlogDocument", () => {
       new Set(),
     );
     expect(broken.filter((b) => b.fieldPath === "canonical_url")).toEqual([]);
+  });
+
+  it("passes cluster cross-links between governed CMS seed slugs", () => {
+    const content: BlogContentJson = {
+      schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION,
+      blocks: [
+        {
+          type: "rich_text",
+          html:
+            '<p>See <a href="/blog/whats-included-in-deep-cleaning-cape-town">scope</a> and <a href="/blog/how-long-does-house-cleaning-take-cape-town">timing</a>.</p>',
+        },
+      ],
+    };
+    const broken = validateCmsBlogDocument(
+      {
+        slug: "how-to-prepare-home-before-cleaner-arrives-cape-town",
+        content,
+        canonical_url: "/blog/how-to-prepare-home-before-cleaner-arrives-cape-town",
+        related_guide_override_slugs: null,
+      },
+      new Set(),
+    );
+    expect(broken).toEqual([]);
   });
 });
 

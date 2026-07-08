@@ -780,6 +780,8 @@ export function PostEditorForm({
     });
     const json = (await res.json().catch(() => ({}))) as {
       error?: string;
+      code?: string;
+      broken?: { fieldPath: string; brokenHref: string; issueType: string; recommendedFix: string }[];
       post?: { id: string };
       validation?: { issues?: { code: string; message: string }[] };
     };
@@ -787,7 +789,15 @@ export function PostEditorForm({
     if (!res.ok) {
       const pubIssues = json.validation?.issues?.map((i) => i.message).filter(Boolean) ?? [];
       setFieldErrors(pubIssues);
-      setFormError(json.error ?? "Save failed.");
+      if (json.code === "cms_link_validation" && json.broken?.length) {
+        const detail = json.broken
+          .slice(0, 5)
+          .map((b) => `${b.fieldPath}: ${b.brokenHref} (${b.issueType}) — ${b.recommendedFix}`)
+          .join("\n");
+        setFormError(`${json.error ?? "CMS internal blog link validation failed."}\n${detail}`);
+      } else {
+        setFormError(json.error ?? "Save failed.");
+      }
       return;
     }
     setFieldErrors([]);

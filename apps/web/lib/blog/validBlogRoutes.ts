@@ -23,6 +23,7 @@ import {
   ROUTED_HIGH_CONVERSION_POSTS,
 } from "@/lib/blog/highConversionPosts";
 import { PROGRAMMATIC_POSTS, ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
+import { GOVERNED_SEED_SLUG_SEMANTIC_CLUSTER } from "@/lib/blog/import/governed-seed-markdown-to-content-json";
 import { LOCATION_HUB_SEO_IMAGE_SLUGS } from "@/lib/blog/injectLocationHubSeoImages";
 import { programmaticBlogCleanupRedirects } from "@/lib/seo/programmaticBlogCleanupRedirects";
 
@@ -126,6 +127,11 @@ export function collectStaticCodeOwnedBlogSlugs(): Set<string> {
 
 export const STATIC_CODE_OWNED_BLOG_SLUGS: ReadonlySet<string> = collectStaticCodeOwnedBlogSlugs();
 
+/** Governed editorial seed slugs (CMS imports) — valid link targets even before every sibling is published. */
+export const GOVERNED_CMS_BLOG_SLUGS: ReadonlySet<string> = new Set(
+  Object.keys(GOVERNED_SEED_SLUG_SEMANTIC_CLUSTER).map((s) => s.toLowerCase()),
+);
+
 /**
  * True when `/blog/{slug}` can be served from in-repo pools **or** appears in optional published DB slugs.
  * Use for internal link safety: never emit `/blog/*` for redirect-only aliases.
@@ -137,6 +143,7 @@ export function isRoutableBlogSlug(slug: string, opts?: { dbPublishedSlugs?: Rea
   if (!s) return false;
   if (REDIRECT_ALIAS_BLOG_SLUGS.has(s)) return false;
   if (opts?.dbPublishedSlugs?.has(s)) return true;
+  if (GOVERNED_CMS_BLOG_SLUGS.has(s)) return true;
   return STATIC_CODE_OWNED_BLOG_SLUGS.has(s);
 }
 
@@ -152,6 +159,7 @@ export function collectDevBlogStaticLinkAllowlist(): Set<string> {
   for (const s of REDIRECT_DESTINATION_BLOG_SLUGS) set.add(s);
   for (const s of CANONICAL_EDITORIAL_SLUGS) set.add(s);
   for (const s of LOCATION_HUB_SEO_IMAGE_SLUGS) set.add(s);
+  for (const s of GOVERNED_CMS_BLOG_SLUGS) set.add(s);
   return set;
 }
 

@@ -301,6 +301,19 @@ export async function fetchPublishedBlogSlugSet(admin: SupabaseClient): Promise<
   return set;
 }
 
+/** Any CMS row with content — used on admin publish so cluster drafts can cross-link before go-live. */
+export async function fetchAllCmsBlogSlugSet(admin: SupabaseClient): Promise<Set<string>> {
+  const { data, error } = await admin.from("blog_posts").select("slug").not("content_json", "is", null);
+
+  if (error || !data) return new Set();
+  const set = new Set<string>();
+  for (const row of data as { slug?: string }[]) {
+    const s = String(row.slug ?? "").trim().toLowerCase();
+    if (s) set.add(s);
+  }
+  return set;
+}
+
 export function validateCanonicalUrlField(
   sourcePostSlug: string,
   canonicalUrl: string | null | undefined,
@@ -484,7 +497,7 @@ export async function validateCmsBlogLinksForAdminSave(
   input: CmsBlogDocumentInput & { status: CmsBlogSaveStatus },
 ): Promise<BrokenCmsBlogLink[]> {
   if (input.status === "draft") return [];
-  const base = await fetchPublishedBlogSlugSet(admin);
+  const base = await fetchAllCmsBlogSlugSet(admin);
   const set = buildPublishedSlugSetForCmsValidation(base, input.slug);
   return validateCmsBlogDocument(input, set);
 }
