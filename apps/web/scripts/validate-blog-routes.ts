@@ -12,6 +12,7 @@ import {
   normalizeBlogPathname,
   resolveBlogRedirectChain,
 } from "../lib/blog/validBlogRoutes";
+import { GOVERNED_SEED_SLUG_SEMANTIC_CLUSTER } from "../lib/blog/import/governed-seed-markdown-to-content-json";
 import { LOCATION_HUB_STRUCTURED_PAGES } from "../lib/blog/seed/locationHubStructuredContent";
 import { programmaticBlogCleanupRedirects } from "../lib/seo/programmaticBlogCleanupRedirects";
 import { CAPE_TOWN_LOCATIONS } from "../lib/seo/capeTownLocations";
@@ -22,6 +23,7 @@ const DEFINED_SLUGS = new Set<string>([
   ...AIRBNB_HOST_GUIDE_POSTS.map((p) => p.slug),
   ...HIGH_CONVERSION_POSTS.map((p) => p.slug),
   ...LOCATION_HUB_STRUCTURED_PAGES.map((h) => h.slug),
+  ...Object.keys(GOVERNED_SEED_SLUG_SEMANTIC_CLUSTER),
 ]);
 
 const ALLOWED_LOCATION_PATHS = new Set(CAPE_TOWN_LOCATIONS.map((l) => `/locations/${l.slug}`));
