@@ -168,7 +168,10 @@ export async function syncPaidBookingSideEffects(
           });
           await admin
             .from("bookings")
-            .update({ zoho_invoice_id: zohoInvoiceRes.zohoInvoiceId })
+            .update({
+              zoho_invoice_id: zohoInvoiceRes.zohoInvoiceId,
+              zoho_invoice_number: zohoInvoiceRes.invoiceNumber,
+            })
             .eq("id", bookingId);
         } else {
           await logSystemEvent({

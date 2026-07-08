@@ -91,7 +91,7 @@ export async function syncMonthlyInvoiceToZohoBooks(
     paymentUrl?: string | null;
     invoiceDate?: string;
   },
-): Promise<{ ok: true; zohoInvoiceId: string } | { ok: false; error: string }> {
+): Promise<{ ok: true; zohoInvoiceId: string; zohoInvoiceNumber?: string } | { ok: false; error: string }> {
   if (!process.env.ZOHO_CLIENT_ID || !process.env.ZOHO_REFRESH_TOKEN) {
     return { ok: false, error: "zoho_not_configured" };
   }
@@ -148,7 +148,7 @@ export async function syncMonthlyInvoiceToZohoBooks(
 
     const exists = await zohoInvoiceExists(linked);
     if (exists === false) {
-      await admin.from("monthly_invoices").update({ zoho_invoice_id: null }).eq("id", params.invoiceId);
+      await admin.from("monthly_invoices").update({ zoho_invoice_id: null, zoho_invoice_number: null }).eq("id", params.invoiceId);
     } else {
       const updateRes = await updateZohoInvoice({
         zohoInvoiceId: linked,
@@ -162,7 +162,11 @@ export async function syncMonthlyInvoiceToZohoBooks(
         currencyCode: "ZAR",
       });
       if (!updateRes.ok) return { ok: false, error: updateRes.error };
-      return { ok: true, zohoInvoiceId: linked };
+      await admin
+        .from("monthly_invoices")
+        .update({ zoho_invoice_number: updateRes.invoiceNumber })
+        .eq("id", params.invoiceId);
+      return { ok: true, zohoInvoiceId: linked, zohoInvoiceNumber: updateRes.invoiceNumber };
     }
   }
 
@@ -183,13 +187,20 @@ export async function syncMonthlyInvoiceToZohoBooks(
 
   const { error: upErr } = await admin
     .from("monthly_invoices")
-    .update({ zoho_invoice_id: zohoResult.zohoInvoiceId })
+    .update({
+      zoho_invoice_id: zohoResult.zohoInvoiceId,
+      zoho_invoice_number: zohoResult.invoiceNumber,
+    })
     .eq("id", params.invoiceId)
     .is("zoho_invoice_id", null);
 
   if (upErr) return { ok: false, error: upErr.message };
 
-  return { ok: true, zohoInvoiceId: zohoResult.zohoInvoiceId };
+  return {
+    ok: true,
+    zohoInvoiceId: zohoResult.zohoInvoiceId,
+    zohoInvoiceNumber: zohoResult.invoiceNumber,
+  };
 }
 
 /**

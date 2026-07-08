@@ -16,6 +16,7 @@ import {
 import { trustDocPageUrl } from "@/lib/pay/trustPayPageUrl";
 import type { SalesDocumentQuoteRequestDetails } from "@/lib/salesDocument/types";
 import { salesDocumentIsDeletable, salesDocumentIsEditableWithoutPayment } from "@/lib/salesDocument/types";
+import { formatZohoOrderReference } from "@/lib/zoho/zohoOrderReference";
 
 type DocDetail = {
   id: string;
@@ -42,6 +43,10 @@ type DocDetail = {
   first_viewed_at: string | null;
   last_viewed_at: string | null;
   view_count: number;
+  zoho_estimate_id?: string | null;
+  zoho_estimate_number?: string | null;
+  zoho_invoice_id?: string | null;
+  zoho_invoice_number?: string | null;
 };
 
 const SERVICE_LABELS: Record<string, string> = {
@@ -283,7 +288,12 @@ export default function OfficeSalesDocumentDetailPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-slate-900">
-            {canEditLines ? `Edit ${docTypeLabel.toLowerCase()}` : docTypeLabel} · {doc.id.slice(0, 8).toUpperCase()}
+            {canEditLines ? `Edit ${docTypeLabel.toLowerCase()}` : docTypeLabel}
+            {doc.document_type === "quote" && doc.zoho_estimate_number
+              ? ` · ${doc.zoho_estimate_number}`
+              : doc.document_type === "invoice" && doc.zoho_invoice_number
+                ? ` · ${doc.zoho_invoice_number}`
+                : ` · ${doc.id.slice(0, 8).toUpperCase()}`}
           </h1>
           {!canEditLines ? (
             <>
@@ -291,6 +301,9 @@ export default function OfficeSalesDocumentDetailPage() {
               {doc.customer_phone ? <p className="text-sm text-slate-500">{doc.customer_phone}</p> : null}
             </>
           ) : null}
+          <p className="mt-1 text-sm text-slate-500">
+            Shalean order: {formatZohoOrderReference(doc.id, "sales")}
+          </p>
           <p className="mt-1 text-sm capitalize text-slate-600">
             Status: {doc.status === "requested" ? "New request" : doc.status}
             {doc.source === "customer_request" ? " · Website form" : ""}

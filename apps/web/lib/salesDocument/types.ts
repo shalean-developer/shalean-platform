@@ -64,7 +64,9 @@ export type SalesDocumentRow = {
   amount_paid_cents: number;
   balance_cents: number;
   zoho_estimate_id: string | null;
+  zoho_estimate_number: string | null;
   zoho_invoice_id: string | null;
+  zoho_invoice_number: string | null;
   created_by: string | null;
   source?: SalesDocumentSource;
   request_details?: SalesDocumentQuoteRequestDetails | null;

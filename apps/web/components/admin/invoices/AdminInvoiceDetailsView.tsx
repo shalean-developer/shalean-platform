@@ -19,6 +19,7 @@ import { categoryAggregateSummaryLines, sumAdjustmentAmountsByCategory } from "@
 import { formatCurrency } from "@/lib/admin/invoices/invoiceAdminFormatters";
 import { invoiceBookingOptionsFromRows } from "@/lib/admin/invoices/invoiceBookingSelectOptions";
 import { splitHumanTimelineLines } from "@/lib/admin/invoices/invoiceTimelinePresentation";
+import { formatZohoOrderReference } from "@/lib/zoho/zohoOrderReference";
 import type { AdminInvoiceBundle } from "@/lib/admin/invoices/loadAdminInvoiceBundle";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import type { InvoiceTimelineDbEvent } from "@/lib/monthlyInvoice/buildInvoiceHumanTimeline";
@@ -272,6 +273,11 @@ export function AdminInvoiceDetailsView({
   const accountBillingRisk: "ok" | "at_risk" = billingRiskRaw === "at_risk" ? "at_risk" : "ok";
 
   const hasInvoicePdf = typeof invoice.zoho_invoice_id === "string" && invoice.zoho_invoice_id.trim().length > 0;
+  const zohoInvoiceNumber =
+    typeof invoice.zoho_invoice_number === "string" && invoice.zoho_invoice_number.trim().length > 0
+      ? invoice.zoho_invoice_number.trim()
+      : null;
+  const shaleanOrderRef = invoiceId ? formatZohoOrderReference(invoiceId, "monthly") : null;
   const canRefreshZohoPdf = status === "draft" && !isClosed && hasInvoicePdf;
   const canSyncToZoho = !hasInvoicePdf && totalCents > 0;
 
@@ -365,6 +371,8 @@ export function AdminInvoiceDetailsView({
         firstViewedAt={firstViewedAt}
         lastViewedAt={lastViewedAt}
         accountBillingRisk={accountBillingRisk}
+        zohoInvoiceNumber={zohoInvoiceNumber}
+        shaleanOrderRef={shaleanOrderRef}
         listHref={listHref}
         customersHref={customersHref}
         actions={headerActions}

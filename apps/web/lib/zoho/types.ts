@@ -73,6 +73,12 @@ export type ZohoInvoiceUpdateResponse = {
   invoice: ZohoInvoice;
 };
 
+export type ZohoInvoiceGetResponse = {
+  code: number;
+  message: string;
+  invoice: ZohoInvoice;
+};
+
 export type ZohoPaymentCreateResponse = {
   code: number;
   message: string;
@@ -103,6 +109,12 @@ export type ZohoEstimateCreateResponse = {
 };
 
 export type ZohoEstimateUpdateResponse = {
+  code: number;
+  message: string;
+  estimate: ZohoEstimate;
+};
+
+export type ZohoEstimateGetResponse = {
   code: number;
   message: string;
   estimate: ZohoEstimate;

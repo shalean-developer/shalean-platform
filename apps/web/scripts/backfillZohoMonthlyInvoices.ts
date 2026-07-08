@@ -213,7 +213,10 @@ async function main() {
 
     const { error: upErr } = await admin
       .from("monthly_invoices")
-      .update({ zoho_invoice_id: createRes.zohoInvoiceId })
+      .update({
+        zoho_invoice_id: createRes.zohoInvoiceId,
+        zoho_invoice_number: createRes.invoiceNumber,
+      })
       .eq("id", row.id);
     if (upErr) {
       failed += 1;

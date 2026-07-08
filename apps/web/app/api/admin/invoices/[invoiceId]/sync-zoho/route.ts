@@ -52,16 +52,18 @@ export async function POST(_request: Request, ctx: { params: Promise<{ invoiceId
 
   const { data: fresh } = await admin
     .from("monthly_invoices")
-    .select("zoho_invoice_id")
+    .select("zoho_invoice_id, zoho_invoice_number")
     .eq("id", invoiceId)
     .maybeSingle();
 
+  const freshRow = fresh as { zoho_invoice_id?: string | null; zoho_invoice_number?: string | null } | null;
   const zohoInvoiceId =
-    String((fresh as { zoho_invoice_id?: string | null } | null)?.zoho_invoice_id ?? "").trim() || linked || null;
+    String(freshRow?.zoho_invoice_id ?? "").trim() || linked || null;
+  const zohoInvoiceNumber = String(freshRow?.zoho_invoice_number ?? "").trim() || null;
 
   if (!zohoInvoiceId) {
     return NextResponse.json({ error: "Zoho sync did not link an invoice." }, { status: 422 });
   }
 
-  return NextResponse.json({ ok: true, zohoInvoiceId });
+  return NextResponse.json({ ok: true, zohoInvoiceId, zohoInvoiceNumber });
 }

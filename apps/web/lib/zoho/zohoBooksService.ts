@@ -7,8 +7,10 @@ import type {
   ZohoContactCreateResponse,
   ZohoContactListResponse,
   ZohoEstimateCreateResponse,
+  ZohoEstimateGetResponse,
   ZohoEstimateUpdateResponse,
   ZohoInvoiceCreateResponse,
+  ZohoInvoiceGetResponse,
   ZohoInvoiceInput,
   ZohoInvoiceUpdateResponse,
   ZohoLineItem,
@@ -300,6 +302,44 @@ export async function zohoInvoiceExists(zohoInvoiceId: string): Promise<boolean 
     const msg = String(err instanceof Error ? err.message : err);
     if (msg.includes("[429]") || msg.includes("code=45")) return "unknown";
     return false;
+  }
+}
+
+export async function getZohoInvoice(
+  zohoInvoiceId: string,
+): Promise<ServiceResult<{ zohoInvoiceId: string; invoiceNumber: string }>> {
+  const id = zohoInvoiceId.trim();
+  if (!id) return { ok: false, error: "missing_invoice_id" };
+  try {
+    const res = await zohoBooksClient.get<ZohoInvoiceGetResponse>(
+      `/invoices/${encodeURIComponent(id)}`,
+    );
+    return {
+      ok: true,
+      zohoInvoiceId: res.invoice.invoice_id,
+      invoiceNumber: res.invoice.invoice_number,
+    };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
+export async function getZohoEstimate(
+  zohoEstimateId: string,
+): Promise<ServiceResult<{ zohoEstimateId: string; estimateNumber: string }>> {
+  const id = zohoEstimateId.trim();
+  if (!id) return { ok: false, error: "missing_estimate_id" };
+  try {
+    const res = await zohoBooksClient.get<ZohoEstimateGetResponse>(
+      `/estimates/${encodeURIComponent(id)}`,
+    );
+    return {
+      ok: true,
+      zohoEstimateId: res.estimate.estimate_id,
+      estimateNumber: res.estimate.estimate_number,
+    };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
   }
 }
 

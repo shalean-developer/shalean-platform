@@ -31,6 +31,10 @@ export type InvoiceHeaderProps = {
   lastViewedAt?: string | null;
   /** From `user_profiles.account_billing_risk`. */
   accountBillingRisk: "ok" | "at_risk";
+  /** Zoho Books invoice_number (e.g. INV-000123) when synced. */
+  zohoInvoiceNumber?: string | null;
+  /** Shalean order ref shown in Zoho (e.g. MI-4EBD702F). */
+  shaleanOrderRef?: string | null;
   listHref?: string;
   customersHref?: string;
   actions?: ReactNode;
@@ -65,7 +69,15 @@ export function InvoiceHeader(props: InvoiceHeaderProps) {
       <CardHeader className="flex flex-col gap-4">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div className="space-y-1">
-            <CardTitle className="text-xl">Monthly invoice</CardTitle>
+            <CardTitle className="text-xl">
+              Monthly invoice
+              {props.zohoInvoiceNumber ? ` · ${props.zohoInvoiceNumber}` : null}
+            </CardTitle>
+            {props.shaleanOrderRef ? (
+              <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                Shalean order: <span className="font-medium text-zinc-700 dark:text-zinc-200">{props.shaleanOrderRef}</span>
+              </p>
+            ) : null}
             <CardDescription className="text-base text-zinc-700 dark:text-zinc-200">
               <span className="font-medium text-zinc-900 dark:text-zinc-50">{props.customerLabel}</span>
               <span className="mt-0.5 block text-xs font-normal text-zinc-500 dark:text-zinc-400">

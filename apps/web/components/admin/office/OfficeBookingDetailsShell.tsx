@@ -108,6 +108,7 @@ export type OfficeBookingDetailsShellProps = {
   draftDate: string;
   draftTime: string;
   zohoInvoiceId: string | null;
+  zohoInvoiceNumber?: string | null;
   cleanerTotalZar: number | null;
   companyRevenueZar: number | null;
   existingDepositLabel: string | null;
@@ -619,11 +620,18 @@ function ActionsPanel(props: OfficeBookingDetailsShellProps) {
           ) : null}
 
           {props.zohoInvoiceId ? (
-            <Button variant="outline" className="w-full justify-start" asChild>
-              <a href={`/api/admin/bookings/${encodeURIComponent(props.bookingId)}/invoice-pdf`} target="_blank" rel="noopener noreferrer">
-                <ReceiptText className="h-4 w-4" /> View invoice
-              </a>
-            </Button>
+            <div className="space-y-1">
+              {props.zohoInvoiceNumber ? (
+                <p className="text-xs font-medium text-slate-600">
+                  Zoho invoice: <span className="text-slate-900">{props.zohoInvoiceNumber}</span>
+                </p>
+              ) : null}
+              <Button variant="outline" className="w-full justify-start" asChild>
+                <a href={`/api/admin/bookings/${encodeURIComponent(props.bookingId)}/invoice-pdf`} target="_blank" rel="noopener noreferrer">
+                  <ReceiptText className="h-4 w-4" /> View invoice
+                </a>
+              </Button>
+            </div>
           ) : null}
 
           <div className="rounded-xl border border-blue-100 bg-blue-50/80 p-3 text-sm">

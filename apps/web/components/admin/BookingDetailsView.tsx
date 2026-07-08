@@ -2616,6 +2616,7 @@ export default function BookingDetailsView({
           draftDate={draftDate}
           draftTime={draftTime}
           zohoInvoiceId={(fullBooking as { zoho_invoice_id?: string | null }).zoho_invoice_id ?? null}
+          zohoInvoiceNumber={(fullBooking as { zoho_invoice_number?: string | null }).zoho_invoice_number ?? null}
           cleanerTotalZar={cleanerTotalZar}
           companyRevenueZar={companyRevenueZar}
           existingDepositLabel={existingDepositZar != null ? formatZar(existingDepositZar) : null}

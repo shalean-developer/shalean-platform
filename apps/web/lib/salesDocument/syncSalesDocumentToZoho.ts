@@ -104,6 +104,10 @@ export async function syncSalesDocumentToZoho(
         currencyCode: row.currency,
       });
       if (!upd.ok) return { ok: false, error: upd.error };
+      await admin
+        .from("sales_documents")
+        .update({ zoho_estimate_number: upd.estimateNumber })
+        .eq("id", documentId);
     } else if (!linked) {
       const created = await createZohoEstimate({
         referenceId: row.id,
@@ -118,7 +122,10 @@ export async function syncSalesDocumentToZoho(
       estimateId = created.zohoEstimateId;
       await admin
         .from("sales_documents")
-        .update({ zoho_estimate_id: created.zohoEstimateId })
+        .update({
+          zoho_estimate_id: created.zohoEstimateId,
+          zoho_estimate_number: created.estimateNumber,
+        })
         .eq("id", documentId);
     }
 
@@ -143,6 +150,10 @@ export async function syncSalesDocumentToZoho(
       currencyCode: row.currency,
     });
     if (!upd.ok) return { ok: false, error: upd.error };
+    await admin
+      .from("sales_documents")
+      .update({ zoho_invoice_number: upd.invoiceNumber })
+      .eq("id", documentId);
   } else if (!linkedInv) {
     const invoicedEstimateId = await resolveSourceZohoEstimateId(admin, row.converted_from_id);
     const created = await createZohoInvoice({
@@ -160,7 +171,10 @@ export async function syncSalesDocumentToZoho(
     invoiceId = created.zohoInvoiceId;
     await admin
       .from("sales_documents")
-      .update({ zoho_invoice_id: created.zohoInvoiceId })
+      .update({
+        zoho_invoice_id: created.zohoInvoiceId,
+        zoho_invoice_number: created.invoiceNumber,
+      })
       .eq("id", documentId);
   }
 

@@ -34,6 +34,7 @@
     "backfill:booking-earnings-snapshots": "tsx scripts/backfillBookingEarningsSnapshots.ts",
     "backfill:zoho-invoices": "tsx --env-file=.env.local --conditions=react-server scripts/backfillZohoInvoices.ts",
     "backfill:zoho-monthly-invoices": "tsx --env-file=.env.local --conditions=react-server scripts/backfillZohoMonthlyInvoices.ts",
+    "backfill:zoho-invoice-numbers": "tsx --env-file=.env.local --conditions=react-server scripts/backfillZohoInvoiceNumbers.ts",
     "refresh:draft-invoice-due-dates": "tsx --env-file=.env.local --conditions=react-server scripts/refreshDraftMonthlyInvoiceDueDates.ts",
     "announce:monthly-invoicing": "tsx --env-file=.env.local --conditions=react-server scripts/sendMonthlyInvoicingAnnouncement.ts",
     "repair:zoho-invoices": "tsx --env-file=.env.local --conditions=react-server scripts/repairZohoInvoices.ts",
