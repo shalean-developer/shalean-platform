@@ -6,6 +6,8 @@ import { enqueueFailedJob } from "@/lib/booking/failedJobs";
 import { upsertBookingFromPaystack } from "@/lib/booking/upsertBookingFromPaystack";
 import { resolvePaystackUserId } from "@/lib/booking/resolvePaystackUserId";
 import { recordReferralCheckoutRedemption } from "@/lib/referrals/validateReferral";
+import { enrichPaystackMetadataWithBookingReferral } from "@/lib/referrals/referralCheckoutMetadata";
+import { bookingIdForPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
@@ -65,6 +67,19 @@ export async function finalizePaystackChargeSuccess(
     });
   }
 
+  const admin = getSupabaseAdmin();
+  let paystackMetadata = params.paystackMetadata;
+  if (admin) {
+    const bookingIdForReferral = await bookingIdForPaystackReference(admin, params.paystackReference);
+    if (bookingIdForReferral) {
+      paystackMetadata = await enrichPaystackMetadataWithBookingReferral(
+        admin,
+        bookingIdForReferral,
+        paystackMetadata,
+      );
+    }
+  }
+
   let result: Awaited<ReturnType<typeof upsertBookingFromPaystack>>;
   try {
     result = await upsertBookingFromPaystack({
@@ -73,7 +88,7 @@ export async function finalizePaystackChargeSuccess(
       currency: params.currency,
       customerEmail: params.customerEmail,
       snapshot: params.snapshot,
-      paystackMetadata: params.paystackMetadata,
+      paystackMetadata,
       paystackAuthorizationCode: params.paystackAuthorizationCode,
       paystackCustomerCode: params.paystackCustomerCode,
       paidAtIso: params.paidAtIso,
@@ -113,7 +128,6 @@ export async function finalizePaystackChargeSuccess(
     });
   }
 
-  const admin = getSupabaseAdmin();
   let resolvedCustomerEmail = normalizeEmail(params.customerEmail || "");
   if ((!resolvedCustomerEmail || resolvedCustomerEmail.length < 3) && result.bookingId && admin) {
     const { data: br } = await admin
@@ -131,9 +145,9 @@ export async function finalizePaystackChargeSuccess(
     try {
       await recordReferralCheckoutRedemption({
         admin,
-        metadata: params.paystackMetadata,
+        metadata: paystackMetadata,
         bookingId: result.bookingId,
-        userId: resolvePaystackUserId(params.snapshot, params.paystackMetadata),
+        userId: resolvePaystackUserId(params.snapshot, paystackMetadata),
         customerEmail: resolvedCustomerEmail,
       });
     } catch (e) {

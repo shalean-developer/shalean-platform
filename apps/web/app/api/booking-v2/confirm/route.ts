@@ -35,6 +35,8 @@ import {
   deriveDurationMinutesFromBookingV2,
 } from "@/lib/booking-v2/bookingV2ServiceSlug";
 import { spendCleaningCredit } from "@/lib/referrals/credits";
+import { buildReferralCheckoutSnapshot } from "@/lib/referrals/referralCheckoutMetadata";
+import { validateReferralForCheckout } from "@/lib/referrals/validateReferral";
 
 export const runtime = "nodejs";
 
@@ -385,6 +387,21 @@ export async function POST(request: Request) {
 
   const locationFields = locationPersistFields(locationCtx);
 
+  const referralCodeInput =
+    typeof data.referralCode === "string" ? data.referralCode.trim().toUpperCase() : "";
+  const referralValidation = referralCodeInput
+    ? await validateReferralForCheckout({
+        admin: supabase,
+        code: referralCodeInput,
+        userId,
+        customerEmail: email,
+      })
+    : ({ valid: false as const } satisfies { valid: false });
+  const referralDiscountZar = referralValidation.valid ? referralValidation.discountZar : 0;
+  const referralCheckoutSnapshot = referralValidation.valid
+    ? buildReferralCheckoutSnapshot(referralValidation)
+    : null;
+
   // ── 7. Generate Paystack reference ────────────────────────────────────────────
   const paystackReference = `bv2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
@@ -454,6 +471,7 @@ export async function POST(request: Request) {
             email,
             phone: customerPhone,
           },
+          ...(referralCheckoutSnapshot ? { referralCheckout: referralCheckoutSnapshot } : {}),
           ...preferredExtras.snapshotExtension,
           confirmedAt: new Date().toISOString(),
         },
@@ -476,10 +494,38 @@ export async function POST(request: Request) {
       postalCode: data.postalCode,
     });
 
+    let payAmountZar =
+      serverBreakdown.estimated_total ?? serverBreakdown.total ?? clientTotal;
+    let creditAppliedZar = 0;
+    let referralAppliedZar = 0;
+
+    if (referralDiscountZar > 0) {
+      referralAppliedZar = Math.min(referralDiscountZar, payAmountZar);
+      payAmountZar = Math.max(0, payAmountZar - referralAppliedZar);
+    }
+
+    const requestedCredit = Math.round(Number(data.applyCleaningCreditZar ?? 0));
+    if (requestedCredit > 0) {
+      const spendResult = await spendCleaningCredit({
+        admin: supabase,
+        userId,
+        amountZar: Math.min(requestedCredit, payAmountZar),
+        bookingId: existingBooking.id,
+        note: "Applied at booking-v2 checkout",
+      });
+      if (spendResult.ok) {
+        creditAppliedZar = spendResult.spent;
+        payAmountZar = Math.max(0, payAmountZar - creditAppliedZar);
+      }
+    }
+
     return NextResponse.json({
       success: true,
       bookingId: existingBooking.id,
       paystackReference,
+      payAmountZar,
+      creditAppliedZar,
+      referralAppliedZar,
     });
   }
 
@@ -566,6 +612,7 @@ export async function POST(request: Request) {
           email,
           phone: customerPhone,
         },
+        ...(referralCheckoutSnapshot ? { referralCheckout: referralCheckoutSnapshot } : {}),
         ...preferredExtras.snapshotExtension,
         confirmedAt: new Date().toISOString(),
       },
@@ -591,6 +638,12 @@ export async function POST(request: Request) {
 
   let payAmountZar = serverBreakdown.estimated_total ?? serverBreakdown.total ?? clientTotal;
   let creditAppliedZar = 0;
+  let referralAppliedZar = 0;
+
+  if (referralDiscountZar > 0) {
+    referralAppliedZar = Math.min(referralDiscountZar, payAmountZar);
+    payAmountZar = Math.max(0, payAmountZar - referralAppliedZar);
+  }
 
   const requestedCredit = Math.round(Number(data.applyCleaningCreditZar ?? 0));
   if (requestedCredit > 0) {
@@ -613,5 +666,6 @@ export async function POST(request: Request) {
     paystackReference,
     payAmountZar,
     creditAppliedZar,
+    referralAppliedZar,
   });
 }

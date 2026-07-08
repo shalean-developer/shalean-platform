@@ -22,6 +22,8 @@ import {
   trackBookingAnalyticsEvent,
   trackBookingFunnelEvent,
 } from "@/lib/booking/bookingFlowAnalytics";
+import { useStoredReferralCheckoutDiscount } from "@/hooks/useStoredReferralCheckoutDiscount";
+import { getStoredReferral } from "@/lib/referrals/client";
 
 // ─── Auth Form ─────────────────────────────────────────────────────────────────
 
@@ -250,10 +252,13 @@ function PaymentSection({ user }: { user: User }) {
   const [error, setError] = useState<string | null>(null);
   const [creditBalance, setCreditBalance] = useState(0);
   const [applyCredit, setApplyCredit] = useState(false);
+  const { referralDiscount, loading: referralLoading } = useStoredReferralCheckoutDiscount(user.email);
 
   const baseTotal = values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? config.basePrice;
-  const creditToApply = applyCredit ? Math.min(creditBalance, baseTotal) : 0;
-  const payTotal = Math.max(0, baseTotal - creditToApply);
+  const referralToApply = referralDiscount?.discountZar ?? 0;
+  const totalAfterReferral = Math.max(0, baseTotal - referralToApply);
+  const creditToApply = applyCredit ? Math.min(creditBalance, totalAfterReferral) : 0;
+  const payTotal = Math.max(0, totalAfterReferral - creditToApply);
 
   useEffect(() => {
     void (async () => {
@@ -291,6 +296,7 @@ function PaymentSection({ user }: { user: User }) {
         body: JSON.stringify({
           ...values,
           applyCleaningCreditZar: creditToApply,
+          referralCode: referralDiscount?.code ?? getStoredReferral("customer"),
         }),
       });
 
@@ -390,6 +396,20 @@ function PaymentSection({ user }: { user: User }) {
         </div>
         <div className="border-t border-slate-200 pt-3 space-y-3">
           <CustomerPriceBreakdown pricing={values.pricingSummary} compact />
+          {!referralLoading && referralDiscount ? (
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              <p className="font-semibold">Referral discount applied</p>
+              <p className="mt-1 text-emerald-800">
+                R {referralDiscount.discountZar.toLocaleString("en-ZA")} off your first booking — no code needed.
+              </p>
+            </div>
+          ) : null}
+          {referralToApply > 0 ? (
+            <div className="flex items-center justify-between text-sm text-emerald-700">
+              <span>Referral discount</span>
+              <span>- R {referralToApply.toLocaleString("en-ZA")}</span>
+            </div>
+          ) : null}
           {creditBalance > 0 ? (
             <label className="flex cursor-pointer items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
               <div>

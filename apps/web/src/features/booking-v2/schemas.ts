@@ -226,6 +226,7 @@ export const bookingV2ConfirmSchema = z.object({
     })
     .passthrough(),
   applyCleaningCreditZar: z.number().min(0).optional(),
+  referralCode: z.string().optional(),
 });
 
 export type BookingV2ConfirmPayload = z.infer<typeof bookingV2ConfirmSchema>;

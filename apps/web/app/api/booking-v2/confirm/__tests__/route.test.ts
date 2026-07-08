@@ -26,6 +26,9 @@ vi.mock("@/lib/booking-v2/bookingV2SlotEligibility", () => ({
   bookingV2SlotHasEligibleCleaners: vi.fn(),
 }));
 vi.mock("@/lib/booking/getEligibleCleaners", () => ({ getEligibleCleaners: vi.fn() }));
+vi.mock("@/lib/referrals/validateReferral", () => ({
+  validateReferralForCheckout: vi.fn().mockResolvedValue({ valid: false }),
+}));
 
 const basePayload = {
   serviceSlug: "regular-cleaning" as const,

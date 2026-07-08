@@ -27,3 +27,19 @@ export function clearStoredReferral(kind?: "customer" | "cleaner"): void {
   window.localStorage.removeItem(REF_KEY);
   window.localStorage.removeItem(REF_KIND_KEY);
 }
+
+/** Append stored customer referral code to a booking URL (fallback if capture ran on another page). */
+export function appendStoredReferralToHref(href: string, kind: "customer" | "cleaner" = "customer"): string {
+  const code = getStoredReferral(kind);
+  if (!code) return href;
+  try {
+    const url = new URL(href, typeof window !== "undefined" ? window.location.origin : "https://shalean.co.za");
+    if (!url.searchParams.get("ref")) {
+      url.searchParams.set("ref", code);
+    }
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    const join = href.includes("?") ? "&" : "?";
+    return `${href}${join}ref=${encodeURIComponent(code)}`;
+  }
+}

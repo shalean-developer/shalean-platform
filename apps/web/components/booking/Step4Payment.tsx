@@ -32,7 +32,7 @@ import {
   extrasLineItemsFromSnapshot,
 } from "@/lib/pricing/extrasConfig";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
-import { getStoredReferral } from "@/lib/referrals/client";
+import { useStoredReferralCheckoutDiscount } from "@/hooks/useStoredReferralCheckoutDiscount";
 import { writeUserEmailToStorage } from "@/lib/booking/userEmailStorage";
 import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
 import { useAuth } from "@/lib/auth/useAuth";
@@ -126,11 +126,6 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     setPromoError(null);
   }, [searchParams, locked.finalPrice]);
 
-  const [referralDiscount, setReferralDiscount] = useState<{
-    code: string;
-    discountZar: number;
-  } | null>(null);
-
   const recurringDiscount = useMemo(() => {
     const f = locked.cleaningFrequency ?? "one_time";
     if (f === "weekly") return { amount: Math.round(locked.finalPrice * 0.1), frequency: f };
@@ -143,6 +138,7 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
   const [phone, setPhone] = useState("");
   const [sessionUser, setSessionUser] = useState<{ id: string; accessToken: string } | null>(null);
   const { user } = useAuth();
+  const { referralDiscount } = useStoredReferralCheckoutDiscount(email);
 
   useEffect(() => {
     const supabase = getSupabaseBrowser();
@@ -222,12 +218,6 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
       active = false;
     };
   }, [user]);
-
-  useEffect(() => {
-    const code = getStoredReferral("customer");
-    if (!code) return;
-    setReferralDiscount({ code, discountZar: 50 });
-  }, []);
 
   const discountZar = (promoApplied?.discountZar ?? 0) + (referralDiscount?.discountZar ?? 0) + (recurringDiscount?.amount ?? 0);
 

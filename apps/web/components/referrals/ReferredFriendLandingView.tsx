@@ -16,6 +16,7 @@ import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { Button } from "@/components/ui/button";
 import { marketingHeroImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import { appendStoredReferralToHref } from "@/lib/referrals/client";
 import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { cn } from "@/lib/utils";
 
@@ -62,9 +63,13 @@ const FAQ = [
 ];
 
 export function ReferredFriendLandingView() {
-  const bookingHref = marketingHomeBookingHref();
+  const [bookingHref, setBookingHref] = useState(marketingHomeBookingHref());
   const [settings, setSettings] = useState<PublicSettings | null>(null);
   const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    setBookingHref(appendStoredReferralToHref(marketingHomeBookingHref()));
+  }, []);
 
   useEffect(() => {
     void fetch("/api/referrals/settings")
