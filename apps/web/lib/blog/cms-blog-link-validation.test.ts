@@ -74,6 +74,14 @@ describe("validateInternalBlogLinkTarget", () => {
       }),
     ).toEqual({ ok: true });
   });
+
+  it("accepts HC editorial slugs referenced in cluster related guides", () => {
+    expect(
+      validateInternalBlogLinkTarget("how-often-deep-clean-home-cape-town", {
+        publishedSlugSet: empty,
+      }),
+    ).toEqual({ ok: true });
+  });
 });
 
 describe("extractInternalBlogHrefsFromContentJson", () => {
@@ -185,6 +193,23 @@ describe("validateCmsBlogDocument", () => {
         content,
         canonical_url: "/blog/once-off-vs-recurring-cleaning-cape-town",
         related_guide_override_slugs: ["how-often-book-home-cleaning-cape-town"],
+      },
+      new Set(),
+    );
+    expect(broken).toEqual([]);
+  });
+
+  it("passes related guide overrides pointing at HC editorial slugs", () => {
+    const content: BlogContentJson = { schema_version: BLOG_CONTENT_JSON_SCHEMA_VERSION, blocks: [] };
+    const broken = validateCmsBlogDocument(
+      {
+        slug: "whats-included-in-deep-cleaning-cape-town",
+        content,
+        canonical_url: "/blog/whats-included-in-deep-cleaning-cape-town",
+        related_guide_override_slugs: [
+          "how-often-deep-clean-home-cape-town",
+          "what-does-professional-cleaner-do-cape-town",
+        ],
       },
       new Set(),
     );

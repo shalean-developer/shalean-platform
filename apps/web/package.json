@@ -60,7 +60,8 @@
     "reconcile:production-blog-404s": "tsx scripts/reconcile-production-blog-404s.ts",
     "check:blog-seed-cluster-markdown": "tsx scripts/check-governed-blog-seed-markdown-cluster-section.ts",
     "import:cursor-blog-pool": "tsx scripts/import-cursor-blog-png-pool.ts",
-    "import:governed-blog-seed-drafts": "tsx scripts/import-governed-blog-seed-drafts.ts"
+    "import:governed-blog-seed-drafts": "tsx scripts/import-governed-blog-seed-drafts.ts",
+    "import:seo-traffic-blog-posts": "tsx scripts/import-seo-traffic-blog-posts.ts"
   },
   "dependencies": {
     "@floating-ui/react": "^0.27.19",

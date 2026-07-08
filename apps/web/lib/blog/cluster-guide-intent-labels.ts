@@ -1,7 +1,3 @@
-/**
- * Short intent labels for cluster related-guides (footer). Unknown slugs fall back to "Guide".
- * Extend as new governed URLs ship.
- */
 const SLUG_TO_INTENT: Record<string, string> = {
   "deep-vs-standard-cleaning-which-to-book-cape-town": "Decision",
   "whats-included-in-deep-cleaning-cape-town": "Scope",
@@ -17,6 +13,9 @@ const SLUG_TO_INTENT: Record<string, string> = {
   "move-out-cleaning-checklist-cape-town-tenants": "Checklist",
   "how-often-should-you-deep-clean-your-home-cape-town": "Cadence",
 };
+
+/** Slugs with explicit cluster intent labels — must stay CMS-link-validatable. */
+export const CLUSTER_GUIDE_INTENT_SLUGS: readonly string[] = Object.keys(SLUG_TO_INTENT);
 
 export function intentLabelForClusterGuideSlug(slug: string): string {
   const key = slug.trim().toLowerCase();
