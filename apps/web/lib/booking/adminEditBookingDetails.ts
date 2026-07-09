@@ -6,7 +6,7 @@ import { assertAdminBookingEditDetailsAllowed } from "@/lib/booking/assertAdminB
 import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
 import { buildCheckoutVisitLineItems, zarToCents } from "@/lib/booking/buildBookingLineItems";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
-import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
+import { resolveLockedBookingForAdminReprice } from "@/lib/booking/lockedBooking";
 import { recomputeLockCheckoutQuote } from "@/lib/booking/lockQuoteSignature";
 import { buildPriceSnapshotV1Checkout, sumLineItemsCents } from "@/lib/booking/priceSnapshotBooking";
 import { resolveRatesSnapshotForLockedBooking } from "@/lib/booking/resolveRatesSnapshot";
@@ -57,6 +57,26 @@ const CONFLICT_MESSAGE = "Booking was updated by someone else. Reload.";
 function traceBookingId(locked: LockedBooking, bid: string): string {
   const fromLock = typeof locked.booking_id === "string" ? locked.booking_id.trim() : "";
   return fromLock || bid;
+}
+
+function lockedBookingRowFallback(b: Record<string, unknown>) {
+  return {
+    date: typeof b.date === "string" ? b.date : null,
+    time: typeof b.time === "string" ? b.time : null,
+    rooms: typeof b.rooms === "number" ? b.rooms : null,
+    bathrooms: typeof b.bathrooms === "number" ? b.bathrooms : null,
+    extras: b.extras,
+    total_price: typeof b.total_price === "number" ? b.total_price : null,
+    total_paid_zar: typeof b.total_paid_zar === "number" ? b.total_paid_zar : null,
+    service: typeof b.service === "string" ? b.service : null,
+    service_slug: typeof b.service_slug === "string" ? b.service_slug : null,
+    pricing_version_id: typeof b.pricing_version_id === "string" ? b.pricing_version_id : null,
+    created_at: typeof b.created_at === "string" ? b.created_at : null,
+  };
+}
+
+function resolveLockedForAdminEditBooking(b: Record<string, unknown>): LockedBooking | null {
+  return resolveLockedBookingForAdminReprice(b.booking_snapshot, lockedBookingRowFallback(b));
 }
 
 function clampRoomsBaths(n: number | undefined, fallback: number): number {
@@ -479,7 +499,7 @@ export async function previewAdminEditBookingDetails(
   const { data: row, error: selErr } = await admin
     .from("bookings")
     .select(
-      "id, booking_snapshot, total_price, amount_paid_cents, total_paid_cents, total_paid_zar, payment_status, payment_completed_at, rooms, bathrooms, extras, status",
+      "id, booking_snapshot, total_price, amount_paid_cents, total_paid_cents, total_paid_zar, payment_status, payment_completed_at, rooms, bathrooms, extras, status, date, time, service, service_slug, pricing_version_id, created_at",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -492,11 +512,7 @@ export async function previewAdminEditBookingDetails(
     return { ok: false, status: 422, error: "Only notes can be edited while the job is in progress." };
   }
 
-  const locked = parseLockedBookingFromUnknown(
-    b.booking_snapshot && typeof b.booking_snapshot === "object" && !Array.isArray(b.booking_snapshot)
-      ? (b.booking_snapshot as { locked?: unknown }).locked
-      : null,
-  );
+  const locked = resolveLockedForAdminEditBooking(b);
   if (!locked) {
     return { ok: false, status: 400, error: "Booking snapshot is missing a priced lock." };
   }
@@ -661,7 +677,7 @@ async function executeRepricingAdminEditBookingDetails(
   const { data: row, error: selErr } = await admin
     .from("bookings")
     .select(
-      "id, booking_snapshot, total_price, total_paid_cents, amount_paid_cents, total_paid_zar, payment_status, payment_completed_at, rooms, bathrooms, extras, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, is_team_job, status, dispatch_status, payment_mismatch, updated_at",
+      "id, booking_snapshot, total_price, total_paid_cents, amount_paid_cents, total_paid_zar, payment_status, payment_completed_at, rooms, bathrooms, extras, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, is_team_job, status, dispatch_status, payment_mismatch, updated_at, date, time, service, service_slug, pricing_version_id, created_at",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -691,9 +707,7 @@ async function executeRepricingAdminEditBookingDetails(
   const oldLinesRpc = dbLineRowsToRpcPayload(oldLineRows);
 
   const snap = b.booking_snapshot;
-  const locked = parseLockedBookingFromUnknown(
-    snap && typeof snap === "object" && !Array.isArray(snap) ? (snap as { locked?: unknown }).locked : null,
-  );
+  const locked = resolveLockedForAdminEditBooking(b);
   if (!locked) {
     await failIdempotency(admin, dedupeKey, {
       ok: false,

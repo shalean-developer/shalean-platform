@@ -4,7 +4,9 @@ import type { BookingStep1State } from "@/components/booking/useBookingStep1";
 import {
   inferServiceGroupFromServiceId,
   inferServiceTypeFromServiceId,
+  parseBookingServiceId,
 } from "@/components/booking/serviceCategories";
+import type { BookingSnapshotFlatV1 } from "@/lib/booking/paystackChargeTypes";
 import { clearSelectedCleanerFromStorage } from "@/lib/booking/cleanerSelection";
 import { normalizeExtraRoomsRaw } from "@/lib/pricing/pricingEngine";
 import { PRICING_ENGINE_ALGORITHM_VERSION } from "@/lib/pricing/engineVersion";
@@ -65,6 +67,15 @@ function setSnapshotCache(raw: string | null, value: LockedBooking | null) {
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+function readFiniteRoomCount(v: unknown): number | null {
+  if (typeof v === "number" && Number.isFinite(v)) return Math.round(v);
+  if (typeof v === "string" && v.trim()) {
+    const n = Number(v.trim());
+    if (Number.isFinite(n)) return Math.round(n);
+  }
+  return null;
 }
 
 function normalizeLockedExtrasArray(raw: unknown): string[] | null {
@@ -134,7 +145,9 @@ export function parseLockedBooking(raw: string | null): LockedBooking | null {
   if (!Number.isFinite(finalHours)) return null;
   if (typeof data.time !== "string" || !data.time) return null;
   if (typeof data.lockedAt !== "string") return null;
-  if (typeof data.rooms !== "number" || typeof data.bathrooms !== "number") return null;
+  const rooms = readFiniteRoomCount(data.rooms ?? data.bedrooms);
+  const bathrooms = readFiniteRoomCount(data.bathrooms);
+  if (rooms == null || bathrooms == null) return null;
   const extrasNorm = normalizeLockedExtrasArray(data.extras);
   if (extrasNorm === null) return null;
   const extraRooms = normalizeExtraRoomsRaw(data.extraRooms);
@@ -184,6 +197,8 @@ export function parseLockedBooking(raw: string | null): LockedBooking | null {
 
   return {
     ...data,
+    rooms,
+    bathrooms,
     extras: extrasNorm,
     extraRooms,
     date,
@@ -217,6 +232,131 @@ export function parseLockedBookingFromUnknown(data: unknown): LockedBooking | nu
   } catch {
     return null;
   }
+}
+
+export type BookingRowLockFallback = {
+  date?: string | null;
+  time?: string | null;
+  rooms?: number | null;
+  bathrooms?: number | null;
+  extras?: unknown;
+  total_price?: number | null;
+  total_paid_zar?: number | null;
+  service?: string | null;
+  service_slug?: string | null;
+  pricing_version_id?: string | null;
+  created_at?: string | null;
+};
+
+function readSnapshotFlat(snap: unknown): BookingSnapshotFlatV1 | null {
+  if (!snap || typeof snap !== "object" || Array.isArray(snap)) return null;
+  const flat = (snap as { flat?: unknown }).flat;
+  if (!flat || typeof flat !== "object" || Array.isArray(flat)) return null;
+  const f = flat as Record<string, unknown>;
+  return {
+    service: typeof f.service === "string" ? f.service : null,
+    rooms: readFiniteRoomCount(f.rooms),
+    bathrooms: readFiniteRoomCount(f.bathrooms),
+    extras: Array.isArray(f.extras)
+      ? f.extras.filter((x): x is string => typeof x === "string" && x.trim().length > 0).map((x) => x.trim())
+      : [],
+    location: typeof f.location === "string" ? f.location : null,
+    date: typeof f.date === "string" ? f.date : null,
+    time: typeof f.time === "string" ? f.time : null,
+  };
+}
+
+function extraSlugsFromBookingRowExtras(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      const s = item.trim();
+      if (s) out.push(s);
+      continue;
+    }
+    if (item && typeof item === "object" && "slug" in item && typeof (item as { slug?: unknown }).slug === "string") {
+      const s = (item as { slug: string }).slug.trim();
+      if (s) out.push(s);
+    }
+  }
+  return out;
+}
+
+/**
+ * Checkout `locked` when present; otherwise synthesize from `booking_snapshot.flat` + row columns
+ * (sales-document and admin unified bookings that never ran `/api/booking/lock`).
+ */
+export function resolveLockedBookingForAdminReprice(
+  snap: unknown,
+  row: BookingRowLockFallback,
+): LockedBooking | null {
+  if (snap && typeof snap === "object" && !Array.isArray(snap)) {
+    const fromLocked = parseLockedBookingFromUnknown((snap as { locked?: unknown }).locked ?? null);
+    if (fromLocked) return fromLocked;
+  }
+
+  const flat = readSnapshotFlat(snap);
+  const snapRec = snap && typeof snap === "object" && !Array.isArray(snap) ? (snap as Record<string, unknown>) : null;
+  const serviceSlugRaw =
+    flat?.service ??
+    (typeof snapRec?.service_slug === "string" ? snapRec.service_slug : null) ??
+    row.service_slug ??
+    row.service ??
+    "standard";
+  const serviceId = parseBookingServiceId(serviceSlugRaw) ?? "standard";
+  const service_type = inferServiceTypeFromServiceId(serviceId);
+  const service_group = inferServiceGroupFromServiceId(serviceId);
+
+  const date =
+    (flat?.date && /^\d{4}-\d{2}-\d{2}$/.test(flat.date) ? flat.date : null) ??
+    (typeof row.date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(row.date.trim()) ? row.date.trim() : null);
+  const timeRaw = (flat?.time ?? row.time ?? "").trim();
+  const time = /^\d{1,2}:\d{2}/.test(timeRaw) ? timeRaw.slice(0, 5) : null;
+  if (!date || !time) return null;
+
+  const rooms = readFiniteRoomCount(flat?.rooms ?? row.rooms) ?? 1;
+  const bathrooms = readFiniteRoomCount(flat?.bathrooms ?? row.bathrooms) ?? 1;
+  const extras = Array.from(
+    new Set([...(flat?.extras ?? []), ...extraSlugsFromBookingRowExtras(row.extras)].map((x) => x.trim()).filter(Boolean)),
+  ).sort((a, b) => a.localeCompare(b));
+
+  const totalZar = (() => {
+    const tp = Number(row.total_price);
+    if (Number.isFinite(tp) && tp > 0) return Math.round(tp);
+    const tpz = Number(row.total_paid_zar);
+    if (Number.isFinite(tpz) && tpz > 0) return Math.round(tpz);
+    const snapTotal = snapRec && typeof snapRec.total_zar === "number" ? snapRec.total_zar : null;
+    if (snapTotal != null && Number.isFinite(snapTotal) && snapTotal > 0) return Math.round(snapTotal);
+    return 1;
+  })();
+
+  const lockedAt =
+    typeof row.created_at === "string" && row.created_at.trim() ? row.created_at.trim() : new Date().toISOString();
+
+  const pvRaw = typeof row.pricing_version_id === "string" ? row.pricing_version_id.trim() : "";
+
+  return parseLockedBookingFromUnknown({
+    locked: true,
+    lockedAt,
+    date,
+    time,
+    finalPrice: totalZar,
+    finalHours: 3,
+    surge: 1,
+    rooms,
+    bathrooms,
+    extraRooms: 0,
+    extras,
+    location: (flat?.location ?? "").trim().slice(0, 500),
+    propertyType: "apartment",
+    cleaningFrequency: "one_time",
+    service: serviceId,
+    service_type,
+    service_group,
+    selectedCategory: service_group,
+    ...(pvRaw && /^[0-9a-f-]{36}$/i.test(pvRaw) ? { pricing_version_id: pvRaw.toLowerCase() } : {}),
+  });
 }
 
 export function readLockedBookingFromStorage(): LockedBooking | null {

@@ -1562,7 +1562,7 @@ export default function BookingDetailsView({
           if (!cancelled) {
             setEditPricePreview(null);
             setEditPricePreviewHttpError(
-              !res.ok ? `Preview failed (HTTP ${res.status}).` : (json.error ?? "Preview could not run."),
+              json.error ?? (!res.ok ? `Preview failed (HTTP ${res.status}).` : "Preview could not run."),
             );
           }
           return;
