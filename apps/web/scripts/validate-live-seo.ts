@@ -69,9 +69,22 @@ async function fetchPage(url: string): Promise<{ status: number; location: strin
   return fetchWithNoRedirect(url);
 }
 
+async function fetchPageWithRetry(
+  url: string,
+  attempts = 3,
+): Promise<{ status: number; location: string | null; body: string }> {
+  let last: Awaited<ReturnType<typeof fetchPage>> | null = null;
+  for (let i = 0; i < attempts; i++) {
+    last = await fetchPage(url);
+    if (last.status === 200) return last;
+    if (i < attempts - 1) await new Promise((resolve) => setTimeout(resolve, 750 * (i + 1)));
+  }
+  return last!;
+}
+
 async function main(): Promise<void> {
   const sitemapUrl = `${baseEnv}/sitemap.xml`;
-  const smRes = await fetchPage(sitemapUrl);
+  const smRes = await fetchPageWithRetry(sitemapUrl);
   if (smRes.status !== 200) {
     console.error(`[validate-live-seo] sitemap fetch failed: ${sitemapUrl} → ${smRes.status}`);
     process.exit(1);

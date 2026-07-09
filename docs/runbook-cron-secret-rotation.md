@@ -46,7 +46,7 @@ Background workers are migrating from Vercel `/api/cron/*` to **Supabase Edge Fu
 
 ### Prerequisites
 
-1. Apply migration `20261052_invoke_edge_cron.sql`.
+1. Apply migration `20261054_invoke_edge_cron.sql`.
 2. Deploy function: `supabase functions deploy whatsapp-worker --project-ref <ref>`
 3. Set Edge secrets (Dashboard → Edge Functions → Secrets) — mirror `supabase/functions/.env.example`.
 4. Update `cron_http_targets`:
