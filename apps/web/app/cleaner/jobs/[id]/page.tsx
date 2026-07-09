@@ -52,6 +52,11 @@ import {
   JOB_EARNING_LABEL,
   JOB_EARNING_UNAVAILABLE_CONTACT_LABEL,
 } from "@/lib/cleaner/cleanerJobEarning";
+import { evaluateCleanerJobCompletionGate } from "@/lib/cleaner/cleanerJobCompletionGate";
+import {
+  formatCleanerJobElapsedLabel,
+  formatQuotedDurationLabel,
+} from "@/lib/cleaner/cleanerJobElapsedTimer";
 import { optimisticPatchForLifecycleAction } from "@/lib/cleaner/cleanerLifecycleOptimisticPatch";
 import { mapsNavigationUrlFromJobLocation } from "@/lib/cleaner/mapsNavigationUrl";
 import {
@@ -98,6 +103,8 @@ type CleanerJobDetailWire = {
   pricing_summary?: unknown;
   service_details?: unknown;
   duration_hours?: number | null;
+  duration_minutes?: number | null;
+  estimated_duration_minutes?: number | null;
   job_notes?: string | null;
   displayEarningsCents?: number | null;
   earnings_cents?: number | null;
@@ -696,6 +703,47 @@ export default function CleanerJobDetailPage() {
   const jobEarning = useMemo(() => cleanerJobEarningFromCents(earningsCents), [earningsCents]);
   const jobEarningPositive = isCleanerJobEarningPositive(jobEarning);
 
+  const nowAnchored = useMemo(() => Date.now() + serverClockOffsetMs, [serverClockOffsetMs, tick]);
+
+  const completionGate = useMemo(() => {
+    if (!displayJob || jobUi.phase !== "complete") return null;
+    return evaluateCleanerJobCompletionGate({
+      started_at: displayJob.started_at ?? null,
+      duration_minutes: displayJob.duration_minutes ?? null,
+      estimated_duration_minutes: displayJob.estimated_duration_minutes ?? null,
+      pricing_summary: displayJob.pricing_summary,
+      booking_snapshot: displayJob.booking_snapshot,
+    }, nowAnchored);
+  }, [
+    displayJob,
+    jobUi.phase,
+    nowAnchored,
+    displayJob?.started_at,
+    displayJob?.duration_minutes,
+    displayJob?.estimated_duration_minutes,
+    displayJob?.pricing_summary,
+    displayJob?.booking_snapshot,
+  ]);
+
+  const elapsedOnSiteLabel = useMemo(() => {
+    if (jobUi.phase !== "complete" || !displayJob?.started_at) return null;
+    return formatCleanerJobElapsedLabel(displayJob.started_at, nowAnchored);
+  }, [jobUi.phase, displayJob?.started_at, nowAnchored]);
+
+  const quotedDurationLabel = useMemo(() => {
+    const mins =
+      typeof displayJob?.duration_minutes === "number"
+        ? displayJob.duration_minutes
+        : completionGate && !completionGate.ok
+          ? completionGate.durationMinutes ?? null
+          : completionGate?.ok
+            ? completionGate.durationMinutes
+            : null;
+    return formatQuotedDurationLabel(mins);
+  }, [displayJob?.duration_minutes, completionGate]);
+
+  const completionGateBlocked = completionGate != null && !completionGate.ok;
+
   const showLifecycleDebugStrip = process.env.NEXT_PUBLIC_CLEANER_JOB_LIFECYCLE_DEBUG === "1";
 
   const scheduleModel = useMemo(
@@ -714,8 +762,6 @@ export default function CleanerJobDetailPage() {
     const parts = [displayJob?.date, displayJob?.time].map((x) => String(x ?? "").trim()).filter(Boolean);
     return parts.length ? parts.join(" · ") : null;
   }, [displayJob?.date, displayJob?.time]);
-
-  const nowAnchored = useMemo(() => Date.now() + serverClockOffsetMs, [serverClockOffsetMs, tick]);
 
   const lateness = useMemo(() => {
     if (!displayJob?.status) return { kind: "none" } as const;
@@ -1440,6 +1486,19 @@ export default function CleanerJobDetailPage() {
                     ) : null}
                     {jobUi.phase === "complete" ? (
                       <>
+                        {elapsedOnSiteLabel || quotedDurationLabel ? (
+                          <div
+                            className="rounded-lg border border-emerald-600/25 bg-emerald-50/80 px-3 py-2 text-sm text-emerald-950"
+                            data-testid="cleaner-job-elapsed-timer"
+                          >
+                            {elapsedOnSiteLabel ? (
+                              <p className="font-semibold">{elapsedOnSiteLabel}</p>
+                            ) : null}
+                            {quotedDurationLabel ? (
+                              <p className="mt-0.5 text-xs text-emerald-900/80">{quotedDurationLabel}</p>
+                            ) : null}
+                          </div>
+                        ) : null}
                         {!jobEarningPositive ? (
                           <p
                             role="status"
@@ -1447,6 +1506,15 @@ export default function CleanerJobDetailPage() {
                             className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-950 dark:text-amber-50"
                           >
                             {JOB_EARNING_BLOCK_COMPLETION_MESSAGE}
+                          </p>
+                        ) : null}
+                        {completionGateBlocked ? (
+                          <p
+                            role="status"
+                            data-testid="cleaner-job-detail-completion-gate-message"
+                            className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm font-medium text-amber-950 dark:text-amber-50"
+                          >
+                            {completionGate.error}
                           </p>
                         ) : null}
                         {confirmPending === "complete" ? (
@@ -1457,7 +1525,7 @@ export default function CleanerJobDetailPage() {
                               <Button
                                 type="button"
                                 className="min-h-12 flex-1 bg-emerald-700 text-white hover:bg-emerald-700/90"
-                                disabled={actionBusy != null || lifecycleDisabled || !jobEarningPositive}
+                                disabled={actionBusy != null || lifecycleDisabled || !jobEarningPositive || completionGateBlocked}
                                 onClick={() => void runLifecyclePost("complete", { optimistic: true })}
                               >
                                 {actionBusy === "complete" ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
@@ -1473,8 +1541,8 @@ export default function CleanerJobDetailPage() {
                             type="button"
                             data-testid="cleaner-job-detail-complete-button"
                             className="min-h-12 w-full bg-emerald-700 text-white hover:bg-emerald-700/90"
-                            disabled={actionBusy != null || lifecycleDisabled || !jobEarningPositive}
-                            aria-disabled={!jobEarningPositive || actionBusy != null || lifecycleDisabled}
+                            disabled={actionBusy != null || lifecycleDisabled || !jobEarningPositive || completionGateBlocked}
+                            aria-disabled={!jobEarningPositive || completionGateBlocked || actionBusy != null || lifecycleDisabled}
                             onClick={() => setConfirmPending("complete")}
                           >
                             Complete job

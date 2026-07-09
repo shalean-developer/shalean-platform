@@ -33,6 +33,10 @@ import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarnin
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { bookingIsRecurringPendingPayment } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
+import {
+  buildAdminCompletionGateOverridePatch,
+  evaluateCleanerJobCompletionGate,
+} from "@/lib/cleaner/cleanerJobCompletionGate";
 import { fetchServiceQaForAdminBooking } from "@/lib/booking/bookingServiceQaServer";
 import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
@@ -572,6 +576,21 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       (typeof user.email === "string" && user.email.trim()) || user.id;
   }
 
+  if (updates.status === "completed" && before) {
+    const gate = evaluateCleanerJobCompletionGate(before as unknown as Record<string, unknown>);
+    if (!gate.ok) {
+      Object.assign(
+        updates as Record<string, unknown>,
+        buildAdminCompletionGateOverridePatch({
+          adminEmail: user.email,
+          adminUserId: user.id,
+          reason: "Admin PATCH status=completed",
+          blockedCodes: gate.blockedCodes,
+        }),
+      );
+    }
+  }
+
   if (updates.status === "completed" && beforeRow) {
     const { patch: completionCoherencePatch, dispatchStatusNormalized } = buildCompletionCoherencePatch({
       beforeCompletedAt,
@@ -649,6 +668,25 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         override_type: "recurring_unpaid_completion",
       },
     });
+  }
+
+  if (updates.status === "completed" && before) {
+    const gate = evaluateCleanerJobCompletionGate(before as unknown as Record<string, unknown>);
+    if (!gate.ok) {
+      await logSystemEvent({
+        level: "warn",
+        source: "admin_booking_lifecycle_override",
+        message: "admin_marked_completed_completion_gate_override",
+        context: {
+          booking_id: id,
+          admin_user_id: user.id,
+          admin_email: user.email ?? null,
+          prior_status: beforeStatus,
+          override_type: "completion_gate",
+          gate_codes: gate.blockedCodes,
+        },
+      });
+    }
   }
 
   if (cleanerWasChanged) {

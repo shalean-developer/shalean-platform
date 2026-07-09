@@ -14,6 +14,8 @@ import {
 import { isBookingPayoutPaid } from "@/lib/cleaner/cleanerPayoutPaid";
 import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
 import { jobTotalZarFromCleanerBookingLike } from "@/lib/cleaner/cleanerUxEstimatedPayZar";
+import { resolvePersistedBookingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
+import { durationHoursFromMinutes } from "@/lib/booking/quote/resolveBookingDurationWorkload";
 
 export type { CleanerJobUiState, CleanerMobilePhase };
 
@@ -126,10 +128,10 @@ export function durationHoursFromBookingRecord(row: Record<string, unknown>): nu
 
 /** Explicit duration hours when set; null when only the legacy default would apply. */
 export function explicitDurationHoursFromBookingRecord(row: Record<string, unknown>): number | null {
+  const mins = resolvePersistedBookingDurationMinutes(row);
+  if (mins != null) return durationHoursFromMinutes(mins);
   const fromSnap = explicitDurationHoursFromBookingSnapshot(row.booking_snapshot);
   if (fromSnap != null) return fromSnap;
-  const mins = estimatedDurationMinutesFromBookingRecord(row);
-  if (mins != null) return mins / 60;
   return null;
 }
 

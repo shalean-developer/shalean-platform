@@ -36,6 +36,7 @@ import {
 } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
 import { deriveBookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
 import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
+import { evaluateCleanerJobCompletionGate } from "@/lib/cleaner/cleanerJobCompletionGate";
 import { isBookingCompletedRouterEnabled } from "@/lib/notifications/notificationRouter";
 import {
   buildViewerRosterContext,
@@ -148,6 +149,10 @@ type BookingLifecycleRow = {
   dispatch_status?: string | null;
   en_route_at?: string | null;
   started_at?: string | null;
+  duration_minutes?: number | null;
+  estimated_duration_minutes?: number | null;
+  pricing_summary?: unknown;
+  booking_snapshot?: unknown;
   display_earnings_cents?: number | null;
   cleaner_earnings_total_cents?: number | null;
   billing_type?: string | null;
@@ -452,7 +457,7 @@ export async function runCleanerBookingLifecycleAction(params: {
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, assignment_attempts, cleaner_response_status, accepted_at, dispatch_status, en_route_at, started_at, display_earnings_cents, cleaner_earnings_total_cents, is_recurring_generated, billing_type, monthly_invoice_id",
+      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, assignment_attempts, cleaner_response_status, accepted_at, dispatch_status, en_route_at, started_at, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot, display_earnings_cents, cleaner_earnings_total_cents, is_recurring_generated, billing_type, monthly_invoice_id",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -1285,6 +1290,49 @@ export async function runCleanerBookingLifecycleAction(params: {
         cleaner_earnings_total_cents: bRow.cleaner_earnings_total_cents ?? null,
       },
     });
+
+    const completionGate = evaluateCleanerJobCompletionGate(bRow);
+    if (!completionGate.ok) {
+      const lifecycleCode =
+        completionGate.code === "missing_persisted_duration"
+          ? CLEANER_LIFECYCLE_CODE.COMPLETION_MISSING_DURATION
+          : completionGate.code === "quote_signature_missing"
+            ? CLEANER_LIFECYCLE_CODE.COMPLETION_QUOTE_SIGNATURE_MISSING
+            : CLEANER_LIFECYCLE_CODE.COMPLETION_MINIMUM_DURATION_NOT_ELAPSED;
+      void logSystemEvent({
+        level: "warn",
+        source: "cleaner_lifecycle_complete",
+        message: "complete_blocked_completion_gate",
+        context: {
+          booking_id: bookingId,
+          cleaner_id: cleanerId,
+          gate_code: completionGate.code,
+          remaining_minutes: completionGate.remainingMinutes ?? null,
+          duration_minutes: completionGate.durationMinutes ?? null,
+          elapsed_minutes: completionGate.elapsedMinutes ?? null,
+        },
+      });
+      traceCleanerLifecycle({
+        outcome: "blocked",
+        bookingId,
+        cleanerId,
+        action,
+        bookingStatus: st,
+        cleanerResponseStatus: bRow.cleaner_response_status,
+        dispatchStatus: bRow.dispatch_status,
+        httpStatus: 422,
+        reasonCode: lifecycleCode,
+      });
+      return {
+        status: 422,
+        json: {
+          error: completionGate.error,
+          code: lifecycleCode,
+          gate_code: completionGate.code,
+          remaining_minutes: completionGate.remainingMinutes ?? null,
+        },
+      };
+    }
 
     try {
       const persistCleanerId =

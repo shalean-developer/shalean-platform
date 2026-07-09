@@ -24,4 +24,10 @@ export const CLEANER_LIFECYCLE_CODE = {
   PENDING_PAYMENT_LIFECYCLE_BLOCKED: "lifecycle_pending_payment_blocked",
   /** Recurring unpaid visit: accept/decline allowed; travel / start / complete blocked until payment confirms. */
   RECURRING_PENDING_PAYMENT_PROGRESSION_BLOCKED: "lifecycle_recurring_pending_payment_progression_blocked",
+  /** Phase 6: authoritative duration missing on booking row. */
+  COMPLETION_MISSING_DURATION: "completion_missing_persisted_duration",
+  /** Phase 6: V2 pricing_summary missing quote_signature. */
+  COMPLETION_QUOTE_SIGNATURE_MISSING: "completion_quote_signature_missing",
+  /** Phase 6: cleaner attempted complete before minimum quoted on-site time elapsed. */
+  COMPLETION_MINIMUM_DURATION_NOT_ELAPSED: "completion_minimum_duration_not_elapsed",
 } as const;

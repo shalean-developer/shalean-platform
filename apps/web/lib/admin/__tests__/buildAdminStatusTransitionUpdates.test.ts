@@ -47,12 +47,22 @@ describe("buildAdminStatusTransitionUpdates", () => {
     expect(typeof updates.completed_at).toBe("string");
   });
 
-  it("clears cancelled_by when reopening from cancelled", () => {
+  it("records completion-gate override audit when admin completes early", () => {
+    const startedAt = new Date(Date.now() - 10 * 60_000).toISOString();
     const { updates } = buildAdminStatusTransitionUpdates(
-      { status: "cancelled", completed_at: null, dispatch_status: null },
-      "assigned",
+      {
+        status: "in_progress",
+        completed_at: null,
+        dispatch_status: "assigned",
+        started_at: startedAt,
+        duration_minutes: 180,
+      },
+      "completed",
+      { adminEmail: "ops@example.com", completionGateOverrideReason: "Customer signed off early" },
     );
-    expect(updates.status).toBe("assigned");
-    expect(updates.cancelled_by).toBeNull();
+    expect(updates.admin_completion_gate_override_at).toBeTruthy();
+    expect(updates.admin_completion_gate_override_by).toBe("ops@example.com");
+    expect(updates.admin_completion_gate_override_reason).toBe("Customer signed off early");
+    expect(updates.admin_completion_gate_override_codes).toContain("minimum_duration_not_elapsed");
   });
 });

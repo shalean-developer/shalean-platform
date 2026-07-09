@@ -340,7 +340,7 @@ export async function GET(request: Request) {
   const jobsPayload = cardView
     ? jobsWithRoster.map((j) => ({
         ...j,
-        scope_lines: cleanerBookingScopeLines(j as CleanerBookingRow),
+        scope_lines: cleanerBookingScopeLines(j as unknown as CleanerBookingRow),
       }))
     : jobsWithRoster;
 

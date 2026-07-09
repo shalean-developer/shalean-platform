@@ -1,11 +1,20 @@
 import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
 import { bookingIsRecurringPendingPayment } from "@/lib/cleaner/cleanerRecurringPendingPaymentLifecycle";
+import {
+  buildAdminCompletionGateOverridePatch,
+  evaluateCleanerJobCompletionGate,
+} from "@/lib/cleaner/cleanerJobCompletionGate";
 import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 
 export type AdminStatusTransitionBeforeRow = {
   status?: string | null;
   completed_at?: string | null;
   dispatch_status?: string | null;
+  started_at?: string | null;
+  duration_minutes?: number | null;
+  estimated_duration_minutes?: number | null;
+  pricing_summary?: unknown;
+  booking_snapshot?: unknown;
 };
 
 export type AdminStatusTransitionUpdatesResult = {
@@ -21,7 +30,11 @@ export type AdminStatusTransitionUpdatesResult = {
 export function buildAdminStatusTransitionUpdates(
   beforeRow: AdminStatusTransitionBeforeRow,
   nextStatusRaw: string,
-  opts?: { adminEmail?: string | null; adminUserId?: string | null },
+  opts?: {
+    adminEmail?: string | null;
+    adminUserId?: string | null;
+    completionGateOverrideReason?: string | null;
+  },
 ): AdminStatusTransitionUpdatesResult {
   const beforeStatus = canonicalDbBookingStatus(String(beforeRow.status ?? "pending").trim() || "pending");
   const nextStatus = canonicalDbBookingStatus(nextStatusRaw);
@@ -50,6 +63,22 @@ export function buildAdminStatusTransitionUpdates(
       updates.admin_recurring_unpaid_completion_override_at = new Date().toISOString();
       updates.admin_recurring_unpaid_completion_override_by =
         (typeof opts?.adminEmail === "string" && opts.adminEmail.trim()) || opts?.adminUserId || null;
+    }
+
+    const gate = evaluateCleanerJobCompletionGate(beforeRow);
+    if (!gate.ok) {
+      const overrideReason =
+        (typeof opts?.completionGateOverrideReason === "string" && opts.completionGateOverrideReason.trim()) ||
+        "Admin lifecycle completion override";
+      Object.assign(
+        updates,
+        buildAdminCompletionGateOverridePatch({
+          adminEmail: opts?.adminEmail,
+          adminUserId: opts?.adminUserId,
+          reason: overrideReason,
+          blockedCodes: gate.blockedCodes,
+        }),
+      );
     }
   }
 

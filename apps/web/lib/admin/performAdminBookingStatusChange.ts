@@ -22,6 +22,7 @@ import {
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
+import { evaluateCleanerJobCompletionGate } from "@/lib/cleaner/cleanerJobCompletionGate";
 
 export type PerformAdminBookingStatusChangeParams = {
   admin: SupabaseClient;
@@ -37,7 +38,7 @@ export type PerformAdminBookingStatusChangeResult =
   | { ok: false; status: number; error: string; code?: string };
 
 const BEFORE_SELECT =
-  "id, status, completed_at, dispatch_status, cleaner_id, payout_owner_cleaner_id, date, time, display_earnings_cents, is_team_job";
+  "id, status, completed_at, dispatch_status, cleaner_id, payout_owner_cleaner_id, date, time, display_earnings_cents, is_team_job, started_at, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot";
 
 export async function performAdminBookingStatusChange(
   params: PerformAdminBookingStatusChangeParams,
@@ -71,6 +72,11 @@ export async function performAdminBookingStatusChange(
     time?: string | null;
     display_earnings_cents?: unknown;
     is_team_job?: boolean | null;
+    started_at?: string | null;
+    duration_minutes?: number | null;
+    estimated_duration_minutes?: number | null;
+    pricing_summary?: unknown;
+    booking_snapshot?: unknown;
   };
 
   const beforeStatus = canonicalDbBookingStatus(String(beforeRow.status ?? "pending").trim() || "pending");
@@ -89,7 +95,11 @@ export async function performAdminBookingStatusChange(
     buildAdminStatusTransitionUpdates(beforeRow, nextStatus, {
       adminEmail: params.adminEmail,
       adminUserId,
+      completionGateOverrideReason: reason,
     });
+
+  const completionGate =
+    toStatus === "completed" ? evaluateCleanerJobCompletionGate(beforeRow) : null;
 
   const { error: updateErr } = await applyAdminBookingLifecycleStatusOverride({
     admin,
@@ -109,6 +119,23 @@ export async function performAdminBookingStatusChange(
         admin_email: params.adminEmail ?? null,
         prior_status: fromStatus,
         override_type: "recurring_unpaid_completion",
+        reason,
+      },
+    });
+  }
+
+  if (toStatus === "completed" && completionGate && !completionGate.ok) {
+    await logSystemEvent({
+      level: "warn",
+      source: "admin_booking_lifecycle_override",
+      message: "admin_marked_completed_completion_gate_override",
+      context: {
+        booking_id: bookingId,
+        admin_user_id: adminUserId,
+        admin_email: params.adminEmail ?? null,
+        prior_status: fromStatus,
+        override_type: "completion_gate",
+        gate_codes: completionGate.blockedCodes,
         reason,
       },
     });
