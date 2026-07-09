@@ -109,5 +109,6 @@ export function bookingDemandWindowMinutes(booking: {
   const start = hmToMinutes(timeHm.slice(0, 5));
   if (start == null) return null;
   const durationMin = effectiveJobDurationMinutes(booking);
+  if (durationMin == null) return null;
   return { startMin: start, durationMin };
 }

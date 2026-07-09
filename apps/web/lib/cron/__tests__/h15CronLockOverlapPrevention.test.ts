@@ -292,6 +292,10 @@ describe("H-15 cron lock — per-route guards", () => {
     { dir: "freeze-payouts", key: "freezePayouts" },
     { dir: "payout-integrity-daily", key: "payoutIntegrityDaily" },
     { dir: "reconcile-paystack-transfers", key: "reconcilePaystackTransfers" },
+    { dir: "generate-recurring-expenses", key: "generateRecurringExpenses" },
+    { dir: "finance-daily-automation", key: "financeDailyAutomation" },
+    { dir: "backfill-paystack-payments", key: "backfillPaystackPayments" },
+    { dir: "accounting-sync", key: "accountingSync" },
     { dir: "ops-health", key: "opsHealthMetrics" },
   ];
 
@@ -384,6 +388,10 @@ describe("H-15 cron lock — coverage manifest", () => {
     "freeze-payouts",
     "payout-integrity-daily",
     "reconcile-paystack-transfers",
+    "generate-recurring-expenses",
+    "finance-daily-automation",
+    "backfill-paystack-payments",
+    "accounting-sync",
     "ops-health",
   ]);
 

@@ -636,6 +636,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     selected_extras?: string[] | null;
     pricing_summary?: unknown;
     booking_snapshot?: unknown;
+    duration_minutes?: number | null;
+    estimated_duration_minutes?: number | null;
     rooms?: number | null;
     bathrooms?: number | null;
     extras?: unknown;

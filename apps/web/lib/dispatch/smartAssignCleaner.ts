@@ -98,7 +98,8 @@ export type SmartAssignResult =
         | "db_error"
         | "params_mismatch"
         | "invalid_booking_time"
-        | "missing_job_coordinates";
+        | "missing_job_coordinates"
+        | "missing_duration_minutes";
       message?: string;
     };
 
