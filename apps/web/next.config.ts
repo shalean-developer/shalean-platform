@@ -45,6 +45,11 @@ function portalCutoverRedirects() {
 const nextConfig: NextConfig = {
   serverExternalPackages: ["googleapis", "google-auth-library"],
   poweredByHeader: false,
+  typescript: {
+    // Types are enforced by `npm run typecheck` (CI + local). Skipping the second full-program
+    // pass inside `next build` avoids OOM on large trees when the default ~4GB heap is exhausted.
+    ignoreBuildErrors: true,
+  },
   ...(locationSeoFeedbackJson
     ? {
         env: {

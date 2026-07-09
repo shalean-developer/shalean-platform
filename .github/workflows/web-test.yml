@@ -42,7 +42,7 @@ jobs:
       - name: Blog route governance
         run: npm run validate:blog-routes && npm run audit:internal-links && npm run validate:cms-blog-links
       - name: Typecheck
-        run: npx tsc --noEmit
+        run: npm run typecheck
       - name: Booking core ESLint gate
         run: npm run lint:booking-core
       - name: Blog SEO governance report
