@@ -9,6 +9,7 @@ import {
   buildCanonicalDurationShadowDiagnostics,
   reportCanonicalDurationShadowMismatch,
 } from "@/lib/pricing/canonicalDurationShadow";
+import { estimateUnifiedJobDurationHours } from "@/lib/booking/quote/resolveBookingDurationWorkload";
 import { selectLegacyJobDurationHours } from "@/lib/pricing/legacyDurationSelection";
 import type { PricingRatesSnapshot, SnapshotBundleRow } from "@/lib/pricing/pricingRatesSnapshot";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
@@ -276,6 +277,15 @@ export function normalizeJobSubtotalSplitZar(
 }
 
 export function estimateJobDurationHoursSnapshot(snapshot: PricingRatesSnapshot, job: PricingJobInput): number {
+  void snapshot;
+  return estimateUnifiedJobDurationHours(job);
+}
+
+/** @deprecated Shadow/diagnostics only — runtime quotes use {@link estimateUnifiedJobDurationHours}. */
+export function estimateLegacyTariffDurationHoursSnapshot(
+  snapshot: PricingRatesSnapshot,
+  job: PricingJobInput,
+): number {
   return selectLegacyJobDurationHours(snapshot, job);
 }
 

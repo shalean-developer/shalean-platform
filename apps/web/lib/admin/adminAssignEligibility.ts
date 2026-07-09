@@ -19,7 +19,9 @@ import {
   type CleanerPreferenceRowLike,
 } from "@/lib/dispatch/cleanerPreferenceMatch";
 import { buildAdminWarning, type AdminWarning } from "@/lib/admin/adminWarningPayload";
+import { resolveSchedulingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
 
+/** @deprecated Scheduling uses persisted duration via {@link resolveSchedulingDurationMinutes}. */
 export const DEFAULT_ASSIGN_JOB_DURATION_MIN = 240;
 
 type AvRow = { start_time: string; end_time: string; is_available: boolean };
@@ -51,10 +53,16 @@ export const SCHEDULE_DEMAND_STATUSES = new Set([
   "confirmed",
 ]);
 
-export function effectiveJobDurationMinutes(row: { duration_minutes?: number | null }): number {
-  const d = row.duration_minutes;
-  if (typeof d === "number" && Number.isFinite(d) && d > 0) return Math.min(9 * 60, Math.max(60, d));
-  return DEFAULT_ASSIGN_JOB_DURATION_MIN;
+export function effectiveJobDurationMinutes(row: {
+  id?: string | null;
+  duration_minutes?: number | null;
+  estimated_duration_minutes?: number | null;
+  pricing_summary?: unknown;
+  booking_snapshot?: unknown;
+}): number | null {
+  const resolved = resolveSchedulingDurationMinutes(row, "adminAssignEligibility.effectiveJobDurationMinutes");
+  if (resolved == null) return null;
+  return Math.min(9 * 60, Math.max(60, resolved));
 }
 
 export function busyUntilFromOverlappingJobs(
@@ -77,6 +85,7 @@ export function overlapBlockingDetail(
     const os = dayMinutes(o.time);
     if (os == null) continue;
     const od = effectiveJobDurationMinutes(o);
+    if (od == null) continue;
     const oe = os + od;
     if (intervalsOverlap(bookingStartMin, bookingEnd, os, oe)) {
       const rangeLabel = `${formatMinutesAsHm(os)}–${formatMinutesAsHm(oe)}`;
@@ -121,7 +130,7 @@ export async function countBookingsOverlappingDemandSlot(
   const slotEnd = slotStartMin + slotDurationMin;
   let q = admin
     .from("bookings")
-    .select("id, time, duration_minutes, status")
+    .select("id, time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot, status")
     .eq("date", dateYmd);
   if (cityId) q = q.eq("city_id", cityId);
   const { data: rows } = await q;
@@ -131,6 +140,9 @@ export async function countBookingsOverlappingDemandSlot(
       id?: string;
       time?: string | null;
       duration_minutes?: number | null;
+      estimated_duration_minutes?: number | null;
+      pricing_summary?: unknown;
+      booking_snapshot?: unknown;
       status?: string | null;
     };
     const st = String(row.status ?? "").toLowerCase();
@@ -138,6 +150,7 @@ export async function countBookingsOverlappingDemandSlot(
     const os = dayMinutes(row.time);
     if (os == null) continue;
     const od = effectiveJobDurationMinutes(row);
+    if (od == null) continue;
     const oe = os + od;
     if (!intervalsOverlap(slotStartMin, slotEnd, os, oe)) continue;
     n += 1;

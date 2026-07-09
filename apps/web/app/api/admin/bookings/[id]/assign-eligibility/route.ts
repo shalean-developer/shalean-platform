@@ -50,7 +50,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, time, duration_minutes, city_id, location_id, service_slug, service")
+    .select("id, date, time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot, city_id, location_id, service_slug, service")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -59,9 +59,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   }
 
   const b = booking as {
+    id?: string;
     date?: string | null;
     time?: string | null;
     duration_minutes?: number | null;
+    estimated_duration_minutes?: number | null;
+    pricing_summary?: unknown;
+    booking_snapshot?: unknown;
     city_id?: string | null;
     location_id?: string | null;
     service_slug?: string | null;
@@ -74,6 +78,12 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   }
 
   const durationMinutes = effectiveJobDurationMinutes(b);
+  if (durationMinutes == null) {
+    return NextResponse.json(
+      { error: "Booking has no persisted duration. Re-quote or edit the booking before assigning." },
+      { status: 422 },
+    );
+  }
   const slotStartMin = hmToMinutes(timeHm.slice(0, 5));
   const cityIdFilter = b.city_id?.trim() ? String(b.city_id).trim() : null;
   const overlappingDemandInSlot =

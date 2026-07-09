@@ -1,6 +1,7 @@
 import { SERVICE_CONFIG, serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
-import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
+import { resolveBookingV2Quote } from "@/lib/booking/quote/resolveBookingQuote";
+import { buildAuthoritativeQuotePersistPatch } from "@/lib/booking/quote/bookingQuotePersistence";
 import type { BookingV2FeesConfig, CustomerPricingBreakdown } from "@/lib/booking-v2/types";
 import type { LiveServiceConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
@@ -57,7 +58,7 @@ export function buildCustomerPricingFromForm(params: {
   const equipmentQuote: EquipmentQuoteResult | null =
     equipmentRequired && values.equipmentQuote ? values.equipmentQuote : null;
 
-  return calculateCustomerTotal({
+  return resolveBookingV2Quote({
     serviceSlug,
     serviceLabel: catalogSource.label,
     serviceDetails: values.serviceDetails ?? {},
@@ -83,17 +84,12 @@ export function buildCustomerPricingFromForm(params: {
         showEquipmentQuestion,
     },
     feesConfig: feesConfig ?? defaultBookingV2FeesConfig(),
-  });
+  }).breakdown;
 }
 
-export function pricingPersistFields(breakdown: CustomerPricingBreakdown) {
-  return {
-    pricing_summary: breakdown,
-    total_paid_zar: breakdown.estimated_total,
-    amount_paid_cents: Math.round(breakdown.estimated_total * 100),
-    service_fee_cents: Math.round(breakdown.service_fee * 100),
-    base_amount_cents: Math.round(breakdown.subtotal_before_service_fee * 100),
-    recurring_discount_cents: Math.round(breakdown.recurring_discount * 100),
-    estimated_duration_minutes: breakdown.estimated_duration_minutes,
-  };
+export function pricingPersistFields(
+  breakdown: CustomerPricingBreakdown,
+  schedule?: { date: string; time: string } | null,
+) {
+  return buildAuthoritativeQuotePersistPatch({ breakdown, schedule });
 }

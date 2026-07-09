@@ -49,7 +49,10 @@ import {
 } from "@/lib/booking/checkoutCleanerEligibility";
 import { paymentConversionBucketFromSeconds } from "@/lib/booking/paymentConversionBucket";
 import { resolveExtrasLineItems } from "@/lib/booking/extrasSnapshot";
-import { lockedDurationMinutesPatch } from "@/lib/booking/durationMinutesIntegrity";
+import {
+  buildLegacyLockDurationPersistPatch,
+  authoritativeDurationPatchFromBookingRow,
+} from "@/lib/booking/quote/bookingQuotePersistence";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import {
   roomsBathroomsCountsFromServiceDetails,
@@ -724,7 +727,25 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     service_fee_cents: serviceFeeCents,
     currency: input.currency || "ZAR",
     booking_snapshot: preservedSnapshot,
-    ...lockedDurationMinutesPatch(lockedRow),
+    ...(lockedRow
+      ? buildLegacyLockDurationPersistPatch({
+          locked: lockedRow,
+          schedule:
+            locked?.date && locked?.time
+              ? { date: String(locked.date), time: String(locked.time) }
+              : pendingExisting?.date && pendingExisting?.time
+                ? { date: String(pendingExisting.date), time: String(pendingExisting.time) }
+                : null,
+        })
+      : authoritativeDurationPatchFromBookingRow({
+          id: existingPendingPaymentId ?? existing?.id ?? null,
+          duration_minutes: pendingExisting?.duration_minutes ?? null,
+          estimated_duration_minutes: pendingExisting?.estimated_duration_minutes ?? null,
+          pricing_summary: pendingExisting?.pricing_summary ?? preservedSnapshot,
+          booking_snapshot: preservedSnapshot,
+          date: locked?.date ?? pendingExisting?.date ?? null,
+          time: locked?.time ?? pendingExisting?.time ?? null,
+        })),
     ...(serviceSlugForRow ? { service_slug: serviceSlugForRow } : {}),
     status: "pending",
     dispatch_status: "searching",

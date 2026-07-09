@@ -23,6 +23,7 @@ import { getDefaultTravelTimeProvider } from "@/lib/dispatch/travelProvider";
 import type { TravelTimeProvider } from "@/lib/dispatch/travelProviderTypes";
 import { getTravelMinutesBetweenAreas } from "@/lib/dispatch/travelCache";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
+import { resolvePersistedBookingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
 import type { CleanerRow, SmartDispatchCandidate } from "@/lib/dispatch/types";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { predictAcceptanceProbability } from "@/lib/marketplace-intelligence/acceptanceProbability";
@@ -125,7 +126,6 @@ export type DispatchScoreV4Input = {
   randomJitter?: number;
 };
 
-const DEFAULT_JOB_DURATION_MIN = 180;
 const TRAVEL_BUFFER_MIN = 30;
 const DEFAULT_MAX_CANDIDATES = 10;
 const DEFAULT_MAX_SOFT_OFFERS = 9;
@@ -266,8 +266,8 @@ type DayInterval = { start: number; end: number; location_id: string | null };
 function intervalFromRow(timeHm: string, durationMin: number | null | undefined): { start: number; end: number } | null {
   const start = timeHmToMinutes(timeHm);
   if (!Number.isFinite(start)) return null;
-  const d = durationMin ?? DEFAULT_JOB_DURATION_MIN;
-  return { start, end: start + d };
+  if (durationMin == null || !Number.isFinite(durationMin) || durationMin < 30) return null;
+  return { start, end: start + Math.round(durationMin) };
 }
 
 function intervalsOverlap(a: DayInterval, b: DayInterval): boolean {
@@ -442,7 +442,10 @@ export async function findSmartDispatchCandidates(
 ): Promise<FindSmartDispatchCandidatesResult> {
   const { dateYmd, timeHm, locationId } = params;
   const cityId = params.cityId ?? null;
-  const newJobDuration = params.newJobDurationMinutes ?? DEFAULT_JOB_DURATION_MIN;
+  const newJobDuration = params.newJobDurationMinutes;
+  if (newJobDuration == null || !Number.isFinite(newJobDuration) || newJobDuration < 30) {
+    return emptyFindSmartDispatchCandidates();
+  }
   const searchExpansion = params.searchExpansion ?? "none";
   const demandLevel: DemandLevel = params.demandLevel ?? "normal";
   const surgeMultiplier = Number.isFinite(params.surgeMultiplier) ? (params.surgeMultiplier as number) : 1;
@@ -565,7 +568,7 @@ export async function findSmartDispatchCandidates(
   ] = await Promise.all([
     supabase
       .from("bookings")
-      .select("cleaner_id, time, location_id, duration_minutes, status")
+      .select("cleaner_id, time, location_id, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot")
       .eq("date", dateYmd)
       .in("cleaner_id", ids)
       .in("status", ["assigned", "in_progress", "completed"]),
@@ -667,7 +670,7 @@ export async function findSmartDispatchCandidates(
     const cid = String((row as { cleaner_id?: string }).cleaner_id ?? "");
     const t = String((row as { time?: string }).time ?? "");
     const lid = (row as { location_id?: string | null }).location_id ?? null;
-    const dur = (row as { duration_minutes?: number | null }).duration_minutes;
+    const dur = resolvePersistedBookingDurationMinutes(row as { duration_minutes?: number | null; estimated_duration_minutes?: number | null; pricing_summary?: unknown; booking_snapshot?: unknown; id?: string });
     if (!cid || !t) continue;
     const core = intervalFromRow(t, dur);
     if (!core) continue;
@@ -1165,7 +1168,15 @@ export async function smartAssignCleaner(
     jobCapabilitySlug ||
     (jobCapabilityLabel ? jobCapabilityLabel.toLowerCase() : "") ||
     null;
-  const durationMinutes = (booking as { duration_minutes?: number | null }).duration_minutes ?? null;
+  const durationMinutes = resolvePersistedBookingDurationMinutes(
+    booking as {
+      id?: string;
+      duration_minutes?: number | null;
+      estimated_duration_minutes?: number | null;
+      pricing_summary?: unknown;
+      booking_snapshot?: unknown;
+    },
+  );
   const surgeMultiplier = Number((booking as { surge_multiplier?: number | null }).surge_multiplier ?? 1) || 1;
   const demandLevelRaw = String((booking as { demand_level?: string | null }).demand_level ?? "normal").toLowerCase();
   const demandLevel: DemandLevel =
@@ -1187,6 +1198,16 @@ export async function smartAssignCleaner(
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd) || !/^\d{2}:\d{2}$/.test(normalizeHm(timeHm))) {
     return { ok: false, error: "invalid_booking_time", message: "Invalid date/time on booking" };
+  }
+
+  if (durationMinutes == null) {
+    await logSystemEvent({
+      level: "warn",
+      source: "dispatch_failed",
+      message: "Booking missing persisted duration_minutes",
+      context: { bookingId: params.bookingId },
+    });
+    return { ok: false, error: "missing_duration_minutes", message: "Booking has no persisted duration for dispatch" };
   }
 
   const { data: locCheck } = await supabase

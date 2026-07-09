@@ -6,7 +6,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 import { BOOKING_SLOT_OCCUPYING_STATUSES } from "@/lib/booking/bookingCleanerSlotOccupyingStatuses";
-import { reportDurationFallbackTo120 } from "@/lib/booking/durationMinutesIntegrity";
+import { resolveSchedulingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
 
 export type { BookingSlotOccupyingStatus } from "@/lib/booking/bookingCleanerSlotOccupyingStatuses";
 export { BOOKING_SLOT_OCCUPYING_STATUSES } from "@/lib/booking/bookingCleanerSlotOccupyingStatuses";
@@ -23,6 +23,9 @@ export type OccupyingBookingRow = {
   start_time?: string | null;
   end_time?: string | null;
   duration_minutes?: number | null;
+  estimated_duration_minutes?: number | null;
+  pricing_summary?: unknown;
+  booking_snapshot?: unknown;
 };
 
 const INELIGIBLE_ACCOUNT_STATUS = new Set([
@@ -84,18 +87,11 @@ export function existingBookingOccupancyWindow(row: OccupyingBookingRow): { star
     return { startMin: start, endMin: endParsed };
   }
   const d = row.duration_minutes;
-  const dur =
-    typeof d === "number" && Number.isFinite(d) && d >= 30
-      ? Math.min(12 * 60, Math.round(d))
-      : (() => {
-          reportDurationFallbackTo120({
-            bookingId: row.id ?? null,
-            source: "existingBookingOccupancyWindow",
-            durationMinutes: d ?? null,
-          });
-          return 120;
-        })();
-  return { startMin: start, endMin: start + dur };
+  const resolved =
+    resolveSchedulingDurationMinutes(row, "existingBookingOccupancyWindow") ??
+    (typeof d === "number" && Number.isFinite(d) && d >= 30 ? Math.min(12 * 60, Math.round(d)) : null);
+  if (resolved == null) return null;
+  return { startMin: start, endMin: start + resolved };
 }
 
 /**
@@ -179,7 +175,7 @@ export async function findCleanerSlotOccupancyConflict(
 
   const { data, error } = await admin
     .from("bookings")
-    .select("id, cleaner_id, selected_cleaner_id, date, booking_date, time, start_time, end_time, duration_minutes")
+    .select("id, cleaner_id, selected_cleaner_id, date, booking_date, time, start_time, end_time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot")
     .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
     .or(`cleaner_id.eq.${cleanerId},selected_cleaner_id.eq.${cleanerId}`)
     .or(`date.eq.${dateYmd},booking_date.eq.${dateYmd}`);

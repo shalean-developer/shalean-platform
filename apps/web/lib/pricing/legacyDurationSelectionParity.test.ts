@@ -8,6 +8,7 @@ import {
 } from "@/lib/booking/checkoutLockValidation";
 import { checkoutDurationMinutesFromLocked } from "@/lib/booking/checkoutCleanerEligibility";
 import { quoteLockFromRequestBodyWithSnapshot } from "@/lib/booking/bookingLockQuote";
+import { resolveLegacyBookingQuote } from "@/lib/booking/quote/resolveBookingQuote";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
 import {
   buildLockQuoteSignString,
@@ -19,6 +20,9 @@ import {
   selectLegacyJobDurationHours,
   selectLegacyJobDurationMinutes,
 } from "@/lib/pricing/legacyDurationSelection";
+import {
+  estimateUnifiedJobDurationHours,
+} from "@/lib/booking/quote/resolveBookingDurationWorkload";
 import {
   estimateJobDurationHoursSnapshot,
   quoteCheckoutZarWithSnapshot,
@@ -58,7 +62,7 @@ function baseLocked(over: Partial<LockedBooking>): LockedBooking {
   } as LockedBooking;
 }
 
-describe("legacy duration selection parity (Phase 2D-B)", () => {
+describe("unified booking quote duration (Phase 1)", () => {
   const prevSecret = process.env.BOOKING_LOCK_HMAC_SECRET;
 
   beforeEach(() => {
@@ -70,7 +74,7 @@ describe("legacy duration selection parity (Phase 2D-B)", () => {
     else process.env.BOOKING_LOCK_HMAC_SECRET = prevSecret;
   });
 
-  it("keeps quote duration parity on the shared legacy helper", () => {
+  it("checkout quote hours match unified canonical engine", () => {
     const job = {
       service: "standard" as const,
       rooms: 2,
@@ -78,16 +82,16 @@ describe("legacy duration selection parity (Phase 2D-B)", () => {
       extraRooms: 1,
       extras: ["inside-oven"],
     };
-    const helperHours = selectLegacyJobDurationHours(snap, job);
+    const unifiedHours = estimateUnifiedJobDurationHours(job);
     const estimatedHours = estimateJobDurationHoursSnapshot(snap, job);
     const checkout = quoteCheckoutZarWithSnapshot(snap, job, "10:00", "regular", { cleanersCount: 1 });
 
-    expect(estimatedHours).toBe(helperHours);
-    expect(checkout.hours).toBe(helperHours);
-    expect(checkout.durationDiagnostics?.canonical_duration_minutes).not.toBe(legacyHoursToDurationMinutes(checkout.hours));
+    expect(estimatedHours).toBe(unifiedHours);
+    expect(checkout.hours).toBe(unifiedHours);
+    expect(checkout.durationDiagnostics?.canonical_duration_minutes).toBeGreaterThan(0);
   });
 
-  it("keeps time-slot inferred duration parity with quote duration", () => {
+  it("time-slot inferred duration matches unified quote hours", () => {
     const job = {
       service: "airbnb" as const,
       rooms: 3,
@@ -96,8 +100,9 @@ describe("legacy duration selection parity (Phase 2D-B)", () => {
       extras: ["inside-fridge", "inside-oven"],
     };
 
-    expect(selectLegacyJobDurationMinutes(snap, job)).toBe(
-      legacyHoursToDurationMinutes(quoteJobDurationHoursWithSnapshot(snap, job, "regular")),
+    expect(quoteJobDurationHoursWithSnapshot(snap, job, "regular")).toBe(estimateUnifiedJobDurationHours(job));
+    expect(selectLegacyJobDurationMinutes(snap, job)).not.toBe(
+      legacyHoursToDurationMinutes(estimateUnifiedJobDurationHours(job)),
     );
   });
 
@@ -133,7 +138,7 @@ describe("legacy duration selection parity (Phase 2D-B)", () => {
     expect(core?.durationMinutes).not.toBe(999);
   });
 
-  it("keeps signature duration parity and ignores diagnostics metadata", () => {
+  it("lock signature ignores diagnostics metadata", () => {
     const quoted = quoteLockFromRequestBodyWithSnapshot(
       {
         service: "standard",
@@ -165,12 +170,11 @@ describe("legacy duration selection parity (Phase 2D-B)", () => {
       quote: { ...quoted.quote, durationDiagnostics: undefined },
     });
 
-    expect(quoted.quote.durationDiagnostics?.delta_severity).toBe("critical");
     expect(withDiagnostics).toBe(withoutDiagnostics);
   });
 
-  it("keeps checkout duration parity on legacy hours", () => {
-    const quoted = quoteLockFromRequestBodyWithSnapshot(
+  it("checkout validates unified hours on lock recompute", () => {
+    const quoted = resolveLegacyBookingQuote(
       {
         service: "standard",
         service_type: "standard_cleaning",
@@ -203,7 +207,8 @@ describe("legacy duration selection parity (Phase 2D-B)", () => {
     const result = validateLockForCheckout(locked, Date.now(), { ratesSnapshot: snap });
 
     expect(result.ok).toBe(true);
-    expect(quoted.quote.hours).toBe(selectLegacyJobDurationHours(snap, quoted.job));
+    expect(quoted.quote.hours).toBe(quoted.unified.duration_hours);
+    expect(quoted.unified.quote_signature).toHaveLength(64);
   });
 
   it("keeps selected-cleaner duration parity on the shared locked-duration helper", () => {
@@ -246,7 +251,7 @@ describe("legacy duration selection parity (Phase 2D-B)", () => {
     if (recurringBypass.ok) expect(recurringBypass.visitTotalZar).toBe(Math.round(locked.finalPrice));
   });
 
-  it("keeps canonical shadow duration non-authoritative", () => {
+  it("runtime quote hours align with canonical workload minutes", () => {
     const job = {
       service: "standard" as const,
       rooms: 2,
@@ -256,29 +261,31 @@ describe("legacy duration selection parity (Phase 2D-B)", () => {
     };
     const quoted = quoteCheckoutZarWithSnapshot(snap, job, "10:00", "regular", { cleanersCount: 1 });
 
-    expect(quoted.hours).toBe(selectLegacyJobDurationHours(snap, job));
-    expect(legacyHoursToDurationMinutes(quoted.hours)).not.toBe(
-      quoted.durationDiagnostics?.canonical_duration_minutes,
-    );
+    expect(quoted.hours).toBe(estimateUnifiedJobDurationHours(job));
+    expect(quoted.durationDiagnostics?.canonical_duration_minutes).toBeGreaterThan(0);
   });
 
-  it("keeps legacy hours stable", () => {
+  it("legacy tariff hours remain available for locked-booking persistence", () => {
     const job = { service: "standard" as const, rooms: 2, bathrooms: 1, extraRooms: 0, extras: [] as string[] };
 
     expect(selectLegacyJobDurationHours(snap, job)).toBe(2.7);
     expect(selectLegacyJobDurationMinutes(snap, job)).toBe(162);
+    expect(estimateUnifiedJobDurationHours(job)).toBe(4.5);
   });
 
-  it("keeps runtime duration inference flows converged on the shared helper", () => {
+  it("runtime duration inference flows use unified engine in pricing snapshot", () => {
     const files = {
       pricingEngineSnapshot: readFileSync(path.join(libRoot, "pricing/pricingEngineSnapshot.ts"), "utf8"),
+      resolveBookingQuote: readFileSync(path.join(libRoot, "booking/quote/resolveBookingQuote.ts"), "utf8"),
       timeSlotsRoute: readFileSync(path.join(webRoot, "app/api/booking/time-slots/route.ts"), "utf8"),
       canonicalSlotEligibility: readFileSync(path.join(libRoot, "booking/canonicalSlotEligibilityParams.ts"), "utf8"),
       lockedBookingDuration: readFileSync(path.join(libRoot, "booking/lockedBookingDurationMinutes.ts"), "utf8"),
       runBookingLockValidation: readFileSync(path.join(libRoot, "booking/runBookingLockValidation.ts"), "utf8"),
     };
 
-    expect(files.pricingEngineSnapshot).toContain("selectLegacyJobDurationHours");
+    expect(files.pricingEngineSnapshot).toContain("estimateUnifiedJobDurationHours");
+    expect(files.resolveBookingQuote).toContain("resolveLegacyBookingQuote");
+    expect(files.resolveBookingQuote).toContain("resolveBookingV2Quote");
     expect(files.timeSlotsRoute).toContain("selectLegacyJobDurationMinutes");
     expect(files.canonicalSlotEligibility).toContain("legacyHoursToDurationMinutes");
     expect(files.lockedBookingDuration).toContain("selectLegacyLockedBookingDurationMinutes");

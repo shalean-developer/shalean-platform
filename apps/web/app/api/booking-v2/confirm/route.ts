@@ -30,10 +30,7 @@ import { validatePreferredCleanersForSlot } from "@/lib/booking/validatePreferre
 import {
   bookingV2SlotHasEligibleCleaners,
 } from "@/lib/booking-v2/bookingV2SlotEligibility";
-import {
-  canonicalServiceSlugFromBookingV2,
-  deriveDurationMinutesFromBookingV2,
-} from "@/lib/booking-v2/bookingV2ServiceSlug";
+import { canonicalServiceSlugFromBookingV2 } from "@/lib/booking-v2/bookingV2ServiceSlug";
 import { spendCleaningCredit } from "@/lib/referrals/credits";
 import { buildReferralCheckoutSnapshot } from "@/lib/referrals/referralCheckoutMetadata";
 import { buildReferralCheckoutFingerprint } from "@/lib/referrals/checkoutFingerprint";
@@ -312,14 +309,44 @@ export async function POST(request: Request) {
     data.pricingSummary = serverBreakdown;
   }
 
-  const persistPricing = pricingPersistFields(serverBreakdown);
+  if (
+    !serverBreakdown.quote_signature ||
+    typeof serverBreakdown.estimated_duration_minutes !== "number" ||
+    serverBreakdown.estimated_duration_minutes < 1
+  ) {
+    console.error("[booking-v2/confirm] unified quote missing signature or duration");
+    return NextResponse.json(
+      { error: "We could not verify your quote. Please refresh and try again." },
+      { status: 422 },
+    );
+  }
 
-  const canonicalServiceSlug = canonicalServiceSlugFromBookingV2(data.serviceSlug);
-  const durationMinutes = deriveDurationMinutesFromBookingV2(
-    data.serviceSlug,
-    serverBreakdown.estimated_duration_minutes ?? null,
-  );
+  const clientDuration = (data.pricingSummary as { estimated_duration_minutes?: number })
+    .estimated_duration_minutes;
+  if (
+    typeof clientDuration === "number" &&
+    clientDuration > 0 &&
+    clientDuration !== serverBreakdown.estimated_duration_minutes &&
+    serverTotal > 0
+  ) {
+    const durationDrift =
+      Math.abs(clientDuration - serverBreakdown.estimated_duration_minutes) /
+      serverBreakdown.estimated_duration_minutes;
+    if (durationDrift > 0.01) {
+      console.warn(
+        `[booking-v2/confirm] duration drift: client ${clientDuration}m vs server ${serverBreakdown.estimated_duration_minutes}m — overriding`,
+      );
+    }
+  }
+
   const timeHm = data.time.trim().slice(0, 5);
+  const canonicalServiceSlug = canonicalServiceSlugFromBookingV2(data.serviceSlug);
+  const durationMinutes = serverBreakdown.estimated_duration_minutes;
+
+  const persistPricing = pricingPersistFields(serverBreakdown, {
+    date: data.date,
+    time: timeHm,
+  });
 
   const locationCtx = await resolveConfirmLocationContext(supabase, {
     suburb: data.suburb,

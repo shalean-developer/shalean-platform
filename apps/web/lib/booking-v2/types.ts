@@ -1,5 +1,6 @@
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
+import type { DurationWorkloadResult } from "@/lib/pricing/cleaningDurationWorkload";
 
 export type { EquipmentQuoteResult };
 
@@ -41,6 +42,13 @@ export type CustomerPricingBreakdown = {
   recurring_discount: number;
   estimated_total: number;
   estimated_duration_minutes: number;
+  /** Unified quote engine — one-decimal hours (matches legacy `finalHours`). */
+  duration_hours?: number;
+  team_scaled_duration_minutes?: number;
+  cleaner_workload?: number;
+  /** HMAC binding price + duration + inputs ({@link BOOKING_QUOTE_ENGINE_VERSION}). */
+  quote_signature?: string;
+  calculation_version?: number;
   lineItems: PricingLineItem[];
   /** Legacy flat fields for backward compatibility */
   basePrice: number;
@@ -110,6 +118,8 @@ export type CustomerTotalInput = {
   feesConfig: BookingV2FeesConfig;
   equipmentRequired?: boolean;
   equipmentQuote?: EquipmentQuoteResult | null;
+  /** When set, duration comes from the unified quote engine (must match price inputs). */
+  precomputedDurationWorkload?: DurationWorkloadResult;
 };
 
 export function isStructuredPricingBreakdown(

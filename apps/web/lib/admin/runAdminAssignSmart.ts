@@ -79,8 +79,17 @@ export async function runAdminAssignSmart(
   }
 
   const durationMinutes = effectiveJobDurationMinutes(
-    booking as { duration_minutes?: number | null },
+    booking as {
+      id?: string;
+      duration_minutes?: number | null;
+      estimated_duration_minutes?: number | null;
+      pricing_summary?: unknown;
+      booking_snapshot?: unknown;
+    },
   );
+  if (durationMinutes == null) {
+    return { ok: false, error: "Booking has no persisted duration for assignment.", attempts: 0 };
+  }
 
   let cleanerIds = (explicitIds ?? []).map((s) => s.trim()).filter(Boolean).slice(0, 150);
   if (cleanerIds.length === 0) {

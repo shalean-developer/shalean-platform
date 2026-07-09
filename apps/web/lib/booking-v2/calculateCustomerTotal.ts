@@ -1,4 +1,3 @@
-import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import type {
   BookingV2FeesConfig,
@@ -12,23 +11,7 @@ import {
   EXTRA_CLEANER_SERVICE_SLUGS,
 } from "@/lib/booking-v2/propertyFactorPricing";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
-import { resolveCanonicalDurationWorkload } from "@/lib/pricing/cleaningDurationWorkload";
-
-const V2_TO_CANONICAL: Record<ServiceSlug, BookingServiceId> = {
-  "regular-cleaning": "standard",
-  "deep-cleaning": "deep",
-  "moving-cleaning": "move",
-  "office-cleaning": "standard",
-  "carpet-cleaning": "carpet",
-  "airbnb-cleaning": "airbnb",
-};
-
-function parseCount(details: Record<string, string | number | boolean>, key: string): number {
-  const raw = details[key];
-  if (raw === "" || raw == null) return 0;
-  const n = typeof raw === "number" ? raw : parseInt(String(raw), 10);
-  return Number.isFinite(n) && n >= 0 ? n : 0;
-}
+import { resolveBookingV2DurationWorkload } from "@/lib/booking/quote/resolveBookingDurationWorkload";
 
 export function computeServiceFeeZar(
   subtotalBeforeServiceFee: number,
@@ -102,41 +85,15 @@ function computeExtraCleanerCost(
   return extraCleaners * fee;
 }
 
-function estimateDurationMinutes(
-  serviceSlug: ServiceSlug,
-  serviceDetails: Record<string, string | number | boolean>,
-  selectedExtras: string[],
-  cleanerCount: number,
-  cleanerMode: "team" | "individual_cleaners",
-  catalogHours: number,
-): number {
-  const canonical = V2_TO_CANONICAL[serviceSlug];
-  let rooms = parseCount(serviceDetails, "bedrooms");
-  let bathrooms = parseCount(serviceDetails, "bathrooms");
-  let extraRooms = parseCount(serviceDetails, "extraRooms");
-
-  if (serviceSlug === "carpet-cleaning") {
-    rooms = parseCount(serviceDetails, "carpetRooms");
-    bathrooms = 0;
-    extraRooms = 0;
-  } else if (serviceSlug === "office-cleaning") {
-    rooms = 0;
-    extraRooms = 0;
-  }
-
-  try {
-    const result = resolveCanonicalDurationWorkload({
-      service: canonical,
-      rooms,
-      bathrooms,
-      extraRooms,
-      extras: selectedExtras,
-      teamMemberCount: cleanerMode === "team" ? 3 : cleanerCount,
-    });
-    return result.duration_minutes;
-  } catch {
-    return Math.max(60, Math.round(catalogHours * 60));
-  }
+function resolveDurationWorkloadForInput(input: CustomerTotalInput) {
+  if (input.precomputedDurationWorkload) return input.precomputedDurationWorkload;
+  return resolveBookingV2DurationWorkload({
+    serviceSlug: input.serviceSlug,
+    serviceDetails: input.serviceDetails,
+    selectedExtras: input.selectedExtras,
+    cleanerMode: input.cleanerMode,
+    cleanerCount: input.cleanerCount,
+  });
 }
 
 export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPricingBreakdown {
@@ -214,14 +171,8 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
     Math.round(beforeDiscount - recurring_discount),
   );
 
-  const estimated_duration_minutes = estimateDurationMinutes(
-    serviceSlug,
-    serviceDetails,
-    selectedExtras,
-    cleanerCount,
-    cleanerMode,
-    catalog.estimatedDurationHours,
-  );
+  const duration_workload = resolveDurationWorkloadForInput(input);
+  const estimated_duration_minutes = duration_workload.duration_minutes;
 
   const lineItems = buildCustomerPriceLineItems(
     {

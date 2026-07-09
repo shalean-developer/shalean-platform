@@ -111,6 +111,13 @@ export async function validateAdminManualAssignToCleaner(
   const dateYmd = String(b.date ?? "");
   const timeHm = String(b.time ?? "");
   const durationMinutes = effectiveJobDurationMinutes(b);
+  if (durationMinutes == null) {
+    return {
+      ok: false,
+      httpStatus: 422,
+      error: "Booking has no persisted duration. Re-quote or edit the booking before assigning.",
+    };
+  }
 
   const { data: cleaner, error: cErr } = await admin
     .from("cleaners")

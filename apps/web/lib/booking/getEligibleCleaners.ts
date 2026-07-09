@@ -248,7 +248,7 @@ export async function getEligibleCleaners(
     admin
       .from("bookings")
       .select(
-        "id, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, booking_date, time, start_time, end_time, duration_minutes",
+        "id, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, booking_date, time, start_time, end_time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot",
       )
       .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
       .or(`date.eq.${params.date},booking_date.eq.${params.date}`),

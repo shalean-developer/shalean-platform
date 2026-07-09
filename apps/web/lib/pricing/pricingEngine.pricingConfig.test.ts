@@ -5,9 +5,11 @@ import { getServiceBaseZarFromSnapshot } from "@/lib/pricing/pricingConfig";
 import {
   computeJobSubtotalZarSnapshot,
   estimateJobDurationHoursSnapshot,
+  estimateLegacyTariffDurationHoursSnapshot,
   quoteBaseJobZarWithSnapshot,
   quoteCheckoutZarWithSnapshot,
 } from "@/lib/pricing/pricingEngineSnapshot";
+import { estimateUnifiedJobDurationHours } from "@/lib/booking/quote/resolveBookingDurationWorkload";
 import { vitestTestPricingRatesSnapshot } from "@/lib/pricing/testPricingSnapshot";
 
 const snap = vitestTestPricingRatesSnapshot();
@@ -33,12 +35,13 @@ describe("catalog snapshot + engine", () => {
     expect(checkout.subtotalZar).toBe(sub);
   });
 
-  it("subtotal and hours follow per-service tariff only (standard 2bd/1ba)", () => {
+  it("subtotal follows tariff; runtime hours follow unified canonical engine (standard 2bd/1ba)", () => {
     const job = { service: "standard" as const, rooms: 2, bathrooms: 1, extraRooms: 0, extras: [] as string[] };
     const t = snap.services.standard as ServiceTariff;
     expect(computeJobSubtotalZarSnapshot(snap, job)).toBe(t.base + 2 * t.bedroom + 1 * t.bathroom);
+    expect(estimateJobDurationHoursSnapshot(snap, job)).toBe(estimateUnifiedJobDurationHours(job));
     const d = t.duration;
-    expect(estimateJobDurationHoursSnapshot(snap, job)).toBe(
+    expect(estimateLegacyTariffDurationHoursSnapshot(snap, job)).toBe(
       Math.max(2, Math.round((d.base + 2 * d.bedroom + 1 * d.bathroom) * 10) / 10),
     );
   });

@@ -10,8 +10,8 @@ import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import {
   lockedDurationMinutesFromBookingSnapshot,
-  lockedDurationMinutesPatch,
 } from "@/lib/booking/durationMinutesIntegrity";
+import { buildLegacyLockDurationPersistPatch } from "@/lib/booking/quote/bookingQuotePersistence";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { scheduleBookingPaymentRecoveryJobs } from "@/lib/booking/bookingPaymentRecoveryJobs";
@@ -134,7 +134,13 @@ export async function insertPendingPaymentBookingRow(
       price_breakdown: null,
       total_price: null,
       price_snapshot: provisionalPriceSnapshotFromLocked(locked),
-      ...lockedDurationMinutesPatch(locked),
+      ...buildLegacyLockDurationPersistPatch({
+        locked,
+        schedule:
+          locked.date && locked.time
+            ? { date: String(locked.date), time: String(locked.time) }
+            : null,
+      }),
       payment_link_expires_at: paymentLinkExpiresAt,
     })
     .select("id")

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { CONFIG_MISSING_BOOKING_LOCK_HMAC } from "@/lib/booking/bookingLockHmacSecret";
 import { getOrCreatePricingVersionId } from "@/lib/booking/pricingVersionDb";
-import { quoteLockFromRequestBodyWithSnapshot } from "@/lib/booking/bookingLockQuote";
+import { resolveLegacyBookingQuote } from "@/lib/booking/quote/resolveBookingQuote";
 import { computeLockQuoteSignature, LOCK_HOLD_MS } from "@/lib/booking/lockQuoteSignature";
 import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
 import { extrasLineItemsFromSnapshot } from "@/lib/pricing/extrasConfig";
@@ -40,7 +40,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const r = quoteLockFromRequestBodyWithSnapshot(body, snapshot, { allowClientDynamicAdjustment: false });
+  const r = resolveLegacyBookingQuote(body, snapshot, { allowClientDynamicAdjustment: false });
   if (!r.ok) {
     return NextResponse.json({ ok: false, error: r.error }, { status: r.status });
   }
@@ -49,7 +49,7 @@ export async function POST(request: Request) {
   const catalogServiceId = resolveServiceForPricing(r.job);
   const slotCheck = await validateLockSlotAgainstEligibility(admin, b, {
     timeHm: r.timeHm,
-    durationHours: r.quote.hours,
+    durationHours: r.unified.duration_hours,
     catalogServiceId,
   });
   if (!slotCheck.ok) {
@@ -95,6 +95,12 @@ export async function POST(request: Request) {
     ...(pricing_version_id ? { pricing_version_id } : {}),
     total: q.totalZar,
     hours: q.hours,
+    duration_minutes: r.unified.duration_minutes,
+    duration_hours: r.unified.duration_hours,
+    cleaner_workload: r.unified.cleaner_workload,
+    team_scaled_duration_minutes: r.unified.team_scaled_duration_minutes,
+    quote_signature: r.unified.quote_signature,
+    calculation_version: r.unified.calculation_version,
     surgeMultiplier: q.effectiveSurgeMultiplier,
     surgeApplied: q.effectiveSurgeMultiplier > 1.001,
     surgeLabel: q.surgeLabel,

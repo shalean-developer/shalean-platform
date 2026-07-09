@@ -95,8 +95,12 @@ describe("Phase 2E-A duration_minutes persistence", () => {
     expect(lockedDurationMinutesFromBookingSnapshot({ locked })).toBe(255);
   });
 
-  it("old bookings still fall back safely to 120 minutes for occupancy windows", () => {
-    expect(existingBookingOccupancyWindow({ id: "old-booking", time: "09:00", duration_minutes: null })).toEqual({
+  it("returns null occupancy when duration is missing (no silent 120m fallback)", () => {
+    expect(existingBookingOccupancyWindow({ id: "old-booking", time: "09:00", duration_minutes: null })).toBeNull();
+  });
+
+  it("uses persisted duration when present", () => {
+    expect(existingBookingOccupancyWindow({ id: "booking", time: "09:00", duration_minutes: 120 })).toEqual({
       startMin: 540,
       endMin: 660,
     });
@@ -165,13 +169,13 @@ describe("Phase 2E-A duration_minutes creation/finalization convergence", () => 
     const expected = [
       [
         "lib/booking/insertPendingPaymentBooking.ts",
-        ["lockedDurationMinutesPatch(locked)", "duration_minutes", "lockedDurationMinutesFromBookingSnapshot"],
+        ["buildLegacyLockDurationPersistPatch", "duration_minutes", "lockedDurationMinutesFromBookingSnapshot"],
       ],
       [
         "lib/booking/paystackInitializeCore.ts",
         ["selectLockedBookingDurationMinutesForPersistence(locked)", "durationMinutes:"],
       ],
-      ["lib/booking/upsertBookingFromPaystack.ts", ["lockedDurationMinutesPatch(lockedRow)"]],
+      ["lib/booking/upsertBookingFromPaystack.ts", ["buildLegacyLockDurationPersistPatch", "authoritativeDurationPatchFromBookingRow"]],
       ["lib/recurring/insertRecurringOccurrenceBooking.ts", ["lockedDurationMinutesPatch(locked)"]],
       ["lib/recurring/insertMonthlyRecurringOccurrenceBooking.ts", ["lockedDurationMinutesPatch(locked)"]],
     ] as const;
