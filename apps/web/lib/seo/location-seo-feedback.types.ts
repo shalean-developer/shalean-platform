@@ -9,6 +9,9 @@ export type LocationGscMetricSnapshot = {
   clicks?: number;
   ctr?: number;
   avg_position?: number;
+  prev_clicks?: number;
+  prev_impressions?: number;
+  prev_avg_position?: number;
 };
 
 export type LocationSeoFeedbackConfig = {

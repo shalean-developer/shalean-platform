@@ -40,6 +40,63 @@ order by jobname;
 
 ---
 
+## Edge Function cron cutover (Phase 1+)
+
+Background workers are migrating from Vercel `/api/cron/*` to **Supabase Edge Functions**. See `docs/backend-migration-architecture.md`.
+
+### Prerequisites
+
+1. Apply migration `20261052_invoke_edge_cron.sql`.
+2. Deploy function: `supabase functions deploy whatsapp-worker --project-ref <ref>`
+3. Set Edge secrets (Dashboard → Edge Functions → Secrets) — mirror `supabase/functions/.env.example`.
+4. Update `cron_http_targets`:
+
+```sql
+update public.cron_http_targets
+set edge_base_url = 'https://<project-ref>.supabase.co/functions/v1',
+    cron_secret = '<same value as Vercel CRON_SECRET>',
+    updated_at = now()
+where singleton;
+```
+
+### Shadow verification (before pg_cron cutover)
+
+**Do not reschedule pg_cron until shadow checks pass.** Vercel route stays active.
+
+Manual invoke (replace URL and secret):
+
+```bash
+curl -sS -X POST "https://<project-ref>.supabase.co/functions/v1/whatsapp-worker?metrics=1" \
+  -H "Authorization: Bearer <CRON_SECRET>" \
+  -H "Content-Type: application/json"
+```
+
+Compare `cron_runs` / `system_logs` for `job_name = 'whatsapp-worker'` and `runtime = supabase_edge` vs existing Vercel entries.
+
+### Cutover single job
+
+```sql
+select cron.unschedule('whatsapp-worker');
+select cron.schedule(
+  'whatsapp-worker',
+  '* * * * *',
+  $$select public.invoke_edge_cron('whatsapp-worker');$$
+);
+```
+
+### Rollback
+
+```sql
+select cron.unschedule('whatsapp-worker');
+select cron.schedule(
+  'whatsapp-worker',
+  '* * * * *',
+  $$select public.invoke_nextjs_cron('/api/cron/whatsapp-worker');$$
+);
+```
+
+---
+
 ## When to rotate
 
 - Any chance the value was copied into chat, tickets, or logs.

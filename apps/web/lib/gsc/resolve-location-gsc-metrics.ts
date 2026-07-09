@@ -19,6 +19,9 @@ type DbGscRow = {
   impressions: number;
   ctr: number | string;
   avg_position: number | string | null;
+  prev_clicks?: number;
+  prev_impressions?: number;
+  prev_avg_position?: number | string | null;
   synced_at: string;
 };
 
@@ -33,7 +36,7 @@ async function loadLocationGscMetricsFromDb(
 ): Promise<{ rows: DbGscRow[]; latestSyncedAt: string | null } | null> {
   const { data, error } = await admin
     .from("location_gsc_metrics")
-    .select("slug, page_url, clicks, impressions, ctr, avg_position, synced_at")
+    .select("slug, page_url, clicks, impressions, ctr, avg_position, prev_clicks, prev_impressions, prev_avg_position, synced_at")
     .order("impressions", { ascending: false });
 
   if (error) {
@@ -80,6 +83,9 @@ export async function resolveLocationGscMetricEntries(
             clicks: toNumber(row.clicks) ?? undefined,
             ctr: toNumber(row.ctr) ?? undefined,
             avg_position: toNumber(row.avg_position) ?? undefined,
+            prev_clicks: toNumber(row.prev_clicks) ?? undefined,
+            prev_impressions: toNumber(row.prev_impressions) ?? undefined,
+            prev_avg_position: toNumber(row.prev_avg_position) ?? undefined,
           },
         })),
       };
@@ -108,7 +114,10 @@ export function toGscImportSnapshot(
       clicks: metrics.clicks ?? null,
       ctr: metrics.ctr ?? null,
       avg_position: metrics.avg_position ?? null,
+      prev_clicks: metrics.prev_clicks ?? null,
+      prev_impressions: metrics.prev_impressions ?? null,
+      prev_avg_position: metrics.prev_avg_position ?? null,
       ctr_pct_display: metrics.ctr != null ? Math.round(metrics.ctr * 10_000) / 100 : null,
     }))
-    .sort((a, b) => (b.ctr ?? 0) - (a.ctr ?? 0));
+    .sort((a, b) => (b.clicks ?? 0) - (a.clicks ?? 0));
 }

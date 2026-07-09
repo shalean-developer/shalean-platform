@@ -17,6 +17,23 @@ export type GscPagePerformanceRow = {
   avgPosition: number | null;
 };
 
+export type GscQueryPagePerformanceRow = {
+  query: string;
+  pageUrl: string;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  avgPosition: number | null;
+};
+
+export type GscDailyPerformanceRow = {
+  date: string;
+  clicks: number;
+  impressions: number;
+};
+
+export const DEFAULT_GSC_CHART_DAYS = 30;
+
 export function normalizeGscPrivateKey(raw: string): string {
   return raw.replace(/\\n/g, "\n");
 }
@@ -28,6 +45,11 @@ export function readGscSyncDays(): number {
   return Math.min(Math.floor(n), 500);
 }
 
+export function parseGscYmd(ymd: string): Date {
+  const [y, m, d] = ymd.split("-").map((part) => Number(part));
+  return new Date(Date.UTC(y, (m ?? 1) - 1, d ?? 1));
+}
+
 /** GSC reporting lags — end on yesterday UTC, start `days` window inclusive. */
 export function buildGscDateRange(days: number, now = new Date()): GscDateRange {
   const end = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
@@ -35,6 +57,22 @@ export function buildGscDateRange(days: number, now = new Date()): GscDateRange 
   const start = new Date(end);
   start.setUTCDate(start.getUTCDate() - (days - 1));
   return { startDate: formatGscYmd(start), endDate: formatGscYmd(end) };
+}
+
+/** Prior non-overlapping window of the same length immediately before `buildGscDateRange(days)`. */
+export function buildGscPreviousDateRange(days: number, now = new Date()): GscDateRange {
+  const current = buildGscDateRange(days, now);
+  const currentStart = parseGscYmd(current.startDate);
+  const previousEnd = new Date(currentStart);
+  previousEnd.setUTCDate(previousEnd.getUTCDate() - 1);
+  const previousStart = new Date(previousEnd);
+  previousStart.setUTCDate(previousStart.getUTCDate() - (days - 1));
+  return { startDate: formatGscYmd(previousStart), endDate: formatGscYmd(previousEnd) };
+}
+
+export function pctChange(current: number, previous: number): number | null {
+  if (previous <= 0) return current > 0 ? 100 : null;
+  return Math.round(((current - previous) / previous) * 1000) / 10;
 }
 
 export function formatGscYmd(d: Date): string {

@@ -78,6 +78,14 @@ export async function persistSeoOptimizationResults(
 
   let recommendationsInserted = 0;
   if (result.recommendations.length > 0) {
+    const { error: deleteError } = await admin
+      .from("seo_insights_recommendations")
+      .delete()
+      .is("applied_at", null);
+    if (deleteError) {
+      console.error("[seo-optimization] seo_insights_recommendations clear failed", deleteError.message);
+    }
+
     const { error } = await admin.from("seo_insights_recommendations").insert(
       result.recommendations.map((r) => ({
         slug: r.slug,

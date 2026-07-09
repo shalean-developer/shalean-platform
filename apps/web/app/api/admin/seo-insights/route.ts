@@ -1,6 +1,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { isAdmin } from "@/lib/auth/admin";
+import { mergeSeoRecommendations } from "@/lib/admin/officeSeoInsightsPresentation";
+import { loadLocationGscQuerySnapshot } from "@/lib/gsc/resolve-location-gsc-queries";
+import { loadLocationGscSyncMeta } from "@/lib/gsc/resolve-location-gsc-meta";
 import {
   resolveLocationGscMetricEntries,
   toGscImportSnapshot,
@@ -163,11 +166,18 @@ export async function GET(request: Request) {
     applied_at: null as string | null,
     created_at: untilIso,
   }));
-  const dbRecKeys = new Set(dbRecommendations.map((r) => `${String(r.slug)}|${String(r.kind)}`));
-  const mergedRecommendations = [
-    ...dbRecommendations,
-    ...engineRecommendations.filter((r) => !dbRecKeys.has(`${String(r.slug)}|${String(r.kind)}`)),
-  ];
+  const mergedRecommendations = mergeSeoRecommendations(
+    dbRecommendations as Array<{
+      id: string;
+      slug: string | null;
+      kind: string;
+      severity: string;
+      title: string;
+      detail: unknown;
+      created_at?: string;
+    }>,
+    engineRecommendations,
+  );
 
   const health_score_by_slug_current = optimization.pageHealth.slice(0, 80).map((p) => ({
     slug: p.slug,
@@ -190,6 +200,25 @@ export async function GET(request: Request) {
 
   const gscResolved = await resolveLocationGscMetricEntries(admin);
   const gscImported = toGscImportSnapshot(gscResolved.entries);
+  const [gscQueries, gscMeta] = await Promise.all([
+    loadLocationGscQuerySnapshot(admin),
+    loadLocationGscSyncMeta(admin),
+  ]);
+
+  const gsc_totals = gscMeta
+    ? {
+        totalClicks: gscMeta.currentClicks,
+        totalImpressions: gscMeta.currentImpressions,
+        previousClicks: gscMeta.previousClicks,
+        previousImpressions: gscMeta.previousImpressions,
+        clicksTrendPct: gscMeta.clicksTrendPct,
+        impressionsTrendPct: gscMeta.impressionsTrendPct,
+        currentStartDate: gscMeta.currentStartDate,
+        currentEndDate: gscMeta.currentEndDate,
+        previousStartDate: gscMeta.previousStartDate,
+        previousEndDate: gscMeta.previousEndDate,
+      }
+    : null;
 
   return NextResponse.json({
     since: currentSinceIso,
@@ -209,8 +238,13 @@ export async function GET(request: Request) {
     })),
     scroll_depth_by_slug,
     booking_starts_by_slug,
-    gsc_import_snapshot: gscImported.slice(0, 40),
+    gsc_import_snapshot: gscImported,
     gsc_import_count: gscImported.length,
+    gsc_totals,
+    gsc_clicks_chart: gscMeta?.clicksChart ?? [],
+    gsc_query_snapshot: gscQueries?.rows ?? [],
+    gsc_query_count: gscQueries?.rows.length ?? 0,
+    gsc_queries_synced_at: gscQueries?.syncedAt ?? null,
     gsc_config_source: gscResolved.source,
     gsc_synced_at: gscResolved.syncedAt,
     optimization: {
@@ -220,7 +254,7 @@ export async function GET(request: Request) {
     notes: [
       "`periods.current_30d` / `periods.previous_30d` mirror the flat fields and `previous_period` (additive shape for charts and future 7d/90d windows).",
       "Current metrics use the last 30 days of events; when `previous_period` is present, it is the prior non-overlapping 30 days (days 31–60) for scroll, booking-start proxy, and recomputed health scores.",
-      "GSC snapshot: DB sync (location_gsc_metrics) when present, else LOCATION_SEO_FEEDBACK_JSON / file fallback. CTR is a 0–1 fraction.",
+      "GSC snapshot: DB sync (location_gsc_metrics + location_gsc_queries) when present, else LOCATION_SEO_FEEDBACK_JSON / file fallback. CTR is a 0–1 fraction.",
       "Manual sync: POST /api/admin/seo/gsc-sync (admin). Scheduled: GET /api/cron/gsc-sync (CRON_SECRET).",
       "Booking proxy: share of distinct sessions with a given `cta_kind`+`cta_location` that also fired `start_booking` within the window.",
       "Automation: POST `/api/cron/seo-optimization` (CRON_SECRET). Env: `SEO_OPTIMIZATION_AUTO_APPLY_TITLE`, `SEO_OPTIMIZATION_AUTO_APPLY_HUB_UI`.",

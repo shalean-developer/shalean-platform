@@ -1,0 +1,24 @@
+# Shalean Platform — Supabase local config (Edge Functions + migrations).
+# See docs/backend-migration-architecture.md
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+[functions]
+# Verify JWT only for user-facing functions; cron workers use CRON_SECRET.
+verify_jwt = false
+
+[functions.whatsapp-worker]
+verify_jwt = false
