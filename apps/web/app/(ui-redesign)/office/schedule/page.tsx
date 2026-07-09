@@ -58,6 +58,11 @@ type RangeBookingsResponse = {
     service_slug?: string | null;
     location: string | null;
     dispatch_status: string | null;
+    duration_minutes?: number | null;
+    estimated_duration_minutes?: number | null;
+    estimated_finish_at?: string | null;
+    pricing_summary?: unknown;
+    booking_snapshot?: unknown;
     booking_cleaners?: Array<{ cleaner_id: string; full_name: string | null; role: string }>;
   }>;
 };
@@ -84,6 +89,11 @@ function mapRangeBooking(row: RangeBookingsResponse["bookings"][number]): Office
     service_slug: row.service_slug,
     location: row.location,
     dispatch_status: row.dispatch_status,
+    duration_minutes: row.duration_minutes,
+    estimated_duration_minutes: row.estimated_duration_minutes,
+    estimated_finish_at: row.estimated_finish_at,
+    pricing_summary: row.pricing_summary,
+    booking_snapshot: row.booking_snapshot,
     booking_cleaners: row.booking_cleaners,
   };
 }

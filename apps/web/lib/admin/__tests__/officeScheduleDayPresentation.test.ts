@@ -8,7 +8,10 @@ import {
   computeOfficeScheduleCleanerStats,
   countOfficeScheduleStartingSoonUnassigned,
   filterOfficeScheduleBookings,
+  formatOfficeScheduleTimeRange,
+  formatOfficeScheduleTimeRangeForBooking,
   officeScheduleAssignedCleanerLabel,
+  officeScheduleEventLayout,
   resolveOfficeScheduleSummary,
   type OfficeScheduleDayBooking,
 } from "@/lib/admin/officeScheduleDayPresentation";
@@ -146,6 +149,45 @@ describe("filterOfficeScheduleBookings", () => {
     );
     expect(rows).toHaveLength(1);
     expect(rows[0]?.id).toBe("1");
+  });
+});
+
+describe("officeSchedule duration (Phase 5)", () => {
+  it("formatOfficeScheduleTimeRange uses authoritative duration instead of hardcoded 60m", () => {
+    expect(formatOfficeScheduleTimeRange("09:00", 195)).toBe("9am - 12:15pm");
+    expect(formatOfficeScheduleTimeRange("09:00", null)).toBe("9am");
+  });
+
+  it("formatOfficeScheduleTimeRangeForBooking resolves from estimated_duration_minutes", () => {
+    expect(
+      formatOfficeScheduleTimeRangeForBooking({
+        time: "10:00",
+        duration_minutes: null,
+        estimated_duration_minutes: 120,
+      }),
+    ).toBe("10am - 12pm");
+  });
+
+  it("officeScheduleEventLayout scales block height to duration", () => {
+    const layout = officeScheduleEventLayout({ time: "09:30", duration_minutes: 180 }, 48);
+    expect(layout.topPx).toBe(24);
+    expect(layout.heightPx).toBe(144);
+    expect(layout.durationMinutes).toBe(180);
+  });
+
+  it("buildOfficeScheduleTimelineHours extends through job end time", () => {
+    const hours = buildOfficeScheduleTimelineHours([
+      scheduleBooking({
+        id: "1",
+        status: "assigned",
+        cleaner_id: "c1",
+        time: "09:00:00",
+        date: "2026-06-19",
+        duration_minutes: 180,
+      }),
+    ]);
+    expect(hours).toContain("09:00");
+    expect(hours).toContain("12:00");
   });
 });
 

@@ -70,6 +70,8 @@ import {
   operationalDisplayBadgeClassName,
 } from "@/lib/booking/describeBookingOperationalState";
 import type { DashboardLifecycleAlignmentWire } from "@/lib/booking/bookingLifecycleContract";
+import { resolvePersistedBookingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
+import { durationHoursFromMinutes } from "@/lib/booking/quote/resolveBookingDurationWorkload";
 import {
   type AdminBookingsListRow,
   normalizeAdminBookingDispatchStatus,
@@ -625,16 +627,13 @@ function adminServiceHomeSummary(booking: BookingDetails): {
   const bathrooms =
     positiveRoomCount(booking.bathrooms) ?? positiveRoomCount(locked?.bathrooms) ?? null;
 
-  let durationHours: number | null = positiveDurationHours(booking.duration_hours);
-  if (durationHours == null) {
-    const durationMinutes = (booking as { duration_minutes?: number | null }).duration_minutes;
-    if (typeof durationMinutes === "number" && Number.isFinite(durationMinutes) && durationMinutes > 0) {
-      durationHours = positiveDurationHours(durationMinutes / 60);
-    }
+  let durationHours: number | null = null;
+  const resolvedMinutes = resolvePersistedBookingDurationMinutes(booking);
+  if (resolvedMinutes != null) {
+    durationHours = positiveDurationHours(durationHoursFromMinutes(resolvedMinutes));
   }
-  if (durationHours == null && locked) {
-    durationHours =
-      positiveDurationHours(locked.finalHours) ?? positiveDurationHours(locked.duration) ?? null;
+  if (durationHours == null) {
+    durationHours = positiveDurationHours(booking.duration_hours);
   }
 
   const ptRaw = locked?.propertyType;

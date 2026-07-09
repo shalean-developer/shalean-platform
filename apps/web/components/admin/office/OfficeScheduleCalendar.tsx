@@ -12,15 +12,19 @@ import {
   formatOfficeScheduleHourLabel,
   formatOfficeScheduleListDateHeader,
   formatOfficeScheduleMonthTitle,
-  formatOfficeScheduleTimeRange,
+  formatOfficeScheduleDurationLabel,
+  formatOfficeScheduleTimeRangeForBooking,
   formatOfficeScheduleWeekTitle,
   groupOfficeScheduleBookingsByDate,
   isOfficeScheduleToday,
   officeScheduleAssignedCleanerLabel,
   officeScheduleEventBarClass,
+  officeScheduleEventLayout,
+  officeScheduleEventTooltip,
   officeScheduleServiceLabel,
   officeScheduleStatusPresentation,
   parseOfficeScheduleTimeMinutes,
+  resolveOfficeScheduleDurationMinutes,
   type OfficeScheduleCalendarView,
   type OfficeScheduleDayBooking,
 } from "@/lib/admin/officeScheduleDayPresentation";
@@ -165,6 +169,7 @@ function ScheduleEventBar({
   const { tone } = officeScheduleStatusPresentation(booking);
   const title = officeScheduleServiceLabel(booking);
   const isUnassigned = tone === "unassigned";
+  const tooltip = officeScheduleEventTooltip(booking);
 
   return (
     <Link
@@ -174,7 +179,7 @@ function ScheduleEventBar({
         compact ? "text-[11px] leading-tight" : "text-xs",
         officeScheduleEventBarClass(tone, booking.status),
       )}
-      title={title}
+      title={tooltip}
     >
       {isUnassigned ? (
         <AlertTriangle className="h-3 w-3 shrink-0 opacity-90" />
@@ -338,7 +343,7 @@ function WeekView({
                 <div
                   key={ymd}
                   className={cn(
-                    "relative min-h-[48px] border-r border-slate-100 p-0.5 last:border-r-0",
+                    "relative min-h-[48px] overflow-visible border-r border-slate-100 p-0.5 last:border-r-0",
                     isToday && "bg-amber-50/30",
                   )}
                 >
@@ -363,25 +368,26 @@ function WeekEventBlock({
   cleanersById: Map<string, string | null>;
 }) {
   const { tone } = officeScheduleStatusPresentation(booking);
-  const mins = parseOfficeScheduleTimeMinutes(booking.time) ?? 0;
-  const topPct = ((mins % 60) / 60) * 100;
+  const layout = officeScheduleEventLayout(booking, 48);
   const title = officeScheduleServiceLabel(booking);
   const assigned = officeScheduleAssignedCleanerLabel(booking, cleanersById);
+  const durationLabel = formatOfficeScheduleDurationLabel(layout.durationMinutes);
 
   return (
     <Link
       href={`/office/bookings/${booking.id}`}
       className={cn(
-        "absolute inset-x-0.5 z-10 flex min-h-[36px] flex-col justify-center rounded px-1.5 py-1 text-white shadow-sm",
+        "absolute inset-x-0.5 z-10 flex min-h-[28px] flex-col justify-center rounded px-1.5 py-1 text-white shadow-sm",
         officeScheduleEventBarClass(tone, booking.status),
       )}
-      style={{ top: `${Math.min(topPct, 50)}%`, height: "calc(100% - 4px)" }}
-      title={title}
+      style={{ top: `${layout.topPx}px`, height: `${layout.heightPx}px` }}
+      title={officeScheduleEventTooltip(booking)}
     >
       <span className="flex items-center gap-1 truncate text-[11px] font-semibold">
         <Lock className="h-2.5 w-2.5 shrink-0 opacity-80" />
         {title}
       </span>
+      {durationLabel ? <span className="truncate text-[10px] opacity-90">{durationLabel}</span> : null}
       {assigned ? <span className="truncate text-[10px] opacity-90">{assigned}</span> : null}
     </Link>
   );
@@ -429,7 +435,7 @@ function DayView({
               <div className="border-r border-slate-100 px-2 py-4 text-right text-[10px] text-slate-400">
                 {formatOfficeScheduleHourLabel(hour)}
               </div>
-              <div className="relative min-h-[56px] bg-amber-50/20 p-1">
+              <div className="relative min-h-[56px] overflow-visible bg-amber-50/20 p-1">
                 {hourBookings.map((b) => (
                   <DayEventBlock key={b.id} booking={b} cleanersById={cleanersById} />
                 ))}
@@ -450,24 +456,26 @@ function DayEventBlock({
   cleanersById: Map<string, string | null>;
 }) {
   const { tone } = officeScheduleStatusPresentation(booking);
-  const mins = parseOfficeScheduleTimeMinutes(booking.time) ?? 0;
-  const topPct = ((mins % 60) / 60) * 100;
+  const layout = officeScheduleEventLayout(booking, 56);
   const title = officeScheduleServiceLabel(booking);
   const assigned = officeScheduleAssignedCleanerLabel(booking, cleanersById);
+  const durationLabel = formatOfficeScheduleDurationLabel(layout.durationMinutes);
 
   return (
     <Link
       href={`/office/bookings/${booking.id}`}
       className={cn(
-        "absolute inset-x-1 z-10 flex min-h-[44px] flex-col justify-center rounded px-2 py-1.5 text-white shadow-sm",
+        "absolute inset-x-1 z-10 flex min-h-[28px] flex-col justify-center rounded px-2 py-1.5 text-white shadow-sm",
         officeScheduleEventBarClass(tone, booking.status),
       )}
-      style={{ top: `${Math.min(topPct, 40)}%`, height: "calc(100% - 8px)" }}
+      style={{ top: `${layout.topPx}px`, height: `${layout.heightPx}px` }}
+      title={officeScheduleEventTooltip(booking)}
     >
       <span className="flex items-center gap-1.5 text-sm font-semibold">
         <Lock className="h-3.5 w-3.5 shrink-0 opacity-80" />
         {title}
       </span>
+      {durationLabel ? <span className="truncate text-xs opacity-90">{durationLabel}</span> : null}
       {assigned ? <span className="mt-0.5 truncate text-xs opacity-90">{assigned}</span> : null}
     </Link>
   );
@@ -538,6 +546,8 @@ function ListEventRow({
   const { tone } = officeScheduleStatusPresentation(booking);
   const title = officeScheduleServiceLabel(booking);
   const assigned = officeScheduleAssignedCleanerLabel(booking, cleanersById);
+  const timeRange = formatOfficeScheduleTimeRangeForBooking(booking);
+  const durationLabel = formatOfficeScheduleDurationLabel(resolveOfficeScheduleDurationMinutes(booking));
   const dotColor =
     tone === "unassigned"
       ? "bg-orange-500"
@@ -551,8 +561,9 @@ function ListEventRow({
 
   return (
     <div className="flex items-start gap-3">
-      <span className="w-28 shrink-0 pt-1 text-xs tabular-nums text-slate-500">
-        {formatOfficeScheduleTimeRange(booking.time)}
+      <span className="w-36 shrink-0 pt-1 text-xs tabular-nums text-slate-500">
+        {timeRange}
+        {durationLabel ? <span className="mt-0.5 block text-[10px] text-slate-400">{durationLabel}</span> : null}
       </span>
       <span className={cn("mt-1.5 h-2 w-2 shrink-0 rounded-full", dotColor)} />
       <div className="min-w-0 flex-1">

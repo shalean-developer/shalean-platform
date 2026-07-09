@@ -7,8 +7,13 @@ import {
 } from "@/lib/admin/officeTodayScheduleStats";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { serviceLabelFromBookingRow } from "@/lib/booking/bookingV2CustomerDisplay";
+import {
+  resolvePersistedBookingDurationMinutes,
+  type BookingDurationRowLike,
+} from "@/lib/booking/quote/bookingQuotePersistence";
 
-export type OfficeScheduleDayBooking = OfficeScheduleBookingRow & {
+export type OfficeScheduleDayBooking = OfficeScheduleBookingRow &
+  BookingDurationRowLike & {
   id: string;
   date: string | null;
   time: string | null;
@@ -19,6 +24,7 @@ export type OfficeScheduleDayBooking = OfficeScheduleBookingRow & {
   dispatch_status: string | null;
   team_id?: string | null;
   is_team_job?: boolean | null;
+  estimated_finish_at?: string | null;
   booking_cleaners?: readonly { cleaner_id: string; full_name: string | null; role: string }[] | null;
 };
 
@@ -309,8 +315,13 @@ function parseBookingHour(time: string | null | undefined): number | null {
 export function buildOfficeScheduleTimelineHours(bookings: OfficeScheduleDayBooking[]): string[] {
   const hours = new Set<number>();
   for (const booking of bookings) {
-    const hour = parseBookingHour(booking.time);
-    if (hour != null) hours.add(hour);
+    const startMins = parseOfficeScheduleTimeMinutes(booking.time);
+    if (startMins == null) continue;
+    hours.add(Math.floor(startMins / 60));
+    const duration = resolveOfficeScheduleDurationMinutes(booking);
+    if (duration != null) {
+      hours.add(Math.floor((startMins + duration) / 60));
+    }
   }
   if (hours.size === 0) {
     return Array.from({ length: 11 }, (_, i) => `${String(7 + i).padStart(2, "0")}:00`);
@@ -320,6 +331,79 @@ export function buildOfficeScheduleTimelineHours(bookings: OfficeScheduleDayBook
   const out: string[] = [];
   for (let h = min; h <= max; h++) out.push(`${String(h).padStart(2, "0")}:00`);
   return out;
+}
+
+/** Authoritative scheduled duration for ops calendar (no silent 60/120/180 fallbacks). */
+export function resolveOfficeScheduleDurationMinutes(
+  booking: BookingDurationRowLike,
+): number | null {
+  return resolvePersistedBookingDurationMinutes(booking);
+}
+
+export function formatOfficeScheduleDurationLabel(durationMinutes: number | null | undefined): string | null {
+  if (durationMinutes == null || !Number.isFinite(durationMinutes) || durationMinutes < 1) return null;
+  const rounded = Math.round(durationMinutes);
+  const hours = Math.floor(rounded / 60);
+  const mins = rounded % 60;
+  if (hours <= 0) return `${mins}m`;
+  if (mins === 0) return `${hours}h`;
+  return `${hours}h ${mins}m`;
+}
+
+function formatOfficeScheduleClockMinutes(m: number): string {
+  const h = Math.floor(m / 60) % 24;
+  const min = m % 60;
+  const suffix = h < 12 || h === 24 ? "am" : "pm";
+  const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
+  return min === 0 ? `${hour12}${suffix}` : `${hour12}:${String(min).padStart(2, "0")}${suffix}`;
+}
+
+export function formatOfficeScheduleTimeRange(
+  time: string | null | undefined,
+  durationMinutes?: number | null,
+): string {
+  const mins = parseOfficeScheduleTimeMinutes(time);
+  if (mins == null) return "All day";
+  if (durationMinutes == null || !Number.isFinite(durationMinutes) || durationMinutes < 1) {
+    return formatOfficeScheduleClockMinutes(mins);
+  }
+  return `${formatOfficeScheduleClockMinutes(mins)} - ${formatOfficeScheduleClockMinutes(mins + Math.round(durationMinutes))}`;
+}
+
+export function formatOfficeScheduleTimeRangeForBooking(
+  booking: Pick<OfficeScheduleDayBooking, "time"> & BookingDurationRowLike,
+): string {
+  return formatOfficeScheduleTimeRange(booking.time, resolveOfficeScheduleDurationMinutes(booking));
+}
+
+export type OfficeScheduleEventLayout = {
+  topPx: number;
+  heightPx: number;
+  durationMinutes: number | null;
+};
+
+/** Pixel layout for week/day timeline blocks from authoritative duration. */
+export function officeScheduleEventLayout(
+  booking: Pick<OfficeScheduleDayBooking, "time"> & BookingDurationRowLike,
+  hourCellHeightPx = 48,
+): OfficeScheduleEventLayout {
+  const startMins = parseOfficeScheduleTimeMinutes(booking.time);
+  const durationMinutes = resolveOfficeScheduleDurationMinutes(booking);
+  const topPx = startMins != null ? ((startMins % 60) / 60) * hourCellHeightPx : 0;
+  const heightPx =
+    durationMinutes != null
+      ? Math.max(28, (durationMinutes / 60) * hourCellHeightPx)
+      : Math.max(28, hourCellHeightPx - 4);
+  return { topPx, heightPx, durationMinutes };
+}
+
+export function officeScheduleEventTooltip(
+  booking: Pick<OfficeScheduleDayBooking, "service" | "service_slug" | "time"> & BookingDurationRowLike,
+): string {
+  const title = officeScheduleServiceLabel(booking);
+  const range = formatOfficeScheduleTimeRangeForBooking(booking);
+  const duration = formatOfficeScheduleDurationLabel(resolveOfficeScheduleDurationMinutes(booking));
+  return [title, range, duration].filter(Boolean).join(" · ");
 }
 
 export function bookingsInTimelineHour(bookings: OfficeScheduleDayBooking[], hourLabel: string): OfficeScheduleDayBooking[] {
@@ -361,20 +445,6 @@ export function formatOfficeScheduleHourLabel(hour24: number): string {
   if (hour24 < 12) return `${hour24}am`;
   if (hour24 === 12) return "12pm";
   return `${hour24 - 12}pm`;
-}
-
-export function formatOfficeScheduleTimeRange(time: string | null | undefined): string {
-  const mins = parseOfficeScheduleTimeMinutes(time);
-  if (mins == null) return "All day";
-  const endMins = mins + 60;
-  const fmt = (m: number) => {
-    const h = Math.floor(m / 60) % 24;
-    const min = m % 60;
-    const suffix = h < 12 || h === 24 ? "am" : "pm";
-    const hour12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-    return min === 0 ? `${hour12}${suffix}` : `${hour12}:${String(min).padStart(2, "0")}${suffix}`;
-  };
-  return `${fmt(mins)} - ${fmt(endMins)}`;
 }
 
 export function formatOfficeScheduleMonthTitle(ymd: string): string {
