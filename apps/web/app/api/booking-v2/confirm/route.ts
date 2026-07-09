@@ -36,6 +36,8 @@ import {
 } from "@/lib/booking-v2/bookingV2ServiceSlug";
 import { spendCleaningCredit } from "@/lib/referrals/credits";
 import { buildReferralCheckoutSnapshot } from "@/lib/referrals/referralCheckoutMetadata";
+import { buildReferralCheckoutFingerprint } from "@/lib/referrals/checkoutFingerprint";
+import { resolveReferralClientIp } from "@/lib/referrals/clientIp";
 import { validateReferralForCheckout } from "@/lib/referrals/validateReferral";
 
 export const runtime = "nodejs";
@@ -392,6 +394,10 @@ export async function POST(request: Request) {
   const preDiscountTotalZar = Math.round(
     Number(serverBreakdown.estimated_total ?? serverBreakdown.total ?? clientTotal),
   );
+  const referralCheckoutFingerprint = buildReferralCheckoutFingerprint({
+    clientIp: resolveReferralClientIp(request),
+    userAgent: request.headers.get("user-agent"),
+  });
   const referralValidation = referralCodeInput
     ? await validateReferralForCheckout({
         admin: supabase,
@@ -400,11 +406,12 @@ export async function POST(request: Request) {
         customerEmail: email ?? "",
         bookingTotalZar: preDiscountTotalZar,
         serviceSlug: data.serviceSlug,
+        checkoutFingerprint: referralCheckoutFingerprint,
       })
     : ({ valid: false as const } satisfies { valid: false });
   const referralDiscountZar = referralValidation.valid ? referralValidation.discountZar : 0;
   const referralCheckoutSnapshot = referralValidation.valid
-    ? buildReferralCheckoutSnapshot(referralValidation)
+    ? buildReferralCheckoutSnapshot(referralValidation, Date.now(), referralCheckoutFingerprint)
     : null;
 
   // ── 7. Generate Paystack reference ────────────────────────────────────────────

@@ -7,6 +7,7 @@ export type BookingReferralCheckoutSnapshot = {
   referrerType: "customer" | "cleaner";
   referrerId: string;
   lockValidatedAt: number;
+  checkoutFingerprint?: string | null;
 };
 
 export function buildReferralCheckoutSnapshot(
@@ -17,6 +18,7 @@ export function buildReferralCheckoutSnapshot(
     referrerId: string;
   },
   lockValidatedAt = Date.now(),
+  checkoutFingerprint?: string | null,
 ): BookingReferralCheckoutSnapshot {
   return {
     applied: true,
@@ -25,6 +27,7 @@ export function buildReferralCheckoutSnapshot(
     referrerType: validation.referrerType,
     referrerId: validation.referrerId,
     lockValidatedAt,
+    checkoutFingerprint: checkoutFingerprint ?? null,
   };
 }
 
@@ -55,7 +58,7 @@ function readReferralCheckoutFromSnapshot(snapshot: unknown): BookingReferralChe
 export function referralCheckoutMetadataFromSnapshot(
   snapshot: BookingReferralCheckoutSnapshot,
 ): Record<string, string> {
-  return {
+  const meta: Record<string, string> = {
     referral_code: snapshot.code,
     referral_checkout_applied: "1",
     referral_checkout_code: snapshot.code,
@@ -64,6 +67,9 @@ export function referralCheckoutMetadataFromSnapshot(
     referral_checkout_discount_zar: String(snapshot.discountZar),
     referral_lock_validated_at: String(snapshot.lockValidatedAt),
   };
+  const fp = String(snapshot.checkoutFingerprint ?? "").trim();
+  if (fp) meta.referral_checkout_fingerprint = fp;
+  return meta;
 }
 
 export async function enrichPaystackMetadataWithBookingReferral(

@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { getCreditSummary } from "@/lib/referrals/credits";
+import { getCreditTransactionHistory } from "@/lib/referrals/credits";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -21,11 +21,6 @@ export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const summary = await getCreditSummary(admin, userData.user.id);
-  return NextResponse.json({
-    balance: summary.balance,
-    totalEarned: summary.totalEarned,
-    totalUsed: summary.totalUsed,
-    nextExpiryAt: summary.nextExpiryAt,
-  });
+  const history = await getCreditTransactionHistory(admin, userData.user.id);
+  return NextResponse.json({ transactions: history });
 }

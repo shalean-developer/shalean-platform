@@ -138,7 +138,11 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
   const [phone, setPhone] = useState("");
   const [sessionUser, setSessionUser] = useState<{ id: string; accessToken: string } | null>(null);
   const { user } = useAuth();
-  const { referralDiscount } = useStoredReferralCheckoutDiscount(email);
+  const { referralDiscount, invalidMessage } = useStoredReferralCheckoutDiscount({
+    email,
+    bookingTotalZar: locked.finalPrice,
+    serviceSlug: locked.service ?? undefined,
+  });
 
   useEffect(() => {
     const supabase = getSupabaseBrowser();
@@ -450,6 +454,10 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
       {referralDiscount ? (
         <div className="rounded-lg border border-emerald-200/80 bg-emerald-50/90 px-3 py-2 text-xs text-emerald-900 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-100">
           Referral code {referralDiscount.code}: R {formatZar(referralDiscount.discountZar)} off your payment.
+        </div>
+      ) : invalidMessage ? (
+        <div className="rounded-lg border border-amber-200/80 bg-amber-50/90 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/60 dark:bg-amber-950/40 dark:text-amber-100">
+          Referral discount not applied: {invalidMessage}
         </div>
       ) : null}
       {promoApplied ? (

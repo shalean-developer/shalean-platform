@@ -14,11 +14,8 @@ import {
 } from "@/lib/referrals/programEnforcement";
 import { getReferralProgramSettingsCached } from "@/lib/referrals/settings";
 
-function randDigits(len: number): string {
-  let out = "";
-  for (let i = 0; i < len; i++) out += Math.floor(Math.random() * 10);
-  return out;
-}
+import { generateReferralCodeCandidate } from "@/lib/referrals/referralCode";
+import { sendReferralRewardEarnedEmail } from "@/lib/referrals/referralRewardEmails";
 
 function referralMaxRewardedPerMonth(): number {
   const raw = Number(process.env.REFERRAL_MAX_REWARDED_PER_REFERRER_MONTH ?? "25");
@@ -29,12 +26,12 @@ async function generateUniqueCode(
   admin: SupabaseClient,
   table: "user_profiles" | "cleaners",
 ): Promise<string> {
-  for (let i = 0; i < 12; i++) {
-    const code = `SHALEAN${randDigits(4)}`;
+  for (let i = 0; i < 16; i++) {
+    const code = generateReferralCodeCandidate();
     const { data } = await admin.from(table).select("id").eq("referral_code", code).maybeSingle();
     if (!data) return code;
   }
-  return `SHALEAN${Date.now().toString().slice(-6)}`;
+  return generateReferralCodeCandidate();
 }
 
 export async function getOrCreateCustomerReferralCode(
@@ -325,6 +322,21 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
     refereeUserId: refereeResolved,
     bookingId: bookingUuid,
     rewardZar: credit,
+  });
+
+  void sendReferralRewardEarnedEmail({
+    admin: params.admin,
+    referrerId,
+    referralId: pending.id,
+    rewardZar: credit,
+    referredContact: email,
+  }).then((r) => {
+    if (!r.sent && r.error && r.error !== "already_sent" && r.error !== "customer_outbound_paused") {
+      void reportOperationalIssue("warn", "referrals/rewardEarnedEmail", r.error ?? "send_failed", {
+        referralId: pending.id,
+        referrerId,
+      });
+    }
   });
 }
 

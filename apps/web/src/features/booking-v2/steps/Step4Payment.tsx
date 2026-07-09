@@ -252,9 +252,13 @@ function PaymentSection({ user }: { user: User }) {
   const [error, setError] = useState<string | null>(null);
   const [creditBalance, setCreditBalance] = useState(0);
   const [applyCredit, setApplyCredit] = useState(false);
-  const { referralDiscount, loading: referralLoading } = useStoredReferralCheckoutDiscount(user.email);
-
   const baseTotal = values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? config.basePrice;
+  const { referralDiscount, loading: referralLoading, invalidMessage } = useStoredReferralCheckoutDiscount({
+    email: user.email,
+    bookingTotalZar: baseTotal,
+    serviceSlug,
+  });
+
   const referralToApply = referralDiscount?.discountZar ?? 0;
   const totalAfterReferral = Math.max(0, baseTotal - referralToApply);
   const creditToApply = applyCredit ? Math.min(creditBalance, totalAfterReferral) : 0;
@@ -402,6 +406,12 @@ function PaymentSection({ user }: { user: User }) {
               <p className="mt-1 text-emerald-800">
                 R {referralDiscount.discountZar.toLocaleString("en-ZA")} off your first booking — no code needed.
               </p>
+            </div>
+          ) : null}
+          {!referralLoading && !referralDiscount && invalidMessage ? (
+            <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-semibold">Referral discount not applied</p>
+              <p className="mt-1 text-amber-800">{invalidMessage}</p>
             </div>
           ) : null}
           {referralToApply > 0 ? (

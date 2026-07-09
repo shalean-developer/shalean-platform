@@ -14,11 +14,14 @@ import {
   isServiceEligibleForReferral,
   meetsMinBookingValue,
 } from "@/lib/referrals/programEnforcement";
+import { isValidReferralCodeFormat } from "@/lib/referrals/referralCode";
+import { isReferralFingerprintBlocked } from "@/lib/referrals/duplicateDetection";
+import type { ReferralCheckoutInvalidReason } from "@/lib/referrals/referralCheckoutReasons";
 
 const DEFAULT_CHECKOUT_DISCOUNT_ZAR = 50;
 
 export type ValidateReferralForCheckoutResult =
-  | { valid: false }
+  | { valid: false; reason: ReferralCheckoutInvalidReason }
   | {
       valid: true;
       discountZar: number;
@@ -91,31 +94,34 @@ export async function validateReferralForCheckout(params: {
   bookingTotalZar?: number | null;
   /** Service slug for eligible_service_categories check. */
   serviceSlug?: string | null;
+  /** Device fingerprint from IP + User-Agent (guest abuse prevention). */
+  checkoutFingerprint?: string | null;
 }): Promise<ValidateReferralForCheckoutResult> {
   const normalized = params.code.trim().toUpperCase();
-  if (!normalized) return { valid: false };
+  if (!normalized) return { valid: false, reason: "invalid_format" };
+  if (!isValidReferralCodeFormat(normalized)) return { valid: false, reason: "invalid_format" };
 
   const referrer = await resolveReferrerFromCode(params.admin, normalized);
-  if (!referrer) return { valid: false };
+  if (!referrer) return { valid: false, reason: "code_not_found" };
 
   const uid = typeof params.userId === "string" && params.userId.trim() ? params.userId.trim() : null;
   if (uid && uid === referrer.referrerId) {
-    return { valid: false };
+    return { valid: false, reason: "self_referral" };
   }
 
   const email = normalizeEmail(params.customerEmail || "");
   const priorPaid = await countQualifyingBookingsForCustomer(params.admin, uid, email, "paid");
   if (priorPaid > 0) {
-    return { valid: false };
+    return { valid: false, reason: "not_first_booking" };
   }
 
   const limits = await loadReferralCodeLimitsForReferrer(params.admin, normalized, referrer.referrerType, referrer.referrerId);
-  if (!limits) return { valid: false };
+  if (!limits) return { valid: false, reason: "code_not_found" };
 
   if (limits.expiresAtIso) {
     const exp = new Date(limits.expiresAtIso);
     if (!Number.isNaN(exp.getTime()) && Date.now() > exp.getTime()) {
-      return { valid: false };
+      return { valid: false, reason: "code_expired" };
     }
   }
 
@@ -124,22 +130,34 @@ export async function validateReferralForCheckout(params: {
       .from("referral_discount_redemptions")
       .select("id", { count: "exact", head: true })
       .eq("referral_code", normalized);
-    if (ctErr) return { valid: false };
+    if (ctErr) return { valid: false, reason: "code_not_found" };
     if ((count ?? 0) >= limits.maxUses) {
-      return { valid: false };
+      return { valid: false, reason: "max_uses_reached" };
     }
   }
 
   const settings = await getReferralProgramSettingsCached(params.admin);
-  if (!settings.enabled) return { valid: false };
+  if (!settings.enabled) return { valid: false, reason: "program_disabled" };
 
   if (!isServiceEligibleForReferral(params.serviceSlug, settings)) {
-    return { valid: false };
+    return { valid: false, reason: "service_ineligible" };
   }
 
   const bookingTotal = Number(params.bookingTotalZar ?? 0);
   if (!meetsMinBookingValue(bookingTotal, settings)) {
-    return { valid: false };
+    return { valid: false, reason: "min_booking_not_met" };
+  }
+
+  if (
+    await isReferralFingerprintBlocked({
+      admin: params.admin,
+      referralCode: normalized,
+      fingerprint: params.checkoutFingerprint ?? null,
+      customerEmail: email,
+      userId: uid,
+    })
+  ) {
+    return { valid: false, reason: "device_already_used" };
   }
 
   return {

@@ -117,6 +117,46 @@ export async function getCreditSummary(
   return { balance: Math.max(0, balance), totalEarned, totalUsed, nextExpiryAt };
 }
 
+export type CreditHistoryRow = {
+  id: string;
+  amountZar: number;
+  balanceAfterZar: number;
+  type: CreditTransactionType;
+  note: string | null;
+  createdAt: string;
+  referralId: string | null;
+  bookingId: string | null;
+};
+
+export async function getCreditTransactionHistory(
+  admin: SupabaseClient,
+  userId: string,
+  limit = 50,
+): Promise<CreditHistoryRow[]> {
+  const { data, error } = await admin
+    .from("cleaning_credit_transactions")
+    .select("id, amount_zar, balance_after_zar, type, note, created_at, referral_id, booking_id")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(Math.min(Math.max(1, limit), 200));
+
+  if (error) {
+    await reportOperationalIssue("warn", "referrals/creditHistory", error.message, { userId });
+    return [];
+  }
+
+  return (data ?? []).map((row) => ({
+    id: String((row as { id: string }).id),
+    amountZar: Number((row as { amount_zar?: number }).amount_zar ?? 0),
+    balanceAfterZar: Number((row as { balance_after_zar?: number }).balance_after_zar ?? 0),
+    type: String((row as { type?: string }).type ?? "earn") as CreditTransactionType,
+    note: (row as { note?: string | null }).note ?? null,
+    createdAt: String((row as { created_at: string }).created_at),
+    referralId: (row as { referral_id?: string | null }).referral_id ?? null,
+    bookingId: (row as { booking_id?: string | null }).booking_id ?? null,
+  }));
+}
+
 /** Credit referrer wallet with ledger entry (called after referral reward). */
 export async function creditCleaningCredit(params: {
   admin: SupabaseClient;

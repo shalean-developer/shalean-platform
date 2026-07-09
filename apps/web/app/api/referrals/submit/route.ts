@@ -1,11 +1,20 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { referralFormSchema, submitReferralForm } from "@/lib/referrals/submitReferralForm";
+import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import {
+  checkReferralSubmitEmailLimit,
+  checkReferralSubmitIpLimit,
+  referralRateLimitResponse,
+} from "@/lib/rateLimit/referralPublicAbuseLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const ipDecision = checkReferralSubmitIpLimit(request);
+  if (!ipDecision.allowed) return referralRateLimitResponse(ipDecision);
+
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
@@ -24,6 +33,9 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  const emailDecision = checkReferralSubmitEmailLimit(normalizeEmail(parsed.data.referrerEmail));
+  if (!emailDecision.allowed) return referralRateLimitResponse(emailDecision);
 
   const result = await submitReferralForm(admin, parsed.data);
   if (!result.ok) {

@@ -52,6 +52,7 @@ export async function GET(request: Request) {
     referralsCount: successfulReferrals.length,
     creditBalance: creditSummary.balance,
     creditUsed: creditSummary.totalUsed,
+    nextExpiryAt: creditSummary.nextExpiryAt,
     totalReferrals: rows.length,
     pendingReferrals: pendingReferrals.length,
     successfulReferrals: successfulReferrals.length,

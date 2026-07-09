@@ -6,6 +6,7 @@ import {
   displayCustomerBookingReference,
   formatCustomerBookingTotalPaid,
 } from "@/lib/booking/customerBookingReference";
+import { BookingSuccessReferralPrompt } from "@/components/referrals/BookingSuccessReferralPrompt";
 import { CUSTOMER_SUPPORT_WHATSAPP_E164 } from "@/lib/site/customerSupport";
 
 export type BookingConfirmationHeroProps = {
@@ -104,6 +105,8 @@ export function BookingConfirmationHero({
         </a>
         .
       </p>
+
+      <BookingSuccessReferralPrompt hasSession={hasSession} />
     </section>
   );
 }

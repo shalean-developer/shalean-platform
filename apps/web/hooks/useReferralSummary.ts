@@ -10,6 +10,7 @@ export type ReferralSummary = {
   referralsCount: number;
   creditBalance: number;
   creditUsed?: number;
+  nextExpiryAt?: string | null;
   totalReferrals?: number;
   pendingReferrals?: number;
   successfulReferrals?: number;
@@ -61,6 +62,7 @@ export function useReferralSummary(): {
         referralsCount: Number(j.referralsCount ?? 0),
         creditBalance: Number(j.creditBalance ?? 0),
         creditUsed: Number(j.creditUsed ?? 0),
+        nextExpiryAt: j.nextExpiryAt ?? null,
         totalReferrals: Number(j.totalReferrals ?? 0),
         pendingReferrals: Number(j.pendingReferrals ?? 0),
         successfulReferrals: Number(j.successfulReferrals ?? 0),

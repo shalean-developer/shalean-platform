@@ -3,27 +3,48 @@
 import { useEffect, useState } from "react";
 import { getDashboardAccessToken } from "@/lib/dashboard/dashboardFetch";
 import { getStoredReferral } from "@/lib/referrals/client";
+import type { ReferralCheckoutInvalidReason } from "@/lib/referrals/referralCheckoutReasons";
 
 export type StoredReferralCheckoutDiscount = {
   code: string;
   discountZar: number;
 };
 
+export type UseStoredReferralCheckoutDiscountOptions = {
+  email?: string | null;
+  bookingTotalZar?: number;
+  serviceSlug?: string;
+};
+
 /**
  * Reads a referral code captured from `?ref=` and validates it for checkout.
  * No manual code entry — discount is applied automatically when valid.
  */
-export function useStoredReferralCheckoutDiscount(email?: string | null): {
+export function useStoredReferralCheckoutDiscount(
+  emailOrOpts?: string | null | UseStoredReferralCheckoutDiscountOptions,
+  legacyEmail?: string | null,
+): {
   referralDiscount: StoredReferralCheckoutDiscount | null;
   loading: boolean;
+  invalidReason: ReferralCheckoutInvalidReason | null;
+  invalidMessage: string | null;
 } {
+  const opts: UseStoredReferralCheckoutDiscountOptions =
+    emailOrOpts != null && typeof emailOrOpts === "object"
+      ? emailOrOpts
+      : { email: emailOrOpts ?? legacyEmail ?? null };
+
   const [referralDiscount, setReferralDiscount] = useState<StoredReferralCheckoutDiscount | null>(null);
   const [loading, setLoading] = useState(true);
+  const [invalidReason, setInvalidReason] = useState<ReferralCheckoutInvalidReason | null>(null);
+  const [invalidMessage, setInvalidMessage] = useState<string | null>(null);
 
   useEffect(() => {
     const code = getStoredReferral("customer");
     if (!code) {
       setReferralDiscount(null);
+      setInvalidReason(null);
+      setInvalidMessage(null);
       setLoading(false);
       return;
     }
@@ -43,24 +64,37 @@ export function useStoredReferralCheckoutDiscount(email?: string | null): {
           },
           body: JSON.stringify({
             code: storedCode,
-            email: email?.trim() || undefined,
+            email: opts.email?.trim() || undefined,
+            bookingTotalZar: opts.bookingTotalZar,
+            serviceSlug: opts.serviceSlug,
           }),
         });
         const json = (await res.json()) as {
           valid?: boolean;
           code?: string;
           discountZar?: number;
+          reason?: ReferralCheckoutInvalidReason;
+          message?: string;
         };
-        if (!cancelled && json.valid && Number(json.discountZar) > 0) {
+        if (cancelled) return;
+        if (json.valid && Number(json.discountZar) > 0) {
           setReferralDiscount({
             code: json.code?.trim().toUpperCase() ?? storedCode,
             discountZar: Math.round(Number(json.discountZar)),
           });
-        } else if (!cancelled) {
+          setInvalidReason(null);
+          setInvalidMessage(null);
+        } else {
           setReferralDiscount(null);
+          setInvalidReason(json.reason ?? null);
+          setInvalidMessage(json.message?.trim() || null);
         }
       } catch {
-        if (!cancelled) setReferralDiscount(null);
+        if (!cancelled) {
+          setReferralDiscount(null);
+          setInvalidReason(null);
+          setInvalidMessage(null);
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -70,7 +104,7 @@ export function useStoredReferralCheckoutDiscount(email?: string | null): {
     return () => {
       cancelled = true;
     };
-  }, [email]);
+  }, [opts.email, opts.bookingTotalZar, opts.serviceSlug]);
 
-  return { referralDiscount, loading };
+  return { referralDiscount, loading, invalidReason, invalidMessage };
 }
