@@ -24,7 +24,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await admin
     .from("finance_budgets")
-    .select("id, name, period_type, period_start, period_end, is_active, created_at")
+    .select("id, name, budget_type, period_type, period_start, period_end, is_active, created_at")
     .eq("is_active", true)
     .order("period_start", { ascending: false });
 
@@ -46,6 +46,7 @@ export async function POST(request: Request) {
     .from("finance_budgets")
     .insert({
       name: body.name,
+      budget_type: body.budget_type === "income" ? "income" : "expense",
       period_type: body.period_type,
       period_start: body.period_start,
       period_end: body.period_end,
@@ -66,6 +67,8 @@ export async function POST(request: Request) {
         category_id: l.category_id ?? null,
         branch_id: l.branch_id ?? null,
         vendor_id: l.vendor_id ?? null,
+        service_slug: l.service_slug ?? null,
+        is_total_line: l.is_total_line === true,
         amount_cents: Math.round(Number(l.amount_cents)),
         notes: l.notes ?? null,
       })),
