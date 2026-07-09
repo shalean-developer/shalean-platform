@@ -106,4 +106,35 @@ describe("aggregateCleanerPerformance", () => {
     expect(today?.completedJobs).toBe(1);
     expect(today?.onTimePct).toBeNull();
   });
+
+  it("uses persisted scheduled duration for avgJobDurationMinutes, not wall-clock", () => {
+    const { cleaners } = aggregateCleanerPerformance(
+      [
+        {
+          cleaner_id: "c1",
+          date: "2026-06-19",
+          time: "08:00",
+          started_at: "2026-06-19T06:00:00.000Z",
+          completed_at: "2026-06-19T07:00:00.000Z",
+          status: "completed",
+          duration_minutes: 180,
+        },
+        {
+          cleaner_id: "c1",
+          date: "2026-06-20",
+          time: "08:00",
+          started_at: "2026-06-20T06:00:00.000Z",
+          completed_at: "2026-06-20T10:00:00.000Z",
+          status: "completed",
+          estimated_duration_minutes: 240,
+        },
+      ],
+      new Map([["c1", "Cleaner One"]]),
+    );
+    expect(cleaners).toHaveLength(1);
+    expect(cleaners[0]!.avgJobDurationMinutes).toBe(210);
+    expect(cleaners[0]!.scheduledDurationSamples).toBe(2);
+    expect(cleaners[0]!.avgActualDurationMinutes).toBeGreaterThan(0);
+    expect(cleaners[0]!.avgActualDurationMinutes).not.toBe(cleaners[0]!.avgJobDurationMinutes);
+  });
 });

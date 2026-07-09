@@ -1,7 +1,11 @@
 import { formatIsoInJohannesburgYmd, todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { bookingScheduledStartUtcMs } from "@/lib/admin/opsSnapshot";
+import {
+  resolveReportingDurationMinutes,
+  type BookingDurationReportingRow,
+} from "@/lib/admin/reporting/bookingDurationReporting";
 
-export type BookingPerfInput = {
+export type BookingPerfInput = BookingDurationReportingRow & {
   cleaner_id: string | null;
   date: string | null;
   time: string | null;
@@ -19,7 +23,11 @@ export type CleanerPerfRow = {
   avgLateMinutes: number;
   completionDenominator: number;
   completionRate: number;
+  /** Average persisted scheduled duration among completed jobs. */
   avgJobDurationMinutes: number;
+  scheduledDurationSamples: number;
+  /** Wall-clock average (started_at → completed_at) when both timestamps exist. */
+  avgActualDurationMinutes: number;
   reliabilityScore: number;
   lowSample: boolean;
 };
@@ -66,8 +74,10 @@ type Acc = {
   sumPositiveLateMinutes: number;
   sumLateAmongLate: number;
   lateCount: number;
-  durationCount: number;
-  sumDurationMinutes: number;
+  scheduledDurationCount: number;
+  sumScheduledDurationMinutes: number;
+  actualDurationCount: number;
+  sumActualDurationMinutes: number;
 };
 
 function emptyAcc(): Acc {
@@ -80,8 +90,10 @@ function emptyAcc(): Acc {
     sumPositiveLateMinutes: 0,
     sumLateAmongLate: 0,
     lateCount: 0,
-    durationCount: 0,
-    sumDurationMinutes: 0,
+    scheduledDurationCount: 0,
+    sumScheduledDurationMinutes: 0,
+    actualDurationCount: 0,
+    sumActualDurationMinutes: 0,
   };
 }
 
@@ -185,14 +197,22 @@ export function aggregateCleanerPerformance(
       }
     }
 
+    if (status === "completed") {
+      const scheduledMin = resolveReportingDurationMinutes(b);
+      if (scheduledMin != null && scheduledMin > 0 && scheduledMin <= 24 * 60) {
+        a.scheduledDurationCount++;
+        a.sumScheduledDurationMinutes += scheduledMin;
+      }
+    }
+
     const started = parseTs(b.started_at);
     if (status === "completed" && started != null) {
       const completedAt = parseTs(b.completed_at);
       if (completedAt != null && completedAt > started) {
         const durationMin = (completedAt - started) / 60_000;
         if (durationMin > 0 && durationMin <= 24 * 60) {
-          a.durationCount++;
-          a.sumDurationMinutes += durationMin;
+          a.actualDurationCount++;
+          a.sumActualDurationMinutes += durationMin;
         }
       }
     }
@@ -214,7 +234,10 @@ export function aggregateCleanerPerformance(
     const rawScore = onTimeRate * 0.4 + completionRate * 0.4 + latenessPenalty * 0.2;
     const reliabilityScore = Math.round(Math.max(0, Math.min(100, rawScore * 100)));
 
-    const avgJobDurationMinutes = a.durationCount > 0 ? a.sumDurationMinutes / a.durationCount : 0;
+    const avgJobDurationMinutes =
+      a.scheduledDurationCount > 0 ? a.sumScheduledDurationMinutes / a.scheduledDurationCount : 0;
+    const avgActualDurationMinutes =
+      a.actualDurationCount > 0 ? a.sumActualDurationMinutes / a.actualDurationCount : 0;
 
     const lowSample = completionDenominator < 3 && punctualityJobs < 3;
 
@@ -231,6 +254,8 @@ export function aggregateCleanerPerformance(
       completionDenominator,
       completionRate,
       avgJobDurationMinutes: Math.round(avgJobDurationMinutes * 10) / 10,
+      scheduledDurationSamples: a.scheduledDurationCount,
+      avgActualDurationMinutes: Math.round(avgActualDurationMinutes * 10) / 10,
       reliabilityScore,
       lowSample,
     });

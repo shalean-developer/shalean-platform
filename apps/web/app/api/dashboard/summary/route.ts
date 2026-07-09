@@ -98,7 +98,10 @@ export async function GET(request: Request) {
   const thisMonthBookings = mapped.filter((b) => typeof b.date === "string" && b.date.startsWith(ym));
   const bookingsThisMonthCount = thisMonthBookings.length;
   const hoursBookedThisMonth = Math.round(
-    thisMonthBookings.reduce((sum, b) => sum + ((b.durationHours ?? 0) > 0 ? b.durationHours : 0), 0),
+    thisMonthBookings.reduce((sum, b) => {
+      const hours = b.durationHours;
+      return sum + (hours != null && hours > 0 ? hours : 0);
+    }, 0),
   );
   const completedThisMonthCount = thisMonthBookings.filter(isDashboardBookingAuthoritativelyCompleted).length;
 

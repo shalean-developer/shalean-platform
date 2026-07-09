@@ -34,7 +34,8 @@ export function CleanerPerformanceTable({ rows }: { rows: CleanerPerfRow[] }) {
             <th className="px-3 py-3">On-time %</th>
             <th className="px-3 py-3">Avg lateness (min)</th>
             <th className="px-3 py-3">Completion rate</th>
-            <th className="px-3 py-3">Avg duration (min)</th>
+            <th className="px-3 py-3">Avg scheduled (min)</th>
+            <th className="px-3 py-3">Avg actual (min)</th>
             <th className="px-3 py-3">Reliability</th>
           </tr>
         </thead>
@@ -76,6 +77,10 @@ export function CleanerPerformanceTable({ rows }: { rows: CleanerPerfRow[] }) {
                 </td>
                 <td className="px-3 py-2.5 tabular-nums text-zinc-800 dark:text-zinc-200">
                   {r.avgJobDurationMinutes > 0 ? r.avgJobDurationMinutes : "—"}
+                  <div className="text-[11px] font-normal text-zinc-500">n={r.scheduledDurationSamples}</div>
+                </td>
+                <td className="px-3 py-2.5 tabular-nums text-zinc-800 dark:text-zinc-200">
+                  {r.avgActualDurationMinutes > 0 ? r.avgActualDurationMinutes : "—"}
                 </td>
                 <td className="px-3 py-2.5">
                   <span

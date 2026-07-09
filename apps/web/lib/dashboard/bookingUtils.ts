@@ -1,3 +1,4 @@
+import { resolveReportingDurationMinutes } from "@/lib/admin/reporting/bookingDurationReporting";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import {
   accessNotesFromBookingRow,
@@ -273,18 +274,14 @@ export function mapBookingRow(row: BookingRow): DashboardBooking {
   const derivedSuburb = rowSuburb || snapSuburb || (loc.includes(",") ? loc.split(",").slice(-1)[0]!.trim() : loc);
   const suburb = derivedSuburb || "—";
   const addressLine = loc.includes(",") ? loc.split(",")[0]!.trim() : loc || "—";
-  const durationMin = typeof row.duration_minutes === "number" && row.duration_minutes > 0 ? row.duration_minutes : null;
-  const hoursSnap = snapshot?.locked?.finalHours;
+  const persistedMinutes = resolveReportingDurationMinutes(row);
+  const durationHours =
+    persistedMinutes != null && persistedMinutes > 0
+      ? Math.round((persistedMinutes / 60) * 10) / 10
+      : null;
+
   const breakdown = parseStoredPriceBreakdown(row.price_breakdown);
   const priceDisplayFromCheckout = breakdown != null || row.pricing_summary != null;
-  const durationHours =
-    breakdown != null && typeof breakdown.hours === "number" && breakdown.hours > 0
-      ? Math.round(breakdown.hours * 10) / 10
-      : durationMin != null
-        ? Math.round((durationMin / 60) * 10) / 10
-        : typeof hoursSnap === "number" && hoursSnap > 0
-          ? hoursSnap
-          : 2;
 
   const scheduledAt =
     scheduleConfirmed && date && time

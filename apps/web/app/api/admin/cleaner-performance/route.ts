@@ -45,7 +45,9 @@ export async function GET(request: Request) {
   const [{ data: bookingRows, error: bErr }, { data: cleanerRows, error: cErr }] = await Promise.all([
     admin
       .from("bookings")
-      .select("cleaner_id, date, time, started_at, completed_at, status")
+      .select(
+        "cleaner_id, date, time, started_at, completed_at, status, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot",
+      )
       .not("cleaner_id", "is", null)
       .gte("date", fromYmd)
       .limit(12_000),

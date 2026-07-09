@@ -42,6 +42,21 @@ describe("Phase 2E-B daily cleaner workload shadow scanner", () => {
     ]);
   });
 
+  it("uses estimated_duration_minutes when duration_minutes is missing", () => {
+    const report = buildDailyCleanerWorkloadShadowReport([
+      { id: "e1", cleaner_id: "cleaner-1", date: "2026-06-01", estimated_duration_minutes: 150 },
+    ]);
+
+    expect(report.soloDays[0]).toEqual(
+      expect.objectContaining({
+        bookingIds: ["e1"],
+        fallbackBookingIds: [],
+        fallbackCount: 0,
+        totalScheduledMinutes: 150,
+      }),
+    );
+  });
+
   it("reports fallback usage for missing or invalid duration_minutes without blocking", () => {
     const report = buildDailyCleanerWorkloadShadowReport([
       { id: "missing", cleaner_id: "cleaner-1", date: "2026-06-01", duration_minutes: null },

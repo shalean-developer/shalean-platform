@@ -49,9 +49,9 @@ export default function MetricsPage() {
       color: "bg-red-50 text-red-600",
     },
     {
-      label: "Cleaner utilisation",
+      label: "Team slot utilisation",
       value: avgUtil != null ? `${avgUtil}%` : "—",
-      sub: "Fleet average today",
+      sub: "Assigned jobs vs daily team capacity",
       icon: Users,
       color: "bg-blue-50 text-blue-600",
     },

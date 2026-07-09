@@ -294,7 +294,8 @@ export default function AccountBookingDetailPage() {
                     </span>
                     <span className="inline-flex items-center gap-2">
                       <Clock className="h-4 w-4 text-blue-600" />
-                      {booking.time} · {booking.durationHours}h
+                      {booking.time}
+                      {booking.durationHours != null ? ` · ${booking.durationHours}h` : ""}
                     </span>
                   </>
                 ) : (

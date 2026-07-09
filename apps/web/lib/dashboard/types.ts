@@ -170,7 +170,7 @@ export type DashboardBooking = {
   suburb: string;
   priceZar: number;
   status: NormalizedBookingStatus;
-  durationHours: number;
+  durationHours: number | null;
   rooms: string[];
   extras: string[];
   /** Non-room answers from booking-v2 `service_details`. */

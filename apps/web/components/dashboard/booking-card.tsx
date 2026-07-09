@@ -217,15 +217,16 @@ export function BookingCard({
   const gradient = getServiceGradient(booking.serviceName);
   const confirmBadge = getConfirmationBadge(booking);
   const paymentDisplay = getPaymentStatusDisplay(booking);
-  const endTime = addHoursToTime(booking.time, booking.durationHours);
+  const endTime = booking.durationHours != null ? addHoursToTime(booking.time, booking.durationHours) : null;
   const startTimeLabel = formatTime12(booking.time);
   const endTimeLabel = endTime ? formatTime12(endTime) : null;
   const showTimeRange = booking.scheduleConfirmed && startTimeLabel != null && endTimeLabel != null;
+  const durationHours = booking.durationHours;
   const durationLabel =
-    Number.isFinite(booking.durationHours) && booking.durationHours > 0
-      ? booking.durationHours % 1 === 0
-        ? `${booking.durationHours} hr${booking.durationHours !== 1 ? "s" : ""}`
-        : `${booking.durationHours} hrs`
+    durationHours != null && Number.isFinite(durationHours) && durationHours > 0
+      ? durationHours % 1 === 0
+        ? `${durationHours} hr${durationHours !== 1 ? "s" : ""}`
+        : `${durationHours} hrs`
       : null;
   const fullAddress = formatBookingLocation(booking);
 

@@ -1,7 +1,9 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { computeFleetHourUtilizationPct } from "@/lib/admin/reporting/bookingDurationReporting";
 import { loadProfitSnapshot } from "@/lib/admin/expenses/loadCashFlowDashboard";
+import { FUTURE_MAX_CLEANER_DAY_MINUTES } from "@/lib/booking/durationMinutesIntegrity";
 
 export type HealthMetric = {
   key: string;
@@ -93,20 +95,30 @@ export async function computeBusinessHealthScore(
     activeCustomers && repeatCustomers ? (repeatCustomers / activeCustomers) * 100 : 60,
   );
 
-  const { count: completedJobs } = await admin
-    .from("bookings")
-    .select("id", { count: "exact", head: true })
-    .eq("status", "completed")
-    .gte("date", new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10));
+  const thirtyDaysAgo = new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10);
 
   const { count: activeCleaners } = await admin
     .from("cleaners")
     .select("id", { count: "exact", head: true })
     .eq("is_active", true);
 
-  const utilizationScore = clampScore(
-    activeCleaners && completedJobs ? Math.min(100, (completedJobs / (activeCleaners * 20)) * 100) : 50,
-  );
+  const { data: completedForUtilization } = await admin
+    .from("bookings")
+    .select(
+      "duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot, cleaner_id",
+    )
+    .eq("status", "completed")
+    .not("cleaner_id", "is", null)
+    .gte("date", thirtyDaysAgo)
+    .limit(15_000);
+
+  const utilizationPct = computeFleetHourUtilizationPct({
+    bookings: completedForUtilization ?? [],
+    activeCleanerCount: activeCleaners ?? 0,
+    windowDays: 30,
+    policyMinutesPerCleanerDay: FUTURE_MAX_CLEANER_DAY_MINUTES,
+  });
+  const utilizationScore = clampScore(utilizationPct);
 
   const { data: overdueInvoices } = await admin
     .from("monthly_invoices")
@@ -168,7 +180,7 @@ export async function computeBusinessHealthScore(
       weight: WEIGHTS.cleaner_utilization,
       trend: utilizationScore >= 60 ? "up" : "flat",
       direction: "positive",
-      value: utilizationScore,
+      value: Math.round(utilizationPct * 10) / 10,
       unit: "%",
     },
     {

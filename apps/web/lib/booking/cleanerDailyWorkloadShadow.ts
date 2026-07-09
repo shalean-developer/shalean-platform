@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { resolveReportingDurationMinutes } from "@/lib/admin/reporting/bookingDurationReporting";
+
 import { BOOKING_SLOT_OCCUPYING_STATUSES } from "@/lib/booking/bookingCleanerSlotOccupyingStatuses";
 import {
   BOOKING_DURATION_FALLBACK_MINUTES,
@@ -23,6 +25,9 @@ export type DailyWorkloadShadowBookingRow = {
   booking_date?: string | null;
   status?: string | null;
   duration_minutes?: number | null;
+  estimated_duration_minutes?: number | null;
+  pricing_summary?: unknown;
+  booking_snapshot?: unknown;
 };
 
 export type DailyWorkloadFallbackUsage = {
@@ -97,17 +102,18 @@ function resolveShadowDurationMinutes(row: DailyWorkloadShadowBookingRow): {
   usedFallback: boolean;
   rawDurationMinutes: number | null;
 } {
+  const persisted = resolveReportingDurationMinutes(row);
+  if (persisted != null && persisted >= MIN_REASONABLE_BOOKING_DURATION_MINUTES) {
+    return { minutes: Math.round(persisted), usedFallback: false, rawDurationMinutes: persisted };
+  }
   const raw =
     typeof row.duration_minutes === "number" && Number.isFinite(row.duration_minutes)
       ? row.duration_minutes
-      : null;
-  if (raw != null && raw >= MIN_REASONABLE_BOOKING_DURATION_MINUTES) {
-    return { minutes: Math.round(raw), usedFallback: false, rawDurationMinutes: raw };
-  }
+      : persisted;
   return {
     minutes: BOOKING_DURATION_FALLBACK_MINUTES,
     usedFallback: true,
-    rawDurationMinutes: raw,
+    rawDurationMinutes: raw ?? null,
   };
 }
 

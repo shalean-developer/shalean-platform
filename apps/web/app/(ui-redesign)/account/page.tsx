@@ -67,11 +67,11 @@ const QUICK_ACTIONS = [
 ];
 
 /* ─── Booking time formatter ─── */
-function formatTimeRange(time: string, durationHours: number, scheduleConfirmed = true): string {
+function formatTimeRange(time: string, durationHours: number | null, scheduleConfirmed = true): string {
   if (!scheduleConfirmed || !time?.trim() || !/^\d{1,2}:\d{2}$/.test(time.trim())) {
     return "Time to be confirmed";
   }
-  if (!Number.isFinite(durationHours) || durationHours <= 0) {
+  if (durationHours == null || !Number.isFinite(durationHours) || durationHours <= 0) {
     return "Time to be confirmed";
   }
   try {
