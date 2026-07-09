@@ -9,6 +9,11 @@ import type {
   PaymentTransactionRow,
 } from "@/lib/payments/paymentTransactionTypes";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { enqueueAccountingSync } from "@/lib/accounting/accountingSyncQueue";
+import {
+  ensurePaystackVendor,
+  loadZohoIntegrationSettings,
+} from "@/lib/accounting/zohoIntegrationSettings";
 
 export type RecordGatewayPaymentParams = {
   gateway: PaymentGateway;
@@ -54,6 +59,18 @@ async function resolvePaystackFeesCategoryId(admin: SupabaseClient): Promise<str
   return data?.id ?? null;
 }
 
+async function resolveInvoiceNumberForBooking(
+  admin: SupabaseClient,
+  bookingId: string | null,
+): Promise<string | null> {
+  if (!bookingId) return null;
+  const { data } = await admin
+    .from("bookings")
+    .select("zoho_invoice_number")
+    .eq("id", bookingId)
+    .maybeSingle();
+  return data?.zoho_invoice_number ?? null;
+}
 async function resolvePaystackAccountId(admin: SupabaseClient): Promise<string | null> {
   const { data } = await admin
     .from("expense_accounts")
@@ -166,24 +183,32 @@ export async function recordGatewayPayment(
     const accountId = await resolvePaystackAccountId(admin);
 
     if (categoryId && branchId) {
+      const settings = await loadZohoIntegrationSettings(admin);
+      const paystackVendorId = await ensurePaystackVendor(admin, settings);
+      const invoiceNumber = await resolveInvoiceNumberForBooking(admin, bookingId);
+      const feeDescription = invoiceNumber
+        ? `Paystack processing fee for Invoice ${invoiceNumber}`
+        : `Paystack processing fee — ${ref}`;
       const expenseDate = paidAt.slice(0, 10);
       const { data: expense, error: expErr } = await admin
         .from("expenses")
         .insert({
           expense_date: expenseDate,
           category_id: categoryId,
-          description: `Paystack processing fee — ${ref}`,
+          vendor_id: paystackVendorId,
+          description: feeDescription,
           amount_cents: fee.processing_fee_cents,
           payment_method: "paystack",
           paid_from_account_id: accountId,
           branch_id: branchId,
           booking_id: bookingId,
-          notes: `Auto-recorded (${fee.fee_calculation_method}). Gross: R${(amountCents / 100).toFixed(2)}, net: R${(netSettlement / 100).toFixed(2)}.`,
+          notes: `Auto-recorded (${fee.fee_calculation_method}). Gross: R${(amountCents / 100).toFixed(2)}, net: R${(netSettlement / 100).toFixed(2)}. Ref: ${ref}`,
           status: "approved",
           approval_stage: "complete",
           approved_at: now,
           payment_transaction_id: paymentTransactionId,
           processing_fees_cents: fee.processing_fee_cents,
+          sync_status: "pending",
         })
         .select("id")
         .single();
@@ -194,9 +219,18 @@ export async function recordGatewayPayment(
           .from("payment_transactions")
           .update({ expense_id: expenseId, updated_at: now })
           .eq("id", paymentTransactionId);
+        void enqueueAccountingSync(admin, { entityType: "expense", entityId: expense.id });
+        if (paystackVendorId) {
+          void enqueueAccountingSync(admin, { entityType: "vendor", entityId: paystackVendorId });
+        }
       }
     }
   }
+
+  void enqueueAccountingSync(admin, {
+    entityType: "payment_transaction",
+    entityId: paymentTransactionId,
+  });
 
   if (bookingId) {
     await admin

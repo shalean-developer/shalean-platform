@@ -48,6 +48,7 @@ export const CRON_LOCK_KEYS = {
   generateRecurringExpenses: "cron:generate-recurring-expenses",
   financeDailyAutomation: "cron:finance-daily-automation",
   backfillPaystackPayments: "cron:backfill-paystack-payments",
+  accountingSync: "cron:accounting-sync",
 
   // Read-only observability
   opsHealthMetrics: "cron:ops-health-metrics",

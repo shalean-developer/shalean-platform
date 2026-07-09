@@ -5,6 +5,7 @@ import { checkBudgetAlerts } from "@/lib/admin/expenses/loadBudgets";
 import { notifyFinanceUsers } from "@/lib/admin/expenses/financeNotifications";
 import { persistBusinessHealthScore } from "@/lib/admin/expenses/businessHealthScore";
 import { backfillPaystackPaymentTransactions } from "@/lib/payments/backfillPaystackPaymentTransactions";
+import { processAccountingSyncQueue } from "@/lib/accounting/processAccountingSyncQueue";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -58,7 +59,14 @@ export async function POST(request: Request) {
         verifyWithPaystack: true,
       });
 
-      return { health_score: health.overall_score, budget_alerts: budgetAlerts.length, paystack_backfill: paystackBackfill };
+      const accountingSync = await processAccountingSyncQueue(admin, 50);
+
+      return {
+        health_score: health.overall_score,
+        budget_alerts: budgetAlerts.length,
+        paystack_backfill: paystackBackfill,
+        accounting_sync: accountingSync,
+      };
     },
   );
 

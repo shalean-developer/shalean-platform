@@ -4,11 +4,14 @@ import { normalizeBillingEmail } from "@/lib/zoho/shaleanBillingContactEmail";
 import { zohoBooksClient } from "@/lib/zoho/zohoBooksClient";
 import { formatZohoOrderReference, type ZohoOrderKind } from "@/lib/zoho/zohoOrderReference";
 import type {
+  ZohoBankAccountsResponse,
+  ZohoChartAccountsResponse,
   ZohoContactCreateResponse,
   ZohoContactListResponse,
   ZohoEstimateCreateResponse,
   ZohoEstimateGetResponse,
   ZohoEstimateUpdateResponse,
+  ZohoExpenseCreateResponse,
   ZohoInvoiceCreateResponse,
   ZohoInvoiceGetResponse,
   ZohoInvoiceInput,
@@ -305,19 +308,37 @@ export async function zohoInvoiceExists(zohoInvoiceId: string): Promise<boolean 
   }
 }
 
+export type ZohoInvoiceDetails = {
+  zohoInvoiceId: string;
+  invoiceNumber: string;
+  status: string;
+  totalCents: number;
+  balanceCents: number;
+  taxCents: number;
+  customerId: string | null;
+  currencyCode: string;
+};
+
 export async function getZohoInvoice(
   zohoInvoiceId: string,
-): Promise<ServiceResult<{ zohoInvoiceId: string; invoiceNumber: string }>> {
+): Promise<ServiceResult<ZohoInvoiceDetails>> {
   const id = zohoInvoiceId.trim();
   if (!id) return { ok: false, error: "missing_invoice_id" };
   try {
     const res = await zohoBooksClient.get<ZohoInvoiceGetResponse>(
       `/invoices/${encodeURIComponent(id)}`,
     );
+    const inv = res.invoice;
     return {
       ok: true,
-      zohoInvoiceId: res.invoice.invoice_id,
-      invoiceNumber: res.invoice.invoice_number,
+      zohoInvoiceId: inv.invoice_id,
+      invoiceNumber: inv.invoice_number,
+      status: inv.status ?? "unknown",
+      totalCents: Math.round((inv.total ?? 0) * 100),
+      balanceCents: Math.round((inv.balance ?? 0) * 100),
+      taxCents: Math.round((inv.tax_total ?? 0) * 100),
+      customerId: inv.customer_id ?? null,
+      currencyCode: inv.currency_code ?? "ZAR",
     };
   } catch (err) {
     return { ok: false, error: String(err instanceof Error ? err.message : err) };
@@ -541,6 +562,128 @@ export async function markZohoInvoicePaid(
     });
 
     return { ok: true, paymentId: res.payment.payment_id };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
+// ─── Vendors (suppliers) ──────────────────────────────────────────────────────
+
+async function findVendorContactId(name: string): Promise<string | null> {
+  const contactName = name.trim();
+  if (contactName.length < 2) return null;
+  const res = await zohoBooksClient.get<ZohoContactListResponse>(
+    `/contacts?contact_type=vendor&search_text=${encodeURIComponent(contactName)}`,
+  );
+  const contacts = res.contacts ?? [];
+  const exact = contacts.find((c) => c.contact_name?.trim().toLowerCase() === contactName.toLowerCase());
+  return exact?.contact_id ?? null;
+}
+
+/**
+ * Returns the Zoho vendor (supplier) contact ID. Creates a new vendor contact if
+ * one with the given name does not yet exist.
+ */
+export async function getOrCreateVendor(params: {
+  name: string;
+  email?: string;
+  phone?: string;
+}): Promise<ServiceResult<{ vendorId: string }>> {
+  try {
+    const contactName = params.name.trim();
+    if (contactName.length < 2) return { ok: false, error: "vendor_name_required" };
+
+    const existingId = await findVendorContactId(contactName);
+    if (existingId) return { ok: true, vendorId: existingId };
+
+    try {
+      const createRes = await zohoBooksClient.post<ZohoContactCreateResponse>("/contacts", {
+        contact_name: contactName,
+        contact_type: "vendor",
+        ...(params.email ? { email: params.email } : {}),
+        ...(params.phone ? { phone: params.phone } : {}),
+      });
+      return { ok: true, vendorId: createRes.contact.contact_id };
+    } catch (createErr) {
+      const msg = String(createErr instanceof Error ? createErr.message : createErr);
+      if (msg.includes("3062") || /already exists/i.test(msg)) {
+        const fallbackId = await findVendorContactId(contactName);
+        if (fallbackId) return { ok: true, vendorId: fallbackId };
+      }
+      throw createErr;
+    }
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
+// ─── Expenses ─────────────────────────────────────────────────────────────────
+
+export type CreateZohoExpenseParams = {
+  accountId: string;
+  date: string;
+  amountZar: number;
+  vendorId?: string;
+  description?: string;
+  referenceNumber?: string;
+  currencyCode?: string;
+};
+
+export async function createZohoExpense(
+  params: CreateZohoExpenseParams,
+): Promise<ServiceResult<{ expenseId: string }>> {
+  try {
+    const res = await zohoBooksClient.post<ZohoExpenseCreateResponse>("/expenses", {
+      account_id: params.accountId,
+      date: params.date,
+      amount: params.amountZar,
+      ...(params.vendorId ? { vendor_id: params.vendorId } : {}),
+      ...(params.description ? { description: params.description } : {}),
+      ...(params.referenceNumber ? { reference_number: params.referenceNumber } : {}),
+      currency_code: params.currencyCode ?? "ZAR",
+    });
+    return { ok: true, expenseId: res.expense.expense_id };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
+// ─── Chart of accounts / bank balances ────────────────────────────────────────
+
+export async function listZohoExpenseAccounts(): Promise<
+  ServiceResult<{ accounts: Array<{ accountId: string; accountName: string }> }>
+> {
+  try {
+    const res = await zohoBooksClient.get<ZohoChartAccountsResponse>(
+      "/chartofaccounts?filter_by=AccountType.Expense",
+    );
+    const accounts = (res.chartofaccounts ?? []).map((a) => ({
+      accountId: a.account_id,
+      accountName: a.account_name,
+    }));
+    return { ok: true, accounts };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
+export async function getZohoBankBalances(): Promise<
+  ServiceResult<{ cashInBankCents: number; pettyCashCents: number }>
+> {
+  try {
+    const res = await zohoBooksClient.get<ZohoBankAccountsResponse>("/bankaccounts");
+    let cashInBank = 0;
+    let pettyCash = 0;
+    for (const acct of res.bankaccounts ?? []) {
+      const bal = Math.round((acct.balance ?? 0) * 100);
+      const name = (acct.account_name ?? "").toLowerCase();
+      if (name.includes("petty") || acct.account_type === "cash") {
+        pettyCash += bal;
+      } else {
+        cashInBank += bal;
+      }
+    }
+    return { ok: true, cashInBankCents: cashInBank, pettyCashCents: pettyCash };
   } catch (err) {
     return { ok: false, error: String(err instanceof Error ? err.message : err) };
   }

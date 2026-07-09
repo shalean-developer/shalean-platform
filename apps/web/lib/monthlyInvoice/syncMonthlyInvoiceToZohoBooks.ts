@@ -196,6 +196,21 @@ export async function syncMonthlyInvoiceToZohoBooks(
 
   if (upErr) return { ok: false, error: upErr.message };
 
+  const { upsertInvoiceSyncMetadata } = await import("@/lib/accounting/syncInvoiceMetadata");
+  const { getZohoInvoice } = await import("@/lib/zoho/zohoBooksService");
+  const details = await getZohoInvoice(zohoResult.zohoInvoiceId);
+  await upsertInvoiceSyncMetadata(admin, {
+    entityType: "monthly_invoice",
+    entityId: params.invoiceId,
+    zohoInvoiceId: zohoResult.zohoInvoiceId,
+    zohoInvoiceNumber: zohoResult.invoiceNumber,
+    zohoCustomerId: details.ok ? details.customerId : null,
+    invoiceStatus: details.ok ? details.status : "draft",
+    invoiceTotalCents: details.ok ? details.totalCents : null,
+    taxAmountCents: details.ok ? details.taxCents : null,
+    outstandingBalanceCents: details.ok ? details.balanceCents : null,
+  });
+
   return {
     ok: true,
     zohoInvoiceId: zohoResult.zohoInvoiceId,

@@ -120,6 +120,8 @@ export async function approveExpenseWorkflow(
   void loadExpenseNotifyContext(admin, expenseId).then((ctx) => {
     if (ctx) void notifyExpenseApproved(admin, ctx, email);
   });
+  const { enqueueAccountingSync } = await import("@/lib/accounting/accountingSyncQueue");
+  void enqueueAccountingSync(admin, { entityType: "expense", entityId: expenseId });
   return { ok: true, status: "approved", approval_stage: "complete" };
 }
 

@@ -37,6 +37,66 @@ export type ZohoInvoice = {
   status: string;
   total: number;
   balance: number;
+  customer_id?: string;
+  tax_total?: number;
+  currency_code?: string;
+};
+
+export type ZohoVendorContact = {
+  contact_id: string;
+  contact_name: string;
+  email?: string;
+};
+
+export type ZohoExpenseInput = {
+  account_id: string;
+  date: string;
+  amount: number;
+  vendor_id?: string;
+  description?: string;
+  reference_number?: string;
+  currency_code?: string;
+  is_billable?: boolean;
+};
+
+export type ZohoExpense = {
+  expense_id: string;
+  account_id: string;
+  date: string;
+  amount: number;
+  status: string;
+};
+
+export type ZohoExpenseCreateResponse = {
+  code: number;
+  message: string;
+  expense: ZohoExpense;
+};
+
+export type ZohoBankAccount = {
+  account_id: string;
+  account_name: string;
+  account_type: string;
+  balance: number;
+  currency_code?: string;
+};
+
+export type ZohoBankAccountsResponse = {
+  code: number;
+  message: string;
+  bankaccounts: ZohoBankAccount[];
+};
+
+export type ZohoChartAccount = {
+  account_id: string;
+  account_name: string;
+  account_type: string;
+};
+
+export type ZohoChartAccountsResponse = {
+  code: number;
+  message: string;
+  chartofaccounts: ZohoChartAccount[];
 };
 
 export type ZohoPaymentInput = {

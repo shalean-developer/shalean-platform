@@ -5,7 +5,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { createZohoInvoice, markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
+import { createZohoInvoice, getZohoInvoice, markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
+import { upsertInvoiceSyncMetadata } from "@/lib/accounting/syncInvoiceMetadata";
 import { resolveZohoCustomerContactForBooking } from "@/lib/zoho/resolveZohoCustomerContact";
 import { provisionV2RecurringPlan } from "@/lib/recurring/provisionV2RecurringPlan";
 import { preferredCleanerIdsFromSnapshot } from "@/lib/booking/persistPreferredCleaners";
@@ -173,6 +174,20 @@ export async function syncPaidBookingSideEffects(
               zoho_invoice_number: zohoInvoiceRes.invoiceNumber,
             })
             .eq("id", bookingId);
+
+          const details = await getZohoInvoice(zohoInvoiceRes.zohoInvoiceId);
+          await upsertInvoiceSyncMetadata(admin, {
+            entityType: "booking",
+            entityId: bookingId,
+            zohoInvoiceId: zohoInvoiceRes.zohoInvoiceId,
+            zohoInvoiceNumber: zohoInvoiceRes.invoiceNumber,
+            bookingId,
+            zohoCustomerId: details.ok ? details.customerId : null,
+            invoiceStatus: details.ok ? details.status : "paid",
+            invoiceTotalCents: details.ok ? details.totalCents : Math.round(totalZar * 100),
+            taxAmountCents: details.ok ? details.taxCents : null,
+            outstandingBalanceCents: details.ok ? details.balanceCents : 0,
+          });
         } else {
           await logSystemEvent({
             level: "warn",

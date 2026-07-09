@@ -104,6 +104,7 @@ export const OFFICE_NAV_MODULES: NavModule[] = [
       { label: "Pricing", href: "/office/pricing", icon: Tag },
       { label: "Monthly invoices", href: "/office/invoices", icon: FileText },
       { label: "Zoho sync", href: "/office/billing", icon: Receipt },
+      { label: "Zoho integration", href: "/office/zoho-integration", icon: Settings },
     ],
   },
   {

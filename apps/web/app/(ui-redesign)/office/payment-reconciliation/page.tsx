@@ -42,6 +42,10 @@ const ISSUE_LABELS: Record<string, string> = {
   entity_amount_mismatch: "Source amount mismatch",
   reference_mismatch: "Reference mismatch",
   missing_payment_transaction: "Missing payment record",
+  missing_zoho_expense: "Missing Zoho expense",
+  missing_zoho_payment: "Missing Zoho payment",
+  zoho_expense_sync_failed: "Zoho expense sync failed",
+  zoho_payment_sync_failed: "Zoho payment sync failed",
 };
 
 const ENTITY_LABELS: Record<string, string> = {
@@ -111,7 +115,9 @@ export default function PaymentReconciliationPage() {
   const issueCount =
     (summary?.missing_expense_count ?? 0) +
     (summary?.amount_mismatch_count ?? 0) +
-    (summary?.missing_payment_record_count ?? 0);
+    (summary?.missing_payment_record_count ?? 0) +
+    (summary?.failed_zoho_sync_count ?? 0) +
+    (summary?.missing_zoho_payment_count ?? 0);
 
   const missingBy = summary?.missing_by_entity;
 
@@ -187,6 +193,20 @@ export default function PaymentReconciliationPage() {
           value={String(issueCount)}
           loading={loading}
           status={issueCount > 0 ? "negative" : "positive"}
+        />
+        <FinanceKpiCard
+          icon={AlertTriangle}
+          label="Zoho sync failures"
+          value={String(summary?.failed_zoho_sync_count ?? 0)}
+          loading={loading}
+          status={(summary?.failed_zoho_sync_count ?? 0) > 0 ? "negative" : "positive"}
+        />
+        <FinanceKpiCard
+          icon={AlertTriangle}
+          label="Missing Zoho payments"
+          value={String(summary?.missing_zoho_payment_count ?? 0)}
+          loading={loading}
+          status={(summary?.missing_zoho_payment_count ?? 0) > 0 ? "warning" : "positive"}
         />
         {missingBy ? (
           <>

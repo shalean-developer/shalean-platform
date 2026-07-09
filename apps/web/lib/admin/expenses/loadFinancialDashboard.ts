@@ -14,6 +14,8 @@ import {
 } from "@/lib/admin/expenses/loadExpenses";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { loadPaymentTransactionMetrics } from "@/lib/payments/loadPaymentTransactionMetrics";
+import { isZohoConfigured } from "@/lib/accounting/zohoIntegrationSettings";
+import { getZohoBankBalances } from "@/lib/zoho/zohoBooksService";
 
 export type FinancialDashboardPayload = {
   period: { from: string; to: string };
@@ -268,6 +270,14 @@ export async function loadFinancialDashboard(
     const bal = a.balance_cents ?? 0;
     if (a.account_type === "petty_cash") pettyCash += bal;
     else if (a.account_type === "bank" || a.account_type === "paystack") cashInBank += bal;
+  }
+
+  if (isZohoConfigured()) {
+    const zohoBalances = await getZohoBankBalances();
+    if (zohoBalances.ok) {
+      cashInBank = zohoBalances.cashInBankCents;
+      pettyCash = zohoBalances.pettyCashCents;
+    }
   }
 
   const outstandingCustomer = (pendingInvoices ?? []).reduce((s, r) => s + (r.balance_cents ?? 0), 0);

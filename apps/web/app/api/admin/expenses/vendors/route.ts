@@ -81,5 +81,9 @@ export async function POST(request: Request) {
 
   const { data, error } = await admin.from("expense_vendors").insert(row).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const { enqueueAccountingSync } = await import("@/lib/accounting/accountingSyncQueue");
+  void enqueueAccountingSync(admin, { entityType: "vendor", entityId: data.id });
+
   return NextResponse.json({ ok: true, id: data.id });
 }
