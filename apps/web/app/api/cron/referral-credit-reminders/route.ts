@@ -5,7 +5,7 @@ import { processReferralCreditExpiryReminders } from "@/lib/referrals/referralRe
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Daily cron — remind referrers before referral cleaning credit expires. */
+/** Daily cron — remind referrers before referral cleaning credit expires (08:00 SAST / 06:00 UTC). */
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");

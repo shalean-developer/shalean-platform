@@ -5,7 +5,7 @@ import { processMonthlyReferralCampaign } from "@/lib/referrals/referralCampaign
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Monthly referral email cron — call on 1st of each month. */
+/** Monthly referral email cron — 1st of each month (09:00 SAST / 07:00 UTC). Campaign must be enabled in admin. */
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET;
   const auth = request.headers.get("authorization");
