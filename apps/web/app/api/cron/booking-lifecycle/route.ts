@@ -9,7 +9,7 @@ import { evaluateRebookEligibility } from "@/lib/booking/lifecycleEmailGuards";
 import { processLifecycleJob, type LifecycleJobRow } from "@/lib/booking/processLifecycleJob";
 import { evaluateLifecycleEmailAlerts } from "@/lib/admin/lifecycleEmailMonitoring";
 import { logSystemEvent, reportOperationalIssue, logCronRun } from "@/lib/logging/systemLog";
-import { completeCleanerReferralOnFirstJob } from "@/lib/referrals/server";
+import { completeCleanerReferralOnFirstJob, processCustomerReferralAfterFirstPaidBooking } from "@/lib/referrals/server";
 import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -131,6 +131,13 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
     }
 
     void ensureCleanerEarningsLedgerRow({ admin, bookingId: id });
+
+    void processCustomerReferralAfterFirstPaidBooking({
+      admin,
+      bookingUserId: uid,
+      customerEmail: rawEmail,
+      bookingId: id,
+    });
 
     if (isBookingCompletedRouterEnabled()) {
       const event = buildBookingEvent({

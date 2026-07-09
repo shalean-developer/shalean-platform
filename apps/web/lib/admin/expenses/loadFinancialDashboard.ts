@@ -14,6 +14,7 @@ import {
 } from "@/lib/admin/expenses/loadExpenses";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { loadPaymentTransactionMetrics } from "@/lib/payments/loadPaymentTransactionMetrics";
+import { loadReferralPromoCostTotals } from "@/lib/admin/referrals/loadReferralPromoCosts";
 import { isZohoConfigured } from "@/lib/accounting/zohoIntegrationSettings";
 import { getZohoBankBalances } from "@/lib/zoho/zohoBooksService";
 
@@ -126,25 +127,31 @@ export async function loadFinancialDashboard(
   const report = await loadOfficePayoutPeriodReport(admin, from, to);
   const operatingExpenses = await sumApprovedExpensesInRange(admin, from, to, branchId);
   const gatewayPayments = await loadPaymentTransactionMetrics(admin, from, to, { branchId });
+  const promoCosts = await loadReferralPromoCostTotals(admin, from, to, branchId);
 
   const profit = computeProfitBreakdown(
     report.totals.total_revenue_cents,
     report.totals.earned_cents,
     operatingExpenses,
+    promoCosts.referral_discount_cost_cents,
+    promoCosts.cleaning_credit_cost_cents,
   );
 
   const visitCount = report.totals.visit_count ?? 0;
   const avgRevenuePerBooking = visitCount > 0 ? Math.round(profit.customer_revenue_cents / visitCount) : 0;
   const avgExpensePerBooking = visitCount > 0 ? Math.round(operatingExpenses / visitCount) : 0;
-  const avgProfitPerBooking = visitCount > 0 ? Math.round(profit.net_profit_cents / visitCount) : 0;
+  const avgProfitPerBooking = visitCount > 0 ? Math.round(profit.net_profit_after_promo_cents / visitCount) : 0;
 
   const prev = prevPeriod(from, to);
   const prevReport = await loadOfficePayoutPeriodReport(admin, prev.from, prev.to);
   const prevExpenses = await sumApprovedExpensesInRange(admin, prev.from, prev.to, branchId);
+  const prevPromo = await loadReferralPromoCostTotals(admin, prev.from, prev.to, branchId);
   const prevProfit = computeProfitBreakdown(
     prevReport.totals.total_revenue_cents,
     prevReport.totals.earned_cents,
     prevExpenses,
+    prevPromo.referral_discount_cost_cents,
+    prevPromo.cleaning_credit_cost_cents,
   );
 
   const expensesByCategory = await loadExpensesByCategory(admin, from, to, branchId);
@@ -294,7 +301,7 @@ export async function loadFinancialDashboard(
       avg_profit_per_booking_cents: avgProfitPerBooking,
       revenue_growth_percent: growthPercent(profit.customer_revenue_cents, prevProfit.customer_revenue_cents),
       expense_growth_percent: growthPercent(operatingExpenses, prevExpenses),
-      profit_growth_percent: growthPercent(profit.net_profit_cents, prevProfit.net_profit_cents),
+      profit_growth_percent: growthPercent(profit.net_profit_after_promo_cents, prevProfit.net_profit_after_promo_cents),
     },
     monthly_trend: monthlyTrend,
     expenses_by_category: expensesByCategory,

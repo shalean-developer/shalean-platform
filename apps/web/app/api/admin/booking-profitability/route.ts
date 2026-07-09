@@ -6,6 +6,7 @@ import {
   resolveBookingGatewayProcessingFeeCents,
   sumApprovedBookingOperatingExpenses,
 } from "@/lib/payments/bookingPaymentFees";
+import { loadReferralPromoCostsByBookingIds } from "@/lib/admin/referrals/loadReferralPromoCosts";
 import { requireFinanceApi } from "@/lib/auth/requireFinanceApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -50,6 +51,9 @@ export async function GET(request: Request) {
   const { data: bookings, error, count } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const bookingIds = (bookings ?? []).map((b) => String(b.id));
+  const promoByBooking = await loadReferralPromoCostsByBookingIds(admin, bookingIds);
+
   const items = await Promise.all(
     (bookings ?? []).map(async (b) => {
       const customerPayment = bookingCustomerRevenueCents(b);
@@ -60,12 +64,17 @@ export async function GET(request: Request) {
       const bookingExpenses = await sumApprovedBookingOperatingExpenses(admin, b.id);
       const gatewayFees = await resolveBookingGatewayProcessingFeeCents(admin, b.id);
       const platformFees = Math.max(0, Math.round(Number(b.service_fee_cents) ?? 0));
+      const promo = promoByBooking.get(String(b.id));
+      const referralDiscount = promo?.referral_discount_cents ?? 0;
+      const cleaningCredit = promo?.cleaning_credit_cents ?? 0;
       const profit = computeBookingProfit(
         customerPayment,
         cleanerPayment,
         bookingExpenses,
         gatewayFees,
         platformFees,
+        referralDiscount,
+        cleaningCredit,
       );
       const city = b.cities as { name?: string } | null;
       const serviceLabel =

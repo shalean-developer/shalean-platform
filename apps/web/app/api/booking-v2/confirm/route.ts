@@ -389,12 +389,17 @@ export async function POST(request: Request) {
 
   const referralCodeInput =
     typeof data.referralCode === "string" ? data.referralCode.trim().toUpperCase() : "";
+  const preDiscountTotalZar = Math.round(
+    Number(serverBreakdown.estimated_total ?? serverBreakdown.total ?? clientTotal),
+  );
   const referralValidation = referralCodeInput
     ? await validateReferralForCheckout({
         admin: supabase,
         code: referralCodeInput,
         userId,
         customerEmail: email ?? "",
+        bookingTotalZar: preDiscountTotalZar,
+        serviceSlug: data.serviceSlug,
       })
     : ({ valid: false as const } satisfies { valid: false });
   const referralDiscountZar = referralValidation.valid ? referralValidation.discountZar : 0;

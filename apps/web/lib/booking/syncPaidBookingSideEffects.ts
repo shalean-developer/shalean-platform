@@ -7,6 +7,7 @@ import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsFo
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { createZohoInvoice, getZohoInvoice, markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 import { upsertInvoiceSyncMetadata } from "@/lib/accounting/syncInvoiceMetadata";
+import { buildZohoLineItemsWithReferralPromos } from "@/lib/referrals/zohoLineItems";
 import { resolveZohoCustomerContactForBooking } from "@/lib/zoho/resolveZohoCustomerContact";
 import { provisionV2RecurringPlan } from "@/lib/recurring/provisionV2RecurringPlan";
 import { preferredCleanerIdsFromSnapshot } from "@/lib/booking/persistPreferredCleaners";
@@ -138,6 +139,14 @@ export async function syncPaidBookingSideEffects(
         const contact = contactRes.contact;
         const today = todayYmdJhb();
         const locationLabel = [row.location, row.suburb].filter(Boolean).join(", ");
+        const lineItems = buildZohoLineItemsWithReferralPromos({
+          service: row.service,
+          totalPaidZar: totalZar,
+          bookingSnapshot: row.booking_snapshot,
+        }).map((item) => ({
+          ...item,
+          description: item.description ?? ([row.date, locationLabel].filter(Boolean).join(" · ") || `Booking ref: ${reference}`),
+        }));
         const zohoInvoiceRes = await createZohoInvoice({
           referenceId: bookingId,
           orderKind: "booking",
@@ -146,14 +155,7 @@ export async function syncPaidBookingSideEffects(
           customerPhone: contact.phone,
           invoiceDate: today,
           dueDate: today,
-          lineItems: [
-            {
-              name: row.service ?? "Shalean Cleaning Service",
-              description: [row.date, locationLabel].filter(Boolean).join(" · ") || `Booking ref: ${reference}`,
-              rate: totalZar,
-              quantity: 1,
-            },
-          ],
+          lineItems,
           notes: `Paystack ref: ${reference}`,
           currencyCode: "ZAR",
         });

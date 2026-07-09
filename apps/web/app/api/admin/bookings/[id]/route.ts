@@ -38,6 +38,7 @@ import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
 import { assertAdminBookingDeleteSafe } from "@/lib/admin/adminBookingDeleteSafety";
+import { maybeProcessReferralClawbackOnBookingChange } from "@/lib/referrals/clawback";
 import { assertAdminBookingPatchDoesNotMutateAssignmentFields } from "@/lib/admin/adminBookingPatchAssignmentGuard";
 import { buildAdminWarningPayload } from "@/lib/admin/adminWarningPayload";
 import { buildAdminEarningsDisplayForBooking } from "@/lib/admin/adminBookingEarningsDisplay";
@@ -623,6 +624,13 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       ? await applyAdminBookingLifecycleStatusOverride({ admin, bookingId: id, updates })
       : await admin.from("bookings").update(updates).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  void maybeProcessReferralClawbackOnBookingChange({
+    admin,
+    bookingId: id,
+    previousStatus: beforeStatus,
+    newStatus: typeof updates.status === "string" ? updates.status : undefined,
+  });
 
   if (
     updates.status === "completed" &&

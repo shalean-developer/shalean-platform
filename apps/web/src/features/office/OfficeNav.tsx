@@ -100,6 +100,8 @@ export const OFFICE_NAV_MODULES: NavModule[] = [
       { label: "Reports", href: "/office/expense-reports", icon: FileText },
       { label: "Payment reconciliation", href: "/office/payment-reconciliation", icon: Scale },
       { label: "Booking profit", href: "/office/booking-profitability", icon: DollarSign },
+      { label: "Referral finance", href: "/office/referral-finance", icon: HeartHandshake },
+      { label: "Referral reconciliation", href: "/office/referral-reconciliation", icon: Scale },
       { label: "Payouts", href: "/office/payouts", icon: Wallet },
       { label: "Pricing", href: "/office/pricing", icon: Tag },
       { label: "Monthly invoices", href: "/office/invoices", icon: FileText },

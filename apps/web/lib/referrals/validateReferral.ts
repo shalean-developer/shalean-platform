@@ -8,8 +8,12 @@ import {
   emitReferralCheckoutRedemptionEvents,
   type ReferralRedemptionSnapshot,
 } from "@/lib/referrals/referralCheckoutEvents";
-import { countPaidBookingsForCustomer, resolveReferrerFromCode } from "@/lib/referrals/server";
+import { countQualifyingBookingsForCustomer, resolveReferrerFromCode } from "@/lib/referrals/server";
 import { getReferralProgramSettingsCached } from "@/lib/referrals/settings";
+import {
+  isServiceEligibleForReferral,
+  meetsMinBookingValue,
+} from "@/lib/referrals/programEnforcement";
 
 const DEFAULT_CHECKOUT_DISCOUNT_ZAR = 50;
 
@@ -83,6 +87,10 @@ export async function validateReferralForCheckout(params: {
   code: string;
   userId?: string | null;
   customerEmail: string;
+  /** Pre-discount booking total in ZAR — required when min_booking_value_zar > 0. */
+  bookingTotalZar?: number | null;
+  /** Service slug for eligible_service_categories check. */
+  serviceSlug?: string | null;
 }): Promise<ValidateReferralForCheckoutResult> {
   const normalized = params.code.trim().toUpperCase();
   if (!normalized) return { valid: false };
@@ -96,7 +104,7 @@ export async function validateReferralForCheckout(params: {
   }
 
   const email = normalizeEmail(params.customerEmail || "");
-  const priorPaid = await countPaidBookingsForCustomer(params.admin, uid, email);
+  const priorPaid = await countQualifyingBookingsForCustomer(params.admin, uid, email, "paid");
   if (priorPaid > 0) {
     return { valid: false };
   }
@@ -124,6 +132,15 @@ export async function validateReferralForCheckout(params: {
 
   const settings = await getReferralProgramSettingsCached(params.admin);
   if (!settings.enabled) return { valid: false };
+
+  if (!isServiceEligibleForReferral(params.serviceSlug, settings)) {
+    return { valid: false };
+  }
+
+  const bookingTotal = Number(params.bookingTotalZar ?? 0);
+  if (!meetsMinBookingValue(bookingTotal, settings)) {
+    return { valid: false };
+  }
 
   return {
     valid: true,

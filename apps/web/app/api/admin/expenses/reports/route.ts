@@ -9,6 +9,7 @@ import {
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { sumApprovedExpensesInRange } from "@/lib/admin/expenses/loadExpenses";
 import { loadPaymentTransactionMetrics } from "@/lib/payments/loadPaymentTransactionMetrics";
+import { loadReferralPromoCostTotals } from "@/lib/admin/referrals/loadReferralPromoCosts";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -33,16 +34,20 @@ export async function GET(request: Request) {
       case "profit-loss": {
         const report = await loadOfficePayoutPeriodReport(admin, f, t);
         const expenses = await sumApprovedExpensesInRange(admin, f, t, branchId);
+        const promo = await loadReferralPromoCostTotals(admin, f, t, branchId);
         const gatewayPayments = await loadPaymentTransactionMetrics(admin, f, t, { branchId });
         const profit = computeProfitBreakdown(
           report.totals.total_revenue_cents,
           report.totals.earned_cents,
           expenses,
+          promo.referral_discount_cost_cents,
+          promo.cleaning_credit_cost_cents,
         );
         return NextResponse.json({
           type: reportType,
           period: { from: f, to: t },
           profit,
+          promo_costs: promo,
           gateway_payments: gatewayPayments,
           visit_count: report.totals.visit_count,
         });

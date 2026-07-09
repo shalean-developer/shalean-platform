@@ -7,6 +7,11 @@ import {
   emitCustomerReferralLifecycleRewardEvents,
 } from "@/lib/referrals/referralLifecycleEvents";
 import { creditCleaningCredit } from "@/lib/referrals/credits";
+import { countQualifyingBookingsForCustomer } from "@/lib/referrals/eligibility";
+import {
+  referrerAtMaxRewards,
+  referrerHasFinalizedReferralForContact,
+} from "@/lib/referrals/programEnforcement";
 import { getReferralProgramSettingsCached } from "@/lib/referrals/settings";
 
 function randDigits(len: number): string {
@@ -140,6 +145,12 @@ export async function createPendingCustomerReferral(params: {
   }
 
   const settings = await getReferralProgramSettingsCached(params.admin);
+  if (!settings.allowMultipleReferrals) {
+    const finalized = await referrerHasFinalizedReferralForContact(params.admin, email);
+    if (finalized) return;
+  }
+  if (await referrerAtMaxRewards(params.admin, referrer.referrerId, settings)) return;
+
   const { error: insErr } = await params.admin.from("referrals").insert({
     referrer_id: referrer.referrerId,
     referrer_type: "customer",
@@ -164,33 +175,8 @@ export async function createPendingCustomerReferral(params: {
   });
 }
 
-/** Count non–pending-payment bookings for referral eligibility (referee first booking, etc.). */
-export async function countPaidBookingsForCustomer(
-  admin: SupabaseClient,
-  bookingUserId: string | null,
-  customerEmail: string,
-): Promise<number> {
-  const email = normalizeEmail(customerEmail || "");
-  if (bookingUserId) {
-    const { count, error } = await admin
-      .from("bookings")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", bookingUserId)
-      .neq("status", "pending_payment")
-      .neq("status", "payment_expired");
-    if (error) return 0;
-    return count ?? 0;
-  }
-  if (!email) return 0;
-  const { count, error } = await admin
-    .from("bookings")
-    .select("id", { count: "exact", head: true })
-    .eq("customer_email", email)
-    .neq("status", "pending_payment")
-    .neq("status", "payment_expired");
-  if (error) return 0;
-  return count ?? 0;
-}
+/** Count qualifying bookings for referral eligibility (excludes cancelled/failed/refunded). */
+export { countQualifyingBookingsForCustomer, countPaidBookingsForCustomer } from "@/lib/referrals/eligibility";
 
 async function referrerRewardAbuseBlocked(admin: SupabaseClient, referrerId: string): Promise<boolean> {
   const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
@@ -219,8 +205,15 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
   const email = normalizeEmail(params.customerEmail || "");
   if (!email) return;
 
-  const paidCount = await countPaidBookingsForCustomer(params.admin, params.bookingUserId, email);
-  if (paidCount !== 1) return;
+  const programSettings = await getReferralProgramSettingsCached(params.admin);
+  const countMode = programSettings.rewardOn === "first_completed_booking" ? "completed" : "paid";
+  const qualifyingCount = await countQualifyingBookingsForCustomer(
+    params.admin,
+    params.bookingUserId,
+    email,
+    countMode,
+  );
+  if (qualifyingCount !== 1) return;
 
   const { data: pending } = await params.admin
     .from("referrals")
@@ -253,7 +246,14 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
     return;
   }
 
-  const programSettings = await getReferralProgramSettingsCached(params.admin);
+  if (await referrerAtMaxRewards(params.admin, referrerId, programSettings)) {
+    await reportOperationalIssue("warn", "referrals/max_rewards", "Referrer at max rewards cap", {
+      referrerId,
+      bookingId: params.bookingId ?? null,
+    });
+    return;
+  }
+
   const reward = Number((pending as { reward_amount?: number }).reward_amount ?? programSettings.rewardAmountZar);
   const now = new Date().toISOString();
   const creditExpiresAt =
