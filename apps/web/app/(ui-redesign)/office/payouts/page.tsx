@@ -239,6 +239,18 @@ export default function PayoutsPage() {
     { params: reportParams },
   );
 
+  const { data: profitData } = useAdminData<{
+    profit: {
+      customer_revenue_cents: number;
+      cleaner_payouts_cents: number;
+      gross_margin_cents: number;
+      operating_expenses_cents: number;
+      net_profit_cents: number;
+      gross_margin_percent: number | null;
+      net_profit_percent: number | null;
+    };
+  }>("/api/admin/financial-dashboard", { params: reportParams });
+
   useEffect(() => {
     if (!loading && data) setLastRefreshedAt(new Date());
   }, [loading, data]);
@@ -246,6 +258,7 @@ export default function PayoutsPage() {
   const payouts = data?.payouts ?? [];
   const cleaners = data?.cleaners ?? [];
   const totals = data?.totals;
+  const profit = profitData?.profit;
   const range = data?.range ?? { from: fromDate, to: toDate };
 
   useEffect(() => {
@@ -812,27 +825,48 @@ export default function PayoutsPage() {
 
       <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-slate-100 px-5 py-3.5">
-          <h2 className="text-sm font-semibold text-slate-800">Earnings split</h2>
+          <h2 className="text-sm font-semibold text-slate-800">Profit breakdown</h2>
           <p className="text-xs text-slate-500">
             {loading ? "Loading…" : `${totals?.visit_count ?? 0} completed visit${(totals?.visit_count ?? 0) === 1 ? "" : "s"} in period`}
           </p>
         </div>
         <div className="p-5">
-          <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
+          <div className="mb-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Total earnings</p>
-              <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">
-                {loading ? "—" : formatZar(totals?.total_revenue_cents ?? 0)}
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Customer revenue</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+                {loading ? "—" : formatZar(profit?.customer_revenue_cents ?? totals?.total_revenue_cents ?? 0)}
               </p>
-              <p className="mt-1 text-xs text-slate-500">Customer revenue on completed visits</p>
             </div>
-            <div className="rounded-lg bg-emerald-50 px-4 py-3 text-right">
-              <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Company earnings</p>
-              <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-800">
-                {loading ? "—" : formatZar(totals?.company_earnings_cents ?? 0)}
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-blue-600">Cleaner payouts</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-blue-800">
+                {loading ? "—" : formatZar(profit?.cleaner_payouts_cents ?? totals?.earned_cents ?? 0)}
               </p>
-              {!loading && totals?.margin_percent != null ? (
-                <p className="mt-0.5 text-xs text-emerald-700">{totals.margin_percent}% margin</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-emerald-700">Gross margin</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-800">
+                {loading ? "—" : formatZar(profit?.gross_margin_cents ?? totals?.company_earnings_cents ?? 0)}
+              </p>
+              {!loading && (profit?.gross_margin_percent ?? totals?.margin_percent) != null ? (
+                <p className="mt-0.5 text-xs text-emerald-700">{profit?.gross_margin_percent ?? totals?.margin_percent}% margin</p>
+              ) : null}
+            </div>
+            <div>
+              <p className="text-xs font-medium uppercase tracking-wide text-amber-700">Operating expenses</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-amber-800">
+                {loading ? "—" : formatZar(profit?.operating_expenses_cents ?? 0)}
+              </p>
+              <p className="mt-0.5 text-xs text-amber-600">Approved expenses only</p>
+            </div>
+            <div className="rounded-lg bg-violet-50 px-3 py-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-violet-700">Net profit</p>
+              <p className="mt-1 text-2xl font-bold tabular-nums text-violet-900">
+                {loading ? "—" : formatZar(profit?.net_profit_cents ?? 0)}
+              </p>
+              {!loading && profit?.net_profit_percent != null ? (
+                <p className="mt-0.5 text-xs text-violet-700">{profit.net_profit_percent}% of revenue</p>
               ) : null}
             </div>
           </div>
@@ -840,26 +874,27 @@ export default function PayoutsPage() {
           {!loading && (totals?.total_revenue_cents ?? 0) > 0 ? (
             <>
               {(() => {
-                const revenue = totals?.total_revenue_cents ?? 0;
-                const company = totals?.company_earnings_cents ?? 0;
-                const cleaner = totals?.earned_cents ?? 0;
-                const companyWidth = Math.min(100, earningsSharePercent(company, revenue));
-                const cleanerWidth = Math.min(100 - companyWidth, earningsSharePercent(cleaner, revenue));
+                const revenue = profit?.customer_revenue_cents ?? totals?.total_revenue_cents ?? 0;
+                const cleaner = profit?.cleaner_payouts_cents ?? totals?.earned_cents ?? 0;
+                const gross = profit?.gross_margin_cents ?? totals?.company_earnings_cents ?? 0;
+                const expenses = profit?.operating_expenses_cents ?? 0;
+                const net = profit?.net_profit_cents ?? gross - expenses;
+                const cleanerWidth = Math.min(100, earningsSharePercent(cleaner, revenue));
+                const grossWidth = Math.min(100 - cleanerWidth, earningsSharePercent(gross, revenue));
+                const expenseWidth = Math.min(100 - cleanerWidth - grossWidth, earningsSharePercent(expenses, revenue));
                 return (
                   <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
-                    {company > 0 ? (
-                      <div
-                        className="h-full bg-emerald-500"
-                        style={{ width: `${companyWidth}%` }}
-                        title={`Company: ${formatZar(company)}`}
-                      />
-                    ) : null}
                     {cleaner > 0 ? (
-                      <div
-                        className="h-full bg-blue-500"
-                        style={{ width: `${cleanerWidth}%` }}
-                        title={`Cleaner payouts: ${formatZar(cleaner)}`}
-                      />
+                      <div className="h-full bg-blue-500" style={{ width: `${cleanerWidth}%` }} title={`Cleaner payouts: ${formatZar(cleaner)}`} />
+                    ) : null}
+                    {gross > 0 ? (
+                      <div className="h-full bg-emerald-500" style={{ width: `${grossWidth}%` }} title={`Gross margin: ${formatZar(gross)}`} />
+                    ) : null}
+                    {expenses > 0 ? (
+                      <div className="h-full bg-amber-500" style={{ width: `${expenseWidth}%` }} title={`Operating expenses: ${formatZar(expenses)}`} />
+                    ) : null}
+                    {net > 0 ? (
+                      <div className="h-full bg-violet-500" style={{ width: `${Math.max(0, 100 - cleanerWidth - grossWidth - expenseWidth)}%` }} title={`Net profit: ${formatZar(net)}`} />
                     ) : null}
                   </div>
                 );
@@ -867,15 +902,10 @@ export default function PayoutsPage() {
               <div className="mt-4 space-y-2.5">
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <div className="flex min-w-0 items-center gap-2">
-                    <Building2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                    <span className="text-slate-600">Company earnings</span>
+                    <DollarSign className="h-4 w-4 shrink-0 text-slate-600" />
+                    <span className="text-slate-600">Customer revenue</span>
                   </div>
-                  <div className="flex shrink-0 items-center gap-3 tabular-nums">
-                    <span className="font-semibold text-slate-900">{formatZar(totals?.company_earnings_cents ?? 0)}</span>
-                    <span className="w-10 text-right text-xs text-slate-400">
-                      {earningsSharePercent(totals?.company_earnings_cents ?? 0, totals?.total_revenue_cents ?? 0)}%
-                    </span>
-                  </div>
+                  <span className="font-semibold tabular-nums text-slate-900">{formatZar(profit?.customer_revenue_cents ?? totals?.total_revenue_cents ?? 0)}</span>
                 </div>
                 <div className="flex items-center justify-between gap-3 text-sm">
                   <div className="flex min-w-0 items-center gap-2">
@@ -883,11 +913,39 @@ export default function PayoutsPage() {
                     <span className="text-slate-600">Cleaner payouts</span>
                   </div>
                   <div className="flex shrink-0 items-center gap-3 tabular-nums">
-                    <span className="font-semibold text-slate-900">{formatZar(totals?.earned_cents ?? 0)}</span>
+                    <span className="font-semibold text-slate-900">{formatZar(profit?.cleaner_payouts_cents ?? totals?.earned_cents ?? 0)}</span>
                     <span className="w-10 text-right text-xs text-slate-400">
-                      {earningsSharePercent(totals?.earned_cents ?? 0, totals?.total_revenue_cents ?? 0)}%
+                      {earningsSharePercent(profit?.cleaner_payouts_cents ?? totals?.earned_cents ?? 0, profit?.customer_revenue_cents ?? totals?.total_revenue_cents ?? 0)}%
                     </span>
                   </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Building2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                    <span className="text-slate-600">Gross margin</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3 tabular-nums">
+                    <span className="font-semibold text-slate-900">{formatZar(profit?.gross_margin_cents ?? totals?.company_earnings_cents ?? 0)}</span>
+                    <span className="w-10 text-right text-xs text-slate-400">
+                      {earningsSharePercent(profit?.gross_margin_cents ?? totals?.company_earnings_cents ?? 0, profit?.customer_revenue_cents ?? totals?.total_revenue_cents ?? 0)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <Wallet className="h-4 w-4 shrink-0 text-amber-600" />
+                    <span className="text-slate-600">Operating expenses</span>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-3 tabular-nums">
+                    <span className="font-semibold text-slate-900">{formatZar(profit?.operating_expenses_cents ?? 0)}</span>
+                    <span className="w-10 text-right text-xs text-slate-400">
+                      {earningsSharePercent(profit?.operating_expenses_cents ?? 0, profit?.customer_revenue_cents ?? totals?.total_revenue_cents ?? 0)}%
+                    </span>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between gap-3 border-t border-slate-100 pt-2 text-sm font-semibold">
+                  <span className="text-violet-800">Net profit</span>
+                  <span className="tabular-nums text-violet-900">{formatZar(profit?.net_profit_cents ?? 0)}</span>
                 </div>
               </div>
             </>

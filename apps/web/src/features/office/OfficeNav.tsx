@@ -86,6 +86,9 @@ export const OFFICE_NAV_MODULES: NavModule[] = [
     label: "Finance",
     icon: Wallet,
     children: [
+      { label: "Financial dashboard", href: "/office/financial-dashboard", icon: BarChart3 },
+      { label: "Expenses", href: "/office/expenses", icon: Receipt },
+      { label: "Reports", href: "/office/expense-reports", icon: FileText },
       { label: "Payouts", href: "/office/payouts", icon: Wallet },
       { label: "Pricing", href: "/office/pricing", icon: Tag },
       { label: "Monthly invoices", href: "/office/invoices", icon: FileText },

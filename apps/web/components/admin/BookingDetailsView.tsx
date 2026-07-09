@@ -831,6 +831,12 @@ export default function BookingDetailsView({
   const [error, setError] = useState<string | null>(null);
   const [fullBooking, setFullBooking] = useState<BookingDetails | null>(null);
   const [earningsDisplay, setEarningsDisplay] = useState<AdminEarningsDisplay | null>(null);
+  const [bookingProfit, setBookingProfit] = useState<{
+    customer_payment_cents: number;
+    cleaner_payment_cents: number;
+    booking_expenses_cents: number;
+    net_booking_profit_cents: number;
+  } | null>(null);
   const [cleaner, setCleaner] = useState<Cleaner | null>(null);
   /** From GET `selected_cleaner` — customer pick when not same row as assigned `cleaner`. */
   const [selectedCleaner, setSelectedCleaner] = useState<Cleaner | null>(null);
@@ -1151,6 +1157,28 @@ export default function BookingDetailsView({
     return () => {
       ac.abort();
       if (detailLoadAbortRef.current === ac) detailLoadAbortRef.current = null;
+    };
+  }, [bookingId, detailRefresh]);
+
+  useEffect(() => {
+    if (!bookingId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const token = await getAdminToken();
+        if (!token) return;
+        const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/expenses`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok || cancelled) return;
+        const json = (await res.json()) as { profit?: typeof bookingProfit };
+        if (!cancelled && json.profit) setBookingProfit(json.profit);
+      } catch {
+        /* non-fatal */
+      }
+    })();
+    return () => {
+      cancelled = true;
     };
   }, [bookingId, detailRefresh]);
 
@@ -3730,7 +3758,7 @@ export default function BookingDetailsView({
               <DetailRow label="Cleaner earnings (stored/projected)" value={`R ${cleanerTotalZar.toLocaleString("en-ZA")}`} />
             ) : null}
             {companyRevenueZar != null ? (
-              <DetailRow label="Company revenue" value={`R ${companyRevenueZar.toLocaleString("en-ZA")}`} />
+              <DetailRow label="Gross margin" value={`R ${companyRevenueZar.toLocaleString("en-ZA")}`} />
             ) : null}
           </DetailCard>
           <DetailCard title="Cleaner payout">
@@ -3747,7 +3775,7 @@ export default function BookingDetailsView({
                 <DetailRow label="Cleaner bonus" value={`R ${cleanerBonusZar.toLocaleString("en-ZA")}`} />
                 <DetailRow label="Total cleaner earnings" value={`R ${cleanerTotalZar.toLocaleString("en-ZA")}`} strong />
                 <DetailRow
-                  label="Company revenue"
+                  label="Gross margin"
                   value={companyRevenueZar == null ? "—" : `R ${companyRevenueZar.toLocaleString("en-ZA")}`}
                 />
                 <DetailRow
@@ -3793,6 +3821,30 @@ export default function BookingDetailsView({
               </>
             )}
           </DetailCard>
+          {bookingProfit ? (
+            <DetailCard title="Booking profit">
+              <DetailRow
+                label="Customer payment"
+                value={`R ${(bookingProfit.customer_payment_cents / 100).toLocaleString("en-ZA")}`}
+              />
+              <DetailRow
+                label="Cleaner payment"
+                value={`R ${(bookingProfit.cleaner_payment_cents / 100).toLocaleString("en-ZA")}`}
+              />
+              <DetailRow
+                label="Booking expenses"
+                value={`R ${(bookingProfit.booking_expenses_cents / 100).toLocaleString("en-ZA")}`}
+              />
+              <DetailRow
+                label="Net booking profit"
+                value={`R ${(bookingProfit.net_booking_profit_cents / 100).toLocaleString("en-ZA")}`}
+                strong
+              />
+              <p className="mt-2 text-xs text-zinc-500">
+                Booking expenses include approved operating costs linked to this job (supplies, fuel, parking, etc.).
+              </p>
+            </DetailCard>
+          ) : null}
         </section>
 
         <aside className="col-span-12 lg:col-span-4">
