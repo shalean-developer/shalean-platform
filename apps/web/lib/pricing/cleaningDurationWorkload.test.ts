@@ -124,6 +124,31 @@ describe("canonical duration/workload resolver (Phase 2C)", () => {
     expect(large.guards).toContain("max_duration_clamped");
   });
 
+  it("applies admin-configured minute limits when provided", () => {
+    const withAdminFloor = resolveCanonicalDurationWorkload({
+      service: "standard",
+      rooms: 1,
+      bathrooms: 1,
+      extras: [],
+      durationMinuteLimits: { minMinutes: 270, maxMinutes: 480 },
+    });
+
+    expect(withAdminFloor.duration_minutes).toBe(270);
+    expect(withAdminFloor.guards).toContain("min_duration_clamped");
+
+    const withAdminCeiling = resolveCanonicalDurationWorkload({
+      service: "standard",
+      rooms: 25,
+      bathrooms: 25,
+      extraRooms: 25,
+      extras: ["interior-walls", "garage-cleaning", "outside-windows"],
+      durationMinuteLimits: { minMinutes: 210, maxMinutes: 480 },
+    });
+
+    expect(withAdminCeiling.duration_minutes).toBe(480);
+    expect(withAdminCeiling.guards).toContain("max_duration_clamped");
+  });
+
   it("applies minimum and maximum guards", () => {
     const standardMinimum = resolveCanonicalDurationWorkload({
       service: "standard",

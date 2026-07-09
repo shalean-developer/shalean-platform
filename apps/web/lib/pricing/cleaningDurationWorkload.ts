@@ -56,6 +56,8 @@ export type DurationWorkloadInput = {
   extras?: readonly string[] | null;
   teamMemberCount?: number | null;
   recurringSnapshotDurationMinutes?: number | null;
+  /** Admin snapshot / catalog limits override hardcoded service policy min/max. */
+  durationMinuteLimits?: { minMinutes: number; maxMinutes: number } | null;
 };
 
 export type ResolvedExtraDuration = ExtraDurationPolicy & {
@@ -344,12 +346,14 @@ export function resolveCanonicalDurationWorkload(input: DurationWorkloadInput): 
 
   const roundedRawDuration = Math.round(rawDuration);
   let duration = roundedRawDuration;
-  if (duration < servicePolicy.minMinutes) {
-    duration = servicePolicy.minMinutes;
+  const minMinutes = input.durationMinuteLimits?.minMinutes ?? servicePolicy.minMinutes;
+  const maxMinutes = input.durationMinuteLimits?.maxMinutes ?? servicePolicy.maxMinutes;
+  if (duration < minMinutes) {
+    duration = minMinutes;
     guards.push("min_duration_clamped");
   }
-  if (duration > servicePolicy.maxMinutes) {
-    duration = servicePolicy.maxMinutes;
+  if (duration > maxMinutes) {
+    duration = maxMinutes;
     guards.push("max_duration_clamped");
   }
 

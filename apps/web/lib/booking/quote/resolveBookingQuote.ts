@@ -129,7 +129,7 @@ export function resolveLegacyBookingQuote(
   if (!quoted.ok) return quoted;
 
   const teamMemberCount = quoted.quoteOptions.cleanersCount ?? 1;
-  const duration_workload = resolveLegacyJobDurationWorkload(quoted.job, teamMemberCount);
+  const duration_workload = resolveLegacyJobDurationWorkload(quoted.job, teamMemberCount, snapshot);
   const envelope = buildBookingQuoteEnvelope({
     funnel: "legacy",
     customer_price_zar: quoted.quote.totalZar,
@@ -216,6 +216,10 @@ export function resolveBookingV2Quote(input: CustomerTotalInput & { serviceSlug:
     selectedExtras: input.selectedExtras,
     cleanerMode: input.cleanerMode,
     cleanerCount: input.cleanerCount,
+    durationLimits: {
+      minHours: input.catalog.minDurationHours,
+      maxHours: input.catalog.maxDurationHours,
+    },
   });
 
   const breakdown = calculateCustomerTotal({

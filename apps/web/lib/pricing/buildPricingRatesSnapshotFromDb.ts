@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { PRICING_ENGINE_ALGORITHM_VERSION } from "@/lib/pricing/engineVersion";
 import type { PricingRatesSnapshot, SnapshotBundleRow } from "@/lib/pricing/pricingRatesSnapshot";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
+import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
 const SERVICE_KEYS: readonly BookingServiceId[] = [
   "standard",
@@ -35,7 +36,16 @@ function rowToTariff(row: {
   duration_per_bedroom: number;
   duration_per_bathroom: number;
   duration_per_extra_room: number;
+  min_hours?: number;
+  max_hours?: number;
 }): ServiceTariff {
+  const minHoursRaw = Number(row.min_hours);
+  const maxHoursRaw = Number(row.max_hours);
+  const minHours =
+    Number.isFinite(minHoursRaw) && minHoursRaw > 0 ? minHoursRaw : DEFAULT_SERVICE_DURATION_LIMITS.minHours;
+  const maxHours =
+    Number.isFinite(maxHoursRaw) && maxHoursRaw > 0 ? maxHoursRaw : DEFAULT_SERVICE_DURATION_LIMITS.maxHours;
+
   return {
     base: Math.round(Number(row.base_price) || 0),
     bedroom: Math.round(Number(row.price_per_bedroom) || 0),
@@ -47,6 +57,10 @@ function rowToTariff(row: {
       bathroom: Number(row.duration_per_bathroom) || 0,
       extraRoom: Number(row.duration_per_extra_room) || 0,
     },
+    durationLimits: {
+      minHours,
+      maxHours: Math.max(minHours, maxHours),
+    },
   };
 }
 
@@ -57,7 +71,7 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
   const { data: svcRows, error: svcErr } = await supabase
     .from("pricing_services")
     .select(
-      "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, duration_base, duration_per_bedroom, duration_per_bathroom, duration_per_extra_room",
+      "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, duration_base, duration_per_bedroom, duration_per_bathroom, duration_per_extra_room, min_hours, max_hours",
     )
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
@@ -82,6 +96,8 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
       duration_per_bedroom: Number(row.duration_per_bedroom),
       duration_per_bathroom: Number(row.duration_per_bathroom),
       duration_per_extra_room: Number(row.duration_per_extra_room),
+      min_hours: Number(row.min_hours),
+      max_hours: Number(row.max_hours),
     });
   }
 
@@ -94,6 +110,8 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     duration_per_bedroom: 0.5,
     duration_per_bathroom: 0.5,
     duration_per_extra_room: 0.3,
+    min_hours: DEFAULT_SERVICE_DURATION_LIMITS.minHours,
+    max_hours: DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
   });
   const baseTariff = bySlug.standard ?? bySlug[Object.keys(bySlug)[0] ?? ""] ?? fallback;
   for (const k of SERVICE_KEYS) {

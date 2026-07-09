@@ -16,6 +16,8 @@ export {
 } from "@/lib/booking/quote/bookingQuoteSignature";
 export {
   durationHoursFromMinutes,
+  durationMinuteLimitsFromHours,
+  durationMinuteLimitsFromTariff,
   estimateUnifiedJobDurationHours,
   resolveBookingV2DurationWorkload,
   resolveLegacyJobDurationWorkload,

@@ -17,6 +17,7 @@ const TARIFF: ServiceTariff = {
   bathroom: 40,
   extraRoom: 30,
   duration: { base: 2, bedroom: 0.25, bathroom: 0.2, extraRoom: 0.15 },
+  durationLimits: { minHours: 3.5, maxHours: 8 },
 };
 
 /** Deterministic catalog for Vitest — mirrors shape from Supabase-backed snapshots. */

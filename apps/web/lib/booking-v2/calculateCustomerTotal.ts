@@ -93,6 +93,10 @@ function resolveDurationWorkloadForInput(input: CustomerTotalInput) {
     selectedExtras: input.selectedExtras,
     cleanerMode: input.cleanerMode,
     cleanerCount: input.cleanerCount,
+    durationLimits: {
+      minHours: input.catalog.minDurationHours,
+      maxHours: input.catalog.maxDurationHours,
+    },
   });
 }
 

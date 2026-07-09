@@ -124,6 +124,8 @@ describe("POST /api/booking-v2/confirm", () => {
           pricePerExtraRoom: 30,
           pricePerExtraCleaner: 299,
           estimatedDurationHours: 3,
+          minDurationHours: 3.5,
+          maxDurationHours: 8,
           extras: [],
         },
       },

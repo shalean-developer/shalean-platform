@@ -277,8 +277,7 @@ export function normalizeJobSubtotalSplitZar(
 }
 
 export function estimateJobDurationHoursSnapshot(snapshot: PricingRatesSnapshot, job: PricingJobInput): number {
-  void snapshot;
-  return estimateUnifiedJobDurationHours(job);
+  return estimateUnifiedJobDurationHours(job, 1, snapshot);
 }
 
 /** @deprecated Shadow/diagnostics only — runtime quotes use {@link estimateUnifiedJobDurationHours}. */

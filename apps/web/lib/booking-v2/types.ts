@@ -109,6 +109,8 @@ export type CustomerTotalInput = {
     pricePerExtraRoom: number;
     pricePerExtraCleaner: number;
     estimatedDurationHours: number;
+    minDurationHours: number;
+    maxDurationHours: number;
     extras: Array<{ id: string; label: string; priceZar: number }>;
     allowsExtraCleaner?: boolean;
     showEquipmentQuestion?: boolean;

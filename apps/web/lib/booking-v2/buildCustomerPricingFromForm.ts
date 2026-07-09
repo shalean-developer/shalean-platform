@@ -6,6 +6,7 @@ import type { BookingV2FeesConfig, CustomerPricingBreakdown } from "@/lib/bookin
 import type { LiveServiceConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
+import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
 export function buildCustomerPricingFromForm(params: {
   serviceSlug: BookingV2FormData["serviceSlug"];
@@ -51,6 +52,8 @@ export function buildCustomerPricingFromForm(params: {
       pricePerExtraRoom: 0,
       pricePerExtraCleaner: staticConfig.pricePerExtraCleaner,
       estimatedDurationHours: staticConfig.estimatedDurationHours,
+      minDurationHours: DEFAULT_SERVICE_DURATION_LIMITS.minHours,
+      maxDurationHours: DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
       extras: [],
     };
 
@@ -76,6 +79,8 @@ export function buildCustomerPricingFromForm(params: {
       pricePerExtraRoom: catalogSource.pricePerExtraRoom,
       pricePerExtraCleaner: catalogSource.pricePerExtraCleaner,
       estimatedDurationHours: catalogSource.estimatedDurationHours,
+      minDurationHours: catalogSource.minDurationHours,
+      maxDurationHours: catalogSource.maxDurationHours,
       extras: catalogSource.extras,
       allowsExtraCleaner: catalogSource.allowsExtraCleaner,
       showEquipmentQuestion:

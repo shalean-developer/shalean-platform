@@ -75,6 +75,9 @@ export type LiveServiceConfig = {
   pricePerExtraRoom: number;
   pricePerExtraCleaner: number;
   estimatedDurationHours: number;
+  /** Admin-configured duration clamp from `pricing_services`. */
+  minDurationHours: number;
+  maxDurationHours: number;
   extras: LiveExtra[];
 };
 

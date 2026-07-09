@@ -18,6 +18,7 @@ import type {
   ServicesCatalog,
 } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { DB_SLUG_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
+import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
 export type {
   LiveExtra,
@@ -86,6 +87,8 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       price_per_bathroom: number;
       price_per_extra_room: number;
       duration_base: number;
+      min_hours: number;
+      max_hours: number;
     }
   > = {};
 
@@ -97,7 +100,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       admin
         .from("pricing_services")
         .select(
-          "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, duration_base",
+          "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, duration_base, min_hours, max_hours",
         )
         .eq("is_active", true)
         .order("sort_order", { ascending: true }),
@@ -120,6 +123,14 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
           price_per_bathroom: Math.round(Number(row.price_per_bathroom) || 0),
           price_per_extra_room: Math.round(Number(row.price_per_extra_room) || 0),
           duration_base: Number(row.duration_base) || 0,
+          min_hours:
+            Number.isFinite(Number(row.min_hours)) && Number(row.min_hours) > 0
+              ? Number(row.min_hours)
+              : DEFAULT_SERVICE_DURATION_LIMITS.minHours,
+          max_hours:
+            Number.isFinite(Number(row.max_hours)) && Number(row.max_hours) > 0
+              ? Number(row.max_hours)
+              : DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
         };
       }
     }
@@ -198,6 +209,11 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       estimatedDurationHours: dbSvc?.duration_base
         ? Math.max(1, Math.round(dbSvc.duration_base))
         : staticFallback.estimatedDurationHours,
+      minDurationHours: dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
+      maxDurationHours: Math.max(
+        dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
+        dbSvc?.max_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
+      ),
       extras,
     };
     activeServiceSlugs.push(slug);
@@ -226,6 +242,11 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         estimatedDurationHours: dbSvc?.duration_base
           ? Math.max(1, Math.round(dbSvc.duration_base))
           : staticFallback.estimatedDurationHours,
+        minDurationHours: dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
+        maxDurationHours: Math.max(
+          dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
+          dbSvc?.max_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
+        ),
         extras: [],
       };
     }
