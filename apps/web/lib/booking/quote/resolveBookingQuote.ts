@@ -1,5 +1,6 @@
 import type { CustomerPricingBreakdown } from "@/lib/booking-v2/types";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
+import { buildBookingV2QuoteSignatureInputs } from "@/lib/booking/quote/validateBookingV2Quote";
 import { quoteLockFromRequestBodyWithSnapshot, type LockQuoteError, type LockQuoteSuccess } from "@/lib/booking/bookingLockQuote";
 import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
 import type { CustomerTotalInput } from "@/lib/booking-v2/types";
@@ -231,18 +232,7 @@ export function resolveBookingV2Quote(input: CustomerTotalInput & { serviceSlug:
     funnel: "v2",
     customer_price_zar: breakdown.estimated_total,
     duration_workload,
-    signatureInputs: {
-      serviceSlug: input.serviceSlug,
-      serviceDetails: input.serviceDetails,
-      selectedExtras: [...input.selectedExtras].sort(),
-      cleanerMode: input.cleanerMode,
-      cleanerCount: input.cleanerCount,
-      bookingType: input.bookingType,
-      recurringFrequency: input.recurringFrequency,
-      equipmentRequired: Boolean(input.equipmentRequired),
-      equipmentLogisticsFee: breakdown.equipment_logistics_fee,
-      estimatedTotal: breakdown.estimated_total,
-    },
+    signatureInputs: buildBookingV2QuoteSignatureInputs(input, breakdown),
   });
 
   return {

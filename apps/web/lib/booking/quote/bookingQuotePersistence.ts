@@ -145,6 +145,24 @@ export function buildAuthoritativeQuotePersistPatch(
   };
 }
 
+/** Duration + pricing_summary sync without overwriting Paystack-collected payment amounts. */
+export function buildAuthoritativeQuoteDurationOnlyPatch(
+  input: AuthoritativeQuotePersistInput,
+): Record<string, unknown> {
+  const full = buildAuthoritativeQuotePersistPatch(input);
+  const {
+    amount_paid_cents: _amountPaid,
+    total_paid_cents: _totalPaid,
+    total_paid_zar: _totalPaidZar,
+    total_price: _totalPrice,
+    base_amount_cents: _base,
+    service_fee_cents: _fee,
+    recurring_discount_cents: _discount,
+    ...durationOnly
+  } = full;
+  return durationOnly;
+}
+
 /** V2 Paystack finalize: copy authoritative duration from pricing_summary when legacy lock is absent. */
 export function authoritativeDurationPatchFromBookingRow(row: {
   id?: string | null;
@@ -161,7 +179,7 @@ export function authoritativeDurationPatchFromBookingRow(row: {
   const summary = pricingSummaryFromRow(row);
   if (summary?.quote_signature && validPersistedMinutes(summary.estimated_duration_minutes) != null) {
     try {
-      return buildAuthoritativeQuotePersistPatch({
+      return buildAuthoritativeQuoteDurationOnlyPatch({
         breakdown: summary,
         schedule: row.date && row.time ? { date: row.date, time: row.time } : null,
       });

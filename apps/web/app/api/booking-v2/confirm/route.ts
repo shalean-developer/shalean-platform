@@ -36,6 +36,10 @@ import { buildReferralCheckoutSnapshot } from "@/lib/referrals/referralCheckoutM
 import { buildReferralCheckoutFingerprint } from "@/lib/referrals/checkoutFingerprint";
 import { resolveReferralClientIp } from "@/lib/referrals/clientIp";
 import { validateReferralForCheckout } from "@/lib/referrals/validateReferral";
+import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
+import { assertV2ConfirmQuoteIntegrity } from "@/lib/booking/quote/validateBookingV2Quote";
+import type { CustomerPricingBreakdown, CustomerTotalInput } from "@/lib/booking-v2/types";
+import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 
 export const runtime = "nodejs";
 
@@ -227,6 +231,7 @@ export async function POST(request: Request) {
   let serverEquipmentQuote: EquipmentQuoteResult | null = null;
   let equipmentPricingSnapshot: ReturnType<typeof buildEquipmentPricingSnapshot> | null = null;
 
+  let catalogLoaded = false;
   let serverBreakdown = buildCustomerPricingFromForm({
     serviceSlug: data.serviceSlug,
     values: {
@@ -284,9 +289,51 @@ export async function POST(request: Request) {
       liveConfig,
       feesConfig,
     });
+    catalogLoaded = true;
   } catch (e) {
     console.warn("[booking-v2/confirm] server price check failed:", e);
   }
+
+  const quoteInput: CustomerTotalInput & { serviceSlug: ServiceSlug } = {
+    serviceSlug: data.serviceSlug,
+    serviceLabel: liveConfig?.label ?? data.serviceSlug,
+    serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
+    selectedExtras: data.selectedExtras ?? [],
+    cleanerMode: data.cleanerMode,
+    cleanerCount: data.cleanerCount ?? 1,
+    bookingType: data.bookingType,
+    recurringFrequency: data.recurringFrequency ?? "",
+    catalog: {
+      basePrice: liveConfig?.basePrice ?? 0,
+      pricePerBedroom: liveConfig?.pricePerBedroom ?? 0,
+      pricePerBathroom: liveConfig?.pricePerBathroom ?? 0,
+      pricePerExtraRoom: liveConfig?.pricePerExtraRoom ?? 0,
+      pricePerExtraCleaner: liveConfig?.pricePerExtraCleaner ?? 0,
+      estimatedDurationHours: liveConfig?.estimatedDurationHours ?? 3,
+      minDurationHours: liveConfig?.minDurationHours ?? 3.5,
+      maxDurationHours: liveConfig?.maxDurationHours ?? 8,
+      extras: liveConfig?.extras ?? [],
+      allowsExtraCleaner: liveConfig?.allowsExtraCleaner,
+      showEquipmentQuestion: liveConfig?.showEquipmentQuestion,
+    },
+    feesConfig: feesConfig ?? defaultBookingV2FeesConfig(),
+    equipmentRequired: equipmentRequiredFlag,
+    equipmentQuote: serverEquipmentQuote,
+  };
+
+  const clientPricingSummary = parsed.data.pricingSummary as CustomerPricingBreakdown & { total?: number };
+  const quoteValidation = assertV2ConfirmQuoteIntegrity({
+    serverBreakdown,
+    catalogLoaded,
+    clientPricingSummary,
+    quoteInput,
+  });
+  if (!quoteValidation.ok) {
+    console.error("[booking-v2/confirm] quote validation failed:", quoteValidation.code);
+    return NextResponse.json({ error: quoteValidation.error }, { status: quoteValidation.status });
+  }
+
+  data.pricingSummary = serverBreakdown!;
 
   const equipmentPersist = equipmentPersistFields({
     equipmentRequired: equipmentRequiredFlag,
@@ -295,55 +342,14 @@ export async function POST(request: Request) {
   });
 
   const clientTotal =
-    (data.pricingSummary as { estimated_total?: number }).estimated_total ??
-    data.pricingSummary.total;
-  const serverTotal = serverBreakdown.estimated_total;
-
-  if (serverTotal > 0) {
-    const drift = Math.abs(serverTotal - clientTotal) / serverTotal;
-    if (drift > 0.01) {
-      console.warn(
-        `[booking-v2/confirm] price drift: client R${clientTotal} vs server R${serverTotal} (${(drift * 100).toFixed(1)}%) — overriding`,
-      );
-    }
-    data.pricingSummary = serverBreakdown;
-  }
-
-  if (
-    !serverBreakdown.quote_signature ||
-    typeof serverBreakdown.estimated_duration_minutes !== "number" ||
-    serverBreakdown.estimated_duration_minutes < 1
-  ) {
-    console.error("[booking-v2/confirm] unified quote missing signature or duration");
-    return NextResponse.json(
-      { error: "We could not verify your quote. Please refresh and try again." },
-      { status: 422 },
-    );
-  }
-
-  const clientDuration = (data.pricingSummary as { estimated_duration_minutes?: number })
-    .estimated_duration_minutes;
-  if (
-    typeof clientDuration === "number" &&
-    clientDuration > 0 &&
-    clientDuration !== serverBreakdown.estimated_duration_minutes &&
-    serverTotal > 0
-  ) {
-    const durationDrift =
-      Math.abs(clientDuration - serverBreakdown.estimated_duration_minutes) /
-      serverBreakdown.estimated_duration_minutes;
-    if (durationDrift > 0.01) {
-      console.warn(
-        `[booking-v2/confirm] duration drift: client ${clientDuration}m vs server ${serverBreakdown.estimated_duration_minutes}m — overriding`,
-      );
-    }
-  }
+    (parsed.data.pricingSummary as { estimated_total?: number }).estimated_total ??
+    parsed.data.pricingSummary.total;
 
   const timeHm = data.time.trim().slice(0, 5);
   const canonicalServiceSlug = canonicalServiceSlugFromBookingV2(data.serviceSlug);
-  const durationMinutes = serverBreakdown.estimated_duration_minutes;
+  const durationMinutes = serverBreakdown!.estimated_duration_minutes;
 
-  const persistPricing = pricingPersistFields(serverBreakdown, {
+  const persistPricing = pricingPersistFields(serverBreakdown!, {
     date: data.date,
     time: timeHm,
   });

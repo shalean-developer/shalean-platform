@@ -23,6 +23,13 @@ import {
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
+import {
+  computeAdminV2RepriceAuthoritativeQuote,
+  isV2AuthoritativeBookingRow,
+  legacyRepriceUnifiedDurationPatch,
+  serviceSlugFromBookingRow,
+} from "@/lib/booking/quote/adminRepriceAuthoritativeQuote";
+import { canonicalServiceSlugFromBookingV2 } from "@/lib/booking-v2/bookingV2ServiceSlug";
 
 export type AdminEditBookingDetailsBody = {
   bedrooms?: number;
@@ -499,7 +506,7 @@ export async function previewAdminEditBookingDetails(
   const { data: row, error: selErr } = await admin
     .from("bookings")
     .select(
-      "id, booking_snapshot, total_price, amount_paid_cents, total_paid_cents, total_paid_zar, payment_status, payment_completed_at, rooms, bathrooms, extras, status, date, time, service, service_slug, pricing_version_id, created_at",
+      "id, booking_snapshot, pricing_summary, total_price, amount_paid_cents, total_paid_cents, total_paid_zar, payment_status, payment_completed_at, rooms, bathrooms, extras, status, date, time, service, service_slug, pricing_version_id, created_at",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -512,14 +519,28 @@ export async function previewAdminEditBookingDetails(
     return { ok: false, status: 422, error: "Only notes can be edited while the job is in progress." };
   }
 
-  const locked = resolveLockedForAdminEditBooking(b);
-  if (!locked) {
+  const snap = b.booking_snapshot;
+  const v2Authoritative = isV2AuthoritativeBookingRow(b);
+  const locked = v2Authoritative ? null : resolveLockedForAdminEditBooking(b);
+  if (!v2Authoritative && !locked) {
     return { ok: false, status: 400, error: "Booking snapshot is missing a priced lock." };
   }
 
-  const curRooms = readRoomsFromLocked(locked);
-  const curBaths = readBathroomsFromLocked(locked);
-  const curExtras = readExtrasFromLocked(locked);
+  const curRooms = v2Authoritative
+    ? clampRoomsBaths(Number(b.rooms), 1)
+    : readRoomsFromLocked(locked!);
+  const curBaths = v2Authoritative
+    ? clampRoomsBaths(Number(b.bathrooms), 1)
+    : readBathroomsFromLocked(locked!);
+  const curExtras = v2Authoritative
+    ? canonicalizeExtraSlugs(
+        Array.isArray((snap as { selectedExtras?: unknown } | null)?.selectedExtras)
+          ? ((snap as { selectedExtras: unknown[] }).selectedExtras.map((x) => String(x).trim()).filter(Boolean))
+          : Array.isArray(b.extras)
+            ? (b.extras as unknown[]).map((x) => String(x).trim()).filter(Boolean)
+            : [],
+      )
+    : readExtrasFromLocked(locked!);
   const nextRooms = wantsRooms ? clampRoomsBaths(Number(params.body.bedrooms), curRooms) : curRooms;
   const nextBaths = wantsBaths ? clampRoomsBaths(Number(params.body.bathrooms), curBaths) : curBaths;
   const nextExtras =
@@ -527,24 +548,40 @@ export async function previewAdminEditBookingDetails(
       ? canonicalizeExtraSlugs(params.body.extras.map((x) => String(x).trim()).filter(Boolean))
       : curExtras;
 
-  const rep = await computeAdminEditBookingReprice(admin, {
-    bookingId,
-    locked,
-    nextRooms,
-    nextBaths,
-    nextExtras,
-    notes: undefined,
-    snap: b.booking_snapshot,
-    adminUserId: "",
-  });
-  if (!rep.ok) {
-    return { ok: false, status: rep.status, error: rep.error };
+  let visitCents: number;
+  if (v2Authoritative) {
+    const v2 = await computeAdminV2RepriceAuthoritativeQuote({
+      row: b,
+      snap,
+      nextRooms,
+      nextBaths,
+      nextExtras,
+    });
+    if (!v2.ok) {
+      return { ok: false, status: v2.status, error: v2.error };
+    }
+    visitCents = v2.visitCents;
+  } else {
+    const rep = await computeAdminEditBookingReprice(admin, {
+      bookingId,
+      locked: locked!,
+      nextRooms,
+      nextBaths,
+      nextExtras,
+      notes: undefined,
+      snap,
+      adminUserId: "",
+    });
+    if (!rep.ok) {
+      return { ok: false, status: rep.status, error: rep.error };
+    }
+    visitCents = rep.visitCents;
   }
 
   const oldTp = Number(b.total_price);
   const oldCents = Number.isFinite(oldTp) ? Math.round(oldTp * 100) : resolveEffectivePaidCents(b);
   const paid = bookingRowSignalsPaid(b);
-  const newCents = rep.visitCents;
+  const newCents = visitCents;
   const delta = newCents - oldCents;
   const requires_collect_confirm = paid && newCents > resolveEffectivePaidCents(b);
 
@@ -677,7 +714,7 @@ async function executeRepricingAdminEditBookingDetails(
   const { data: row, error: selErr } = await admin
     .from("bookings")
     .select(
-      "id, booking_snapshot, total_price, total_paid_cents, amount_paid_cents, total_paid_zar, payment_status, payment_completed_at, rooms, bathrooms, extras, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, is_team_job, status, dispatch_status, payment_mismatch, updated_at, date, time, service, service_slug, pricing_version_id, created_at",
+      "id, booking_snapshot, pricing_summary, total_price, total_paid_cents, amount_paid_cents, total_paid_zar, payment_status, payment_completed_at, rooms, bathrooms, extras, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, is_team_job, status, dispatch_status, payment_mismatch, updated_at, date, time, service, service_slug, pricing_version_id, created_at",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -707,8 +744,9 @@ async function executeRepricingAdminEditBookingDetails(
   const oldLinesRpc = dbLineRowsToRpcPayload(oldLineRows);
 
   const snap = b.booking_snapshot;
-  const locked = resolveLockedForAdminEditBooking(b);
-  if (!locked) {
+  const v2Authoritative = isV2AuthoritativeBookingRow(b);
+  const locked = v2Authoritative ? null : resolveLockedForAdminEditBooking(b);
+  if (!v2Authoritative && !locked) {
     await failIdempotency(admin, dedupeKey, {
       ok: false,
       status: 400,
@@ -717,9 +755,21 @@ async function executeRepricingAdminEditBookingDetails(
     return { ok: false, status: 400, error: "Booking snapshot is missing a priced lock; rooms/extras cannot be edited." };
   }
 
-  const curRooms = readRoomsFromLocked(locked);
-  const curBaths = readBathroomsFromLocked(locked);
-  const curExtras = readExtrasFromLocked(locked);
+  const curRooms = v2Authoritative
+    ? clampRoomsBaths(Number(b.rooms), 1)
+    : readRoomsFromLocked(locked!);
+  const curBaths = v2Authoritative
+    ? clampRoomsBaths(Number(b.bathrooms), 1)
+    : readBathroomsFromLocked(locked!);
+  const curExtras = v2Authoritative
+    ? canonicalizeExtraSlugs(
+        Array.isArray((snap as { selectedExtras?: unknown } | null)?.selectedExtras)
+          ? ((snap as { selectedExtras: unknown[] }).selectedExtras.map((x) => String(x).trim()).filter(Boolean))
+          : Array.isArray(b.extras)
+            ? (b.extras as unknown[]).map((x) => String(x).trim()).filter(Boolean)
+            : [],
+      )
+    : readExtrasFromLocked(locked!);
   const nextRooms = wantsRooms ? clampRoomsBaths(Number(params.body.bedrooms), curRooms) : curRooms;
   const nextBaths = wantsBaths ? clampRoomsBaths(Number(params.body.bathrooms), curBaths) : curBaths;
   const nextExtras =
@@ -727,19 +777,87 @@ async function executeRepricingAdminEditBookingDetails(
       ? canonicalizeExtraSlugs(params.body.extras.map((x) => String(x).trim()).filter(Boolean))
       : curExtras;
 
-  const rep = await computeAdminEditBookingReprice(admin, {
-    bookingId,
-    locked,
-    nextRooms,
-    nextBaths,
-    nextExtras,
-    notes: params.body.notes,
-    snap,
-    adminUserId: params.adminUserId,
-  });
-  if (!rep.ok) {
-    await failIdempotency(admin, dedupeKey, { ok: false, status: rep.status, error: rep.error });
-    return { ok: false, status: rep.status, error: rep.error };
+  let rep: RepriceEditComputation;
+  let v2QuotePatch: Record<string, unknown> | null = null;
+
+  if (v2Authoritative) {
+    const v2 = await computeAdminV2RepriceAuthoritativeQuote({
+      row: b,
+      snap,
+      nextRooms,
+      nextBaths,
+      nextExtras,
+      notes: params.body.notes,
+    });
+    if (!v2.ok) {
+      await failIdempotency(admin, dedupeKey, { ok: false, status: v2.status, error: v2.error });
+      return { ok: false, status: v2.status, error: v2.error };
+    }
+    v2QuotePatch = v2.quotePatch;
+    const serviceSlug = serviceSlugFromBookingRow(b);
+    const checkoutLineItems = buildCheckoutVisitLineItems({
+      serviceTypeSlug: serviceSlug ? canonicalServiceSlugFromBookingV2(serviceSlug) : null,
+      job: {
+        serviceBaseZar: v2.breakdown.base_service_price,
+        roomsZar: v2.breakdown.property_factors_total,
+        extrasZar: v2.breakdown.selected_extras_total + v2.breakdown.extra_cleaner_cost,
+      },
+      subtotalZar: v2.breakdown.subtotal_before_service_fee,
+      visitTotalZar: v2.breakdown.estimated_total,
+    });
+    const extrasPersist = sanitizeBookingExtrasForPersist(
+      v2.breakdown.selected_extras.map((e) => ({
+        slug: e.extra_id,
+        name: e.name,
+        price: e.price,
+      })),
+      { where: "adminEditBookingDetails", bookingId },
+    );
+    const price_snapshot = buildRepriceSnapshotMeta(
+      buildPriceSnapshotV1Checkout({
+        service_type: serviceSlug ? canonicalServiceSlugFromBookingV2(serviceSlug) : "standard",
+        base_price: v2.breakdown.base_service_price + v2.breakdown.property_factors_total,
+        extras: extrasPersist.map((x) => ({
+          id: String(x.slug ?? "").trim() || "extra",
+          name: typeof x.name === "string" ? x.name : String(x.slug ?? "Extra"),
+          price: Math.round(Number(x.price) || 0),
+        })),
+        total_price: v2.visitRounded,
+      }),
+      params.adminUserId,
+    );
+    rep = {
+      ok: true,
+      visitRounded: v2.visitRounded,
+      visitCents: v2.visitCents,
+      checkoutLineItems,
+      lockedNext: locked ?? ({} as LockedBooking),
+      lockedPersist: locked ?? ({} as LockedBooking),
+      snapMerged: v2.snapMerged,
+      extrasPersist,
+      price_snapshot,
+      price_breakdown: v2.breakdown,
+      jobSubtotalSplit: {
+        serviceBaseZar: v2.breakdown.base_service_price,
+        roomsZar: v2.breakdown.property_factors_total,
+        extrasZar: v2.breakdown.selected_extras_total + v2.breakdown.extra_cleaner_cost,
+      },
+    };
+  } else {
+    rep = await computeAdminEditBookingReprice(admin, {
+      bookingId,
+      locked: locked!,
+      nextRooms,
+      nextBaths,
+      nextExtras,
+      notes: params.body.notes,
+      snap,
+      adminUserId: params.adminUserId,
+    });
+    if (!rep.ok) {
+      await failIdempotency(admin, dedupeKey, { ok: false, status: rep.status, error: rep.error });
+      return { ok: false, status: rep.status, error: rep.error };
+    }
   }
 
   const paid = bookingRowSignalsPaid(b);
@@ -770,6 +888,30 @@ async function executeRepricingAdminEditBookingDetails(
     price_snapshot: rep.price_snapshot,
     price_breakdown: rep.price_breakdown,
   };
+
+  if (v2QuotePatch) {
+    const breakdown = rep.price_breakdown as import("@/lib/booking-v2/types").CustomerPricingBreakdown;
+    Object.assign(patch, v2QuotePatch, {
+      base_amount_cents: Math.round(breakdown.subtotal_before_service_fee * 100),
+      service_fee_cents: Math.round(breakdown.service_fee * 100),
+      recurring_discount_cents: Math.round(breakdown.recurring_discount * 100),
+    });
+  } else {
+    const rates = await resolveRatesSnapshotForLockedBooking(admin, rep.lockedPersist);
+    if (rates) {
+      Object.assign(
+        patch,
+        legacyRepriceUnifiedDurationPatch({
+          lockedPersist: rep.lockedPersist,
+          rates,
+          schedule:
+            typeof b.date === "string" && typeof b.time === "string"
+              ? { date: String(b.date).trim(), time: String(b.time).trim().slice(0, 5) }
+              : null,
+        }),
+      );
+    }
+  }
 
   if (paid) {
     patch.total_paid_cents = rep.visitCents;

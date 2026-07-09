@@ -24,6 +24,7 @@ export {
 } from "@/lib/booking/quote/resolveBookingDurationWorkload";
 export {
   buildAuthoritativeQuotePersistPatch,
+  buildAuthoritativeQuoteDurationOnlyPatch,
   authoritativeDurationPatchFromBookingRow,
   buildLegacyLockDurationPersistPatch,
   estimatedFinishAtIso,
@@ -42,3 +43,7 @@ export {
   verifyBookingV2QuoteBreakdown,
   type ResolveLegacyBookingQuoteResult,
 } from "@/lib/booking/quote/resolveBookingQuote";
+export {
+  assertV2ConfirmQuoteIntegrity,
+  buildBookingV2QuoteSignatureInputs,
+} from "@/lib/booking/quote/validateBookingV2Quote";
