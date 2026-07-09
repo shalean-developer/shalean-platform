@@ -20,7 +20,37 @@ export async function GET(request: Request) {
 
   const { data, error } = await query.limit(200);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ vendors: data ?? [] });
+
+  const vendors = data ?? [];
+  const vendorIds = vendors.map((v) => v.id);
+  const statsByVendor = new Map<string, { count: number; total_cents: number }>();
+
+  if (vendorIds.length > 0) {
+    const { data: expenseRows } = await admin
+      .from("expenses")
+      .select("vendor_id, amount_cents, status")
+      .in("vendor_id", vendorIds);
+
+    for (const row of expenseRows ?? []) {
+      const vid = row.vendor_id as string | null;
+      if (!vid) continue;
+      const stat = statsByVendor.get(vid) ?? { count: 0, total_cents: 0 };
+      stat.count += 1;
+      if (row.status === "approved") stat.total_cents += row.amount_cents ?? 0;
+      statsByVendor.set(vid, stat);
+    }
+  }
+
+  const enriched = vendors.map((v) => {
+    const stat = statsByVendor.get(v.id);
+    return {
+      ...v,
+      expense_count: stat?.count ?? 0,
+      total_spent_cents: stat?.total_cents ?? 0,
+    };
+  });
+
+  return NextResponse.json({ vendors: enriched });
 }
 
 export async function POST(request: Request) {

@@ -11,6 +11,7 @@ import {
   BarChart3,
   Bell,
   BookOpen,
+  Building2,
   Calendar,
   CheckCircle,
   ChevronRight,
@@ -88,6 +89,7 @@ export const OFFICE_NAV_MODULES: NavModule[] = [
     children: [
       { label: "Financial dashboard", href: "/office/financial-dashboard", icon: BarChart3 },
       { label: "Expenses", href: "/office/expenses", icon: Receipt },
+      { label: "Vendors", href: "/office/expense-vendors", icon: Building2 },
       { label: "Reports", href: "/office/expense-reports", icon: FileText },
       { label: "Payouts", href: "/office/payouts", icon: Wallet },
       { label: "Pricing", href: "/office/pricing", icon: Tag },

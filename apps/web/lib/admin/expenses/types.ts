@@ -28,6 +28,8 @@ export type ExpenseVendorRow = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  expense_count?: number;
+  total_spent_cents?: number;
 };
 
 export type ExpenseAccountRow = {

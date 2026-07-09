@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   CheckCircle2,
@@ -160,6 +161,9 @@ export default function ExpensesPage() {
         subtitle="Track operating expenses, approvals, and receipts"
         actions={
           <>
+            <Link href="/office/expense-vendors">
+              <OfficeZohoSecondaryButton>Vendors</OfficeZohoSecondaryButton>
+            </Link>
             <OfficeZohoSecondaryButton onClick={() => refetch()}>
               <RefreshCw className="h-4 w-4" />
               Refresh
