@@ -13,6 +13,7 @@ import {
   sumApprovedExpensesInRange,
 } from "@/lib/admin/expenses/loadExpenses";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { loadPaymentTransactionMetrics } from "@/lib/payments/loadPaymentTransactionMetrics";
 
 export type FinancialDashboardPayload = {
   period: { from: string; to: string };
@@ -46,7 +47,25 @@ export type FinancialDashboardPayload = {
     gross_margin_cents: number;
     expenses_cents: number;
     net_profit_cents: number;
+    booking_count: number;
+    avg_booking_profit_cents: number;
   }>;
+  executive_kpis: {
+    outstanding_customer_payments_cents: number;
+    pending_cleaner_payouts_cents: number;
+    cash_in_bank_cents: number;
+    petty_cash_balance_cents: number;
+    net_profit_margin_percent: number | null;
+    gateway_processing_fees_cents: number;
+    net_settlement_cents: number;
+    sparkline: Array<{ month: string; revenue_cents: number; expenses_cents: number; net_profit_cents: number }>;
+  };
+  gateway_payments: {
+    gross_cents: number;
+    processing_fee_cents: number;
+    net_settlement_cents: number;
+    transaction_count: number;
+  };
 };
 
 function monthKey(ymd: string): string {
@@ -104,6 +123,7 @@ export async function loadFinancialDashboard(
 
   const report = await loadOfficePayoutPeriodReport(admin, from, to);
   const operatingExpenses = await sumApprovedExpensesInRange(admin, from, to, branchId);
+  const gatewayPayments = await loadPaymentTransactionMetrics(admin, from, to, { branchId });
 
   const profit = computeProfitBreakdown(
     report.totals.total_revenue_cents,
@@ -142,7 +162,7 @@ export async function loadFinancialDashboard(
   const bookings = (bookingRows ?? []) as BookingFinancialRow[];
 
   const monthlyMap = new Map<string, { revenue: number; payouts: number; expenses: number }>();
-  const branchRevenue = new Map<string, { revenue: number; payouts: number }>();
+  const branchRevenue = new Map<string, { revenue: number; payouts: number; bookings: number }>();
 
   for (const b of bookings) {
     const mk = monthKey(b.date ?? from);
@@ -154,9 +174,10 @@ export async function loadFinancialDashboard(
     monthlyMap.set(mk, m);
 
     const bid = b.city_id ?? "unknown";
-    const br = branchRevenue.get(bid) ?? { revenue: 0, payouts: 0 };
+    const br = branchRevenue.get(bid) ?? { revenue: 0, payouts: 0, bookings: 0 };
     br.revenue += rev;
     br.payouts += payout;
+    br.bookings += 1;
     branchRevenue.set(bid, br);
   }
 
@@ -196,6 +217,8 @@ export async function loadFinancialDashboard(
     const revenue = rev?.revenue ?? 0;
     const payouts = rev?.payouts ?? 0;
     const grossMargin = revenue - payouts;
+    const bookingCount = rev?.bookings ?? 0;
+    const netProfit = grossMargin - eb.amount_cents;
     return {
       branch_id: eb.branch_id,
       branch_name: eb.branch_name || cityNames.get(eb.branch_id) || "Unknown",
@@ -203,13 +226,16 @@ export async function loadFinancialDashboard(
       cleaner_payouts_cents: payouts,
       gross_margin_cents: grossMargin,
       expenses_cents: eb.amount_cents,
-      net_profit_cents: grossMargin - eb.amount_cents,
+      net_profit_cents: netProfit,
+      booking_count: bookingCount,
+      avg_booking_profit_cents: bookingCount > 0 ? Math.round(netProfit / bookingCount) : 0,
     };
   });
 
   for (const [bid, rev] of branchRevenue) {
     if (!profitByBranch.some((p) => p.branch_id === bid)) {
       const grossMargin = rev.revenue - rev.payouts;
+      const netProfit = grossMargin;
       profitByBranch.push({
         branch_id: bid,
         branch_name: cityNames.get(bid) ?? "Unknown",
@@ -217,10 +243,35 @@ export async function loadFinancialDashboard(
         cleaner_payouts_cents: rev.payouts,
         gross_margin_cents: grossMargin,
         expenses_cents: 0,
-        net_profit_cents: grossMargin,
+        net_profit_cents: netProfit,
+        booking_count: rev.bookings,
+        avg_booking_profit_cents: rev.bookings > 0 ? Math.round(netProfit / rev.bookings) : 0,
       });
     }
   }
+
+  const [{ data: accounts }, { data: pendingInvoices }, { data: pendingPayouts }] = await Promise.all([
+    admin.from("expense_accounts").select("account_type, balance_cents").eq("is_active", true),
+    admin
+      .from("monthly_invoices")
+      .select("balance_cents")
+      .in("status", ["sent", "partially_paid", "overdue"]),
+    admin
+      .from("cleaner_payouts")
+      .select("total_amount_cents")
+      .in("status", ["pending", "frozen", "approved"]),
+  ]);
+
+  let cashInBank = 0;
+  let pettyCash = 0;
+  for (const a of accounts ?? []) {
+    const bal = a.balance_cents ?? 0;
+    if (a.account_type === "petty_cash") pettyCash += bal;
+    else if (a.account_type === "bank" || a.account_type === "paystack") cashInBank += bal;
+  }
+
+  const outstandingCustomer = (pendingInvoices ?? []).reduce((s, r) => s + (r.balance_cents ?? 0), 0);
+  const pendingCleaner = (pendingPayouts ?? []).reduce((s, r) => s + (r.total_amount_cents ?? 0), 0);
 
   return {
     period: { from, to },
@@ -243,5 +294,21 @@ export async function loadFinancialDashboard(
       amount_cents: c.amount_cents,
     })),
     profit_by_branch: profitByBranch.sort((a, b) => b.net_profit_cents - a.net_profit_cents),
+    executive_kpis: {
+      outstanding_customer_payments_cents: outstandingCustomer,
+      pending_cleaner_payouts_cents: pendingCleaner,
+      cash_in_bank_cents: cashInBank,
+      petty_cash_balance_cents: pettyCash,
+      net_profit_margin_percent: profit.net_profit_percent,
+      gateway_processing_fees_cents: gatewayPayments.processing_fee_cents,
+      net_settlement_cents: gatewayPayments.net_settlement_cents,
+      sparkline: monthlyTrend.slice(-6).map((m) => ({
+        month: m.month,
+        revenue_cents: m.revenue_cents,
+        expenses_cents: m.expenses_cents,
+        net_profit_cents: m.net_profit_cents,
+      })),
+    },
+    gateway_payments: gatewayPayments,
   };
 }

@@ -8,6 +8,7 @@ import {
   normalizeOfficePayoutPeriodRange,
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { sumApprovedExpensesInRange } from "@/lib/admin/expenses/loadExpenses";
+import { loadPaymentTransactionMetrics } from "@/lib/payments/loadPaymentTransactionMetrics";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -32,6 +33,7 @@ export async function GET(request: Request) {
       case "profit-loss": {
         const report = await loadOfficePayoutPeriodReport(admin, f, t);
         const expenses = await sumApprovedExpensesInRange(admin, f, t, branchId);
+        const gatewayPayments = await loadPaymentTransactionMetrics(admin, f, t, { branchId });
         const profit = computeProfitBreakdown(
           report.totals.total_revenue_cents,
           report.totals.earned_cents,
@@ -41,6 +43,7 @@ export async function GET(request: Request) {
           type: reportType,
           period: { from: f, to: t },
           profit,
+          gateway_payments: gatewayPayments,
           visit_count: report.totals.visit_count,
         });
       }
@@ -85,6 +88,41 @@ export async function GET(request: Request) {
           monthly_trend: dashboard.monthly_trend,
           profit: dashboard.profit,
         });
+      }
+      case "cash-flow":
+      case "cleaner-cost":
+      case "executive-monthly":
+      case "executive-annual": {
+        const dashboard = await loadFinancialDashboard(admin, f, t, branchId);
+        const report = await loadOfficePayoutPeriodReport(admin, f, t);
+        const payload = {
+          type: reportType,
+          period: { from: f, to: t },
+          profit: dashboard.profit,
+          monthly_trend: dashboard.monthly_trend,
+          profit_by_branch: dashboard.profit_by_branch,
+          expenses_by_category: dashboard.expenses_by_category,
+          cleaner_payouts_cents: report.totals.earned_cents,
+          visit_count: report.totals.visit_count,
+          executive_kpis: dashboard.executive_kpis,
+        };
+        const format = url.searchParams.get("format");
+        if (format === "csv") {
+          const rows = [
+            "metric,value_cents",
+            `revenue,${dashboard.profit.customer_revenue_cents}`,
+            `cleaner_payouts,${dashboard.profit.cleaner_payouts_cents}`,
+            `operating_expenses,${dashboard.profit.operating_expenses_cents}`,
+            `net_profit,${dashboard.profit.net_profit_cents}`,
+          ].join("\n");
+          return new Response(rows, {
+            headers: {
+              "Content-Type": "text/csv",
+              "Content-Disposition": `attachment; filename="${reportType}-${f}-${t}.csv"`,
+            },
+          });
+        }
+        return NextResponse.json(payload);
       }
       default:
         return NextResponse.json({ error: "Unknown report type." }, { status: 400 });

@@ -53,6 +53,11 @@ type ExpenseDbRow = {
   created_by: string | null;
   approved_by: string | null;
   approved_at: string | null;
+  approval_stage?: string;
+  recurring_expense_id?: string | null;
+  payment_transaction_id?: string | null;
+  processing_fees_cents?: number;
+  platform_fees_cents?: number;
   external_accounting_id: string | null;
   sync_status: string;
   last_synced_at: string | null;
@@ -85,6 +90,11 @@ function mapExpenseRow(row: ExpenseDbRow, emailMap: Record<string, string>): Exp
     created_by: row.created_by,
     approved_by: row.approved_by,
     approved_at: row.approved_at,
+    approval_stage: (row.approval_stage ?? "finance") as ExpenseListItem["approval_stage"],
+    recurring_expense_id: row.recurring_expense_id ?? null,
+    payment_transaction_id: row.payment_transaction_id ?? null,
+    processing_fees_cents: row.processing_fees_cents ?? 0,
+    platform_fees_cents: row.platform_fees_cents ?? 0,
     external_accounting_id: row.external_accounting_id,
     sync_status: row.sync_status as ExpenseListItem["sync_status"],
     last_synced_at: row.last_synced_at,

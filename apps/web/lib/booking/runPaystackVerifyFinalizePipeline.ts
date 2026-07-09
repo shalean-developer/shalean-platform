@@ -24,6 +24,10 @@ import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { bookingPaystackMetadataDebugEnabled } from "@/lib/logging/bookingPaymentDebug";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { notifyBookingDebug } from "@/lib/notifications/notifyBookingDebug";
+import {
+  paystackChargeDataFromRecord,
+  recordPaystackBookingPayment,
+} from "@/lib/payments/recordPaystackSettlement";
 
 /**
  * Paystack transaction payload from `transaction/verify` (shared by `/api/paystack/verify` and `/api/payments/verify`).
@@ -34,8 +38,13 @@ export type PaystackChargeVerifyTx = {
   amount?: number;
   currency?: string;
   paid_at?: string;
+  fees?: number;
+  fees_breakdown?: unknown;
+  channel?: string;
+  id?: number | string;
+  international_format_transaction?: boolean;
   customer?: { email?: string; customer_code?: string };
-  authorization?: { authorization_code?: string };
+  authorization?: { authorization_code?: string; country_code?: string };
   metadata?: Record<string, unknown>;
 };
 
@@ -185,6 +194,14 @@ export async function runPaystackVerifyFinalizePipeline(
         bookingId: result.bookingId,
         reference: ref,
         amountCents: amount,
+      });
+      await recordPaystackBookingPayment(adm, {
+        reference: ref,
+        amountCents: amount,
+        bookingId: result.bookingId,
+        currency,
+        paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+        chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
       });
     }
   }

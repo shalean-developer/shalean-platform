@@ -44,6 +44,11 @@ export const CRON_LOCK_KEYS = {
   payoutIntegrityDaily: "cron:payout-integrity-daily",
   reconcilePaystackTransfers: "cron:reconcile-paystack-transfers",
 
+  // Finance automation
+  generateRecurringExpenses: "cron:generate-recurring-expenses",
+  financeDailyAutomation: "cron:finance-daily-automation",
+  backfillPaystackPayments: "cron:backfill-paystack-payments",
+
   // Read-only observability
   opsHealthMetrics: "cron:ops-health-metrics",
 } as const;

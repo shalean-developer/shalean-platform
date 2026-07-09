@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  Banknote,
   BarChart3,
   Building2,
   DollarSign,
@@ -13,6 +14,9 @@ import {
   TrendingDown,
   TrendingUp,
   Wallet,
+  Clock,
+  CreditCard,
+  PiggyBank,
 } from "lucide-react";
 import {
   Bar,
@@ -35,6 +39,7 @@ import {
   OfficeZohoPageHeader,
   OfficeZohoSecondaryButton,
 } from "@/components/admin/office/OfficeZohoChrome";
+import { FinanceKpiCard } from "@/components/admin/finance/FinanceKpiCard";
 import { useAdminData } from "@/hooks/useAdminData";
 import type { FinancialDashboardPayload } from "@/lib/admin/expenses/loadFinancialDashboard";
 import { defaultOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
@@ -135,8 +140,8 @@ export default function FinancialDashboardPage() {
   return (
     <div className="space-y-6 p-4 md:p-6">
       <OfficeZohoPageHeader
-        title="Financial dashboard"
-        subtitle="True business profit — revenue, payouts, expenses, and net profit"
+        title="Executive financial dashboard"
+        subtitle="True business profit — revenue, payouts, expenses, cash position, and net profit"
         live
         actions={
           <>
@@ -146,8 +151,14 @@ export default function FinancialDashboardPage() {
             <OfficeZohoSecondaryButton onClick={() => refetch()}>
               <RefreshCw className="h-4 w-4" /> Refresh
             </OfficeZohoSecondaryButton>
-            <Link href="/office/expense-reports" className="text-sm font-medium text-[#408df7] hover:underline">
-              View reports →
+            <Link href="/office/payment-reconciliation" className="text-sm font-medium text-[#408df7] hover:underline">
+              Reconciliation →
+            </Link>
+            <Link href="/office/cash-flow" className="text-sm font-medium text-[#408df7] hover:underline">
+              Cash flow →
+            </Link>
+            <Link href="/office/business-health" className="text-sm font-medium text-[#408df7] hover:underline">
+              Health score →
             </Link>
           </>
         }
@@ -155,20 +166,89 @@ export default function FinancialDashboardPage() {
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
-      <OfficeZohoMetricsRow>
-        <OfficeZohoMetricCard icon={DollarSign} label="Customer revenue" value={loading ? "—" : formatZar(profit?.customer_revenue_cents ?? 0)} />
-        <OfficeZohoMetricCard icon={Wallet} label="Cleaner payouts" value={loading ? "—" : formatZar(profit?.cleaner_payouts_cents ?? 0)} />
-        <OfficeZohoMetricCard icon={Building2} label="Gross margin" value={loading ? "—" : formatZar(profit?.gross_margin_cents ?? 0)} />
-        <OfficeZohoMetricCard icon={TrendingDown} label="Operating expenses" value={loading ? "—" : formatZar(profit?.operating_expenses_cents ?? 0)} />
-        <OfficeZohoMetricCard
+      <div className="flex flex-wrap gap-3">
+        <FinanceKpiCard
+          icon={DollarSign}
+          label="Customer revenue"
+          value={loading ? "—" : formatZar(profit?.customer_revenue_cents ?? 0)}
+          growthPercent={cards?.revenue_growth_percent ?? null}
+          sparkline={data?.executive_kpis?.sparkline?.map((s) => ({ value: s.revenue_cents }))}
+          loading={loading}
+          status="positive"
+        />
+        <FinanceKpiCard icon={Wallet} label="Cleaner payouts" value={loading ? "—" : formatZar(profit?.cleaner_payouts_cents ?? 0)} loading={loading} />
+        <FinanceKpiCard icon={Building2} label="Gross margin" value={loading ? "—" : formatZar(profit?.gross_margin_cents ?? 0)} loading={loading} status="positive" />
+        <FinanceKpiCard
+          icon={TrendingDown}
+          label="Operating expenses"
+          value={loading ? "—" : formatZar(profit?.operating_expenses_cents ?? 0)}
+          growthPercent={cards?.expense_growth_percent ?? null}
+          loading={loading}
+          status="warning"
+        />
+        <FinanceKpiCard
           icon={TrendingUp}
           label="Net profit"
           value={loading ? "—" : formatZar(profit?.net_profit_cents ?? 0)}
-          iconClassName={profit && profit.net_profit_cents < 0 ? "bg-red-50 text-red-600" : undefined}
+          growthPercent={cards?.profit_growth_percent ?? null}
+          sparkline={data?.executive_kpis?.sparkline?.map((s) => ({ value: s.net_profit_cents }))}
+          loading={loading}
+          status={(profit?.net_profit_cents ?? 0) >= 0 ? "positive" : "negative"}
         />
-      </OfficeZohoMetricsRow>
+        <FinanceKpiCard
+          icon={BarChart3}
+          label="Net profit margin"
+          value={loading ? "—" : `${data?.executive_kpis?.net_profit_margin_percent ?? cards?.profit_margin_percent ?? "—"}%`}
+          loading={loading}
+        />
+        <FinanceKpiCard
+          icon={CreditCard}
+          label="Outstanding payments"
+          value={loading ? "—" : formatZar(data?.executive_kpis?.outstanding_customer_payments_cents ?? 0)}
+          loading={loading}
+          status="warning"
+        />
+        <FinanceKpiCard
+          icon={Clock}
+          label="Pending cleaner payouts"
+          value={loading ? "—" : formatZar(data?.executive_kpis?.pending_cleaner_payouts_cents ?? 0)}
+          loading={loading}
+        />
+        <FinanceKpiCard
+          icon={Banknote}
+          label="Cash in bank"
+          value={loading ? "—" : formatZar(data?.executive_kpis?.cash_in_bank_cents ?? 0)}
+          loading={loading}
+        />
+        <FinanceKpiCard
+          icon={PiggyBank}
+          label="Petty cash"
+          value={loading ? "—" : formatZar(data?.executive_kpis?.petty_cash_balance_cents ?? 0)}
+          loading={loading}
+        />
+        <FinanceKpiCard
+          icon={CreditCard}
+          label="Gateway fees (Paystack)"
+          value={loading ? "—" : formatZar(data?.executive_kpis?.gateway_processing_fees_cents ?? 0)}
+          loading={loading}
+          status="warning"
+        />
+        <FinanceKpiCard
+          icon={Banknote}
+          label="Net settlement"
+          value={loading ? "—" : formatZar(data?.executive_kpis?.net_settlement_cents ?? 0)}
+          loading={loading}
+          status="positive"
+        />
+        <FinanceKpiCard
+          icon={TrendingUp}
+          label="Avg booking profit"
+          value={loading ? "—" : formatZar(cards?.avg_profit_per_booking_cents ?? 0)}
+          loading={loading}
+        />
+      </div>
 
-      <OfficeZohoMetricsRow>
+      <OfficeZohoMetricsRow meta={<span className="text-xs text-slate-400">Per-booking averages</span>}>
         <OfficeZohoMetricCard icon={BarChart3} label="Profit margin" value={loading ? "—" : `${cards?.profit_margin_percent ?? "—"}%`} />
         <OfficeZohoMetricCard icon={BarChart3} label="Expense ratio" value={loading ? "—" : `${cards?.expense_ratio_percent ?? "—"}%`} />
         <OfficeZohoMetricCard icon={DollarSign} label="Avg revenue / booking" value={loading ? "—" : formatZar(cards?.avg_revenue_per_booking_cents ?? 0)} />
@@ -282,6 +362,8 @@ export default function FinancialDashboardPage() {
                   <th className="px-5 py-3 text-right">Gross margin</th>
                   <th className="px-5 py-3 text-right">Expenses</th>
                   <th className="px-5 py-3 text-right">Net profit</th>
+                  <th className="px-5 py-3 text-right">Bookings</th>
+                  <th className="px-5 py-3 text-right">Avg profit</th>
                 </tr>
               </thead>
               <tbody>
@@ -295,6 +377,8 @@ export default function FinancialDashboardPage() {
                     <td className={cn("px-5 py-3 text-right font-semibold tabular-nums", row.net_profit_cents >= 0 ? "text-violet-700" : "text-red-600")}>
                       {formatZar(row.net_profit_cents)}
                     </td>
+                    <td className="px-5 py-3 text-right tabular-nums">{row.booking_count}</td>
+                    <td className="px-5 py-3 text-right tabular-nums">{formatZar(row.avg_booking_profit_cents)}</td>
                   </tr>
                 ))}
               </tbody>

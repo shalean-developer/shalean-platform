@@ -47,6 +47,8 @@ import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessa
 import { assignmentSourceLabel } from "@/lib/admin/assignmentDisplay";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { getAdminToken } from "@/hooks/useAdminData";
+import { BookingPaymentGatewayCard } from "@/components/admin/finance/BookingPaymentGatewayCard";
+import type { PaymentTransactionRow } from "@/lib/payments/paymentTransactionTypes";
 import { AdminBookingLiveLocation } from "@/components/admin/AdminBookingLiveLocation";
 import {
   EmergencyRosterReassignModal,
@@ -835,8 +837,12 @@ export default function BookingDetailsView({
     customer_payment_cents: number;
     cleaner_payment_cents: number;
     booking_expenses_cents: number;
+    processing_fees_cents: number;
+    platform_fees_cents: number;
     net_booking_profit_cents: number;
+    profit_margin_percent: number | null;
   } | null>(null);
+  const [paymentTransaction, setPaymentTransaction] = useState<PaymentTransactionRow | null>(null);
   const [cleaner, setCleaner] = useState<Cleaner | null>(null);
   /** From GET `selected_cleaner` — customer pick when not same row as assigned `cleaner`. */
   const [selectedCleaner, setSelectedCleaner] = useState<Cleaner | null>(null);
@@ -1171,8 +1177,14 @@ export default function BookingDetailsView({
           headers: { Authorization: `Bearer ${token}` },
         });
         if (!res.ok || cancelled) return;
-        const json = (await res.json()) as { profit?: typeof bookingProfit };
-        if (!cancelled && json.profit) setBookingProfit(json.profit);
+        const json = (await res.json()) as {
+          profit?: typeof bookingProfit;
+          payment_transaction?: PaymentTransactionRow | null;
+        };
+        if (!cancelled) {
+          if (json.profit) setBookingProfit(json.profit);
+          setPaymentTransaction(json.payment_transaction ?? null);
+        }
       } catch {
         /* non-fatal */
       }
@@ -2728,6 +2740,7 @@ export default function BookingDetailsView({
             <AdminInfoCard title="Payments" icon={CreditCard}>
               <DetailRow label="Payment status" value={paymentStatusLabel} />
               <DetailRow label="Total visit" value={`R ${total.toLocaleString("en-ZA")}`} strong />
+              <BookingPaymentGatewayCard paymentTransaction={paymentTransaction} />
               <DetailRow
                 label={cleanerPayoutCard.payoutLabel}
                 value={cleanerPayoutZar == null ? "Pending" : `R ${cleanerPayoutZar.toLocaleString("en-ZA")}`}
@@ -3836,12 +3849,27 @@ export default function BookingDetailsView({
                 value={`R ${(bookingProfit.booking_expenses_cents / 100).toLocaleString("en-ZA")}`}
               />
               <DetailRow
+                label="Gateway fee (Paystack)"
+                value={`R ${(bookingProfit.processing_fees_cents / 100).toLocaleString("en-ZA")}`}
+              />
+              <DetailRow
+                label="Platform fee"
+                value={`R ${(bookingProfit.platform_fees_cents / 100).toLocaleString("en-ZA")}`}
+              />
+              <DetailRow
                 label="Net booking profit"
                 value={`R ${(bookingProfit.net_booking_profit_cents / 100).toLocaleString("en-ZA")}`}
                 strong
               />
+              {bookingProfit.profit_margin_percent != null ? (
+                <DetailRow label="Profit margin" value={`${bookingProfit.profit_margin_percent}%`} />
+              ) : null}
+              <div className="mt-3">
+                <BookingPaymentGatewayCard paymentTransaction={paymentTransaction} />
+              </div>
               <p className="mt-2 text-xs text-zinc-500">
-                Booking expenses include approved operating costs linked to this job (supplies, fuel, parking, etc.).
+                Operating expenses exclude auto-recorded gateway fees to avoid double-counting. Gateway fee is stored on
+                the payment ledger and as an approved Paystack Fees expense.
               </p>
             </DetailCard>
           ) : null}

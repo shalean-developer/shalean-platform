@@ -4,6 +4,12 @@ export type PaystackVerifyTxData = {
   amount?: number;
   currency?: string;
   paid_at?: string;
+  fees?: number;
+  fees_breakdown?: unknown;
+  channel?: string;
+  id?: number | string;
+  international_format_transaction?: boolean;
+  authorization?: { country_code?: string };
   metadata?: Record<string, unknown>;
 };
 

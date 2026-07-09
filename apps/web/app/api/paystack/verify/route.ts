@@ -40,6 +40,12 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 import { allowPaystackVerifyRequest, paystackVerifyRateLimitKey } from "@/lib/rateLimit/paystackVerifyIpLimit";
 import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/paystackReplayPaymentConfirmedNotify";
 import { loadBookingReferenceForId } from "@/lib/booking/loadBookingReference";
+import {
+  paystackChargeDataFromRecord,
+  recordPaystackBookingPayment,
+  recordPaystackMonthlyInvoicePayment,
+  recordPaystackSalesDocumentPayment,
+} from "@/lib/payments/recordPaystackSettlement";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -171,6 +177,21 @@ export async function GET(request: Request) {
             : { reason: monthlyRoutingGet.reason }),
         },
       });
+      if (monthlyRoutingGet.kind === "monthly_settled" || monthlyRoutingGet.kind === "monthly_already_processed") {
+        const invoiceId =
+          monthlyRoutingGet.kind === "monthly_settled"
+            ? monthlyRoutingGet.invoiceId
+            : monthlyInvoiceIdHintGet;
+        if (invoiceId) {
+          await recordPaystackMonthlyInvoicePayment(adminGet, {
+            reference: ref,
+            amountCents: monthlyAmountGet,
+            invoiceId,
+            paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+            chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+          });
+        }
+      }
       return NextResponse.json({
         ok: true,
         success: true,
@@ -212,6 +233,21 @@ export async function GET(request: Request) {
             : { reason: salesRoutingGet.reason }),
         },
       });
+      if (salesRoutingGet.kind === "sales_doc_settled" || salesRoutingGet.kind === "sales_doc_already_processed") {
+        const documentId =
+          salesRoutingGet.kind === "sales_doc_settled"
+            ? salesRoutingGet.documentId
+            : salesDocIdHintGet;
+        if (documentId) {
+          await recordPaystackSalesDocumentPayment(adminGet, {
+            reference: ref,
+            amountCents: monthlyAmountGet,
+            documentId,
+            paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+            chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+          });
+        }
+      }
       return NextResponse.json({
         ok: true,
         success: true,
@@ -269,6 +305,14 @@ export async function GET(request: Request) {
         amountCents: amountCentsGet,
         metadata: tx.metadata,
         customerEmailHint: emailFromCustomer || undefined,
+      });
+      await recordPaystackBookingPayment(adminGet, {
+        reference: ref,
+        amountCents: amountCentsGet,
+        bookingId: existing.bookingId,
+        currency: typeof tx.currency === "string" ? tx.currency : "ZAR",
+        paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+        chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
       });
       return NextResponse.json({
         ok: true,
@@ -481,6 +525,23 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
             : { reason: monthlyRoutingPost.reason }),
         },
       });
+      if (monthlyRoutingPost.kind === "monthly_settled" || monthlyRoutingPost.kind === "monthly_already_processed") {
+        const invoiceId =
+          monthlyRoutingPost.kind === "monthly_settled"
+            ? monthlyRoutingPost.invoiceId
+            : monthlyInvoiceIdFromPaystackMetadata(
+                normalizePaystackMetadata(tx.metadata) as unknown as Record<string, unknown>,
+              );
+        if (invoiceId) {
+          await recordPaystackMonthlyInvoicePayment(adminPost, {
+            reference: ref,
+            amountCents: txAmount,
+            invoiceId,
+            paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+            chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+          });
+        }
+      }
       const metadataMonthly = normalizePaystackMetadata(tx.metadata);
       const { snapshot: snapMonthly } = parseBookingSnapshot(metadataMonthly, { amountCents: txAmount });
       const emailFromCustomerMonthly = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
@@ -539,6 +600,21 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
             : { reason: salesRoutingPost.reason }),
         },
       });
+      if (salesRoutingPost.kind === "sales_doc_settled" || salesRoutingPost.kind === "sales_doc_already_processed") {
+        const documentId =
+          salesRoutingPost.kind === "sales_doc_settled"
+            ? salesRoutingPost.documentId
+            : salesDocIdHintPost;
+        if (documentId) {
+          await recordPaystackSalesDocumentPayment(adminPost, {
+            reference: ref,
+            amountCents: txAmount,
+            documentId,
+            paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+            chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+          });
+        }
+      }
       const metadataSales = normalizePaystackMetadata(tx.metadata);
       const { snapshot: snapSales } = parseBookingSnapshot(metadataSales, { amountCents: txAmount });
       const emailFromCustomerSales = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
@@ -621,6 +697,14 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
         metadata: tx.metadata,
         snapshot: snapShort,
         customerEmailHint: emailNorm || emailFromCustomerPost || undefined,
+      });
+      await recordPaystackBookingPayment(adminPost, {
+        reference: ref,
+        amountCents: txAmount,
+        bookingId: existingPost.bookingId,
+        currency: txCurrency,
+        paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+        chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
       });
       const bookingReference = await loadBookingReferenceForId(adminPost, existingPost.bookingId);
       return NextResponse.json({

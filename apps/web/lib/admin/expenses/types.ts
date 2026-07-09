@@ -1,3 +1,5 @@
+export type ExpenseApprovalStage = "finance" | "manager" | "owner" | "complete" | "rejected";
+
 export type ExpenseStatus = "pending" | "approved" | "rejected";
 
 export type ExpensePaymentMethod =
@@ -57,6 +59,11 @@ export type ExpenseRow = {
   created_by: string | null;
   approved_by: string | null;
   approved_at: string | null;
+  approval_stage: ExpenseApprovalStage;
+  recurring_expense_id: string | null;
+  payment_transaction_id: string | null;
+  processing_fees_cents: number;
+  platform_fees_cents: number;
   external_accounting_id: string | null;
   sync_status: ExpenseSyncStatus;
   last_synced_at: string | null;

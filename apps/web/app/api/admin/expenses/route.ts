@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { notifyExpenseSubmitted } from "@/lib/admin/expenses/sendFinanceApprovalEmails";
 import { requireFinanceApi } from "@/lib/auth/requireFinanceApi";
 import { loadExpenseList, loadExpenseSummary } from "@/lib/admin/expenses/loadExpenses";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -103,10 +104,28 @@ export async function POST(request: Request) {
     receipt_mime: body.receipt_mime ? String(body.receipt_mime) : null,
     notes: body.notes ? String(body.notes) : null,
     status: "pending" as const,
+    approval_stage: "finance" as const,
     created_by: auth.userId,
   };
 
   const { data, error } = await admin.from("expenses").insert(row).select("id").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  await admin.from("expense_approval_events").insert({
+    expense_id: data.id,
+    stage: "finance",
+    action: "submitted",
+    actor_id: auth.userId,
+    comment: "Expense submitted for approval",
+  }).then(() => null);
+
+  void notifyExpenseSubmitted(admin, {
+    id: data.id,
+    description,
+    amount_cents: Math.round(amountCents),
+    expense_date: expenseDate,
+    created_by: auth.userId,
+  });
+
   return NextResponse.json({ ok: true, id: data.id });
 }

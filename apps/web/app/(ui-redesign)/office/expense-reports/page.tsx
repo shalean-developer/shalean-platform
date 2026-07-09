@@ -38,6 +38,12 @@ type ReportResponse = {
     net_profit_percent: number | null;
   };
   visit_count?: number;
+  gateway_payments?: {
+    gross_cents: number;
+    processing_fee_cents: number;
+    net_settlement_cents: number;
+    transaction_count: number;
+  };
   expenses?: ExpenseListItem[];
   expenses_by_category?: Array<{ category: string; group: string; amount_cents: number; count: number }>;
   expenses_by_branch?: Array<{ branch_id: string; branch_name: string; amount_cents: number; count: number }>;
@@ -96,6 +102,8 @@ export default function ExpenseReportsPage() {
               ["Cleaner payouts", data.profit.cleaner_payouts_cents, "text-slate-700"],
               ["Gross margin", data.profit.gross_margin_cents, "text-emerald-700"],
               ["Operating expenses", data.profit.operating_expenses_cents, "text-amber-700"],
+              ["Gateway fees (Paystack)", data.gateway_payments?.processing_fee_cents ?? 0, "text-orange-700"],
+              ["Net settlement", data.gateway_payments?.net_settlement_cents ?? 0, "text-teal-700"],
               ["Net profit", data.profit.net_profit_cents, data.profit.net_profit_cents >= 0 ? "text-violet-700" : "text-red-600"],
             ].map(([label, cents, cls]) => (
               <div key={String(label)} className="rounded-lg border border-slate-100 p-4">

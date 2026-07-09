@@ -35,6 +35,12 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 import { timingSafeEqualString } from "@/lib/security/timingSafeEqualString";
+import {
+  paystackChargeDataFromRecord,
+  recordPaystackBookingPayment,
+  recordPaystackMonthlyInvoicePayment,
+  recordPaystackSalesDocumentPayment,
+} from "@/lib/payments/recordPaystackSettlement";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -180,9 +186,28 @@ export async function POST(request: Request) {
           ...partialCtx,
         },
       });
+      await recordPaystackMonthlyInvoicePayment(supabase, {
+        reference,
+        amountCents: typeof data.amount === "number" ? data.amount : 0,
+        invoiceId: monthlyRouting.invoiceId,
+        paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+        chargeData: paystackChargeDataFromRecord(data),
+      });
       return NextResponse.json({ received: true });
     }
     if (monthlyRouting.kind === "monthly_already_processed") {
+      const invoiceIdHint = monthlyInvoiceIdFromPaystackMetadata(
+        normalizePaystackMetadata(data.metadata) as unknown as Record<string, unknown>,
+      );
+      if (invoiceIdHint) {
+        await recordPaystackMonthlyInvoicePayment(supabase, {
+          reference,
+          amountCents: typeof data.amount === "number" ? data.amount : 0,
+          invoiceId: invoiceIdHint,
+          paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+          chargeData: paystackChargeDataFromRecord(data),
+        });
+      }
       return new Response("Already processed", {
         status: 200,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -204,9 +229,25 @@ export async function POST(request: Request) {
         message: "sales_document.charge.success",
         context: { reference, documentId: salesRouting.documentId },
       });
+      await recordPaystackSalesDocumentPayment(supabase, {
+        reference,
+        amountCents: typeof data.amount === "number" ? data.amount : 0,
+        documentId: salesRouting.documentId,
+        paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+        chargeData: paystackChargeDataFromRecord(data),
+      });
       return NextResponse.json({ received: true });
     }
     if (salesRouting.kind === "sales_doc_already_processed") {
+      if (salesDocIdHint) {
+        await recordPaystackSalesDocumentPayment(supabase, {
+          reference,
+          amountCents: typeof data.amount === "number" ? data.amount : 0,
+          documentId: salesDocIdHint,
+          paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+          chargeData: paystackChargeDataFromRecord(data),
+        });
+      }
       return new Response("Already processed", {
         status: 200,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
@@ -308,6 +349,14 @@ export async function POST(request: Request) {
         reference,
         amountCents: amount,
       });
+      await recordPaystackBookingPayment(supabase, {
+        reference,
+        amountCents: amount,
+        bookingId: persistedHead.bookingId,
+        currency,
+        paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+        chargeData: paystackChargeDataFromRecord(data),
+      });
       return NextResponse.json({ received: true });
     }
   }
@@ -365,6 +414,14 @@ export async function POST(request: Request) {
         bookingId: result.bookingId,
         reference,
         amountCents: amount,
+      });
+      await recordPaystackBookingPayment(supabase, {
+        reference,
+        amountCents: amount,
+        bookingId: result.bookingId,
+        currency,
+        paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
+        chargeData: paystackChargeDataFromRecord(data),
       });
     }
   }

@@ -8,3 +8,14 @@ node_modules/
 
 # Supabase CLI local cache (version pins, etc.)
 supabase/.temp/
+
+# Local audit / scratch outputs
+route-audit-temp.json
+*-audit-temp.json
+*-temp.json
+
+# Lighthouse / local tool caches
+.tmp-lh/
+
+# Local SEO data exports (keep *.example.json)
+apps/web/tmp/gsc-rows.json

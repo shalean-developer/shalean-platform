@@ -53,3 +53,7 @@ next-env.d.ts
 
 # Supabase CLI linked-project + .temp (from `supabase link` run inside apps/web — not the repo root `supabase/migrations`)
 /supabase/
+
+# Local script/data scratch
+/tmp/gsc-rows.json
+/scripts/_tmp-*

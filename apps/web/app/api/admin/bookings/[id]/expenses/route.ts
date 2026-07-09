@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireFinanceApi } from "@/lib/auth/requireFinanceApi";
-import { sumApprovedBookingExpenses } from "@/lib/admin/expenses/loadExpenses";
 import { computeBookingProfit } from "@/lib/admin/expenses/profitCalculations";
 import { bookingCustomerRevenueCents } from "@/lib/admin/payouts/officePayoutPeriodReport";
+import {
+  resolveBookingGatewayProcessingFeeCents,
+  sumApprovedBookingOperatingExpenses,
+} from "@/lib/payments/bookingPaymentFees";
+import { loadPaymentTransactionForBooking } from "@/lib/payments/recordGatewayPayment";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -23,7 +27,7 @@ export async function GET(_request: Request, ctx: RouteCtx) {
   const { data: booking, error } = await admin
     .from("bookings")
     .select(
-      "id, total_paid_zar, amount_paid_cents, total_paid_cents, earnings_summary, cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents",
+      "id, total_paid_zar, amount_paid_cents, total_paid_cents, service_fee_cents, company_revenue_cents, earnings_summary, cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents",
     )
     .eq("id", id)
     .maybeSingle();
@@ -33,8 +37,18 @@ export async function GET(_request: Request, ctx: RouteCtx) {
 
   const customerPayment = bookingCustomerRevenueCents(booking);
   const cleanerPayment = Math.max(0, Math.round(resolveCleanerEarningsCents(booking) ?? Number(booking.cleaner_payout_cents) ?? 0));
-  const bookingExpenses = await sumApprovedBookingExpenses(admin, id);
-  const profit = computeBookingProfit(customerPayment, cleanerPayment, bookingExpenses);
+  const bookingExpenses = await sumApprovedBookingOperatingExpenses(admin, id);
+  const gatewayFees = await resolveBookingGatewayProcessingFeeCents(admin, id);
+  const platformFees = Math.max(0, Math.round(Number(booking.service_fee_cents) ?? 0));
+  const profit = computeBookingProfit(
+    customerPayment,
+    cleanerPayment,
+    bookingExpenses,
+    gatewayFees,
+    platformFees,
+  );
+
+  const paymentTransaction = await loadPaymentTransactionForBooking(admin, id);
 
   const { data: expenses } = await admin
     .from("expenses")
@@ -42,5 +56,9 @@ export async function GET(_request: Request, ctx: RouteCtx) {
     .eq("booking_id", id)
     .order("expense_date", { ascending: false });
 
-  return NextResponse.json({ profit, expenses: expenses ?? [] });
+  return NextResponse.json({
+    profit,
+    payment_transaction: paymentTransaction,
+    expenses: expenses ?? [],
+  });
 }

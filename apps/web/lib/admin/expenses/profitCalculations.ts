@@ -41,21 +41,32 @@ export type BookingProfitBreakdown = {
   customer_payment_cents: number;
   cleaner_payment_cents: number;
   booking_expenses_cents: number;
+  processing_fees_cents: number;
+  platform_fees_cents: number;
   net_booking_profit_cents: number;
+  profit_margin_percent: number | null;
 };
 
 export function computeBookingProfit(
   customerPaymentCents: number,
   cleanerPaymentCents: number,
   bookingExpensesCents: number,
+  processingFeesCents = 0,
+  platformFeesCents = 0,
 ): BookingProfitBreakdown {
   const customer = Math.max(0, Math.round(customerPaymentCents));
   const cleaner = Math.max(0, Math.round(cleanerPaymentCents));
   const expenses = Math.max(0, Math.round(bookingExpensesCents));
+  const processing = Math.max(0, Math.round(processingFeesCents));
+  const platform = Math.max(0, Math.round(platformFeesCents));
+  const net = customer - cleaner - expenses - processing - platform;
   return {
     customer_payment_cents: customer,
     cleaner_payment_cents: cleaner,
     booking_expenses_cents: expenses,
-    net_booking_profit_cents: customer - cleaner - expenses,
+    processing_fees_cents: processing,
+    platform_fees_cents: platform,
+    net_booking_profit_cents: net,
+    profit_margin_percent: customer > 0 ? Math.round((net / customer) * 10000) / 100 : null,
   };
 }
