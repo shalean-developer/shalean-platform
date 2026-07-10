@@ -191,7 +191,7 @@ async function generateWeeklyPayoutsForPeriod(
   admin: SupabaseClient,
   periodStart: string,
   periodEnd: string,
-  opts?: { asOfForCutoffProbe?: Date },
+  opts?: { asOfForCutoffProbe?: Date; createdBy?: string | null },
 ): Promise<GeneratePeriodResult> {
   if (!isMonthlyPayoutBatchPeriod(periodStart, periodEnd)) {
     return { payoutsCreated: 0, bookingsLinked: 0, payoutsBackfilled: 0, skippedCleaners: 0 };
@@ -379,6 +379,7 @@ async function generateWeeklyPayoutsForPeriod(
         status: "pending",
         period_start: periodStart,
         period_end: periodEnd,
+        ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
       })
       .select("id")
       .maybeSingle();
@@ -563,7 +564,10 @@ async function generateWeeklyPayoutsForPeriod(
  * Phase 12: each booking must satisfy {@link bookingPayableForWeeklyBatch} (invoice-settled accrual vs prepaid
  * customer-settled) before linking into a monthly batch.
  */
-export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<GenerateWeeklyPayoutsResult> {
+export async function generateWeeklyPayouts(
+  admin: SupabaseClient,
+  opts?: { createdBy?: string | null },
+): Promise<GenerateWeeklyPayoutsResult> {
   const asOf = new Date();
   const { periodStart, periodEnd } = getPreviousMonthDateBoundsJhb(asOf);
 
@@ -578,7 +582,10 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
   }
 
   const preflight = await ensureNoMissingCompletedPayouts(admin);
-  const periodResult = await generateWeeklyPayoutsForPeriod(admin, periodStart, periodEnd, { asOfForCutoffProbe: asOf });
+  const periodResult = await generateWeeklyPayoutsForPeriod(admin, periodStart, periodEnd, {
+    asOfForCutoffProbe: asOf,
+    createdBy: opts?.createdBy,
+  });
 
   return {
     period: { start: periodStart, end: periodEnd },
@@ -593,7 +600,10 @@ export async function generateWeeklyPayouts(admin: SupabaseClient): Promise<Gene
  * Admin catch-up: batch every Johannesburg calendar month (from July 2026) that still has unlinked payable bookings.
  * Cron continues to use {@link generateWeeklyPayouts} for the previous month only.
  */
-export async function generateCatchUpWeeklyPayouts(admin: SupabaseClient): Promise<GenerateCatchUpWeeklyPayoutsResult> {
+export async function generateCatchUpWeeklyPayouts(
+  admin: SupabaseClient,
+  opts?: { createdBy?: string | null },
+): Promise<GenerateCatchUpWeeklyPayoutsResult> {
   const preflight = await ensureNoMissingCompletedPayouts(admin);
   const months = await listUnbatchedCompletionMonths(admin);
 
@@ -605,7 +615,10 @@ export async function generateCatchUpWeeklyPayouts(admin: SupabaseClient): Promi
 
   for (const { periodStart, periodEnd } of months) {
     const asOfForCutoffProbe = new Date(`${periodEnd}T12:00:00+02:00`);
-    const periodResult = await generateWeeklyPayoutsForPeriod(admin, periodStart, periodEnd, { asOfForCutoffProbe });
+    const periodResult = await generateWeeklyPayoutsForPeriod(admin, periodStart, periodEnd, {
+      asOfForCutoffProbe,
+      createdBy: opts?.createdBy,
+    });
     payoutsCreated += periodResult.payoutsCreated;
     bookingsLinked += periodResult.bookingsLinked;
     payoutsBackfilled += periodResult.payoutsBackfilled;

@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const lockResult = await withCronLock(
       admin,
       { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
-      () => generateCatchUpWeeklyPayouts(admin),
+      () => generateCatchUpWeeklyPayouts(admin, { createdBy: auth.userId }),
     );
     if (lockResult.skipped) {
       return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });

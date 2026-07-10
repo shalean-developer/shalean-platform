@@ -4,32 +4,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { ensurePaystackRecipient } from "@/lib/payout/ensurePaystackRecipient";
 import { measurePhase15aLedgerClaimShadowEligibility } from "@/lib/payout/phase15aLedgerClaimShadowEligibility";
-import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
-
-type PaystackJson = {
-  status?: boolean;
-  message?: string;
-  data?: { transfer_code?: string; status?: string; reference?: string };
-};
-
-async function paystackPost(path: string, body: Record<string, unknown>): Promise<{ ok: true; json: PaystackJson } | { ok: false; error: string }> {
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
-  if (!secret) return { ok: false, error: "PAYSTACK_SECRET_KEY is not configured." };
-  const origin = getPaystackBaseUrl();
-  const res = await fetch(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-  const json = (await res.json().catch(() => ({}))) as PaystackJson;
-  if (!res.ok || json.status === false) {
-    return { ok: false, error: json.message ?? `Paystack request failed with ${res.status}.` };
-  }
-  return { ok: true, json };
-}
+import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
+import {
+  immutableEarningsDisbursementReference,
+  submitPaystackTransferViaOutbox,
+} from "@/lib/payout/paystackTransferExecutor";
 
 async function revertClaimedDisbursement(admin: SupabaseClient, disbursementId: string, errorNote: string): Promise<void> {
   const now = new Date().toISOString();
@@ -47,15 +26,23 @@ async function revertClaimedDisbursement(admin: SupabaseClient, disbursementId: 
 }
 
 /**
- * Claims all `approved` `cleaner_earnings` for the cleaner (DB lock), then sends one Paystack transfer.
- * Completion is driven by `transfer.success` webhook (`applyTransferSuccess` → earnings rows `paid`).
+ * Claims all eligible `approved` `cleaner_earnings` for the cleaner (DB lock + dual-rail gate),
+ * then sends one Paystack transfer via the shared outbox executor.
+ * Completion is driven by `transfer.success` webhook.
  */
 export async function executeCleanerApprovedEarningsPaystack(
   admin: SupabaseClient,
   params: { cleanerId: string; initiatedBy?: string | null },
 ): Promise<
-  | { ok: true; disbursement_id: string; transferCode: string | null; reference: string; skipped?: boolean }
-  | { ok: false; error: string; code?: string; status?: number }
+  | {
+      ok: true;
+      disbursement_id: string;
+      transferCode: string | null;
+      reference: string;
+      skipped?: boolean;
+      needsReconcile?: boolean;
+    }
+  | { ok: false; error: string; code?: string; status?: number; needsReconcile?: boolean }
 > {
   const cid = params.cleanerId.trim();
   if (!/^[0-9a-f-]{36}$/i.test(cid)) return { ok: false, error: "Invalid cleaner id", status: 400 };
@@ -66,10 +53,16 @@ export async function executeCleanerApprovedEarningsPaystack(
   }
 
   /**
-   * Phase 15A measurement only. Do not enforce here until Phase 15B/15C sign-off.
-   * Awaited so claim RPC order is unchanged after observation.
+   * Phase 15A measurement only. Dual-rail exclusion is now enforced in
+   * `claim_cleaner_earnings_for_paystack` (migration 20261065).
    */
   await measurePhase15aLedgerClaimShadowEligibility(admin, cid);
+
+  void logPayoutAuditEvent(admin, {
+    eventType: "ledger_disburse_requested",
+    actorUserId: params.initiatedBy,
+    context: { cleanerId: cid },
+  });
 
   const { data: disbIdRaw, error: claimErr } = await admin.rpc("claim_cleaner_earnings_for_paystack", {
     p_cleaner_id: cid,
@@ -100,7 +93,7 @@ export async function executeCleanerApprovedEarningsPaystack(
       ok: true,
       disbursement_id: disbursementId,
       transferCode: tc || null,
-      reference: ref || tc || disbursementId,
+      reference: ref || tc || immutableEarningsDisbursementReference(disbursementId),
       skipped: true,
     };
   }
@@ -125,43 +118,40 @@ export async function executeCleanerApprovedEarningsPaystack(
     return { ok: false, error: "Disbursement amount is zero.", status: 400 };
   }
 
-  const reference = `shalean-earnings-${disbursementId}`;
-  const transfer = await paystackPost("/transfer", {
-    source: "balance",
-    amount,
-    recipient: ensured.recipientCode,
-    reason: "Cleaner payout",
+  const reference = immutableEarningsDisbursementReference(disbursementId);
+  const transfer = await submitPaystackTransferViaOutbox(admin, {
+    rail: "cleaner_earnings",
+    subjectId: disbursementId,
+    cleanerId: cid,
+    amountCents: amount,
+    recipientCode: ensured.recipientCode,
     reference,
+    initiatedBy: params.initiatedBy,
   });
 
   if (!transfer.ok) {
+    if (transfer.needsReconcile) {
+      // Do not revert claim — money may have moved; leave processing for webhook/reconcile.
+      void reportOperationalIssue("warn", "executeCleanerApprovedEarningsPaystack", transfer.error, {
+        disbursementId,
+        needsReconcile: true,
+      });
+      return {
+        ok: false,
+        error: transfer.error,
+        needsReconcile: true,
+      };
+    }
     await revertClaimedDisbursement(admin, disbursementId, transfer.error);
     return { ok: false, error: transfer.error };
   }
 
-  const transferCode = transfer.json.data?.transfer_code?.trim() ?? null;
-  const transferReference = String(transfer.json.data?.reference ?? "").trim() || reference;
   const now = new Date().toISOString();
-
-  const { error: insErr } = await admin.from("earnings_disbursement_transfers").insert({
-    disbursement_id: disbursementId,
-    cleaner_id: cid,
-    amount_cents: amount,
-    recipient_code: ensured.recipientCode,
-    transfer_code: transferCode,
-    reference: transferReference,
-    status: "processing",
-  });
-  if (insErr) {
-    await revertClaimedDisbursement(admin, disbursementId, `Audit insert failed: ${insErr.message}`);
-    return { ok: false, error: `Transfer sent but audit log failed: ${insErr.message}` };
-  }
-
   const { error: upDisbErr } = await admin
     .from("cleaner_earnings_disbursements")
     .update({
-      paystack_reference: transferReference,
-      transfer_code: transferCode,
+      paystack_reference: transfer.reference,
+      transfer_code: transfer.transferCode,
       updated_at: now,
     })
     .eq("id", disbursementId)
@@ -180,12 +170,19 @@ export async function executeCleanerApprovedEarningsPaystack(
       disbursementId,
       cleanerId: cid,
       initiatedBy: params.initiatedBy ?? null,
-      transferCode,
-      reference: transferReference,
+      transferCode: transfer.transferCode,
+      reference: transfer.reference,
     },
   });
 
-  return { ok: true, disbursement_id: disbursementId, transferCode, reference: transferReference };
+  return {
+    ok: true,
+    disbursement_id: disbursementId,
+    transferCode: transfer.transferCode,
+    reference: transfer.reference,
+    skipped: transfer.skippedExisting,
+    needsReconcile: transfer.needsReconcile,
+  };
 }
 
 /**
@@ -207,10 +204,19 @@ export async function executeAllCleanersApprovedEarningsPaystack(
     void reportOperationalIssue("error", "executeAllCleanersApprovedEarningsPaystack", error.message, {});
     return { cleaners: 0, results: [] };
   }
-  const ids = [...new Set((idsRows ?? []).map((r) => String((r as { cleaner_id?: string }).cleaner_id ?? "").trim()).filter(Boolean))];
+  const ids = [
+    ...new Set(
+      (idsRows ?? [])
+        .map((r) => String((r as { cleaner_id?: string }).cleaner_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
   const results: { cleaner_id: string; ok: boolean; error?: string; disbursement_id?: string }[] = [];
   for (const cleaner_id of ids) {
-    const r = await executeCleanerApprovedEarningsPaystack(admin, { cleanerId: cleaner_id, initiatedBy: params.initiatedBy });
+    const r = await executeCleanerApprovedEarningsPaystack(admin, {
+      cleanerId: cleaner_id,
+      initiatedBy: params.initiatedBy,
+    });
     if (r.ok) {
       results.push({ cleaner_id, ok: true, disbursement_id: r.disbursement_id });
     } else if (r.code === "no_approved_earnings") {

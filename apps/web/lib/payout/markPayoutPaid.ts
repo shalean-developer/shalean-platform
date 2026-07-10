@@ -22,11 +22,18 @@ export async function markCleanerPayoutPaid(
     .update({
       status: "paid",
       paid_at: new Date().toISOString(),
+      payment_status: "success",
     })
     .eq("id", payoutId)
     .eq("status", "approved");
 
   if (error) return { ok: false, error: error.message };
+
+  const { error: bookingSyncErr } = await admin.rpc("mark_bookings_paid_for_cleaner_payout", {
+    p_payout_id: payoutId,
+  });
+  if (bookingSyncErr) return { ok: false, error: bookingSyncErr.message };
+
   void logSystemEvent({
     level: "info",
     source: "PAYOUT_MARKED_PAID",

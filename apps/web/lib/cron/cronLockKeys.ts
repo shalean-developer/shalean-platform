@@ -43,6 +43,7 @@ export const CRON_LOCK_KEYS = {
   freezePayouts: "cron:freeze-payouts",
   payoutIntegrityDaily: "cron:payout-integrity-daily",
   reconcilePaystackTransfers: "cron:reconcile-paystack-transfers",
+  processPayoutTransferOutbox: "cron:process-payout-transfer-outbox",
 
   // Finance automation
   generateRecurringExpenses: "cron:generate-recurring-expenses",

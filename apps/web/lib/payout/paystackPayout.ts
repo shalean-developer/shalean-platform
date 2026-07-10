@@ -1,7 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { ensurePaystackRecipient } from "@/lib/payout/ensurePaystackRecipient";
-import { getPaystackBaseUrl } from "@/lib/payout/paystackOrigin";
+import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
+import {
+  immutableCleanerPayoutReference,
+  submitPaystackTransferViaOutbox,
+} from "@/lib/payout/paystackTransferExecutor";
 
 type PayoutRow = {
   id: string;
@@ -11,107 +15,75 @@ type PayoutRow = {
   payment_status?: string | null;
   payment_reference?: string | null;
   amount_adjusted_at?: string | null;
+  calculated_amount_cents?: number | null;
+  adjustment_note?: string | null;
+  approved_by?: string | null;
 };
 
 type BookingPayoutRow = {
+  id: string;
   cleaner_id: string | null;
   cleaner_payout_cents: number | null;
   cleaner_bonus_cents: number | null;
   is_test: boolean | null;
+  payout_status?: string | null;
+  refunded_at?: string | null;
+  status?: string | null;
 };
 
-type ExistingTransfer = {
-  id: string;
-  transfer_code: string | null;
-};
-
-type PaystackJson = {
-  status?: boolean;
-  message?: string;
-  data?: {
-    transfer_code?: string;
-    status?: string;
-    reference?: string;
-  };
-};
-
-type PaystackTransferResult = {
-  ok: true;
-  transferCode: string | null;
-  reference: string;
-  skippedExisting?: boolean;
-} | {
-  ok: false;
-  error: string;
-  status?: number;
-};
+type PaystackTransferResult =
+  | {
+      ok: true;
+      transferCode: string | null;
+      reference: string;
+      skippedExisting?: boolean;
+      needsReconcile?: boolean;
+    }
+  | {
+      ok: false;
+      error: string;
+      status?: number;
+      needsReconcile?: boolean;
+    };
 
 function cents(value: unknown): number {
   if (value == null || !Number.isFinite(Number(value))) return 0;
   return Math.max(0, Math.round(Number(value)));
 }
 
-function paystackTransferClientReference(payoutId: string, paymentStatus: string | null | undefined): string {
-  const base = `shalean-cleaner-payout-${payoutId}`;
-  const s = String(paymentStatus ?? "")
+function makerCheckerEnabled(): boolean {
+  return String(process.env.PAYOUT_MAKER_CHECKER ?? "")
     .trim()
-    .toLowerCase();
-  if (s === "failed" || s === "partial_failed") return `${base}-retry-${Date.now()}`;
-  return base;
+    .toLowerCase() === "true";
 }
 
-async function paystackRequest(path: string, body: Record<string, unknown>): Promise<{ ok: true; json: PaystackJson } | { ok: false; error: string }> {
-  const secret = process.env.PAYSTACK_SECRET_KEY?.trim();
-  if (!secret) return { ok: false, error: "PAYSTACK_SECRET_KEY is not configured." };
-
-  const origin = getPaystackBaseUrl();
-  const res = await fetch(`${origin}${path.startsWith("/") ? path : `/${path}`}`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${secret}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(body),
-  });
-
-  const json = (await res.json().catch(() => ({}))) as PaystackJson;
-  if (!res.ok || json.status === false) {
-    return { ok: false, error: json.message ?? `Paystack request failed with ${res.status}.` };
-  }
-  return { ok: true, json };
+function allowSelfApprovePay(): boolean {
+  return String(process.env.PAYOUT_ALLOW_SELF_APPROVE_PAY ?? "")
+    .trim()
+    .toLowerCase() === "true";
 }
 
-async function logFailedTransfer(
+async function failPayoutExecution(
   admin: SupabaseClient,
-  params: {
-    payoutId: string;
-    cleanerId: string;
-    amountCents: number;
-    recipientCode?: string | null;
-    error: string;
-  },
+  payoutId: string,
+  status: "failed" | "partial_failed" = "failed",
 ) {
-  await admin.from("payout_transfers").insert({
-    payout_id: params.payoutId,
-    cleaner_id: params.cleanerId,
-    amount_cents: params.amountCents,
-    recipient_code: params.recipientCode ?? null,
-    status: "failed",
-    error: params.error.slice(0, 2000),
-  });
-}
-
-async function failPayoutExecution(admin: SupabaseClient, payoutId: string, status: "failed" | "partial_failed" = "failed") {
   await admin.from("cleaner_payouts").update({ payment_status: status }).eq("id", payoutId).eq("status", "approved");
 }
 
+/**
+ * Pay an approved weekly/monthly `cleaner_payouts` batch via the shared outbox transfer executor.
+ * Money is only sent through {@link submitPaystackTransferViaOutbox}.
+ */
 export async function payCleanerPayoutWithPaystack(
   admin: SupabaseClient,
   params: { payoutId: string; paidBy: string },
 ): Promise<PaystackTransferResult> {
   const { data: payoutData, error: payoutErr } = await admin
     .from("cleaner_payouts")
-    .select("id, cleaner_id, total_amount_cents, status, payment_status, payment_reference, amount_adjusted_at")
+    .select(
+      "id, cleaner_id, total_amount_cents, status, payment_status, payment_reference, amount_adjusted_at, calculated_amount_cents, adjustment_note, approved_by",
+    )
     .eq("id", params.payoutId)
     .maybeSingle();
   if (payoutErr) return { ok: false, error: payoutErr.message };
@@ -122,15 +94,51 @@ export async function payCleanerPayoutWithPaystack(
     return { ok: false, error: "Only approved payout batches can be paid.", status: 400 };
   }
 
+  if (makerCheckerEnabled() && !allowSelfApprovePay()) {
+    const approvedBy = String(payout.approved_by ?? "").trim();
+    if (approvedBy && approvedBy === params.paidBy) {
+      return {
+        ok: false,
+        error: "Maker–checker: the admin who approved this payout cannot also initiate payment.",
+        status: 403,
+      };
+    }
+  }
+
+  const manuallyAdjusted = Boolean(payout.amount_adjusted_at);
+  if (manuallyAdjusted) {
+    const note = String(payout.adjustment_note ?? "").trim();
+    if (note.length < 3) {
+      return {
+        ok: false,
+        error: "Adjusted payouts require an adjustment reason before payment.",
+        status: 400,
+      };
+    }
+    const calculated = cents(payout.calculated_amount_cents);
+    const total = cents(payout.total_amount_cents);
+    if (calculated > 0 && total !== calculated && note.length < 3) {
+      return { ok: false, error: "Override reason required when amount differs from calculated.", status: 400 };
+    }
+  }
+
+  void logPayoutAuditEvent(admin, {
+    eventType: "payout_pay_requested",
+    actorUserId: params.paidBy,
+    payoutId: payout.id,
+    amountCents: cents(payout.total_amount_cents),
+    reference: immutableCleanerPayoutReference(payout.id),
+  });
+
   const { data: existingSuccess, error: existingErr } = await admin
     .from("payout_transfers")
-    .select("id, transfer_code")
+    .select("id, transfer_code, reference")
     .eq("payout_id", payout.id)
     .eq("status", "success")
     .maybeSingle();
   if (existingErr) return { ok: false, error: existingErr.message };
   if (existingSuccess) {
-    const existing = existingSuccess as ExistingTransfer;
+    const existing = existingSuccess as { transfer_code: string | null; reference?: string | null };
     const now = new Date().toISOString();
     await admin
       .from("cleaner_payouts")
@@ -142,7 +150,41 @@ export async function payCleanerPayoutWithPaystack(
       })
       .eq("id", payout.id)
       .eq("status", "approved");
-    return { ok: true, transferCode: existing.transfer_code, reference: existing.transfer_code ?? payout.id, skippedExisting: true };
+    await admin.rpc("mark_bookings_paid_for_cleaner_payout", { p_payout_id: payout.id });
+    return {
+      ok: true,
+      transferCode: existing.transfer_code,
+      reference: existing.reference ?? immutableCleanerPayoutReference(payout.id),
+      skippedExisting: true,
+    };
+  }
+
+  // If already processing with an outbox/transfer, resume via shared executor (same reference) — do not re-claim.
+  const paymentStatus = String(payout.payment_status ?? "")
+    .trim()
+    .toLowerCase();
+  if (paymentStatus === "processing") {
+    const ensuredResume = await ensurePaystackRecipient(admin, payout.cleaner_id);
+    if (!ensuredResume.ok) return { ok: false, error: ensuredResume.error, status: 400 };
+    const resumed = await submitPaystackTransferViaOutbox(admin, {
+      rail: "cleaner_payout",
+      subjectId: payout.id,
+      cleanerId: payout.cleaner_id,
+      amountCents: cents(payout.total_amount_cents),
+      recipientCode: ensuredResume.recipientCode,
+      reference: immutableCleanerPayoutReference(payout.id),
+      initiatedBy: params.paidBy,
+    });
+    if (!resumed.ok) return resumed;
+    await admin
+      .from("cleaner_payouts")
+      .update({
+        payment_status: resumed.needsReconcile ? "processing" : "processing",
+        payment_reference: resumed.transferCode ?? payout.payment_reference ?? null,
+      })
+      .eq("id", payout.id)
+      .eq("status", "approved");
+    return resumed;
   }
 
   const { data: claimed, error: claimErr } = await admin
@@ -157,7 +199,7 @@ export async function payCleanerPayoutWithPaystack(
 
   const { data: bookings, error: bookingsErr } = await admin
     .from("bookings")
-    .select("cleaner_id, cleaner_payout_cents, cleaner_bonus_cents, is_test")
+    .select("id, cleaner_id, cleaner_payout_cents, cleaner_bonus_cents, is_test, payout_status, refunded_at, status")
     .eq("payout_id", payout.id);
   if (bookingsErr) {
     await failPayoutExecution(admin, payout.id);
@@ -177,13 +219,20 @@ export async function payCleanerPayoutWithPaystack(
     await failPayoutExecution(admin, payout.id);
     return { ok: false, error: "Payout contains bookings for a different cleaner.", status: 400 };
   }
+  if (bookingRows.some((row) => row.refunded_at)) {
+    await failPayoutExecution(admin, payout.id);
+    return { ok: false, error: "Payout contains refunded bookings.", status: 400 };
+  }
+  if (bookingRows.some((row) => String(row.status ?? "").toLowerCase() !== "completed")) {
+    await failPayoutExecution(admin, payout.id);
+    return { ok: false, error: "Payout contains non-completed bookings.", status: 400 };
+  }
 
   const bookingTotal = bookingRows.reduce(
     (sum, row) => sum + cents(row.cleaner_payout_cents) + cents(row.cleaner_bonus_cents),
     0,
   );
   const payoutAmount = cents(payout.total_amount_cents);
-  const manuallyAdjusted = Boolean(payout.amount_adjusted_at);
   if (payoutAmount <= 0 || (!manuallyAdjusted && bookingTotal !== payoutAmount)) {
     await failPayoutExecution(admin, payout.id);
     return { ok: false, error: "Payout total does not match linked booking totals.", status: 400 };
@@ -191,48 +240,34 @@ export async function payCleanerPayoutWithPaystack(
 
   const ensured = await ensurePaystackRecipient(admin, payout.cleaner_id);
   if (!ensured.ok) {
-    const error = ensured.error;
-    await logFailedTransfer(admin, { payoutId: payout.id, cleanerId: payout.cleaner_id, amountCents: payoutAmount, error });
     await failPayoutExecution(admin, payout.id);
-    return { ok: false, error, status: 400 };
+    return { ok: false, error: ensured.error, status: 400 };
   }
 
-  const recipientCode = ensured.recipientCode;
-
-  const reference = paystackTransferClientReference(payout.id, payout.payment_status);
-  const transfer = await paystackRequest("/transfer", {
-    source: "balance",
-    amount: payoutAmount,
-    recipient: recipientCode,
-    reason: "Cleaner payout",
+  const reference = immutableCleanerPayoutReference(payout.id);
+  const transfer = await submitPaystackTransferViaOutbox(admin, {
+    rail: "cleaner_payout",
+    subjectId: payout.id,
+    cleanerId: payout.cleaner_id,
+    amountCents: payoutAmount,
+    recipientCode: ensured.recipientCode,
     reference,
+    initiatedBy: params.paidBy,
   });
 
   if (!transfer.ok) {
-    await logFailedTransfer(admin, {
-      payoutId: payout.id,
-      cleanerId: payout.cleaner_id,
-      amountCents: payoutAmount,
-      recipientCode,
-      error: transfer.error,
-    });
+    // Uncertain network: keep processing for reconcile — do NOT mark failed (prevents double-pay on retry).
+    if (transfer.needsReconcile) {
+      void logSystemEvent({
+        level: "warn",
+        source: "PAYOUT_PAYSTACK_NEEDS_RECONCILE",
+        message: "Transfer left processing for reconcile; reference unchanged",
+        context: { payoutId: payout.id, reference, error: transfer.error },
+      });
+      return transfer;
+    }
     await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: transfer.error };
-  }
-
-  const transferCode = transfer.json.data?.transfer_code ?? null;
-  const transferReference = transfer.json.data?.reference ?? reference;
-  const { error: logErr } = await admin.from("payout_transfers").insert({
-    payout_id: payout.id,
-    cleaner_id: payout.cleaner_id,
-    amount_cents: payoutAmount,
-    recipient_code: recipientCode,
-    transfer_code: transferCode,
-    status: "processing",
-  });
-  if (logErr) {
-    await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: `Transfer sent but audit log failed: ${logErr.message}` };
+    return transfer;
   }
 
   const { error: updateErr } = await admin
@@ -240,18 +275,39 @@ export async function payCleanerPayoutWithPaystack(
     .update({
       status: "approved",
       payment_status: "processing",
-      payment_reference: transferCode ?? transferReference,
+      payment_reference: transfer.transferCode ?? reference,
     })
     .eq("id", payout.id)
     .eq("status", "approved");
-  if (updateErr) return { ok: false, error: updateErr.message };
+  if (updateErr) {
+    // Transfer may already be submitted — leave processing; do not fail the batch.
+    void logSystemEvent({
+      level: "error",
+      source: "PAYOUT_PAYSTACK_STATUS_UPDATE",
+      message: "Transfer submitted but payout status update failed",
+      context: { payoutId: payout.id, reference, error: updateErr.message },
+    });
+  }
 
   void logSystemEvent({
     level: "info",
     source: "PAYOUT_PAYSTACK_PROCESSING",
     message: "Cleaner payout transfer sent to Paystack; awaiting webhook confirmation",
-    context: { payoutId: payout.id, cleanerId: payout.cleaner_id, paidBy: params.paidBy, transferCode, transferReference },
+    context: {
+      payoutId: payout.id,
+      cleanerId: payout.cleaner_id,
+      paidBy: params.paidBy,
+      transferCode: transfer.transferCode,
+      transferReference: transfer.reference,
+      bookingIds: bookingRows.map((b) => b.id),
+    },
   });
 
-  return { ok: true, transferCode, reference: transferReference };
+  return {
+    ok: true,
+    transferCode: transfer.transferCode,
+    reference: transfer.reference,
+    skippedExisting: transfer.skippedExisting,
+    needsReconcile: transfer.needsReconcile,
+  };
 }

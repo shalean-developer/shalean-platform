@@ -1,5 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 
 const EDITABLE_STATUSES = new Set(["pending", "frozen"]);
 
@@ -19,7 +20,7 @@ export async function updateCleanerPayoutAmount(
 
   const { data: existing, error: loadErr } = await admin
     .from("cleaner_payouts")
-    .select("id, status, calculated_amount_cents, total_amount_cents")
+    .select("id, status, calculated_amount_cents, total_amount_cents, adjustment_note")
     .eq("id", params.payoutId)
     .maybeSingle();
   if (loadErr) return { ok: false, error: loadErr.message };
@@ -30,9 +31,19 @@ export async function updateCleanerPayoutAmount(
     return { ok: false, error: "Only pending or frozen payouts can be edited." };
   }
 
-  const note = params.adjustmentNote?.trim() || null;
-  const calculated = (existing as { calculated_amount_cents?: number | null }).calculated_amount_cents;
+  const calculatedRaw = (existing as { calculated_amount_cents?: number | null }).calculated_amount_cents;
+  const calculated =
+    calculatedRaw != null && Number.isFinite(Number(calculatedRaw)) ? Math.round(Number(calculatedRaw)) : null;
+  const previousTotal = Math.round(Number((existing as { total_amount_cents?: number }).total_amount_cents ?? 0));
   const wasAdjusted = calculated != null && amount !== calculated;
+  const note = params.adjustmentNote?.trim() || null;
+
+  if (wasAdjusted && (!note || note.length < 3)) {
+    return {
+      ok: false,
+      error: "Adjustment reason is required when the amount differs from the calculated total (min 3 characters).",
+    };
+  }
 
   const patch: Record<string, unknown> = {
     total_amount_cents: amount,
@@ -60,6 +71,24 @@ export async function updateCleanerPayoutAmount(
       calculated_amount_cents: calculated,
       total_amount_cents: amount,
       adjustment_note: note,
+    },
+  });
+
+  void logPayoutAuditEvent(admin, {
+    eventType: "payout_amount_adjusted",
+    actorUserId: params.adjustedBy,
+    payoutId: params.payoutId,
+    amountCents: amount,
+    oldValues: {
+      total_amount_cents: previousTotal,
+      calculated_amount_cents: calculated,
+      adjustment_note: (existing as { adjustment_note?: string | null }).adjustment_note ?? null,
+    },
+    newValues: {
+      total_amount_cents: amount,
+      calculated_amount_cents: calculated,
+      adjustment_note: note,
+      override: wasAdjusted,
     },
   });
 

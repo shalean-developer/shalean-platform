@@ -28,6 +28,12 @@ async function loadRun(admin: SupabaseClient, runId: string) {
  *
  * **Manual:** marks each approved child paid synchronously (no Paystack); use for emergencies or dev.
  */
+function manualPayoutAllowed(): boolean {
+  return String(process.env.ALLOW_MANUAL_PAYOUT ?? "")
+    .trim()
+    .toLowerCase() === "true";
+}
+
 export async function processPayoutRun(
   admin: SupabaseClient,
   runId: string,
@@ -37,7 +43,14 @@ export async function processPayoutRun(
   if (mode === "paystack" && !process.env.PAYSTACK_SECRET_KEY?.trim()) {
     throw new Error("Paystack mode requires PAYSTACK_SECRET_KEY.");
   }
-  if (mode === "manual") return processPayoutRunManual(admin, runId);
+  if (mode === "manual") {
+    if (!manualPayoutAllowed()) {
+      throw new Error(
+        "Manual mark-paid is disabled. Set ALLOW_MANUAL_PAYOUT=true for emergency use, or use Paystack mode.",
+      );
+    }
+    return processPayoutRunManual(admin, runId);
+  }
   return processPayoutRunPaystack(admin, runId, opts.paidBy);
 }
 

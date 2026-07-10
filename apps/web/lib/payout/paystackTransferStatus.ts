@@ -1,8 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 
 export type PaystackTransferData = {
   transfer_code?: string | null;
   reason?: string | null;
+  reference?: string | null;
 };
 
 export type PaystackStatusPayload = {
@@ -121,7 +123,42 @@ async function applyPayoutTransferSuccess(
 
   await maybeMarkPayoutPaid(supabase, transfer.payout_id);
   await maybeMarkPayoutRunPaid(supabase, transfer.payout_id);
+
+  const { error: bookingSyncErr } = await supabase.rpc("mark_bookings_paid_for_cleaner_payout", {
+    p_payout_id: transfer.payout_id,
+  });
+  if (bookingSyncErr) throw new Error(bookingSyncErr.message);
+
+  await markOutboxSucceeded(supabase, data);
+
+  void logPayoutAuditEvent(supabase, {
+    eventType: "payout_transfer_succeeded",
+    payoutId: transfer.payout_id,
+    reference: data.reference ?? data.transfer_code ?? null,
+    context: { kind: "cleaner_payout", transferId: transfer.id },
+  });
+
   return { transferCode: data.transfer_code, payoutId: transfer.payout_id, kind: "cleaner_payout" as const };
+}
+
+async function markOutboxSucceeded(supabase: SupabaseClient, data: PaystackTransferData) {
+  const transferCode = data.transfer_code?.trim();
+  const reference = data.reference?.trim();
+  const now = new Date().toISOString();
+  if (transferCode) {
+    await supabase
+      .from("payout_transfer_outbox")
+      .update({ status: "succeeded", transfer_code: transferCode, updated_at: now })
+      .eq("transfer_code", transferCode)
+      .neq("status", "succeeded");
+  }
+  if (reference) {
+    await supabase
+      .from("payout_transfer_outbox")
+      .update({ status: "succeeded", transfer_code: transferCode ?? null, updated_at: now })
+      .eq("reference", reference)
+      .neq("status", "succeeded");
+  }
 }
 
 async function applyEarningsDisbursementTransferSuccess(
@@ -170,6 +207,20 @@ async function applyEarningsDisbursementTransferSuccess(
 
   if (earnErr) throw new Error(earnErr.message);
 
+  const { error: bookingSyncErr } = await supabase.rpc("mark_bookings_paid_for_earnings_disbursement", {
+    p_disbursement_id: transfer.disbursement_id,
+  });
+  if (bookingSyncErr) throw new Error(bookingSyncErr.message);
+
+  await markOutboxSucceeded(supabase, data);
+
+  void logPayoutAuditEvent(supabase, {
+    eventType: "payout_transfer_succeeded",
+    disbursementId: transfer.disbursement_id,
+    reference: data.reference ?? data.transfer_code ?? null,
+    context: { kind: "cleaner_earnings", transferId: transfer.id },
+  });
+
   return { transferCode: data.transfer_code, disbursementId: transfer.disbursement_id, kind: "cleaner_earnings" as const };
 }
 
@@ -210,6 +261,26 @@ async function applyPayoutTransferFailed(
     .neq("payment_status", "success");
 
   if (payoutError) throw new Error(payoutError.message);
+
+  const transferCode = data.transfer_code?.trim();
+  if (transferCode) {
+    await supabase
+      .from("payout_transfer_outbox")
+      .update({
+        status: "failed",
+        last_error: data.reason?.trim() || "Transfer failed",
+        updated_at: new Date().toISOString(),
+      })
+      .eq("transfer_code", transferCode)
+      .neq("status", "succeeded");
+  }
+
+  void logPayoutAuditEvent(supabase, {
+    eventType: "payout_transfer_failed",
+    payoutId: transfer.payout_id,
+    reference: data.reference ?? transferCode ?? null,
+    context: { kind: "cleaner_payout", reason: data.reason ?? null },
+  });
 
   return { transferCode: data.transfer_code, payoutId: transfer.payout_id, kind: "cleaner_payout" as const };
 }
@@ -253,6 +324,26 @@ async function applyEarningsDisbursementTransferFailed(
 
   if (disbErr) throw new Error(disbErr.message);
 
+  const transferCode = data.transfer_code?.trim();
+  if (transferCode) {
+    await supabase
+      .from("payout_transfer_outbox")
+      .update({
+        status: "failed",
+        last_error: data.reason?.trim() || "Transfer failed",
+        updated_at: now,
+      })
+      .eq("transfer_code", transferCode)
+      .neq("status", "succeeded");
+  }
+
+  void logPayoutAuditEvent(supabase, {
+    eventType: "payout_transfer_failed",
+    disbursementId: transfer.disbursement_id,
+    reference: data.reference ?? transferCode ?? null,
+    context: { kind: "cleaner_earnings", reason: data.reason ?? null },
+  });
+
   return { transferCode: data.transfer_code, disbursementId: transfer.disbursement_id, kind: "cleaner_earnings" as const };
 }
 
@@ -263,6 +354,12 @@ export async function applyTransferSuccess(
 ) {
   const transferCode = data.transfer_code?.trim();
   if (!transferCode) return { ignored: "missing transfer_code" };
+
+  void logPayoutAuditEvent(supabase, {
+    eventType: "payout_webhook_received",
+    reference: data.reference ?? transferCode,
+    context: { event: "transfer.success", transfer_code: transferCode },
+  });
 
   const { transfer: payoutTransfer, error: payoutErr } = await getPayoutTransferByCode(supabase, transferCode);
   if (payoutErr) throw new Error(payoutErr);
