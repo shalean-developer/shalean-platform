@@ -1,10 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
   Download,
+  ExternalLink,
   Search,
 } from "lucide-react";
 import {
@@ -22,6 +24,7 @@ import {
   type SeoRecommendationSeverityFilter,
 } from "@/lib/admin/officeSeoInsightsPresentation";
 import type { SeoInsightsPayload } from "@/lib/admin/officeSeoInsightsPresentation";
+import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 import { cn } from "@/lib/utils";
 
 const FILTERS: { id: SeoRecommendationSeverityFilter; label: string }[] = [
@@ -35,6 +38,7 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: SeoInsightsPayload | null;
+  initialFilter?: SeoRecommendationSeverityFilter;
 };
 
 function severityTone(severity: "critical" | "warning" | "opportunity") {
@@ -59,9 +63,16 @@ function severityTone(severity: "critical" | "warning" | "opportunity") {
   };
 }
 
-export function SeoIssuesPanel({ open, onOpenChange, data }: Props) {
-  const [filter, setFilter] = useState<SeoRecommendationSeverityFilter>("all");
+export function SeoIssuesPanel({ open, onOpenChange, data, initialFilter = "all" }: Props) {
+  const [filter, setFilter] = useState<SeoRecommendationSeverityFilter>(initialFilter);
   const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    if (open) {
+      setFilter(initialFilter);
+      setSearch("");
+    }
+  }, [open, initialFilter]);
 
   const breakdown = useMemo(() => buildOfficeSeoIssueBreakdown(data), [data]);
   const allRows = useMemo(() => buildOfficeSeoRecommendationRows(data, filter), [data, filter]);
@@ -158,7 +169,19 @@ export function SeoIssuesPanel({ open, onOpenChange, data }: Props) {
                           <p className="text-sm font-semibold text-slate-900">{issue.title}</p>
                           {issue.pageLabel ? (
                             <p className="mt-0.5 text-xs text-slate-600">
-                              {issue.pageLabel}
+                              {issue.slug ? (
+                                <Link
+                                  href={locationHubPathFromAreaInput(issue.slug)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 font-medium text-slate-700 hover:text-slate-900 hover:underline"
+                                >
+                                  {issue.pageLabel}
+                                  <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                                </Link>
+                              ) : (
+                                issue.pageLabel
+                              )}
                               {issue.slug ? (
                                 <span className="ml-2 font-mono text-[10px] text-slate-400">{issue.slug}</span>
                               ) : null}

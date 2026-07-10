@@ -1,6 +1,7 @@
 "use client";
 
 import { format } from "date-fns";
+import Link from "next/link";
 import { useMemo, useState } from "react";
 import {
   AlertCircle,
@@ -12,6 +13,7 @@ import {
   ChevronRight,
   CloudDownload,
   Download,
+  ExternalLink,
   Loader2,
   Minus,
   RefreshCw,
@@ -46,9 +48,12 @@ import {
   formatRecommendationDetail,
   seoHealthBarColor,
   type SeoInsightsPayload,
+  type SeoRecommendationSeverityFilter,
 } from "@/lib/admin/officeSeoInsightsPresentation";
 import { adminFetch, useAdminData } from "@/hooks/useAdminData";
 import { emitAdminToast } from "@/lib/admin/toastBus";
+import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
+import { humanizeLocationSlug } from "@/lib/seo/humanize-location-slug";
 import { cn } from "@/lib/utils";
 import { Area, AreaChart, ResponsiveContainer } from "recharts";
 
@@ -191,7 +196,13 @@ export function SeoDashboardOverview() {
   const [showConfig, setShowConfig] = useState(false);
   const [showAllQueries, setShowAllQueries] = useState(false);
   const [showIssuesPanel, setShowIssuesPanel] = useState(false);
+  const [issuesFilter, setIssuesFilter] = useState<SeoRecommendationSeverityFilter>("all");
   const [range, setRange] = useState<AnalyticsRange>(defaultRange);
+
+  function openIssuesPanel(filter: SeoRecommendationSeverityFilter = "all") {
+    setIssuesFilter(filter);
+    setShowIssuesPanel(true);
+  }
 
   const analyticsParams = useMemo(
     () => ({ from: format(range.from, "yyyy-MM-dd"), to: format(range.to, "yyyy-MM-dd") }),
@@ -531,7 +542,7 @@ export function SeoDashboardOverview() {
             </div>
             <button
               type="button"
-              onClick={() => setShowIssuesPanel(true)}
+              onClick={() => openIssuesPanel("all")}
               disabled={issues.length === 0}
               className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
             >
@@ -540,18 +551,38 @@ export function SeoDashboardOverview() {
           </div>
           <div className="space-y-3">
             {[
-              { label: "Critical issues", count: issueBreakdown.critical, tone: "border-red-200 bg-red-50 text-red-800" },
-              { label: "Warnings", count: issueBreakdown.warnings, tone: "border-amber-200 bg-amber-50 text-amber-900" },
+              {
+                label: "Critical issues",
+                count: issueBreakdown.critical,
+                tone: "border-red-200 bg-red-50 text-red-800",
+                filter: "critical" as const,
+              },
+              {
+                label: "Warnings",
+                count: issueBreakdown.warnings,
+                tone: "border-amber-200 bg-amber-50 text-amber-900",
+                filter: "warning" as const,
+              },
               {
                 label: "Opportunities",
                 count: issueBreakdown.opportunities,
                 tone: "border-blue-200 bg-blue-50 text-blue-900",
+                filter: "opportunity" as const,
               },
             ].map((item) => (
-              <div key={item.label} className={cn("flex items-center justify-between rounded-xl border px-4 py-3", item.tone)}>
+              <button
+                key={item.label}
+                type="button"
+                onClick={() => openIssuesPanel(item.filter)}
+                disabled={item.count === 0}
+                className={cn(
+                  "flex w-full items-center justify-between rounded-xl border px-4 py-3 text-left transition hover:brightness-[0.98] disabled:cursor-default disabled:opacity-60",
+                  item.tone,
+                )}
+              >
                 <span className="text-sm font-medium">{item.label}</span>
                 <span className="text-xl font-bold tabular-nums">{item.count}</span>
-              </div>
+              </button>
             ))}
           </div>
         </div>
@@ -618,7 +649,17 @@ export function SeoDashboardOverview() {
                       <div>
                         <p className="text-xs font-bold text-slate-800">{issue.title}</p>
                         {detail ? <p className="mt-0.5 text-xs text-slate-500">{detail}</p> : null}
-                        {issue.slug ? <p className="mt-0.5 font-mono text-[10px] text-slate-400">{issue.slug}</p> : null}
+                        {issue.slug ? (
+                          <Link
+                            href={locationHubPathFromAreaInput(issue.slug)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 hover:text-slate-900 hover:underline"
+                          >
+                            {humanizeLocationSlug(issue.slug)}
+                            <ExternalLink className="h-3 w-3 shrink-0 opacity-70" />
+                          </Link>
+                        ) : null}
                       </div>
                     </div>
                   </div>
@@ -767,7 +808,12 @@ export function SeoDashboardOverview() {
         ) : null}
       </div>
 
-      <SeoIssuesPanel open={showIssuesPanel} onOpenChange={setShowIssuesPanel} data={data} />
+      <SeoIssuesPanel
+        open={showIssuesPanel}
+        onOpenChange={setShowIssuesPanel}
+        data={data}
+        initialFilter={issuesFilter}
+      />
     </div>
   );
 }
