@@ -13,14 +13,14 @@ describe("renderMonthlyInvoicePaymentLinksHtml", () => {
     expect(html).not.toContain("does not open");
   });
 
-  it("renders Paystack fallback when URLs differ", () => {
+  it("omits Paystack fallback so email links stay on the sending domain", () => {
     const html = renderMonthlyInvoicePaymentLinksHtml({
       paymentUrl: "https://shalean.co.za/pay/invoice/abc?ref=mi_x",
       paystackFallbackUrl: "https://checkout.paystack.com/abc123",
     });
     expect(html).toContain("https://shalean.co.za/pay/invoice/abc?ref=mi_x");
-    expect(html).toContain("https://checkout.paystack.com/abc123");
-    expect(html).toContain("does not open on your device");
+    expect(html).not.toContain("checkout.paystack.com");
+    expect(html).not.toContain("does not open on your device");
   });
 
   it("omits fallback when not provided", () => {
@@ -28,5 +28,15 @@ describe("renderMonthlyInvoicePaymentLinksHtml", () => {
       paymentUrl: "https://shalean.co.za/pay/invoice/abc?ref=mi_x",
     });
     expect(html).not.toContain("Paystack");
+  });
+
+  it("allows same-host alternate path as fallback", () => {
+    const html = renderMonthlyInvoicePaymentLinksHtml({
+      paymentUrl: "https://shalean.co.za/pay/invoice/abc?ref=mi_x",
+      paystackFallbackUrl: "https://shalean.co.za/account/invoices",
+      fallbackLinkText: "view invoices in your account",
+    });
+    expect(html).toContain("https://shalean.co.za/account/invoices");
+    expect(html).toContain("does not open on your device");
   });
 });

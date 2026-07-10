@@ -3,6 +3,8 @@ import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 const RESEND_FROM_FALLBACK = "Shalean Cleaning <onboarding@resend.dev>";
 const RESEND_KEY_PATTERN = /^re_[A-Za-z0-9_]+$/;
+/** Prefer a monitored inbox — Resend Insights flags noreply/no-reply From addresses. */
+const NO_REPLY_LOCAL_PART = /^(no-?reply)$/i;
 
 function stripEnvValue(raw: string | null | undefined): string {
   if (raw == null) return "";
@@ -66,17 +68,43 @@ function isValidResendFromAddress(value: string): boolean {
   return plainEmail.test(value) || angleEmail.test(value);
 }
 
+function extractFromEmail(value: string): string | null {
+  const angled = value.match(/<([^<>\s]+@[^<>\s]+)>/);
+  if (angled?.[1]) return angled[1];
+  if (/^[^\s<>]+@[^\s<>]+$/.test(value)) return value;
+  return null;
+}
+
+/**
+ * Rewrite noreply / no-reply local-parts to hello@ on the same domain.
+ * Keeps display name; avoids Resend "Don't use 'no-reply'" deliverability insight.
+ */
+export function rewriteNoReplyFromAddress(value: string): string {
+  const email = extractFromEmail(value);
+  if (!email) return value;
+  const at = email.indexOf("@");
+  if (at <= 0) return value;
+  const local = email.slice(0, at);
+  const domain = email.slice(at + 1);
+  if (!NO_REPLY_LOCAL_PART.test(local) || !domain) return value;
+  const rewrittenEmail = `hello@${domain}`;
+  if (value.includes("<")) {
+    return value.replace(`<${email}>`, `<${rewrittenEmail}>`);
+  }
+  return rewrittenEmail;
+}
+
 function resolveResendFromAddress(): string {
   const fromCombined = stripEnvValue(process.env.RESEND_FROM);
   if (fromCombined && isValidResendFromAddress(fromCombined)) {
-    return fromCombined;
+    return rewriteNoReplyFromAddress(fromCombined);
   }
 
   const fromEmail = stripEnvValue(process.env.RESEND_FROM_EMAIL);
   const fromName = stripEnvValue(process.env.RESEND_FROM_NAME);
   if (fromEmail) {
     const legacy = fromName ? `${fromName} <${fromEmail}>` : fromEmail;
-    if (isValidResendFromAddress(legacy)) return legacy;
+    if (isValidResendFromAddress(legacy)) return rewriteNoReplyFromAddress(legacy);
   }
 
   if (fromCombined) {

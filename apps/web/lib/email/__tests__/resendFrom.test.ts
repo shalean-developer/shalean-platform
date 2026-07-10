@@ -4,6 +4,7 @@ import {
   describeResendApiKeyMisconfig,
   getDefaultFromAddress,
   resolveResendApiKey,
+  rewriteNoReplyFromAddress,
 } from "@/lib/email/resendFrom";
 
 describe("resolveResendApiKey", () => {
@@ -31,6 +32,24 @@ describe("resolveResendApiKey", () => {
   });
 });
 
+describe("rewriteNoReplyFromAddress", () => {
+  it("rewrites noreply and no-reply local parts to hello@", () => {
+    expect(rewriteNoReplyFromAddress("Shalean Cleaning Services <noreply@shalean.co.za>")).toBe(
+      "Shalean Cleaning Services <hello@shalean.co.za>",
+    );
+    expect(rewriteNoReplyFromAddress("Shalean <no-reply@shalean.co.za>")).toBe(
+      "Shalean <hello@shalean.co.za>",
+    );
+    expect(rewriteNoReplyFromAddress("noreply@shalean.co.za")).toBe("hello@shalean.co.za");
+  });
+
+  it("leaves monitored addresses unchanged", () => {
+    expect(rewriteNoReplyFromAddress("Shalean Cleaning Services <hello@shalean.co.za>")).toBe(
+      "Shalean Cleaning Services <hello@shalean.co.za>",
+    );
+  });
+});
+
 describe("getDefaultFromAddress", () => {
   const original = { ...process.env };
 
@@ -40,8 +59,13 @@ describe("getDefaultFromAddress", () => {
 
   it("composes legacy RESEND_FROM_EMAIL + RESEND_FROM_NAME", () => {
     delete process.env.RESEND_FROM;
-    process.env.RESEND_FROM_EMAIL = "noreply@shalean.co.za";
+    process.env.RESEND_FROM_EMAIL = "hello@shalean.co.za";
     process.env.RESEND_FROM_NAME = "Shalean Cleaning";
-    expect(getDefaultFromAddress()).toBe("Shalean Cleaning <noreply@shalean.co.za>");
+    expect(getDefaultFromAddress()).toBe("Shalean Cleaning <hello@shalean.co.za>");
+  });
+
+  it("rewrites noreply RESEND_FROM to hello@", () => {
+    process.env.RESEND_FROM = "Shalean Cleaning Services <noreply@shalean.co.za>";
+    expect(getDefaultFromAddress()).toBe("Shalean Cleaning Services <hello@shalean.co.za>");
   });
 });

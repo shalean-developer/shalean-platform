@@ -604,7 +604,7 @@ export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promis
     <a href="${trustPayPageHref}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Pay now</a>
   </p>
   <p style="font-size:12px;color:#6b7280;">If the button does not work, copy this link into your browser:<br/>
-  <span style="word-break:break-all;font-family:monospace;color:#111827;">${escapeHtml(input.paymentUrl)}</span></p>
+  <span style="word-break:break-all;font-family:monospace;color:#111827;">${escapeHtml(trustPayPageHref)}</span></p>
 </div>`,
   });
 
@@ -663,7 +663,7 @@ export async function sendPaymentLinkEmail(input: PaymentLinkEmailInput): Promis
     <a href="${trustPayPageHref}" style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:600;">Pay now</a>
   </p>
   <p style="font-size:12px;color:#6b7280;">If the button does not work, copy this link into your browser:<br/>
-  <span style="word-break:break-all;font-family:monospace;color:#111827;">${escapeHtml(input.paymentUrl)}</span></p>
+  <span style="word-break:break-all;font-family:monospace;color:#111827;">${escapeHtml(trustPayPageHref)}</span></p>
 </div>`;
 
   const from = getDefaultFromAddress();
