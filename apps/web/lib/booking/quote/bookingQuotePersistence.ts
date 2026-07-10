@@ -35,8 +35,14 @@ function pricingSummaryFromRow(row: BookingDurationRowLike): CustomerPricingBrea
   return isStructuredPricingBreakdown(ps) ? ps : null;
 }
 
+function minutesFromPositiveHours(hours: unknown): number | null {
+  if (typeof hours !== "number" || !Number.isFinite(hours) || hours <= 0) return null;
+  return legacyHoursToDurationMinutes(hours);
+}
+
 /**
  * Resolve authoritative scheduled duration from persisted booking fields (no arbitrary 120/180/240 fallbacks).
+ * Prefers minute columns, then pricing/snapshot quote fields, then legacy `duration_hours`.
  */
 export function resolvePersistedBookingDurationMinutes(row: BookingDurationRowLike): number | null {
   const fromColumn = validPersistedMinutes(row.duration_minutes);
@@ -49,6 +55,9 @@ export function resolvePersistedBookingDurationMinutes(row: BookingDurationRowLi
   const fromSummary = validPersistedMinutes(summary?.estimated_duration_minutes);
   if (fromSummary != null) return fromSummary;
 
+  const fromSummaryHours = minutesFromPositiveHours(summary?.duration_hours);
+  if (fromSummaryHours != null) return fromSummaryHours;
+
   const locked = parseLockedBookingFromUnknown(
     row.booking_snapshot && typeof row.booking_snapshot === "object"
       ? (row.booking_snapshot as { locked?: unknown }).locked
@@ -56,12 +65,12 @@ export function resolvePersistedBookingDurationMinutes(row: BookingDurationRowLi
   );
   if (locked) {
     const hours = locked.finalHours ?? locked.duration;
-    if (typeof hours === "number" && Number.isFinite(hours) && hours > 0) {
-      return legacyHoursToDurationMinutes(hours);
-    }
+    const fromLocked = minutesFromPositiveHours(hours);
+    if (fromLocked != null) return fromLocked;
   }
 
-  return null;
+  // Legacy / admin-edited rows often have duration_hours without duration_minutes.
+  return minutesFromPositiveHours(row.duration_hours);
 }
 
 /** Scheduling paths: persisted duration only; logs when missing (no silent 120/180/240). */

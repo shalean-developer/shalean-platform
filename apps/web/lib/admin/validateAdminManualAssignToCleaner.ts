@@ -20,6 +20,10 @@ type BookingRow = {
   city_id?: string | null;
   dispatch_status?: string | null;
   duration_minutes?: number | null;
+  estimated_duration_minutes?: number | null;
+  duration_hours?: number | null;
+  pricing_summary?: unknown;
+  booking_snapshot?: unknown;
   location_id?: string | null;
   service_slug?: string | null;
   service?: string | null;
@@ -86,7 +90,7 @@ export async function validateAdminManualAssignToCleaner(
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, location_id, service_slug, service, cleaner_response_status, accepted_at",
+      "id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, location_id, service_slug, service, cleaner_response_status, accepted_at",
     )
     .eq("id", bookingId)
     .maybeSingle();

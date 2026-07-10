@@ -52,7 +52,9 @@ export async function runAdminAssignSmart(
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, time, duration_minutes, city_id, status, location_id, service_slug, service")
+    .select(
+      "id, date, time, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, city_id, status, location_id, service_slug, service",
+    )
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -83,6 +85,7 @@ export async function runAdminAssignSmart(
       id?: string;
       duration_minutes?: number | null;
       estimated_duration_minutes?: number | null;
+      duration_hours?: number | null;
       pricing_summary?: unknown;
       booking_snapshot?: unknown;
     },

@@ -117,6 +117,7 @@ export function AdminAssignForm({
   const [progressNote, setProgressNote] = useState<string | null>(null);
   const [elig, setElig] = useState<Record<string, AssignEligibilityUi> | null>(null);
   const [eligStatus, setEligStatus] = useState<EligStatus>("idle");
+  const [eligError, setEligError] = useState<string | null>(null);
   const [overlappingDemandInSlot, setOverlappingDemandInSlot] = useState<number | null>(null);
   const [extremeSlaEscalateConfirm, setExtremeSlaEscalateConfirm] = useState(false);
 
@@ -137,6 +138,7 @@ export function AdminAssignForm({
     if (!checkable || roster.length === 0) {
       setElig(null);
       setEligStatus("skipped");
+      setEligError(null);
       setOverlappingDemandInSlot(null);
       return;
     }
@@ -144,13 +146,17 @@ export function AdminAssignForm({
     const ac = new AbortController();
     setEligStatus("loading");
     setElig(null);
+    setEligError(null);
     setOverlappingDemandInSlot(null);
 
     void (async () => {
       const sb = getSupabaseBrowser();
       const token = (await sb?.auth.getSession())?.data.session?.access_token;
       if (!token) {
-        if (!ac.signal.aborted) setEligStatus("error");
+        if (!ac.signal.aborted) {
+          setEligError("Not signed in — refresh and try again.");
+          setEligStatus("error");
+        }
         return;
       }
       const ids = roster.map((c) => c.id).slice(0, 150);
@@ -166,7 +172,14 @@ export function AdminAssignForm({
           error?: string;
         };
         if (!res.ok) {
-          if (!ac.signal.aborted) setEligStatus("error");
+          if (!ac.signal.aborted) {
+            setEligError(
+              typeof j.error === "string" && j.error.trim()
+                ? j.error.trim()
+                : "Could not load slot eligibility.",
+            );
+            setEligStatus("error");
+          }
           return;
         }
         if (!ac.signal.aborted) {
@@ -197,7 +210,10 @@ export function AdminAssignForm({
           setEligStatus("ready");
         }
       } catch {
-        if (!ac.signal.aborted) setEligStatus("error");
+        if (!ac.signal.aborted) {
+          setEligError("Could not load slot eligibility (network error).");
+          setEligStatus("error");
+        }
       }
     })();
 
@@ -429,7 +445,9 @@ export function AdminAssignForm({
       ) : eligStatus === "loading" ? (
         <p className="text-[11px] text-zinc-600 dark:text-zinc-400">Checking slot vs roster…</p>
       ) : eligStatus === "error" ? (
-        <p className="text-[11px] text-amber-800 dark:text-amber-200">Could not load slot eligibility (session?).</p>
+        <p className="text-[11px] text-amber-800 dark:text-amber-200">
+          {eligError ?? "Could not load slot eligibility."}
+        </p>
       ) : null}
 
       {checkable &&

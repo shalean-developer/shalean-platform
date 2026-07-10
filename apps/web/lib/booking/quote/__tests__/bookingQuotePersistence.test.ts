@@ -75,10 +75,10 @@ describe("bookingQuotePersistence (Phase 2)", () => {
         pricePerBathroom: 40,
         pricePerExtraRoom: 30,
         pricePerExtraCleaner: 200,
-      estimatedDurationHours: 3,
-      minDurationHours: 3.5,
-      maxDurationHours: 8,
-      extras: [],
+        estimatedDurationHours: 3,
+        minDurationHours: 3.5,
+        maxDurationHours: 8,
+        extras: [],
       },
       feesConfig: defaultBookingV2FeesConfig(),
     });
@@ -89,5 +89,57 @@ describe("bookingQuotePersistence (Phase 2)", () => {
         pricing_summary: quote.breakdown,
       }),
     ).toBe(quote.duration_minutes);
+  });
+
+  it("resolvePersistedBookingDurationMinutes falls back to duration_hours when minutes are missing", () => {
+    expect(
+      resolvePersistedBookingDurationMinutes({
+        duration_minutes: null,
+        estimated_duration_minutes: null,
+        duration_hours: 3.5,
+      }),
+    ).toBe(210);
+
+    expect(
+      resolvePersistedBookingDurationMinutes({
+        duration_minutes: null,
+        pricing_summary: {
+          estimated_duration_minutes: 0,
+          duration_hours: 2.5,
+          base_service_price: 0,
+          property_factors_total: 0,
+          bedrooms_price: 0,
+          bathrooms_price: 0,
+          extra_rooms_price: 0,
+          property_size_price: 0,
+          selected_extras: [],
+          selected_extras_total: 0,
+          supplies_equipment_fee: 0,
+          equipment_logistics_fee: 0,
+          equipment_distance_km: 0,
+          equipment_base_fee: 0,
+          equipment_distance_charge: 0,
+          manual_quote_required: false,
+          extra_cleaner_cost: 0,
+          cleaning_service_subtotal: 0,
+          subtotal_before_service_fee: 0,
+          service_fee: 0,
+          recurring_discount: 0,
+          estimated_total: 0,
+          lineItems: [],
+          basePrice: 0,
+          extrasTotal: 0,
+          cleanerSurcharge: 0,
+          total: 0,
+        },
+      }),
+    ).toBe(150);
+
+    expect(
+      resolvePersistedBookingDurationMinutes({
+        duration_minutes: null,
+        duration_hours: 0,
+      }),
+    ).toBeNull();
   });
 });

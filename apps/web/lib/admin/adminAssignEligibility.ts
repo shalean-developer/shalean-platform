@@ -57,6 +57,7 @@ export function effectiveJobDurationMinutes(row: {
   id?: string | null;
   duration_minutes?: number | null;
   estimated_duration_minutes?: number | null;
+  duration_hours?: number | null;
   pricing_summary?: unknown;
   booking_snapshot?: unknown;
 }): number | null {
