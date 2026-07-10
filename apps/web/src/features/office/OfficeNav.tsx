@@ -18,6 +18,7 @@ import {
   DollarSign,
   Eye,
   FileText,
+  Gift,
   HeartHandshake,
   LayoutDashboard,
   Link2,
@@ -147,6 +148,7 @@ export const OFFICE_NAV_MODULES: NavModule[] = [
     icon: Megaphone,
     children: [
       { label: "Marketing", href: "/office/marketing", icon: Megaphone },
+      { label: "Promotions", href: "/office/promotions", icon: Gift },
       { label: "Blog", href: "/office/blog", icon: PenLine },
       { label: "Referrals", href: "/office/referrals", icon: HeartHandshake },
     ],

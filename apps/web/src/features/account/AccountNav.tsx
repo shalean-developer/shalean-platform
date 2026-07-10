@@ -77,6 +77,7 @@ const NAV: NavSection[] = [
       { href: "/account/addresses", label: "Properties", icon: MapPin },
       { href: "/account/reviews", label: "Reviews", icon: Star },
       { href: "/account/referrals", label: "Referrals", icon: Gift },
+      { href: "/account/rewards", label: "Rewards & Offers", icon: Sparkles },
       { href: "/account/profile", label: "Profile Settings", icon: Settings },
       { href: "/account/help", label: "Help & Support", icon: HelpCircle },
     ],

@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, AlertCircle, ShieldCheck, CreditCard, Lock, Mail, Phone, User as UserIcon, CheckCircle2 } from "lucide-react";
@@ -242,7 +241,6 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
 // ─── Payment section ────────────────────────────────────────────────────────────
 
 function PaymentSection({ user }: { user: User }) {
-  const router = useRouter();
   const { serviceSlug, clearBooking } = useBookingV2();
   const { watch } = useFormContext<BookingV2FormData>();
   const values = watch();
@@ -252,15 +250,21 @@ function PaymentSection({ user }: { user: User }) {
   const [error, setError] = useState<string | null>(null);
   const [creditBalance, setCreditBalance] = useState(0);
   const [applyCredit, setApplyCredit] = useState(false);
+  const [promoCode, setPromoCode] = useState("");
+  const [promoDiscountZar, setPromoDiscountZar] = useState(0);
+  const [promoLabel, setPromoLabel] = useState<string | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoChecking, setPromoChecking] = useState(false);
   const baseTotal = values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? config.basePrice;
   const { referralDiscount, loading: referralLoading, invalidMessage } = useStoredReferralCheckoutDiscount({
     email: user.email,
-    bookingTotalZar: baseTotal,
+    bookingTotalZar: Math.max(0, baseTotal - promoDiscountZar),
     serviceSlug,
   });
 
   const referralToApply = referralDiscount?.discountZar ?? 0;
-  const totalAfterReferral = Math.max(0, baseTotal - referralToApply);
+  const totalAfterPromo = Math.max(0, baseTotal - promoDiscountZar);
+  const totalAfterReferral = Math.max(0, totalAfterPromo - referralToApply);
   const creditToApply = applyCredit ? Math.min(creditBalance, totalAfterReferral) : 0;
   const payTotal = Math.max(0, totalAfterReferral - creditToApply);
 
@@ -277,6 +281,89 @@ function PaymentSection({ user }: { user: User }) {
       }
     })();
   }, []);
+
+  // Auto-apply eligible promotions (first booking, bundles, membership) on load
+  useEffect(() => {
+    void (async () => {
+      const session = await getSession();
+      const res = await fetch("/api/promotions/validate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          serviceSlug,
+          selectedExtraIds: values.selectedExtras ?? [],
+          subtotalZar: baseTotal,
+          customerEmail: user.email,
+          promoCode: promoCode.trim() || undefined,
+        }),
+      });
+      if (!res.ok) return;
+      const j = (await res.json()) as {
+        totalDiscountZar?: number;
+        applied?: { name: string; discountZar: number; source: string }[];
+        rejected?: { reason: string }[];
+      };
+      const autoOnly = (j.applied ?? []).filter((a) => a.source !== "code" || !promoCode.trim());
+      const total = Math.round(Number(j.totalDiscountZar ?? 0));
+      if (total > 0 && autoOnly.length) {
+        setPromoDiscountZar(total);
+        setPromoLabel(autoOnly.map((a) => a.name).join(", "));
+        setPromoError(null);
+      } else if (!promoCode.trim()) {
+        setPromoDiscountZar(0);
+        setPromoLabel(null);
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run when cart basics change
+  }, [serviceSlug, baseTotal, values.selectedExtras, user.email]);
+
+  async function applyPromoCode() {
+    setPromoChecking(true);
+    setPromoError(null);
+    try {
+      const session = await getSession();
+      const res = await fetch("/api/promotions/validate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify({
+          serviceSlug,
+          selectedExtraIds: values.selectedExtras ?? [],
+          subtotalZar: baseTotal,
+          customerEmail: user.email,
+          promoCode: promoCode.trim(),
+        }),
+      });
+      const j = (await res.json()) as {
+        totalDiscountZar?: number;
+        applied?: { name: string; discountZar: number }[];
+        rejected?: { reason: string }[];
+        error?: string;
+      };
+      if (!res.ok) {
+        setPromoError(j.error ?? "Could not validate code.");
+        setPromoDiscountZar(0);
+        setPromoLabel(null);
+        return;
+      }
+      const total = Math.round(Number(j.totalDiscountZar ?? 0));
+      if (total <= 0) {
+        setPromoError(j.rejected?.[0]?.reason ?? "This code is not valid for your booking.");
+        setPromoDiscountZar(0);
+        setPromoLabel(null);
+        return;
+      }
+      setPromoDiscountZar(total);
+      setPromoLabel((j.applied ?? []).map((a) => a.name).join(", ") || "Promotion applied");
+    } finally {
+      setPromoChecking(false);
+    }
+  }
 
   async function handleConfirmAndPay() {
     setConfirming(true);
@@ -301,6 +388,7 @@ function PaymentSection({ user }: { user: User }) {
           ...values,
           applyCleaningCreditZar: creditToApply,
           referralCode: referralDiscount?.code ?? getStoredReferral("customer"),
+          promoCode: promoCode.trim() || undefined,
         }),
       });
 
@@ -357,12 +445,26 @@ function PaymentSection({ user }: { user: User }) {
         reference: paystackReference,
         metadata: {
           booking_id: bookingId,
+          pay_total_zar: String(chargeAmount),
+          expected_total_zar: String(chargeAmount),
           ...(gclid ? { gclid } : {}),
           ...(fbclid ? { fbclid } : {}),
         },
         onSuccess: () => {
-          clearBooking();
-          router.push(`/account/success?reference=${encodeURIComponent(paystackReference ?? bookingId ?? "")}`);
+          const ref = paystackReference ?? bookingId ?? "";
+          // Clear busy state first so the UI never stays stuck on "Processing…"
+          // if navigation is slow or the popup callback is flaky.
+          setConfirming(false);
+          try {
+            clearBooking();
+          } catch {
+            // non-fatal — success page does not need local draft state
+          }
+          // Hard navigation is more reliable from Paystack iframe callbacks than
+          // Next soft routing (which can be interrupted when form state resets).
+          window.location.assign(
+            `/account/success?reference=${encodeURIComponent(ref)}`,
+          );
         },
         onCancel: () => {
           setError("Payment cancelled. Your booking is saved — you can retry payment.");
@@ -376,6 +478,18 @@ function PaymentSection({ user }: { user: User }) {
       };
       // Inline SDK typings omit `metadata`; runtime accepts it (same as `initializePayment`).
       popup.newTransaction(paystackOpts as Parameters<typeof popup.newTransaction>[0]);
+
+      // If the popup never calls back (closed tab / browser quirk), unlock the button.
+      window.setTimeout(() => {
+        setConfirming((still) => {
+          if (still) {
+            setError(
+              "If you completed payment, check My Bookings or your email. Otherwise tap Pay again.",
+            );
+          }
+          return false;
+        });
+      }, 5 * 60 * 1000);
     } catch (err) {
       const message = "An unexpected error occurred. Please try again.";
       setError(message);
@@ -411,6 +525,34 @@ function PaymentSection({ user }: { user: User }) {
         </div>
         <div className="border-t border-slate-200 pt-3 space-y-3">
           <CustomerPriceBreakdown pricing={values.pricingSummary} compact />
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={promoCode}
+              onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+              placeholder="Promo code"
+              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm uppercase tracking-wide"
+            />
+            <button
+              type="button"
+              onClick={() => void applyPromoCode()}
+              disabled={promoChecking || !promoCode.trim()}
+              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+            >
+              {promoChecking ? "…" : "Apply"}
+            </button>
+          </div>
+          {promoError ? (
+            <p className="text-xs text-amber-700">{promoError}</p>
+          ) : null}
+          {promoDiscountZar > 0 ? (
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+              <p className="font-semibold">{promoLabel ?? "Promotion applied"}</p>
+              <p className="mt-1 text-emerald-800">
+                You save R {promoDiscountZar.toLocaleString("en-ZA")}
+              </p>
+            </div>
+          ) : null}
           {!referralLoading && referralDiscount ? (
             <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
               <p className="font-semibold">Referral discount applied</p>
@@ -423,6 +565,12 @@ function PaymentSection({ user }: { user: User }) {
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <p className="font-semibold">Referral discount not applied</p>
               <p className="mt-1 text-amber-800">{invalidMessage}</p>
+            </div>
+          ) : null}
+          {promoDiscountZar > 0 ? (
+            <div className="flex items-center justify-between text-sm text-emerald-700">
+              <span>Promotion discount</span>
+              <span>- R {promoDiscountZar.toLocaleString("en-ZA")}</span>
             </div>
           ) : null}
           {referralToApply > 0 ? (

@@ -40,6 +40,13 @@ import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig
 import { assertV2ConfirmQuoteIntegrity } from "@/lib/booking/quote/validateBookingV2Quote";
 import type { CustomerPricingBreakdown, CustomerTotalInput } from "@/lib/booking-v2/types";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
+import {
+  applyPromotionRedemptions,
+  evaluateCheckoutPromotions,
+  getCompletedBookingCount,
+  getActiveMembershipDiscountPercent,
+} from "@/lib/promotions/server";
+import type { AppliedPromotionDiscount } from "@/lib/promotions/types";
 
 export const runtime = "nodejs";
 
@@ -58,18 +65,28 @@ async function resolveConfirmLocationContext(
   },
 ): Promise<BookingV2LocationContext | null> {
   const clientLocId = data.serviceAreaLocationId?.trim() ?? "";
+  let ctx: BookingV2LocationContext | null = null;
+
   if (clientLocId && UUID_RE.test(clientLocId)) {
-    const ctx = await resolveBookingV2LocationContext(supabase, data.suburb);
-    if (ctx && ctx.locationId === clientLocId) {
-      const eqLat = data.equipmentQuote?.customer_latitude;
-      const eqLng = data.equipmentQuote?.customer_longitude;
-      if (typeof eqLat === "number" && typeof eqLng === "number") {
-        return { ...ctx, latitude: eqLat, longitude: eqLng };
-      }
-      return ctx;
+    const resolved = await resolveBookingV2LocationContext(supabase, data.suburb);
+    if (resolved && resolved.locationId === clientLocId) {
+      ctx = resolved;
     }
   }
-  return resolveBookingV2LocationContext(supabase, data.suburb);
+  if (!ctx) {
+    ctx = await resolveBookingV2LocationContext(supabase, data.suburb);
+  }
+  if (!ctx) return null;
+
+  // Prefer equipment-quote geocode when the service-area row has no coordinates.
+  if (ctx.latitude == null || ctx.longitude == null) {
+    const eqLat = data.equipmentQuote?.customer_latitude;
+    const eqLng = data.equipmentQuote?.customer_longitude;
+    if (typeof eqLat === "number" && typeof eqLng === "number" && Number.isFinite(eqLat) && Number.isFinite(eqLng)) {
+      return { ...ctx, latitude: eqLat, longitude: eqLng };
+    }
+  }
+  return ctx;
 }
 
 function locationPersistFields(ctx: BookingV2LocationContext) {
@@ -328,9 +345,17 @@ export async function POST(request: Request) {
     clientPricingSummary,
     quoteInput,
   });
-  if (!quoteValidation.ok) {
+  // Soft failures = client's cached quote is stale. Proceed with server-authoritative
+  // pricing so customers are not blocked; Paystack charges the recomputed amount.
+  if (!quoteValidation.ok && !quoteValidation.soft) {
     console.error("[booking-v2/confirm] quote validation failed:", quoteValidation.code);
     return NextResponse.json({ error: quoteValidation.error }, { status: quoteValidation.status });
+  }
+  if (!quoteValidation.ok && quoteValidation.soft) {
+    console.warn(
+      "[booking-v2/confirm] stale client quote accepted; using server pricing:",
+      quoteValidation.code,
+    );
   }
 
   data.pricingSummary = serverBreakdown!;
@@ -349,7 +374,7 @@ export async function POST(request: Request) {
   const canonicalServiceSlug = canonicalServiceSlugFromBookingV2(data.serviceSlug);
   const durationMinutes = serverBreakdown!.estimated_duration_minutes;
 
-  const persistPricing = pricingPersistFields(serverBreakdown!, {
+  const persistPricingBase = pricingPersistFields(serverBreakdown!, {
     date: data.date,
     time: timeHm,
   });
@@ -371,13 +396,12 @@ export async function POST(request: Request) {
     );
   }
 
+  // Coordinates improve dispatch routing but must not block checkout when the
+  // suburb already maps to a known service area (location_id / city_id).
   if (locationCtx.latitude == null || locationCtx.longitude == null) {
-    return NextResponse.json(
-      {
-        error:
-          "Your service area is missing map coordinates. Please contact us to complete this booking.",
-      },
-      { status: 422 },
+    console.warn(
+      "[booking-v2/confirm] service area missing coordinates; proceeding without lat/lng:",
+      locationCtx.locationId,
     );
   }
 
@@ -447,10 +471,59 @@ export async function POST(request: Request) {
     ? buildReferralCheckoutSnapshot(referralValidation, Date.now(), referralCheckoutFingerprint)
     : null;
 
+  const promoCodeInput = typeof data.promoCode === "string" ? data.promoCode.trim() : "";
+  const selectedExtraIds = data.selectedExtras ?? [];
+  let promotionApplied: AppliedPromotionDiscount[] = [];
+  let promotionDiscountZar = 0;
+  try {
+    const [completedBookingCount, membershipDiscountPercent] = await Promise.all([
+      getCompletedBookingCount(supabase, userId, email ?? ""),
+      getActiveMembershipDiscountPercent(supabase, userId),
+    ]);
+    const promoEval = await evaluateCheckoutPromotions(supabase, {
+      userId,
+      customerEmail: email ?? "",
+      completedBookingCount,
+      serviceSlug: data.serviceSlug,
+      selectedExtraIds,
+      cityId: locationCtx.cityId,
+      locationId: locationCtx.locationId,
+      suburb: data.suburb,
+      subtotalZar: preDiscountTotalZar,
+      promoCode: promoCodeInput || null,
+      membershipDiscountPercent,
+    });
+    promotionApplied = promoEval.applied;
+    promotionDiscountZar = promoEval.totalDiscountZar;
+  } catch {
+    promotionApplied = [];
+    promotionDiscountZar = 0;
+  }
+
+  // Payable amount must match what Paystack charges — otherwise webhook finalize
+  // flags payment_mismatch (paid < stored total_price / price_snapshot).
+  const grossZar = preDiscountTotalZar;
+  let promotionAppliedZar = Math.min(Math.max(0, promotionDiscountZar), grossZar);
+  let payAmountZar = Math.max(0, grossZar - promotionAppliedZar);
+  let referralAppliedZar = Math.min(Math.max(0, referralDiscountZar), payAmountZar);
+  payAmountZar = Math.max(0, payAmountZar - referralAppliedZar);
+  const requestedCredit = Math.round(Number(data.applyCleaningCreditZar ?? 0));
+  const creditToApplyCap = Math.min(Math.max(0, requestedCredit), payAmountZar);
+  // Credit is spent after the booking row exists; snapshot assumes the capped amount.
+  payAmountZar = Math.max(0, payAmountZar - creditToApplyCap);
+
+  const persistPricing = {
+    ...persistPricingBase,
+    total_price: payAmountZar,
+    total_paid_zar: payAmountZar,
+    amount_paid_cents: Math.round(payAmountZar * 100),
+  };
+
   // ── 7. Generate Paystack reference ────────────────────────────────────────────
   const paystackReference = `bv2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 
   // ── 8. Build price_snapshot (required by bookings_price_snapshot_required_check) ──
+  // total_price = Paystack charge (after promo / referral / credit). Keep gross for audit.
   const priceSnapshot = {
     v: 1 as const,
     service_type: data.serviceSlug,
@@ -460,8 +533,13 @@ export async function POST(request: Request) {
       name: extra.name,
       price: extra.price,
     })),
-    total_price: Math.round(serverBreakdown.estimated_total),
-    server_computed_total: serverBreakdown.estimated_total,
+    total_price: payAmountZar,
+    server_computed_total: grossZar,
+    gross_total: grossZar,
+    promotion_discount_zar: promotionAppliedZar,
+    referral_discount_zar: referralAppliedZar,
+    cleaning_credit_zar: creditToApplyCap,
+    pay_total_zar: payAmountZar,
   };
 
   // ── 9. Reuse an existing pending_payment booking for the same slot (retry path) ──
@@ -517,6 +595,16 @@ export async function POST(request: Request) {
             phone: customerPhone,
           },
           ...(referralCheckoutSnapshot ? { referralCheckout: referralCheckoutSnapshot } : {}),
+          ...(promotionApplied.length
+            ? {
+                promotionCheckout: {
+                  applied: promotionApplied,
+                  totalDiscountZar: promotionDiscountZar,
+                  promoCode: promoCodeInput || null,
+                },
+              }
+            : {}),
+          payTotalZar: payAmountZar,
           ...preferredExtras.snapshotExtension,
           confirmedAt: new Date().toISOString(),
         },
@@ -539,28 +627,57 @@ export async function POST(request: Request) {
       postalCode: data.postalCode,
     });
 
-    let payAmountZar =
-      serverBreakdown.estimated_total ?? serverBreakdown.total ?? clientTotal;
     let creditAppliedZar = 0;
-    let referralAppliedZar = 0;
-
-    if (referralDiscountZar > 0) {
-      referralAppliedZar = Math.min(referralDiscountZar, payAmountZar);
-      payAmountZar = Math.max(0, payAmountZar - referralAppliedZar);
-    }
-
-    const requestedCredit = Math.round(Number(data.applyCleaningCreditZar ?? 0));
-    if (requestedCredit > 0) {
+    if (creditToApplyCap > 0) {
       const spendResult = await spendCleaningCredit({
         admin: supabase,
         userId,
-        amountZar: Math.min(requestedCredit, payAmountZar),
+        amountZar: creditToApplyCap,
         bookingId: existingBooking.id,
         note: "Applied at booking-v2 checkout",
       });
       if (spendResult.ok) {
         creditAppliedZar = spendResult.spent;
-        payAmountZar = Math.max(0, payAmountZar - creditAppliedZar);
+        // If spend differed from cap, adjust payable for the client charge.
+        if (creditAppliedZar !== creditToApplyCap) {
+          payAmountZar = Math.max(0, payAmountZar + creditToApplyCap - creditAppliedZar);
+          await supabase
+            .from("bookings")
+            .update({
+              total_price: payAmountZar,
+              total_paid_zar: payAmountZar,
+              amount_paid_cents: Math.round(payAmountZar * 100),
+              price_snapshot: { ...priceSnapshot, cleaning_credit_zar: creditAppliedZar, total_price: payAmountZar, pay_total_zar: payAmountZar },
+            })
+            .eq("id", existingBooking.id);
+        }
+      } else {
+        // Credit unavailable — charge full amount without credit.
+        payAmountZar = Math.max(0, payAmountZar + creditToApplyCap);
+        await supabase
+          .from("bookings")
+          .update({
+            total_price: payAmountZar,
+            total_paid_zar: payAmountZar,
+            amount_paid_cents: Math.round(payAmountZar * 100),
+            price_snapshot: { ...priceSnapshot, cleaning_credit_zar: 0, total_price: payAmountZar, pay_total_zar: payAmountZar },
+          })
+          .eq("id", existingBooking.id);
+      }
+    }
+
+    if (promotionApplied.length > 0) {
+      try {
+        await applyPromotionRedemptions(supabase, {
+          applied: promotionApplied,
+          userId,
+          bookingId: existingBooking.id,
+          customerEmail: email ?? "",
+          bookingRevenueZar: Math.round(payAmountZar),
+          idempotencyPrefix: "bv2",
+        });
+      } catch {
+        // non-fatal: booking already created
       }
     }
 
@@ -571,6 +688,8 @@ export async function POST(request: Request) {
       payAmountZar,
       creditAppliedZar,
       referralAppliedZar,
+      promotionAppliedZar,
+      promotionsApplied: promotionApplied,
     });
   }
 
@@ -658,6 +777,16 @@ export async function POST(request: Request) {
           phone: customerPhone,
         },
         ...(referralCheckoutSnapshot ? { referralCheckout: referralCheckoutSnapshot } : {}),
+        ...(promotionApplied.length
+          ? {
+              promotionCheckout: {
+                applied: promotionApplied,
+                totalDiscountZar: promotionDiscountZar,
+                promoCode: promoCodeInput || null,
+              },
+            }
+          : {}),
+        payTotalZar: payAmountZar,
         ...preferredExtras.snapshotExtension,
         confirmedAt: new Date().toISOString(),
       },
@@ -681,27 +810,65 @@ export async function POST(request: Request) {
     postalCode: data.postalCode,
   });
 
-  let payAmountZar = serverBreakdown.estimated_total ?? serverBreakdown.total ?? clientTotal;
   let creditAppliedZar = 0;
-  let referralAppliedZar = 0;
-
-  if (referralDiscountZar > 0) {
-    referralAppliedZar = Math.min(referralDiscountZar, payAmountZar);
-    payAmountZar = Math.max(0, payAmountZar - referralAppliedZar);
-  }
-
-  const requestedCredit = Math.round(Number(data.applyCleaningCreditZar ?? 0));
-  if (requestedCredit > 0) {
+  if (creditToApplyCap > 0) {
     const spendResult = await spendCleaningCredit({
       admin: supabase,
       userId,
-      amountZar: Math.min(requestedCredit, payAmountZar),
+      amountZar: creditToApplyCap,
       bookingId: inserted.id,
       note: "Applied at booking-v2 checkout",
     });
     if (spendResult.ok) {
       creditAppliedZar = spendResult.spent;
-      payAmountZar = Math.max(0, payAmountZar - creditAppliedZar);
+      if (creditAppliedZar !== creditToApplyCap) {
+        payAmountZar = Math.max(0, payAmountZar + creditToApplyCap - creditAppliedZar);
+        await supabase
+          .from("bookings")
+          .update({
+            total_price: payAmountZar,
+            total_paid_zar: payAmountZar,
+            amount_paid_cents: Math.round(payAmountZar * 100),
+            price_snapshot: {
+              ...priceSnapshot,
+              cleaning_credit_zar: creditAppliedZar,
+              total_price: payAmountZar,
+              pay_total_zar: payAmountZar,
+            },
+          })
+          .eq("id", inserted.id);
+      }
+    } else {
+      payAmountZar = Math.max(0, payAmountZar + creditToApplyCap);
+      await supabase
+        .from("bookings")
+        .update({
+          total_price: payAmountZar,
+          total_paid_zar: payAmountZar,
+          amount_paid_cents: Math.round(payAmountZar * 100),
+          price_snapshot: {
+            ...priceSnapshot,
+            cleaning_credit_zar: 0,
+            total_price: payAmountZar,
+            pay_total_zar: payAmountZar,
+          },
+        })
+        .eq("id", inserted.id);
+    }
+  }
+
+  if (promotionApplied.length > 0) {
+    try {
+      await applyPromotionRedemptions(supabase, {
+        applied: promotionApplied,
+        userId,
+        bookingId: inserted.id,
+        customerEmail: email ?? "",
+        bookingRevenueZar: Math.round(payAmountZar),
+        idempotencyPrefix: "bv2",
+      });
+    } catch {
+      // non-fatal
     }
   }
 
@@ -712,5 +879,7 @@ export async function POST(request: Request) {
     payAmountZar,
     creditAppliedZar,
     referralAppliedZar,
+    promotionAppliedZar,
+    promotionsApplied: promotionApplied,
   });
 }

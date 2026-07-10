@@ -59,6 +59,7 @@ export default function AccountProfilePage() {
   const [pwNew, setPwNew] = useState("");
   const [busy, setBusy] = useState(false);
   const [profileLoading, setProfileLoading] = useState(true);
+  const [dateOfBirth, setDateOfBirth] = useState("");
 
   const meta = user?.user_metadata as { full_name?: string; phone?: string; whatsapp?: string; preferred_contact?: string } | undefined;
   const initials = initialsFromName(meta?.full_name, user?.email);
@@ -80,8 +81,17 @@ export default function AccountProfilePage() {
       setPhone(meta?.phone ?? "");
       setWhatsapp(meta?.whatsapp ?? meta?.phone ?? "");
       setPreferredContact((meta?.preferred_contact as typeof preferredContact | undefined) ?? "whatsapp");
+      const { data: profile } = await sb
+        .from("user_profiles")
+        .select("full_name, phone, date_of_birth")
+        .eq("id", user.id)
+        .maybeSingle();
       if (!cancelled) {
-        setName(meta?.full_name?.trim() || "");
+        setName((profile?.full_name as string | undefined)?.trim() || meta?.full_name?.trim() || "");
+        if (profile?.phone) setPhone(String(profile.phone));
+        if (profile?.date_of_birth) {
+          setDateOfBirth(String(profile.date_of_birth).slice(0, 10));
+        }
         setProfileLoading(false);
       }
     })();
@@ -121,6 +131,7 @@ export default function AccountProfilePage() {
       ...(contact.preferred_notification_channel
         ? { preferred_notification_channel: contact.preferred_notification_channel }
         : {}),
+      date_of_birth: dateOfBirth.trim() || null,
     };
     const pErr = existing
       ? (await sb.from("user_profiles").update(profilePatch).eq("id", user.id)).error
@@ -287,6 +298,18 @@ export default function AccountProfilePage() {
                 />
               </div>
               <p className="text-xs text-gray-400">Email address cannot be changed here. Contact support for help.</p>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-dob">Date of birth</Label>
+              <Input
+                id="profile-dob"
+                type="date"
+                value={dateOfBirth}
+                onChange={(e) => setDateOfBirth(e.target.value)}
+              />
+              <p className="text-xs text-gray-400">
+                Used for your birthday Cleaning Credit (optional).
+              </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">

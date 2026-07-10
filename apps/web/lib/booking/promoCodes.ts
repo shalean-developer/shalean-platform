@@ -4,7 +4,11 @@ export type PromoDiscountResult = {
 };
 
 /**
- * Server- and client-side promo rules. Discount applies only to the locked booking subtotal (cap enforced).
+ * Legacy hardcoded promo codes — kept for backward compatibility with the
+ * old booking funnel. Prefer DB-backed promotions via `/api/promotions/validate`
+ * and `lib/promotions` for booking-v2 and new campaigns.
+ *
+ * @deprecated Use the promotions engine for new codes.
  */
 export function getPromoDiscountZar(code: string, lockedFinalPrice: number): PromoDiscountResult | null {
   const normalized = code.trim().toUpperCase();

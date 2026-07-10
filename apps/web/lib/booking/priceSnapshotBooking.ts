@@ -183,20 +183,27 @@ export function checkoutPriceSnapshotFromLegacyPriceSnapshotV1(raw: unknown): Ch
   const total = finiteZar(o.total_price);
   const base = finiteZar(o.base_price);
   if (total == null) return null;
+  // Prefer explicit payable when present (booking-v2 stores gross in server_computed_total
+  // and the Paystack charge in total_price / pay_total_zar).
+  const payTotal = finiteZar(o.pay_total_zar) ?? total;
   const extrasArr = Array.isArray(o.extras) ? o.extras : [];
   const extrasZar = extrasArr.reduce((s, e) => {
     if (!e || typeof e !== "object") return s;
     const p = finiteZar((e as { price?: unknown }).price);
     return s + (p ?? 0);
   }, 0);
-  const sub = base ?? Math.max(0, total - extrasZar);
+  const discountZar = finiteZar(o.promotion_discount_zar) ?? finiteZar(o.discount_zar) ?? 0;
+  const referralDiscount = finiteZar(o.referral_discount_zar) ?? 0;
+  const creditZar = finiteZar(o.cleaning_credit_zar) ?? 0;
+  const gross = finiteZar(o.gross_total) ?? finiteZar(o.server_computed_total) ?? total;
+  const sub = base ?? Math.max(0, gross - extrasZar);
   return {
     version: 1,
     currency: "ZAR",
-    total_zar: Math.round(total),
+    total_zar: Math.round(payTotal),
     subtotal_zar: Math.round(sub),
     extras_total_zar: Math.round(extrasZar),
-    discount_zar: 0,
+    discount_zar: Math.round(discountZar + referralDiscount + creditZar),
     tip_zar: 0,
     visit_total_zar: Math.round(sub + extrasZar),
     duration_hours: 0,

@@ -51,7 +51,10 @@ describe("validateBookingV2Quote (Phase 4)", () => {
       quoteInput: baseInput,
     });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.code).toBe("quote_price_drift");
+    if (!result.ok) {
+      expect(result.code).toBe("quote_price_drift");
+      expect(result.soft).toBe(true);
+    }
   });
 
   it("rejects duration drift beyond 1%", () => {
@@ -67,7 +70,10 @@ describe("validateBookingV2Quote (Phase 4)", () => {
       quoteInput: baseInput,
     });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.code).toBe("quote_duration_drift");
+    if (!result.ok) {
+      expect(result.code).toBe("quote_duration_drift");
+      expect(result.soft).toBe(true);
+    }
   });
 
   it("rejects client signature mismatch", () => {
@@ -79,7 +85,10 @@ describe("validateBookingV2Quote (Phase 4)", () => {
       quoteInput: baseInput,
     });
     expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.code).toBe("quote_client_signature_mismatch");
+    if (!result.ok) {
+      expect(result.code).toBe("quote_client_signature_mismatch");
+      expect(result.soft).toBe(true);
+    }
   });
 
   it("buildBookingV2QuoteSignatureInputs matches resolveBookingV2Quote signing payload", () => {

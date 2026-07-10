@@ -5,22 +5,36 @@ import { verifyBookingV2QuoteBreakdown } from "@/lib/booking/quote/resolveBookin
 const MAX_PRICE_DRIFT_RATIO = 0.01;
 const MAX_DURATION_DRIFT_RATIO = 0.01;
 
+export type V2QuoteValidationFailureCode =
+  | "quote_recompute_failed"
+  | "quote_signature_missing"
+  | "quote_signature_invalid"
+  | "quote_client_signature_mismatch"
+  | "quote_price_drift"
+  | "quote_duration_drift";
+
 export type V2QuoteValidationFailure = {
   ok: false;
   status: 422;
   error: string;
-  code:
-    | "quote_recompute_failed"
-    | "quote_signature_missing"
-    | "quote_signature_invalid"
-    | "quote_client_signature_mismatch"
-    | "quote_price_drift"
-    | "quote_duration_drift";
+  code: V2QuoteValidationFailureCode;
+  /**
+   * Soft failures mean the client's cached quote is stale, but the server
+   * recomputed a valid authoritative quote — checkout may proceed with server pricing.
+   */
+  soft?: boolean;
 };
 
 export type V2QuoteValidationSuccess = { ok: true };
 
 export type V2QuoteValidationResult = V2QuoteValidationSuccess | V2QuoteValidationFailure;
+
+/** Client-stale codes: safe to continue with server-authoritative pricing. */
+export const V2_QUOTE_SOFT_FAILURE_CODES: ReadonlySet<V2QuoteValidationFailureCode> = new Set([
+  "quote_client_signature_mismatch",
+  "quote_price_drift",
+  "quote_duration_drift",
+]);
 
 export function buildBookingV2QuoteSignatureInputs(
   input: CustomerTotalInput & { serviceSlug: ServiceSlug },
@@ -92,6 +106,7 @@ export function assertV2ConfirmQuoteIntegrity(params: {
       status: 422,
       error: "Your quote changed on our server. Please refresh pricing and try again.",
       code: "quote_client_signature_mismatch",
+      soft: true,
     };
   }
 
@@ -109,6 +124,7 @@ export function assertV2ConfirmQuoteIntegrity(params: {
         status: 422,
         error: "The price for your booking changed. Please refresh and try again.",
         code: "quote_price_drift",
+        soft: true,
       };
     }
   }
@@ -128,6 +144,7 @@ export function assertV2ConfirmQuoteIntegrity(params: {
         status: 422,
         error: "The scheduled duration for your booking changed. Please refresh and try again.",
         code: "quote_duration_drift",
+        soft: true,
       };
     }
   }

@@ -14,13 +14,20 @@ const pending = new Map<ToastKind, { message: string; timer: number }>();
 
 export function showToast(message: string, kind: ToastKind = "info"): void {
   if (typeof window === "undefined") return;
+  const text =
+    typeof message === "string"
+      ? message
+      : message && typeof message === "object" && "message" in (message as object)
+        ? String((message as { message?: unknown }).message ?? "")
+        : String(message ?? "");
+  if (!text.trim()) return;
   const cur = pending.get(kind);
   if (cur) window.clearTimeout(cur.timer);
   const timer = window.setTimeout(() => {
     pending.delete(kind);
-    window.dispatchEvent(new CustomEvent<ToastDetail>(EVENT, { detail: { message, kind } }));
+    window.dispatchEvent(new CustomEvent<ToastDetail>(EVENT, { detail: { message: text, kind } }));
   }, DEBOUNCE_MS) as unknown as number;
-  pending.set(kind, { message, timer });
+  pending.set(kind, { message: text, timer });
 }
 
 function subscribeToast(handler: (detail: ToastDetail) => void): () => void {
@@ -86,7 +93,9 @@ export function ToastHost() {
         )}
       >
         <ToastIcon kind={toast.kind} />
-        <span className="min-w-0 flex-1 leading-snug">{toast.message}</span>
+        <span className="min-w-0 flex-1 leading-snug">
+          {typeof toast.message === "string" ? toast.message : String(toast.message ?? "")}
+        </span>
       </div>
     </div>
   );
