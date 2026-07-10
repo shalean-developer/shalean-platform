@@ -6,6 +6,7 @@ import {
   type ResendLikeError,
 } from "@/lib/email/classifyResendSendError";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
+import { emailSafeGoUrl } from "@/lib/email/emailSafeGoUrl";
 import {
   CUSTOMER_SUPPORT_EMAIL,
   CUSTOMER_SUPPORT_TELEPHONE_E164,
@@ -99,7 +100,7 @@ export function buildMonthlyInvoicingAnnouncementHtml(params: MonthlyInvoicingAn
   <p style="margin: 0 0 20px;">
     Questions? Reply to this email or contact us at
     <a href="mailto:${supportEmail}" style="color:#2563eb;">${supportEmail}</a>
-    or <a href="tel:${escapeHtml(CUSTOMER_SUPPORT_TELEPHONE_E164)}" style="color:#2563eb;">${supportPhone}</a>.
+    or <a href="${escapeHtml(emailSafeGoUrl("call"))}" style="color:#2563eb;">${supportPhone}</a>.
   </p>
 
   <p style="margin: 0;">Thank you for your continued trust in Shalean.</p>

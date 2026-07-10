@@ -6,6 +6,7 @@ import {
   type BookingEmailRowOverlay,
 } from "@/lib/email/resolveBookingEmailFields";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { emailSafeGoUrl } from "@/lib/email/emailSafeGoUrl";
 import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -978,8 +979,8 @@ export async function sendCustomerBookingCancelledEmail(params: {
   </div>
   <p style="color:#374151; margin-bottom: 12px;">If you did not request this cancellation, contact us right away.</p>
   <p style="font-size: 14px; color: #374151;">
-    <strong>Phone:</strong> <a href="tel:0871535250" style="color:#2563eb;">087 153 5250</a><br/>
-    <strong>WhatsApp:</strong> <a href="https://wa.me/27825915525" style="color:#2563eb;">082 591 5525</a>
+    <strong>Phone:</strong> <a href="${escapeAttr(emailSafeGoUrl("call"))}" style="color:#2563eb;">087 153 5250</a><br/>
+    <strong>WhatsApp:</strong> <a href="${escapeAttr(emailSafeGoUrl("whatsapp"))}" style="color:#2563eb;">082 591 5525</a>
   </p>
   <p style="margin: 16px 0;">
     <a href="${escapeAttr(bookUrl)}" style="display:inline-block; background:#2563eb; color:#fff; text-decoration:none; padding:12px 20px; border-radius:10px; font-weight:600;">Book again</a>

@@ -9,11 +9,10 @@ import {
   getEmbeddedShaleanLogoDataUri,
 } from "@/lib/email/emailEmbeddedAssets";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { emailSafeGoUrl } from "@/lib/email/emailSafeGoUrl";
 import {
   CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
-  CUSTOMER_SUPPORT_TELEPHONE_TEL,
   CUSTOMER_SUPPORT_WHATSAPP_DISPLAY,
-  customerSupportWhatsAppHref,
 } from "@/lib/site/customerSupport";
 
 export function getShaleanEmailLogoUrl(): string {
@@ -40,11 +39,16 @@ function emailLogoHeader(): string {
 </a>`;
 }
 
+function socialHrefForEmail(id: ShaleanSocialLinkId): string {
+  return emailSafeGoUrl(id);
+}
+
 function socialIconCell(link: (typeof SHALEAN_SOCIAL_LINKS)[number]): string {
   const iconUrl = getShaleanEmailSocialIconUrl(link.id);
+  const href = socialHrefForEmail(link.id);
   return `<td width="36" height="36" style="width:36px;height:36px;padding:0 6px;line-height:0;font-size:0;">
   <a
-    href="${link.href}"
+    href="${href}"
     target="_blank"
     rel="noopener noreferrer"
     aria-label="${link.label}"
@@ -66,7 +70,7 @@ function emailSocialFooter(): string {
   const iconCells = SHALEAN_SOCIAL_LINKS.map(socialIconCell).join("");
   const textLinks = SHALEAN_SOCIAL_LINKS.map(
     (link, index) =>
-      `${index > 0 ? '<span style="color:#d1d5db;padding:0 6px;">·</span>' : ""}<a href="${link.href}" target="_blank" rel="noopener noreferrer" style="color:#6b7280;text-decoration:underline;">${link.label}</a>`,
+      `${index > 0 ? '<span style="color:#d1d5db;padding:0 6px;">·</span>' : ""}<a href="${socialHrefForEmail(link.id)}" target="_blank" rel="noopener noreferrer" style="color:#6b7280;text-decoration:underline;">${link.label}</a>`,
   ).join("");
 
   return `<table role="presentation" border="0" cellpadding="0" cellspacing="0" align="center" style="margin:16px auto 8px;">
@@ -92,6 +96,8 @@ function emailSocialFooter(): string {
 
 export function wrapBrandedEmailContent(innerHtml: string): string {
   const inner = innerHtml.trim();
+  const callUrl = emailSafeGoUrl("call");
+  const whatsappUrl = emailSafeGoUrl("whatsapp");
   return `
 <div style="font-family: system-ui, -apple-system, 'Segoe UI', sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937; line-height: 1.5; background-color: #ffffff;">
   ${emailLogoHeader()}
@@ -99,8 +105,8 @@ export function wrapBrandedEmailContent(innerHtml: string): string {
     ${inner}
   </div>
   <p style="margin-top: 24px; font-size: 12px; color: #9ca3af; border-top: 1px solid #e5e7eb; padding-top: 16px;">
-    Need help? Reply to this email, call <a href="${CUSTOMER_SUPPORT_TELEPHONE_TEL}" style="color:#2563eb;text-decoration:none;">${CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}</a>,
-    or WhatsApp <a href="${customerSupportWhatsAppHref()}" style="color:#2563eb;text-decoration:none;">${CUSTOMER_SUPPORT_WHATSAPP_DISPLAY}</a>.<br/>
+    Need help? Reply to this email, call <a href="${callUrl}" style="color:#2563eb;text-decoration:none;">${CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}</a>,
+    or WhatsApp <a href="${whatsappUrl}" style="color:#2563eb;text-decoration:none;">${CUSTOMER_SUPPORT_WHATSAPP_DISPLAY}</a>.<br/>
     If you didn&apos;t make this booking, contact us immediately.
   </p>
   ${emailSocialFooter()}
