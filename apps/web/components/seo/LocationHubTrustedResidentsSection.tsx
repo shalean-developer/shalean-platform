@@ -36,8 +36,8 @@ export function LocationHubTrustedResidentsSection({ locationName, snippets }: P
                         ·
                       </span>
                       <span className="font-medium text-zinc-600">{place}</span>
-                      <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-900">
-                        <Star className="h-3.5 w-3.5 fill-emerald-600 text-emerald-600" aria-hidden />
+                      <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-900">
+                        <Star className="h-3.5 w-3.5 fill-blue-600 text-blue-600" aria-hidden />
                         {s.rating}/5
                       </span>
                     </div>

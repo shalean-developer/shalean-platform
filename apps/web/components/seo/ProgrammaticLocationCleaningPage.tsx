@@ -66,6 +66,10 @@ import { linkEmphasisClassName } from "@/lib/ui/linkClassNames";
 import type { LocationTitleVariantId } from "@/lib/seo/location-title-variants";
 import type { LocationHubMarketingReviewSnippet } from "@/lib/seo/location-hub-marketing-reviews";
 import { buildSeoBookingHref, locationSlugFromSeoLocationSlug } from "@/lib/booking/seoBookingPrefill";
+import {
+  locationAboveFoldTrustBullets,
+  locationUsesAboveFoldTrust,
+} from "@/lib/seo/location-above-fold-trust";
 
 type Props = {
   location: CapeTownLocationRow;
@@ -109,6 +113,10 @@ const HERO_SOLID_CLASS =
   "inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700";
 const HERO_OUTLINE_CLASS =
   "inline-flex min-h-12 items-center justify-center rounded-xl border border-emerald-600 bg-white px-6 text-base font-semibold text-emerald-800 shadow-sm transition hover:bg-emerald-50";
+const HERO_SOLID_BLUE_CLASS =
+  "inline-flex min-h-12 items-center justify-center rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700";
+const HERO_OUTLINE_BLUE_CLASS =
+  "inline-flex min-h-12 items-center justify-center rounded-xl border border-blue-600 bg-white px-6 text-base font-semibold text-blue-800 shadow-sm transition hover:bg-blue-50";
 
 export function ProgrammaticLocationCleaningPage({
   location,
@@ -205,6 +213,10 @@ export function ProgrammaticLocationCleaningPage({
   });
 
   const whyChooseItems = seo?.whyChoose?.length ? seo.whyChoose : defaultWhyChooseBullets(location);
+  const aboveFoldTrust = locationUsesAboveFoldTrust(slug);
+  const aboveFoldTrustBullets = locationAboveFoldTrustBullets(slug);
+  const heroSolidClass = aboveFoldTrust ? HERO_SOLID_BLUE_CLASS : HERO_SOLID_CLASS;
+  const heroOutlineClass = aboveFoldTrust ? HERO_OUTLINE_BLUE_CLASS : HERO_OUTLINE_CLASS;
 
   return (
     <main className="bg-white pb-32 text-zinc-900" data-location-hub-root>
@@ -263,10 +275,38 @@ export function ProgrammaticLocationCleaningPage({
         </p>
       </div>
 
-      <section className="border-b border-emerald-100 bg-gradient-to-b from-emerald-50/60 via-white to-white py-14">
+      <section
+        className={
+          aboveFoldTrust
+            ? "border-b border-blue-100 bg-gradient-to-b from-blue-50/60 via-white to-white py-14"
+            : "border-b border-emerald-100 bg-gradient-to-b from-emerald-50/60 via-white to-white py-14"
+        }
+      >
         <div className="mx-auto max-w-4xl px-4">
-          <p className="text-sm font-semibold uppercase tracking-wide text-emerald-700">{eyebrow}</p>
+          <p
+            className={
+              aboveFoldTrust
+                ? "text-sm font-semibold uppercase tracking-wide text-blue-700"
+                : "text-sm font-semibold uppercase tracking-wide text-emerald-700"
+            }
+          >
+            {eyebrow}
+          </p>
           <h1 className="mt-3 text-4xl font-bold leading-tight tracking-tight text-zinc-900 lg:text-5xl">{h1}</h1>
+          {aboveFoldTrustBullets ? (
+            <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold tracking-tight text-zinc-800">
+              {aboveFoldTrustBullets.map((bullet, i) => (
+                <span key={bullet} className="contents">
+                  {i > 0 ? (
+                    <span className="hidden text-zinc-300 sm:inline" aria-hidden>
+                      •
+                    </span>
+                  ) : null}
+                  <span>{bullet}</span>
+                </span>
+              ))}
+            </p>
+          ) : null}
           {slug === "sea-point-cleaning-services" ? (
             <p className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm font-semibold tracking-tight text-zinc-800">
               <span>From R250</span>
@@ -300,7 +340,13 @@ export function ProgrammaticLocationCleaningPage({
             );
           })()}
           {editorialOverride ? (
-            <div className="mt-5 space-y-2 rounded-xl border border-emerald-100 bg-white/80 px-4 py-4 text-base leading-relaxed text-zinc-700 shadow-sm md:text-lg">
+            <div
+              className={
+                aboveFoldTrust
+                  ? "mt-5 space-y-2 rounded-xl border border-blue-100 bg-white/80 px-4 py-4 text-base leading-relaxed text-zinc-700 shadow-sm md:text-lg"
+                  : "mt-5 space-y-2 rounded-xl border border-emerald-100 bg-white/80 px-4 py-4 text-base leading-relaxed text-zinc-700 shadow-sm md:text-lg"
+              }
+            >
               <p>{editorialOverride.localLead}</p>
               <p className="text-sm text-zinc-500">
                 <span className="font-semibold text-zinc-600">Local anchors:</span>{" "}
@@ -345,7 +391,13 @@ export function ProgrammaticLocationCleaningPage({
               ))}
             </p>
           ) : null}
-          <p className="mt-5 border-l-4 border-emerald-200 pl-4 text-base font-medium leading-relaxed text-zinc-800">
+          <p
+            className={
+              aboveFoldTrust
+                ? "mt-5 border-l-4 border-blue-200 pl-4 text-base font-medium leading-relaxed text-zinc-800"
+                : "mt-5 border-l-4 border-emerald-200 pl-4 text-base font-medium leading-relaxed text-zinc-800"
+            }
+          >
             {location.uniqueContextLine}
           </p>
           <p className="mt-4 text-sm leading-relaxed text-zinc-600">
@@ -413,7 +465,7 @@ export function ProgrammaticLocationCleaningPage({
                   ctaLocation="hero"
                   ctaLabel={slot.ctaLabel}
                   ctaKind="book_now"
-                  className={solid ? HERO_SOLID_CLASS : HERO_OUTLINE_CLASS}
+                  className={solid ? heroSolidClass : heroOutlineClass}
                 >
                   {slot.label}
                 </SeoHubGrowthCtaLink>
@@ -433,9 +485,22 @@ export function ProgrammaticLocationCleaningPage({
               {bookCtaLabel}
             </SeoHubGrowthCtaLink>
           </p>
-          <p className="mt-4 text-sm font-medium text-emerald-900">{locationHeroCtaMicrocopy(location)}</p>
+          <p
+            className={
+              aboveFoldTrust ? "mt-4 text-sm font-medium text-blue-900" : "mt-4 text-sm font-medium text-emerald-900"
+            }
+          >
+            {locationHeroCtaMicrocopy(location)}
+          </p>
         </div>
       </section>
+
+      {aboveFoldTrust ? (
+        <>
+          <LocationTrustSignals location={location} trustStats={trustStats} />
+          <LocationHubTrustedResidentsSection locationName={location.name} snippets={marketingReviewSnippets ?? []} />
+        </>
+      ) : null}
 
       {slug === "sea-point-cleaning-services" ? (
         <SeaPointLocationEnhancements ctx={seoCtx} quoteHref={bookingDetailsHref} />
@@ -443,7 +508,9 @@ export function ProgrammaticLocationCleaningPage({
 
       <LocationHubRegionPeersSection location={location} />
 
-      <LocationHubTrustedResidentsSection locationName={location.name} snippets={marketingReviewSnippets ?? []} />
+      {!aboveFoldTrust ? (
+        <LocationHubTrustedResidentsSection locationName={location.name} snippets={marketingReviewSnippets ?? []} />
+      ) : null}
 
       <section className="border-b border-zinc-100 bg-zinc-50/40 py-12" aria-labelledby="hub-popular-ct-services-heading">
         <div className="mx-auto max-w-4xl px-4">
@@ -582,7 +649,7 @@ export function ProgrammaticLocationCleaningPage({
         </div>
       </section>
 
-      <LocationTrustSignals location={location} trustStats={trustStats} />
+      {!aboveFoldTrust ? <LocationTrustSignals location={location} trustStats={trustStats} /> : null}
 
       <LocationHubAuthoritySection location={location} />
 
