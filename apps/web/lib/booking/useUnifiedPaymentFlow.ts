@@ -5,6 +5,7 @@ import { useCallback, useState } from "react";
 import type { BookingPaymentSummary } from "@/lib/payments/bookingPaymentSummary";
 import type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyResponse";
 import { getAnalyticsSessionId } from "@/lib/analytics/sessionId";
+import { getAcquisitionPayloadFields } from "@/lib/analytics/acquisitionContext";
 import {
   ANALYTICS_EVENTS,
   trackBookingAnalyticsEvent,
@@ -78,35 +79,43 @@ export function buildInlinePaystackMetadata(
   if (!assignmentStr && selId) assignmentStr = "user_selected";
   const serviceSlug = canonicalizeBookingServiceSlug(summary.serviceSlug ?? summary.service);
 
-  return buildCanonicalPaystackCheckoutMetadata({
-    payment_path: "inline_checkout",
-    internalBookingId: summary.id,
-    booking_json: summary.bookingSnapshotJson ?? "",
-    booking_snapshot_version: lockTiming.snapshotVersion,
-    locked_at: lockTiming.lockedAt,
-    quote_signature: lockTiming.quoteSignature,
-    lock_expires_at: lockTiming.lockExpiresAt,
-    selected_cleaner_id: selId,
-    cleaner_name: summary.cleanerName ?? "",
-    assignment_type: assignmentStr,
-    service_slug: serviceSlug,
-    customer_email: email,
-    customer_name: summary.customerName ?? "",
-    customer_phone: summary.customerPhone ?? "",
-    customer_user_id: summary.customerUserId ?? "",
-    customer_type: summary.customerUserId ? "login" : "guest",
-    tip_zar: String(tip),
-    discount_zar: "0",
-    promo_code: "",
-    locked_final_zar: String(summary.priceZar),
-    pay_total_zar: String(totalZar),
-    expected_total_zar: String(totalZar),
-    price_snapshot: JSON.stringify(priceSnapshot),
-    booking: JSON.stringify(bookingCtx),
-    payment_mode: ctx.paymentMode,
-    attribution_source: ctx.attributionSource?.trim() ?? "",
-    analytics_session_id: analyticsSessionId,
-  });
+  const acq = getAcquisitionPayloadFields();
+  const gclid = typeof acq.gclid === "string" ? acq.gclid.trim() : "";
+  const fbclid = typeof acq.fbclid === "string" ? acq.fbclid.trim() : "";
+
+  return {
+    ...buildCanonicalPaystackCheckoutMetadata({
+      payment_path: "inline_checkout",
+      internalBookingId: summary.id,
+      booking_json: summary.bookingSnapshotJson ?? "",
+      booking_snapshot_version: lockTiming.snapshotVersion,
+      locked_at: lockTiming.lockedAt,
+      quote_signature: lockTiming.quoteSignature,
+      lock_expires_at: lockTiming.lockExpiresAt,
+      selected_cleaner_id: selId,
+      cleaner_name: summary.cleanerName ?? "",
+      assignment_type: assignmentStr,
+      service_slug: serviceSlug,
+      customer_email: email,
+      customer_name: summary.customerName ?? "",
+      customer_phone: summary.customerPhone ?? "",
+      customer_user_id: summary.customerUserId ?? "",
+      customer_type: summary.customerUserId ? "login" : "guest",
+      tip_zar: String(tip),
+      discount_zar: "0",
+      promo_code: "",
+      locked_final_zar: String(summary.priceZar),
+      pay_total_zar: String(totalZar),
+      expected_total_zar: String(totalZar),
+      price_snapshot: JSON.stringify(priceSnapshot),
+      booking: JSON.stringify(bookingCtx),
+      payment_mode: ctx.paymentMode,
+      attribution_source: ctx.attributionSource?.trim() ?? "",
+      analytics_session_id: analyticsSessionId,
+    }),
+    ...(gclid ? { gclid } : {}),
+    ...(fbclid ? { fbclid } : {}),
+  };
 }
 
 export function bookingAnalyticsStateFromSummary(summary: BookingPaymentSummary): BookingAnalyticsState {

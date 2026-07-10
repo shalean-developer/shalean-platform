@@ -341,6 +341,10 @@ function PaymentSection({ user }: { user: User }) {
       });
 
       // 2. Launch Paystack inline checkout
+      const { getAcquisitionPayloadFields } = await import("@/lib/analytics/acquisitionContext");
+      const acq = getAcquisitionPayloadFields();
+      const gclid = typeof acq.gclid === "string" ? acq.gclid.trim() : "";
+      const fbclid = typeof acq.fbclid === "string" ? acq.fbclid.trim() : "";
 
       const PaystackPop = (await import("@paystack/inline-js")).default;
       const popup = new PaystackPop();
@@ -351,6 +355,11 @@ function PaymentSection({ user }: { user: User }) {
         amount: chargeAmount * 100,
         currency: "ZAR",
         reference: paystackReference,
+        metadata: {
+          booking_id: bookingId,
+          ...(gclid ? { gclid } : {}),
+          ...(fbclid ? { fbclid } : {}),
+        },
         onSuccess: () => {
           clearBooking();
           router.push(`/account/success?reference=${encodeURIComponent(paystackReference ?? bookingId ?? "")}`);

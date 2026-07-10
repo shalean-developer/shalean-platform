@@ -4,7 +4,9 @@ import { Suspense } from "react";
 import { AppNotificationProviders } from "@/components/ui/notifications/AppNotificationProviders";
 import { DeferredGrowthCtaTracking } from "@/components/analytics/DeferredGrowthCtaTracking";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
+import { GoogleAds } from "@/components/analytics/GoogleAds";
 import { GoogleTagManager } from "@/components/analytics/GoogleTagManager";
+import { MetaPixel } from "@/components/analytics/MetaPixel";
 import { SessionReplayProvider } from "@/components/analytics/SessionReplayProvider";
 import { GlobalTopNav } from "@/components/nav/GlobalTopNav";
 import { geistSans } from "@/lib/fonts/appFonts";
@@ -50,7 +52,9 @@ export default function RootLayout({
           <ReferralCapture />
         </Suspense>
         <GoogleAnalytics />
+        <GoogleAds />
         <GoogleTagManager />
+        <MetaPixel />
           <DeferredGrowthCtaTracking />
         </AppNotificationProviders>
       </body>

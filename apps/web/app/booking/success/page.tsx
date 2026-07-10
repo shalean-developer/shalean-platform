@@ -12,6 +12,7 @@ import type {
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { ANALYTICS_EVENTS, trackBookingAnalyticsEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
+import { trackClientPurchase } from "@/lib/ads/trackClientPurchase";
 import { clearStoredReferral } from "@/lib/referrals/client";
 import { BookingConfirmationHero } from "@/components/booking/BookingConfirmationHero";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
@@ -169,6 +170,18 @@ function SuccessContent() {
                 booking_saved: true,
               });
             }
+            const completedSnapForAds = isSnapshot(okData.bookingSnapshot)
+              ? (okData.bookingSnapshot as BookingSnapshotV1)
+              : null;
+            trackClientPurchase({
+              reference: String(okData.reference ?? reference ?? "").trim(),
+              bookingId: okData.bookingId ?? null,
+              amountCents: okData.amountCents ?? null,
+              valueZar: completedSnapForAds?.total_zar ?? null,
+              currency: okData.currency ?? "ZAR",
+              email: okData.customerEmail ?? completedSnapForAds?.customer?.email ?? null,
+              phone: completedSnapForAds?.customer?.phone ?? null,
+            });
             setPhase("success");
             return true;
           }

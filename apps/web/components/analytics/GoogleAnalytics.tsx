@@ -1,7 +1,7 @@
 import { scheduleThirdPartyScript } from "@/lib/analytics/deferThirdPartyScript";
 
 const gaMeasurementId =
-  process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() || "G-WRRDM9ELD7";
+  process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() || "G-6JR2GPGPN3";
 
 /**
  * GA4 gtag — queues events immediately but loads `gtag/js` after idle / load so LCP is not blocked.

@@ -15,6 +15,7 @@ import { notifyBookingDebug } from "@/lib/notifications/notifyBookingDebug";
 import { bookingPaystackFinalizeTraceEnabled } from "@/lib/logging/bookingPaymentDebug";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { isInlineDecoupledPaystackReference } from "@/lib/booking/paystackBookingIdLookup";
+import { reportPaidBookingAdsConversions } from "@/lib/ads/reportPaidBookingAdsConversions";
 
 export type PaystackPersistSource = "verify" | "webhook" | "retry";
 
@@ -189,6 +190,22 @@ export async function finalizePaystackChargeSuccess(
         reference: params.paystackReference,
       });
     }
+
+    const meta = paystackMetadata;
+    const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
+    const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";
+    void reportPaidBookingAdsConversions({
+      admin,
+      paystackReference: params.paystackReference,
+      bookingId: result.bookingId,
+      amountCents: params.amountCents,
+      currency: params.currency,
+      email: resolvedCustomerEmail || null,
+      phone: params.snapshot?.customer?.phone ?? null,
+      customerName: params.snapshot?.customer?.name ?? null,
+      gclid: gclid || null,
+      fbclid: fbclid || null,
+    });
   }
 
   return result;
