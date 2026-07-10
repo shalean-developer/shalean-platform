@@ -1,12 +1,15 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseBookingServiceId } from "@/components/booking/serviceCategories";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import {
-  durationHoursFromMinutes,
   estimatedFinishAtIso,
   resolvePersistedBookingDurationMinutes,
   type BookingDurationRowLike,
 } from "@/lib/booking/quote/bookingQuotePersistence";
-import { resolveLegacyJobDurationWorkload } from "@/lib/booking/quote/resolveBookingDurationWorkload";
+import {
+  durationHoursFromMinutes,
+  resolveLegacyJobDurationWorkload,
+} from "@/lib/booking/quote/resolveBookingDurationWorkload";
 import { MIN_REASONABLE_BOOKING_DURATION_MINUTES } from "@/lib/booking/durationMinutesIntegrity";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
@@ -79,10 +82,13 @@ function roomsBathsFromRow(row: HealableBookingDurationRow): {
       : null;
   const details = snap?.serviceDetails && typeof snap.serviceDetails === "object" ? snap.serviceDetails : null;
 
+  const lockedRaw =
+    locked && typeof locked === "object" ? (locked as Record<string, unknown>) : null;
+
   const rooms =
     positiveRoomCount(row.rooms) ??
-    positiveRoomCount(locked?.bedrooms) ??
     positiveRoomCount(locked?.rooms) ??
+    positiveRoomCount(lockedRaw?.bedrooms) ??
     positiveRoomCount(details?.bedrooms) ??
     positiveRoomCount(details?.carpetRooms) ??
     null;
@@ -106,16 +112,19 @@ function roomsBathsFromRow(row: HealableBookingDurationRow): {
   };
 }
 
-function serviceForWorkload(row: HealableBookingDurationRow): string | null {
+function serviceForWorkload(row: HealableBookingDurationRow): ReturnType<typeof parseBookingServiceId> {
   const locked = parseLockedBookingFromUnknown(
     row.booking_snapshot && typeof row.booking_snapshot === "object"
       ? (row.booking_snapshot as { locked?: unknown }).locked
       : null,
   );
   const fromLocked = typeof locked?.service === "string" ? locked.service.trim() : "";
-  if (fromLocked) return fromLocked;
+  if (fromLocked) {
+    const parsed = parseBookingServiceId(fromLocked);
+    if (parsed) return parsed;
+  }
   const slug = String(row.service_slug ?? row.service ?? "").trim();
-  return slug || null;
+  return slug ? parseBookingServiceId(slug) : null;
 }
 
 function minutesFromPriceSnapshot(row: HealableBookingDurationRow): number | null {
