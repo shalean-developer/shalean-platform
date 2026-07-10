@@ -236,6 +236,7 @@ describe("bookingQuoteLifecycle (Phase 8 E2E)", () => {
       ...inProgress,
       duration_minutes: null,
       estimated_duration_minutes: null,
+      duration_hours: null,
       pricing_summary: null,
       booking_snapshot: null,
     };
