@@ -349,11 +349,11 @@ function PaymentSection({ user }: { user: User }) {
       const PaystackPop = (await import("@paystack/inline-js")).default;
       const popup = new PaystackPop();
 
-      popup.newTransaction({
+      const paystackOpts = {
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "",
         email: user.email ?? "",
         amount: chargeAmount * 100,
-        currency: "ZAR",
+        currency: "ZAR" as const,
         reference: paystackReference,
         metadata: {
           booking_id: bookingId,
@@ -373,7 +373,9 @@ function PaymentSection({ user }: { user: User }) {
           });
           setConfirming(false);
         },
-      });
+      };
+      // Inline SDK typings omit `metadata`; runtime accepts it (same as `initializePayment`).
+      popup.newTransaction(paystackOpts as Parameters<typeof popup.newTransaction>[0]);
     } catch (err) {
       const message = "An unexpected error occurred. Please try again.";
       setError(message);

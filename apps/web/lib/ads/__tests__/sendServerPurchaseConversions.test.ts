@@ -54,8 +54,8 @@ describe("sendMetaCapiPurchase", () => {
 
     expect(res).toEqual({ ok: true });
     expect(fetchMock).toHaveBeenCalledOnce();
-    const [, init] = fetchMock.mock.calls[0]!;
-    const body = JSON.parse(String((init as RequestInit).body)) as {
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(call[1]?.body)) as {
       data: Array<{ event_name: string; event_id: string; user_data: { em?: string }; custom_data: { value: number } }>;
     };
     expect(body.data[0]?.event_name).toBe("Purchase");
@@ -102,6 +102,7 @@ describe("sendGa4MeasurementPurchase", () => {
       bookingId: "b1",
     });
     expect(res).toEqual({ ok: true });
-    expect(String(fetchMock.mock.calls[0]![0])).toContain("measurement_id=G-TEST");
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(String(call[0])).toContain("measurement_id=G-TEST");
   });
 });
