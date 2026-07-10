@@ -1,14 +1,14 @@
 import { SERVICE_CONFIG, serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
-import { resolveBookingV2Quote } from "@/lib/booking/quote/resolveBookingQuote";
+import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
 import { buildAuthoritativeQuotePersistPatch } from "@/lib/booking/quote/bookingQuotePersistence";
-import type { BookingV2FeesConfig, CustomerPricingBreakdown } from "@/lib/booking-v2/types";
+import type { BookingV2FeesConfig, CustomerPricingBreakdown, CustomerTotalInput } from "@/lib/booking-v2/types";
 import type { LiveServiceConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
-export function buildCustomerPricingFromForm(params: {
+export type BuildCustomerPricingFromFormParams = {
   serviceSlug: BookingV2FormData["serviceSlug"];
   values: Pick<
     BookingV2FormData,
@@ -23,7 +23,12 @@ export function buildCustomerPricingFromForm(params: {
   >;
   liveConfig: LiveServiceConfig | null;
   feesConfig: BookingV2FeesConfig | null;
-}): CustomerPricingBreakdown {
+};
+
+/** Shared quote input for display (client) and signed confirm (server). */
+export function buildCustomerTotalInputFromForm(
+  params: BuildCustomerPricingFromFormParams,
+): CustomerTotalInput & { serviceSlug: BookingV2FormData["serviceSlug"] } {
   const { serviceSlug, values, liveConfig, feesConfig } = params;
   const staticConfig = SERVICE_CONFIG[serviceSlug];
 
@@ -61,7 +66,7 @@ export function buildCustomerPricingFromForm(params: {
   const equipmentQuote: EquipmentQuoteResult | null =
     equipmentRequired && values.equipmentQuote ? values.equipmentQuote : null;
 
-  return resolveBookingV2Quote({
+  return {
     serviceSlug,
     serviceLabel: catalogSource.label,
     serviceDetails: values.serviceDetails ?? {},
@@ -89,7 +94,17 @@ export function buildCustomerPricingFromForm(params: {
         showEquipmentQuestion,
     },
     feesConfig: feesConfig ?? defaultBookingV2FeesConfig(),
-  }).breakdown;
+  };
+}
+
+/**
+ * Client-safe pricing for the booking UI.
+ * Does not HMAC-sign — signing requires Node crypto + BOOKING_LOCK_HMAC_SECRET (server only).
+ */
+export function buildCustomerPricingFromForm(
+  params: BuildCustomerPricingFromFormParams,
+): CustomerPricingBreakdown {
+  return calculateCustomerTotal(buildCustomerTotalInputFromForm(params));
 }
 
 export function pricingPersistFields(

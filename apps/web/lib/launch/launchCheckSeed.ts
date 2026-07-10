@@ -1,7 +1,8 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { buildCustomerPricingFromForm, pricingPersistFields } from "@/lib/booking-v2/buildCustomerPricingFromForm";
+import { pricingPersistFields } from "@/lib/booking-v2/buildCustomerPricingFromForm";
+import { buildSignedCustomerPricingFromForm } from "@/lib/booking-v2/buildSignedCustomerPricingFromForm";
 import { filterCustomerOnlineBookingTimeSlots } from "@/lib/booking-v2/customerBookingTimeSlots";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
@@ -78,7 +79,7 @@ export async function seedLaunchCheckPendingPaymentBooking(
     selectedCleanerId?: string | null;
   },
 ): Promise<LaunchCheckSeedResult> {
-  let serverBreakdown = buildCustomerPricingFromForm({
+  let serverBreakdown = buildSignedCustomerPricingFromForm({
     serviceSlug: "regular-cleaning",
     values: {
       serviceDetails: { bedrooms: 2, bathrooms: 1, extraRooms: 0 },
@@ -96,7 +97,7 @@ export async function seedLaunchCheckPendingPaymentBooking(
 
   try {
     const { catalog, feesConfig } = await loadBookingV2Catalog();
-    serverBreakdown = buildCustomerPricingFromForm({
+    serverBreakdown = buildSignedCustomerPricingFromForm({
       serviceSlug: "regular-cleaning",
       values: {
         serviceDetails: { bedrooms: 2, bathrooms: 1, extraRooms: 0 },

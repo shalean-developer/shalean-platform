@@ -4,7 +4,8 @@ import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearer
 import { bookingV2ConfirmSchema } from "@/src/features/booking-v2/schemas";
 import { TEAM_SERVICES } from "@/src/features/booking-v2/config/serviceConfig";
 import { loadDispatchTeamsForBooking } from "@/lib/dispatch/loadDispatchTeamsForBooking";
-import { buildCustomerPricingFromForm, pricingPersistFields } from "@/lib/booking-v2/buildCustomerPricingFromForm";
+import { pricingPersistFields } from "@/lib/booking-v2/buildCustomerPricingFromForm";
+import { buildSignedCustomerPricingFromForm } from "@/lib/booking-v2/buildSignedCustomerPricingFromForm";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import type { LiveServiceConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import {
@@ -249,7 +250,7 @@ export async function POST(request: Request) {
   let equipmentPricingSnapshot: ReturnType<typeof buildEquipmentPricingSnapshot> | null = null;
 
   let catalogLoaded = false;
-  let serverBreakdown = buildCustomerPricingFromForm({
+  let serverBreakdown = buildSignedCustomerPricingFromForm({
     serviceSlug: data.serviceSlug,
     values: {
       serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
@@ -291,7 +292,7 @@ export async function POST(request: Request) {
       });
     }
 
-    serverBreakdown = buildCustomerPricingFromForm({
+    serverBreakdown = buildSignedCustomerPricingFromForm({
       serviceSlug: data.serviceSlug,
       values: {
         serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
