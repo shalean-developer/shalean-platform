@@ -68,7 +68,6 @@ const NAV: NavSection[] = [
     title: "Billing",
     items: [
       { href: "/account/invoices", label: "Monthly billing", icon: FileText },
-      { href: "/account/sales-documents", label: "Quotes", icon: FileText },
       { href: "/account/payments", label: "Payments", icon: CreditCard },
     ],
   },
