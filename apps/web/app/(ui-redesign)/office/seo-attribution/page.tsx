@@ -192,7 +192,9 @@ export default function SeoAttributionPage() {
       <div className="grid gap-5 xl:grid-cols-2">
         <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
           <h3 className="mb-1 text-sm font-bold text-slate-800">Completions by channel</h3>
-          <p className="mb-4 text-xs text-slate-500">Grouped from UTM source / medium on first touch</p>
+          <p className="mb-4 text-xs text-slate-500">
+            Grouped from UTM source / medium — Google &amp; Facebook count as Ads only when medium is paid
+          </p>
           {loading ? (
             <p className="text-sm text-slate-500">Loading…</p>
           ) : channelBars.length === 0 ? (

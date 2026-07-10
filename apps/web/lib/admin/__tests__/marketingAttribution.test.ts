@@ -8,6 +8,14 @@ describe("inferMarketingChannel", () => {
     expect(inferMarketingChannel({ fbclid: "xyz" })).toBe("facebook_ads");
   });
 
+  it("maps Google/Facebook UTMs to ads only when medium is paid", () => {
+    expect(inferMarketingChannel({ utm_source: "google", utm_medium: "cpc" })).toBe("google_ads");
+    expect(inferMarketingChannel({ utm_source: "google", utm_medium: "pmax" })).toBe("google_ads");
+    expect(inferMarketingChannel({ utm_source: "facebook", utm_medium: "paid_social" })).toBe("facebook_ads");
+    expect(inferMarketingChannel({ utm_source: "google", utm_medium: "organic" })).toBe("organic_seo");
+    expect(inferMarketingChannel({ utm_source: "facebook", utm_medium: "social" })).toBe("organic_seo");
+  });
+
   it("uses acquisition first-touch landing paths for organic SEO", () => {
     expect(
       inferMarketingChannel({

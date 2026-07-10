@@ -51,6 +51,49 @@ function isOrganicPath(pathname: string): boolean {
   return /^\/[a-z0-9-]+\/[a-z0-9-]+\/?$/.test(pathname);
 }
 
+const PAID_UTM_MEDIUMS = new Set([
+  "cpc",
+  "ppc",
+  "paid",
+  "paid_social",
+  "paid-social",
+  "paidsocial",
+  "display",
+  "pmax",
+  "performance_max",
+  "cpm",
+  "cpa",
+  "cpv",
+  "banner",
+]);
+
+function isPaidUtmMedium(medium: string): boolean {
+  const m = medium.trim().toLowerCase();
+  if (!m || m === "—" || m === "(none)" || m === "none") return false;
+  if (PAID_UTM_MEDIUMS.has(m)) return true;
+  return m.includes("paid");
+}
+
+function isGoogleUtmSource(utmSource: string): boolean {
+  return (
+    utmSource.includes("google") ||
+    utmSource.includes("adwords") ||
+    utmSource.includes("youtube") ||
+    utmSource.includes("doubleclick")
+  );
+}
+
+function isFacebookUtmSource(utmSource: string, source: string, utmMedium: string): boolean {
+  return (
+    utmSource.includes("facebook") ||
+    utmSource.includes("fb") ||
+    utmSource.includes("instagram") ||
+    utmSource.includes("meta") ||
+    utmMedium.includes("facebook") ||
+    source.includes("facebook")
+  );
+}
+
 function inferChannelFromSignals(signals: {
   source: string;
   pathname: string;
@@ -63,18 +106,18 @@ function inferChannelFromSignals(signals: {
 }): MarketingChannel {
   const { source, pathname, pageType, gclid, fbclid, utmSource, utmMedium, landingPathname } = signals;
 
-  if (gclid || utmSource.includes("google") || (utmMedium === "cpc" && utmSource.includes("google"))) {
+  // Click IDs are definitive paid-ad signals.
+  if (gclid) return "google_ads";
+  if (fbclid) return "facebook_ads";
+
+  // UTM: only treat Google/Facebook as ads when medium is paid (cpc, pmax, paid_social, …).
+  if (isGoogleUtmSource(utmSource) && isPaidUtmMedium(utmMedium)) {
     return "google_ads";
   }
-  if (
-    fbclid ||
-    utmSource.includes("facebook") ||
-    utmSource.includes("fb") ||
-    utmMedium.includes("facebook") ||
-    source.includes("facebook")
-  ) {
+  if (isFacebookUtmSource(utmSource, source, utmMedium) && isPaidUtmMedium(utmMedium)) {
     return "facebook_ads";
   }
+
   if (
     source.includes("ads_lp") ||
     pageType === "google_ads_lp" ||
@@ -82,6 +125,14 @@ function inferChannelFromSignals(signals: {
     landingPathname.startsWith("/lp/cleaning")
   ) {
     return "google_ads";
+  }
+
+  // Organic Google/Facebook search or social (non-paid medium) → SEO / organic bucket.
+  if (
+    (isGoogleUtmSource(utmSource) || isFacebookUtmSource(utmSource, source, utmMedium)) &&
+    (utmMedium === "organic" || utmMedium === "seo" || utmMedium === "social" || utmMedium === "referral")
+  ) {
+    return "organic_seo";
   }
 
   for (const path of [pathname, landingPathname]) {

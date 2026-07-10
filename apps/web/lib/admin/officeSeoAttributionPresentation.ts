@@ -42,13 +42,84 @@ export type SeoAttributionTrendPoint = SeoAttributionDayRow & {
   label: string;
 };
 
-export function seoAttributionChannelLabel(source: string): string {
-  const s = source.toLowerCase();
-  if (s.includes("organic")) return "Organic SEO";
-  if (s.includes("google") || s.includes("gbp:")) return "Google Ads";
-  if (s.includes("facebook") || s.includes("fb")) return "Facebook Ads";
-  if (s.includes("referral")) return "Referrals";
-  return source;
+const PAID_MEDIUMS = new Set([
+  "cpc",
+  "ppc",
+  "paid",
+  "paid_social",
+  "paid-social",
+  "paidsocial",
+  "display",
+  "pmax",
+  "performance_max",
+  "cpm",
+  "cpa",
+  "cpv",
+  "banner",
+]);
+
+function normalizeAttrToken(value: string): string {
+  return value.toLowerCase().trim();
+}
+
+/** True for paid / ads media (not organic social or organic search). */
+export function isPaidAttributionMedium(medium: string): boolean {
+  const m = normalizeAttrToken(medium);
+  if (!m || m === "—" || m === "(none)" || m === "none") return false;
+  if (PAID_MEDIUMS.has(m)) return true;
+  return m.includes("paid");
+}
+
+function isGoogleSource(source: string): boolean {
+  const s = normalizeAttrToken(source);
+  return s.includes("google") || s.includes("adwords") || s.includes("youtube") || s.includes("doubleclick");
+}
+
+function isFacebookSource(source: string): boolean {
+  const s = normalizeAttrToken(source);
+  return (
+    s.includes("facebook") ||
+    s.includes("fb") ||
+    s.includes("instagram") ||
+    s.includes("meta") ||
+    /(^|[^a-z])ig([^a-z]|$)/.test(s)
+  );
+}
+
+function isGoogleBusinessProfileSource(source: string): boolean {
+  const s = normalizeAttrToken(source);
+  return s.startsWith("gbp:") || /gmb|google[_-]?business|business_profile|(^|[^a-z])gbp([^a-z]|$)/.test(s);
+}
+
+/**
+ * Roll UTM source/medium into a stable channel label.
+ * Google/Facebook are Ads only when medium is paid (cpc, pmax, paid_social, …);
+ * GBP and organic search/social are kept separate.
+ */
+export function seoAttributionChannelLabel(source: string, medium = ""): string {
+  const s = normalizeAttrToken(source);
+  const m = normalizeAttrToken(medium);
+
+  if (s.includes("organic") && !isGoogleSource(s) && !isFacebookSource(s) && !isGoogleBusinessProfileSource(s)) {
+    return "Organic SEO";
+  }
+  if (isGoogleBusinessProfileSource(s)) {
+    return "Google Business Profile";
+  }
+
+  if (isGoogleSource(s)) {
+    if (isPaidAttributionMedium(m)) return "Google Ads";
+    if (m === "organic" || m === "seo") return "Organic SEO";
+    return "Google Organic";
+  }
+
+  if (isFacebookSource(s)) {
+    if (isPaidAttributionMedium(m)) return "Facebook Ads";
+    return "Facebook Organic";
+  }
+
+  if (s.includes("referral") || m === "referral") return "Referrals";
+  return source.trim() || source;
 }
 
 export function findOrganicAttributionRow(
@@ -61,7 +132,7 @@ export function findOrganicAttributionRow(
 export function buildAttributionChannelBars(bySource: SeoAttributionSourceRow[]): SeoAttributionChannelBar[] {
   const byLabel = new Map<string, { bookings: number; starts: number }>();
   for (const row of bySource) {
-    const label = seoAttributionChannelLabel(row.source);
+    const label = seoAttributionChannelLabel(row.source, row.medium);
     const cur = byLabel.get(label) ?? { bookings: 0, starts: 0 };
     cur.bookings += row.completed;
     cur.starts += row.quoted;
