@@ -9,6 +9,7 @@ import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { loadMonthlyInvoiceEmailPdfAttachment } from "@/lib/monthlyInvoice/loadMonthlyInvoiceEmailPdfAttachment";
 import { renderMonthlyInvoicePaymentLinksHtml } from "@/lib/monthlyInvoice/monthlyInvoicePaymentLinkHtml";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { customerNameFromEmail } from "@/lib/templates/bookingEmailTemplateData";
 
 /**
  * Discriminated send result. The `classification` field was added in M-9 so
@@ -42,6 +43,8 @@ function classifyMissingResendConfig(): EmailSendErrorClassification {
 
 export async function sendMonthlyInvoiceEmail(params: {
   to: string;
+  /** Customer display name for the greeting (falls back from email local-part). */
+  customerName?: string | null;
   monthLabel: string;
   /** Billing month `YYYY-MM` — used for the PDF filename. */
   month?: string;
@@ -84,8 +87,9 @@ export async function sendMonthlyInvoiceEmail(params: {
     paystackFallbackUrl: params.paystackPaymentUrl,
   });
 
+  const greet = escapeHtml(customerNameFromEmail(params.to, params.customerName));
   const html = `
-    <p>Hi,</p>
+    <p>Hi ${greet},</p>
     <p>Your consolidated cleaning invoice for <strong>${params.monthLabel}</strong> is ready.</p>
     <p><strong>Amount due:</strong> ${amount}<br/>
     <strong>Due:</strong> ${params.dueDateLabel}</p>
@@ -143,6 +147,8 @@ function escapeHtml(s: string): string {
 /** Overdue reminder (distinct copy from initial invoice email). */
 export async function sendMonthlyInvoiceReminderEmail(params: {
   to: string;
+  /** Customer display name for the greeting (falls back from email local-part). */
+  customerName?: string | null;
   daysPastDue: number;
   monthLabel: string;
   totalZar: number;
@@ -169,8 +175,9 @@ export async function sendMonthlyInvoiceReminderEmail(params: {
     primaryLinkText: "Pay your invoice online",
     fallbackLinkText: "pay directly via Paystack",
   });
+  const greet = escapeHtml(customerNameFromEmail(params.to, params.customerName));
   const html = `
-    <p>Hi,</p>
+    <p>Hi ${greet},</p>
     <p>Your invoice is overdue by <strong>${params.daysPastDue}</strong> day${params.daysPastDue === 1 ? "" : "s"}.</p>
     <p><strong>Period:</strong> ${escapeHtml(params.monthLabel)}<br/>
     <strong>Total:</strong> ${fmt(params.totalZar)}<br/>

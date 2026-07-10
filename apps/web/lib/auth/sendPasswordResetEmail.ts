@@ -5,6 +5,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { customerNameFromEmail } from "@/lib/templates/bookingEmailTemplateData";
 
 export type SendPasswordResetEmailResult =
   | { ok: true; channel: "resend" | "supabase" }
@@ -13,6 +14,42 @@ export type SendPasswordResetEmailResult =
 function isMissingUserError(message: string): boolean {
   const m = message.toLowerCase();
   return m.includes("user not found") || m.includes("not found") || m.includes("no user");
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function readMetaFullName(meta: unknown): string | null {
+  if (!meta || typeof meta !== "object") return null;
+  const m = meta as Record<string, unknown>;
+  const fn = typeof m.full_name === "string" ? m.full_name.trim() : "";
+  if (fn) return fn;
+  const n = typeof m.name === "string" ? String(m.name).trim() : "";
+  return n || null;
+}
+
+async function resolvePasswordResetGreetingName(
+  admin: SupabaseClient,
+  email: string,
+  userId?: string | null,
+  userMetadata?: unknown,
+): Promise<string> {
+  if (userId) {
+    const { data: profile } = await admin
+      .from("user_profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .maybeSingle();
+    const fromProfile = String((profile as { full_name?: string | null } | null)?.full_name ?? "").trim();
+    if (fromProfile) return customerNameFromEmail(email, fromProfile);
+  }
+  return customerNameFromEmail(email, readMetaFullName(userMetadata));
 }
 
 /**
@@ -64,12 +101,17 @@ export async function sendPasswordResetEmail(
     return { ok: true, channel: "supabase" };
   }
 
+  const user = data?.user;
+  const greet = escapeHtml(
+    await resolvePasswordResetGreetingName(admin, email, user?.id ?? null, user?.user_metadata),
+  );
+
   const { error: sendErr } = await resend.emails.send({
     from: getDefaultFromAddress(),
     to: email,
     subject: "Reset your Shalean password",
     html: `
-      <p>Hi,</p>
+      <p>Hi ${greet},</p>
       <p>We received a request to reset the password for your Shalean account.</p>
       <p><a href="${actionLink}">Choose a new password</a></p>
       <p>This link expires after a short time. If you did not request this, you can ignore this email.</p>

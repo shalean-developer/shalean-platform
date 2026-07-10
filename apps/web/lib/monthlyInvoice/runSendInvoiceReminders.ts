@@ -14,6 +14,7 @@ import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { johannesburgTodayYmd } from "@/lib/dashboard/bookingSlotTimes";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
+import { readCustomerProfileContact } from "@/lib/customer/readCustomerProfileContact";
 
 const REMINDER_DAY_OFFSETS = new Set([3, 7, 14]);
 
@@ -223,6 +224,7 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
       })) ?? "";
     const { data: udata } = await admin.auth.admin.getUserById(inv.customer_id);
     const user = udata?.user;
+    const customerName = (await readCustomerProfileContact(admin, inv.customer_id, user)).fullName;
     const phoneRaw = typeof user?.phone === "string" ? user.phone.trim() : "";
     const phoneForWa = phoneRaw ? resolveCustomerPhoneForWhatsApp(phoneRaw) : null;
 
@@ -286,6 +288,7 @@ export async function runSendInvoiceReminders(admin: SupabaseClient): Promise<Se
     } else {
       const emailRes = await sendMonthlyInvoiceReminderEmail({
         to: email,
+        customerName,
         daysPastDue: dayOffset,
         monthLabel,
         totalZar: zar(total),

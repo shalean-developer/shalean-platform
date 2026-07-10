@@ -14,6 +14,7 @@ import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
+import { readCustomerProfileContact } from "@/lib/customer/readCustomerProfileContact";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -125,8 +126,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
 
   if (channel === "email") {
     const balanceZar = balance / 100;
+    const customerName = (await readCustomerProfileContact(admin, row.customer_id)).fullName;
     const sent = await sendMonthlyInvoiceEmail({
       to: email,
+      customerName,
       monthLabel,
       month: row.month,
       totalZar: balanceZar,

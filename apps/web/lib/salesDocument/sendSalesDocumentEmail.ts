@@ -2,6 +2,16 @@ import "server-only";
 
 import { getDefaultFromAddress, getResend, describeResendApiKeyMisconfig } from "@/lib/email/resendFrom";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { customerNameFromEmail } from "@/lib/templates/bookingEmailTemplateData";
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
 
 export async function sendSalesDocumentEmail(params: {
   to: string;
@@ -21,12 +31,14 @@ export async function sendSalesDocumentEmail(params: {
   const amount = `R ${Math.round(params.totalZar).toLocaleString("en-ZA")}`;
   const isQuote = params.documentType === "quote";
   const subject = isQuote ? "Your Shalean quote" : "Your Shalean invoice";
+  const displayName = customerNameFromEmail(params.to, params.customerName);
+  const greet = escapeHtml(displayName);
   const intro = isQuote
-    ? `We prepared a quote for <strong>${params.customerName}</strong>.`
-    : `Your invoice for <strong>${params.customerName}</strong> is ready.`;
+    ? `We prepared a quote for <strong>${greet}</strong>.`
+    : `Your invoice for <strong>${greet}</strong> is ready.`;
 
   const html = `
-    <p>Hi,</p>
+    <p>Hi ${greet},</p>
     <p>${intro}</p>
     <p><strong>Amount:</strong> ${amount}${
       params.dueDateLabel && !isQuote ? `<br/><strong>Due:</strong> ${params.dueDateLabel}` : ""

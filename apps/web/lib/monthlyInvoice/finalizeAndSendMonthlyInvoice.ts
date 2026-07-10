@@ -18,6 +18,7 @@ import { markZohoInvoiceSent } from "@/lib/zoho/zohoBooksService";
 import { resolveMonthlyInvoiceCustomerEmail } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail";
 import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
+import { readCustomerProfileContact } from "@/lib/customer/readCustomerProfileContact";
 
 type EmailBreaker = ReturnType<typeof createNotificationConfigBreaker>;
 
@@ -277,6 +278,7 @@ export async function finalizeAndSendMonthlyInvoice(
 
   const mail = await sendMonthlyInvoiceEmail({
     to: email,
+    customerName: (await readCustomerProfileContact(admin, params.customerId)).fullName,
     monthLabel: formatMonthLongYearUtc(row.month),
     month: row.month,
     totalZar: balanceZar,
