@@ -116,14 +116,14 @@ export function generateTemplateCampaignContent(input: GenInput): GeneratedChann
   );
 
   const emailHtml = `<!DOCTYPE html>
-<html><body style="font-family:Arial,sans-serif;color:#0f172a;line-height:1.5;max-width:560px;margin:0 auto;padding:24px">
+<html><body style="font-family:Arial,sans-serif;color:#0B1F4A;line-height:1.5;max-width:560px;margin:0 auto;padding:24px">
   <p style="font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#64748b">${brand}</p>
   <h1 style="font-size:28px;margin:8px 0 12px">${escapeHtml(p.name)}</h1>
-  <p style="font-size:20px;font-weight:700;color:#059669">${escapeHtml(offerText)}</p>
+  <p style="font-size:20px;font-weight:700;color:#2563EB">${escapeHtml(offerText)}</p>
   <p>${escapeHtml(desc)}</p>
   <p><strong>${escapeHtml(code)}</strong></p>
   <p>${escapeHtml(ends)}</p>
-  <p style="margin:28px 0"><a href="${escapeAttr(bookingUrl)}" style="background:#0f172a;color:#fff;padding:12px 22px;border-radius:999px;text-decoration:none;font-weight:600">${escapeHtml(button)}</a></p>
+  <p style="margin:28px 0"><a href="${escapeAttr(bookingUrl)}" style="background:#2563EB;color:#fff;padding:12px 22px;border-radius:10px;text-decoration:none;font-weight:600">${escapeHtml(button)}</a></p>
   <p style="font-size:12px;color:#64748b">Terms apply. Eligibility is checked at checkout.</p>
 </body></html>`;
 

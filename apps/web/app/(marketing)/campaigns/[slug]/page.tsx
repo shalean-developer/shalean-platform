@@ -177,7 +177,7 @@ export default async function CampaignLandingPage({ params }: Props) {
       <header
         className="relative overflow-hidden text-white"
         style={{
-          background: `linear-gradient(135deg, ${promo.display_config.colours?.primary ?? "#0f172a"}, ${promo.display_config.colours?.accent ?? "#059669"})`,
+          background: `linear-gradient(135deg, ${promo.display_config.colours?.primary ?? "#0B1F4A"}, ${promo.display_config.colours?.accent ?? "#2563EB"})`,
         }}
       >
         <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-16 md:py-24">

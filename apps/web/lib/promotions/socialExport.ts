@@ -14,7 +14,7 @@ export async function captureNodeAsPngDataUrl(node: HTMLElement): Promise<string
     return await toPng(node, {
       cacheBust: true,
       pixelRatio: 1,
-      backgroundColor: "#0f172a",
+      backgroundColor: "#0B1F4A",
     });
   } finally {
     node.style.transform = prevTransform;

@@ -114,7 +114,7 @@ export async function generateQrDataUrl(url: string): Promise<string> {
     errorCorrectionLevel: "M",
     margin: 2,
     width: 512,
-    color: { dark: "#0f172a", light: "#ffffff" },
+    color: { dark: "#0B1F4A", light: "#ffffff" },
   });
 }
 
@@ -131,8 +131,8 @@ function brandPayload(promo: PromotionRow) {
     headline: promo.display_config.headline ?? promo.name,
     subheadline: promo.display_config.subheadline ?? promo.description,
     cta: promo.cta_label ?? promo.display_config.cta ?? "Book now",
-    primary: promo.display_config.colours?.primary ?? "#0f172a",
-    accent: promo.display_config.colours?.accent ?? "#059669",
+    primary: promo.display_config.colours?.primary ?? "#0B1F4A",
+    accent: promo.display_config.colours?.accent ?? "#2563EB",
   };
 }
 

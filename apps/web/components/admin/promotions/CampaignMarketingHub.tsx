@@ -1446,8 +1446,8 @@ function SocialContentCard({
             }
             promoCode={payload.promoCode != null ? String(payload.promoCode) : null}
             cta={content.cta ?? (payload.cta != null ? String(payload.cta) : "Book now")}
-            primary={payload.primary != null ? String(payload.primary) : "#0f172a"}
-            accent={payload.accent != null ? String(payload.accent) : "#059669"}
+            primary={payload.primary != null ? String(payload.primary) : "#0B1F4A"}
+            accent={payload.accent != null ? String(payload.accent) : "#2563EB"}
             previewMaxWidth={280}
           />
         </div>
@@ -1565,8 +1565,8 @@ function AssetCard({ asset }: { asset: AssetRow }) {
             subheadline={payload.subheadline != null ? String(payload.subheadline) : null}
             promoCode={payload.promoCode != null ? String(payload.promoCode) : null}
             cta={payload.cta != null ? String(payload.cta) : "Book now"}
-            primary={payload.primary != null ? String(payload.primary) : "#0f172a"}
-            accent={payload.accent != null ? String(payload.accent) : "#059669"}
+            primary={payload.primary != null ? String(payload.primary) : "#0B1F4A"}
+            accent={payload.accent != null ? String(payload.accent) : "#2563EB"}
             previewMaxWidth={260}
           />
         </div>
