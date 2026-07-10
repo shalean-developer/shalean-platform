@@ -2,7 +2,6 @@
 
 import { CampaignMarketingHub } from "@/components/admin/promotions/CampaignMarketingHub";
 
-/** @deprecated Prefer CampaignMarketingHub — kept for any direct imports. */
-export function PromotionsAdminDashboard() {
+export default function OfficeMarketingCampaignsPage() {
   return <CampaignMarketingHub view="campaigns" />;
 }

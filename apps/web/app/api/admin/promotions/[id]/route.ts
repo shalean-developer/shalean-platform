@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
+  deletePromotion,
   duplicatePromotion,
   getPromotionById,
   setPromotionStatus,
@@ -77,6 +78,24 @@ export async function PATCH(request: Request, ctx: Ctx) {
   }
 }
 
+export async function DELETE(request: Request, ctx: Ctx) {
+  const auth = await requireAdminApi(request);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+
+  const { id } = await ctx.params;
+  try {
+    await deletePromotion(admin, id, auth.email);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to delete promotion.";
+    const status = message === "Promotion not found." ? 404 : 500;
+    return NextResponse.json({ error: message }, { status });
+  }
+}
+
 export async function POST(request: Request, ctx: Ctx) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -96,6 +115,10 @@ export async function POST(request: Request, ctx: Ctx) {
     if (body.action === "duplicate") {
       const promotion = await duplicatePromotion(admin, id, auth.email);
       return NextResponse.json({ promotion }, { status: 201 });
+    }
+    if (body.action === "delete") {
+      await deletePromotion(admin, id, auth.email);
+      return NextResponse.json({ ok: true });
     }
     if (body.action === "pause") {
       return NextResponse.json({ promotion: await setPromotionStatus(admin, id, "paused", auth.email) });

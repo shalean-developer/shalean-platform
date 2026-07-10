@@ -20,7 +20,7 @@ function legacyEditorialPublicHref(slug: BlogPostSlug): string {
     case "move-out-cleaning-guide":
       return CANONICAL_MOVE_OUT_CHECKLIST_BLOG_HREF;
     case "cleaning-cost-cape-town":
-      return "/cleaning-prices-cape-town";
+      return "/blog/how-much-does-cleaning-cost-cape-town-2026";
     case "deep-vs-standard-cleaning-cape-town":
       return getCanonicalBlogRoute(slug);
     default:

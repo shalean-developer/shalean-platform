@@ -37,7 +37,7 @@ export const FALLBACK_EDITORIAL_HTML: Record<
 <li>Keep your invoice for deposit conversations—especially across Cape Town rental agencies with strict timelines.</li>
 </ul>
 
-<p>Still deciding between a lighter reset and full handover detail? Compare scopes on our <a href="/services/move-out-cleaning-cape-town">move-out cleaning Cape Town</a> page, read <a href="/cleaning-prices-cape-town">how cleaning pricing works in Cape Town</a>, or see <a href="/blog/deep-cleaning-vs-regular-cleaning-cape-town">deep vs standard cleaning</a> if you are unsure which tier fits before keys go back.</p>
+<p>Still deciding between a lighter reset and full handover detail? Compare scopes on our <a href="/services/move-out-cleaning-cape-town">move-out cleaning Cape Town</a> page, read <a href="/blog/how-much-does-cleaning-cost-cape-town-2026">how cleaning pricing works in Cape Town</a>, or see <a href="/blog/deep-cleaning-vs-regular-cleaning-cape-town">deep vs standard cleaning</a> if you are unsure which tier fits before keys go back.</p>
 <p>Mid-lease, many rentals stay calmer with <a href="/services/standard-cleaning-cape-town">standard cleaning services in Cape Town</a> on a rhythm so move-out day is less overwhelming.</p>
 `.trim(),
 

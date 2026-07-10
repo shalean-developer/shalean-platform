@@ -1,4 +1,5 @@
 import { PromotionAnnouncementBar } from "@/components/promotions/PromotionAnnouncementBar";
+import { PromotionPopup } from "@/components/promotions/PromotionPopup";
 
 export default function MarketingLayout({
   children,
@@ -8,6 +9,7 @@ export default function MarketingLayout({
   return (
     <>
       <PromotionAnnouncementBar />
+      <PromotionPopup />
       {children}
     </>
   );

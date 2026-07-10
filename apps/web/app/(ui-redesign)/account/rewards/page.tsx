@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Gift, Loader2, Sparkles, Clock, Users, Crown } from "lucide-react";
 import { getSession } from "@/lib/auth/authClient";
+import { PromotionDashboardCard } from "@/components/promotions/PromotionDashboardCard";
 
 type RewardsPayload = {
   activePromotions: {
@@ -103,6 +104,8 @@ export default function AccountRewardsPage() {
           Your promotions, credits, membership savings, and seasonal offers.
         </p>
       </div>
+
+      <PromotionDashboardCard />
 
       <div className="grid gap-3 sm:grid-cols-3">
         <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4">

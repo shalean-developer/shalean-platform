@@ -8,6 +8,7 @@ import { Step1Details } from "@/src/features/booking-v2/steps/Step1Details";
 import { Step2Schedule } from "@/src/features/booking-v2/steps/Step2Schedule";
 import { Step3Review } from "@/src/features/booking-v2/steps/Step3Review";
 import { Step4Payment } from "@/src/features/booking-v2/steps/Step4Payment";
+import { PromotionBookingBanner } from "@/components/promotions/PromotionBookingBanner";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import { useBookingV2FunnelTelemetry } from "@/src/features/booking-v2/hooks/useBookingV2FunnelTelemetry";
 import { useBookingV2Pricing } from "@/src/features/booking-v2/hooks/useBookingV2Pricing";
@@ -89,6 +90,7 @@ function BookingV2Inner() {
             )}
 
             <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm sm:p-8">
+              <PromotionBookingBanner />
               {stepContent}
             </div>
 

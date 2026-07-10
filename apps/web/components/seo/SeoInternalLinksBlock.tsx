@@ -7,7 +7,7 @@ import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
 import { cn } from "@/lib/utils";
 
-/** Live pricing education URL (retired `/cleaning-prices-cape-town` hub stays 410). */
+/** Live pricing education URL (retired `/cleaning-prices-cape-town` hub redirects to this blog). */
 export const SEO_HUB_CLEANING_PRICES_PATH = CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF;
 
 /** Recurring-home intent — standard cleaning service page. */

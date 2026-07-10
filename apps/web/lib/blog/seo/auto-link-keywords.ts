@@ -1,7 +1,7 @@
 import type { BlogContentBlock } from "@/lib/blog/content-json";
 
 /** Keep in sync with `CAPE_TOWN_PRICING_AUTHORITY_HREF` (`internalLinks.ts`). */
-const PRICING_AUTHORITY_PAGE = "/cleaning-prices-cape-town";
+const PRICING_AUTHORITY_PAGE = "/blog/how-much-does-cleaning-cost-cape-town-2026";
 
 /** Post-level cap — avoids repetitive internal-link patterns across long articles. */
 export const MAX_AUTO_LINKS_PER_POST = 5;

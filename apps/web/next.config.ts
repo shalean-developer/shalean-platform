@@ -87,6 +87,52 @@ const nextConfig: NextConfig = {
         destination: "/services/deep-cleaning-cape-town",
         permanent: true,
       },
+      /** Common legacy / mistyped paths that previously 404'd. */
+      {
+        source: "/careers",
+        destination: "/cleaner/apply",
+        permanent: true,
+      },
+      {
+        source: "/help",
+        destination: "/faq",
+        permanent: true,
+      },
+      {
+        source: "/help-centre",
+        destination: "/faq",
+        permanent: true,
+      },
+      {
+        source: "/help-center",
+        destination: "/faq",
+        permanent: true,
+      },
+      {
+        source: "/privacy",
+        destination: "/privacy-policy",
+        permanent: true,
+      },
+      {
+        source: "/terms",
+        destination: "/terms-of-service",
+        permanent: true,
+      },
+      {
+        source: "/tos",
+        destination: "/terms-of-service",
+        permanent: true,
+      },
+      {
+        source: "/pricing",
+        destination: "/blog/how-much-does-cleaning-cost-cape-town-2026",
+        permanent: true,
+      },
+      {
+        source: "/campaigns",
+        destination: "/book",
+        permanent: false,
+      },
       {
         source: "/services/standard-cleaning",
         destination: "/services/standard-cleaning-cape-town",

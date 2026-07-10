@@ -1,7 +1,8 @@
 "use client";
 
-import { PromotionsAdminDashboard } from "@/components/admin/promotions/PromotionsAdminDashboard";
+import { CampaignMarketingHub } from "@/components/admin/promotions/CampaignMarketingHub";
 
+/** Legacy path — same campaign management hub. */
 export default function OfficePromotionsPage() {
-  return <PromotionsAdminDashboard />;
+  return <CampaignMarketingHub view="campaigns" />;
 }

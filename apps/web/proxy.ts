@@ -38,6 +38,20 @@ async function runProxy(request: NextRequest) {
   }
 
   /** Phase-1 SEO rebuild — retired programmatic URLs (not blanket homepage redirects). */
+  /** User-facing commercial hubs: redirect to live replacements instead of bare 410. */
+  const commercialHubRedirects: Record<string, string> = {
+    "/cleaning-prices-cape-town": "/blog/how-much-does-cleaning-cost-cape-town-2026",
+    "/cleaning-services-cape-town": "/services",
+    "/maid-services-cape-town": "/services",
+    "/cleaning-services": "/services",
+  };
+  const hubDest = commercialHubRedirects[pathname.replace(/\/$/, "") || "/"];
+  if (hubDest) {
+    const url = request.nextUrl.clone();
+    url.pathname = hubDest;
+    return NextResponse.redirect(url, 308);
+  }
+
   if (isSeoRebuildGonePath(pathname)) {
     return new NextResponse(null, { status: 410 });
   }

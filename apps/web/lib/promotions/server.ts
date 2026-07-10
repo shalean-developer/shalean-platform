@@ -77,9 +77,19 @@ export async function getPromotionById(admin: Admin, id: string): Promise<Promot
   return data ? mapPromotionRow(data as Record<string, unknown>) : null;
 }
 
+export type PromotionDisplaySurface =
+  | "homepage"
+  | "booking"
+  | "pricing"
+  | "announcement"
+  | "popup"
+  | "featured"
+  | "dashboard"
+  | "booking_banner";
+
 export async function getActiveDisplayPromotions(
   admin: Admin,
-  surface: "homepage" | "booking" | "pricing" | "announcement",
+  surface: PromotionDisplaySurface,
 ): Promise<PromotionRow[]> {
   await syncPromotionStatuses(admin);
   let q = admin.from("promotions").select("*").eq("status", "active");
@@ -87,6 +97,10 @@ export async function getActiveDisplayPromotions(
   if (surface === "booking") q = q.eq("show_on_booking", true);
   if (surface === "pricing") q = q.eq("show_on_pricing", true);
   if (surface === "announcement") q = q.eq("show_announcement_bar", true);
+  if (surface === "popup") q = q.eq("show_popup", true);
+  if (surface === "featured") q = q.eq("show_featured_card", true);
+  if (surface === "dashboard") q = q.eq("show_dashboard_card", true);
+  if (surface === "booking_banner") q = q.eq("show_booking_banner", true);
   const { data, error } = await q.order("stack_priority", { ascending: true });
   if (error) throw new Error(error.message);
   const now = new Date();
@@ -132,6 +146,15 @@ export async function createPromotion(
     show_on_booking: input.show_on_booking ?? false,
     show_on_pricing: input.show_on_pricing ?? false,
     show_announcement_bar: input.show_announcement_bar ?? false,
+    show_popup: input.show_popup ?? false,
+    show_featured_card: input.show_featured_card ?? false,
+    show_dashboard_card: input.show_dashboard_card ?? false,
+    show_booking_banner: input.show_booking_banner ?? input.show_on_booking ?? false,
+    hero_image_url: input.hero_image_url ?? null,
+    logo_url: input.logo_url ?? null,
+    cta_label: input.cta_label ?? null,
+    terms_html: input.terms_html ?? null,
+    template_key: input.template_key ?? null,
     display_config: input.display_config ?? {},
     created_by: actor ?? null,
     updated_by: actor ?? null,
@@ -179,6 +202,15 @@ export async function updatePromotion(
     "show_on_booking",
     "show_on_pricing",
     "show_announcement_bar",
+    "show_popup",
+    "show_featured_card",
+    "show_dashboard_card",
+    "show_booking_banner",
+    "hero_image_url",
+    "logo_url",
+    "cta_label",
+    "terms_html",
+    "template_key",
     "display_config",
   ];
   for (const key of keys) {
@@ -202,6 +234,20 @@ export async function setPromotionStatus(
   actor?: string,
 ): Promise<PromotionRow> {
   return updatePromotion(admin, id, { status }, actor);
+}
+
+export async function deletePromotion(
+  admin: Admin,
+  id: string,
+  actor?: string,
+): Promise<void> {
+  const before = await getPromotionById(admin, id);
+  if (!before) throw new Error("Promotion not found.");
+
+  await writeAudit(admin, id, "delete", actor, before, null);
+
+  const { error } = await admin.from("promotions").delete().eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
 export async function duplicatePromotion(
@@ -408,7 +454,12 @@ export async function recordPromotionEvent(
       | "code_rejected"
       | "credit_issued"
       | "email_sent"
-      | "sms_sent";
+      | "sms_sent"
+      | "landing_visit"
+      | "qr_scan"
+      | "popup_view"
+      | "popup_dismiss"
+      | "content_generated";
     userId?: string | null;
     bookingId?: string | null;
     sessionId?: string | null;

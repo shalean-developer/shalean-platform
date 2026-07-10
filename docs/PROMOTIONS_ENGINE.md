@@ -1,25 +1,29 @@
 # Promotion & Campaign Management System
 
-Configurable promotions engine for Shalean. Admins create, schedule, pause, and measure campaigns from **Office → Growth → Promotions** without code changes. Checkout evaluation is server-side and wired into **booking-v2**.
+Configurable promotions engine for Shalean. Admins create, schedule, pause, and measure campaigns from **Office → Growth → Campaigns** without code changes. Checkout evaluation is server-side and wired into **booking-v2**.
+
+For the full marketing content layer (social, email, landing, QR, templates), see [CAMPAIGN_MARKETING_SYSTEM.md](./CAMPAIGN_MARKETING_SYSTEM.md).
 
 ## Architecture
 
 ```
-Admin UI (/office/promotions)
+Admin UI (/office/marketing/campaigns)
         │
         ▼
-API /api/admin/promotions*
+API /api/admin/promotions* + /api/admin/campaign-templates
         │
         ▼
-Postgres: promotions, promotion_redemptions, promotion_events,
-          promotion_bundles, membership_plans, customer_memberships,
-          birthday_rewards, marketing_automation_rules, promotion_audit_log
+Postgres: promotions, campaign_content, campaign_assets, campaign_templates,
+          promotion_redemptions, promotion_events, promotion_bundles,
+          membership_plans, customer_memberships, birthday_rewards,
+          marketing_automation_rules, promotion_audit_log
         │
         ▼
-lib/promotions (evaluate + apply)
+lib/promotions (evaluate + apply + generateCampaignContent)
         │
         ├── booking-v2 confirm (auto-apply + promo codes)
-        ├── /api/promotions (public display)
+        ├── /api/promotions (public display surfaces)
+        ├── /campaigns/[slug] (landing pages)
         ├── /api/account/rewards (customer hub)
         └── cron /api/cron/promotions (status sync + birthdays)
 ```
@@ -50,18 +54,22 @@ lib/promotions (evaluate + apply)
 ## Admin capabilities
 
 - Create / edit / duplicate promotions
+- **Generate Campaign** — multi-channel copy, landing structure, social templates, QR
+- Launch from reusable templates (First Booking, Black Friday, Spring Cleaning, etc.)
 - Schedule (`scheduled` → `active` via cron), pause, resume, end
-- Budgets, usage limits, eligibility JSON, display flags
+- Budgets, usage limits, eligibility JSON, display flags (homepage, popup, booking, dashboard)
 - Analytics KPIs + CSV export
 - Membership plans + assign membership
 - Marketing automation rule toggles
 
 ## Customer surfaces
 
-- `/account/rewards` — Rewards & Offers hub
+- `/account/rewards` — Rewards & Offers hub + dashboard campaign card
 - `/account/referrals` — referral link, credits, history (existing)
 - Checkout promo code field + auto-applied offers
-- Homepage announcement bar (`PromotionAnnouncementBar`)
+- Homepage announcement bar, featured card, optional popup
+- Booking wizard banner + countdown
+- `/campaigns/[slug]` landing pages
 
 ## Birthday automation
 
@@ -76,6 +84,7 @@ Referral **reward amounts, fraud, and credit issuance** remain in `lib/referrals
 ## Migrations
 
 - `supabase/migrations/20261066_promotions_campaign_system.sql`
+- `supabase/migrations/20261067_campaign_marketing_content.sql`
 
 Apply with your usual Supabase migration workflow before using admin UI in production.
 
@@ -85,7 +94,9 @@ Apply with your usual Supabase migration workflow before using admin UI in produ
 |--------|------|------|
 | GET/POST | `/api/admin/promotions` | Admin |
 | GET/PATCH/POST | `/api/admin/promotions/[id]` | Admin |
+| GET/POST | `/api/admin/promotions/[id]/generate` | Admin |
 | GET | `/api/admin/promotions/analytics` | Admin (`?format=csv`) |
+| GET/POST | `/api/admin/campaign-templates` | Admin |
 | GET/POST | `/api/admin/memberships` | Admin |
 | GET/PATCH | `/api/admin/marketing-automation` | Admin |
 | GET/POST | `/api/promotions` | Public |
@@ -97,5 +108,5 @@ Apply with your usual Supabase migration workflow before using admin UI in produ
 
 - Eligibility and discount math are **server-side only**
 - Redemptions use **idempotency keys** (`bv2:{promoId}:{bookingId}`)
-- Audit log on create/update
+- Audit log on create/update/generate
 - RLS: public read of active promotions; customers read own memberships/birthday rewards
