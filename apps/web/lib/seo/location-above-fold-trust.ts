@@ -2,6 +2,8 @@
 export const LOCATION_ABOVE_FOLD_TRUST_SLUGS = new Set([
   "bantry-bay-cleaning-services",
   "bellville-cleaning-services",
+  "bergvliet-cleaning-services",
+  "camps-bay-cleaning-services",
 ]);
 
 export function locationUsesAboveFoldTrust(slug: string): boolean {
@@ -15,6 +17,10 @@ export function locationAboveFoldTrustBullets(slug: string): readonly string[] |
       return ["Discreet cliff-side crews", "Vetted & insured teams", "Google-reviewed Cape Town"];
     case "bellville-cleaning-services":
       return ["Upfront online pricing", "Move-out & recurring cleans", "Trusted local teams"];
+    case "bergvliet-cleaning-services":
+      return ["Family-home specialists", "Pet-friendly crews", "Google-reviewed Cape Town"];
+    case "camps-bay-cleaning-services":
+      return ["Guest-ready turnovers", "Vetted & insured teams", "Google-reviewed Cape Town"];
     default:
       return null;
   }
