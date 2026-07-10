@@ -70,10 +70,46 @@ function graphUrl(cfg: FacebookPublishConfig, path: string, query?: Record<strin
 }
 
 /**
- * Confirm the configured token can act as this Page (Page token), not a bare User token.
+ * Confirm FACEBOOK_PAGE_ACCESS_TOKEN is a Page token for FACEBOOK_PAGE_ID.
+ * User tokens can often GET the Page but still fail publish with deprecated publish_actions.
  */
 export async function assertFacebookPageToken(cfg: FacebookPublishConfig): Promise<FacebookPublishResult | null> {
   try {
+    const meRes = await fetch(
+      graphUrl(cfg, "me", {
+        fields: "id,name",
+        access_token: cfg.accessToken,
+      }),
+      { method: "GET" },
+    );
+    const me = (await meRes.json().catch(() => ({}))) as {
+      id?: string;
+      name?: string;
+      error?: GraphErrorBody;
+    };
+    if (!meRes.ok || me.error || !me.id) {
+      return {
+        ok: false,
+        status: meRes.status,
+        error:
+          formatFacebookGraphError(me.error, meRes.status) +
+          " Could not identify the token via /me. Regenerate a Page token from GET /me/accounts.",
+      };
+    }
+
+    if (String(me.id) !== String(cfg.pageId)) {
+      return {
+        ok: false,
+        status: 400,
+        error: [
+          `FACEBOOK_PAGE_ACCESS_TOKEN is a User token (id ${me.id}), not a Page token.`,
+          `FACEBOOK_PAGE_ID is ${cfg.pageId}.`,
+          "In Graph API Explorer run GET /me/accounts and copy the Page object's access_token (not the token in the right sidebar).",
+          "Then restart the app / update Vercel env and redeploy.",
+        ].join(" "),
+      };
+    }
+
     const res = await fetch(
       graphUrl(cfg, cfg.pageId, {
         fields: "id,name",
@@ -100,6 +136,76 @@ export async function assertFacebookPageToken(cfg: FacebookPublishConfig): Promi
     return {
       ok: false,
       error: e instanceof Error ? e.message : "Failed to validate Facebook Page token.",
+    };
+  }
+}
+
+/** Admin diagnostics: is the configured token a Page token for FACEBOOK_PAGE_ID? */
+export async function diagnoseFacebookPagePublishConfig(): Promise<{
+  configured: boolean;
+  pageId: string | null;
+  tokenKind: "page" | "user" | "unknown" | null;
+  tokenSubjectId: string | null;
+  tokenSubjectName: string | null;
+  okForPublish: boolean;
+  hint: string | null;
+}> {
+  const cfg = getFacebookPagePublishConfig();
+  if (!cfg) {
+    return {
+      configured: false,
+      pageId: null,
+      tokenKind: null,
+      tokenSubjectId: null,
+      tokenSubjectName: null,
+      okForPublish: false,
+      hint: "Set FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN.",
+    };
+  }
+
+  try {
+    const meRes = await fetch(
+      graphUrl(cfg, "me", { fields: "id,name", access_token: cfg.accessToken }),
+      { method: "GET" },
+    );
+    const me = (await meRes.json().catch(() => ({}))) as {
+      id?: string;
+      name?: string;
+      error?: GraphErrorBody;
+    };
+    if (!meRes.ok || me.error || !me.id) {
+      return {
+        configured: true,
+        pageId: cfg.pageId,
+        tokenKind: "unknown",
+        tokenSubjectId: null,
+        tokenSubjectName: null,
+        okForPublish: false,
+        hint: formatFacebookGraphError(me.error, meRes.status),
+      };
+    }
+
+    const isPage = String(me.id) === String(cfg.pageId);
+    return {
+      configured: true,
+      pageId: cfg.pageId,
+      tokenKind: isPage ? "page" : "user",
+      tokenSubjectId: me.id,
+      tokenSubjectName: me.name ?? null,
+      okForPublish: isPage,
+      hint: isPage
+        ? null
+        : "Token is a User token. Replace FACEBOOK_PAGE_ACCESS_TOKEN with the access_token from GET /me/accounts for this Page, then restart/redeploy.",
+    };
+  } catch (e) {
+    return {
+      configured: true,
+      pageId: cfg.pageId,
+      tokenKind: "unknown",
+      tokenSubjectId: null,
+      tokenSubjectName: null,
+      okForPublish: false,
+      hint: e instanceof Error ? e.message : "Token diagnosis failed.",
     };
   }
 }

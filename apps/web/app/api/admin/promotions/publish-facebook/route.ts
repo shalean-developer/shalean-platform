@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
+  diagnoseFacebookPagePublishConfig,
   getFacebookPagePublishConfig,
   publishFacebookPageFeed,
   publishFacebookPagePhoto,
@@ -11,15 +12,20 @@ import { recordPromotionEvent } from "@/lib/promotions/server";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** GET — whether Facebook Page publishing is configured. */
+/** GET — whether Facebook Page publishing is configured + token kind diagnostics. */
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
+  const diagnosis = await diagnoseFacebookPagePublishConfig();
   const cfg = getFacebookPagePublishConfig();
   return NextResponse.json({
-    configured: Boolean(cfg),
+    configured: diagnosis.configured,
     pageId: cfg ? `${cfg.pageId.slice(0, 4)}…` : null,
+    tokenKind: diagnosis.tokenKind,
+    tokenSubjectName: diagnosis.tokenSubjectName,
+    okForPublish: diagnosis.okForPublish,
+    hint: diagnosis.hint,
   });
 }
 

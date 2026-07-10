@@ -205,6 +205,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
   const [allContent, setAllContent] = useState<ContentRow[]>([]);
   const [allAssets, setAllAssets] = useState<AssetRow[]>([]);
   const [facebookConfigured, setFacebookConfigured] = useState(false);
+  const [facebookHint, setFacebookHint] = useState<string | null>(null);
 
   const loadAnalytics = useCallback(async () => {
     const res = await adminFetch<AnalyticsPayload>("/api/admin/promotions/analytics");
@@ -230,8 +231,22 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
   }, []);
 
   const loadFacebookStatus = useCallback(async () => {
-    const res = await adminFetch<{ configured: boolean }>("/api/admin/promotions/publish-facebook");
+    const res = await adminFetch<{
+      configured: boolean;
+      okForPublish?: boolean;
+      tokenKind?: string | null;
+      hint?: string | null;
+    }>("/api/admin/promotions/publish-facebook");
     setFacebookConfigured(Boolean(res.data?.configured));
+    if (res.data?.configured && res.data.okForPublish === false && res.data.hint) {
+      setFacebookHint(res.data.hint);
+    } else if (res.data?.tokenKind === "user") {
+      setFacebookHint(
+        "FACEBOOK_PAGE_ACCESS_TOKEN is a User token. Replace it with the Page access_token from GET /me/accounts, then restart the server.",
+      );
+    } else {
+      setFacebookHint(null);
+    }
   }, []);
 
   const loadContentHub = useCallback(async () => {
@@ -594,6 +609,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
           content={allContent}
           assets={allAssets}
           facebookConfigured={facebookConfigured}
+          facebookHint={facebookHint}
           emptyLabel={`No ${meta.title.toLowerCase()} yet. Generate a campaign first.`}
         />
       ) : null}
@@ -1273,11 +1289,13 @@ function ContentList({
   content,
   assets,
   facebookConfigured,
+  facebookHint,
   emptyLabel,
 }: {
   content: ContentRow[];
   assets: AssetRow[];
   facebookConfigured: boolean;
+  facebookHint: string | null;
   emptyLabel: string;
 }) {
   if (!content.length) {
@@ -1298,6 +1316,10 @@ function ContentList({
           <code className="font-mono text-xs">/me/accounts</code> — not a User token / deprecated{" "}
           <code className="font-mono text-xs">publish_actions</code>). You can still copy text and
           download PNGs to post manually.
+        </p>
+      ) : facebookHint ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {facebookHint}
         </p>
       ) : null}
       <div className="grid gap-4 lg:grid-cols-2">
