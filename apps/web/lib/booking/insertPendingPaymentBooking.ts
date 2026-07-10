@@ -41,7 +41,7 @@ export async function deletePendingPaymentBookingsWithPaystackReference(
 
 export type PendingPaymentInsertResult =
   | { ok: true; id: string }
-  | { ok: false; error: string };
+  | { ok: false; error: string; pgCode?: string };
 
 /**
  * Creates `bookings` row before Paystack initialize so `paystack_reference` is known and
@@ -56,6 +56,11 @@ export async function insertPendingPaymentBookingRow(
     /** When known at insert time, dispatch / assignCleaner can match cleaners immediately. */
     locationId?: string | null;
     cityId?: string | null;
+    /** Admin checkout: stamp ownership at insert so slot uniqueness matches duplicate probes. */
+    customerAuthUserId?: string | null;
+    /** Admin force duplicate slot — must be set on INSERT (unique index runs before update). */
+    slotDuplicateExempt?: boolean;
+    adminForceSlotOverride?: boolean;
   },
 ): Promise<PendingPaymentInsertResult> {
   const email = params.customerEmail.trim().toLowerCase();
@@ -103,6 +108,10 @@ export async function insertPendingPaymentBookingRow(
     typeof params.cityId === "string" && /^[0-9a-f-]{36}$/i.test(params.cityId.trim())
       ? params.cityId.trim().toLowerCase()
       : null;
+  const authUid =
+    typeof params.customerAuthUserId === "string" && /^[0-9a-f-]{36}$/i.test(params.customerAuthUserId.trim())
+      ? params.customerAuthUserId.trim().toLowerCase()
+      : null;
 
   const { data, error } = await admin
     .from("bookings")
@@ -111,7 +120,9 @@ export async function insertPendingPaymentBookingRow(
       customer_email: email,
       customer_name: null,
       customer_phone: null,
-      user_id: null,
+      ...(authUid ? { customer_id: authUid, user_id: authUid } : { user_id: null }),
+      ...(params.slotDuplicateExempt === true ? { slot_duplicate_exempt: true } : {}),
+      ...(params.adminForceSlotOverride === true ? { admin_force_slot_override: true } : {}),
       amount_paid_cents: 0,
       currency: "ZAR",
       booking_snapshot: minimalSnapshot,
@@ -147,7 +158,7 @@ export async function insertPendingPaymentBookingRow(
     .maybeSingle();
 
   if (error) {
-    return { ok: false, error: error.message };
+    return { ok: false, error: error.message, pgCode: error.code };
   }
   const id = data && typeof data === "object" && "id" in data ? String((data as { id: string }).id) : "";
   if (!id) return { ok: false, error: "Insert returned no id." };

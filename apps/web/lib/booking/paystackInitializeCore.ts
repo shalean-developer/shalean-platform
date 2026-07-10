@@ -300,15 +300,49 @@ export async function processPaystackInitializeBody(
   if (!bookingIdFromBody) {
     const paystackRef = crypto.randomUUID();
     await deletePendingPaymentBookingsWithPaystackReference(admin, paystackRef);
+    const trustedCustomerUidForInsert =
+      typeof initOptions?.adminTrustedCustomerUserId === "string" ? initOptions.adminTrustedCustomerUserId.trim() : "";
+    const slotF = initOptions?.adminSlotFlags;
     const ins = await insertPendingPaymentBookingRow(admin, {
       paystackReference: paystackRef,
       locked,
       customerEmail: email,
+      ...(trustedCustomerUidForInsert && /^[0-9a-f-]{36}$/i.test(trustedCustomerUidForInsert)
+        ? { customerAuthUserId: trustedCustomerUidForInsert }
+        : {}),
+      ...(slotF?.slotDuplicateExempt ? { slotDuplicateExempt: true } : {}),
+      ...(slotF?.adminForceSlotOverride ? { adminForceSlotOverride: true } : {}),
     });
-    if (ins.ok) {
-      createdPendingBookingId = ins.id;
-      paystackReferenceOverride = paystackRef;
+    if (!ins.ok) {
+      const dupSlot =
+        Boolean(trustedCustomerUidForInsert) &&
+        !slotF?.slotDuplicateExempt &&
+        (ins.pgCode === "23505" ||
+          /duplicate key|unique constraint|idx_bookings_unique_active_customer_slot/i.test(ins.error));
+      void reportOperationalIssue("error", "processPaystackInitializeBody", "pending_payment insert failed", {
+        error: ins.error,
+        pgCode: ins.pgCode ?? null,
+        email,
+        duplicateSlot: dupSlot,
+      });
+      if (dupSlot) {
+        return {
+          ok: false,
+          status: 409,
+          duplicateSlot: true,
+          error:
+            "This customer already has an active booking in this slot. Open the existing row, or submit again with force after acknowledging the duplicate.",
+        };
+      }
+      return {
+        ok: false,
+        status: 503,
+        errorCode: "PRICING_SNAPSHOT_MISSING",
+        error: "Could not reserve your booking. Please try again in a moment.",
+      };
     }
+    createdPendingBookingId = ins.id;
+    paystackReferenceOverride = paystackRef;
   }
 
   if (createdPendingBookingId) {
@@ -953,10 +987,23 @@ export async function processPaystackInitializeBody(
     selected_cleaner_meta_present: Boolean(cleanerId),
   });
 
+  const resolvedBookingId = createdPendingBookingId ?? bookingIdFromBody;
+  if (!resolvedBookingId) {
+    void reportOperationalIssue("error", "processPaystackInitializeBody", "Paystack init succeeded without booking id", {
+      reference,
+      email,
+    });
+    return {
+      ok: false,
+      status: 500,
+      error: "Checkout started but booking could not be linked. Please try again.",
+    };
+  }
+
   return {
     ok: true,
     authorizationUrl: authUrl,
     reference,
-    bookingId: createdPendingBookingId ?? bookingIdFromBody,
+    bookingId: resolvedBookingId,
   };
 }
