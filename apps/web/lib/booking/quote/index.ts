@@ -34,6 +34,11 @@ export {
   type BookingDurationRowLike,
 } from "@/lib/booking/quote/bookingQuotePersistence";
 export {
+  healBookingDurationForScheduling,
+  resolveHealedBookingDurationMinutes,
+  type HealableBookingDurationRow,
+} from "@/lib/booking/quote/healBookingDurationForScheduling";
+export {
   assertBookingQuoteEnvelopeIntegrity,
   attachBookingQuoteEnvelopeToV2Breakdown,
   buildBookingQuoteEnvelope,

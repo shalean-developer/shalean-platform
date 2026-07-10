@@ -24,6 +24,7 @@ import type { TravelTimeProvider } from "@/lib/dispatch/travelProviderTypes";
 import { getTravelMinutesBetweenAreas } from "@/lib/dispatch/travelCache";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import { resolvePersistedBookingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
+import { healBookingDurationForScheduling } from "@/lib/booking/quote/healBookingDurationForScheduling";
 import type { CleanerRow, SmartDispatchCandidate } from "@/lib/dispatch/types";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { predictAcceptanceProbability } from "@/lib/marketplace-intelligence/acceptanceProbability";
@@ -1141,7 +1142,7 @@ export async function smartAssignCleaner(
   const { data: booking, error: bErr } = await supabase
     .from("bookings")
     .select(
-      "id, date, time, status, cleaner_id, location_id, city_id, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, surge_multiplier, demand_level, dispatch_attempt_count, total_paid_zar, service_slug, service",
+      "id, date, time, status, cleaner_id, location_id, city_id, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, price_snapshot, rooms, bathrooms, extras, surge_multiplier, demand_level, dispatch_attempt_count, total_paid_zar, service_slug, service",
     )
     .eq("id", params.bookingId)
     .maybeSingle();
@@ -1169,16 +1170,26 @@ export async function smartAssignCleaner(
     jobCapabilitySlug ||
     (jobCapabilityLabel ? jobCapabilityLabel.toLowerCase() : "") ||
     null;
-  const durationMinutes = resolvePersistedBookingDurationMinutes(
+  const healed = await healBookingDurationForScheduling(
+    supabase,
     booking as {
-      id?: string;
+      id: string;
+      date?: string | null;
+      time?: string | null;
       duration_minutes?: number | null;
       estimated_duration_minutes?: number | null;
       duration_hours?: number | null;
       pricing_summary?: unknown;
       booking_snapshot?: unknown;
+      price_snapshot?: unknown;
+      rooms?: number | null;
+      bathrooms?: number | null;
+      extras?: unknown;
+      service_slug?: string | null;
+      service?: string | null;
     },
   );
+  const durationMinutes = healed.durationMinutes;
   const surgeMultiplier = Number((booking as { surge_multiplier?: number | null }).surge_multiplier ?? 1) || 1;
   const demandLevelRaw = String((booking as { demand_level?: string | null }).demand_level ?? "normal").toLowerCase();
   const demandLevel: DemandLevel =

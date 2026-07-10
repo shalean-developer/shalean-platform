@@ -21,6 +21,11 @@ export type BookingDurationRowLike = {
 };
 
 function validPersistedMinutes(v: unknown): number | null {
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    v = n;
+  }
   if (typeof v !== "number" || !Number.isFinite(v)) return null;
   const rounded = Math.round(v);
   if (rounded < MIN_REASONABLE_BOOKING_DURATION_MINUTES) return null;

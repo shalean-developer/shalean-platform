@@ -1,8 +1,9 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { computeAssignEligibility, effectiveJobDurationMinutes } from "@/lib/admin/adminAssignEligibility";
+import { computeAssignEligibility } from "@/lib/admin/adminAssignEligibility";
 import { rankCleanersForAutoAssign, type CleanerOption, type SlotEligibilityForRank } from "@/lib/admin/assignRanking";
 import { emitSlaBreachManualEscalation } from "@/lib/admin/slaBreachEscalate";
 import { performAdminAssignToCleaner } from "@/lib/admin/performAdminAssignToCleaner";
+import { healBookingDurationForScheduling } from "@/lib/booking/quote/healBookingDurationForScheduling";
 import { EXTREME_SLA_AUTO_ESCALATE_MINUTES } from "@/lib/admin/runAdminAssignSmart.constants";
 
 const DEFAULT_MAX = 40;
@@ -53,7 +54,7 @@ export async function runAdminAssignSmart(
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, date, time, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, city_id, status, location_id, service_slug, service",
+      "id, date, time, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, price_snapshot, rooms, bathrooms, extras, city_id, status, location_id, service_slug, service",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -80,16 +81,27 @@ export async function runAdminAssignSmart(
     return { ok: false, error: "Booking has no valid date/time for slot checks.", attempts: 0 };
   }
 
-  const durationMinutes = effectiveJobDurationMinutes(
+  const healed = await healBookingDurationForScheduling(
+    admin,
     booking as {
-      id?: string;
+      id: string;
+      date?: string | null;
+      time?: string | null;
       duration_minutes?: number | null;
       estimated_duration_minutes?: number | null;
       duration_hours?: number | null;
       pricing_summary?: unknown;
       booking_snapshot?: unknown;
+      price_snapshot?: unknown;
+      rooms?: number | null;
+      bathrooms?: number | null;
+      extras?: unknown;
+      service_slug?: string | null;
+      service?: string | null;
     },
   );
+  const durationMinutes =
+    healed.durationMinutes != null ? Math.min(9 * 60, Math.max(60, healed.durationMinutes)) : null;
   if (durationMinutes == null) {
     return { ok: false, error: "Booking has no persisted duration for assignment.", attempts: 0 };
   }

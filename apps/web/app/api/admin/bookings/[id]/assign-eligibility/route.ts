@@ -4,10 +4,10 @@ import { isAdmin } from "@/lib/auth/admin";
 import {
   computeAssignEligibility,
   countBookingsOverlappingDemandSlot,
-  effectiveJobDurationMinutes,
   formatMinutesAsHm,
   buildAdminAssignmentEligibilityWarnings,
 } from "@/lib/admin/adminAssignEligibility";
+import { healBookingDurationForScheduling } from "@/lib/booking/quote/healBookingDurationForScheduling";
 import { hmToMinutes } from "@/lib/dispatch/timeWindow";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -51,7 +51,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, date, time, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, city_id, location_id, service_slug, service",
+      "id, date, time, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, price_snapshot, rooms, bathrooms, extras, city_id, location_id, service_slug, service",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -61,7 +61,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   }
 
   const b = booking as {
-    id?: string;
+    id: string;
     date?: string | null;
     time?: string | null;
     duration_minutes?: number | null;
@@ -69,6 +69,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     duration_hours?: number | null;
     pricing_summary?: unknown;
     booking_snapshot?: unknown;
+    price_snapshot?: unknown;
+    rooms?: number | null;
+    bathrooms?: number | null;
+    extras?: unknown;
     city_id?: string | null;
     location_id?: string | null;
     service_slug?: string | null;
@@ -80,7 +84,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     return NextResponse.json({ error: "Booking has no valid date/time for slot checks." }, { status: 400 });
   }
 
-  const durationMinutes = effectiveJobDurationMinutes(b);
+  const healed = await healBookingDurationForScheduling(admin, b);
+  const durationMinutes =
+    healed.durationMinutes != null ? Math.min(9 * 60, Math.max(60, healed.durationMinutes)) : null;
   if (durationMinutes == null) {
     return NextResponse.json(
       { error: "Booking has no persisted duration. Re-quote or edit the booking before assigning." },

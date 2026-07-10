@@ -9,6 +9,7 @@ import {
   type DailyWorkloadWarning,
   warningFromDailyWorkloadShadowDay,
 } from "@/lib/booking/cleanerDailyWorkloadShadow";
+import { healBookingDurationForScheduling } from "@/lib/booking/quote/healBookingDurationForScheduling";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 
 type BookingRow = {
@@ -24,6 +25,10 @@ type BookingRow = {
   duration_hours?: number | null;
   pricing_summary?: unknown;
   booking_snapshot?: unknown;
+  price_snapshot?: unknown;
+  rooms?: number | null;
+  bathrooms?: number | null;
+  extras?: unknown;
   location_id?: string | null;
   service_slug?: string | null;
   service?: string | null;
@@ -90,7 +95,7 @@ export async function validateAdminManualAssignToCleaner(
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, location_id, service_slug, service, cleaner_response_status, accepted_at",
+      "id, date, time, status, cleaner_id, city_id, dispatch_status, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot, price_snapshot, rooms, bathrooms, extras, location_id, service_slug, service, cleaner_response_status, accepted_at",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -114,13 +119,21 @@ export async function validateAdminManualAssignToCleaner(
 
   const dateYmd = String(b.date ?? "");
   const timeHm = String(b.time ?? "");
-  const durationMinutes = effectiveJobDurationMinutes(b);
+  const healed = await healBookingDurationForScheduling(admin, b);
+  const durationMinutes =
+    healed.durationMinutes != null
+      ? Math.min(9 * 60, Math.max(60, healed.durationMinutes))
+      : effectiveJobDurationMinutes(b);
   if (durationMinutes == null) {
     return {
       ok: false,
       httpStatus: 422,
       error: "Booking has no persisted duration. Re-quote or edit the booking before assigning.",
     };
+  }
+  if (healed.healed) {
+    b.duration_minutes = healed.durationMinutes;
+    b.estimated_duration_minutes = healed.durationMinutes;
   }
 
   const { data: cleaner, error: cErr } = await admin
