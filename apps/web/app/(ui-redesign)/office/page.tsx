@@ -132,6 +132,17 @@ function johannesburgTodayYmd(): string {
   return `${get("year")}-${get("month")}-${get("day")}`;
 }
 
+function formatDashboardDateLabel(ymd: string): string {
+  const d = new Date(`${ymd}T12:00:00+02:00`);
+  if (!Number.isFinite(d.getTime())) return ymd;
+  return d.toLocaleDateString("en-ZA", {
+    weekday: "long",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function pct(part: number, total: number): number {
   if (total <= 0) return 0;
   return Math.round((part / total) * 1000) / 10;
@@ -315,13 +326,15 @@ export default function OfficeDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date());
+  const [selectedYmd, setSelectedYmd] = useState(() => johannesburgTodayYmd());
 
   const { data: opsData, refetch: refetchOps } = useAdminData<OpsSnapshot>("/api/admin/ops-snapshot");
 
   const todayYmd = johannesburgTodayYmd();
+  const isViewingToday = selectedYmd === todayYmd;
   const { data: scheduleData } = useAdminData<OfficeScheduleDayResponse>(
     "/api/admin/schedule/day",
-    { params: { date: todayYmd } },
+    { params: { date: selectedYmd } },
   );
 
   const todayBookings = scheduleData?.bookings ?? [];
@@ -332,9 +345,9 @@ export default function OfficeDashboardPage() {
       computeOfficeScheduleCleanerStats({
         bookings: todayBookings,
         cleaners: scheduleData?.cleaners ?? [],
-        dateYmd: todayYmd,
+        dateYmd: selectedYmd,
       }),
-    [todayBookings, scheduleData?.cleaners, todayYmd],
+    [todayBookings, scheduleData?.cleaners, selectedYmd],
   );
 
   const cleanersById = useMemo(
@@ -365,12 +378,10 @@ export default function OfficeDashboardPage() {
     };
   }, [lastRefresh]);
 
-  const todayLabel = new Date().toLocaleDateString("en-ZA", {
-    weekday: "long",
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  const selectedDateLabel = formatDashboardDateLabel(selectedYmd);
+  const dayOpsTitle = isViewingToday ? "Today's operations" : "Day operations";
+  const dayScheduleTitle = isViewingToday ? "Today's schedule" : "Day schedule";
+  const bookingsCountLabel = isViewingToday ? "Total bookings today" : "Total bookings";
 
   const slaBreachCount = opsData?.slaBreaches ?? 0;
   const unassignedCount = opsData?.unassigned ?? 0;
@@ -566,10 +577,20 @@ export default function OfficeDashboardPage() {
           <p className="mt-0.5 text-sm text-slate-500">Command center — today&apos;s operations at a glance.</p>
         </div>
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600">
-            <Calendar className="h-4 w-4 text-slate-400" />
-            <span>{todayLabel}</span>
-          </div>
+          <label className="relative flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50">
+            <Calendar className="h-4 w-4 text-slate-400" aria-hidden />
+            <span>{selectedDateLabel}</span>
+            <input
+              type="date"
+              value={selectedYmd}
+              onChange={(e) => {
+                const next = e.target.value.trim();
+                if (/^\d{4}-\d{2}-\d{2}$/.test(next)) setSelectedYmd(next);
+              }}
+              className="absolute inset-0 cursor-pointer opacity-0"
+              aria-label="Select dashboard date"
+            />
+          </label>
           <button
             type="button"
             onClick={() => {
@@ -590,10 +611,10 @@ export default function OfficeDashboardPage() {
 
       {/* ── Top row: Today's ops + Needs action (Zoho receivables/payables) ─ */}
       <div className="grid gap-4 lg:grid-cols-2">
-        <ZohoPanel title="Today's operations" href="/office/schedule" linkLabel="View schedule">
+        <ZohoPanel title={dayOpsTitle} href="/office/schedule" linkLabel="View schedule">
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Total bookings today</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{bookingsCountLabel}</p>
               <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{todayStats.total}</p>
             </div>
             <div className="text-right">
@@ -621,7 +642,7 @@ export default function OfficeDashboardPage() {
       </div>
 
       {/* ── Full-width schedule (Zoho cash flow anchor) ─────────────────── */}
-      <ZohoPanel title="Today's schedule" href="/office/schedule" linkLabel="Full schedule">
+      <ZohoPanel title={dayScheduleTitle} href="/office/schedule" linkLabel="Full schedule">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-4">
             {[
