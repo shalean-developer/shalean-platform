@@ -95,8 +95,9 @@ export function SeoIssuesPanel({ open, onOpenChange, data, initialFilter = "all"
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="flex max-h-[min(88vh,820px)] max-w-3xl flex-col gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-slate-100 px-5 py-4 text-left">
+      <DialogContent className="max-w-3xl gap-0 overflow-hidden p-0">
+        <div className="flex max-h-[min(88vh,820px)] flex-col overflow-hidden">
+        <DialogHeader className="shrink-0 border-b border-slate-100 px-5 py-4 text-left">
           <DialogTitle>All SEO issues</DialogTitle>
           <DialogDescription>
             {breakdown.critical} critical · {breakdown.warnings} warnings · {breakdown.opportunities} opportunities
@@ -105,7 +106,7 @@ export function SeoIssuesPanel({ open, onOpenChange, data, initialFilter = "all"
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-5 py-3">
+        <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-slate-100 px-5 py-3">
           {FILTERS.map((item) => (
             <button
               key={item.id}
@@ -136,7 +137,7 @@ export function SeoIssuesPanel({ open, onOpenChange, data, initialFilter = "all"
           </button>
         </div>
 
-        <div className="border-b border-slate-100 px-5 py-3">
+        <div className="shrink-0 border-b border-slate-100 px-5 py-3">
           <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
             <Search className="h-4 w-4 shrink-0 text-slate-400" />
             <input
@@ -202,6 +203,7 @@ export function SeoIssuesPanel({ open, onOpenChange, data, initialFilter = "all"
               })}
             </div>
           )}
+        </div>
         </div>
       </DialogContent>
     </Dialog>

@@ -613,16 +613,28 @@ export function SeoDashboardOverview() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
-          <h3 className="mb-1 text-sm font-bold text-slate-800">Recommendations</h3>
-          <p className="mb-4 text-xs text-slate-500">Actionable SEO improvements</p>
+        <div className="flex min-h-0 flex-col rounded-2xl border border-slate-100 bg-white p-5 shadow-sm">
+          <div className="mb-4 flex items-start justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-bold text-slate-800">Recommendations</h3>
+              <p className="text-xs text-slate-500">Actionable SEO improvements</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openIssuesPanel("all")}
+              disabled={issues.length === 0}
+              className="shrink-0 rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+            >
+              View all
+            </button>
+          </div>
           {loading ? (
             <p className="text-sm text-slate-500">Loading…</p>
           ) : issues.length === 0 ? (
             <p className="text-sm text-emerald-600">No open SEO recommendations — pages look healthy.</p>
           ) : (
-            <div className="max-h-[360px] space-y-3 overflow-y-auto">
-              {issues.slice(0, 8).map((issue) => {
+            <div className="min-h-0 max-h-[min(56vh,520px)] space-y-3 overflow-y-auto pr-1">
+              {issues.map((issue) => {
                 const kind = String(issue.severity ?? "").toLowerCase();
                 const type = kind === "critical" || kind === "error" ? "error" : kind === "warning" || kind === "warn" ? "warning" : "info";
                 const detail = formatRecommendationDetail(issue.detail);

@@ -86,6 +86,18 @@ export type HubUiAutoPatch = {
   reason: string;
 };
 
+export type SeoOptimizationEngineOptions = {
+  /** DB-synced metrics merged with env/file fallback; DB wins per slug. */
+  gscMetricsBySlug?: ReadonlyMap<string, LocationGscMetricSnapshot>;
+};
+
+function resolveGscMetrics(
+  slug: string,
+  gscMetricsBySlug?: ReadonlyMap<string, LocationGscMetricSnapshot>,
+): LocationGscMetricSnapshot | null {
+  return gscMetricsBySlug?.get(slug) ?? getLocationGscMetrics(slug);
+}
+
 export type SeoOptimizationEngineResult = {
   titleAutoCandidates: TitleAutoCandidate[];
   hubUiPatches: HubUiAutoPatch[];
@@ -298,8 +310,9 @@ function computeSlugHealth(
   suburbBySlug: Map<string, string>,
   titleAutoCandidates: TitleAutoCandidate[],
   slugBestCta: Map<string, { key: string; conversion_pct: number; sessions: number }>,
+  gscMetricsBySlug?: ReadonlyMap<string, LocationGscMetricSnapshot>,
 ): PageHealthRow {
-  const gsc = getLocationGscMetrics(slug);
+  const gsc = resolveGscMetrics(slug, gscMetricsBySlug);
   const scroll = scrollMap.get(slug);
   const suburb = suburbBySlug.get(slug);
   const ctaSessions = suburbCtaSessions(suburb, aggregated.suburbCtaBooking);
@@ -338,7 +351,11 @@ function computeSlugHealth(
   };
 }
 
-export function runSeoOptimizationEngine(aggregated: AggregatedSeoEvents): SeoOptimizationEngineResult {
+export function runSeoOptimizationEngine(
+  aggregated: AggregatedSeoEvents,
+  options?: SeoOptimizationEngineOptions,
+): SeoOptimizationEngineResult {
+  const gscMetricsBySlug = options?.gscMetricsBySlug;
   const recommendations: SeoRecommendationInsert[] = [];
   const titleAutoCandidates: TitleAutoCandidate[] = [];
   const hubUiPatches = heroSwapFromAggregates(aggregated);
@@ -456,6 +473,7 @@ export function runSeoOptimizationEngine(aggregated: AggregatedSeoEvents): SeoOp
       suburbBySlug,
       titleAutoCandidates,
       slugBestCta,
+      gscMetricsBySlug,
     );
     const { score, band, components } = health;
     const ctrPart = components.ctr;
@@ -496,7 +514,8 @@ export function runSeoOptimizationEngine(aggregated: AggregatedSeoEvents): SeoOp
         },
         confidence: Math.min(
           1,
-          (scrollMap.get(slug)?.sessions_at_25 ?? 0) / 100 + (getLocationGscMetrics(slug)?.impressions ?? 0) / 1000,
+          (scrollMap.get(slug)?.sessions_at_25 ?? 0) / 100 +
+            (resolveGscMetrics(slug, gscMetricsBySlug)?.impressions ?? 0) / 1000,
         ),
       });
     } else if (band === "insufficient_data") {
@@ -528,7 +547,7 @@ export function runSeoOptimizationEngine(aggregated: AggregatedSeoEvents): SeoOp
   }
 
   const pageHealth: PageHealthRow[] = [...slugSet].map((slug) =>
-    computeSlugHealth(slug, aggregated, scrollMap, suburbBySlug, titleAutoCandidates, slugBestCta),
+    computeSlugHealth(slug, aggregated, scrollMap, suburbBySlug, titleAutoCandidates, slugBestCta, gscMetricsBySlug),
   );
   pageHealth.sort((a, b) => a.score - b.score);
 

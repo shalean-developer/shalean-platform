@@ -31,6 +31,18 @@ function toNumber(value: number | string | null | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+function dbRowToGscSnapshot(row: DbGscRow): LocationGscMetricSnapshot {
+  return {
+    impressions: toNumber(row.impressions) ?? undefined,
+    clicks: toNumber(row.clicks) ?? undefined,
+    ctr: toNumber(row.ctr) ?? undefined,
+    avg_position: toNumber(row.avg_position) ?? undefined,
+    prev_clicks: toNumber(row.prev_clicks) ?? undefined,
+    prev_impressions: toNumber(row.prev_impressions) ?? undefined,
+    prev_avg_position: toNumber(row.prev_avg_position) ?? undefined,
+  };
+}
+
 async function loadLocationGscMetricsFromDb(
   admin: SupabaseClient,
 ): Promise<{ rows: DbGscRow[]; latestSyncedAt: string | null } | null> {
@@ -65,43 +77,55 @@ function fallbackSourceFromEnv(): GscMetricsSource {
 }
 
 /**
- * Priority: synced DB metrics → LOCATION_SEO_FEEDBACK_JSON → file-backed JSON (via Next env injection) → empty.
+ * Per-slug merge: env/file base layer, then DB sync overlays matching slugs (DB wins).
+ * Used by the SEO health engine and admin GSC snapshot.
+ */
+export async function buildMergedGscMetricsMap(
+  admin: SupabaseClient | null,
+): Promise<Map<string, LocationGscMetricSnapshot>> {
+  const map = new Map<string, LocationGscMetricSnapshot>(
+    listLocationGscMetricEntries().map(({ slug, metrics }) => [slug, metrics]),
+  );
+
+  if (admin) {
+    const db = await loadLocationGscMetricsFromDb(admin);
+    if (db) {
+      for (const row of db.rows) {
+        map.set(row.slug, dbRowToGscSnapshot(row));
+      }
+    }
+  }
+
+  return map;
+}
+
+/**
+ * Priority: merged DB + env/file per slug (DB overrides env for the same slug).
  */
 export async function resolveLocationGscMetricEntries(
   admin: SupabaseClient | null,
 ): Promise<ResolvedLocationGscMetrics> {
+  const merged = await buildMergedGscMetricsMap(admin);
+  if (merged.size === 0) {
+    return { source: "none", syncedAt: null, entries: [] };
+  }
+
+  let source: GscMetricsSource = fallbackSourceFromEnv();
+  let syncedAt: string | null = null;
+
   if (admin) {
     const db = await loadLocationGscMetricsFromDb(admin);
     if (db && db.rows.length > 0) {
-      return {
-        source: "database",
-        syncedAt: db.latestSyncedAt,
-        entries: db.rows.map((row) => ({
-          slug: row.slug,
-          metrics: {
-            impressions: toNumber(row.impressions) ?? undefined,
-            clicks: toNumber(row.clicks) ?? undefined,
-            ctr: toNumber(row.ctr) ?? undefined,
-            avg_position: toNumber(row.avg_position) ?? undefined,
-            prev_clicks: toNumber(row.prev_clicks) ?? undefined,
-            prev_impressions: toNumber(row.prev_impressions) ?? undefined,
-            prev_avg_position: toNumber(row.prev_avg_position) ?? undefined,
-          },
-        })),
-      };
+      source = "database";
+      syncedAt = db.latestSyncedAt;
     }
   }
 
-  const fallback = listLocationGscMetricEntries();
-  if (fallback.length > 0) {
-    return {
-      source: fallbackSourceFromEnv(),
-      syncedAt: null,
-      entries: fallback,
-    };
-  }
+  const entries = [...merged.entries()]
+    .map(([slug, metrics]) => ({ slug, metrics }))
+    .sort((a, b) => (b.metrics.impressions ?? 0) - (a.metrics.impressions ?? 0));
 
-  return { source: "none", syncedAt: null, entries: [] };
+  return { source, syncedAt, entries };
 }
 
 export function toGscImportSnapshot(

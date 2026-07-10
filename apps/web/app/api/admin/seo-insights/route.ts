@@ -5,6 +5,7 @@ import { mergeSeoRecommendations } from "@/lib/admin/officeSeoInsightsPresentati
 import { loadLocationGscQuerySnapshot } from "@/lib/gsc/resolve-location-gsc-queries";
 import { loadLocationGscSyncMeta } from "@/lib/gsc/resolve-location-gsc-meta";
 import {
+  buildMergedGscMetricsMap,
   resolveLocationGscMetricEntries,
   toGscImportSnapshot,
 } from "@/lib/gsc/resolve-location-gsc-metrics";
@@ -50,9 +51,10 @@ export async function GET(request: Request) {
   prevSince.setDate(prevSince.getDate() - WINDOW_DAYS * 2);
   const prevSinceIso = prevSince.toISOString();
 
-  const [curWin, prevWin] = await Promise.all([
+  const [curWin, prevWin, gscMetricsBySlug] = await Promise.all([
     fetchSeoInsightUserEventsWindow(admin, currentSinceIso, null),
     fetchSeoInsightUserEventsWindow(admin, prevSinceIso, currentSinceIso),
+    buildMergedGscMetricsMap(admin),
   ]);
   if (curWin.error) {
     return NextResponse.json({ error: curWin.error }, { status: 500 });
@@ -60,7 +62,7 @@ export async function GET(request: Request) {
 
   const rows = curWin.rows;
   const aggregated = aggregateSeoUserEvents(rows);
-  const optimization = runSeoOptimizationEngine(aggregated);
+  const optimization = runSeoOptimizationEngine(aggregated, { gscMetricsBySlug });
 
   let previous_period: {
     since: string;
@@ -73,7 +75,7 @@ export async function GET(request: Request) {
 
   if (!prevWin.error) {
     const aggPrev = aggregateSeoUserEvents(prevWin.rows);
-    const optPrev = runSeoOptimizationEngine(aggPrev);
+    const optPrev = runSeoOptimizationEngine(aggPrev, { gscMetricsBySlug });
     const prevScroll = aggPrev.scrollFunnels.slice(0, 40);
     const prevBookingMap = new Map<string, number>();
     for (const r of aggPrev.slugCtaKindLocationBooking) {
@@ -254,7 +256,7 @@ export async function GET(request: Request) {
     notes: [
       "`periods.current_30d` / `periods.previous_30d` mirror the flat fields and `previous_period` (additive shape for charts and future 7d/90d windows).",
       "Current metrics use the last 30 days of events; when `previous_period` is present, it is the prior non-overlapping 30 days (days 31–60) for scroll, booking-start proxy, and recomputed health scores.",
-      "GSC snapshot: DB sync (location_gsc_metrics + location_gsc_queries) when present, else LOCATION_SEO_FEEDBACK_JSON / file fallback. CTR is a 0–1 fraction.",
+      "GSC snapshot: merged DB sync (location_gsc_metrics) + LOCATION_SEO_FEEDBACK_JSON / file fallback per slug (DB wins). CTR is a 0–1 fraction.",
       "Manual sync: POST /api/admin/seo/gsc-sync (admin). Scheduled: GET /api/cron/gsc-sync (CRON_SECRET).",
       "Booking proxy: share of distinct sessions with a given `cta_kind`+`cta_location` that also fired `start_booking` within the window.",
       "Automation: POST `/api/cron/seo-optimization` (CRON_SECRET). Env: `SEO_OPTIMIZATION_AUTO_APPLY_TITLE`, `SEO_OPTIMIZATION_AUTO_APPLY_HUB_UI`.",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
+import { buildMergedGscMetricsMap } from "@/lib/gsc/resolve-location-gsc-metrics";
 import { aggregateSeoUserEvents, fetchSeoInsightUserEvents } from "@/lib/seo/optimization/aggregate-seo-events";
 import { runSeoOptimizationEngine } from "@/lib/seo/optimization/engine";
 import { persistSeoOptimizationResults } from "@/lib/seo/optimization/persist";
@@ -33,13 +34,16 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase admin not configured." }, { status: 503 });
   }
 
-  const { sinceIso, rows, error } = await fetchSeoInsightUserEvents(admin, WINDOW_DAYS);
+  const [{ sinceIso, rows, error }, gscMetricsBySlug] = await Promise.all([
+    fetchSeoInsightUserEvents(admin, WINDOW_DAYS),
+    buildMergedGscMetricsMap(admin),
+  ]);
   if (error) {
     return NextResponse.json({ error }, { status: 500 });
   }
 
   const aggregated = aggregateSeoUserEvents(rows);
-  const engineResult = runSeoOptimizationEngine(aggregated);
+  const engineResult = runSeoOptimizationEngine(aggregated, { gscMetricsBySlug });
 
   const applyTitleVariants = envBool("SEO_OPTIMIZATION_AUTO_APPLY_TITLE", false);
   const applyHubUiPatches = envBool("SEO_OPTIMIZATION_AUTO_APPLY_HUB_UI", false);

@@ -60,4 +60,29 @@ describe("runSeoOptimizationEngine", () => {
     expect(row?.data_gaps.scroll_sessions_needed).toBe(SCROLL_MIN_SESSIONS_BASELINE);
     expect(row?.data_gaps.cta_sessions_needed).toBe(10);
   });
+
+  it("uses injected merged GSC map for slugs missing from env", () => {
+    const gscMetricsBySlug = new Map([
+      ["bantry-bay-cleaning-services", { impressions: 240, ctr: 0.032, avg_position: 19.2 }],
+    ]);
+    const result = runSeoOptimizationEngine(EMPTY_AGG, { gscMetricsBySlug });
+    const bantry = result.pageHealth.find((r) => r.slug === "bantry-bay-cleaning-services");
+    expect(bantry?.components.ctr).toBeGreaterThan(0);
+    expect(bantry?.band).not.toBe("critical");
+  });
+
+  it("prefers injected DB GSC over env fallback for the same slug", () => {
+    const gscMetricsBySlug = new Map([
+      ["wynberg-cleaning-services", { impressions: 300, ctr: 0.08, avg_position: 8 }],
+    ]);
+    const withoutInject = runSeoOptimizationEngine(EMPTY_AGG).pageHealth.find(
+      (r) => r.slug === "wynberg-cleaning-services",
+    );
+    const withInject = runSeoOptimizationEngine(EMPTY_AGG, { gscMetricsBySlug }).pageHealth.find(
+      (r) => r.slug === "wynberg-cleaning-services",
+    );
+    expect(withoutInject?.band).toBe("critical");
+    expect(withInject?.band).not.toBe("critical");
+    expect((withInject?.score ?? 0)).toBeGreaterThan(withoutInject?.score ?? 0);
+  });
 });
