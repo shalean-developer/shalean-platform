@@ -87,7 +87,7 @@ export function trackClientPurchase(params: {
     /* ignore */
   }
 
-  const adsId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID?.trim();
+  const adsId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID?.trim() || "AW-11050850519";
   const adsLabel = process.env.NEXT_PUBLIC_GOOGLE_ADS_PURCHASE_LABEL?.trim();
   try {
     if (typeof window.gtag === "function") {
