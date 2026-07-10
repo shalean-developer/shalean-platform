@@ -127,18 +127,19 @@ export default async function CampaignLandingPage({ params }: Props) {
     }
   }
 
-  if (promo && (promo.status === "ended" || promo.status === "expired")) {
-    redirect(`/book?promo=${encodeURIComponent(promo.promo_code ?? promo.slug)}`);
-  }
-
-  if (promo?.status === "scheduled" && promo.starts_at && new Date(promo.starts_at) > new Date()) {
-    redirect("/book");
-  }
-
-  if (!promo || (promo.status !== "active" && promo.status !== "scheduled" && promo.status !== "draft" && promo.status !== "paused")) {
+  const allowedStatuses = new Set(["active", "scheduled", "draft", "paused", "ended", "expired"]);
+  if (!promo || !allowedStatuses.has(String(promo.status ?? ""))) {
     // Prefer soft landing over 404 for shared campaign URLs (pre-migration / pre-generate).
     promo = fallbackPromo(slug);
   }
+
+  // Keep shared Facebook / QR URLs on the landing page even when the promo ended —
+  // redirecting to /book broke some Facebook in-app browsers / .com domain hops.
+  const offerExpired =
+    promo.id !== "fallback" &&
+    (promo.status === "ended" ||
+      promo.status === "expired" ||
+      (promo.ends_at != null && new Date(promo.ends_at).getTime() < Date.now()));
 
   if (admin && promo.id !== "fallback") {
     try {
@@ -182,6 +183,11 @@ export default async function CampaignLandingPage({ params }: Props) {
       >
         <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-16 md:py-24">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/80">Shalean</p>
+          {offerExpired ? (
+            <p className="inline-flex w-fit rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+              Offer ended — you can still book online
+            </p>
+          ) : null}
           <p className="text-4xl font-bold tracking-tight md:text-5xl">{offer}</p>
           <h1 className="max-w-2xl text-3xl font-semibold md:text-4xl">
             {structured.heroHeadline ?? promo.display_config.headline ?? promo.name}

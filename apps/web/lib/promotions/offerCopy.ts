@@ -21,11 +21,35 @@ export function siteOrigin(): string {
     process.env.NEXT_PUBLIC_SITE_URL?.trim() ||
     process.env.NEXT_PUBLIC_APP_URL?.trim() ||
     "https://shalean.co.za";
-  return raw.replace(/\/$/, "");
+  // Never emit shalean.com — www.shalean.com currently 404s and breaks Facebook link clicks.
+  return raw
+    .replace(/\/$/, "")
+    .replace(/^https?:\/\/(www\.)?shalean\.com$/i, "https://shalean.co.za");
 }
 
 export function absoluteCampaignUrl(promo: Pick<PromotionRow, "slug" | "landing_page_path">): string {
   const path = campaignLandingPath(promo);
-  if (path.startsWith("http")) return path;
+  if (path.startsWith("http")) {
+    return path
+      .replace(/^https?:\/\/(www\.)?shalean\.com(?=\/|$)/i, "https://shalean.co.za")
+      .replace(/\/$/, "");
+  }
   return `${siteOrigin()}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+/** Normalize any campaign/booking URL before publishing to social. */
+export function canonicalizePublicSiteUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return `${siteOrigin()}/book`;
+  try {
+    const u = new URL(trimmed);
+    if (/^(www\.)?shalean\.com$/i.test(u.hostname)) {
+      u.protocol = "https:";
+      u.hostname = "shalean.co.za";
+    }
+    return u.toString().replace(/\/$/, "") || siteOrigin();
+  } catch {
+    if (trimmed.startsWith("/")) return `${siteOrigin()}${trimmed}`;
+    return `${siteOrigin()}/book`;
+  }
 }

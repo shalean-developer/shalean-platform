@@ -1,5 +1,7 @@
 import "server-only";
 
+import { canonicalizePublicSiteUrl } from "@/lib/promotions/offerCopy";
+
 export type FacebookPublishConfig = {
   pageId: string;
   accessToken: string;
@@ -245,7 +247,9 @@ export async function publishFacebookPagePhoto(args: {
     return { ok: false, error: "Image must be under 8MB." };
   }
 
-  const caption = [args.message.trim(), args.link?.trim()].filter(Boolean).join("\n\n");
+  const caption = [args.message.trim(), canonicalizePublicSiteUrl(args.link?.trim() || "https://shalean.co.za/book")]
+    .filter(Boolean)
+    .join("\n\n");
   const form = new FormData();
   form.set("caption", caption.slice(0, 8000));
   form.set("published", "true");
@@ -306,7 +310,7 @@ export async function publishFacebookPageFeed(args: {
     message: args.message.trim().slice(0, 8000),
     access_token: cfg.accessToken,
   };
-  if (args.link?.trim()) body.link = args.link.trim();
+  if (args.link?.trim()) body.link = canonicalizePublicSiteUrl(args.link);
 
   const url = graphUrl(cfg, `${cfg.pageId}/feed`);
   try {

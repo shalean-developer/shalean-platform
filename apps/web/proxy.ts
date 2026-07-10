@@ -31,6 +31,24 @@ export async function proxy(request: NextRequest) {
 
 async function runProxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? "";
+
+  /** Apex .com / www currently 404 outside this app — force canonical .co.za for shared campaign links. */
+  if (host === "shalean.com" || host === "www.shalean.com") {
+    const url = request.nextUrl.clone();
+    url.protocol = "https:";
+    url.host = "shalean.co.za";
+    url.port = "";
+    return NextResponse.redirect(url, 308);
+  }
+
+  /** Short campaign links used in ads / captions. */
+  const shortCampaign = pathname.match(/^\/c\/([^/]+)\/?$/);
+  if (shortCampaign?.[1]) {
+    const url = request.nextUrl.clone();
+    url.pathname = `/campaigns/${shortCampaign[1]}`;
+    return NextResponse.redirect(url, 308);
+  }
 
   /** Cron uses header auth only; skip Supabase session cloning work (and avoid any edge header quirks). */
   if (pathname.startsWith("/api/cron")) {

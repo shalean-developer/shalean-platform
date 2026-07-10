@@ -35,6 +35,7 @@ import {
   downloadDataUrl,
 } from "@/lib/promotions/socialExport";
 import { SocialImageCard } from "@/components/admin/promotions/SocialImageCard";
+import { canonicalizePublicSiteUrl } from "@/lib/promotions/offerCopy";
 import type { PromotionRow, PromotionStatus, PromotionType } from "@/lib/promotions/types";
 
 type AnalyticsPayload = {
@@ -1393,12 +1394,13 @@ function SocialContentCard({
       if (cardRef.current) {
         imageDataUrl = await captureNodeAsPngDataUrl(cardRef.current);
       }
-      const link =
+      const link = canonicalizePublicSiteUrl(
         typeof payload.landing === "string"
           ? payload.landing
           : content.promotion?.slug
             ? `https://shalean.co.za/campaigns/${content.promotion.slug}`
-            : "https://shalean.co.za/book";
+            : "https://shalean.co.za/book",
+      );
       const res = await adminFetch<{ postId: string }>("/api/admin/promotions/publish-facebook", {
         method: "POST",
         body: JSON.stringify({

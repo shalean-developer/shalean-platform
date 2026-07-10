@@ -123,6 +123,7 @@ function brandPayload(promo: PromotionRow) {
     discountType: promo.discount_type,
     discountValue: promo.discount_value,
   });
+  const landing = absoluteCampaignUrl(promo);
   return {
     brand: "Shalean",
     campaignName: promo.name,
@@ -133,6 +134,7 @@ function brandPayload(promo: PromotionRow) {
     cta: promo.cta_label ?? promo.display_config.cta ?? "Book now",
     primary: promo.display_config.colours?.primary ?? "#0B1F4A",
     accent: promo.display_config.colours?.accent ?? "#2563EB",
+    landing,
   };
 }
 
