@@ -147,7 +147,8 @@ describe("submitPaystackTransferViaOutbox", () => {
     expect(order[1]).toBe("insert:outbox");
     expect(order[2]).toBe("paystack:/transfer");
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const body = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit | undefined)?.body ?? "{}"));
+    const fetchCall = fetchMock.mock.calls[0] as unknown as [RequestInfo | URL, RequestInit?] | undefined;
+    const body = JSON.parse(String(fetchCall?.[1]?.body ?? "{}"));
     expect(body.reference).toBe(REF);
   });
 
