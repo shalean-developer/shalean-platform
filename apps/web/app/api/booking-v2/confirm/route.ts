@@ -503,9 +503,9 @@ export async function POST(request: Request) {
   // Payable amount must match what Paystack charges — otherwise webhook finalize
   // flags payment_mismatch (paid < stored total_price / price_snapshot).
   const grossZar = preDiscountTotalZar;
-  let promotionAppliedZar = Math.min(Math.max(0, promotionDiscountZar), grossZar);
+  const promotionAppliedZar = Math.min(Math.max(0, promotionDiscountZar), grossZar);
   let payAmountZar = Math.max(0, grossZar - promotionAppliedZar);
-  let referralAppliedZar = Math.min(Math.max(0, referralDiscountZar), payAmountZar);
+  const referralAppliedZar = Math.min(Math.max(0, referralDiscountZar), payAmountZar);
   payAmountZar = Math.max(0, payAmountZar - referralAppliedZar);
   const requestedCredit = Math.round(Number(data.applyCleaningCreditZar ?? 0));
   const creditToApplyCap = Math.min(Math.max(0, requestedCredit), payAmountZar);
