@@ -292,6 +292,7 @@ describe("H-15 cron lock — per-route guards", () => {
     { dir: "freeze-payouts", key: "freezePayouts" },
     { dir: "payout-integrity-daily", key: "payoutIntegrityDaily" },
     { dir: "reconcile-paystack-transfers", key: "reconcilePaystackTransfers" },
+    { dir: "process-payout-transfer-outbox", key: "processPayoutTransferOutbox" },
     { dir: "generate-recurring-expenses", key: "generateRecurringExpenses" },
     { dir: "finance-daily-automation", key: "financeDailyAutomation" },
     { dir: "backfill-paystack-payments", key: "backfillPaystackPayments" },
@@ -339,6 +340,7 @@ describe("H-15 cron lock — per-route guards", () => {
       "referral-campaigns",
       "referral-credit-reminders",
       "referral-credit-expiry",
+      "promotions",
     ];
 
     for (const r of routesAlwaysOk) {
@@ -388,6 +390,7 @@ describe("H-15 cron lock — coverage manifest", () => {
     "freeze-payouts",
     "payout-integrity-daily",
     "reconcile-paystack-transfers",
+    "process-payout-transfer-outbox",
     "generate-recurring-expenses",
     "finance-daily-automation",
     "backfill-paystack-payments",
@@ -412,6 +415,7 @@ describe("H-15 cron lock — coverage manifest", () => {
     "referral-campaigns",
     "referral-credit-reminders",
     "referral-credit-expiry",
+    "promotions",
   ]);
 
   it("all cron route directories are accounted for", () => {
