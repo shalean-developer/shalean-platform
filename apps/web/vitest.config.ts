@@ -3,6 +3,7 @@ import path from "node:path";
 import { defineConfig } from "vitest/config";
 
 const maxThreads = Math.max(2, Math.floor(os.cpus().length / 2));
+const packagesRoot = path.resolve(__dirname, "../../packages");
 
 export default defineConfig({
   test: {
@@ -24,6 +25,11 @@ export default defineConfig({
     alias: {
       "@": path.resolve(__dirname, "."),
       "server-only": path.resolve(__dirname, "vitest-shims/server-only.ts"),
+      // Workspace packages ship TS source; resolve explicitly for CI/Vitest.
+      "@shalean/utils": path.resolve(packagesRoot, "utils/src"),
+      "@shalean/types": path.resolve(packagesRoot, "types/src"),
+      "@shalean/validation": path.resolve(packagesRoot, "validation/src"),
+      "@shalean/api-client": path.resolve(packagesRoot, "api-client/src"),
     },
   },
 });
