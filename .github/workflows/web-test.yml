@@ -32,23 +32,11 @@ jobs:
       - name: Production dependency audit (high+)
         run: npm run audit:production --workspace=web
       - name: Critical tests (payments + referrals)
-        working-directory: apps/web
         run: |
           set -euxo pipefail
           node -v
-          test -f node_modules/vitest/vitest.mjs
-          test -f ../../packages/utils/src/index.ts
-          node ./node_modules/vitest/vitest.mjs run \
-            lib/referrals/validateReferral.test.ts \
-            lib/booking/paymentAmountVsSnapshot.test.ts \
-            lib/booking/upsertBookingFromPaystack.test.ts \
-            lib/booking/finalizePaystackChargeSuccess.test.ts \
-            lib/booking/failedJobs.test.ts \
-            lib/booking/enqueuePaystackRecoveryFailedJobs.test.ts \
-            lib/booking/runBookingLockValidation.test.ts \
-            lib/notifications/notificationIdempotencyClaim.test.ts \
-            lib/rateLimit/paystackVerifyIpLimit.test.ts \
-            --reporter=verbose
+          npm --workspace=web exec -- vitest --version
+          npm run test:critical --workspace=web
       - name: Revenue path tests (booking, dispatch, cleaner API, cron locks)
         run: >-
           npm run test --workspace=web --
