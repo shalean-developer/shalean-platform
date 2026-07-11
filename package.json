@@ -2,7 +2,7 @@
   "name": "shalean-platform",
   "private": true,
   "workspaces": [
-    "apps/*",
+    "apps/web",
     "packages/*"
   ],
   "engines": {
