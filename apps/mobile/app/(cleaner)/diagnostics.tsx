@@ -13,7 +13,14 @@ import Constants from "expo-constants";
 import * as Application from "expo-application";
 import * as Device from "expo-device";
 import { OfflineBanner } from "@/components/OfflineBanner";
-import { APP_BUILD_NUMBER, APP_ENV, APP_VERSION, API_BASE_URL, assertMobileConfig } from "@/constants/config";
+import {
+  APP_BUILD_NUMBER,
+  APP_ENV,
+  APP_VERSION,
+  API_BASE_URL,
+  API_UPSTREAM_URL,
+  assertMobileConfig,
+} from "@/constants/config";
 import { diagnosticLog } from "@/lib/diagnostics/logger";
 import { getLastSyncAt } from "@/lib/network/networkStatus";
 import { offlineActionQueue } from "@/lib/offline/actionQueue";
@@ -40,7 +47,14 @@ export default function DiagnosticsScreen() {
         value: Application.nativeBuildVersion || APP_BUILD_NUMBER || "—",
       },
       { label: "Environment", value: APP_ENV },
-      { label: "API base URL", value: API_BASE_URL || "(missing — set EXPO_PUBLIC_API_BASE_URL)" },
+      {
+        label: "API base URL",
+        value:
+          API_BASE_URL ||
+          (API_UPSTREAM_URL
+            ? `(web proxy → ${API_UPSTREAM_URL})`
+            : "(missing — set EXPO_PUBLIC_API_BASE_URL)"),
+      },
       { label: "Config OK", value: configCheck.ok ? "Yes" : `Missing: ${configCheck.missing.join(", ")}` },
       { label: "Expo SDK", value: String(Constants.expoConfig?.sdkVersion ?? "53") },
       {

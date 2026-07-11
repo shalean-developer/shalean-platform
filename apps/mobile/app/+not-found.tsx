@@ -15,7 +15,7 @@ export default function NotFoundScreen() {
         </Text>
         <AppButton
           label="Go to today's jobs"
-          onPress={() => router.replace("/(cleaner)")}
+          onPress={() => router.replace("/(cleaner)/(tabs)")}
           className="min-w-[200px]"
         />
       </View>

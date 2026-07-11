@@ -4,7 +4,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { OfflineBanner } from "@/components/OfflineBanner";
 import { AppButton } from "@/components/ui/AppButton";
-import { API_BASE_URL, APP_ENV, APP_VERSION } from "@/constants/config";
+import { ListRow } from "@/components/ui/ListRow";
+import { SectionCard } from "@/components/ui/SectionCard";
+import { API_UPSTREAM_URL, APP_ENV, APP_VERSION } from "@/constants/config";
 import { useAuth } from "@/providers/AuthProvider";
 import { useConnectivity } from "@/providers/ConnectivityProvider";
 import { colors } from "@/theme";
@@ -35,14 +37,17 @@ export default function CleanerSettingsScreen() {
     <SafeAreaView className="flex-1 bg-surface" edges={["bottom"]}>
       <OfflineBanner />
       <View className="gap-3 px-4 py-4">
-        <View className="rounded-2xl border border-surface-muted bg-surface-card p-4">
+        <SectionCard>
           <Text className="text-sm text-ink-muted">Signed in as</Text>
           <Text className="mt-1 text-base font-semibold text-ink">
             {profile?.cleaner?.full_name ?? "Cleaner"}
           </Text>
           <View className="mt-3 flex-row items-center gap-2">
             <View
-              className={`h-2 w-2 rounded-full ${isOnline ? "bg-brand-500" : "bg-ink-muted"}`}
+              className="h-2 w-2 rounded-full"
+              style={{
+                backgroundColor: isOnline ? colors.status.success.fg : colors.ink.subtle,
+              }}
               accessibilityElementsHidden
             />
             <Text className="text-sm text-ink-muted">
@@ -52,9 +57,9 @@ export default function CleanerSettingsScreen() {
           </View>
           <Text className="mt-2 text-xs text-ink-muted">
             Version {APP_VERSION}
-            {showApiUrl && API_BASE_URL ? ` · ${API_BASE_URL}` : ""}
+            {showApiUrl && API_UPSTREAM_URL ? ` · ${API_UPSTREAM_URL}` : ""}
           </Text>
-        </View>
+        </SectionCard>
 
         <AppButton
           label="Sync now"
@@ -63,12 +68,15 @@ export default function CleanerSettingsScreen() {
           icon={<Ionicons name="sync-outline" size={18} color={colors.ink.default} />}
         />
 
-        <AppButton
-          label="About / Diagnostics"
-          variant="secondary"
-          onPress={() => router.push("/(cleaner)/diagnostics")}
-          icon={<Ionicons name="information-circle-outline" size={18} color={colors.ink.default} />}
-        />
+        {__DEV__ ? (
+          <SectionCard flush className="overflow-hidden p-0">
+            <ListRow
+              label="About / Diagnostics"
+              icon="information-circle-outline"
+              onPress={() => router.push("/(cleaner)/diagnostics")}
+            />
+          </SectionCard>
+        ) : null}
 
         <AppButton label="Sign out" variant="danger" onPress={onSignOut} />
       </View>

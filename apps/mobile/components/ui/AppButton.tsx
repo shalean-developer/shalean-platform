@@ -63,7 +63,7 @@ export function AppButton({
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
       accessibilityState={{ disabled: isDisabled, busy }}
-      className={`min-h-12 flex-row items-center justify-center gap-2 rounded-xl px-4 py-3.5 active:opacity-80 ${variantClass[variant]} ${isDisabled ? "opacity-60" : ""} ${className}`}
+      className={`min-h-touch flex-row items-center justify-center gap-2 rounded-xl px-4 py-3.5 active:opacity-80 ${variantClass[variant]} ${isDisabled ? "opacity-60" : ""} ${className}`}
     >
       {busy ? (
         <ActivityIndicator

@@ -71,9 +71,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Phone and password are required." }, { status: 400 });
   }
 
-  if (!allowCleanerLoginPhoneRequest(cleanerLoginPhoneRateLimitKey(phone))) {
-    return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
-  }
+  const phoneLimitKey = cleanerLoginPhoneRateLimitKey(phone);
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -129,6 +127,9 @@ export async function POST(request: Request) {
   }
 
   if (queryError && !cleaner) {
+    if (!allowCleanerLoginPhoneRequest(phoneLimitKey)) {
+      return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+    }
     const debug =
       process.env.NODE_ENV !== "production"
         ? { reason: "query_error", details: queryError, variants }
@@ -136,6 +137,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid credentials", debug }, { status: 401 });
   }
   if (!cleaner) {
+    if (!allowCleanerLoginPhoneRequest(phoneLimitKey)) {
+      return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+    }
     const debug =
       process.env.NODE_ENV !== "production"
         ? { reason: "cleaner_not_found", variants, canonical, digits: digitsOnly(phone) }
@@ -145,6 +149,9 @@ export async function POST(request: Request) {
 
   const authUid = String(cleaner.auth_user_id ?? "").trim();
   if (!authUid) {
+    if (!allowCleanerLoginPhoneRequest(phoneLimitKey)) {
+      return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+    }
     const debug =
       process.env.NODE_ENV !== "production" ? { reason: "missing_auth_user_id", cleanerId: cleaner.id } : undefined;
     return NextResponse.json(
@@ -158,6 +165,9 @@ export async function POST(request: Request) {
 
   const email = await resolveLoginEmail(admin, cleaner);
   if (!email) {
+    if (!allowCleanerLoginPhoneRequest(phoneLimitKey)) {
+      return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+    }
     const debug =
       process.env.NODE_ENV !== "production"
         ? { reason: "missing_login_email", cleanerId: cleaner.id }
@@ -171,6 +181,9 @@ export async function POST(request: Request) {
   const pub = createClient(url, anon, { auth: { persistSession: false } });
   const { data: signData, error: signErr } = await pub.auth.signInWithPassword({ email, password });
   if (signErr || !signData.session?.user) {
+    if (!allowCleanerLoginPhoneRequest(phoneLimitKey)) {
+      return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+    }
     const debug =
       process.env.NODE_ENV !== "production"
         ? { reason: "auth_sign_in_failed", cleanerId: cleaner.id, details: signErr?.message }
@@ -181,6 +194,9 @@ export async function POST(request: Request) {
   const uid = signData.session.user.id;
   if (uid !== authUid) {
     await pub.auth.signOut().catch(() => {});
+    if (!allowCleanerLoginPhoneRequest(phoneLimitKey)) {
+      return NextResponse.json({ error: "Too many attempts. Try again later." }, { status: 429 });
+    }
     return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
   }
 

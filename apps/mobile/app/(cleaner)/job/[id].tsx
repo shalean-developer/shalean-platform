@@ -1,14 +1,15 @@
-import type { ReactNode } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { useLocalSearchParams } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { formatCleanerJobEarningsLabel } from "@shalean/utils";
 import { OfflineBanner } from "@/components/OfflineBanner";
+import { SectionCard } from "@/components/ui/SectionCard";
 import { StatusBadge } from "@/components/ui/StatusBadge";
 import { EmptyState, ErrorState, LoadingState } from "@/components/ui/StateViews";
 import { JobActionBar } from "@/features/jobs/JobActionBar";
 import { JobPhotosPanel } from "@/features/jobs/JobPhotosPanel";
+import { JobProgressStepper } from "@/features/jobs/JobProgressStepper";
 import { openAddressInMaps, openPhoneDialer } from "@/lib/jobs/jobDeepLinks";
 import { friendlyErrorMessage } from "@/lib/errors/apiErrorMessage";
 import { useJobDetail } from "@/hooks/useCleanerJobs";
@@ -17,8 +18,12 @@ import {
   formatDuration,
   formatFriendlyYmd,
   formatJobTime,
+  formatTimelineClock,
+  jobEarningsCents,
+  jobEarningsIsEstimate,
   jobStatusLabel,
   jobStatusTone,
+  jobTimelineEvents,
 } from "@/lib/jobs/jobDisplay";
 import { colors } from "@/theme";
 
@@ -62,12 +67,16 @@ export default function JobDetailScreen() {
   const phone = String(job.customer_phone ?? "").trim();
   const service =
     String(job.service_name || job.service || job.service_type || "").trim() || "Cleaning";
-  const earningsCents = job.displayEarningsCents ?? job.display_earnings_cents ?? job.earnings_cents;
+  const earningsCents = jobEarningsCents(job);
+  const payLabel = formatCleanerJobEarningsLabel(earningsCents, {
+    estimate: jobEarningsIsEstimate(job),
+  });
   const extras = extrasLabels(job);
   const scope = (job.scope_lines ?? []).filter(Boolean);
   const access = (job.access_detail_lines ?? []).filter(Boolean);
   const notes = String(job.job_notes ?? "").trim();
   const canMaps = Boolean(address && address !== "—");
+  const timeline = jobTimelineEvents(job);
 
   return (
     <View className="flex-1 bg-surface">
@@ -77,11 +86,23 @@ export default function JobDetailScreen() {
         contentContainerClassName="gap-3 px-4 pb-6 pt-2"
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void refetch()} />}
       >
-        <View className="rounded-2xl border border-surface-muted bg-surface-card p-4">
-          <StatusBadge label={jobStatusLabel(job)} tone={jobStatusTone(job)} />
-          <Text className="mt-2 text-2xl font-bold text-ink" accessibilityRole="header">
-            {String(job.customer_name ?? "").trim() || "Customer"}
-          </Text>
+        <JobProgressStepper job={job} />
+
+        <SectionCard elevated>
+          <View className="flex-row items-start justify-between gap-3">
+            <View className="flex-1">
+              <StatusBadge label={jobStatusLabel(job)} tone={jobStatusTone(job)} />
+              <Text className="mt-2 text-2xl font-bold text-ink" accessibilityRole="header">
+                {String(job.customer_name ?? "").trim() || "Customer"}
+              </Text>
+            </View>
+            <View className="items-end rounded-xl bg-earnings-bg px-3 py-2">
+              <Text className="text-caption text-earnings-fg">
+                {jobEarningsIsEstimate(job) ? "Est. pay" : "Pay"}
+              </Text>
+              <Text className="text-base font-bold text-earnings-fg">{payLabel}</Text>
+            </View>
+          </View>
 
           <View className="mt-3 flex-row gap-2">
             {phone ? (
@@ -102,71 +123,91 @@ export default function JobDetailScreen() {
             ) : null}
           </View>
 
-          <View className="mt-4 gap-2 border-t border-surface-muted pt-3">
+          <View className="mt-4 gap-2 border-t border-border pt-3">
             <MetaRow icon="time-outline" text={`${formatJobTime(job.time)} · ${formatDuration(job)}`} />
             {job.date ? <MetaRow icon="calendar-outline" text={formatFriendlyYmd(String(job.date))} /> : null}
             <MetaRow icon="location-outline" text={address} />
-            <MetaRow
-              icon="cash-outline"
-              text={`Pay: ${formatCleanerJobEarningsLabel(earningsCents, {
-                estimate: job.displayEarningsIsEstimate === true || job.earnings_is_estimate === true,
-              })}`}
-            />
+            <MetaRow icon="briefcase-outline" text={service} />
           </View>
-        </View>
+        </SectionCard>
 
-        <Section title="Service">
+        {access.length > 0 ? (
+          <View className="rounded-2xl border border-status-warning-fg bg-status-warning-bg p-4">
+            <Text className="mb-2 text-overline font-semibold uppercase tracking-wide text-status-warning-fg">
+              Access
+            </Text>
+            {access.map((line) => (
+              <Text key={line} className="mb-1 text-sm font-medium text-status-warning-fg">
+                · {line}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
+        <SectionCard title="Service">
           <Text className="text-base text-ink">{service}</Text>
           {(job.service_detail_lines ?? []).map((line) => (
             <Text key={line} className="mt-1 text-sm text-ink-muted">
               {line}
             </Text>
           ))}
-        </Section>
+        </SectionCard>
 
         {scope.length > 0 ? (
-          <Section title="Scope">
+          <SectionCard title="Checklist / scope">
             {scope.map((line) => (
-              <Text key={line} className="mb-1 text-sm text-ink">
+              <Text key={line} className="mb-1.5 text-sm text-ink">
                 · {line}
               </Text>
             ))}
-          </Section>
+          </SectionCard>
         ) : null}
 
         {extras.length > 0 ? (
-          <Section title="Extras">
+          <SectionCard title="Extras">
             {extras.map((name) => (
               <Text key={name} className="mb-1 text-sm text-ink">
                 · {name}
               </Text>
             ))}
-          </Section>
-        ) : null}
-
-        {access.length > 0 ? (
-          <Section title="Access">
-            {access.map((line) => (
-              <Text key={line} className="mb-1 text-sm text-ink">
-                · {line}
-              </Text>
-            ))}
-          </Section>
+          </SectionCard>
         ) : null}
 
         {notes ? (
-          <Section title="Notes">
+          <SectionCard title="Notes">
             <Text className="text-sm leading-5 text-ink">{notes}</Text>
-          </Section>
+          </SectionCard>
         ) : null}
 
-        <Section title="Photos" flush>
+        {timeline.length > 0 ? (
+          <SectionCard title="Timeline">
+            {timeline.map((event, index) => (
+              <View
+                key={event.key}
+                className={`flex-row gap-3 ${index < timeline.length - 1 ? "mb-3" : ""}`}
+              >
+                <View className="items-center">
+                  <View className="h-2.5 w-2.5 rounded-full bg-brand-500" />
+                  {index < timeline.length - 1 ? (
+                    <View className="mt-1 w-0.5 flex-1 bg-border" style={{ minHeight: 16 }} />
+                  ) : null}
+                </View>
+                <View className="flex-1 pb-0.5">
+                  <Text className="text-sm font-semibold text-ink">{event.label}</Text>
+                  <Text className="text-caption text-ink-muted">{formatTimelineClock(event.at)}</Text>
+                </View>
+              </View>
+            ))}
+          </SectionCard>
+        ) : null}
+
+        <SectionCard title="Photos" flush>
           <JobPhotosPanel job={job} />
-        </Section>
+        </SectionCard>
       </ScrollView>
 
       <View
-        className="border-t border-surface-muted bg-surface-card px-4 pt-3"
+        className="border-t border-border bg-surface-card px-4 pt-3"
         style={{ paddingBottom: Math.max(insets.bottom, 12) }}
       >
         <JobActionBar job={job} />
@@ -191,7 +232,7 @@ function QuickAction({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      className="min-h-11 flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-surface-muted bg-surface px-3 active:opacity-80"
+      className="min-h-touch flex-1 flex-row items-center justify-center gap-2 rounded-xl border border-border bg-surface px-3 active:opacity-80"
       android_ripple={{ color: colors.surface.muted }}
     >
       <Ionicons name={icon} size={18} color={colors.brand[600]} />
@@ -205,23 +246,6 @@ function MetaRow({ icon, text }: { icon: keyof typeof Ionicons.glyphMap; text: s
     <View className="flex-row items-start gap-2">
       <Ionicons name={icon} size={16} color={colors.ink.muted} style={{ marginTop: 2 }} />
       <Text className="flex-1 text-sm text-ink">{text}</Text>
-    </View>
-  );
-}
-
-function Section({
-  title,
-  children,
-  flush,
-}: {
-  title: string;
-  children: ReactNode;
-  flush?: boolean;
-}) {
-  return (
-    <View className={`rounded-2xl border border-surface-muted bg-surface-card ${flush ? "p-3" : "p-4"}`}>
-      <Text className="mb-2 text-sm font-semibold uppercase tracking-wide text-ink-muted">{title}</Text>
-      {children}
     </View>
   );
 }

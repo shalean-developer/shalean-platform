@@ -2,9 +2,11 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
+import { Pressable, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { isValidContactPhone } from "@shalean/validation";
+import { AppButton } from "@/components/ui/AppButton";
+import { TextField } from "@/components/ui/TextField";
 import { useAuth } from "@/providers/AuthProvider";
 import { colors } from "@/theme";
 
@@ -48,52 +50,41 @@ export function SignInForm({ onSuccess }: Props) {
 
   return (
     <View className="w-full gap-4" accessibilityLabel="Cleaner sign in form">
-      <View>
-        <Text nativeID="cleaner-phone-label" className="mb-1.5 text-sm font-medium text-ink">
-          Phone number
-        </Text>
-        <Controller
-          control={control}
-          name="phone"
-          render={({ field: { onChange, onBlur, value } }) => (
-            <TextInput
-              className="min-h-12 rounded-xl border border-surface-muted bg-surface-card px-4 py-3.5 text-base text-ink"
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="phone-pad"
-              textContentType="telephoneNumber"
-              placeholder="082 123 4567"
-              placeholderTextColor={colors.ink.muted}
-              selectionColor={colors.brand[500]}
-              cursorColor={colors.brand[500]}
-              onBlur={onBlur}
-              onChangeText={onChange}
-              value={value}
-              editable={!isSubmitting}
-              accessibilityLabel="Phone number"
-              accessibilityLabelledBy="cleaner-phone-label"
-              accessibilityHint="Enter the phone number linked to your cleaner account"
-            />
-          )}
-        />
-        {errors.phone ? (
-          <Text accessibilityLiveRegion="polite" className="mt-1 text-sm text-danger">
-            {errors.phone.message}
-          </Text>
-        ) : null}
-      </View>
+      <Controller
+        control={control}
+        name="phone"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <TextField
+            label="Phone number"
+            labelId="cleaner-phone-label"
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="phone-pad"
+            textContentType="telephoneNumber"
+            placeholder="082 123 4567"
+            onBlur={onBlur}
+            onChangeText={onChange}
+            value={value}
+            editable={!isSubmitting}
+            error={errors.phone?.message}
+            accessibilityHint="Enter the phone number linked to your cleaner account"
+          />
+        )}
+      />
 
-      <View>
-        <Text nativeID="cleaner-password-label" className="mb-1.5 text-sm font-medium text-ink">
-          Password
-        </Text>
-        <Controller
-          control={control}
-          name="password"
-          render={({ field: { onChange, onBlur, value } }) => (
+      <Controller
+        control={control}
+        name="password"
+        render={({ field: { onChange, onBlur, value } }) => (
+          <View>
+            <Text nativeID="cleaner-password-label" className="mb-1.5 text-sm font-medium text-ink">
+              Password
+            </Text>
             <View className="relative">
               <TextInput
-                className="min-h-12 rounded-xl border border-surface-muted bg-surface-card py-3.5 pl-4 pr-12 text-base text-ink"
+                className={`min-h-touch rounded-xl border bg-surface-card py-3.5 pl-4 pr-12 text-base text-ink ${
+                  errors.password ? "border-danger" : "border-border"
+                }`}
                 secureTextEntry={!showPassword}
                 textContentType="password"
                 autoCapitalize="none"
@@ -113,7 +104,7 @@ export function SignInForm({ onSuccess }: Props) {
                 accessibilityRole="button"
                 accessibilityLabel={showPassword ? "Hide password" : "Show password"}
                 hitSlop={8}
-                className="absolute bottom-0 right-0 top-0 min-w-12 items-center justify-center"
+                className="absolute bottom-0 right-0 top-0 min-w-touch items-center justify-center"
               >
                 <Ionicons
                   name={showPassword ? "eye-off-outline" : "eye-outline"}
@@ -122,14 +113,14 @@ export function SignInForm({ onSuccess }: Props) {
                 />
               </Pressable>
             </View>
-          )}
-        />
-        {errors.password ? (
-          <Text accessibilityLiveRegion="polite" className="mt-1 text-sm text-danger">
-            {errors.password.message}
-          </Text>
-        ) : null}
-      </View>
+            {errors.password ? (
+              <Text accessibilityLiveRegion="polite" className="mt-1 text-sm text-danger">
+                {errors.password.message}
+              </Text>
+            ) : null}
+          </View>
+        )}
+      />
 
       {formError ? (
         <Text accessibilityLiveRegion="assertive" accessibilityRole="alert" className="text-sm text-danger">
@@ -137,20 +128,13 @@ export function SignInForm({ onSuccess }: Props) {
         </Text>
       ) : null}
 
-      <Pressable
+      <AppButton
+        label="Sign in"
         onPress={() => void onSubmit()}
+        loading={isSubmitting}
         disabled={isSubmitting}
-        accessibilityRole="button"
-        accessibilityLabel="Sign in"
-        accessibilityState={{ disabled: isSubmitting, busy: isSubmitting }}
-        className="mt-2 min-h-12 items-center justify-center rounded-xl bg-brand-500 px-4 py-3.5 active:opacity-80"
-      >
-        {isSubmitting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text className="text-base font-semibold text-ink-inverse">Sign in</Text>
-        )}
-      </Pressable>
+        className="mt-2"
+      />
     </View>
   );
 }

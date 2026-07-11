@@ -4,7 +4,15 @@ import { CleanerApi } from "@/services/cleanerApi";
 
 export const cleanerQueryKeys = {
   me: ["cleaner", "me"] as const,
+  jobsCard: ["cleaner", "jobs", "card"] as const,
   todaysJobs: ["cleaner", "jobs", "today"] as const,
+  dashboard: ["cleaner", "dashboard"] as const,
+  earnings: ["cleaner", "earnings"] as const,
+  roster: ["cleaner", "roster"] as const,
+  notifications: ["cleaner", "notifications"] as const,
+  referrals: ["cleaner", "referrals"] as const,
+  profileSummary: ["cleaner", "profile-summary"] as const,
+  feedback: ["cleaner", "feedback"] as const,
   job: (id: string) => ["cleaner", "jobs", id] as const,
 };
 

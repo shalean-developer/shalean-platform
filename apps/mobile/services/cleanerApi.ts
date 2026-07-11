@@ -1,6 +1,14 @@
 import type { ApiResult } from "@shalean/api-client";
 import { getMobileApiClient } from "@/lib/api/createMobileApiClient";
-import type { CleanerLoginResponse, CleanerMeResponse } from "@/services/types/cleanerJobs";
+import type {
+  CleanerEarningsResponse,
+  CleanerFeedbackListResponse,
+  CleanerLoginResponse,
+  CleanerMeResponse,
+  CleanerProfileSummaryResponse,
+  CleanerReferralMeResponse,
+  CleanerRosterResponse,
+} from "@/services/types/cleanerJobs";
 
 /**
  * Cleaner domain API — wraps `@shalean/api-client` paths only.
@@ -23,6 +31,41 @@ export const CleanerApi = {
     return getMobileApiClient().requestJson<CleanerMeResponse>("/api/cleaner/me", {
       method: "PATCH",
       json: { is_available: isAvailable },
+    });
+  },
+
+  earnings(): Promise<ApiResult<CleanerEarningsResponse>> {
+    return getMobileApiClient().requestJson<CleanerEarningsResponse>("/api/cleaner/earnings");
+  },
+
+  roster(): Promise<ApiResult<CleanerRosterResponse>> {
+    return getMobileApiClient().requestJson<CleanerRosterResponse>("/api/cleaner/roster");
+  },
+
+  referralsMe(): Promise<ApiResult<CleanerReferralMeResponse>> {
+    return getMobileApiClient().requestJson<CleanerReferralMeResponse>("/api/cleaner/referrals/me");
+  },
+
+  profileSummary(): Promise<ApiResult<CleanerProfileSummaryResponse>> {
+    return getMobileApiClient().requestJson<CleanerProfileSummaryResponse>(
+      "/api/cleaner/profile-summary",
+    );
+  },
+
+  listFeedback(): Promise<ApiResult<CleanerFeedbackListResponse>> {
+    return getMobileApiClient().requestJson<CleanerFeedbackListResponse>(
+      "/api/cleaner/report-feedback",
+    );
+  },
+
+  submitFeedback(body: {
+    submission_type: "report" | "feedback";
+    subject?: string | null;
+    message: string;
+  }): Promise<ApiResult<{ ok?: boolean; id?: string }>> {
+    return getMobileApiClient().requestJson("/api/cleaner/report-feedback", {
+      method: "POST",
+      json: body,
     });
   },
 };

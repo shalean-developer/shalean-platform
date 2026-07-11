@@ -73,7 +73,9 @@ export function ConnectivityProvider({ children }: { children: ReactNode }) {
       setIsOnline(online);
       if (online) {
         void flushQueue();
-        void queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.todaysJobs });
+        void queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.jobsCard });
+        void queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.dashboard });
+        void queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.earnings });
       }
     });
     const unsubQueue = offlineActionQueue.subscribe((items) => {

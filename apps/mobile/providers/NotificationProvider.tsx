@@ -1,6 +1,7 @@
 import * as Notifications from "expo-notifications";
 import { useRouter } from "expo-router";
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { Platform } from "react-native";
 import { diagnosticLog } from "@/lib/diagnostics/logger";
 import { useAuth } from "@/providers/AuthProvider";
 import {
@@ -45,6 +46,9 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   }, [status]);
 
   useEffect(() => {
+    // expo-notifications listeners / cold-start APIs are native-only.
+    if (Platform.OS === "web") return;
+
     const received = Notifications.addNotificationReceivedListener((notification) => {
       diagnosticLog.info("Notification received (foreground)", {
         id: notification.request.identifier,

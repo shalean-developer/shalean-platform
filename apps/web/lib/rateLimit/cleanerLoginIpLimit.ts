@@ -1,7 +1,13 @@
+/**
+ * Cleaner login rate limits (in-memory per serverless instance).
+ *
+ * IP cap is a coarse DoS guard. Phone cap targets credential stuffing and
+ * should only be incremented on failed authentication (see login route).
+ */
 const IP_WINDOW_MS = 15 * 60_000;
-const IP_MAX_REQUESTS = 5;
+const IP_MAX_REQUESTS = 40;
 const PHONE_WINDOW_MS = 60 * 60_000;
-const PHONE_MAX_REQUESTS = 10;
+const PHONE_MAX_REQUESTS = 20;
 
 const ipBuckets = new Map<string, number[]>();
 const phoneBuckets = new Map<string, number[]>();

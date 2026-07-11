@@ -97,8 +97,9 @@ export async function flushOfflineActionQueue(queryClient?: QueryClient): Promis
         processed += 1;
         if (queryClient) {
           await Promise.all([
-            queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.todaysJobs }),
+            queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.jobsCard }),
             queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.job(item.bookingId) }),
+            queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.earnings }),
           ]);
         }
       } catch (e) {

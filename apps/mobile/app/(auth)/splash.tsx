@@ -11,7 +11,7 @@ export default function SplashScreen() {
   }
 
   if (status === "signedIn") {
-    return <Redirect href="/(cleaner)" />;
+    return <Redirect href="/(cleaner)/(tabs)" />;
   }
 
   return <Redirect href="/(auth)/sign-in" />;

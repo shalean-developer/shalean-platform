@@ -11,15 +11,18 @@ export type PushRegistrationResult =
   | { ok: true; token: string }
   | { ok: false; reason: "web" | "simulator" | "denied" | "unavailable" | "error"; message?: string };
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: false,
-    shouldSetBadge: false,
-    shouldShowBanner: true,
-    shouldShowList: true,
-  }),
-});
+/** Push APIs are native-only — skip handler setup on web to avoid boot crashes. */
+if (Platform.OS !== "web") {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: false,
+      shouldSetBadge: false,
+      shouldShowBanner: true,
+      shouldShowList: true,
+    }),
+  });
+}
 
 export async function getStoredPushToken(): Promise<string | null> {
   try {
@@ -87,7 +90,7 @@ export function resolveNotificationDeepLink(data: Record<string, unknown> | unde
   if (bookingId) return `/(cleaner)/job/${bookingId}`;
 
   const type = typeof data.type === "string" ? data.type.trim() : "";
-  if (type === "jobs" || type === "today") return "/(cleaner)";
+  if (type === "jobs" || type === "today") return "/(cleaner)/(tabs)";
 
   return null;
 }

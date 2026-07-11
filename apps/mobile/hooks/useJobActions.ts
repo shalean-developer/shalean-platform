@@ -58,7 +58,8 @@ export function useJobLifecycleMutation(bookingId: string) {
     onSuccess: async (result) => {
       if (result.queued) return;
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.todaysJobs }),
+        queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.jobsCard }),
+        queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.dashboard }),
         queryClient.invalidateQueries({ queryKey: cleanerQueryKeys.job(bookingId) }),
       ]);
     },

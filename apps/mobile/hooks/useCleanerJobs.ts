@@ -1,27 +1,59 @@
+import { useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { johannesburgCalendarYmd } from "@shalean/utils";
-import { filterTodaysJobs } from "@/lib/jobs/jobDisplay";
+import { johannesburgCalendarYmd, johannesburgCalendarYmdAddDays } from "@shalean/utils";
+import { filterTodaysJobs, sortJobsByTime } from "@/lib/jobs/jobDisplay";
 import { markSynced } from "@/lib/network/networkStatus";
 import { useAuth } from "@/providers/AuthProvider";
 import { JobsApi } from "@/services/jobsApi";
 import { cleanerQueryKeys } from "@/hooks/useCleanerProfile";
+import type { CleanerJobWire } from "@/services/types/cleanerJobs";
 
-export function useTodaysJobs() {
+/** Shared card-view jobs list (Today + Schedule). */
+export function useCleanerJobsCard() {
   const { status } = useAuth();
-  const today = johannesburgCalendarYmd();
 
   return useQuery({
-    queryKey: [...cleanerQueryKeys.todaysJobs, today],
+    queryKey: cleanerQueryKeys.jobsCard,
     queryFn: async () => {
       const res = await JobsApi.listTodayCard();
       if (!res.ok) throw new Error(res.error);
       markSynced();
-      return filterTodaysJobs(res.data.jobs ?? []);
+      return res.data.jobs ?? [];
     },
     enabled: status === "signedIn",
-    // Keep previous day's cache visible only for matching key; offlineFirst serves disk cache.
     placeholderData: (prev) => prev,
   });
+}
+
+export function useTodaysJobs() {
+  const query = useCleanerJobsCard();
+  const today = johannesburgCalendarYmd();
+
+  const data = useMemo(() => {
+    if (!query.data) return undefined;
+    return filterTodaysJobs(query.data);
+  }, [query.data, today]);
+
+  return { ...query, data };
+}
+
+/** Jobs from today through +horizonDays (Johannesburg calendar). */
+export function useScheduleJobs(horizonDays = 13) {
+  const query = useCleanerJobsCard();
+  const today = johannesburgCalendarYmd();
+  const end = johannesburgCalendarYmdAddDays(today, horizonDays);
+
+  const data = useMemo(() => {
+    if (!query.data) return undefined;
+    return sortJobsByTime(
+      query.data.filter((j) => {
+        const d = String(j.date ?? "").trim();
+        return Boolean(d) && d >= today && d <= end;
+      }),
+    );
+  }, [query.data, today, end]);
+
+  return { ...query, data };
 }
 
 export function useJobDetail(bookingId: string | undefined) {
@@ -38,4 +70,9 @@ export function useJobDetail(bookingId: string | undefined) {
     enabled: status === "signedIn" && Boolean(bookingId),
     placeholderData: (prev) => prev,
   });
+}
+
+export function jobsForDate(jobs: CleanerJobWire[] | undefined, ymd: string): CleanerJobWire[] {
+  if (!jobs) return [];
+  return sortJobsByTime(jobs.filter((j) => String(j.date ?? "").trim() === ymd));
 }

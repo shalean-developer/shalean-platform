@@ -7,7 +7,7 @@ import {
 describe("allowCleanerLoginIpRequest", () => {
   it("allows under cap then blocks the next attempt", () => {
     const key = `test-ip:${Math.random()}`;
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 40; i++) {
       expect(allowCleanerLoginIpRequest(key)).toBe(true);
     }
     expect(allowCleanerLoginIpRequest(key)).toBe(false);
@@ -17,7 +17,7 @@ describe("allowCleanerLoginIpRequest", () => {
 describe("allowCleanerLoginPhoneRequest", () => {
   it("allows under cap then blocks the next attempt", () => {
     const key = `test-phone:${Math.random()}`;
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 20; i++) {
       expect(allowCleanerLoginPhoneRequest(key)).toBe(true);
     }
     expect(allowCleanerLoginPhoneRequest(key)).toBe(false);

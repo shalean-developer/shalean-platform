@@ -14,7 +14,7 @@ export default function SignInScreen() {
   }
 
   if (status === "signedIn") {
-    return <Redirect href="/(cleaner)" />;
+    return <Redirect href="/(cleaner)/(tabs)" />;
   }
 
   return (
@@ -24,17 +24,17 @@ export default function SignInScreen() {
           <Image
             source={require("../../assets/images/shalean-logo.png")}
             accessibilityLabel="Shalean"
-            className="mb-5 h-14 w-40"
+            style={{ width: 160, height: 48, marginBottom: 20 }}
             resizeMode="contain"
           />
           <Text className="text-center text-3xl font-bold text-ink" accessibilityRole="header">
             Shalean Cleaner
           </Text>
           <Text className="mt-2 text-center text-base text-ink-muted">
-            Sign in with your phone number and password.
+            Sign in to see today's jobs and manage your workday.
           </Text>
         </View>
-        <SignInForm onSuccess={() => router.replace("/(cleaner)")} />
+        <SignInForm onSuccess={() => router.replace("/(cleaner)/(tabs)")} />
       </View>
     </SafeAreaView>
   );

@@ -113,8 +113,116 @@ export type CleanerDashboardResponse = {
   jobs: CleanerJobWire[];
   summary?: {
     today_cents?: number;
+    today_breakdown?: unknown;
+    suggested_daily_goal_cents?: number;
     server_now_ms?: number;
+    earnings_timezone?: string;
   };
+};
+
+export type CleanerEarningsRowWire = {
+  booking_id: string;
+  date: string | null;
+  service: string;
+  location: string;
+  payout_status: "pending" | "eligible" | "paid" | "invalid" | string;
+  payout_frozen_cents: number | null;
+  amount_cents: number;
+  payout_paid_at: string | null;
+  payout_run_id: string | null;
+  in_frozen_batch?: boolean;
+};
+
+export type CleanerEarningsResponse = {
+  as_of?: string;
+  summary?: {
+    pending_cents?: number;
+    eligible_cents?: number;
+    paid_cents?: number;
+    invalid_cents?: number;
+    frozen_batch_cents?: number;
+    today_cents?: number;
+    week_cents?: number;
+    month_cents?: number;
+    suggested_daily_goal_cents?: number;
+    bonus_total_cents?: number;
+  };
+  total_pending?: number;
+  total_approved?: number;
+  total_paid?: number;
+  total_all_time?: number;
+  paymentDetails?: {
+    readyForPayout?: boolean;
+    missingBankDetails?: boolean;
+  };
+  rows?: CleanerEarningsRowWire[];
+};
+
+export type CleanerRosterAvailabilityWire = {
+  date: string;
+  start_time?: string | null;
+  end_time?: string | null;
+  is_available?: boolean | null;
+};
+
+export type CleanerRosterResponse = {
+  availability: CleanerRosterAvailabilityWire[];
+  workingAreas: { id: string; name: string }[];
+};
+
+export type CleanerNotificationKind =
+  | "booking_assigned"
+  | "booking_updated"
+  | "reminder"
+  | "payment"
+  | "announcement";
+
+export type CleanerNotificationItem = {
+  id: string;
+  kind: CleanerNotificationKind;
+  title: string;
+  body: string;
+  createdAt: string;
+  href?: string;
+  bookingId?: string;
+};
+
+export type CleanerReferralMeResponse = {
+  referralCode: string;
+  totalEarned: number;
+  referralsCount: number;
+  bonusPayout: number;
+};
+
+export type CleanerProfileSummaryResponse = {
+  name: string;
+  phone: string;
+  email: string;
+  status: string | null;
+  is_available: boolean;
+  has_payment_method: boolean;
+  has_failed_transfer: boolean;
+  total_all_time_cents: number;
+  payout_schedule_headline: string;
+  payout_schedule_sub: string;
+  account_number_masked: string | null;
+  bank_code: string | null;
+  account_name: string | null;
+};
+
+export type CleanerFeedbackSubmission = {
+  id: string;
+  submission_type: "report" | "feedback" | string;
+  subject: string | null;
+  message: string;
+  status: string;
+  admin_response: string | null;
+  created_at: string;
+  resolved_at: string | null;
+};
+
+export type CleanerFeedbackListResponse = {
+  submissions: CleanerFeedbackSubmission[];
 };
 
 export type PhotoUploadResponse = {

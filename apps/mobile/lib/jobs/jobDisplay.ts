@@ -90,3 +90,97 @@ export function extrasLabels(job: CleanerJobWire): string[] {
   }
   return [];
 }
+
+export function jobServiceLabel(job: CleanerJobWire): string {
+  return String(job.service_name || job.service || job.service_type || "").trim() || "Cleaning";
+}
+
+/** Prefer suburb-like segment from a comma-separated address. */
+export function jobAreaLabel(job: CleanerJobWire): string {
+  const raw = String(job.location_display || job.location || "").trim();
+  if (!raw) return "Area TBA";
+  const parts = raw
+    .split(",")
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length >= 2) return parts[1]!;
+  return parts[0]!.length > 32 ? `${parts[0]!.slice(0, 32)}…` : parts[0]!;
+}
+
+export function isJobCompleted(job: CleanerJobWire): boolean {
+  const label = jobStatusLabel(job).toLowerCase();
+  return label === "completed";
+}
+
+export function isJobCancelledOrDeclined(job: CleanerJobWire): boolean {
+  const label = jobStatusLabel(job).toLowerCase();
+  return label === "cancelled" || label === "declined";
+}
+
+export function sortJobsByTime(jobs: CleanerJobWire[]): CleanerJobWire[] {
+  return [...jobs].sort((a, b) => formatJobTime(a.time).localeCompare(formatJobTime(b.time)));
+}
+
+/** Next actionable job: earliest non-completed, non-cancelled. */
+export function pickNextJob(jobs: CleanerJobWire[]): CleanerJobWire | null {
+  const sorted = sortJobsByTime(jobs);
+  return sorted.find((j) => !isJobCompleted(j) && !isJobCancelledOrDeclined(j)) ?? null;
+}
+
+export function jobEarningsCents(job: CleanerJobWire): number | null | undefined {
+  return job.displayEarningsCents ?? job.display_earnings_cents ?? job.earnings_cents;
+}
+
+export function jobEarningsIsEstimate(job: CleanerJobWire): boolean {
+  return job.displayEarningsIsEstimate === true || job.earnings_is_estimate === true;
+}
+
+/**
+ * Lifecycle progress index for the stepper.
+ * 0 Assigned → 1 Accepted → 2 En route → 3 In progress → 4 Completed
+ * -1 for cancelled/declined
+ */
+export function jobLifecycleStepIndex(job: CleanerJobWire): number {
+  const label = jobStatusLabel(job).toLowerCase();
+  if (label === "cancelled" || label === "declined") return -1;
+  if (label === "completed") return 4;
+  if (label === "in progress") return 3;
+  if (label === "on the way") return 2;
+  if (label === "accepted") return 1;
+  return 0;
+}
+
+export const JOB_LIFECYCLE_STEPS = [
+  { key: "assigned", label: "Assigned" },
+  { key: "accepted", label: "Accepted" },
+  { key: "en_route", label: "En route" },
+  { key: "in_progress", label: "In progress" },
+  { key: "completed", label: "Done" },
+] as const;
+
+export type JobTimelineEvent = { key: string; label: string; at: string };
+
+/** Display-only timeline from job timestamps. */
+export function jobTimelineEvents(job: CleanerJobWire): JobTimelineEvent[] {
+  const events: JobTimelineEvent[] = [];
+  const push = (key: string, label: string, at: string | null | undefined) => {
+    const v = String(at ?? "").trim();
+    if (v) events.push({ key, label, at: v });
+  };
+  push("assigned", "Assigned", job.assigned_at);
+  push("accepted", "Accepted", job.accepted_at);
+  push("en_route", "On the way", job.en_route_at);
+  push("started", "Started", job.started_at);
+  push("completed", "Completed", job.completed_at);
+  return events;
+}
+
+/** Short clock string from ISO / datetime when possible. */
+export function formatTimelineClock(at: string): string {
+  const d = new Date(at);
+  if (Number.isNaN(d.getTime())) {
+    // Already a time-like string
+    return at.length >= 16 ? at.slice(11, 16) : at;
+  }
+  return d.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", hour12: false });
+}

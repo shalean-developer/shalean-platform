@@ -6,6 +6,7 @@ import { AuthProvider } from "@/providers/AuthProvider";
 import { ConnectivityProvider } from "@/providers/ConnectivityProvider";
 import { NotificationProvider } from "@/providers/NotificationProvider";
 import { QueryProvider } from "@/providers/QueryProvider";
+import { ToastProvider } from "@/providers/ToastProvider";
 import { colors } from "@/theme";
 
 const lightNav = {
@@ -30,7 +31,9 @@ export function AppProviders({ children }: Props) {
           <AuthProvider>
             <ConnectivityProvider>
               <NotificationProvider>
-                <NavThemeProvider value={lightNav}>{children}</NavThemeProvider>
+                <ToastProvider>
+                  <NavThemeProvider value={lightNav}>{children}</NavThemeProvider>
+                </ToastProvider>
               </NotificationProvider>
             </ConnectivityProvider>
           </AuthProvider>

@@ -77,6 +77,20 @@ export function actionLabel(action: CleanerLifecycleAction): string {
   }
 }
 
+/** Short CTA for list / hero cards. */
+export function primaryCardAction(job: CleanerJobWire): {
+  kind: "accept" | "navigate";
+  label: string;
+  action?: CleanerLifecycleAction;
+} {
+  const actions = deriveCleanerJobActions(job);
+  if (actions.accept) return { kind: "accept", label: "Accept", action: "accept" };
+  if (actions.enRoute) return { kind: "navigate", label: "On my way", action: "en_route" };
+  if (actions.start) return { kind: "navigate", label: "Start", action: "start" };
+  if (actions.complete) return { kind: "navigate", label: "Complete", action: "complete" };
+  return { kind: "navigate", label: "Open" };
+}
+
 export function newIdempotencyKey(): string {
   if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
     return crypto.randomUUID();
