@@ -1,0 +1,42 @@
+# Repo-root EAS ignore — keep Android uploads limited to mobile + shared packages.
+# Paths are relative to this file (monorepo root).
+
+# Web app (not needed for Expo native builds)
+apps/web/
+apps/web/**
+
+# Dependencies / build output (reinstalled on EAS)
+**/node_modules/
+**/.next/
+**/.expo/
+**/dist/
+**/web-build/
+**/coverage/
+**/.turbo/
+
+# Local env / secrets / logs
+**/.env
+**/.env.*
+!**/.env.example
+**/*.log
+npm-debug.*
+
+# Native signing material
+**/*.jks
+**/*.p8
+**/*.p12
+**/*.mobileprovision
+
+# Docs / misc heavy or irrelevant
+**/.git/
+agent-transcripts/
+docs/
+supabase/functions/
+*.md
+!apps/mobile/README.md
+!apps/mobile/docs/**
+
+# Cursor / IDE
+.cursor/
+**/.vscode/
+**/.idea/

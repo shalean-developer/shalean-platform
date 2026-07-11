@@ -1,4 +1,5 @@
-# Local / generated — keep EAS upload lean. Monorepo packages/ must remain included via git root.
+# Local / generated — keep EAS upload lean.
+# Sibling web app paths are relative to apps/mobile.
 .expo/
 dist/
 dist-web-smoke/
@@ -14,6 +15,13 @@ node_modules/
 *.mobileprovision
 npm-debug.*
 **/.next/
-apps/web/.next/
-apps/web/node_modules/
 **/*.log
+
+# Monorepo siblings not needed for the cleaner app binary
+../web/
+../web/**
+../../apps/web/
+../../node_modules/
+../../.git/
+../../.cursor/
+../../docs/
