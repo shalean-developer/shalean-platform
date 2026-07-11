@@ -1,5 +1,5 @@
 {
-  "installCommand": "cd ../.. && npm ci",
+  "installCommand": "npm ci",
   "crons": [
     {
       "path": "/api/cron/referral-credit-reminders",

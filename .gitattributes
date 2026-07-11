@@ -1,0 +1,4 @@
+# Force LF for shell/CI files so GitHub Actions bash scripts don't break on CRLF.
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
