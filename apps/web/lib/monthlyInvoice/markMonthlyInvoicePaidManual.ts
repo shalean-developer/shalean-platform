@@ -5,9 +5,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
+import { resolveZohoCustomerContactForMonthlyInvoice } from "@/lib/zoho/resolveZohoCustomerContact";
+import { markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 
 /**
  * Records full settlement without Paystack (offline / ops). Allowed for sent / partially_paid / overdue only.
+ * After local settlement, syncs payment to Zoho Books when a linked invoice exists (non-blocking).
  */
 export async function markMonthlyInvoicePaidManual(
   admin: SupabaseClient,
@@ -20,7 +23,7 @@ export async function markMonthlyInvoicePaidManual(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: inv, error: invErr } = await admin
     .from("monthly_invoices")
-    .select("id, status, total_amount_cents, amount_paid_cents, is_closed")
+    .select("id, status, total_amount_cents, amount_paid_cents, is_closed, zoho_invoice_id, customer_id")
     .eq("id", params.invoiceId)
     .maybeSingle();
 
@@ -32,6 +35,8 @@ export async function markMonthlyInvoicePaidManual(
     total_amount_cents: number | null;
     amount_paid_cents: number | null;
     is_closed: boolean | null;
+    zoho_invoice_id?: string | null;
+    customer_id?: string | null;
   };
 
   if (row.is_closed) return { ok: false, error: "invoice_already_closed" };
@@ -131,6 +136,62 @@ export async function markMonthlyInvoicePaidManual(
       note: noteTrim,
     },
   });
+
+  // Sync payment to Zoho Books (non-blocking — failures are logged but don't fail settlement)
+  const zohoInvoiceId = String(row.zoho_invoice_id ?? "").trim();
+  const customerId = String(row.customer_id ?? "").trim();
+  if (zohoInvoiceId && customerId && process.env.ZOHO_CLIENT_ID && process.env.ZOHO_REFRESH_TOKEN) {
+    try {
+      const contactRes = await resolveZohoCustomerContactForMonthlyInvoice(admin, {
+        invoiceId: row.id,
+        customerId,
+      });
+      if (contactRes.ok) {
+        const payRes = await markZohoInvoicePaid({
+          zohoInvoiceId,
+          amountZar: capPaid / 100,
+          paymentDate: todayYmdJhb(),
+          reference: `manual_${row.id.slice(0, 8)}`,
+          customerEmail: contactRes.contact.email,
+          customerName: contactRes.contact.name,
+        });
+        if (!payRes.ok) {
+          await logSystemEvent({
+            level: "warn",
+            source: "monthly_invoice/admin_manual",
+            message: "monthly_invoice_zoho_mark_paid_failed",
+            context: {
+              invoice_id: row.id,
+              zoho_invoice_id: zohoInvoiceId,
+              error: payRes.error,
+            },
+          });
+        }
+      } else {
+        await logSystemEvent({
+          level: "warn",
+          source: "monthly_invoice/admin_manual",
+          message: "monthly_invoice_zoho_contact_resolve_failed",
+          context: {
+            invoice_id: row.id,
+            zoho_invoice_id: zohoInvoiceId,
+            error: contactRes.error,
+          },
+        });
+      }
+    } catch (err) {
+      await logSystemEvent({
+        level: "warn",
+        source: "monthly_invoice/admin_manual",
+        message: "monthly_invoice_zoho_mark_paid_threw",
+        context: {
+          invoice_id: row.id,
+          zoho_invoice_id: zohoInvoiceId,
+          error: String(err instanceof Error ? err.message : err),
+        },
+      });
+    }
+  }
 
   return { ok: true };
 }

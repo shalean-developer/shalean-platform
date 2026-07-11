@@ -131,7 +131,7 @@ export function AdminInvoiceDetailsView({
 
       setZohoRefreshToast({
         text: j.zohoInvoiceId
-          ? `Synced to Zoho. You can download the PDF now.`
+          ? "Synced to Zoho."
           : "Synced to Zoho.",
       });
       await load();
@@ -279,7 +279,8 @@ export function AdminInvoiceDetailsView({
       : null;
   const shaleanOrderRef = invoiceId ? formatZohoOrderReference(invoiceId, "monthly") : null;
   const canRefreshZohoPdf = status === "draft" && !isClosed && hasInvoicePdf;
-  const canSyncToZoho = !hasInvoicePdf && totalCents > 0;
+  const canSyncPaymentToZoho = hasInvoicePdf && ["paid", "partially_paid"].includes(status.toLowerCase());
+  const canSyncToZoho = totalCents > 0 && (!hasInvoicePdf || canSyncPaymentToZoho);
 
   const headerActions = (
     <div className="grid w-full min-w-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:flex-wrap lg:items-center lg:justify-end">
@@ -290,10 +291,14 @@ export function AdminInvoiceDetailsView({
           size="sm"
           disabled={zohoSyncBusy}
           className="w-full justify-center border-amber-300 text-amber-800 hover:bg-amber-50 sm:w-auto"
-          title="Create this invoice in Zoho Books and link the PDF."
+          title={
+            canSyncPaymentToZoho
+              ? "Push this invoice's paid status to Zoho Books if payment is still outstanding there."
+              : "Create this invoice in Zoho Books and link the PDF."
+          }
           onClick={() => void syncToZoho()}
         >
-          {zohoSyncBusy ? "Syncing…" : "Sync to Zoho"}
+          {zohoSyncBusy ? "Syncing…" : canSyncPaymentToZoho ? "Sync payment to Zoho" : "Sync to Zoho"}
         </Button>
       ) : null}
       {canRefreshZohoPdf ? (

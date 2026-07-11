@@ -48,6 +48,15 @@ export async function POST(_request: Request, ctx: { params: Promise<{ invoiceId
         { status: 422 },
       );
     }
+  } else if (["paid", "partially_paid"].includes(status)) {
+    // Already linked: still push local payment status to Zoho when needed.
+    const result = await syncBillingDocumentToZoho(admin, { kind: "monthly_invoice", id: invoiceId });
+    if (!result.ok) {
+      return NextResponse.json(
+        { error: monthlyInvoiceZohoSyncErrorMessage(result.error) },
+        { status: 422 },
+      );
+    }
   }
 
   const { data: fresh } = await admin

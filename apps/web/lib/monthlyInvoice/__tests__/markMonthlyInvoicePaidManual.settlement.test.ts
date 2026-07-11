@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/booking/bookingOperations", () => ({
   refreshRecurringBookingPaymentState: vi.fn().mockResolvedValue(undefined),
@@ -10,6 +10,22 @@ vi.mock("@/lib/monthlyInvoice/invoiceSnapshotEvents", () => ({
 
 vi.mock("@/lib/logging/systemLog", () => ({
   logSystemEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+const markZohoInvoicePaid = vi.fn().mockResolvedValue({ ok: true, paymentId: "pay-1" });
+const resolveZohoCustomerContactForMonthlyInvoice = vi.fn().mockResolvedValue({
+  ok: true,
+  contact: { email: "customer@example.com", name: "Customer" },
+});
+
+vi.mock("@/lib/zoho/zohoBooksService", () => ({
+  markZohoInvoicePaid: (...args: unknown[]) => markZohoInvoicePaid(...args),
+  todayYmdJhb: () => "2026-07-11",
+}));
+
+vi.mock("@/lib/zoho/resolveZohoCustomerContact", () => ({
+  resolveZohoCustomerContactForMonthlyInvoice: (...args: unknown[]) =>
+    resolveZohoCustomerContactForMonthlyInvoice(...args),
 }));
 
 import { markMonthlyInvoicePaidManual } from "@/lib/monthlyInvoice/markMonthlyInvoicePaidManual";
@@ -29,6 +45,8 @@ function buildAdmin(opts: {
     total_amount_cents: number;
     amount_paid_cents: number;
     is_closed: boolean;
+    zoho_invoice_id?: string | null;
+    customer_id?: string | null;
   };
   children: BookingChild[];
   failingBookingIds?: string[];
@@ -89,8 +107,20 @@ function buildAdmin(opts: {
 }
 
 describe("markMonthlyInvoicePaidManual settlement aggregation", () => {
+  const prevClientId = process.env.ZOHO_CLIENT_ID;
+  const prevRefresh = process.env.ZOHO_REFRESH_TOKEN;
+
   beforeEach(() => {
     vi.clearAllMocks();
+    delete process.env.ZOHO_CLIENT_ID;
+    delete process.env.ZOHO_REFRESH_TOKEN;
+  });
+
+  afterEach(() => {
+    if (prevClientId === undefined) delete process.env.ZOHO_CLIENT_ID;
+    else process.env.ZOHO_CLIENT_ID = prevClientId;
+    if (prevRefresh === undefined) delete process.env.ZOHO_REFRESH_TOKEN;
+    else process.env.ZOHO_REFRESH_TOKEN = prevRefresh;
   });
 
   it("marks the invoice paid and settles all child bookings", async () => {
@@ -135,6 +165,81 @@ describe("markMonthlyInvoicePaidManual settlement aggregation", () => {
       payout_status: "eligible",
       payout_frozen_cents: 25_000,
     });
+    expect(markZohoInvoicePaid).not.toHaveBeenCalled();
+  });
+
+  it("syncs payment to Zoho when a linked invoice exists", async () => {
+    process.env.ZOHO_CLIENT_ID = "client";
+    process.env.ZOHO_REFRESH_TOKEN = "refresh";
+
+    const { admin } = buildAdmin({
+      invoice: {
+        id: "invoice-zoho",
+        status: "sent",
+        total_amount_cents: 50_000,
+        amount_paid_cents: 0,
+        is_closed: false,
+        zoho_invoice_id: "zoho-inv-1",
+        customer_id: "cust-1",
+      },
+      children: [
+        {
+          id: "booking-1",
+          total_paid_zar: 500,
+          amount_paid_cents: 0,
+          display_earnings_cents: 25_000,
+          cleaner_payout_cents: 20_000,
+        },
+      ],
+    });
+
+    const result = await markMonthlyInvoicePaidManual(admin as never, {
+      invoiceId: "invoice-zoho",
+      adminEmail: "ops@example.com",
+      adminUserId: "admin-1",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(resolveZohoCustomerContactForMonthlyInvoice).toHaveBeenCalledWith(expect.anything(), {
+      invoiceId: "invoice-zoho",
+      customerId: "cust-1",
+    });
+    expect(markZohoInvoicePaid).toHaveBeenCalledWith({
+      zohoInvoiceId: "zoho-inv-1",
+      amountZar: 500,
+      paymentDate: "2026-07-11",
+      reference: "manual_invoice-",
+      customerEmail: "customer@example.com",
+      customerName: "Customer",
+    });
+  });
+
+  it("still succeeds when Zoho mark-paid fails", async () => {
+    process.env.ZOHO_CLIENT_ID = "client";
+    process.env.ZOHO_REFRESH_TOKEN = "refresh";
+    markZohoInvoicePaid.mockResolvedValueOnce({ ok: false, error: "zoho_down" });
+
+    const { admin } = buildAdmin({
+      invoice: {
+        id: "invoice-zoho-fail",
+        status: "sent",
+        total_amount_cents: 50_000,
+        amount_paid_cents: 0,
+        is_closed: false,
+        zoho_invoice_id: "zoho-inv-2",
+        customer_id: "cust-1",
+      },
+      children: [],
+    });
+
+    const result = await markMonthlyInvoicePaidManual(admin as never, {
+      invoiceId: "invoice-zoho-fail",
+      adminEmail: "ops@example.com",
+      adminUserId: "admin-1",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(markZohoInvoicePaid).toHaveBeenCalled();
   });
 
   it("returns a partial-settlement error when a child booking fails", async () => {
@@ -178,5 +283,6 @@ describe("markMonthlyInvoicePaidManual settlement aggregation", () => {
     });
     expect(captured.invoiceUpdates.some((u) => u.status === "paid")).toBe(true);
     expect(captured.bookingUpdates.map((u) => u.bookingId)).toEqual(["booking-1", "booking-2"]);
+    expect(markZohoInvoicePaid).not.toHaveBeenCalled();
   });
 });

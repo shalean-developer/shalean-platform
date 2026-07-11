@@ -8,7 +8,7 @@ import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsFo
 import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
 import { resolveMonthlyInvoiceZohoTotalCents } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceZohoTotalCents";
 import { resolveZohoCustomerContactForMonthlyInvoice } from "@/lib/zoho/resolveZohoCustomerContact";
-import { markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
+import { getZohoInvoice, markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 import { syncSalesDocumentToZoho } from "@/lib/salesDocument/syncSalesDocumentToZoho";
 
 export type SyncBillingDocumentToZohoResult =
@@ -87,7 +87,48 @@ async function syncMonthlyInvoiceRowToZoho(
   };
 
   const existing = String(row.zoho_invoice_id ?? "").trim();
-  if (existing) return { ok: true, zoho_id: existing };
+  const status = String(row.status ?? "").toLowerCase();
+  const paidCents = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
+  const paymentReference = String(row.paystack_reference ?? invoiceId).trim() || invoiceId;
+
+  async function applyLocalPaymentToZoho(zohoInvoiceId: string): Promise<SyncBillingDocumentToZohoResult | null> {
+    if (paidCents <= 0 || !["paid", "partially_paid"].includes(status)) return null;
+
+    // Avoid duplicate Zoho payments when the invoice is already settled there.
+    const zohoInv = await getZohoInvoice(zohoInvoiceId);
+    if (zohoInv.ok && zohoInv.balanceCents <= 0) return null;
+
+    const amountZar = zohoInv.ok
+      ? Math.min(paidCents, zohoInv.balanceCents) / 100
+      : paidCents / 100;
+    if (amountZar <= 0) return null;
+
+    const contactRes = await resolveZohoCustomerContactForMonthlyInvoice(admin, {
+      invoiceId,
+      customerId: row.customer_id,
+    });
+    const contact = contactRes.ok ? contactRes.contact : null;
+    const payRes = await markZohoInvoicePaid({
+      zohoInvoiceId,
+      amountZar,
+      paymentDate: todayYmdJhb(),
+      reference: paymentReference,
+      customerEmail: contact?.email,
+      customerName: contact?.name,
+    });
+    if (!payRes.ok) {
+      return { ok: false, error: `zoho_mark_paid_failed:${payRes.error}` };
+    }
+    return null;
+  }
+
+  // Already linked: still apply local payment to Zoho when Shalean shows paid/partial
+  // (e.g. admin marked paid before Zoho payment sync existed).
+  if (existing) {
+    const payErr = await applyLocalPaymentToZoho(existing);
+    if (payErr) return payErr;
+    return { ok: true, zoho_id: existing };
+  }
 
   const totalCents = resolveMonthlyInvoiceZohoTotalCents(row);
   const balanceZar = totalCents / 100;
@@ -104,26 +145,8 @@ async function syncMonthlyInvoiceRowToZoho(
 
   if (!result.ok) return result;
 
-  const status = String(row.status ?? "").toLowerCase();
-  const paidCents = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
-  if (paidCents > 0 && ["paid", "partially_paid"].includes(status)) {
-    const contactRes = await resolveZohoCustomerContactForMonthlyInvoice(admin, {
-      invoiceId,
-      customerId: row.customer_id,
-    });
-    const contact = contactRes.ok ? contactRes.contact : null;
-    const payRes = await markZohoInvoicePaid({
-      zohoInvoiceId: result.zohoInvoiceId,
-      amountZar: paidCents / 100,
-      paymentDate: todayYmdJhb(),
-      reference: String(row.paystack_reference ?? invoiceId).trim() || invoiceId,
-      customerEmail: contact?.email,
-      customerName: contact?.name,
-    });
-    if (!payRes.ok) {
-      return { ok: false, error: `zoho_mark_paid_failed:${payRes.error}` };
-    }
-  }
+  const payErr = await applyLocalPaymentToZoho(result.zohoInvoiceId);
+  if (payErr) return payErr;
 
   return { ok: true, zoho_id: result.zohoInvoiceId };
 }
