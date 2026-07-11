@@ -20,27 +20,22 @@ on:
 jobs:
   vitest:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "20"
           cache: npm
-          # Monorepo root lockfile — apps/web is a workspace package.
           cache-dependency-path: package-lock.json
       - name: Install
-        working-directory: .
         run: npm ci
       - name: Production dependency audit (high+)
-        run: npm run audit:production
+        run: npm run audit:production --workspace=web
       - name: Critical tests (payments + referrals)
-        run: npm run test:critical
+        run: npm run test:critical --workspace=web
       - name: Revenue path tests (booking, dispatch, cleaner API, cron locks)
         run: >-
-          npm run test --
+          npm run test --workspace=web --
           lib/booking/__tests__/cleanerServicePreferenceEligibility.test.ts
           lib/dispatch/__tests__/h9DispatchEscalationStatusFilter.test.ts
           app/api/cleaner/__tests__/cleanerEarningsApi.test.ts
@@ -48,26 +43,29 @@ jobs:
           lib/cron/__tests__/h15CronLockOverlapPrevention.test.ts
           lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts
       - name: Blog route governance
-        run: npm run validate:blog-routes && npm run audit:internal-links && npm run validate:cms-blog-links
+        run: >-
+          npm run validate:blog-routes --workspace=web
+          && npm run audit:internal-links --workspace=web
+          && npm run validate:cms-blog-links --workspace=web
       - name: Typecheck
-        run: npm run typecheck
+        run: npm run typecheck --workspace=web
       - name: Booking core ESLint gate
-        run: npm run lint:booking-core
+        run: npm run lint:booking-core --workspace=web
       - name: Blog SEO governance report
-        run: npm run report:blog-seo-governance
+        run: npm run report:blog-seo-governance --workspace=web
       - name: Canonical purity report
-        run: npm run report:canonical-purity
+        run: npm run report:canonical-purity --workspace=web
       - name: Live SEO validation
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
           LIVE_SEO_EXTENDED: ${{ vars.LIVE_SEO_EXTENDED || '1' }}
-        run: npm run validate:live-seo
+        run: npm run validate:live-seo --workspace=web
       - name: Live internal link crawl
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
-        run: npm run validate:live-internal-links
+        run: npm run validate:live-internal-links --workspace=web
       - name: Search Console readiness
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
           REQUIRE_GSC_VERIFICATION: ${{ vars.REQUIRE_GSC_VERIFICATION || '0' }}
-        run: npm run validate:search-console-readiness
+        run: npm run validate:search-console-readiness --workspace=web
