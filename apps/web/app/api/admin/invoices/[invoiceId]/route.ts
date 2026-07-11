@@ -2,8 +2,7 @@ import { NextResponse } from "next/server";
 
 import { loadAdminInvoiceBundle } from "@/lib/admin/invoices/loadAdminInvoiceBundle";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
-import { setDraftMonthlyInvoiceDueDateOverride } from "@/lib/monthlyInvoice/setDraftMonthlyInvoiceDueDateOverride";
-import { syncMonthlyInvoiceToZohoBooks } from "@/lib/monthlyInvoice/syncMonthlyInvoiceToZohoBooks";
+import { updateMonthlyInvoiceBillingDates } from "@/lib/monthlyInvoice/updateMonthlyInvoiceBillingDates";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -28,6 +27,26 @@ export async function GET(request: Request, ctx: { params: Promise<{ invoiceId: 
   return NextResponse.json(bundle.data);
 }
 
+function friendlyBillingDateError(code: string): string {
+  switch (code) {
+    case "not_found":
+      return "Invoice not found.";
+    case "invoice_already_closed":
+      return "This invoice is closed and cannot be edited.";
+    case "invalid_due_date":
+      return "Due date must be YYYY-MM-DD.";
+    case "invalid_invoice_date":
+      return "Invoice date must be YYYY-MM-DD.";
+    case "due_date_must_be_in_billing_month":
+      return "For draft invoices, due date must fall within the billing month.";
+    case "no_dates_provided":
+      return "Provide invoiceDate and/or dueDate.";
+    default:
+      return code;
+  }
+}
+
+/** Update invoice document date and/or payment due date (any non-closed status). */
 export async function PATCH(request: Request, ctx: { params: Promise<{ invoiceId: string }> }) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -35,49 +54,37 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ invoiceId
   const { invoiceId } = await ctx.params;
   if (!invoiceId) return NextResponse.json({ error: "Missing invoice id." }, { status: 400 });
 
-  const body = (await request.json().catch(() => ({}))) as { dueDate?: unknown };
-  const dueDate = String(body.dueDate ?? "").trim().slice(0, 10);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-    return NextResponse.json({ error: "dueDate must be YYYY-MM-DD." }, { status: 400 });
-  }
+  const body = (await request.json().catch(() => ({}))) as {
+    dueDate?: unknown;
+    invoiceDate?: unknown;
+  };
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const set = await setDraftMonthlyInvoiceDueDateOverride(admin, invoiceId, dueDate);
-  if (!set.ok) {
-    const status = set.error === "not_found" ? 404 : set.error === "invoice_not_draft" ? 409 : 400;
-    return NextResponse.json({ error: set.error }, { status });
+  const result = await updateMonthlyInvoiceBillingDates(admin, {
+    invoiceId,
+    dueDate: body.dueDate === undefined ? undefined : String(body.dueDate ?? "").trim() || null,
+    invoiceDate:
+      body.invoiceDate === undefined ? undefined : String(body.invoiceDate ?? "").trim() || null,
+    adminEmail: auth.email ?? undefined,
+  });
+
+  if (!result.ok) {
+    const status =
+      result.error === "not_found"
+        ? 404
+        : result.error === "invoice_already_closed"
+          ? 409
+          : 400;
+    return NextResponse.json({ error: friendlyBillingDateError(result.error) }, { status });
   }
 
-  const { data: inv } = await admin
-    .from("monthly_invoices")
-    .select("id, customer_id, month, due_date, status, total_amount_cents, zoho_invoice_id")
-    .eq("id", invoiceId)
-    .maybeSingle();
-
-  const row = inv as {
-    id: string;
-    customer_id: string;
-    month: string;
-    due_date: string;
-    status: string | null;
-    total_amount_cents: number | null;
-  } | null;
-
-  if (row && String(row.status ?? "").toLowerCase() === "draft") {
-    const balanceZar = Math.max(0, Math.round(Number(row.total_amount_cents ?? 0))) / 100;
-    if (balanceZar > 0) {
-      await syncMonthlyInvoiceToZohoBooks(admin, {
-        invoiceId: row.id,
-        customerId: row.customer_id,
-        month: row.month,
-        dueDate: row.due_date,
-        balanceZar,
-        status: row.status,
-      });
-    }
-  }
-
-  return NextResponse.json({ ok: true, dueDate });
+  return NextResponse.json({
+    ok: true,
+    dueDate: result.dueDate,
+    invoiceDate: result.invoiceDate,
+    zohoSynced: result.zohoSynced,
+    ...(result.zohoError ? { zohoError: result.zohoError } : {}),
+  });
 }

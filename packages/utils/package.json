@@ -1,0 +1,23 @@
+{
+  "name": "@shalean/utils",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./phone": "./src/phone.ts",
+    "./normalizeEmail": "./src/normalizeEmail.ts",
+    "./formatZar": "./src/formatZar.ts",
+    "./cleanerZarFormat": "./src/cleanerZarFormat.ts",
+    "./johannesburgBookingClock": "./src/johannesburgBookingClock.ts",
+    "./johannesburgMonth": "./src/johannesburgMonth.ts",
+    "./distance": "./src/distance.ts",
+    "./cleanerDisplayFirstName": "./src/cleanerDisplayFirstName.ts",
+    "./shaleanBillingContactEmail": "./src/shaleanBillingContactEmail.ts",
+    "./customerProfileContactFields": "./src/customerProfileContactFields.ts"
+  },
+  "types": "./src/index.ts",
+  "files": [
+    "src"
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "name": "@shalean/validation",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./contactPhoneValidation": "./src/contactPhoneValidation.ts",
+    "./bookingExtrasLimits": "./src/bookingExtrasLimits.ts",
+    "./bookingPaymentPrecheckLogic": "./src/bookingPaymentPrecheckLogic.ts"
+  },
+  "types": "./src/index.ts",
+  "files": [
+    "src"
+  ]
+}

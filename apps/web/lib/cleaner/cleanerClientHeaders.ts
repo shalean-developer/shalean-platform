@@ -1,8 +1,7 @@
-import { getSupabaseAccessToken } from "@/lib/supabase/browser";
+import { buildBearerHeaders } from "@shalean/api-client";
+import { webTokenProvider } from "@/lib/api/webTokenProvider";
 
 /** Auth headers for `/api/cleaner/*` — Supabase session JWT only. */
 export async function getCleanerAuthHeaders(): Promise<Record<string, string> | null> {
-  const token = (await getSupabaseAccessToken())?.trim();
-  if (!token) return null;
-  return { Authorization: `Bearer ${token}` };
+  return buildBearerHeaders(webTokenProvider);
 }

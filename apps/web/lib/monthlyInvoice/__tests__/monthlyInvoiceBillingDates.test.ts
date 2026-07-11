@@ -136,6 +136,13 @@ describe("zohoDatesForMonthlyInvoice", () => {
       dueDate: "2026-06-26",
     });
   });
+
+  it("honours an admin invoice date override", () => {
+    expect(zohoDatesForMonthlyInvoice("2026-06", "2026-06-10", "2026-06-10")).toEqual({
+      invoiceDate: "2026-06-10",
+      dueDate: "2026-06-10",
+    });
+  });
 });
 
 describe("lastScheduledVisitYmd", () => {

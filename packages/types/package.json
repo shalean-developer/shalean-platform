@@ -1,0 +1,24 @@
+{
+  "name": "@shalean/types",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./canonicalBookingStatus": "./src/canonicalBookingStatus.ts",
+    "./cleanerResponseStatus": "./src/cleanerResponseStatus.ts",
+    "./cleanerBookingLifecycleStatuses": "./src/cleanerBookingLifecycleStatuses.ts",
+    "./customerBookingModifyStatuses": "./src/customerBookingModifyStatuses.ts",
+    "./bookingCustomerIdentity": "./src/bookingCustomerIdentity.ts",
+    "./availabilityWeekdays": "./src/availabilityWeekdays.ts",
+    "./vipTier": "./src/vipTier.ts",
+    "./customerBookingOwnership": "./src/customerBookingOwnership.ts"
+  },
+  "types": "./src/index.ts",
+  "files": [
+    "src"
+  ],
+  "dependencies": {
+    "@shalean/utils": "file:../utils"
+  }
+}

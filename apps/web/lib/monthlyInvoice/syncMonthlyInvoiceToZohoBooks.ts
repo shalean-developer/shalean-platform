@@ -110,21 +110,29 @@ export async function syncMonthlyInvoiceToZohoBooks(
     dueDateYmd = lastScheduledVisitYmd(params.month, dates) ?? billingMonthInvoiceDate(params.month);
   }
 
-  const zohoDates = zohoDatesForMonthlyInvoice(params.month, dueDateYmd);
+  const { data: existing } = await admin
+    .from("monthly_invoices")
+    .select("zoho_invoice_id, status, invoice_date")
+    .eq("id", params.invoiceId)
+    .maybeSingle();
+
+  const row = existing as {
+    zoho_invoice_id?: string | null;
+    status?: string | null;
+    invoice_date?: string | null;
+  } | null;
+  const linked = String(row?.zoho_invoice_id ?? "").trim();
+  const rowStatus = String(params.status ?? row?.status ?? "").toLowerCase();
+
+  const zohoDates = zohoDatesForMonthlyInvoice(
+    params.month,
+    dueDateYmd,
+    params.invoiceDate ?? row?.invoice_date,
+  );
   const invoiceDate = params.invoiceDate ?? zohoDates.invoiceDate;
   const dueDate = zohoDates.dueDate;
   const payNote = params.paymentUrl ? ` Pay via: ${params.paymentUrl}` : "";
   const notes = `Shalean monthly invoice ${params.invoiceId}.${payNote}`;
-
-  const { data: existing } = await admin
-    .from("monthly_invoices")
-    .select("zoho_invoice_id, status")
-    .eq("id", params.invoiceId)
-    .maybeSingle();
-
-  const row = existing as { zoho_invoice_id?: string | null; status?: string | null } | null;
-  const linked = String(row?.zoho_invoice_id ?? "").trim();
-  const rowStatus = String(params.status ?? row?.status ?? "").toLowerCase();
 
   const contactRes = await resolveZohoCustomerContactForMonthlyInvoice(admin, {
     invoiceId: params.invoiceId,

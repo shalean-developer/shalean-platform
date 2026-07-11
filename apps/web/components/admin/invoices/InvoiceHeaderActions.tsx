@@ -46,6 +46,12 @@ export type InvoiceHeaderActionsProps = {
   amountPaidCents: number;
   balanceCents: number;
   bookingCountToSettle: number;
+  /** Payment due date YYYY-MM-DD */
+  dueDate?: string | null;
+  /** Document/billing date YYYY-MM-DD (defaults to 1st of month when unset) */
+  invoiceDate?: string | null;
+  /** Billing month YYYY-MM — used to default invoice date */
+  billingMonth?: string | null;
   refundedAt?: string | null;
   refundReference?: string | null;
   invoiceBookings?: InvoiceBookingOption[];
@@ -120,8 +126,14 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   const [confirmSendOpen, setConfirmSendOpen] = useState(false);
   const [sendErr, setSendErr] = useState<string | null>(null);
 
+  const [datesOpen, setDatesOpen] = useState(false);
+  const [editInvoiceDate, setEditInvoiceDate] = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [datesErr, setDatesErr] = useState<string | null>(null);
+
   const st = props.status.toLowerCase();
   const canAdjust = !props.isClosed && ["draft", "sent", "partially_paid", "overdue"].includes(st);
+  const canEditDates = !props.isClosed;
   const hasLink = Boolean(props.paymentLink?.trim());
   const canResendEmail = hasLink && ["sent", "partially_paid", "overdue"].includes(st);
   const canMarkPaid = !props.isClosed && ["sent", "partially_paid", "overdue"].includes(st);
@@ -130,6 +142,12 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   const canRefund = !props.isClosed && st === "paid";
   const canHardClose = !props.isClosed && ["draft", "sent", "partially_paid", "overdue", "paid"].includes(st);
   const canSendInvoice = !props.isClosed && st === "draft";
+
+  const defaultInvoiceDate =
+    (props.invoiceDate && /^\d{4}-\d{2}-\d{2}$/.test(props.invoiceDate) ? props.invoiceDate : null) ??
+    (props.billingMonth && /^\d{4}-\d{2}$/.test(props.billingMonth) ? `${props.billingMonth}-01` : "");
+  const defaultDueDate =
+    props.dueDate && /^\d{4}-\d{2}-\d{2}$/.test(props.dueDate) ? props.dueDate : defaultInvoiceDate;
 
   const settleAmount = Math.max(0, props.balanceCents);
   const bookingLabel = props.bookingCountToSettle === 1 ? "booking" : "bookings";
@@ -436,6 +454,44 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
     }
   }
 
+  async function submitBillingDates() {
+    if (actionLock.current) return;
+    setDatesErr(null);
+    const invoiceDate = editInvoiceDate.trim().slice(0, 10);
+    const dueDate = editDueDate.trim().slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(invoiceDate) || !/^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      setDatesErr("Enter valid invoice and due dates (YYYY-MM-DD).");
+      return;
+    }
+    actionLock.current = true;
+    setBusy("dates");
+    try {
+      const res = await authFetch(props.getAccessToken, `/api/admin/invoices/${encodeURIComponent(props.invoiceId)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ invoiceDate, dueDate }),
+      });
+      const j = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        zohoSynced?: boolean;
+        zohoError?: string;
+      };
+      if (!res.ok) throw new Error(j.error ?? `Request failed (${res.status})`);
+      const zohoNote = j.zohoSynced
+        ? " Zoho dates updated."
+        : j.zohoError
+          ? ` Saved in Shalean; Zoho update failed (${j.zohoError}).`
+          : "";
+      setToast({ text: `Billing dates updated.${zohoNote}` });
+      setDatesOpen(false);
+      await props.onDone();
+    } catch (e) {
+      setDatesErr(e instanceof Error ? e.message : "Failed to update dates.");
+    } finally {
+      setBusy(null);
+      actionLock.current = false;
+    }
+  }
+
   const resendDisabledReason = !hasLink
     ? "No payment link on file. Initialize Paystack for this invoice first."
     : !["sent", "partially_paid", "overdue"].includes(st)
@@ -462,6 +518,23 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
           Add adjustment
         </Button>
       </span>
+      {canEditDates ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="w-full justify-center sm:w-auto"
+          disabled={busy !== null}
+          onClick={() => {
+            setDatesErr(null);
+            setEditInvoiceDate(defaultInvoiceDate);
+            setEditDueDate(defaultDueDate);
+            setDatesOpen(true);
+          }}
+        >
+          Edit billing dates
+        </Button>
+      ) : null}
       {canSendInvoice ? (
         <Button
           type="button"
@@ -700,6 +773,57 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
             </Button>
             <Button type="button" disabled={busy !== null} onClick={() => void submitAdjustment()}>
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={datesOpen}
+        onOpenChange={(open) => {
+          setDatesOpen(open);
+          if (!open) setDatesErr(null);
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit billing dates</DialogTitle>
+            <DialogDescription>
+              Change the invoice document date (shown in Zoho) and the payment due date. For example, if the customer
+              pays on the 10th, set both dates to the 10th of the billing month.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-1">
+            <div className="grid gap-1.5">
+              <Label htmlFor="invoice-date">Invoice / billing date</Label>
+              <Input
+                id="invoice-date"
+                type="date"
+                value={editInvoiceDate}
+                disabled={busy !== null}
+                onChange={(e) => setEditInvoiceDate(e.target.value)}
+              />
+              <p className="text-xs text-zinc-500">Document date on the invoice (defaults to the 1st of the month).</p>
+            </div>
+            <div className="grid gap-1.5">
+              <Label htmlFor="due-date">Due date</Label>
+              <Input
+                id="due-date"
+                type="date"
+                value={editDueDate}
+                disabled={busy !== null}
+                onChange={(e) => setEditDueDate(e.target.value)}
+              />
+              <p className="text-xs text-zinc-500">When payment is expected. Overdue flags use this date.</p>
+            </div>
+            {datesErr ? <p className="text-sm text-red-600 dark:text-red-400">{datesErr}</p> : null}
+          </div>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDatesOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" disabled={busy !== null} onClick={() => void submitBillingDates()}>
+              {busy === "dates" ? "Saving…" : "Save dates"}
             </Button>
           </DialogFooter>
         </DialogContent>

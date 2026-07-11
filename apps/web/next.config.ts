@@ -43,6 +43,8 @@ function portalCutoverRedirects() {
 }
 
 const nextConfig: NextConfig = {
+  // Local workspace packages ship TypeScript source; Next must transpile them.
+  transpilePackages: ["@shalean/utils", "@shalean/types", "@shalean/validation", "@shalean/api-client"],
   serverExternalPackages: ["googleapis", "google-auth-library"],
   poweredByHeader: false,
   typescript: {

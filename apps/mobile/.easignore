@@ -1,0 +1,19 @@
+# Local / generated — keep EAS upload lean. Monorepo packages/ must remain included via git root.
+.expo/
+dist/
+dist-web-smoke/
+web-build/
+node_modules/
+**/node_modules/
+.env
+.env.*
+!.env.example
+*.jks
+*.p8
+*.p12
+*.mobileprovision
+npm-debug.*
+**/.next/
+apps/web/.next/
+apps/web/node_modules/
+**/*.log

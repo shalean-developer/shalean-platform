@@ -251,6 +251,33 @@ export async function updateZohoInvoice(
 }
 
 /**
+ * Updates only invoice + due dates on a Zoho Books invoice.
+ * Prefer this for admin billing-date edits on already-sent invoices (line items unchanged).
+ */
+export async function updateZohoInvoiceDates(params: {
+  zohoInvoiceId: string;
+  invoiceDate: string;
+  dueDate: string;
+}): Promise<ServiceResult<{ zohoInvoiceId: string }>> {
+  try {
+    const id = params.zohoInvoiceId.trim();
+    if (!id) return { ok: false, error: "missing_invoice_id" };
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(params.invoiceDate) || !/^\d{4}-\d{2}-\d{2}$/.test(params.dueDate)) {
+      return { ok: false, error: "invalid_dates" };
+    }
+
+    const res = await zohoBooksClient.put<ZohoInvoiceUpdateResponse>(`/invoices/${encodeURIComponent(id)}`, {
+      date: params.invoiceDate,
+      due_date: params.dueDate,
+    });
+
+    return { ok: true, zohoInvoiceId: res.invoice?.invoice_id ?? id };
+  } catch (err) {
+    return { ok: false, error: String(err instanceof Error ? err.message : err) };
+  }
+}
+
+/**
  * Fetches the PDF rendering of a Zoho Books invoice.
  * Used by Shalean's in-app invoice proxy routes so customers and admins can
  * view/download the Zoho-generated invoice without leaving the app.

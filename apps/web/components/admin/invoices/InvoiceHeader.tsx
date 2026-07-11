@@ -7,6 +7,7 @@ import {
   formatCurrency,
   formatDate,
   formatDateTime,
+  formatDueDateLabel,
   formatInvoiceMonth,
 } from "@/lib/admin/invoices/invoiceAdminFormatters";
 
@@ -17,6 +18,10 @@ export type InvoiceHeaderProps = {
   customerLoginEmail?: string | null;
   customerPhone: string | null;
   month: string;
+  /** Document/billing date YYYY-MM-DD (optional override; else 1st of month). */
+  invoiceDate?: string | null;
+  /** Payment due date YYYY-MM-DD. */
+  dueDate?: string | null;
   status: string;
   isOverdue: boolean;
   isClosed: boolean;
@@ -88,6 +93,23 @@ export function InvoiceHeader(props: InvoiceHeaderProps) {
             <p className="pt-1 text-sm text-zinc-600 dark:text-zinc-300">
               Billing month: <span className="font-semibold text-zinc-900 dark:text-zinc-100">{formatInvoiceMonth(props.month)}</span>{" "}
               <span className="text-zinc-400">({props.month})</span>
+            </p>
+            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+              Invoice date:{" "}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                {formatDueDateLabel(
+                  props.invoiceDate && /^\d{4}-\d{2}-\d{2}$/.test(props.invoiceDate)
+                    ? props.invoiceDate
+                    : props.month && /^\d{4}-\d{2}$/.test(props.month)
+                      ? `${props.month}-01`
+                      : null,
+                )}
+              </span>
+              {" · "}
+              Due:{" "}
+              <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+                {formatDueDateLabel(props.dueDate)}
+              </span>
             </p>
           </div>
           <div className="flex w-full min-w-0 flex-col gap-3 lg:items-end">

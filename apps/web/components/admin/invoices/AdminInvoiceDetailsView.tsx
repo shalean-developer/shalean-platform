@@ -261,6 +261,11 @@ export function AdminInvoiceDetailsView({
   const status = String(invoice.status ?? "draft");
   const isOverdue = Boolean(invoice.is_overdue);
   const isClosed = Boolean(invoice.is_closed);
+  const dueDate = typeof invoice.due_date === "string" ? invoice.due_date.slice(0, 10) : null;
+  const invoiceDate =
+    typeof invoice.invoice_date === "string" && /^\d{4}-\d{2}-\d{2}/.test(invoice.invoice_date)
+      ? invoice.invoice_date.slice(0, 10)
+      : null;
   const paymentLink = typeof invoice.payment_link === "string" ? invoice.payment_link : null;
   const paystackReference = typeof invoice.paystack_reference === "string" ? invoice.paystack_reference : null;
   const sentAt = typeof invoice.sent_at === "string" ? invoice.sent_at : null;
@@ -338,6 +343,9 @@ export function AdminInvoiceDetailsView({
         amountPaidCents={paidCents}
         balanceCents={balanceCents}
         bookingCountToSettle={bookingCountToSettle}
+        dueDate={dueDate}
+        invoiceDate={invoiceDate}
+        billingMonth={month}
         refundedAt={refundedAt}
         refundReference={refundReference}
         invoiceBookings={invoiceBookingOptions}
@@ -364,6 +372,8 @@ export function AdminInvoiceDetailsView({
         customerLoginEmail={customerContact.loginEmail}
         customerPhone={customerContact.phone}
         month={month}
+        invoiceDate={invoiceDate}
+        dueDate={dueDate}
         status={status}
         isOverdue={isOverdue}
         isClosed={isClosed}

@@ -64,6 +64,10 @@
     "import:seo-traffic-blog-posts": "tsx scripts/import-seo-traffic-blog-posts.ts"
   },
   "dependencies": {
+    "@shalean/types": "file:../../packages/types",
+    "@shalean/utils": "file:../../packages/utils",
+    "@shalean/validation": "file:../../packages/validation",
+    "@shalean/api-client": "file:../../packages/api-client",
     "@floating-ui/react": "^0.27.19",
     "@hookform/resolvers": "^5.4.0",
     "@paystack/inline-js": "^2.22.8",
