@@ -1,5 +1,6 @@
 import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors } from "@/theme";
 
 /**
@@ -7,8 +8,13 @@ import { colors } from "@/theme";
  * Job detail stays on the parent stack.
  */
 export default function CleanerTabsLayout() {
+  const insets = useSafeAreaInsets();
+  const bottomInset = Math.max(insets.bottom, 8);
+
   return (
     <Tabs
+      // Keeps inactive tab scenes mounted — more reliable on Android release builds.
+      detachInactiveScreens={false}
       screenOptions={{
         headerStyle: { backgroundColor: colors.surface.default },
         headerTintColor: colors.ink.default,
@@ -19,14 +25,16 @@ export default function CleanerTabsLayout() {
         tabBarStyle: {
           backgroundColor: colors.surface.card,
           borderTopColor: colors.border.default,
-          height: 60,
-          paddingBottom: 8,
+          // Include system inset so edge-to-edge Android still receives tab presses.
+          height: 52 + bottomInset,
           paddingTop: 6,
+          paddingBottom: bottomInset,
         },
         tabBarLabelStyle: {
           fontSize: 11,
           fontWeight: "600",
         },
+        tabBarHideOnKeyboard: true,
         sceneStyle: { backgroundColor: colors.surface.default },
       }}
     >

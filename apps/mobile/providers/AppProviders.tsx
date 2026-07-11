@@ -1,5 +1,6 @@
 import { DefaultTheme, ThemeProvider as NavThemeProvider } from "@react-navigation/native";
 import { type ReactNode } from "react";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { AuthProvider } from "@/providers/AuthProvider";
@@ -25,20 +26,22 @@ type Props = { children: ReactNode };
 
 export function AppProviders({ children }: Props) {
   return (
-    <SafeAreaProvider>
-      <AppErrorBoundary>
-        <QueryProvider>
-          <AuthProvider>
-            <ConnectivityProvider>
-              <NotificationProvider>
-                <ToastProvider>
-                  <NavThemeProvider value={lightNav}>{children}</NavThemeProvider>
-                </ToastProvider>
-              </NotificationProvider>
-            </ConnectivityProvider>
-          </AuthProvider>
-        </QueryProvider>
-      </AppErrorBoundary>
-    </SafeAreaProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaProvider>
+        <AppErrorBoundary>
+          <QueryProvider>
+            <AuthProvider>
+              <ConnectivityProvider>
+                <NotificationProvider>
+                  <ToastProvider>
+                    <NavThemeProvider value={lightNav}>{children}</NavThemeProvider>
+                  </ToastProvider>
+                </NotificationProvider>
+              </ConnectivityProvider>
+            </AuthProvider>
+          </QueryProvider>
+        </AppErrorBoundary>
+      </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }
