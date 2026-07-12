@@ -6,6 +6,7 @@ import {
   getFacebookPagePublishConfig,
   publishFacebookPageFeed,
   publishFacebookPagePhoto,
+  publishFacebookPagePhotoFromUrl,
 } from "@/lib/promotions/facebookPublish";
 import { recordPromotionEvent } from "@/lib/promotions/server";
 
@@ -40,6 +41,7 @@ export async function POST(request: Request) {
   let body: {
     message?: string;
     imageDataUrl?: string | null;
+    imageUrl?: string | null;
     link?: string | null;
     promotionId?: string | null;
   };
@@ -60,7 +62,13 @@ export async function POST(request: Request) {
         imageDataUrl: body.imageDataUrl,
         link: body.link,
       })
-    : await publishFacebookPageFeed({ message, link: body.link });
+    : body.imageUrl?.trim()
+      ? await publishFacebookPagePhotoFromUrl({
+          message,
+          imageUrl: body.imageUrl.trim(),
+          link: body.link,
+        })
+      : await publishFacebookPageFeed({ message, link: body.link });
 
   if (!result.ok) {
     const status = result.status && result.status >= 400 && result.status < 600 ? result.status : 400;

@@ -193,6 +193,19 @@ export async function generateFullCampaign(
   const qrDataUrl = await generateQrDataUrl(bookingUrl);
   const payload = brandPayload(promo);
 
+  // Preserve custom uploads across regenerate (non-data-URL image_url).
+  const existingAssets = await listCampaignAssets(admin, promo.id);
+  const customImageByType = new Map<string, string>();
+  for (const row of existingAssets) {
+    if (
+      row.asset_type !== "qr_code" &&
+      row.image_url &&
+      !row.image_url.startsWith("data:")
+    ) {
+      customImageByType.set(row.asset_type, row.image_url);
+    }
+  }
+
   await admin.from("campaign_assets").delete().eq("promotion_id", promo.id).in(
     "asset_type",
     [...SOCIAL_IMAGE_SPECS.map((s) => s.assetType), "qr_code"],
@@ -205,8 +218,14 @@ export async function generateFullCampaign(
       label: spec.label,
       width: spec.width,
       height: spec.height,
-      image_url: null as string | null,
-      template_payload: { ...payload, format: spec.assetType },
+      image_url: customImageByType.get(spec.assetType) ?? (null as string | null),
+      template_payload: {
+        ...payload,
+        format: spec.assetType,
+        ...(customImageByType.has(spec.assetType)
+          ? { customUpload: true }
+          : {}),
+      },
       sort_order: i,
       updated_at: now,
     })),

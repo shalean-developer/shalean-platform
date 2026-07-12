@@ -8,6 +8,7 @@ import {
   Download,
   ExternalLink,
   Gift,
+  ImagePlus,
   Loader2,
   Megaphone,
   Pause,
@@ -15,6 +16,7 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Share2,
   Sparkles,
   Square,
@@ -22,7 +24,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { adminFetch, useAdminData } from "@/hooks/useAdminData";
+import { adminFetch, getAdminToken, useAdminData } from "@/hooks/useAdminData";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -33,6 +35,8 @@ import {
   captureNodeAsPngDataUrl,
   copyTextToClipboard,
   downloadDataUrl,
+  downloadImageUrl,
+  isCustomCampaignAssetImage,
 } from "@/lib/promotions/socialExport";
 import { SocialImageCard } from "@/components/admin/promotions/SocialImageCard";
 import type { SocialTrustItem } from "@/components/admin/promotions/social-design";
@@ -127,6 +131,7 @@ type ContentRow = {
 
 type AssetRow = {
   id: string;
+  promotion_id?: string;
   asset_type: string;
   label: string;
   width: number | null;
@@ -135,6 +140,53 @@ type AssetRow = {
   template_payload: Record<string, unknown>;
   promotion?: { name: string; slug: string; status: string };
 };
+
+async function uploadCampaignAssetImage(args: {
+  file: File;
+  assetId?: string | null;
+  promotionId?: string | null;
+  assetType?: string | null;
+}): Promise<{ ok: true; asset: AssetRow } | { ok: false; error: string }> {
+  const token = await getAdminToken();
+  if (!token) return { ok: false, error: "Not authenticated" };
+
+  const form = new FormData();
+  form.set("file", args.file);
+  if (args.assetId) form.set("assetId", args.assetId);
+  if (args.promotionId) form.set("promotionId", args.promotionId);
+  if (args.assetType) form.set("assetType", args.assetType);
+
+  try {
+    const res = await fetch("/api/admin/promotions/assets/image", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+      body: form,
+    });
+    const json = (await res.json().catch(() => ({}))) as {
+      error?: string;
+      asset?: AssetRow;
+    };
+    if (!res.ok || !json.asset) {
+      return { ok: false, error: json.error ?? `Upload failed (${res.status})` };
+    }
+    return { ok: true, asset: json.asset };
+  } catch (e) {
+    return { ok: false, error: e instanceof Error ? e.message : "Upload failed" };
+  }
+}
+
+async function clearCampaignAssetImage(
+  assetId: string,
+): Promise<{ ok: true; asset: AssetRow } | { ok: false; error: string }> {
+  const res = await adminFetch<{ asset: AssetRow }>(
+    `/api/admin/promotions/assets/image?assetId=${encodeURIComponent(assetId)}`,
+    { method: "DELETE" },
+  );
+  if (!res.ok || !res.data?.asset) {
+    return { ok: false, error: res.error ?? "Could not restore template." };
+  }
+  return { ok: true, asset: res.data.asset };
+}
 
 type TemplateRow = {
   id: string;
@@ -681,10 +733,36 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
           facebookConfigured={facebookConfigured}
           facebookHint={facebookHint}
           emptyLabel={`No ${meta.title.toLowerCase()} yet. Generate a campaign first.`}
+          onAssetUpdated={(asset) => {
+            setAllAssets((prev) => {
+              const idx = prev.findIndex((a) => a.id === asset.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = { ...prev[idx], ...asset };
+                return next;
+              }
+              return [asset, ...prev];
+            });
+          }}
         />
       ) : null}
 
-      {view === "assets" ? <AssetsList assets={allAssets} /> : null}
+      {view === "assets" ? (
+        <AssetsList
+          assets={allAssets}
+          onAssetUpdated={(asset) => {
+            setAllAssets((prev) => {
+              const idx = prev.findIndex((a) => a.id === asset.id);
+              if (idx >= 0) {
+                const next = [...prev];
+                next[idx] = { ...prev[idx], ...asset };
+                return next;
+              }
+              return [asset, ...prev];
+            });
+          }}
+        />
+      ) : null}
 
       {view === "templates" ? (
         <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
@@ -1386,12 +1464,14 @@ function ContentList({
   facebookConfigured,
   facebookHint,
   emptyLabel,
+  onAssetUpdated,
 }: {
   content: ContentRow[];
   assets: AssetRow[];
   facebookConfigured: boolean;
   facebookHint: string | null;
   emptyLabel: string;
+  onAssetUpdated?: (asset: AssetRow) => void;
 }) {
   if (!content.length) {
     return (
@@ -1425,13 +1505,20 @@ function ContentList({
             asset={
               assets.find(
                 (a) =>
-                  a.promotion?.slug === c.promotion?.slug &&
-                  a.asset_type === (CHANNEL_TO_ASSET[c.channel] ?? ""),
+                  a.asset_type === (CHANNEL_TO_ASSET[c.channel] ?? "") &&
+                  (c.promotion_id
+                    ? a.promotion_id === c.promotion_id
+                    : a.promotion?.slug === c.promotion?.slug),
               ) ??
-              assets.find((a) => a.asset_type === (CHANNEL_TO_ASSET[c.channel] ?? "")) ??
+              assets.find(
+                (a) =>
+                  a.asset_type === (CHANNEL_TO_ASSET[c.channel] ?? "") &&
+                  a.promotion?.slug === c.promotion?.slug,
+              ) ??
               null
             }
             facebookConfigured={facebookConfigured}
+            onAssetUpdated={onAssetUpdated}
           />
         ))}
       </div>
@@ -1443,18 +1530,30 @@ function SocialContentCard({
   content,
   asset,
   facebookConfigured,
+  onAssetUpdated,
 }: {
   content: ContentRow;
   asset: AssetRow | null;
   facebookConfigured: boolean;
+  onAssetUpdated?: (asset: AssetRow) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  const [localAsset, setLocalAsset] = useState<AssetRow | null>(asset);
   const text = content.html_body || content.body;
-  const payload = asset?.template_payload ?? {};
-  const width = asset?.width ?? 1200;
-  const height = asset?.height ?? 630;
+  const activeAsset = localAsset ?? asset;
+  const payload = activeAsset?.template_payload ?? {};
+  const width = activeAsset?.width ?? 1200;
+  const height = activeAsset?.height ?? 630;
   const showImage = Boolean(CHANNEL_TO_ASSET[content.channel]);
+  const customImage = isCustomCampaignAssetImage(activeAsset?.image_url);
+  const previewMax = 280;
+  const previewScale = Math.min(1, previewMax / width);
+
+  useEffect(() => {
+    setLocalAsset(asset);
+  }, [asset]);
 
   async function copy() {
     const ok = await copyTextToClipboard(text);
@@ -1462,17 +1561,24 @@ function SocialContentCard({
   }
 
   async function downloadPng() {
-    if (!cardRef.current) {
-      emitAdminToast("Image not ready.", "error");
-      return;
-    }
     setBusy("png");
     try {
-      const dataUrl = await captureNodeAsPngDataUrl(cardRef.current);
-      downloadDataUrl(
-        dataUrl,
-        `${content.promotion?.slug ?? "campaign"}-${content.channel}.png`,
-      );
+      if (customImage && activeAsset?.image_url) {
+        await downloadImageUrl(
+          activeAsset.image_url,
+          `${content.promotion?.slug ?? "campaign"}-${content.channel}.png`,
+        );
+      } else {
+        if (!cardRef.current) {
+          emitAdminToast("Image not ready.", "error");
+          return;
+        }
+        const dataUrl = await captureNodeAsPngDataUrl(cardRef.current);
+        downloadDataUrl(
+          dataUrl,
+          `${content.promotion?.slug ?? "campaign"}-${content.channel}.png`,
+        );
+      }
       emitAdminToast("PNG downloaded.", "success");
     } catch (e) {
       emitAdminToast(e instanceof Error ? e.message : "PNG export failed.", "error");
@@ -1485,7 +1591,10 @@ function SocialContentCard({
     setBusy("fb");
     try {
       let imageDataUrl: string | null = null;
-      if (cardRef.current) {
+      let imageUrl: string | null = null;
+      if (customImage && activeAsset?.image_url) {
+        imageUrl = activeAsset.image_url;
+      } else if (cardRef.current) {
         imageDataUrl = await captureNodeAsPngDataUrl(cardRef.current);
       }
       const link = canonicalizePublicSiteUrl(
@@ -1500,6 +1609,7 @@ function SocialContentCard({
         body: JSON.stringify({
           message: content.body,
           imageDataUrl,
+          imageUrl,
           link,
           promotionId: content.promotion_id ?? null,
         }),
@@ -1511,6 +1621,51 @@ function SocialContentCard({
       emitAdminToast(`Posted to Facebook (id ${res.data?.postId ?? "ok"}).`, "success");
     } catch (e) {
       emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function onFileSelected(file: File | undefined) {
+    if (!file) return;
+    const assetType = CHANNEL_TO_ASSET[content.channel];
+    if (!assetType && !activeAsset?.id) {
+      emitAdminToast("No image slot for this channel.", "error");
+      return;
+    }
+    setBusy("upload");
+    try {
+      const res = await uploadCampaignAssetImage({
+        file,
+        assetId: activeAsset?.id,
+        promotionId: content.promotion_id ?? activeAsset?.promotion_id,
+        assetType: assetType ?? activeAsset?.asset_type,
+      });
+      if (!res.ok) {
+        emitAdminToast(res.error, "error");
+        return;
+      }
+      setLocalAsset(res.asset);
+      onAssetUpdated?.(res.asset);
+      emitAdminToast("Custom image uploaded.", "success");
+    } finally {
+      setBusy(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function restoreTemplate() {
+    if (!activeAsset?.id) return;
+    setBusy("reset");
+    try {
+      const res = await clearCampaignAssetImage(activeAsset.id);
+      if (!res.ok) {
+        emitAdminToast(res.error, "error");
+        return;
+      }
+      setLocalAsset(res.asset);
+      onAssetUpdated?.(res.asset);
+      emitAdminToast("Restored generated template.", "success");
     } finally {
       setBusy(null);
     }
@@ -1531,39 +1686,97 @@ function SocialContentCard({
 
       {showImage ? (
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-3">
-          <SocialImageCard
-            ref={cardRef}
-            width={width}
-            height={height}
-            previewMaxWidth={280}
-            {...socialCardPropsFromPayload(payload, {
-              headline: content.title ?? content.promotion?.name ?? "Shalean",
-              subheadline: content.cta,
-              cta: content.cta ?? "Book Now",
-              format: CHANNEL_TO_ASSET[content.channel] ?? null,
-            })}
-          />
+          {customImage && activeAsset?.image_url ? (
+            <div>
+              <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-blue-700">
+                Custom upload
+              </p>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={activeAsset.image_url}
+                alt={`${CHANNEL_LABELS[content.channel] ?? content.channel} creative`}
+                className="rounded-lg object-cover"
+                style={{
+                  width: width * previewScale,
+                  height: height * previewScale,
+                  maxWidth: "100%",
+                }}
+              />
+            </div>
+          ) : (
+            <SocialImageCard
+              ref={cardRef}
+              width={width}
+              height={height}
+              previewMaxWidth={previewMax}
+              {...socialCardPropsFromPayload(payload, {
+                headline: content.title ?? content.promotion?.name ?? "Shalean",
+                subheadline: content.cta,
+                cta: content.cta ?? "Book Now",
+                format: CHANNEL_TO_ASSET[content.channel] ?? null,
+              })}
+            />
+          )}
         </div>
       ) : null}
+
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/png,image/jpeg,image/webp,image/gif"
+        className="hidden"
+        onChange={(e) => void onFileSelected(e.target.files?.[0])}
+      />
 
       <div className="mt-3 flex flex-wrap gap-2">
         <Button size="sm" variant="outline" onClick={() => void copy()}>
           <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy text
         </Button>
         {showImage ? (
-          <Button
-            size="sm"
-            variant="outline"
-            disabled={busy === "png"}
-            onClick={() => void downloadPng()}
-          >
-            {busy === "png" ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Download className="mr-1.5 h-3.5 w-3.5" />
-            )}
-            Download PNG
-          </Button>
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy === "png"}
+              onClick={() => void downloadPng()}
+            >
+              {busy === "png" ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Download PNG
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy === "upload" || (!content.promotion_id && !activeAsset?.id)}
+              onClick={() => fileInputRef.current?.click()}
+              title="Replace with an image from your computer"
+            >
+              {busy === "upload" ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Upload image
+            </Button>
+            {customImage ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy === "reset" || !activeAsset?.id}
+                onClick={() => void restoreTemplate()}
+              >
+                {busy === "reset" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Use template
+              </Button>
+            ) : null}
+          </>
         ) : null}
         {content.channel === "facebook" ? (
           <Button
@@ -1589,7 +1802,13 @@ function SocialContentCard({
   );
 }
 
-function AssetsList({ assets }: { assets: AssetRow[] }) {
+function AssetsList({
+  assets,
+  onAssetUpdated,
+}: {
+  assets: AssetRow[];
+  onAssetUpdated?: (asset: AssetRow) => void;
+}) {
   if (!assets.length) {
     return (
       <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-500">
@@ -1600,81 +1819,200 @@ function AssetsList({ assets }: { assets: AssetRow[] }) {
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
       {assets.map((a) => (
-        <AssetCard key={a.id} asset={a} />
+        <AssetCard key={a.id} asset={a} onAssetUpdated={onAssetUpdated} />
       ))}
     </div>
   );
 }
 
-function AssetCard({ asset }: { asset: AssetRow }) {
+function AssetCard({
+  asset,
+  onAssetUpdated,
+}: {
+  asset: AssetRow;
+  onAssetUpdated?: (asset: AssetRow) => void;
+}) {
   const cardRef = useRef<HTMLDivElement>(null);
-  const [busy, setBusy] = useState(false);
-  const payload = asset.template_payload ?? {};
-  const isQr = asset.asset_type === "qr_code" || asset.image_url?.startsWith("data:");
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const [localAsset, setLocalAsset] = useState(asset);
+  const active = localAsset;
+  const payload = active.template_payload ?? {};
+  const isQr = active.asset_type === "qr_code" || active.image_url?.startsWith("data:");
+  const customImage = !isQr && isCustomCampaignAssetImage(active.image_url);
+  const width = active.width ?? 1200;
+  const height = active.height ?? 630;
+  const previewMax = 260;
+  const previewScale = Math.min(1, previewMax / width);
+
+  useEffect(() => {
+    setLocalAsset(asset);
+  }, [asset]);
 
   async function download() {
-    if (isQr && asset.image_url) {
-      downloadDataUrl(asset.image_url, `${asset.promotion?.slug ?? "campaign"}-qr.png`);
+    if (isQr && active.image_url) {
+      downloadDataUrl(active.image_url, `${active.promotion?.slug ?? "campaign"}-qr.png`);
       emitAdminToast("QR downloaded.", "success");
       return;
     }
-    if (!cardRef.current) {
-      emitAdminToast("Image not ready.", "error");
-      return;
-    }
-    setBusy(true);
+    setBusy("png");
     try {
-      const dataUrl = await captureNodeAsPngDataUrl(cardRef.current);
-      downloadDataUrl(
-        dataUrl,
-        `${asset.promotion?.slug ?? "campaign"}-${asset.asset_type}.png`,
-      );
+      if (customImage && active.image_url) {
+        await downloadImageUrl(
+          active.image_url,
+          `${active.promotion?.slug ?? "campaign"}-${active.asset_type}.png`,
+        );
+      } else {
+        if (!cardRef.current) {
+          emitAdminToast("Image not ready.", "error");
+          return;
+        }
+        const dataUrl = await captureNodeAsPngDataUrl(cardRef.current);
+        downloadDataUrl(
+          dataUrl,
+          `${active.promotion?.slug ?? "campaign"}-${active.asset_type}.png`,
+        );
+      }
       emitAdminToast("PNG downloaded.", "success");
     } catch (e) {
       emitAdminToast(e instanceof Error ? e.message : "PNG export failed.", "error");
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  }
+
+  async function onFileSelected(file: File | undefined) {
+    if (!file || isQr) return;
+    setBusy("upload");
+    try {
+      const res = await uploadCampaignAssetImage({
+        file,
+        assetId: active.id,
+        promotionId: active.promotion_id,
+        assetType: active.asset_type,
+      });
+      if (!res.ok) {
+        emitAdminToast(res.error, "error");
+        return;
+      }
+      setLocalAsset({ ...active, ...res.asset, promotion: active.promotion });
+      onAssetUpdated?.({ ...active, ...res.asset, promotion: active.promotion });
+      emitAdminToast("Custom image uploaded.", "success");
+    } finally {
+      setBusy(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function restoreTemplate() {
+    if (!active.id || isQr) return;
+    setBusy("reset");
+    try {
+      const res = await clearCampaignAssetImage(active.id);
+      if (!res.ok) {
+        emitAdminToast(res.error, "error");
+        return;
+      }
+      setLocalAsset({ ...active, ...res.asset, promotion: active.promotion });
+      onAssetUpdated?.({ ...active, ...res.asset, promotion: active.promotion });
+      emitAdminToast("Restored generated template.", "success");
+    } finally {
+      setBusy(null);
     }
   }
 
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-4">
-      <p className="font-medium">{asset.label}</p>
+      <p className="font-medium">{active.label}</p>
       <p className="text-xs text-slate-500">
-        {asset.promotion?.name}
-        {asset.width && asset.height ? ` · ${asset.width}×${asset.height}` : ""}
+        {active.promotion?.name}
+        {active.width && active.height ? ` · ${active.width}×${active.height}` : ""}
+        {customImage ? " · Custom upload" : ""}
       </p>
-      {isQr && asset.image_url ? (
+      {isQr && active.image_url ? (
         // eslint-disable-next-line @next/next/no-img-element
-        <img src={asset.image_url} alt={asset.label} className="mt-3 h-28 w-28" />
+        <img src={active.image_url} alt={active.label} className="mt-3 h-28 w-28" />
       ) : (
         <div className="mt-3 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-2">
-          <SocialImageCard
-            ref={cardRef}
-            width={asset.width ?? 1200}
-            height={asset.height ?? 630}
-            previewMaxWidth={260}
-            {...socialCardPropsFromPayload(payload, {
-              headline: asset.promotion?.name ?? "Shalean",
-              format: asset.asset_type,
-            })}
-          />
+          {customImage && active.image_url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={active.image_url}
+              alt={active.label}
+              className="rounded-lg object-cover"
+              style={{
+                width: width * previewScale,
+                height: height * previewScale,
+                maxWidth: "100%",
+              }}
+            />
+          ) : (
+            <SocialImageCard
+              ref={cardRef}
+              width={width}
+              height={height}
+              previewMaxWidth={previewMax}
+              {...socialCardPropsFromPayload(payload, {
+                headline: active.promotion?.name ?? "Shalean",
+                format: active.asset_type,
+              })}
+            />
+          )}
         </div>
       )}
-      <Button
-        className="mt-3"
-        size="sm"
-        variant="outline"
-        disabled={busy}
-        onClick={() => void download()}
-      >
-        {busy ? (
-          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Download className="mr-1.5 h-3.5 w-3.5" />
-        )}
-        Download PNG
-      </Button>
+
+      {!isQr ? (
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/png,image/jpeg,image/webp,image/gif"
+          className="hidden"
+          onChange={(e) => void onFileSelected(e.target.files?.[0])}
+        />
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Button size="sm" variant="outline" disabled={busy === "png"} onClick={() => void download()}>
+          {busy === "png" ? (
+            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Download className="mr-1.5 h-3.5 w-3.5" />
+          )}
+          Download PNG
+        </Button>
+        {!isQr ? (
+          <>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={busy === "upload"}
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {busy === "upload" ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
+              )}
+              Upload
+            </Button>
+            {customImage ? (
+              <Button
+                size="sm"
+                variant="outline"
+                disabled={busy === "reset"}
+                onClick={() => void restoreTemplate()}
+              >
+                {busy === "reset" ? (
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                )}
+                Use template
+              </Button>
+            ) : null}
+          </>
+        ) : null}
+      </div>
     </div>
   );
 }

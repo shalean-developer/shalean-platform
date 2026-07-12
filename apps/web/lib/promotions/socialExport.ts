@@ -42,11 +42,34 @@ export async function captureNodeAsPngDataUrl(node: HTMLElement): Promise<string
   }
 }
 
-export function downloadDataUrl(dataUrl: string, filename: string) {
+export async function downloadDataUrl(dataUrl: string, filename: string) {
   const a = document.createElement("a");
   a.href = dataUrl;
   a.download = filename;
   a.click();
+}
+
+/** Download a remote image URL as a file (custom uploaded creatives). */
+export async function downloadImageUrl(url: string, filename: string): Promise<void> {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Could not download image (${res.status}).`);
+  const blob = await res.blob();
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const a = document.createElement("a");
+    a.href = objectUrl;
+    a.download = filename;
+    a.click();
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
+}
+
+/** True when the asset has a custom uploaded creative (not QR data URL / not template-only). */
+export function isCustomCampaignAssetImage(imageUrl: string | null | undefined): boolean {
+  if (!imageUrl) return false;
+  if (imageUrl.startsWith("data:image/")) return false;
+  return /^https?:\/\//i.test(imageUrl);
 }
 
 export async function copyTextToClipboard(text: string): Promise<boolean> {

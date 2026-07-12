@@ -289,6 +289,39 @@ export async function publishFacebookPagePhoto(args: {
   }
 }
 
+/** Fetch a public image URL and publish it as a Page photo post. */
+export async function publishFacebookPagePhotoFromUrl(args: {
+  message: string;
+  imageUrl: string;
+  link?: string | null;
+}): Promise<FacebookPublishResult> {
+  try {
+    const res = await fetch(args.imageUrl, { method: "GET", redirect: "follow" });
+    if (!res.ok) {
+      return { ok: false, error: `Could not download image (${res.status}).` };
+    }
+    const mime = (res.headers.get("content-type") || "image/jpeg").split(";")[0]!.trim().toLowerCase();
+    if (!/^image\/(png|jpeg|jpg|webp)$/.test(mime)) {
+      return { ok: false, error: "Image URL must be PNG, JPEG, or WebP." };
+    }
+    const buf = Buffer.from(await res.arrayBuffer());
+    if (buf.length < 100) return { ok: false, error: "Downloaded image is too small." };
+    if (buf.length > 8 * 1024 * 1024) return { ok: false, error: "Image must be under 8MB." };
+    const normalized = mime === "image/jpg" ? "image/jpeg" : mime;
+    const dataUrl = `data:${normalized};base64,${buf.toString("base64")}`;
+    return publishFacebookPagePhoto({
+      message: args.message,
+      imageDataUrl: dataUrl,
+      link: args.link,
+    });
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Failed to download image for Facebook.",
+    };
+  }
+}
+
 /** Text-only Page feed post (no image). */
 export async function publishFacebookPageFeed(args: {
   message: string;
