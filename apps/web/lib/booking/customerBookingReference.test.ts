@@ -4,6 +4,7 @@ import {
   formatCustomerBookingTotalPaid,
   isCustomerBookingReference,
   customerAccountBookingReference,
+  resolveCustomerTotalPaidZar,
 } from "@/lib/booking/customerBookingReference";
 
 describe("customerBookingReference", () => {
@@ -35,5 +36,21 @@ describe("customerBookingReference", () => {
         bookingReference: "bv2_1781694927362_585pib",
       }),
     ).toBe("00000000");
+  });
+
+  it("prefers Paystack amountCents over snapshot total_zar for Total paid", () => {
+    expect(
+      resolveCustomerTotalPaidZar({
+        amountCents: 123_000,
+        snapshotTotalZar: 1885,
+      }),
+    ).toBe(1230);
+    expect(
+      resolveCustomerTotalPaidZar({
+        amountCents: null,
+        snapshotTotalZar: 1602,
+      }),
+    ).toBe(1602);
+    expect(resolveCustomerTotalPaidZar({ amountCents: 0, snapshotTotalZar: null })).toBeNull();
   });
 });

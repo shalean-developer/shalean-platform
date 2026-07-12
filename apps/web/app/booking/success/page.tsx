@@ -17,6 +17,7 @@ import { clearStoredReferral } from "@/lib/referrals/client";
 import { BookingConfirmationHero } from "@/components/booking/BookingConfirmationHero";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { CUSTOMER_SUPPORT_WHATSAPP_E164 } from "@/lib/site/customerSupport";
+import { resolveCustomerTotalPaidZar } from "@/lib/booking/customerBookingReference";
 const VERIFY_MAX_ATTEMPTS = 3;
 const VERIFY_RETRY_DELAY_MS = 1500;
 
@@ -177,7 +178,10 @@ function SuccessContent() {
               reference: String(okData.reference ?? reference ?? "").trim(),
               bookingId: okData.bookingId ?? null,
               amountCents: okData.amountCents ?? null,
-              valueZar: completedSnapForAds?.total_zar ?? null,
+              valueZar:
+                typeof okData.amountCents === "number" && okData.amountCents > 0
+                  ? Math.round(okData.amountCents / 100)
+                  : (completedSnapForAds?.total_zar ?? null),
               currency: okData.currency ?? "ZAR",
               email: okData.customerEmail ?? completedSnapForAds?.customer?.email ?? null,
               phone: completedSnapForAds?.customer?.phone ?? null,
@@ -354,16 +358,8 @@ function SuccessContent() {
   }
 
   if (phase === "persist_pending" && statusData?.paymentStatus === "success") {
-    const snapP = isSnapshot(statusData.bookingSnapshot)
-      ? (statusData.bookingSnapshot as BookingSnapshotV1)
-      : null;
-    const totalZarP =
-      typeof snapP?.total_zar === "number"
-        ? snapP.total_zar
-        : typeof statusData.amountCents === "number" && statusData.amountCents > 0
-          ? Math.round(statusData.amountCents / 100)
-          : null;
-
+    // Do not show a money figure here — snapshot totals can differ from the
+    // Paystack charge (promos/credits). Amount is confirmed on the success card.
     return (
       <PageShell>
         <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
@@ -371,9 +367,6 @@ function SuccessContent() {
           <p className="mx-auto mt-3 max-w-sm text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
             Your payment went through. We&apos;re saving your booking now — you don&apos;t need to pay again.
           </p>
-          {totalZarP != null ? (
-            <p className="mt-4 text-lg font-bold tabular-nums text-primary">R{totalZarP.toLocaleString("en-ZA")}</p>
-          ) : null}
           <button
             type="button"
             onClick={() => {
@@ -413,12 +406,10 @@ function SuccessContent() {
     ? (statusData.bookingSnapshot as BookingSnapshotV1)
     : null;
   const persistedBookingId = statusData.bookingId?.trim() ?? "";
-  const totalZarFromSnap = typeof snap?.total_zar === "number" ? snap.total_zar : null;
-  const totalPaidZar =
-    totalZarFromSnap ??
-    (typeof statusData.amountCents === "number" && statusData.amountCents > 0
-      ? Math.round(statusData.amountCents / 100)
-      : null);
+  const totalPaidZar = resolveCustomerTotalPaidZar({
+    amountCents: statusData.amountCents,
+    snapshotTotalZar: typeof snap?.total_zar === "number" ? snap.total_zar : null,
+  });
 
   if (!persistedBookingId) {
     return (
