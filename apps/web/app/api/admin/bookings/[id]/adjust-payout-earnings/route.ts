@@ -59,7 +59,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     adjustment_note: adjustmentNote,
   };
 
-  let applyResult: { ok: true; payoutId: string | null; batchTotalCents: number | null } | null = null;
+  const applyState: {
+    payoutId: string | null;
+    batchTotalCents: number | null;
+  } = { payoutId: null, batchTotalCents: null };
 
   const gate = await withEarningsAdjustMakerChecker(admin, {
     actionType,
@@ -86,11 +89,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
             adminUserId: auth.userId,
           });
       if (!result.ok) return { ok: false as const, error: result.error, code: result.code };
-      applyResult = {
-        ok: true,
-        payoutId: result.payoutId,
-        batchTotalCents: result.batchTotalCents,
-      };
+      applyState.payoutId = result.payoutId;
+      applyState.batchTotalCents = result.batchTotalCents;
       return { ok: true as const };
     },
   });
@@ -118,8 +118,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   return NextResponse.json({
     ok: true,
-    payoutId: applyResult?.payoutId ?? null,
-    batchTotalCents: applyResult?.batchTotalCents ?? null,
+    payoutId: applyState.payoutId,
+    batchTotalCents: applyState.batchTotalCents,
     proposal_id: gate.proposalId ?? null,
   });
 }

@@ -92,7 +92,7 @@ export async function countOpsAssignableCleaners(
     return 0;
   }
 
-  const cleaners = ((r.data ?? []) as CleanerBase[]).filter((c) => {
+  const cleaners = ((r.data ?? []) as unknown as CleanerBase[]).filter((c) => {
     if (!cleanerAccountEligibleForOpsAssignment(c)) return false;
     if (!cleanerWorksOnScheduledWeekday(c.availability_weekdays, params.date)) return false;
     if (!cleanerPassesServiceCapabilityGate(c, capabilityGate)) return false;
