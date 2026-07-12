@@ -124,6 +124,7 @@ function brandPayload(promo: PromotionRow) {
     discountValue: promo.discount_value,
   });
   const landing = absoluteCampaignUrl(promo);
+  const isFirstBooking = promo.promotion_type === "first_booking";
   return {
     brand: "Shalean",
     campaignName: promo.name,
@@ -131,10 +132,22 @@ function brandPayload(promo: PromotionRow) {
     promoCode: promo.promo_code,
     headline: promo.display_config.headline ?? promo.name,
     subheadline: promo.display_config.subheadline ?? promo.description,
-    cta: promo.cta_label ?? promo.display_config.cta ?? "Book now",
+    cta: promo.cta_label ?? promo.display_config.cta ?? "Book Now",
     primary: promo.display_config.colours?.primary ?? "#0B1F4A",
     accent: promo.display_config.colours?.accent ?? "#2563EB",
     landing,
+    website: "shalean.co.za",
+    endsAt: promo.ends_at,
+    heroImageUrl: promo.hero_image_url ?? promo.banner_image_url ?? null,
+    logoUrl: promo.logo_url ?? null,
+    badgeLabel: isFirstBooking ? "New customers" : "Limited offer",
+    ratingLabel: "4.9 Rating",
+    benefits: ["Trusted Cleaners", "Fully Insured", "Easy Online Booking"],
+    trustItems: [
+      { icon: "★", label: "4.9 Rating" },
+      { icon: "✓", label: "Fully Insured" },
+      { icon: "✓", label: "Background Checked" },
+    ],
   };
 }
 

@@ -2,6 +2,26 @@
 
 import { toPng } from "html-to-image";
 
+async function waitForImages(node: HTMLElement): Promise<void> {
+  const images = Array.from(node.querySelectorAll("img"));
+  await Promise.all(
+    images.map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete && img.naturalWidth > 0) {
+            resolve();
+            return;
+          }
+          const done = () => resolve();
+          img.addEventListener("load", done, { once: true });
+          img.addEventListener("error", done, { once: true });
+          // Cache-bust soft timeout so export never hangs on a broken asset.
+          window.setTimeout(done, 4000);
+        }),
+    ),
+  );
+}
+
 /** Capture a DOM node (full-size social card) as a PNG data URL. */
 export async function captureNodeAsPngDataUrl(node: HTMLElement): Promise<string> {
   // Temporarily undo preview scale so export is full resolution
@@ -11,12 +31,12 @@ export async function captureNodeAsPngDataUrl(node: HTMLElement): Promise<string
   node.style.transformOrigin = "top left";
 
   try {
+    await waitForImages(node);
     return await toPng(node, {
       cacheBust: true,
       pixelRatio: 1,
       backgroundColor: "#0B1F4A",
-    });
-  } finally {
+    });  } finally {
     node.style.transform = prevTransform;
     node.style.transformOrigin = prevOrigin;
   }

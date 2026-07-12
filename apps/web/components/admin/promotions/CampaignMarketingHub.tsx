@@ -35,8 +35,58 @@ import {
   downloadDataUrl,
 } from "@/lib/promotions/socialExport";
 import { SocialImageCard } from "@/components/admin/promotions/SocialImageCard";
+import type { SocialTrustItem } from "@/components/admin/promotions/social-design";
 import { canonicalizePublicSiteUrl } from "@/lib/promotions/offerCopy";
 import type { PromotionRow, PromotionStatus, PromotionType } from "@/lib/promotions/types";
+
+function socialCardPropsFromPayload(
+  payload: Record<string, unknown>,
+  fallbacks: {
+    offer?: string;
+    headline?: string;
+    subheadline?: string | null;
+    cta?: string | null;
+    format?: string | null;
+  } = {},
+) {
+  const trustRaw = payload.trustItems;
+  const trustItems = Array.isArray(trustRaw)
+    ? (trustRaw as SocialTrustItem[]).filter(
+        (t) => t && typeof t === "object" && typeof t.label === "string",
+      )
+    : undefined;
+  const benefitsRaw = payload.benefits;
+  const benefits = Array.isArray(benefitsRaw)
+    ? benefitsRaw.filter((b): b is string => typeof b === "string")
+    : undefined;
+
+  return {
+    brand: payload.brand != null ? String(payload.brand) : "Shalean",
+    offer: String(payload.offer ?? fallbacks.offer ?? "Special offer"),
+    headline: String(payload.headline ?? fallbacks.headline ?? "Shalean"),
+    subheadline:
+      payload.subheadline != null
+        ? String(payload.subheadline)
+        : (fallbacks.subheadline ?? null),
+    promoCode: payload.promoCode != null ? String(payload.promoCode) : null,
+    cta: fallbacks.cta ?? (payload.cta != null ? String(payload.cta) : "Book Now"),
+    primary: payload.primary != null ? String(payload.primary) : "#0B1F4A",
+    accent: payload.accent != null ? String(payload.accent) : "#2563EB",
+    landing: payload.landing != null ? String(payload.landing) : null,
+    format:
+      payload.format != null
+        ? String(payload.format)
+        : (fallbacks.format ?? null),
+    heroImageUrl: payload.heroImageUrl != null ? String(payload.heroImageUrl) : null,
+    logoUrl: payload.logoUrl != null ? String(payload.logoUrl) : null,
+    endsAt: payload.endsAt != null ? String(payload.endsAt) : null,
+    campaignName: payload.campaignName != null ? String(payload.campaignName) : null,
+    badgeLabel: payload.badgeLabel != null ? String(payload.badgeLabel) : null,
+    ratingLabel: payload.ratingLabel != null ? String(payload.ratingLabel) : null,
+    benefits,
+    trustItems,
+  };
+}
 
 type AnalyticsPayload = {
   summaries: {
@@ -1485,16 +1535,13 @@ function SocialContentCard({
             ref={cardRef}
             width={width}
             height={height}
-            offer={String(payload.offer ?? "Special offer")}
-            headline={String(payload.headline ?? content.title ?? content.promotion?.name ?? "Shalean")}
-            subheadline={
-              payload.subheadline != null ? String(payload.subheadline) : content.cta
-            }
-            promoCode={payload.promoCode != null ? String(payload.promoCode) : null}
-            cta={content.cta ?? (payload.cta != null ? String(payload.cta) : "Book now")}
-            primary={payload.primary != null ? String(payload.primary) : "#0B1F4A"}
-            accent={payload.accent != null ? String(payload.accent) : "#2563EB"}
             previewMaxWidth={280}
+            {...socialCardPropsFromPayload(payload, {
+              headline: content.title ?? content.promotion?.name ?? "Shalean",
+              subheadline: content.cta,
+              cta: content.cta ?? "Book Now",
+              format: CHANNEL_TO_ASSET[content.channel] ?? null,
+            })}
           />
         </div>
       ) : null}
@@ -1606,14 +1653,11 @@ function AssetCard({ asset }: { asset: AssetRow }) {
             ref={cardRef}
             width={asset.width ?? 1200}
             height={asset.height ?? 630}
-            offer={String(payload.offer ?? "Special offer")}
-            headline={String(payload.headline ?? asset.promotion?.name ?? "Shalean")}
-            subheadline={payload.subheadline != null ? String(payload.subheadline) : null}
-            promoCode={payload.promoCode != null ? String(payload.promoCode) : null}
-            cta={payload.cta != null ? String(payload.cta) : "Book now"}
-            primary={payload.primary != null ? String(payload.primary) : "#0B1F4A"}
-            accent={payload.accent != null ? String(payload.accent) : "#2563EB"}
             previewMaxWidth={260}
+            {...socialCardPropsFromPayload(payload, {
+              headline: asset.promotion?.name ?? "Shalean",
+              format: asset.asset_type,
+            })}
           />
         </div>
       )}
