@@ -360,7 +360,9 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
   const nowIso = new Date().toISOString();
 
   if (rosterLocked && force) {
-    const safe = await assertBookingCleanerEarningsResetSafe(admin, bookingId);
+    const safe = await assertBookingCleanerEarningsResetSafe(admin, bookingId, {
+      allowEligiblePayoutStatus: true,
+    });
     if (!safe.ok) {
       if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
       return { ok: false, httpStatus: safe.status, error: safe.error, code: safe.code };
@@ -369,6 +371,15 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     if (!rst.ok) {
       if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
       return { ok: false, httpStatus: 500, error: rst.error, code: "earnings_reset_failed" };
+    }
+    // Eligible bookings must leave the payout pipeline so roster sync can re-finalize.
+    const { error: thawErr } = await admin
+      .from("bookings")
+      .update({ payout_status: "pending", payout_frozen_cents: null })
+      .eq("id", bookingId);
+    if (thawErr) {
+      if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+      return { ok: false, httpStatus: 500, error: thawErr.message, code: "payout_status_thaw_failed" };
     }
     rosterLocked = false;
     forceReopenedEarnings = true;

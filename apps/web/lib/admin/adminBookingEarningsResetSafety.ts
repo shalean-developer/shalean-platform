@@ -6,6 +6,15 @@ export type AdminBookingEarningsResetSafetyResult =
   | { ok: true }
   | { ok: false; status: number; error: string; code: string };
 
+export type AssertBookingCleanerEarningsResetSafeOptions = {
+  /**
+   * Admin force-assign / reopen: allow bookings already marked eligible (or paid status
+   * without `payout_paid_at`). Still blocks when `payout_paid_at` is set, weekly batch is
+   * locked, or non-pending `cleaner_earnings` rows exist.
+   */
+  allowEligiblePayoutStatus?: boolean;
+};
+
 /**
  * Guards {@link resetBookingCleanerLineEarnings} + re-persist: no locked weekly payout,
  * booking not already in invoice payout pipeline, and no non-pending `cleaner_earnings` rows.
@@ -13,6 +22,7 @@ export type AdminBookingEarningsResetSafetyResult =
 export async function assertBookingCleanerEarningsResetSafe(
   admin: SupabaseClient,
   bookingId: string,
+  opts?: AssertBookingCleanerEarningsResetSafeOptions,
 ): Promise<AdminBookingEarningsResetSafetyResult> {
   const bid = bookingId.trim();
   if (!/^[0-9a-f-]{36}$/i.test(bid)) {
@@ -40,7 +50,10 @@ export async function assertBookingCleanerEarningsResetSafe(
       code: "booking_payout_paid_at_set",
     };
   }
-  if (payoutStatus === "eligible" || payoutStatus === "paid") {
+  if (
+    !opts?.allowEligiblePayoutStatus &&
+    (payoutStatus === "eligible" || payoutStatus === "paid")
+  ) {
     return {
       ok: false,
       status: 409,

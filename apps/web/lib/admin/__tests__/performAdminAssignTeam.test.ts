@@ -486,7 +486,9 @@ describe("performAdminAssignTeam", () => {
       oldTeamId: null,
       forceReopenedEarnings: true,
     });
-    expect(assertBookingCleanerEarningsResetSafe).toHaveBeenCalledWith(admin, bookingId);
+    expect(assertBookingCleanerEarningsResetSafe).toHaveBeenCalledWith(admin, bookingId, {
+      allowEligiblePayoutStatus: true,
+    });
     expect(resetBookingCleanerLineEarnings).toHaveBeenCalledWith(admin, bookingId);
     expect(rpc).toHaveBeenCalledWith(
       "assign_team_and_sync_roster",
