@@ -16,9 +16,7 @@ major_version = 15
 enabled = true
 port = 54323
 
-[functions]
-# Verify JWT only for user-facing functions; cron workers use CRON_SECRET.
-verify_jwt = false
-
+# Per-function only — top-level [functions] verify_jwt = bool breaks Preview parse
+# ("functions[verify_jwt] expected a map or struct, got bool").
 [functions.whatsapp-worker]
 verify_jwt = false
