@@ -56,6 +56,29 @@ type SupabaseAdmin = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+/**
+ * Promo / referral / credit can cover the full total. Never leave a R0 booking
+ * in `pending_payment` or send the customer to Paystack with amount 0.
+ */
+async function settleFullyCoveredBookingV2(
+  supabase: SupabaseAdmin,
+  bookingId: string,
+  payAmountZar: number,
+): Promise<boolean> {
+  if (payAmountZar > 0) return false;
+  const now = new Date().toISOString();
+  await supabase
+    .from("bookings")
+    .update({
+      status: "pending",
+      payment_status: "success",
+      payment_completed_at: now,
+      billing_type: "prepaid",
+    })
+    .eq("id", bookingId);
+  return true;
+}
+
 async function resolveConfirmLocationContext(
   supabase: SupabaseAdmin,
   data: {
@@ -456,8 +479,14 @@ export async function POST(request: Request) {
     clientIp: resolveReferralClientIp(request),
     userAgent: request.headers.get("user-agent"),
   });
-  const referralValidation = referralCodeInput
-    ? await validateReferralForCheckout({
+  // Soft-fail like promo eval: never let referral validation abort confirm.
+  let referralValidation: Awaited<ReturnType<typeof validateReferralForCheckout>> = {
+    valid: false,
+    reason: "code_not_found",
+  };
+  if (referralCodeInput) {
+    try {
+      referralValidation = await validateReferralForCheckout({
         admin: supabase,
         code: referralCodeInput,
         userId,
@@ -465,8 +494,11 @@ export async function POST(request: Request) {
         bookingTotalZar: preDiscountTotalZar,
         serviceSlug: data.serviceSlug,
         checkoutFingerprint: referralCheckoutFingerprint,
-      })
-    : ({ valid: false as const } satisfies { valid: false });
+      });
+    } catch {
+      referralValidation = { valid: false, reason: "code_not_found" };
+    }
+  }
   const referralDiscountZar = referralValidation.valid ? referralValidation.discountZar : 0;
   const referralCheckoutSnapshot = referralValidation.valid
     ? buildReferralCheckoutSnapshot(referralValidation, Date.now(), referralCheckoutFingerprint)
@@ -682,6 +714,12 @@ export async function POST(request: Request) {
       }
     }
 
+    const requiresPayment = !(await settleFullyCoveredBookingV2(
+      supabase,
+      existingBooking.id,
+      payAmountZar,
+    ));
+
     return NextResponse.json({
       success: true,
       bookingId: existingBooking.id,
@@ -691,6 +729,7 @@ export async function POST(request: Request) {
       referralAppliedZar,
       promotionAppliedZar,
       promotionsApplied: promotionApplied,
+      requiresPayment,
     });
   }
 
@@ -873,6 +912,8 @@ export async function POST(request: Request) {
     }
   }
 
+  const requiresPayment = !(await settleFullyCoveredBookingV2(supabase, inserted.id, payAmountZar));
+
   return NextResponse.json({
     success: true,
     bookingId: inserted.id,
@@ -882,5 +923,6 @@ export async function POST(request: Request) {
     referralAppliedZar,
     promotionAppliedZar,
     promotionsApplied: promotionApplied,
+    requiresPayment,
   });
 }

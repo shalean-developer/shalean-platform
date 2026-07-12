@@ -451,6 +451,59 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     context: { reference },
   });
 
+  // Fully covered checkouts (promo/referral/credit → R0) settle on confirm without a
+  // Paystack charge. Short-circuit before calling Paystack so success pages stay green.
+  const adminPrePaystack = getSupabaseAdmin();
+  if (adminPrePaystack) {
+    const settled = await findBookingIdStatusForPaystackReference(adminPrePaystack, reference);
+    if (settled) {
+      const { data: payRow } = await adminPrePaystack
+        .from("bookings")
+        .select("payment_status, amount_paid_cents")
+        .eq("id", settled.bookingId)
+        .maybeSingle();
+      const paymentStatus = String(
+        (payRow as { payment_status?: string | null } | null)?.payment_status ?? "",
+      )
+        .trim()
+        .toLowerCase();
+      if (paymentStatus === "success" || paymentStatus === "paid") {
+        const amountCents = Number(
+          (payRow as { amount_paid_cents?: number | null } | null)?.amount_paid_cents ?? 0,
+        );
+        const bookingReference = await loadBookingReferenceForId(
+          adminPrePaystack,
+          settled.bookingId,
+        );
+        return NextResponse.json({
+          success: true,
+          ok: true,
+          paymentStatus: "success",
+          reference,
+          amountCents: Number.isFinite(amountCents) ? amountCents : 0,
+          currency: "ZAR",
+          customerEmail: "",
+          customerName: null,
+          userId: null,
+          bookingSnapshot: null,
+          bookingInDatabase: true,
+          bookingId: settled.bookingId,
+          bookingReference,
+          state: "already_processed",
+          alreadyExists: true,
+          skipped: true,
+          upsertError: null,
+          assignmentType: null,
+          fallbackReason: null,
+          showCleanerSubstitutionNotice: false,
+          attemptedCleanerId: null,
+          assignedCleanerId: null,
+          selectedCleanerId: null,
+        } satisfies PaystackVerifyPostResponse);
+      }
+    }
+  }
+
   const json = await fetchPaystackVerify(reference, secret);
 
   if (!json.status || !json.data) {

@@ -225,7 +225,11 @@ export const bookingV2ConfirmSchema = z.object({
         .optional(),
     })
     .passthrough(),
-  applyCleaningCreditZar: z.number().min(0).optional(),
+  // Clients may send JSON null; treat null like omitted (same footgun as promo/referral codes).
+  applyCleaningCreditZar: z.preprocess(
+    (v) => (v == null || v === "" ? undefined : v),
+    z.number().min(0).optional(),
+  ),
   // Clients may send JSON null when no code is stored; treat null like omitted.
   referralCode: z.preprocess(
     (v) => (v == null || v === "" ? undefined : v),

@@ -31,6 +31,17 @@ describe("bookingV2ConfirmSchema null optional codes", () => {
     }
   });
 
+  it("accepts applyCleaningCreditZar as JSON null", () => {
+    const parsed = bookingV2ConfirmSchema.safeParse({
+      ...base,
+      applyCleaningCreditZar: null,
+    });
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.applyCleaningCreditZar).toBeUndefined();
+    }
+  });
+
   it("keeps a non-empty referral code", () => {
     const parsed = bookingV2ConfirmSchema.safeParse({
       ...base,

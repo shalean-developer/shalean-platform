@@ -24,7 +24,7 @@ import {
 import { useStoredReferralCheckoutDiscount } from "@/hooks/useStoredReferralCheckoutDiscount";
 import { getStoredReferral } from "@/lib/referrals/client";
 
-// ─── Auth Form ─────────────────────────────────────────────────────────────────
+// ??? Auth Form ?????????????????????????????????????????????????????????????????
 
 type AuthMode = "sign_in" | "sign_up";
 
@@ -67,7 +67,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
           {mode === "sign_in" ? "Sign in to confirm your booking" : "Create an account"}
         </h3>
         <p className="mt-1 text-sm text-slate-500">
-          Your booking details are saved — signing in will not clear them.
+          Your booking details are saved ? signing in will not clear them.
         </p>
       </div>
 
@@ -133,7 +133,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             <PasswordInput
               id="si-password"
               autoComplete="current-password"
-              placeholder="••••••••"
+              placeholder="????????"
               {...signInForm.register("password")}
               className="rounded-xl border-slate-200 py-2.5 text-sm shadow-sm focus-visible:outline-blue-500"
             />
@@ -238,7 +238,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
   );
 }
 
-// ─── Payment section ────────────────────────────────────────────────────────────
+// ??? Payment section ????????????????????????????????????????????????????????????
 
 function PaymentSection({ user }: { user: User }) {
   const { serviceSlug, clearBooking } = useBookingV2();
@@ -307,7 +307,7 @@ function PaymentSection({ user }: { user: User }) {
         rejected?: { reason: string }[];
       };
       const autoOnly = (j.applied ?? []).filter((a) => a.source !== "code" || !promoCode.trim());
-      const total = Math.round(Number(j.totalDiscountZar ?? 0));
+      const total = autoOnly.reduce((sum, a) => sum + Math.round(Number(a.discountZar ?? 0)), 0);
       if (total > 0 && autoOnly.length) {
         setPromoDiscountZar(total);
         setPromoLabel(autoOnly.map((a) => a.name).join(", "));
@@ -400,6 +400,7 @@ function PaymentSection({ user }: { user: User }) {
         paystackReference?: string;
         payAmountZar?: number;
         creditAppliedZar?: number;
+        requiresPayment?: boolean;
         error?: string;
       };
 
@@ -417,6 +418,20 @@ function PaymentSection({ user }: { user: User }) {
 
       const { paystackReference, bookingId } = confirmJson;
       const chargeAmount = confirmJson.payAmountZar ?? payTotal;
+      const requiresPayment = confirmJson.requiresPayment !== false && chargeAmount > 0;
+
+      if (!requiresPayment) {
+        setConfirming(false);
+        try {
+          clearBooking();
+        } catch {
+          // non-fatal
+        }
+        const ref = paystackReference ?? bookingId ?? "";
+        window.location.assign(`/account/success?reference=${encodeURIComponent(ref)}`);
+        return;
+      }
+
       trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
         service: serviceSlug,
         service_type: serviceSlug,
@@ -454,13 +469,13 @@ function PaymentSection({ user }: { user: User }) {
         },
         onSuccess: () => {
           const ref = paystackReference ?? bookingId ?? "";
-          // Clear busy state first so the UI never stays stuck on "Processing…"
+          // Clear busy state first so the UI never stays stuck on "Processing?"
           // if navigation is slow or the popup callback is flaky.
           setConfirming(false);
           try {
             clearBooking();
           } catch {
-            // non-fatal — success page does not need local draft state
+            // non-fatal ? success page does not need local draft state
           }
           // Hard navigation is more reliable from Paystack iframe callbacks than
           // Next soft routing (which can be interrupted when form state resets).
@@ -469,7 +484,7 @@ function PaymentSection({ user }: { user: User }) {
           );
         },
         onCancel: () => {
-          setError("Payment cancelled. Your booking is saved — you can retry payment.");
+          setError("Payment cancelled. Your booking is saved ? you can retry payment.");
           trackBookingFunnelEvent("payment", BOOKING_FUNNEL_ROW.EXIT, {
             flow: "booking_v2",
             reason: "paystack_cancelled",
@@ -541,7 +556,7 @@ function PaymentSection({ user }: { user: User }) {
               disabled={promoChecking || !promoCode.trim()}
               className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {promoChecking ? "…" : "Apply"}
+              {promoChecking ? "?" : "Apply"}
             </button>
           </div>
           {promoError ? (
@@ -559,7 +574,7 @@ function PaymentSection({ user }: { user: User }) {
             <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
               <p className="font-semibold">Referral discount applied</p>
               <p className="mt-1 text-emerald-800">
-                R {referralDiscount.discountZar.toLocaleString("en-ZA")} off your first booking — no code needed.
+                R {referralDiscount.discountZar.toLocaleString("en-ZA")} off your first booking ? no code needed.
               </p>
             </div>
           ) : null}
@@ -626,7 +641,7 @@ function PaymentSection({ user }: { user: User }) {
         {confirming ? (
           <>
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-            Processing…
+            Processing?
           </>
         ) : (
           <>
@@ -641,7 +656,7 @@ function PaymentSection({ user }: { user: User }) {
         {[
           { Icon: ShieldCheck, label: "Vetted and background-checked cleaners" },
           { Icon: CreditCard, label: "Secure payment powered by Paystack" },
-          { Icon: CheckCircle2, label: "100% satisfaction guarantee — we'll make it right" },
+          { Icon: CheckCircle2, label: "100% satisfaction guarantee ? we'll make it right" },
         ].map(({ Icon, label }) => (
           <div key={label} className="flex items-center gap-2 text-xs text-slate-500">
             <Icon className="h-3.5 w-3.5 shrink-0 text-green-500" aria-hidden />
@@ -660,7 +675,7 @@ function PaymentSection({ user }: { user: User }) {
   );
 }
 
-// ─── Step 4 ─────────────────────────────────────────────────────────────────────
+// ??? Step 4 ?????????????????????????????????????????????????????????????????????
 
 export function Step4Payment() {
   const [user, setUser] = useState<User | null>(null);
