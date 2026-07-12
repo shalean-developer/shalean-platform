@@ -115,6 +115,7 @@ describe("POST /api/admin/bookings/[id]/assign-team", () => {
       teamId,
       adminUserId: "00000000-0000-4000-8000-000000000099",
       adminEmail: "ops@example.com",
+      force: false,
     });
     const json = (await res.json()) as { ok: boolean; teamId: string; oldTeamId: string | null };
     expect(json).toEqual({
@@ -124,6 +125,44 @@ describe("POST /api/admin/bookings/[id]/assign-team", () => {
     });
   });
 
+  it("passes force:true through to adminAssignTeamToBooking", async () => {
+    authState.userEmail = "ops@example.com";
+    const bookingId = "00000000-0000-4000-8000-000000000002";
+    const teamId = "00000000-0000-4000-8000-0000000000aa";
+    getSupabaseAdminMock.mockReturnValue({} as never);
+    adminAssignTeamToBookingMock.mockResolvedValue({
+      ok: true,
+      bookingId,
+      data: { ok: true, teamId, oldTeamId: null, forceReopenedEarnings: true },
+      event: {
+        type: "booking.assigned",
+        bookingId,
+        actor: "admin",
+        occurredAt: "2026-01-01T00:00:00.000Z",
+        idempotencyKey: "k",
+      },
+    });
+
+    const res = await POST(
+      new Request("http://localhost/test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer fake-jwt",
+        },
+        body: JSON.stringify({ teamId, force: true }),
+      }),
+      { params: Promise.resolve({ id: bookingId }) },
+    );
+
+    expect(res.status).toBe(200);
+    expect(adminAssignTeamToBookingMock).toHaveBeenCalledWith(
+      expect.objectContaining({ bookingId, teamId, force: true }),
+    );
+    const json = (await res.json()) as { forceReopenedEarnings?: boolean };
+    expect(json.forceReopenedEarnings).toBe(true);
+  });
+
   it("maps bookingOperations failure to same JSON shape and status as before (performAdminAssignTeam errors)", async () => {
     authState.userEmail = "ops@example.com";
     getSupabaseAdminMock.mockReturnValue({} as never);
@@ -131,9 +170,41 @@ describe("POST /api/admin/bookings/[id]/assign-team", () => {
       ok: false,
       bookingId: "00000000-0000-4000-8000-000000000002",
       code: "admin_assign_team_http_409",
-      message: "Roster locked.",
+      message: BOOKING_ROSTER_LOCKED_HINT,
       httpStatus: 409,
-      cause: { ok: false, httpStatus: 409, error: "Roster locked." },
+      cause: { ok: false, httpStatus: 409, error: BOOKING_ROSTER_LOCKED_HINT, code: "roster_finalized" },
+    });
+
+    const res = await POST(
+      new Request("http://localhost/test", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: "Bearer fake-jwt",
+        },
+        body: JSON.stringify({ teamId: "00000000-0000-4000-8000-0000000000aa" }),
+      }),
+      { params: Promise.resolve({ id: "00000000-0000-4000-8000-000000000002" }) },
+    );
+
+    expect(res.status).toBe(409);
+    const json = (await res.json()) as { error: string; hint?: string; force_hint?: string; code?: string };
+    expect(json.error).toBe(BOOKING_ROSTER_LOCKED_HINT);
+    expect(json.hint).toBe(BOOKING_ROSTER_LOCKED_HINT);
+    expect(json.code).toBe("roster_finalized");
+    expect(json.force_hint).toMatch(/Force assign/i);
+  });
+
+  it("does not attach roster-locked hint for capacity 409s", async () => {
+    authState.userEmail = "ops@example.com";
+    getSupabaseAdminMock.mockReturnValue({} as never);
+    adminAssignTeamToBookingMock.mockResolvedValue({
+      ok: false,
+      bookingId: "00000000-0000-4000-8000-000000000002",
+      code: "admin_assign_team_http_409",
+      message: "Team is at capacity for this booking date.",
+      httpStatus: 409,
+      cause: { ok: false, httpStatus: 409, error: "Team is at capacity for this booking date." },
     });
 
     const res = await POST(
@@ -150,8 +221,8 @@ describe("POST /api/admin/bookings/[id]/assign-team", () => {
 
     expect(res.status).toBe(409);
     const json = (await res.json()) as { error: string; hint?: string };
-    expect(json.error).toBe("Roster locked.");
-    expect(json.hint).toBe(BOOKING_ROSTER_LOCKED_HINT);
+    expect(json.error).toBe("Team is at capacity for this booking date.");
+    expect(json.hint).toBeUndefined();
   });
 });
 

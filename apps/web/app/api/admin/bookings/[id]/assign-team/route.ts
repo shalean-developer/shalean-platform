@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
+import {
+  BOOKING_ROSTER_LOCKED_FORCE_HINT,
+  BOOKING_ROSTER_LOCKED_HINT,
+  ROSTER_FINALIZED_CODE,
+} from "@/lib/admin/bookingRosterLockedMessage";
 import { listTeamAssignCandidatesForBooking } from "@/lib/admin/performAdminAssignTeam";
 import { adminAssignTeamToBooking } from "@/lib/booking/bookingOperations";
 import { isAdmin } from "@/lib/auth/admin";
@@ -32,6 +36,10 @@ async function requireAdmin(request: Request): Promise<
   return { ok: true, userId: user.id, email: user.email };
 }
 
+function earningsFinalizedAt(raw: unknown): boolean {
+  return raw != null && String(raw).trim() !== "";
+}
+
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingId } = await ctx.params;
   if (!bookingId) return NextResponse.json({ error: "Missing booking id." }, { status: 400 });
@@ -44,7 +52,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const { data: booking, error: bErr } = await admin
     .from("bookings")
-    .select("id, date, service, service_slug, booking_snapshot, is_team_job")
+    .select("id, date, service, service_slug, booking_snapshot, is_team_job, cleaner_line_earnings_finalized_at")
     .eq("id", bookingId)
     .maybeSingle();
   if (bErr) return NextResponse.json({ error: bErr.message }, { status: 500 });
@@ -59,7 +67,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       },
     )
   ) {
-    return NextResponse.json({ supports_team_assignment: false, teams: [] });
+    return NextResponse.json({ supports_team_assignment: false, teams: [], earnings_finalized: false });
   }
 
   const { teams, error, qualified_for_label } = await listTeamAssignCandidatesForBooking(admin, {
@@ -72,10 +80,15 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   });
   if (error) return NextResponse.json({ error }, { status: 400 });
 
+  const earningsFinalized = earningsFinalizedAt(
+    (booking as { cleaner_line_earnings_finalized_at?: string | null }).cleaner_line_earnings_finalized_at,
+  );
+
   return NextResponse.json({
     supports_team_assignment: true,
     teams,
     qualified_for_label,
+    earnings_finalized: earningsFinalized,
   });
 }
 
@@ -86,14 +99,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const auth = await requireAdmin(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  let body: { teamId?: string };
+  let body: { teamId?: string; force?: boolean };
   try {
-    body = (await request.json()) as { teamId?: string };
+    body = (await request.json()) as { teamId?: string; force?: boolean };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
   const teamId = typeof body.teamId === "string" ? body.teamId.trim() : "";
   if (!teamId) return NextResponse.json({ error: "teamId required." }, { status: 400 });
+  const force = body.force === true;
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -104,13 +118,30 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     teamId,
     adminUserId: auth.userId,
     adminEmail: auth.email,
+    force,
   });
 
   if (!op.ok) {
     const httpStatus = op.httpStatus ?? 500;
-    const locked = httpStatus === 409;
+    const cause = op.cause as { code?: string; error?: string } | undefined;
+    const code = typeof cause?.code === "string" ? cause.code : undefined;
+    const rosterFinalized =
+      code === ROSTER_FINALIZED_CODE ||
+      (httpStatus === 409 &&
+        typeof op.message === "string" &&
+        /finalized|roster locked|cleaner line earnings/i.test(op.message));
     return NextResponse.json(
-      { error: op.message, ...(locked ? { hint: BOOKING_ROSTER_LOCKED_HINT } : {}) },
+      {
+        error: op.message,
+        ...(rosterFinalized
+          ? {
+              hint: BOOKING_ROSTER_LOCKED_HINT,
+              force_hint: BOOKING_ROSTER_LOCKED_FORCE_HINT,
+              code: ROSTER_FINALIZED_CODE,
+            }
+          : {}),
+        ...(code && !rosterFinalized ? { code } : {}),
+      },
       { status: httpStatus },
     );
   }
@@ -124,5 +155,6 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     ok: true,
     teamId: assigned.teamId,
     oldTeamId: assigned.oldTeamId,
+    ...(assigned.forceReopenedEarnings ? { forceReopenedEarnings: true } : {}),
   });
 }

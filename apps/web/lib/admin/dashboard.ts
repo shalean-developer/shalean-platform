@@ -426,6 +426,7 @@ export async function fetchTeamAssignCandidates(bookingId: string): Promise<{
   teams: AdminTeamAssignCandidate[];
   qualified_for_label: string;
   supports_team_assignment: boolean;
+  earnings_finalized: boolean;
 }> {
   const token = await getAdminToken();
   const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-team`, {
@@ -435,6 +436,7 @@ export async function fetchTeamAssignCandidates(bookingId: string): Promise<{
     teams?: AdminTeamAssignCandidate[];
     qualified_for_label?: string;
     supports_team_assignment?: boolean;
+    earnings_finalized?: boolean;
     error?: string;
   };
   if (res.status === 401) throw new Error("Please login.");
@@ -444,20 +446,30 @@ export async function fetchTeamAssignCandidates(bookingId: string): Promise<{
     teams: json.teams ?? [],
     qualified_for_label: json.qualified_for_label ?? "",
     supports_team_assignment: json.supports_team_assignment === true,
+    earnings_finalized: json.earnings_finalized === true,
   };
 }
 
-export async function assignTeamToBookingAdmin(bookingId: string, teamId: string) {
+export async function assignTeamToBookingAdmin(bookingId: string, teamId: string, opts?: { force?: boolean }) {
   const token = await getAdminToken();
   const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}/assign-team`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-    body: JSON.stringify({ teamId }),
+    body: JSON.stringify({ teamId, ...(opts?.force === true ? { force: true } : {}) }),
   });
-  const json = (await res.json()) as { error?: string; hint?: string };
+  const json = (await res.json()) as {
+    error?: string;
+    hint?: string;
+    force_hint?: string;
+    code?: string;
+  };
   if (!res.ok) {
-    const msg = res.status === 409 && json.hint ? json.hint : json.error ?? "Failed to assign team.";
-    throw new Error(msg);
+    if (json.code === "roster_finalized" || (res.status === 409 && json.hint)) {
+      const parts = [json.hint ?? json.error ?? "Failed to assign team."];
+      if (json.force_hint) parts.push(json.force_hint);
+      throw new Error(parts.join(" "));
+    }
+    throw new Error(json.error ?? "Failed to assign team.");
   }
 }
 

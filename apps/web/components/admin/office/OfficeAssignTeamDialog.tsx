@@ -39,6 +39,8 @@ export function OfficeAssignTeamDialog({
   const [qualifiedLabel, setQualifiedLabel] = useState("");
   const [teams, setTeams] = useState<AdminTeamAssignCandidate[]>([]);
   const [pickId, setPickId] = useState<string | null>(null);
+  const [earningsFinalized, setEarningsFinalized] = useState(false);
+  const [forceAssign, setForceAssign] = useState(false);
 
   const load = useCallback(async () => {
     if (!bookingId) return;
@@ -48,16 +50,20 @@ export function OfficeAssignTeamDialog({
       const data = await fetchTeamAssignCandidates(bookingId);
       if (!data.supports_team_assignment) {
         setTeams([]);
+        setEarningsFinalized(false);
         setError("This booking is not eligible for team assignment (deep / move only).");
         return;
       }
       setQualifiedLabel(data.qualified_for_label);
       setTeams(data.teams);
+      setEarningsFinalized(data.earnings_finalized);
+      if (data.earnings_finalized) setForceAssign(false);
       const current = currentTeamId && data.teams.some((t) => t.id === currentTeamId) ? currentTeamId : null;
       const firstAssignable = data.teams.find((t) => t.assignable)?.id ?? null;
       setPickId(current ?? firstAssignable);
     } catch (e) {
       setTeams([]);
+      setEarningsFinalized(false);
       setError(e instanceof Error ? e.message : "Could not load teams.");
     } finally {
       setLoading(false);
@@ -70,6 +76,8 @@ export function OfficeAssignTeamDialog({
       setPickId(null);
       setError(null);
       setQualifiedLabel("");
+      setEarningsFinalized(false);
+      setForceAssign(false);
       return;
     }
     void load();
@@ -85,14 +93,34 @@ export function OfficeAssignTeamDialog({
       emitAdminToast("That team cannot take this booking (capacity, roster, or qualification).", "error");
       return;
     }
+    if (earningsFinalized && !forceAssign) {
+      emitAdminToast(
+        "Earnings are finalized for this booking. Enable Force assign to reopen earnings and continue.",
+        "error",
+      );
+      return;
+    }
     setAssigning(true);
     try {
-      await assignTeamToBookingAdmin(bookingId, pickId);
-      emitAdminToast(currentTeamId ? "Team changed." : "Team assigned.", "success");
+      await assignTeamToBookingAdmin(bookingId, pickId, { force: forceAssign });
+      emitAdminToast(
+        forceAssign
+          ? currentTeamId
+            ? "Team changed (earnings reopened)."
+            : "Team assigned (earnings reopened)."
+          : currentTeamId
+            ? "Team changed."
+            : "Team assigned.",
+        "success",
+      );
       onOpenChange(false);
       await onAssigned?.();
     } catch (e) {
-      emitAdminToast(e instanceof Error ? e.message : "Team assignment failed.", "error");
+      const msg = e instanceof Error ? e.message : "Team assignment failed.";
+      emitAdminToast(msg, "error");
+      if (/finalized|Force assign/i.test(msg)) {
+        setEarningsFinalized(true);
+      }
     } finally {
       setAssigning(false);
     }
@@ -175,6 +203,27 @@ export function OfficeAssignTeamDialog({
                   })}
                 </select>
               </div>
+              {earningsFinalized ? (
+                <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50 px-3 py-3">
+                  <p className="text-xs leading-relaxed text-amber-950">
+                    Cleaner line earnings are finalized for this booking. Assigning a team requires reopening earnings
+                    first (or use Force assign below).
+                  </p>
+                  <label className="flex items-start gap-2 text-sm text-amber-950">
+                    <input
+                      type="checkbox"
+                      className="mt-0.5"
+                      checked={forceAssign}
+                      onChange={(e) => setForceAssign(e.target.checked)}
+                      disabled={assigning}
+                    />
+                    <span>
+                      <span className="font-semibold">Force assign</span> — reopen cleaner line earnings and sync the
+                      team roster.
+                    </span>
+                  </label>
+                </div>
+              ) : null}
             </>
           ) : null}
 
@@ -194,7 +243,13 @@ export function OfficeAssignTeamDialog({
           </button>
           <button
             type="button"
-            disabled={assigning || loading || Boolean(error) || !pickId}
+            disabled={
+              assigning ||
+              loading ||
+              Boolean(error) ||
+              !pickId ||
+              (earningsFinalized && !forceAssign)
+            }
             onClick={() => void onAssign()}
             className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >

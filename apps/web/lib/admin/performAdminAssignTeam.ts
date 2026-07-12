@@ -13,7 +13,11 @@ import { isTeamMemberActiveOnBookingDate, effectiveTeamMembershipDateYmd } from 
 import { isTeamService, teamServiceType } from "@/lib/dispatch/assignBooking";
 import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
 import { CAPACITY_STATUSES } from "@/lib/dispatch/assignTeamToBooking";
-import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
+import { assertBookingCleanerEarningsResetSafe } from "@/lib/admin/adminBookingEarningsResetSafety";
+import {
+  BOOKING_ROSTER_LOCKED_HINT,
+  ROSTER_FINALIZED_CODE,
+} from "@/lib/admin/bookingRosterLockedMessage";
 import {
   findIndividualCleanerSlotConflict,
   findTeamJobSlotConflict,
@@ -28,6 +32,7 @@ import {
 } from "@/lib/dispatch/teamJobsPerDay";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { CANONICAL_TEAM_POOL_DISPLAY_CENTS, isLegacyPayoutEngineEnabled } from "@/lib/payout/canonicalCleanerPayout";
+import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 import {
   buildTeamJobMemberFixedPerCleanerPayoutRows,
   buildTeamJobMemberPayoutInsertRows,
@@ -93,14 +98,19 @@ export type AdminAssignTeamOptions = {
   teamId: string;
   adminUserId: string;
   adminEmail?: string | null;
+  /**
+   * When true and line earnings are finalized: reopen earnings (if safe) then fully
+   * sync team + roster + payouts. Without force, empty-roster locked bookings are blocked.
+   */
+  force?: boolean;
 };
 
 export type AdminAssignTeamResult =
-  | { ok: true; teamId: string; oldTeamId: string | null }
-  | { ok: false; httpStatus: number; error: string };
+  | { ok: true; teamId: string; oldTeamId: string | null; forceReopenedEarnings?: boolean }
+  | { ok: false; httpStatus: number; error: string; code?: string };
 
 export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Promise<AdminAssignTeamResult> {
-  const { admin, bookingId, teamId, adminUserId, adminEmail } = opts;
+  const { admin, bookingId, teamId, adminUserId, adminEmail, force = false } = opts;
   const tid = String(teamId ?? "").trim();
   if (!tid || !/^[0-9a-f-]{36}$/i.test(tid)) {
     return { ok: false, httpStatus: 400, error: "Invalid teamId." };
@@ -230,7 +240,8 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
 
   const oldTeamId = typeof b.team_id === "string" && b.team_id.trim() ? b.team_id.trim() : null;
   const sameTeam = oldTeamId === tid && b.is_team_job === true;
-  const rosterLocked = earningsFinalizedAt(b.cleaner_line_earnings_finalized_at);
+  let rosterLocked = earningsFinalizedAt(b.cleaner_line_earnings_finalized_at);
+  let forceReopenedEarnings = false;
 
   const oldTeamCapacity = teamDayJobSlots();
   let claimedTeamId: string | null = null;
@@ -348,6 +359,21 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
 
   const nowIso = new Date().toISOString();
 
+  if (rosterLocked && force) {
+    const safe = await assertBookingCleanerEarningsResetSafe(admin, bookingId);
+    if (!safe.ok) {
+      if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+      return { ok: false, httpStatus: safe.status, error: safe.error, code: safe.code };
+    }
+    const rst = await resetBookingCleanerLineEarnings(admin, bookingId);
+    if (!rst.ok) {
+      if (claimedTeamId) await releaseTeamCapacityClaim(admin, claimedTeamId, dateYmd);
+      return { ok: false, httpStatus: 500, error: rst.error, code: "earnings_reset_failed" };
+    }
+    rosterLocked = false;
+    forceReopenedEarnings = true;
+  }
+
   if (rosterLocked) {
     const { count: rosterCountCheck } = await admin
       .from("booking_cleaners")
@@ -359,6 +385,7 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
         ok: false,
         httpStatus: 409,
         error: BOOKING_ROSTER_LOCKED_HINT,
+        code: ROSTER_FINALIZED_CODE,
       };
     }
 
@@ -395,6 +422,7 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
         ok: false,
         httpStatus: locked ? 409 : 500,
         error: locked ? BOOKING_ROSTER_LOCKED_HINT : atomic.message,
+        ...(locked ? { code: ROSTER_FINALIZED_CODE } : {}),
       };
     }
   }
@@ -499,20 +527,24 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
   void logSystemEvent({
     level: "info",
     source: "ADMIN_TEAM_OVERRIDE",
-    message: "Admin manually assigned or changed team for booking",
+    message: forceReopenedEarnings
+      ? "Admin force-assigned team after reopening finalized line earnings"
+      : "Admin manually assigned or changed team for booking",
     context: {
       bookingId,
       oldTeamId: oldTeamId ?? null,
       newTeamId: tid,
       adminId: adminUserId,
       adminEmail: adminEmail ?? null,
+      force: force === true,
+      forceReopenedEarnings,
     },
   });
 
   /** M-8: assignment-mutation snapshot trigger (monthly team bookings only). */
   await triggerAssignmentEarningsSnapshotForBooking(admin, bookingId, "performAdminAssignTeam");
 
-  return { ok: true, teamId: tid, oldTeamId };
+  return { ok: true, teamId: tid, oldTeamId, ...(forceReopenedEarnings ? { forceReopenedEarnings: true } : {}) };
 }
 
 export type TeamAssignCandidateRow = {

@@ -881,6 +881,8 @@ export default function BookingDetailsView({
   const [assigningTeam, setAssigningTeam] = useState(false);
   const [teamModalLoading, setTeamModalLoading] = useState(false);
   const [teamModalError, setTeamModalError] = useState<string | null>(null);
+  const [teamForceAssign, setTeamForceAssign] = useState(false);
+  const [teamEarningsFinalized, setTeamEarningsFinalized] = useState(false);
   const [bookingCleaners, setBookingCleaners] = useState<BookingCleanerRow[]>([]);
   const [emergencyRosterOpen, setEmergencyRosterOpen] = useState(false);
   const [repairRosterBusy, setRepairRosterBusy] = useState(false);
@@ -1654,6 +1656,7 @@ export default function BookingDetailsView({
         qualified_for_label?: string;
         error?: string;
         supports_team_assignment?: boolean;
+        earnings_finalized?: boolean;
       } = {};
       if (raw.trim()) {
         try {
@@ -1666,6 +1669,7 @@ export default function BookingDetailsView({
       if (j.supports_team_assignment === false) {
         setTeamAssignQualifiedLabel("");
         setTeamCandidates([]);
+        setTeamEarningsFinalized(false);
         setTeamModalError(
           "Team assignment is not available for this booking from the server. Refresh the page if this surprises you.",
         );
@@ -1673,6 +1677,11 @@ export default function BookingDetailsView({
       }
       setTeamAssignQualifiedLabel(typeof j.qualified_for_label === "string" ? j.qualified_for_label : "");
       setTeamCandidates(Array.isArray(j.teams) ? j.teams : []);
+      const finalized =
+        j.earnings_finalized === true ||
+        Boolean((fullBooking?.cleaner_line_earnings_finalized_at ?? "").toString().trim().length > 0);
+      setTeamEarningsFinalized(finalized);
+      if (finalized) setTeamForceAssign(false);
     } catch (e) {
       setTeamModalError(e instanceof Error ? e.message : "Could not load teams.");
     } finally {
@@ -1690,6 +1699,10 @@ export default function BookingDetailsView({
     setTeamCandidates([]);
     setTeamAssignQualifiedLabel("");
     setTeamModalError(null);
+    setTeamForceAssign(false);
+    setTeamEarningsFinalized(
+      Boolean((fullBooking?.cleaner_line_earnings_finalized_at ?? "").toString().trim().length > 0),
+    );
     void loadTeamsForTeamModal();
   };
 
@@ -2298,15 +2311,28 @@ export default function BookingDetailsView({
       });
       return;
     }
+    if (teamEarningsFinalized && !teamForceAssign) {
+      setToast({
+        kind: "error",
+        text: "Earnings are finalized. Enable Force assign to reopen earnings and continue.",
+      });
+      return;
+    }
     setAssigningTeam(true);
     try {
-      await assignTeamToBookingAdmin(fullBooking.id, teamPickId);
+      await assignTeamToBookingAdmin(fullBooking.id, teamPickId, { force: teamForceAssign });
       setTeamModalOpen(false);
       setTeamPickId(null);
-      setToast({ kind: "success", text: "Team assigned" });
+      setTeamForceAssign(false);
+      setToast({
+        kind: "success",
+        text: teamForceAssign ? "Team assigned (earnings reopened)" : "Team assigned",
+      });
       setDetailRefresh((n) => n + 1);
     } catch (e) {
-      setToast({ kind: "error", text: e instanceof Error ? e.message : "Team assignment failed" });
+      const msg = e instanceof Error ? e.message : "Team assignment failed";
+      setToast({ kind: "error", text: msg });
+      if (/finalized|Force assign/i.test(msg)) setTeamEarningsFinalized(true);
     } finally {
       setAssigningTeam(false);
     }
@@ -4427,6 +4453,7 @@ export default function BookingDetailsView({
                   setTeamModalOpen(false);
                   setTeamPickId(null);
                   setTeamModalError(null);
+                  setTeamForceAssign(false);
                 }
               }}
             >
@@ -4503,6 +4530,27 @@ export default function BookingDetailsView({
                     })}
                   </select>
                 </div>
+                {teamEarningsFinalized && !teamModalLoading && !teamModalError ? (
+                  <div className="mt-4 space-y-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 dark:border-amber-900/50 dark:bg-amber-950/40">
+                    <p className="text-xs leading-relaxed text-amber-950 dark:text-amber-100">
+                      Cleaner line earnings are finalized for this booking. Assigning a team requires reopening earnings
+                      first (or use Force assign below).
+                    </p>
+                    <label className="flex items-start gap-2 text-sm text-amber-950 dark:text-amber-50">
+                      <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={teamForceAssign}
+                        onChange={(e) => setTeamForceAssign(e.target.checked)}
+                        disabled={assigningTeam}
+                      />
+                      <span>
+                        <span className="font-semibold">Force assign</span> — reopen cleaner line earnings and sync the
+                        team roster.
+                      </span>
+                    </label>
+                  </div>
+                ) : null}
                 {!teamModalLoading && teamModalError === null && teamCandidates.length === 0 ? (
                   <div className="mt-2 space-y-2 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
                     <p>
@@ -4541,6 +4589,7 @@ export default function BookingDetailsView({
                       setTeamModalOpen(false);
                       setTeamPickId(null);
                       setTeamModalError(null);
+                      setTeamForceAssign(false);
                     }}
                     className="rounded-md bg-zinc-100 px-3 py-1.5 text-sm font-medium text-zinc-700 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-200 dark:hover:bg-zinc-700"
                   >
@@ -4548,7 +4597,13 @@ export default function BookingDetailsView({
                   </button>
                   <button
                     type="button"
-                    disabled={assigningTeam || teamModalLoading || !teamPickId || Boolean(teamModalError)}
+                    disabled={
+                      assigningTeam ||
+                      teamModalLoading ||
+                      !teamPickId ||
+                      Boolean(teamModalError) ||
+                      (teamEarningsFinalized && !teamForceAssign)
+                    }
                     onClick={() => void handleAssignTeam()}
                     className="rounded-md bg-emerald-700 px-3 py-1.5 text-sm font-semibold text-white hover:bg-emerald-800 disabled:opacity-50"
                   >

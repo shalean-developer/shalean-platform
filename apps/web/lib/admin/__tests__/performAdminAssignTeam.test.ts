@@ -1,11 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { performAdminAssignTeam } from "@/lib/admin/performAdminAssignTeam";
+import { BOOKING_ROSTER_LOCKED_HINT, ROSTER_FINALIZED_CODE } from "@/lib/admin/bookingRosterLockedMessage";
 
 vi.mock("@/lib/logging/systemLog", () => ({
   logSystemEvent: vi.fn(),
 }));
 
+vi.mock("@/lib/admin/adminBookingEarningsResetSafety", () => ({
+  assertBookingCleanerEarningsResetSafe: vi.fn(async () => ({ ok: true })),
+}));
+
+vi.mock("@/lib/payout/resetBookingCleanerLineEarnings", () => ({
+  resetBookingCleanerLineEarnings: vi.fn(async () => ({ ok: true })),
+}));
+
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { assertBookingCleanerEarningsResetSafe } from "@/lib/admin/adminBookingEarningsResetSafety";
+import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 
 const bookingId = "11111111-1111-4111-8111-111111111111";
 const newTeamId = "22222222-2222-4222-8222-222222222222";
@@ -79,6 +90,8 @@ function createMockAdmin(opts: {
   slotCount?: number;
   slotUsageCount?: number;
   oldTeamCapacityRow?: { capacity_per_day: number };
+  /** Count returned for booking_cleaners head count (roster lock empty check). */
+  bookingCleanersCount?: number;
 }) {
   const {
     booking,
@@ -87,6 +100,7 @@ function createMockAdmin(opts: {
     slotCount = 0,
     slotUsageCount = 0,
     oldTeamCapacityRow,
+    bookingCleanersCount = 0,
   } = opts;
   let bookingsFrom = 0;
   let teamsFrom = 0;
@@ -210,11 +224,22 @@ function createMockAdmin(opts: {
           payout_weight: 1,
           lead_bonus_cents: 0,
         }));
+        const countP = Promise.resolve({ count: bookingCleanersCount, error: null, data: null });
         return {
           select: () => ({
             eq: () => ({
               order: () => Promise.resolve({ data: rosterData, error: null }),
+              then: countP.then.bind(countP),
+              catch: countP.catch.bind(countP),
+              finally: countP.finally.bind(countP),
             }),
+          }),
+        };
+      }
+      if (table === "cleaner_earnings") {
+        return {
+          select: () => ({
+            eq: () => Promise.resolve({ data: [], error: null }),
           }),
         };
       }
@@ -276,6 +301,10 @@ function createMockAdmin(opts: {
 describe("performAdminAssignTeam", () => {
   beforeEach(() => {
     vi.mocked(logSystemEvent).mockClear();
+    vi.mocked(assertBookingCleanerEarningsResetSafe).mockReset();
+    vi.mocked(assertBookingCleanerEarningsResetSafe).mockResolvedValue({ ok: true });
+    vi.mocked(resetBookingCleanerLineEarnings).mockReset();
+    vi.mocked(resetBookingCleanerLineEarnings).mockResolvedValue({ ok: true });
   });
 
   it("assigns team successfully: updates booking, payouts per member, assignment row, logs override", async () => {
@@ -415,5 +444,93 @@ describe("performAdminAssignTeam", () => {
     if (!res.ok) {
       expect(res.httpStatus).toBe(409);
     }
+  });
+
+  it("blocks assign when earnings finalized and roster empty without force", async () => {
+    const { admin, rpc } = createMockAdmin({
+      booking: baseBooking({ cleaner_line_earnings_finalized_at: "2026-06-01T12:00:00.000Z" }),
+      bookingCleanersCount: 0,
+    });
+    const res = await performAdminAssignTeam({
+      admin: admin as never,
+      bookingId,
+      teamId: newTeamId,
+      adminUserId: "admin-uuid",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.httpStatus).toBe(409);
+      expect(res.error).toBe(BOOKING_ROSTER_LOCKED_HINT);
+      expect(res.code).toBe(ROSTER_FINALIZED_CODE);
+    }
+    expect(resetBookingCleanerLineEarnings).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("assign_team_and_sync_roster", expect.anything());
+  });
+
+  it("force assign reopens earnings then syncs roster when finalized", async () => {
+    const { admin, rpc } = createMockAdmin({
+      booking: baseBooking({ cleaner_line_earnings_finalized_at: "2026-06-01T12:00:00.000Z" }),
+      bookingCleanersCount: 0,
+    });
+    const res = await performAdminAssignTeam({
+      admin: admin as never,
+      bookingId,
+      teamId: newTeamId,
+      adminUserId: "admin-uuid",
+      adminEmail: "admin@test.com",
+      force: true,
+    });
+    expect(res).toEqual({
+      ok: true,
+      teamId: newTeamId,
+      oldTeamId: null,
+      forceReopenedEarnings: true,
+    });
+    expect(assertBookingCleanerEarningsResetSafe).toHaveBeenCalledWith(admin, bookingId);
+    expect(resetBookingCleanerLineEarnings).toHaveBeenCalledWith(admin, bookingId);
+    expect(rpc).toHaveBeenCalledWith(
+      "assign_team_and_sync_roster",
+      expect.objectContaining({
+        p_booking_id: bookingId,
+        p_team_id: newTeamId,
+        p_variant: "admin",
+      }),
+    );
+    expect(vi.mocked(logSystemEvent)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        source: "ADMIN_TEAM_OVERRIDE",
+        context: expect.objectContaining({
+          force: true,
+          forceReopenedEarnings: true,
+        }),
+      }),
+    );
+  });
+
+  it("force assign fails when earnings reset is unsafe", async () => {
+    vi.mocked(assertBookingCleanerEarningsResetSafe).mockResolvedValue({
+      ok: false,
+      status: 409,
+      error: "Weekly payout batch is frozen, approved, or paid; reset is not allowed.",
+      code: "weekly_payout_locked",
+    });
+    const { admin, rpc } = createMockAdmin({
+      booking: baseBooking({ cleaner_line_earnings_finalized_at: "2026-06-01T12:00:00.000Z" }),
+      bookingCleanersCount: 0,
+    });
+    const res = await performAdminAssignTeam({
+      admin: admin as never,
+      bookingId,
+      teamId: newTeamId,
+      adminUserId: "admin-uuid",
+      force: true,
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.httpStatus).toBe(409);
+      expect(res.code).toBe("weekly_payout_locked");
+    }
+    expect(resetBookingCleanerLineEarnings).not.toHaveBeenCalled();
+    expect(rpc).not.toHaveBeenCalledWith("assign_team_and_sync_roster", expect.anything());
   });
 });
