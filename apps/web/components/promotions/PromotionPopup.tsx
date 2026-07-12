@@ -106,17 +106,18 @@ export function PromotionPopup() {
 
   if (!open || !promo) return null;
 
-  const primary = promo.colours?.primary ?? "#0d1b69";
-  const accent = promo.colours?.accent ?? "#34d399";
+  const active = promo;
+  const primary = active.colours?.primary ?? "#0d1b69";
+  const accent = active.colours?.accent ?? "#34d399";
 
   function dismiss() {
-    sessionStorage.setItem(STORAGE_KEY, promo.id);
+    sessionStorage.setItem(STORAGE_KEY, active.id);
     setEntered(false);
     setOpen(false);
     void fetch("/api/promotions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ promotionId: promo.id, eventType: "popup_dismiss" }),
+      body: JSON.stringify({ promotionId: active.id, eventType: "popup_dismiss" }),
     });
   }
 
@@ -167,9 +168,9 @@ export function PromotionPopup() {
               <Sparkles className="h-5 w-5" aria-hidden />
             </span>
             <div className="min-w-0 space-y-1.5">
-              {promo.offerLabel ? (
+              {active.offerLabel ? (
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/85">
-                  {promo.offerLabel}
+                  {active.offerLabel}
                 </p>
               ) : (
                 <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-white/85">
@@ -177,15 +178,15 @@ export function PromotionPopup() {
                 </p>
               )}
               <h2 id={titleId} className="text-balance text-2xl font-bold leading-tight tracking-tight">
-                {promo.headline}
+                {active.headline}
               </h2>
             </div>
           </div>
         </div>
 
         <div className="space-y-4 px-6 py-5">
-          {promo.subheadline ? (
-            <p className="text-sm leading-relaxed text-slate-600">{promo.subheadline}</p>
+          {active.subheadline ? (
+            <p className="text-sm leading-relaxed text-slate-600">{active.subheadline}</p>
           ) : (
             <p className="text-sm leading-relaxed text-slate-600">
               Book your first clean with Shalean and save. Trusted cleaners, flexible scheduling,
@@ -193,14 +194,14 @@ export function PromotionPopup() {
             </p>
           )}
 
-          {promo.promoCode ? (
+          {active.promoCode ? (
             <div className="flex items-center justify-between gap-3 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-4 py-3">
               <div>
                 <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
                   Promo code
                 </p>
                 <p className="font-mono text-base font-bold tracking-wide text-slate-900">
-                  {promo.promoCode}
+                  {active.promoCode}
                 </p>
               </div>
               <span
@@ -212,24 +213,24 @@ export function PromotionPopup() {
             </div>
           ) : null}
 
-          {promo.countdown ? <PromotionCountdown endsAt={promo.endsAt} /> : null}
+          {active.countdown ? <PromotionCountdown endsAt={active.endsAt} /> : null}
 
           <div className="space-y-2.5">
             <Link
-              href={promoBookingHref(promo.promoCode)}
+              href={promoBookingHref(active.promoCode)}
               className="inline-flex w-full items-center justify-center rounded-2xl px-4 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:brightness-110"
               style={{
                 background: `linear-gradient(135deg, ${primary}, ${accent})`,
                 boxShadow: `0 12px 28px ${primary}33`,
               }}
-              onClick={() => trackPromoEvent(promo.id, "click")}
+              onClick={() => trackPromoEvent(active.id, "click")}
             >
-              {promo.cta || "Book now"}
+              {active.cta || "Book now"}
             </Link>
             <Link
-              href={promo.landingPagePath}
+              href={active.landingPagePath}
               className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
-              onClick={() => trackPromoEvent(promo.id, "landing_visit")}
+              onClick={() => trackPromoEvent(active.id, "landing_visit")}
             >
               Learn more
             </Link>
