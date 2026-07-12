@@ -15,6 +15,9 @@ type DisplayPromo = {
   promoCode: string | null;
 };
 
+/** CSS offset for fixed bottom promo bar (includes safe-area). */
+export const PROMO_ANNOUNCEMENT_OFFSET_VAR = "--promo-announcement-offset";
+
 function countdownLabel(endsAt: string | null): string | null {
   if (!endsAt) return null;
   const ms = new Date(endsAt).getTime() - Date.now();
@@ -26,7 +29,12 @@ function countdownLabel(endsAt: string | null): string | null {
   return `${hours}h ${mins}m left`;
 }
 
-/** Sticky announcement bar for active seasonal / homepage promotions. */
+function clearPromoBarChrome() {
+  document.documentElement.style.removeProperty(PROMO_ANNOUNCEMENT_OFFSET_VAR);
+  document.documentElement.removeAttribute("data-promo-announcement");
+}
+
+/** Fixed bottom announcement bar for active seasonal / homepage promotions. */
 export function PromotionAnnouncementBar() {
   const [promo, setPromo] = useState<DisplayPromo | null>(null);
   const [dismissed, setDismissed] = useState(false);
@@ -51,16 +59,31 @@ export function PromotionAnnouncementBar() {
     })();
   }, []);
 
+  useEffect(() => {
+    if (!promo || dismissed) {
+      clearPromoBarChrome();
+      return;
+    }
+    document.documentElement.style.setProperty(
+      PROMO_ANNOUNCEMENT_OFFSET_VAR,
+      "calc(2.75rem + env(safe-area-inset-bottom, 0px))",
+    );
+    document.documentElement.setAttribute("data-promo-announcement", "");
+    return () => clearPromoBarChrome();
+  }, [promo, dismissed]);
+
   if (!promo || dismissed) return null;
 
-  const bg = promo.colours?.primary ?? "#0f172a";
+  const bg = promo.colours?.primary ?? "#0d1b69";
   const accent = promo.colours?.accent ?? "#34d399";
   const cd = promo.countdown ? countdownLabel(promo.endsAt) : null;
 
   return (
     <div
-      className="relative z-40 flex items-center justify-center gap-3 px-4 py-2.5 text-center text-sm text-white"
+      className="fixed inset-x-0 bottom-0 z-[45] flex items-center justify-center gap-3 px-4 py-2.5 pb-[max(0.625rem,env(safe-area-inset-bottom))] text-center text-sm text-white shadow-[0_-4px_24px_rgba(13,27,105,0.18)]"
       style={{ background: `linear-gradient(90deg, ${bg}, ${accent}55)` }}
+      role="region"
+      aria-label="Promotion"
     >
       <p className="font-medium">
         {promo.headline}

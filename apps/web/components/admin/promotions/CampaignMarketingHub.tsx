@@ -177,7 +177,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     show_on_homepage: true,
     show_on_booking: true,
     show_featured_card: true,
-    show_popup: false,
+    show_popup: true,
     show_announcement_bar: true,
     generate: true,
   };

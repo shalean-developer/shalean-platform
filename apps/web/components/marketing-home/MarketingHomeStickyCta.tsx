@@ -10,7 +10,7 @@ export function MarketingHomeStickyCta() {
 
   return (
     <div
-      className="fixed inset-x-0 bottom-0 z-40 border-t border-blue-100 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_24px_rgba(37,99,235,0.12)] backdrop-blur-md md:hidden print:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-blue-100 bg-white/95 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] shadow-[0_-4px_24px_rgba(37,99,235,0.12)] backdrop-blur-md md:hidden print:hidden [:root[data-promo-announcement]_&]:hidden"
       role="region"
       aria-label="Book cleaning"
     >

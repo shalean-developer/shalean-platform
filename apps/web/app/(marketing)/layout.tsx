@@ -8,9 +8,9 @@ export default function MarketingLayout({
 }>) {
   return (
     <>
+      <div className="pb-[var(--promo-announcement-offset,0px)]">{children}</div>
       <PromotionAnnouncementBar />
       <PromotionPopup />
-      {children}
     </>
   );
 }
