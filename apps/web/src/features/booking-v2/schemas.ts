@@ -226,8 +226,15 @@ export const bookingV2ConfirmSchema = z.object({
     })
     .passthrough(),
   applyCleaningCreditZar: z.number().min(0).optional(),
-  referralCode: z.string().optional(),
-  promoCode: z.string().optional(),
+  // Clients may send JSON null when no code is stored; treat null like omitted.
+  referralCode: z.preprocess(
+    (v) => (v == null || v === "" ? undefined : v),
+    z.string().optional(),
+  ),
+  promoCode: z.preprocess(
+    (v) => (v == null || v === "" ? undefined : v),
+    z.string().optional(),
+  ),
 });
 
 export type BookingV2ConfirmPayload = z.infer<typeof bookingV2ConfirmSchema>;
