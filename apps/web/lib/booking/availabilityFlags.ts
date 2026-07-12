@@ -7,6 +7,15 @@ export function isStrictAvailabilityEnabled(): boolean {
 }
 
 /**
+ * Phase A soft fulfillment: allow ops_assignment / area_review instead of hard-blocking
+ * when no cleaner is instantly eligible. Default ON so conversion improves; set
+ * `BOOKING_SOFT_FULFILLMENT=false` to restore legacy 409 / empty-slot behaviour.
+ */
+export function isBookingSoftFulfillmentEnabled(): boolean {
+  return process.env.BOOKING_SOFT_FULFILLMENT !== "false";
+}
+
+/**
  * Phase 2E-D rollout flag: public cleaner availability may soft-filter solo cleaners
  * whose scheduled minutes would exceed the future 8h/day policy after the requested booking.
  * Default OFF; admin and dispatch call sites must opt in explicitly if/when policy changes.

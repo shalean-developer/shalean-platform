@@ -70,9 +70,11 @@ describe("admin booking mutation convergence (static guard)", () => {
     expect(src).toContain("adminUpdateBookingNotes");
     expect(src).toContain("isAdminEditBookingDetailsNotesOnlyBody");
     expect(src).toContain("adminRepriceBooking");
+    expect(src).toContain("withMoneyActionMakerChecker");
+    expect(src).toContain("reprice_booking_details");
     expect(src).not.toMatch(/\badminEditBookingDetails\s*\(/);
     expect(src).not.toContain("finalizePaidBooking");
-    expect(src).toMatch(/notesOnly\s*\?[\s\S]*adminUpdateBookingNotes/);
-    expect(src).toMatch(/:\s*await\s+adminRepriceBooking\(/);
+    expect(src).toMatch(/if\s*\(\s*notesOnly\s*\)[\s\S]*adminUpdateBookingNotes/);
+    expect(src).toMatch(/adminRepriceBooking\(/);
   });
 });

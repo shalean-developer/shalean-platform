@@ -14,6 +14,10 @@ import { ANALYTICS_EVENTS, trackBookingAnalyticsEvent } from "@/lib/booking/book
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { trackClientPurchase } from "@/lib/ads/trackClientPurchase";
 import { clearStoredReferral } from "@/lib/referrals/client";
+import {
+  clearBookingV2DraftStorage,
+  consumeBookingV2SuccessRedirect,
+} from "@/lib/booking-v2/bookingV2PaymentRedirect";
 import { BookingConfirmationHero } from "@/components/booking/BookingConfirmationHero";
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { CUSTOMER_SUPPORT_WHATSAPP_E164 } from "@/lib/site/customerSupport";
@@ -130,6 +134,8 @@ function SuccessContent() {
           setErrorMessage(null);
           markRetargetingCandidate(false);
           clearStoredReferral("customer");
+          clearBookingV2DraftStorage();
+          consumeBookingV2SuccessRedirect();
 
           if (isBookingPersisted(okData)) {
             // Confirm UI first — analytics must not block leaving "Confirming…".

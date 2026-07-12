@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { CONFIG_MISSING_BOOKING_LOCK_HMAC } from "@/lib/booking/bookingLockHmacSecret";
+import { isLegacyBookingLockEnabled } from "@/lib/booking/customerPricingSot";
 import { getOrCreatePricingVersionId } from "@/lib/booking/pricingVersionDb";
 import { resolveLegacyBookingQuote } from "@/lib/booking/quote/resolveBookingQuote";
 import { computeLockQuoteSignature, LOCK_HOLD_MS } from "@/lib/booking/lockQuoteSignature";
@@ -14,9 +15,23 @@ export const dynamic = "force-dynamic";
 
 /**
  * Authoritative slot lock quote — recomputes price on the server from Supabase catalog + `quoteCheckoutZarWithSnapshot`.
+ * Phase 4: new locks require LEGACY_BOOKING_LOCK_ENABLED=true. In-flight locked payloads still verify via HMAC.
  * Client must persist returned totals + `signature` + `lockExpiresAt` (never trust slot list or client totals).
  */
 export async function POST(request: Request) {
+  if (!isLegacyBookingLockEnabled()) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error:
+          "Legacy booking lock is retired. Use the booking-v2 checkout flow (/book or customer app).",
+        errorCode: "LEGACY_BOOKING_LOCK_DISABLED",
+        customerPricingSot: "booking_v2",
+      },
+      { status: 410 },
+    );
+  }
+
   let body: unknown;
   try {
     body = await request.json();

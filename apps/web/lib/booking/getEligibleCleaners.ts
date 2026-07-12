@@ -57,6 +57,11 @@ export type GetEligibleCleanersParams = {
   preloadedCleanerLocations?: CleanerLocationPair[];
   /** When set, skips DB fetch for `cleaner_preferences` (strict service/time gating). */
   preloadedCleanerPreferences?: Map<string, CleanerPreferenceRowLike>;
+  /**
+   * When set (including `[]`), skips the per-call `bookings` occupancy query.
+   * Slot grids must preload once per date — otherwise ~23 identical round-trips.
+   */
+  preloadedOccupyingBookings?: OccupyingBookingRow[];
   /** When set, skips cleaners list query (must match `cleanerIds` filter intent). */
   preloadedCleaners?: CleanerBase[];
   /**
@@ -65,6 +70,48 @@ export type GetEligibleCleanersParams = {
    */
   enforcePublicDailyWorkloadLimit?: boolean;
 };
+
+/** Shared select for day occupancy — keep in sync with {@link getEligibleCleaners} bookings query. */
+export const OCCUPYING_BOOKINGS_SELECT =
+  "id, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, booking_date, time, start_time, end_time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot";
+
+/** One day of slot-occupying bookings (used by the time-slot grid preload). */
+export async function fetchOccupyingBookingsForDate(
+  admin: SupabaseClient,
+  dateYmd: string,
+): Promise<OccupyingBookingRow[]> {
+  const { data, error } = await admin
+    .from("bookings")
+    .select(OCCUPYING_BOOKINGS_SELECT)
+    .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
+    .or(`date.eq.${dateYmd},booking_date.eq.${dateYmd}`);
+  if (error) {
+    console.error("[getEligibleCleaners] occupying bookings query failed:", error.message);
+    return [];
+  }
+  return (data ?? []) as OccupyingBookingRow[];
+}
+
+export async function fetchCleanerPreferencesByCleanerIds(
+  admin: SupabaseClient,
+  cleanerIds: string[],
+): Promise<Map<string, CleanerPreferenceRowLike>> {
+  const m = new Map<string, CleanerPreferenceRowLike>();
+  if (cleanerIds.length === 0) return m;
+  const { data, error } = await admin
+    .from("cleaner_preferences")
+    .select("cleaner_id, preferred_areas, preferred_services, preferred_time_blocks, is_strict")
+    .in("cleaner_id", cleanerIds);
+  if (error) {
+    console.error("[getEligibleCleaners] cleaner_preferences query failed:", error.message);
+    return m;
+  }
+  for (const raw of data ?? []) {
+    const cid = String((raw as { cleaner_id?: string }).cleaner_id ?? "");
+    if (cid) m.set(cid, raw as CleanerPreferenceRowLike);
+  }
+  return m;
+}
 
 export type CleanerBase = {
   id: string;
@@ -231,6 +278,7 @@ export async function getEligibleCleaners(
 
   const needAvail = params.preloadedAvailability == null;
   const needLoc = params.preloadedCleanerLocations == null;
+  const needBookings = params.preloadedOccupyingBookings == null;
   const jobServiceSlug = (params.serviceType ?? "").trim().toLowerCase() || null;
   const needPrefs = params.preloadedCleanerPreferences == null && jobServiceSlug != null;
 
@@ -245,13 +293,13 @@ export async function getEligibleCleaners(
     needLoc
       ? admin.from("cleaner_locations").select("cleaner_id, location_id").in("cleaner_id", ids)
       : Promise.resolve({ data: null as { cleaner_id: string; location_id: string }[] | null, error: null }),
-    admin
-      .from("bookings")
-      .select(
-        "id, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, booking_date, time, start_time, end_time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot",
-      )
-      .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
-      .or(`date.eq.${params.date},booking_date.eq.${params.date}`),
+    needBookings
+      ? admin
+          .from("bookings")
+          .select(OCCUPYING_BOOKINGS_SELECT)
+          .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
+          .or(`date.eq.${params.date},booking_date.eq.${params.date}`)
+      : Promise.resolve({ data: null as OccupyingBookingRow[] | null, error: null }),
     needPrefs
       ? admin
           .from("cleaner_preferences")
@@ -262,7 +310,9 @@ export async function getEligibleCleaners(
 
   const availData = params.preloadedAvailability ?? (availRes as { data: CleanerAvailabilityRow[] | null }).data;
   const locRows = params.preloadedCleanerLocations ?? (locRes as { data: unknown[] | null }).data;
-  const bookRows = (bookRes as { data: unknown[] | null }).data;
+  const bookRows =
+    params.preloadedOccupyingBookings ??
+    ((bookRes as { data: unknown[] | null }).data as OccupyingBookingRow[] | null);
 
   const prefByCleaner =
     params.preloadedCleanerPreferences ??

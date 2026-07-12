@@ -9,8 +9,14 @@ import {
   filterCustomerOnlineBookingTimeSlots,
 } from "@/lib/booking-v2/customerBookingTimeSlots";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
+import type { BookingFulfillmentMode } from "@/lib/booking/bookingFulfillmentMode";
 
-type SlotRow = { time: string; available: boolean };
+type SlotRow = {
+  time: string;
+  available: boolean;
+  availableInstant?: boolean;
+  fulfillmentMode?: BookingFulfillmentMode;
+};
 
 function buildV2AvailabilityMap(
   slots: SlotRow[],
@@ -26,6 +32,22 @@ function buildV2AvailabilityMap(
     const hm = row.time?.trim().slice(0, 5);
     if (hm && /^\d{2}:\d{2}$/.test(hm) && allowedTimes.has(hm)) {
       out[hm] = Boolean(row.available);
+    }
+  }
+  return out;
+}
+
+function buildFulfillmentMap(
+  slots: SlotRow[],
+  dateYmd: string,
+  scheduling?: Partial<BookingV2SchedulingConfig>,
+): Record<string, BookingFulfillmentMode> {
+  const out: Record<string, BookingFulfillmentMode> = {};
+  const allowedTimes = new Set(filterCustomerOnlineBookingTimeSlots(dateYmd, { scheduling }));
+  for (const row of slots) {
+    const hm = row.time?.trim().slice(0, 5);
+    if (hm && /^\d{2}:\d{2}$/.test(hm) && allowedTimes.has(hm) && row.available) {
+      out[hm] = row.fulfillmentMode ?? (row.availableInstant === false ? "ops_assignment" : "instant");
     }
   }
   return out;
@@ -63,6 +85,8 @@ export function useBookingV2ScheduleAvailability(args: {
   scheduling?: Partial<BookingV2SchedulingConfig>;
 }): {
   availability: Record<string, boolean> | undefined;
+  fulfillmentBySlot: Record<string, BookingFulfillmentMode> | undefined;
+  dayFulfillmentMode: BookingFulfillmentMode | null;
   loading: boolean;
   fetchError: boolean;
 } {
@@ -88,6 +112,7 @@ export function useBookingV2ScheduleAvailability(args: {
     const ac = new AbortController();
     setLoading(true);
     setFetchError(false);
+    setSlots(null);
 
     const url = scheduleAvailabilityUrl({
       dateYmd: args.dateYmd,
@@ -137,12 +162,31 @@ export function useBookingV2ScheduleAvailability(args: {
   const availability = useMemo(() => {
     if (!args.dateYmd) return undefined;
     if (!args.locationId) return checkoutScheduleSlotsAllUnavailable();
-    if (loading || slots === null) return checkoutScheduleSlotsAllUnavailable();
+    // Keep prior map while refreshing so Step 2 does not clear the selected time mid-fetch.
+    if (loading && slots === null) return undefined;
+    if (slots === null) return checkoutScheduleSlotsAllUnavailable();
     return buildV2AvailabilityMap(slots, args.dateYmd, args.scheduling);
   }, [args.dateYmd, args.locationId, args.scheduling, loading, slots]);
 
+  const fulfillmentBySlot = useMemo(() => {
+    if (!args.dateYmd || !args.locationId || loading || slots === null) return undefined;
+    return buildFulfillmentMap(slots, args.dateYmd, args.scheduling);
+  }, [args.dateYmd, args.locationId, args.scheduling, loading, slots]);
+
+  const dayFulfillmentMode = useMemo((): BookingFulfillmentMode | null => {
+    if (!fulfillmentBySlot) return null;
+    const modes = Object.values(fulfillmentBySlot);
+    if (modes.length === 0) return null;
+    if (modes.every((m) => m === "area_review")) return "area_review";
+    if (modes.every((m) => m === "ops_assignment" || m === "area_review")) return "ops_assignment";
+    if (modes.some((m) => m === "instant")) return "instant";
+    return modes[0] ?? null;
+  }, [fulfillmentBySlot]);
+
   return {
     availability,
+    fulfillmentBySlot,
+    dayFulfillmentMode,
     loading: canFetch && loading,
     fetchError,
   };

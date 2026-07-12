@@ -23,6 +23,12 @@ import {
 } from "@/lib/booking/bookingFlowAnalytics";
 import { useStoredReferralCheckoutDiscount } from "@/hooks/useStoredReferralCheckoutDiscount";
 import { getStoredReferral } from "@/lib/referrals/client";
+import {
+  bookingV2SuccessHref,
+  clearBookingV2DraftStorage,
+  consumeBookingV2SuccessRedirect,
+  redirectToBookingV2Success,
+} from "@/lib/booking-v2/bookingV2PaymentRedirect";
 
 // ??? Auth Form ?????????????????????????????????????????????????????????????????
 
@@ -242,9 +248,16 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
 
 function PaymentSection({ user }: { user: User }) {
   const { serviceSlug, clearBooking } = useBookingV2();
-  const { watch } = useFormContext<BookingV2FormData>();
+  const { watch, setValue } = useFormContext<BookingV2FormData>();
   const values = watch();
   const config = SERVICE_CONFIG[serviceSlug];
+
+  // Recover if Paystack onSuccess cleared mid-navigation (HMR / Fast Refresh remount).
+  useEffect(() => {
+    const pending = consumeBookingV2SuccessRedirect();
+    if (!pending) return;
+    window.location.replace(bookingV2SuccessHref(pending));
+  }, []);
 
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -387,7 +400,7 @@ function PaymentSection({ user }: { user: User }) {
         body: JSON.stringify({
           ...values,
           applyCleaningCreditZar: creditToApply,
-          // Omit when unset: Zod optional strings reject JSON null from getStoredReferral.
+          // Omit when unset ? Zod optional strings reject JSON `null` from getStoredReferral.
           referralCode:
             (referralDiscount?.code ?? getStoredReferral("customer") ?? "").trim() || undefined,
           promoCode: promoCode.trim() || undefined,
@@ -402,7 +415,46 @@ function PaymentSection({ user }: { user: User }) {
         creditAppliedZar?: number;
         requiresPayment?: boolean;
         error?: string;
+        code?: string;
+        fulfillmentMode?: string;
+        customerMessage?: string;
       };
+
+      if (confirmRes.status === 409 && confirmJson.code === "AREA_REVIEW_REQUIRED") {
+        const areaRes = await fetch("/api/booking-v2/area-review", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({
+            serviceSlug: values.serviceSlug,
+            address: values.address,
+            suburb: values.suburb,
+            city: values.city,
+            postalCode: values.postalCode,
+            serviceAreaLocationId: values.serviceAreaLocationId || null,
+            serviceAreaCityId: values.serviceAreaCityId || null,
+            date: values.date,
+            time: values.time,
+            contactPhone: values.contactPhone,
+            serviceDetails: values.serviceDetails,
+          }),
+        });
+        const areaJson = (await areaRes.json()) as {
+          success?: boolean;
+          bookingId?: string;
+          customerMessage?: string;
+          error?: string;
+        };
+        if (areaRes.ok && areaJson.success && areaJson.bookingId) {
+          window.location.href = `/account/success?areaReview=1&bookingId=${encodeURIComponent(areaJson.bookingId)}`;
+          return;
+        }
+        setError(areaJson.error ?? confirmJson.customerMessage ?? confirmJson.error ?? "Could not submit area review.");
+        setConfirming(false);
+        return;
+      }
 
       if (!confirmRes.ok || !confirmJson.success || !confirmJson.bookingId) {
         const message = confirmJson.error ?? "Could not create your booking. Please try again.";
@@ -420,15 +472,33 @@ function PaymentSection({ user }: { user: User }) {
       const chargeAmount = confirmJson.payAmountZar ?? payTotal;
       const requiresPayment = confirmJson.requiresPayment !== false && chargeAmount > 0;
 
+      // Keep UI total aligned with the amount Paystack will charge (VIP / promo / credit).
+      if (
+        Number.isFinite(chargeAmount) &&
+        Math.abs(chargeAmount - payTotal) >= 1 &&
+        values.pricingSummary
+      ) {
+        setValue(
+          "pricingSummary",
+          {
+            ...values.pricingSummary,
+            estimated_total: chargeAmount,
+            total: chargeAmount,
+          },
+          { shouldDirty: false, shouldValidate: false },
+        );
+      }
+
       if (!requiresPayment) {
         setConfirming(false);
+        const ref = paystackReference ?? bookingId ?? "";
+        clearBookingV2DraftStorage();
         try {
           clearBooking();
         } catch {
           // non-fatal
         }
-        const ref = paystackReference ?? bookingId ?? "";
-        window.location.assign(`/account/success?reference=${encodeURIComponent(ref)}`);
+        window.location.assign(bookingV2SuccessHref(ref));
         return;
       }
 
@@ -457,7 +527,7 @@ function PaymentSection({ user }: { user: User }) {
       const paystackOpts = {
         key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "",
         email: user.email ?? "",
-        amount: chargeAmount * 100,
+        amount: Math.round(chargeAmount * 100),
         currency: "ZAR" as const,
         reference: paystackReference,
         metadata: {
@@ -467,24 +537,18 @@ function PaymentSection({ user }: { user: User }) {
           ...(gclid ? { gclid } : {}),
           ...(fbclid ? { fbclid } : {}),
         },
-        onSuccess: () => {
-          const ref = paystackReference ?? bookingId ?? "";
-          // Clear busy state first so the UI never stays stuck on "Processing?"
-          // if navigation is slow or the popup callback is flaky.
-          setConfirming(false);
-          try {
-            clearBooking();
-          } catch {
-            // non-fatal ? success page does not need local draft state
-          }
-          // Hard navigation is more reliable from Paystack iframe callbacks than
-          // Next soft routing (which can be interrupted when form state resets).
-          window.location.assign(
-            `/account/success?reference=${encodeURIComponent(ref)}`,
-          );
+        onSuccess: (transaction?: { reference?: string }) => {
+          const ref =
+            (typeof transaction?.reference === "string" && transaction.reference.trim()) ||
+            paystackReference ||
+            bookingId ||
+            "";
+          // Navigate first — do not clearBooking() here. Clearing draft + Fast Refresh
+          // remount can strand the user on Step 4 instead of /account/success.
+          redirectToBookingV2Success(ref);
         },
         onCancel: () => {
-          setError("Payment cancelled. Your booking is saved ? you can retry payment.");
+          setError("Payment cancelled. Your booking is saved — you can retry payment.");
           trackBookingFunnelEvent("payment", BOOKING_FUNNEL_ROW.EXIT, {
             flow: "booking_v2",
             reason: "paystack_cancelled",

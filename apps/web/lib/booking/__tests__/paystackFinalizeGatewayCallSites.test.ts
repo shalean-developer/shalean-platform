@@ -42,6 +42,18 @@ describe("Paystack finalize gateway call sites", () => {
     expect(src).not.toMatch(/\bfinalizePaystackChargeSuccess\s*\(/);
   });
 
+  it("verify pipeline does not await Zoho side effects (success-page hang guard)", () => {
+    const src = readFileSync(join(root, "lib/booking/runPaystackVerifyFinalizePipeline.ts"), "utf8");
+    expect(src).toMatch(/void\s+syncPaidBookingSideEffects\s*\(/);
+    expect(src).not.toMatch(/await\s+syncPaidBookingSideEffects\s*\(/);
+  });
+
+  it("webhook does not await Zoho side effects (Paystack retry hang guard)", () => {
+    const src = readFileSync(join(root, "app/api/paystack/webhook/route.ts"), "utf8");
+    expect(src).toMatch(/void\s+syncPaidBookingSideEffects\s*\(/);
+    expect(src).not.toMatch(/await\s+syncPaidBookingSideEffects\s*\(/);
+  });
+
   it("admin mark-paid route does not call finalizePaidBooking (manual settlement wrapper)", () => {
     const src = readFileSync(join(root, "app/api/admin/bookings/[id]/mark-paid/route.ts"), "utf8");
     expect(src).not.toContain("finalizePaidBooking");

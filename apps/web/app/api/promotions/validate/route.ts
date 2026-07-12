@@ -6,6 +6,7 @@ import {
   getCompletedBookingCount,
   getActiveMembershipDiscountPercent,
 } from "@/lib/promotions/server";
+import { resolveCheckoutPromoEligibilityExtras } from "@/lib/promotions/resolveCheckoutPromoEligibilityExtras";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,6 +23,8 @@ export async function POST(request: Request) {
     subtotalZar?: number;
     cityId?: string;
     locationId?: string;
+    suburb?: string;
+    suburbId?: string;
     customerEmail?: string;
   };
   try {
@@ -51,6 +54,13 @@ export async function POST(request: Request) {
     getActiveMembershipDiscountPercent(admin, userId),
   ]);
 
+  const locationId = body.locationId?.trim() || body.suburbId?.trim() || null;
+  const promoExtras = await resolveCheckoutPromoEligibilityExtras(admin, {
+    userId,
+    locationId,
+    completedBookingCount,
+  });
+
   try {
     const result = await evaluateCheckoutPromotions(admin, {
       userId,
@@ -60,6 +70,9 @@ export async function POST(request: Request) {
       selectedExtraIds: body.selectedExtraIds ?? [],
       cityId: body.cityId,
       locationId: body.locationId,
+      suburb: body.suburb,
+      suburbId: promoExtras.suburbId ?? body.suburbId ?? null,
+      customerSegments: promoExtras.customerSegments,
       subtotalZar,
       promoCode: body.promoCode,
       membershipDiscountPercent,

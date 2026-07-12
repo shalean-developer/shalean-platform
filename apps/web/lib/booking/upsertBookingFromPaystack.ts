@@ -4,6 +4,7 @@ import { bookingCustomerKey, bookingCustomerOwnershipPatch } from "@/lib/booking
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import type { CheckoutPriceSnapshotV1 } from "@/lib/booking/priceSnapshotBooking";
+import { isPaymentAmountMismatchZar } from "@/lib/payments/paymentAmountMismatch";
 import {
   checkoutPriceSnapshotFromLegacyPriceSnapshotV1,
   parseCheckoutPriceSnapshotV1FromMeta,
@@ -395,7 +396,6 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     });
   }
 
-  const MISMATCH_EPS_ZAR = 2;
   const paidZar = input.amountCents / 100;
   const expectedZar = priceSnapshotFromMeta
     ? priceSnapshot.total_zar
@@ -405,7 +405,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         if (Number.isFinite(parsedPay) && parsedPay > 0) return parsedPay;
         return priceSnapshot.total_zar;
       })();
-    if (Math.abs(paidZar - expectedZar) > MISMATCH_EPS_ZAR) {
+    if (isPaymentAmountMismatchZar(paidZar, expectedZar)) {
     logPaymentStructured("payment_mismatch", {
       reference: input.paystackReference,
       paid_zar: paidZar,

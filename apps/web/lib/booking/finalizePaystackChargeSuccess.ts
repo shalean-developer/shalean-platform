@@ -191,6 +191,43 @@ export async function finalizePaystackChargeSuccess(
       });
     }
 
+    try {
+      const { data: softRow } = await admin
+        .from("bookings")
+        .select("fulfillment_mode, suburb, date, time, service_slug, customer_name, customer_email, customer_phone")
+        .eq("id", result.bookingId)
+        .maybeSingle();
+      const mode = String((softRow as { fulfillment_mode?: string | null } | null)?.fulfillment_mode ?? "")
+        .trim()
+        .toLowerCase();
+      if (mode === "ops_assignment") {
+        const { notifyOfficeSoftFulfillment } = await import("@/lib/notifications/notifyOfficeSoftFulfillment");
+        const row = softRow as {
+          suburb?: string | null;
+          date?: string | null;
+          time?: string | null;
+          service_slug?: string | null;
+          customer_name?: string | null;
+          customer_email?: string | null;
+          customer_phone?: string | null;
+        } | null;
+        void notifyOfficeSoftFulfillment({
+          supabase: admin,
+          bookingId: result.bookingId,
+          kind: "ops_assignment",
+          suburb: row?.suburb,
+          dateYmd: row?.date,
+          timeHm: row?.time,
+          serviceSlug: row?.service_slug,
+          customerName: row?.customer_name,
+          customerEmail: row?.customer_email ?? resolvedCustomerEmail,
+          customerPhone: row?.customer_phone,
+        });
+      }
+    } catch {
+      /* non-fatal */
+    }
+
     const meta = paystackMetadata;
     const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
     const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";

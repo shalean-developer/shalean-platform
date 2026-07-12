@@ -52,6 +52,12 @@
       ],
       "@shalean/api-client/*": [
         "../../packages/api-client/src/*"
+      ],
+      "@shalean/pricing": [
+        "../../packages/pricing/src/index.ts"
+      ],
+      "@shalean/pricing/*": [
+        "../../packages/pricing/src/*"
       ]
     }
   },

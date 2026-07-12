@@ -16,8 +16,9 @@ export function normalizeVipTier(raw: string | VipTier | null | undefined): VipT
 }
 
 /**
- * VIP is applied only inside {@link quoteCheckoutZar} as `subtotal * getVipDiscountMultiplier(tier)`.
- * Do not multiply again at checkout or in UI totals.
+ * VIP is applied inside legacy `quoteCheckoutZarWithSnapshot` and booking-v2
+ * `calculateCustomerTotal` (Phase 2: `applyVipToCleaningSubtotalZar`) as
+ * `subtotal * getVipDiscountMultiplier(tier)`. Do not multiply again at checkout.
  */
 export function getVipDiscountMultiplier(tier: VipTier | string | null | undefined): number {
   const t = normalizeVipTier(tier == null || tier === "" ? undefined : typeof tier === "string" ? tier : tier);

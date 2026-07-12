@@ -3,10 +3,12 @@ import { NextResponse } from "next/server";
 import {
   type AdminEditBookingDetailsBody,
   type AdminEditBookingDetailsResult,
+  bookingRowSignalsPaid,
   isAdminEditBookingDetailsNotesOnlyBody,
 } from "@/lib/booking/adminEditBookingDetails";
 import { adminRepriceBooking, adminUpdateBookingNotes } from "@/lib/booking/bookingOperations";
 import { isAdmin } from "@/lib/auth/admin";
+import { withMoneyActionMakerChecker } from "@/lib/payout/earningsAdjustMakerChecker";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -70,9 +72,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Missing admin user id." }, { status: 401 });
   }
 
-  let body: AdminEditBookingDetailsBody;
+  let body: AdminEditBookingDetailsBody & { proposal_id?: string };
   try {
-    body = (await request.json()) as AdminEditBookingDetailsBody;
+    body = (await request.json()) as AdminEditBookingDetailsBody & { proposal_id?: string };
   } catch {
     return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   }
@@ -83,23 +85,102 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   }
 
   const idempotencyHeader = request.headers.get("idempotency-key")?.trim() ?? "";
+  const proposalId = typeof body.proposal_id === "string" ? body.proposal_id.trim() : "";
 
   const notesOnly = isAdminEditBookingDetailsNotesOnlyBody(body);
-  const result = notesOnly
-    ? await adminUpdateBookingNotes({
-        admin,
-        bookingId,
-        body,
-        adminUserId,
-        idempotencyKey: idempotencyHeader || null,
-      })
-    : await adminRepriceBooking({
+  if (notesOnly) {
+    const result = await adminUpdateBookingNotes({
+      admin,
+      bookingId,
+      body,
+      adminUserId,
+      idempotencyKey: idempotencyHeader || null,
+    });
+    return jsonFromEditResult(result);
+  }
+
+  const { data: bookingRow } = await admin
+    .from("bookings")
+    .select(
+      "payment_status, payment_completed_at, amount_paid_cents, total_paid_cents, total_paid_zar",
+    )
+    .eq("id", bookingId)
+    .maybeSingle();
+
+  const paid = bookingRow ? bookingRowSignalsPaid(bookingRow as Record<string, unknown>) : false;
+
+  if (!paid) {
+    const result = await adminRepriceBooking({
+      admin,
+      bookingId,
+      body,
+      adminUserId,
+      idempotencyKey: idempotencyHeader || null,
+    });
+    return jsonFromEditResult(result);
+  }
+
+  // Phase 4: paid reprice goes through maker–checker when enabled.
+  let applyResult: AdminEditBookingDetailsResult | null = null;
+  const gate = await withMoneyActionMakerChecker(admin, {
+    actionType: "reprice_booking_details",
+    bookingId,
+    payload: {
+      bedrooms: body.bedrooms,
+      bathrooms: body.bathrooms,
+      extras: body.extras,
+      notes: body.notes,
+      client_updated_at: body.client_updated_at,
+      confirm_collect_additional: body.confirm_collect_additional,
+    },
+    adminUserId,
+    adminEmail: user.email,
+    proposalId: proposalId || null,
+    apply: async () => {
+      const result = await adminRepriceBooking({
         admin,
         bookingId,
         body,
         adminUserId,
         idempotencyKey: idempotencyHeader || null,
       });
+      applyResult = result;
+      if (!result.ok) {
+        const err =
+          "error" in result
+            ? result.error
+            : "conflict" in result
+              ? result.message
+              : "Repricing failed.";
+        return { ok: false as const, error: err, code: "reprice_failed" };
+      }
+      return { ok: true as const };
+    },
+  });
 
-  return jsonFromEditResult(result);
+  if (!gate.ok) {
+    const status =
+      gate.code === "maker_checker_self_approve" ||
+      gate.code === "proposal_not_pending" ||
+      gate.code === "proposal_expired" ||
+      gate.code === "proposal_booking_mismatch" ||
+      gate.code === "proposal_action_mismatch"
+        ? 409
+        : gate.code === "proposal_not_found"
+          ? 404
+          : 400;
+    return NextResponse.json({ ok: false, error: gate.error, code: gate.code }, { status });
+  }
+
+  if (gate.mode === "proposed") {
+    return NextResponse.json({
+      ok: true,
+      mode: "proposed",
+      proposalId: gate.proposalId,
+      message: "Paid reprice proposed. A second admin must approve with proposal_id.",
+    });
+  }
+
+  if (applyResult) return jsonFromEditResult(applyResult);
+  return NextResponse.json({ ok: true, mode: "applied", proposalId: gate.proposalId });
 }

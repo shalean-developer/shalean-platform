@@ -23,13 +23,15 @@ export type BuildCustomerPricingFromFormParams = {
   >;
   liveConfig: LiveServiceConfig | null;
   feesConfig: BookingV2FeesConfig | null;
+  /** Loyalty tier from user_profiles (server confirm). */
+  vipTier?: string | null;
 };
 
 /** Shared quote input for display (client) and signed confirm (server). */
 export function buildCustomerTotalInputFromForm(
   params: BuildCustomerPricingFromFormParams,
 ): CustomerTotalInput & { serviceSlug: BookingV2FormData["serviceSlug"] } {
-  const { serviceSlug, values, liveConfig, feesConfig } = params;
+  const { serviceSlug, values, liveConfig, feesConfig, vipTier } = params;
   const staticConfig = SERVICE_CONFIG[serviceSlug];
 
   const showEquipmentQuestion =
@@ -94,6 +96,7 @@ export function buildCustomerTotalInputFromForm(
         showEquipmentQuestion,
     },
     feesConfig: feesConfig ?? defaultBookingV2FeesConfig(),
+    vipTier: vipTier ?? null,
   };
 }
 

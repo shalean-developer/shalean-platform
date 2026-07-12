@@ -36,6 +36,9 @@ const INELIGIBLE_ACCOUNT_STATUS = new Set([
   "blocked",
 ]);
 
+/** Hard blocks for ops assignment — offline/paused cleaners may still be called by office. */
+const OPS_INELIGIBLE_ACCOUNT_STATUS = new Set(["suspended", "banned", "disabled", "blocked"]);
+
 /**
  * Row-level gate: active, accepting work, and not in a blocked lifecycle status.
  * Used by customer pool, checkout pre-check, and {@link getEligibleCleaners} preload filtering.
@@ -51,6 +54,22 @@ export function cleanerAccountEligibleForCustomerBooking(row: {
     .trim()
     .toLowerCase();
   if (INELIGIBLE_ACCOUNT_STATUS.has(st)) return false;
+  return true;
+}
+
+/**
+ * Ops can still assign cleaners who are offline / manually paused, as long as the
+ * account is active and not suspended/banned.
+ */
+export function cleanerAccountEligibleForOpsAssignment(row: {
+  is_active?: boolean | null;
+  status?: string | null;
+}): boolean {
+  if (row.is_active === false) return false;
+  const st = String(row.status ?? "")
+    .trim()
+    .toLowerCase();
+  if (OPS_INELIGIBLE_ACCOUNT_STATUS.has(st)) return false;
   return true;
 }
 

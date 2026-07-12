@@ -186,6 +186,10 @@ export async function PATCH(request: Request) {
   }
 
   const now = new Date().toISOString();
+  const beforeConfig =
+    existing && typeof (existing as { config?: unknown }).config === "object"
+      ? ((existing as { config: Record<string, unknown> }).config)
+      : null;
   const { error: writeErr } = await admin.from("pricing_booking_config").upsert(
     {
       id: CONFIG_ID,
@@ -196,6 +200,17 @@ export async function PATCH(request: Request) {
   );
 
   if (writeErr) return NextResponse.json({ error: writeErr.message }, { status: 500 });
+
+  const { recordPricingCatalogAudit } = await import("@/lib/admin/recordPricingCatalogAudit");
+  await recordPricingCatalogAudit(admin, {
+    tableName: "pricing_booking_config",
+    rowId: CONFIG_ID,
+    action: "update",
+    beforeRow: beforeConfig,
+    afterRow: current,
+    actorUserId: auth.user.id,
+    actorEmail: auth.email,
+  });
 
   return NextResponse.json({ ok: true, config: current, updated_at: now });
 }

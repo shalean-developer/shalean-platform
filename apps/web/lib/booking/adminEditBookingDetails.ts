@@ -23,6 +23,7 @@ import {
 import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
+import { PAYMENT_AMOUNT_MISMATCH_EPS_CENTS } from "@/lib/payments/paymentAmountMismatch";
 import {
   computeAdminV2RepriceAuthoritativeQuote,
   isV2AuthoritativeBookingRow,
@@ -877,7 +878,9 @@ async function executeRepricingAdminEditBookingDetails(
   }
 
   const beforeAudit = auditPick(b);
-  const paidMismatchAfter = paid && rep.visitCents > oldPaidCents;
+  // Phase 1: mismatch = quote ≠ gateway cash (increase OR decrease), not "increase only".
+  const paidMismatchAfter =
+    paid && Math.abs(rep.visitCents - oldPaidCents) > PAYMENT_AMOUNT_MISMATCH_EPS_CENTS;
 
   const patch: Record<string, unknown> = {
     booking_snapshot: rep.snapMerged,
@@ -914,15 +917,18 @@ async function executeRepricingAdminEditBookingDetails(
   }
 
   if (paid) {
-    patch.total_paid_cents = rep.visitCents;
-    patch.amount_paid_cents = rep.visitCents;
-    patch.total_paid_zar = rep.visitRounded;
-  }
-
-  if (paidMismatchAfter) {
-    patch.payment_mismatch = true;
-  } else if (paid && rep.visitCents <= oldPaidCents) {
-    patch.payment_mismatch = false;
+    // Phase 1: never rewrite gateway-collected amounts to the new quote.
+    // Keep amount_paid_* / total_paid_* as cash truth; flag mismatch for ops top-up/refund.
+    patch.payment_mismatch = paidMismatchAfter;
+    if (rep.visitCents < oldPaidCents) {
+      console.warn("PAID_TOTAL_CHANGED", {
+        bookingId,
+        before_cents: oldPaidCents,
+        after_cents: rep.visitCents,
+        direction: "decrease",
+        gateway_amounts_preserved: true,
+      });
+    }
   }
 
   const st0 = String(b.status ?? "").trim().toLowerCase();
@@ -934,15 +940,6 @@ async function executeRepricingAdminEditBookingDetails(
     patch.dispatch_status = "assigned";
   }
 
-  if (paid && rep.visitCents < oldPaidCents) {
-    console.warn("PAID_TOTAL_CHANGED", {
-      bookingId,
-      before_cents: oldPaidCents,
-      after_cents: rep.visitCents,
-      direction: "decrease",
-    });
-  }
-
   const revertKeys = [
     "booking_snapshot",
     "rooms",
@@ -951,9 +948,6 @@ async function executeRepricingAdminEditBookingDetails(
     "total_price",
     "price_snapshot",
     "price_breakdown",
-    "total_paid_cents",
-    "amount_paid_cents",
-    "total_paid_zar",
     "status",
     "dispatch_status",
     "payment_mismatch",

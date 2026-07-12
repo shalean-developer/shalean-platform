@@ -37,6 +37,9 @@ export type CustomerPricingBreakdown = {
   extra_cleaner_cost: number;
   /** Cleaning subtotal before equipment and service fee. */
   cleaning_service_subtotal: number;
+  /** VIP loyalty discount applied to cleaning subtotal (Phase 2). */
+  vip_discount_zar?: number;
+  vip_tier?: string;
   subtotal_before_service_fee: number;
   service_fee: number;
   recurring_discount: number;
@@ -122,6 +125,8 @@ export type CustomerTotalInput = {
   equipmentQuote?: EquipmentQuoteResult | null;
   /** When set, duration comes from the unified quote engine (must match price inputs). */
   precomputedDurationWorkload?: DurationWorkloadResult;
+  /** Loyalty tier from user_profiles.tier — applied server-side on confirm. */
+  vipTier?: string | null;
 };
 
 export function isStructuredPricingBreakdown(
@@ -156,6 +161,7 @@ export function normalizePricingSummary(raw: unknown): CustomerPricingBreakdown 
     equipment_distance_charge: 0,
     manual_quote_required: false,
     cleaning_service_subtotal: legacy.total,
+    vip_discount_zar: 0,
     extra_cleaner_cost: cleaner,
     subtotal_before_service_fee: legacy.total,
     service_fee: 0,

@@ -42,7 +42,14 @@ import {
 import { cn } from "@/lib/utils";
 import { defaultEquipmentPricingConfig } from "@/lib/booking-v2/equipmentPricing";
 
-type PricingSection = "base" | "extras" | "equipment" | "team" | "cleaner_count" | "discounts";
+type PricingSection =
+  | "base"
+  | "extras"
+  | "equipment"
+  | "team"
+  | "cleaner_count"
+  | "discounts"
+  | "audit";
 
 const TABS: { id: PricingSection; label: string }[] = [
   { id: "base", label: "Base Pricing" },
@@ -51,7 +58,18 @@ const TABS: { id: PricingSection; label: string }[] = [
   { id: "team", label: "Team Pricing" },
   { id: "cleaner_count", label: "Cleaner Count" },
   { id: "discounts", label: "Recurring Discounts" },
+  { id: "audit", label: "Recent changes" },
 ];
+
+type CatalogAuditRow = {
+  id: string;
+  table_name: string;
+  row_id: string;
+  action: string;
+  actor_email: string | null;
+  created_at: string;
+  rollback_of: string | null;
+};
 
 function formatZar(amount: number): string {
   return `R ${Math.round(amount).toLocaleString("en-ZA")}`;
@@ -85,6 +103,8 @@ export function OfficePricingPageView() {
   const [services, setServices] = useState<PricingServiceRow[]>([]);
   const [extras, setExtras] = useState<PricingExtraRow[]>([]);
   const [bookingConfig, setBookingConfig] = useState<BookingPricingConfig>({});
+  const [auditRows, setAuditRows] = useState<CatalogAuditRow[]>([]);
+  const [auditLoading, setAuditLoading] = useState(false);
 
   const [serviceDialog, setServiceDialog] = useState<PricingServiceRow | "new" | null>(null);
   const [extraDialog, setExtraDialog] = useState<PricingExtraRow | "new" | null>(null);
@@ -133,9 +153,28 @@ export function OfficePricingPageView() {
     setLoading(false);
   }, []);
 
+  const loadAudit = useCallback(async () => {
+    setAuditLoading(true);
+    const res = await adminFetch<{ ok?: boolean; rows?: CatalogAuditRow[]; error?: string }>(
+      "/api/admin/pricing-catalog-audit?limit=50",
+      { method: "GET", cache: "no-store" },
+    );
+    setAuditLoading(false);
+    if (!res.ok) {
+      emitAdminToast(res.error ?? "Could not load catalog audit.", "error");
+      setAuditRows([]);
+      return;
+    }
+    setAuditRows(res.data?.rows ?? []);
+  }, []);
+
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (tab === "audit") void loadAudit();
+  }, [tab, loadAudit]);
 
   const extraCleanerExtra = useMemo(
     () => extras.find((e) => e.slug === "extra-cleaner") ?? null,
@@ -360,6 +399,58 @@ export function OfficePricingPageView() {
               onDelete={(key) => setDeleteTarget({ kind: "discount", key })}
             />
           ) : null}
+
+          {!loading && tab === "audit" ? (
+            <CatalogAuditTab
+              rows={auditRows}
+              loading={auditLoading}
+              busy={busy}
+              onRefresh={() => void loadAudit()}
+              onRollback={async (row, force) => {
+                setBusy(true);
+                const res = await adminFetch<{
+                  ok?: boolean;
+                  error?: string;
+                  code?: string;
+                }>(`/api/admin/pricing-catalog-audit/${encodeURIComponent(row.id)}/rollback`, {
+                  method: "POST",
+                  body: JSON.stringify({ force }),
+                });
+                setBusy(false);
+                if (!res.ok) {
+                  if (res.data?.code === "newer_audit_exists" || /newer catalog change/i.test(res.error ?? "")) {
+                    const confirmed = window.confirm(
+                      "A newer change exists for this row. Force rollback anyway?",
+                    );
+                    if (confirmed) {
+                      await (async () => {
+                        setBusy(true);
+                        const forced = await adminFetch(
+                          `/api/admin/pricing-catalog-audit/${encodeURIComponent(row.id)}/rollback`,
+                          { method: "POST", body: JSON.stringify({ force: true }) },
+                        );
+                        setBusy(false);
+                        if (!forced.ok) emitAdminToast(forced.error ?? "Rollback failed", "error");
+                        else {
+                          emitAdminToast("Catalog restored (forced).", "success");
+                          await load();
+                          await loadAudit();
+                        }
+                      })();
+                    } else {
+                      emitAdminToast(res.error ?? "Rollback blocked", "error");
+                    }
+                    return;
+                  }
+                  emitAdminToast(res.error ?? "Rollback failed", "error");
+                  return;
+                }
+                emitAdminToast("Catalog restored.", "success");
+                await load();
+                await loadAudit();
+              }}
+            />
+          ) : null}
         </div>
       </div>
 
@@ -550,6 +641,96 @@ function AddButton({ label, onClick }: { label: string; onClick: () => void }) {
     >
       <Plus className="h-3.5 w-3.5" /> {label}
     </button>
+  );
+}
+
+function CatalogAuditTab({
+  rows,
+  loading,
+  busy,
+  onRefresh,
+  onRollback,
+}: {
+  rows: CatalogAuditRow[];
+  loading: boolean;
+  busy: boolean;
+  onRefresh: () => void;
+  onRollback: (row: CatalogAuditRow, force: boolean) => Promise<void>;
+}) {
+  return (
+    <div className="space-y-4">
+      <TabHeader
+        title="Recent catalog edits. Rollback restores the previous snapshot for that change."
+        action={
+          <button
+            type="button"
+            onClick={onRefresh}
+            disabled={loading || busy}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+          >
+            {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            Refresh
+          </button>
+        }
+      />
+      {loading && !rows.length ? (
+        <div className="space-y-2">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="h-12 animate-pulse rounded-xl bg-slate-100" />
+          ))}
+        </div>
+      ) : null}
+      {!loading && !rows.length ? (
+        <p className="rounded-xl border border-dashed border-slate-200 px-4 py-8 text-center text-sm text-slate-500">
+          No catalog audit rows yet.
+        </p>
+      ) : null}
+      {rows.length ? (
+        <div className="overflow-x-auto rounded-xl border border-slate-100">
+          <table className="min-w-full text-left text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+              <tr>
+                <th className="px-3 py-2 font-semibold">When</th>
+                <th className="px-3 py-2 font-semibold">Table</th>
+                <th className="px-3 py-2 font-semibold">Action</th>
+                <th className="px-3 py-2 font-semibold">Row</th>
+                <th className="px-3 py-2 font-semibold">Actor</th>
+                <th className="px-3 py-2 font-semibold" />
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={row.id} className="border-t border-slate-100">
+                  <td className="px-3 py-2 whitespace-nowrap text-slate-600">
+                    {new Date(row.created_at).toLocaleString("en-ZA")}
+                  </td>
+                  <td className="px-3 py-2 font-medium text-slate-800">{row.table_name}</td>
+                  <td className="px-3 py-2 text-slate-700">{row.action}</td>
+                  <td className="px-3 py-2 font-mono text-xs text-slate-500">
+                    {row.row_id.length > 10 ? `${row.row_id.slice(0, 8)}…` : row.row_id}
+                  </td>
+                  <td className="px-3 py-2 text-slate-600">{row.actor_email ?? "—"}</td>
+                  <td className="px-3 py-2 text-right">
+                    {row.action === "rollback" ? (
+                      <span className="text-xs text-slate-400">restored</span>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void onRollback(row, false)}
+                        className="rounded-lg bg-slate-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-800 disabled:opacity-60"
+                      >
+                        Rollback
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </div>
   );
 }
 

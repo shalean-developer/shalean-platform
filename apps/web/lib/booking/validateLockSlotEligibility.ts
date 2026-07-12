@@ -1,25 +1,30 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { isStrictAvailabilityEnabled } from "@/lib/booking/availabilityFlags";
+import {
+  isBookingSoftFulfillmentEnabled,
+  isStrictAvailabilityEnabled,
+} from "@/lib/booking/availabilityFlags";
+import { assessBookingFulfillment } from "@/lib/booking/assessBookingFulfillment";
 import { slotEligibilityCoreFromLockBody } from "@/lib/booking/canonicalSlotEligibilityParams";
 import { countEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 
 /**
  * Ensures a lock request matches server-side eligibility for the given area and slot
  * (prevents stale locks after suburb change or DevTools tampering with `cleanersCount` / `locationId`).
+ * With soft fulfillment, ops_assignment / area_review locks are allowed when no instant cleaner exists.
  */
 export async function validateLockSlotAgainstEligibility(
   admin: SupabaseClient,
   body: Record<string, unknown>,
   opts: { timeHm: string; durationHours: number; catalogServiceId?: string | null },
-): Promise<{ ok: true } | { ok: false; status: number; error: string }> {
-  const strict = isStrictAvailabilityEnabled();
+): Promise<{ ok: true; fulfillmentMode?: string } | { ok: false; status: number; error: string }> {
+  const soft = isBookingSoftFulfillmentEnabled();
   const loc = String(body.locationId ?? body.location_id ?? "").trim();
   const date = typeof body.date === "string" ? body.date.trim() : "";
 
   if (!loc) {
-    if (strict) {
+    if (!soft && isStrictAvailabilityEnabled()) {
       return { ok: false, status: 400, error: "locationId is required to lock a slot." };
     }
     return { ok: true };
@@ -47,6 +52,18 @@ export async function validateLockSlotAgainstEligibility(
     return { ok: false, status: 400, error: "Invalid slot parameters for eligibility." };
   }
 
+  if (soft) {
+    const assessment = await assessBookingFulfillment(admin, {
+      date: core.date,
+      startTime: core.startTime,
+      durationMinutes: core.durationMinutes,
+      locationId: core.locationId,
+      locationExpandedIds: core.locationExpandedIds,
+      serviceType: core.bookingServiceSlug,
+    });
+    return { ok: true, fulfillmentMode: assessment.mode };
+  }
+
   const serverCount = await countEligibleCleaners(admin, {
     date: core.date,
     startTime: core.startTime,
@@ -68,7 +85,7 @@ export async function validateLockSlotAgainstEligibility(
   const clientCount =
     typeof ccRaw === "number" && Number.isFinite(ccRaw) ? Math.max(0, Math.round(ccRaw)) : null;
   if (clientCount === null) {
-    return { ok: true };
+    return { ok: true, fulfillmentMode: "instant" };
   }
   if (clientCount !== serverCount) {
     return {
@@ -78,5 +95,5 @@ export async function validateLockSlotAgainstEligibility(
     };
   }
 
-  return { ok: true };
+  return { ok: true, fulfillmentMode: "instant" };
 }

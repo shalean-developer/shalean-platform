@@ -27,6 +27,7 @@ import {
 } from "@/lib/payout/monthBounds";
 import { MONTHLY_PAYOUT_START_YMD } from "@/lib/payout/payoutPeriodConfig";
 import { isYmdInInclusiveRange, weeklyBatchDayYmd } from "@/lib/payout/weekBounds";
+import { filterBookingsNotOnLedgerRail } from "@/lib/payout/filterBookingsNotOnLedgerRail";
 import {
   listRosterMemberWeeklyPayoutCandidates,
   rosterMemberWeeklyPayoutTotalCents,
@@ -338,6 +339,31 @@ async function generateWeeklyPayoutsForPeriod(
       }
 
       bookings.push(booking);
+    }
+
+    // Phase 4 reverse dual-rail: skip jobs already claimed/paid on ledger rail.
+    if (bookings.length) {
+      const { allowedIds, blockedIds } = await filterBookingsNotOnLedgerRail(
+        admin,
+        bookings.map((b) => String(b.id ?? "")),
+      );
+      if (blockedIds.length) {
+        metrics.increment("cleaner.weekly_batch_booking_excluded_ledger_rail", {
+          cleanerId,
+          count: blockedIds.length,
+        });
+        for (const bid of blockedIds) {
+          await reportOperationalIssue(
+            "warn",
+            "generateWeeklyPayouts",
+            "Skipped weekly batch booking already on ledger rail (dual-rail reverse gate)",
+            { cleanerId, bookingId: bid },
+          );
+        }
+      }
+      const filtered = bookings.filter((b) => allowedIds.has(String(b.id ?? "")));
+      bookings.length = 0;
+      bookings.push(...filtered);
     }
 
     const rosterMemberCandidates = await listRosterMemberWeeklyPayoutCandidates({

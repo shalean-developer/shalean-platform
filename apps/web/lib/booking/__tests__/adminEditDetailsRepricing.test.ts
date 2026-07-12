@@ -19,6 +19,9 @@ describe("admin edit-details repricing slice (static guards)", () => {
     expect(slice).toMatch(/\.from\(\s*["']booking_changes["']\s*\)/);
     expect(slice).toContain("confirm_collect_additional");
     expect(slice).toContain("payment_mismatch");
+    // Phase 1: gateway cash columns must not be rewritten to the new quote.
+    expect(slice).toContain("gateway_amounts_preserved");
+    expect(slice).not.toMatch(/patch\.amount_paid_cents\s*=\s*rep\.visitCents/);
   });
 
   it("adminRepriceBooking delegates without notification router or finalize", () => {

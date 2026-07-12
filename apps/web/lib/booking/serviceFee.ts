@@ -1,7 +1,9 @@
 /**
  * Service fee on checkout (ZAR). Cleaner payout uses the base subtotal only; fee is company-only.
  *
- * Configure with:
+ * Booking-v2 SoT uses `pricing_booking_config` fees (see bookingV2FeesConfig).
+ * Env overrides below are legacy-only and require LEGACY_ENV_SERVICE_FEE_ENABLED=true.
+ *
  * - `BOOKING_SERVICE_FEE_RULE=flat` (default) or `percent_floor` → max(2000¢, 5% of base cents)
  * - `BOOKING_SERVICE_FEE_CENTS` / `NEXT_PUBLIC_BOOKING_SERVICE_FEE_CENTS` override flat default (3000 = R30)
  */
@@ -14,7 +16,15 @@ function parseEnvCents(v: string | undefined): number | null {
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 
+function legacyEnvServiceFeeEnabled(): boolean {
+  return String(process.env.LEGACY_ENV_SERVICE_FEE_ENABLED ?? "")
+    .trim()
+    .toLowerCase() === "true";
+}
+
 export function resolveBookingServiceFeeRule(): BookingServiceFeeRule {
+  // Phase 4: env fee rules are legacy-only (booking-v2 uses pricing_booking_config).
+  if (!legacyEnvServiceFeeEnabled()) return "flat";
   const raw = (
     process.env.BOOKING_SERVICE_FEE_RULE ??
     process.env.NEXT_PUBLIC_BOOKING_SERVICE_FEE_RULE ??
@@ -42,6 +52,7 @@ export const DEFAULT_BOOKING_SERVICE_FEE_CENTS = 3000;
 
 /**
  * Fee in cents from the visit **subtotal** in whole ZAR (before fee).
+ * Env cents overrides require LEGACY_ENV_SERVICE_FEE_ENABLED=true (Phase 4).
  */
 export function computeServiceFeeCentsFromBaseZar(baseZar: number): number {
   const baseCents = Math.max(0, Math.round(baseZar * 100));
@@ -56,8 +67,11 @@ export function computeServiceFeeCentsFromBaseZar(baseZar: number): number {
   if (rule === "percent_floor") {
     return Math.max(2000, Math.round(baseCents * 0.05));
   }
-  const fromEnv =
-    parseEnvCents(process.env.NEXT_PUBLIC_BOOKING_SERVICE_FEE_CENTS) ??
-    parseEnvCents(process.env.BOOKING_SERVICE_FEE_CENTS);
-  return fromEnv ?? DEFAULT_BOOKING_SERVICE_FEE_CENTS;
+  if (legacyEnvServiceFeeEnabled()) {
+    const fromEnv =
+      parseEnvCents(process.env.NEXT_PUBLIC_BOOKING_SERVICE_FEE_CENTS) ??
+      parseEnvCents(process.env.BOOKING_SERVICE_FEE_CENTS);
+    return fromEnv ?? DEFAULT_BOOKING_SERVICE_FEE_CENTS;
+  }
+  return DEFAULT_BOOKING_SERVICE_FEE_CENTS;
 }

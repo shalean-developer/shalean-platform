@@ -4,6 +4,7 @@ import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 export const ADMIN_BOOKING_STATUS_VALUES = [
   "pending",
   "pending_payment",
+  "area_review",
   "assigned",
   "in_progress",
   "completed",
@@ -16,6 +17,7 @@ export type AdminBookingStatusValue = (typeof ADMIN_BOOKING_STATUS_VALUES)[numbe
 const ADMIN_STATUS_LABELS: Record<AdminBookingStatusValue, string> = {
   pending: "Pending",
   pending_payment: "Pending payment",
+  area_review: "Area Review",
   assigned: "Assigned",
   in_progress: "In progress",
   completed: "Completed",

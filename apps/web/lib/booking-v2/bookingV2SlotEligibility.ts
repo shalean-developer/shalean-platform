@@ -1,4 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  assessBookingFulfillment,
+  type BookingFulfillmentAssessment,
+} from "@/lib/booking/assessBookingFulfillment";
 import { countEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import {
   canonicalServiceSlugFromBookingV2,
@@ -44,6 +48,27 @@ export async function bookingV2SlotHasEligibleCleaners(
 ): Promise<boolean> {
   const count = await countEligibleCleanersForBookingV2Slot(admin, params);
   return count > 0;
+}
+
+export async function assessBookingV2SlotFulfillment(
+  admin: SupabaseClient,
+  params: BookingV2SlotEligibilityParams,
+): Promise<BookingFulfillmentAssessment> {
+  const timeHm = params.time.trim().slice(0, 5);
+  const durationMinutes = deriveDurationMinutesFromBookingV2(
+    params.serviceSlug,
+    params.durationMinutes,
+  );
+  const canonicalService = canonicalServiceSlugFromBookingV2(params.serviceSlug);
+
+  return assessBookingFulfillment(admin, {
+    date: params.date,
+    startTime: timeHm,
+    durationMinutes,
+    locationId: params.location.locationId,
+    locationExpandedIds: [params.location.locationId],
+    serviceType: canonicalService,
+  });
 }
 
 export function bedroomsBathroomsFromV2ServiceDetails(

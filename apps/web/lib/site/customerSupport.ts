@@ -1,21 +1,20 @@
-/** Customer-facing support (guest bookings, cancellations, general enquiries). */
+/**
+ * Compatibility shim — implementation lives in `@shalean/utils`.
+ * Web may override WhatsApp URL via NEXT_PUBLIC_SUPPORT_WHATSAPP_URL.
+ */
+import { buildCustomerSupportWhatsAppUrl } from "@shalean/utils/customerSupport";
 
-export const CUSTOMER_SUPPORT_EMAIL = "support@shalean.com";
+export {
+  CUSTOMER_SUPPORT_EMAIL,
+  CUSTOMER_SUPPORT_TELEPHONE_E164,
+  CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
+  CUSTOMER_SUPPORT_TELEPHONE_TEL,
+  CUSTOMER_SUPPORT_WHATSAPP_E164,
+  CUSTOMER_SUPPORT_WHATSAPP_DISPLAY,
+  customerSupportWhatsAppHref,
+  buildCustomerSupportWhatsAppUrl,
+} from "@shalean/utils/customerSupport";
 
-/** Call number — 087 153 5250 */
-export const CUSTOMER_SUPPORT_TELEPHONE_E164 = "+27871535250";
-export const CUSTOMER_SUPPORT_TELEPHONE_DISPLAY = "087 153 5250";
-export const CUSTOMER_SUPPORT_TELEPHONE_TEL = "tel:0871535250";
-
-/** WhatsApp number — 082 591 5525 */
-export const CUSTOMER_SUPPORT_WHATSAPP_E164 = "+27825915525";
-export const CUSTOMER_SUPPORT_WHATSAPP_DISPLAY = "082 591 5525";
-
-export function customerSupportWhatsAppHref(): string {
-  return `https://wa.me/${CUSTOMER_SUPPORT_WHATSAPP_E164.replace(/\D/g, "")}`;
-}
-
-/** Pre-filled WhatsApp chat */
+/** Pre-filled WhatsApp chat (env override for web campaigns). */
 export const CUSTOMER_SUPPORT_WHATSAPP_URL =
-  process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP_URL?.trim() ||
-  `${customerSupportWhatsAppHref()}?text=Hi%20I%20want%20to%20book%20a%20cleaning`;
+  process.env.NEXT_PUBLIC_SUPPORT_WHATSAPP_URL?.trim() || buildCustomerSupportWhatsAppUrl();

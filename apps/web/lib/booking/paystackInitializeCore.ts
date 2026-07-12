@@ -12,8 +12,13 @@ import type {
   BookingCustomerAuthType,
   BookingSnapshotDiscountLineV1,
 } from "@/lib/booking/paystackChargeTypes";
-import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
 import { verifySupabaseAccessToken } from "@/lib/booking/verifySupabaseSession";
+import {
+  evaluateCheckoutPromotions,
+  getActiveMembershipDiscountPercent,
+  getCompletedBookingCount,
+} from "@/lib/promotions/server";
+import { canonicalizeBookingServiceSlug } from "@/lib/booking/canonicalizeBookingServiceSlug";
 import { validateLockForCheckout } from "@/lib/booking/checkoutLockValidation";
 import { selectLockedBookingDurationMinutesForPersistence } from "@/lib/booking/durationMinutesIntegrity";
 import {
@@ -86,7 +91,6 @@ import {
   PAYSTACK_CHECKOUT_METADATA_CONTRACT_VERSION,
 } from "@/lib/booking/bookingPaystackCheckoutMetadataFlat";
 import { normalizePreferredCleanerIds } from "@/lib/booking/persistPreferredCleaners";
-import { canonicalizeBookingServiceSlug } from "@/lib/booking/canonicalizeBookingServiceSlug";
 
 export { PAYSTACK_ERROR_TIME_SLOT_UNAVAILABLE };
 
@@ -538,8 +542,50 @@ export async function processPaystackInitializeBody(
   }
 
   const promoCode = typeof b.promoCode === "string" ? b.promoCode.trim() : "";
-  const promo = promoCode ? getPromoDiscountZar(promoCode, visitZar) : null;
-  const promoDiscountZar = promo?.discountZar ?? 0;
+  // Phase 2: DB promotions only (hardcoded promoCodes retired).
+  const legacyToV2Slug: Record<string, string> = {
+    standard: "regular-cleaning",
+    deep: "deep-cleaning",
+    move: "moving-cleaning",
+    carpet: "carpet-cleaning",
+    airbnb: "airbnb-cleaning",
+    office: "office-cleaning",
+  };
+  const canonicalService = locked.service
+    ? canonicalizeBookingServiceSlug(locked.service)
+    : "standard";
+  const serviceSlugForPromo = legacyToV2Slug[canonicalService] ?? canonicalService;
+  const selectedExtraIds = Array.isArray(locked.extras)
+    ? locked.extras.map((e) => (typeof e === "string" ? e : String((e as { id?: string }).id ?? ""))).filter(Boolean)
+    : [];
+  let promoDiscountZar = 0;
+  let promoDescription: string | null = null;
+  try {
+    const [completedBookingCount, membershipDiscountPercent] = await Promise.all([
+      getCompletedBookingCount(admin, customer.user_id, customer.email),
+      getActiveMembershipDiscountPercent(admin, customer.user_id),
+    ]);
+    const promoEval = await evaluateCheckoutPromotions(admin, {
+      userId: customer.user_id,
+      customerEmail: customer.email,
+      completedBookingCount,
+      serviceSlug: serviceSlugForPromo,
+      selectedExtraIds,
+      subtotalZar: visitZar,
+      promoCode: promoCode || null,
+      membershipDiscountPercent,
+    });
+    promoDiscountZar = Math.max(0, Math.round(promoEval.totalDiscountZar));
+    const first = promoEval.applied[0];
+    promoDescription = first?.description ?? (promoDiscountZar > 0 ? "Promotion applied" : null);
+  } catch (err) {
+    console.error("[paystack/initialize] promotion evaluation failed:", err);
+    return {
+      ok: false,
+      status: 503,
+      error: "Could not apply promotions. Please try again.",
+    };
+  }
 
   const referralCodeInput = typeof b.referralCode === "string" ? b.referralCode.trim().toUpperCase() : "";
   const referralValidation = referralCodeInput
@@ -565,13 +611,15 @@ export async function processPaystackInitializeBody(
   }
 
   const discountLines: BookingSnapshotDiscountLineV1[] = [];
-  if (promoDiscountZar > 0 && promoCode) {
-    const desc = promo?.description;
+  if (promoDiscountZar > 0) {
+    const desc = promoDescription;
     discountLines.push({
       id: "promo",
       label: desc
-        ? `Promo · ${promoCode.trim().toUpperCase()} — ${desc}`
-        : `Promo · ${promoCode.trim().toUpperCase()}`,
+        ? `Promo${promoCode ? ` · ${promoCode.trim().toUpperCase()}` : ""} — ${desc}`
+        : promoCode
+          ? `Promo · ${promoCode.trim().toUpperCase()}`
+          : "Promotion",
       amount_zar: promoDiscountZar,
     });
   }

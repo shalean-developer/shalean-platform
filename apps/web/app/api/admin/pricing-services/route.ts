@@ -79,8 +79,24 @@ export async function PATCH(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const { error } = await admin.from("pricing_services").update(patch).eq("id", id);
+  const { data: before } = await admin.from("pricing_services").select("*").eq("id", id).maybeSingle();
+  const { data: afterRows, error } = await admin
+    .from("pricing_services")
+    .update(patch)
+    .eq("id", id)
+    .select("*");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const { recordPricingCatalogAudit } = await import("@/lib/admin/recordPricingCatalogAudit");
+  await recordPricingCatalogAudit(admin, {
+    tableName: "pricing_services",
+    rowId: id,
+    action: "update",
+    beforeRow: (before as Record<string, unknown> | null) ?? null,
+    afterRow: (afterRows?.[0] as Record<string, unknown> | undefined) ?? null,
+    actorUserId: auth.user.id,
+    actorEmail: auth.email,
+  });
 
   return NextResponse.json({ ok: true });
 }
@@ -156,6 +172,16 @@ export async function POST(request: Request) {
   const { data, error } = await admin.from("pricing_services").insert(row).select("*").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
+  const { recordPricingCatalogAudit } = await import("@/lib/admin/recordPricingCatalogAudit");
+  await recordPricingCatalogAudit(admin, {
+    tableName: "pricing_services",
+    rowId: String((data as { id?: string }).id ?? slug),
+    action: "insert",
+    afterRow: data as Record<string, unknown>,
+    actorUserId: auth.user.id,
+    actorEmail: auth.email,
+  });
+
   return NextResponse.json({ ok: true, service: data });
 }
 
@@ -169,8 +195,19 @@ export async function DELETE(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
+  const { data: before } = await admin.from("pricing_services").select("*").eq("id", id).maybeSingle();
   const { error } = await admin.from("pricing_services").delete().eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  const { recordPricingCatalogAudit } = await import("@/lib/admin/recordPricingCatalogAudit");
+  await recordPricingCatalogAudit(admin, {
+    tableName: "pricing_services",
+    rowId: id,
+    action: "delete",
+    beforeRow: (before as Record<string, unknown> | null) ?? null,
+    actorUserId: auth.user.id,
+    actorEmail: auth.email,
+  });
 
   return NextResponse.json({ ok: true });
 }

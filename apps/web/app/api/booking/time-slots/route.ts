@@ -17,6 +17,8 @@ export type TimeSlotAvailability = {
   cleanersCount: number;
   /** Area the slot grid was built for — must match `locationId` on lock when both are sent. */
   locationId: string | null;
+  availableInstant?: boolean;
+  fulfillmentMode?: "instant" | "ops_assignment" | "area_review";
 };
 
 export const runtime = "nodejs";

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { evaluateBookingPaymentPrecheck } from "@/lib/booking/bookingPaymentPrecheckLogic";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
+import { getPaystackPublicKey } from "@/lib/payments/paystackPublicKey";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -78,5 +79,9 @@ export async function POST(req: Request) {
   const rowTotal =
     r && r.total_price != null && r.total_price !== "" ? Number(r.total_price) : null;
   logPaymentStructured("payment_precheck", { booking_id: bookingId, ok: true, row_total: rowTotal });
-  return NextResponse.json({ ok: true });
+  const paystackPublicKey = getPaystackPublicKey();
+  return NextResponse.json({
+    ok: true,
+    ...(paystackPublicKey ? { paystackPublicKey } : {}),
+  });
 }

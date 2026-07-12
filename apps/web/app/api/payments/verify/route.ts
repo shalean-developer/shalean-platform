@@ -15,6 +15,7 @@ import {
 import { salesDocumentIdFromPaystackMetadata } from "@/lib/salesDocument/salesDocumentPaystackReference";
 import { monthlyInvoiceIdFromPaystackMetadata } from "@/lib/monthlyInvoice/monthlyInvoicePaystackReference";
 import { bookingPaymentTotalCents, clampTipZar, type BookingRowPaymentInput } from "@/lib/payments/bookingPaymentSummary";
+import { isPaymentAmountMismatchCents } from "@/lib/payments/paymentAmountMismatch";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -183,7 +184,7 @@ export async function POST(request: Request) {
     if (expected == null || expected <= 0) {
       return NextResponse.json({ ok: false, error: "Booking has no payable total set." }, { status: 409 });
     }
-    if (Math.abs(amount - expected) > 1) {
+    if (isPaymentAmountMismatchCents(amount, expected)) {
       return NextResponse.json({ ok: false, error: "Amount does not match booking total." }, { status: 400 });
     }
   }

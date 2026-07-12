@@ -186,11 +186,12 @@ export async function runPaystackVerifyFinalizePipeline(
       context: { reference: ref, bookingId: result.bookingId, skipped: result.skipped },
     });
 
-    // Idempotent: Zoho invoice + recurring plan. Runs here because the success
-    // page finalizes via this verify pipeline (the webhook may never fire in dev
-    // or hits its idempotent skip once verify wins the race).
+    // Idempotent: Zoho invoice + recurring plan. Fire-and-forget so the success
+    // page / verify HTTP response is not blocked on Zoho OAuth or rate-limit
+    // backoff (admin mark-paid already uses `void` for the same reason).
+    // Safe: syncPaidBookingSideEffects never throws to the caller.
     if (adm) {
-      await syncPaidBookingSideEffects(adm, {
+      void syncPaidBookingSideEffects(adm, {
         bookingId: result.bookingId,
         reference: ref,
         amountCents: amount,

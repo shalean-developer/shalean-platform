@@ -275,7 +275,7 @@ export function Step2Schedule() {
   );
 
   const areaResolved = Boolean(serviceAreaLocationId?.trim());
-  const { availability, loading: slotsLoading, fetchError: slotsFetchError } =
+  const { availability, fulfillmentBySlot, dayFulfillmentMode, loading: slotsLoading, fetchError: slotsFetchError } =
     useBookingV2ScheduleAvailability({
       dateYmd: date || null,
       locationId: serviceAreaLocationId?.trim() || null,
@@ -296,7 +296,7 @@ export function Step2Schedule() {
   }, [bookingType, recurringFrequency, setValue]);
 
   useEffect(() => {
-    if (!date) return;
+    if (!date || slotsLoading) return;
     const available =
       availability != null
         ? Object.entries(availability)
@@ -308,7 +308,7 @@ export function Step2Schedule() {
     if (time && !available.includes(time)) {
       setValue("time", available[0] ?? "", { shouldValidate: true });
     }
-  }, [date, time, setValue, scheduling, availability, areaResolved]);
+  }, [date, time, setValue, scheduling, availability, areaResolved, slotsLoading]);
 
   function toggleCleaner(cleaner: AvailableCleanerV2) {
     const ids = selectedCleanerIds;
@@ -432,6 +432,8 @@ export function Step2Schedule() {
                     onChange={field.onChange}
                     scheduling={scheduling}
                     availability={availability}
+                    fulfillmentBySlot={fulfillmentBySlot}
+                    dayFulfillmentMode={dayFulfillmentMode}
                     loading={slotsLoading}
                     areaResolved={areaResolved}
                   />

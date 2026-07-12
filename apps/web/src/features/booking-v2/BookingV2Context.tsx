@@ -40,7 +40,7 @@ import {
 
 export type { LiveServiceConfig };
 
-const STORAGE_KEY = "shalean:booking-v2:v1";
+const STORAGE_KEY = "shalean:booking-v2:v1"; // keep in sync with BOOKING_V2_DRAFT_STORAGE_KEY
 
 // ─── Context shape ─────────────────────────────────────────────────────────────
 

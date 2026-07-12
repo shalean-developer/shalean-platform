@@ -19,8 +19,8 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { computeCheckoutTotalZar } from "@/lib/booking/checkoutTotal";
 import { readGuestUserFromStorage, writeGuestUserToStorage } from "@/lib/booking/guestUserStorage";
-import { getPromoDiscountZar } from "@/lib/booking/promoCodes";
 import { formatLockedAppointmentLabel, type LockedBooking } from "@/lib/booking/lockedBooking";
+import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
 import {
   BOOKING_PROMO_QUERY,
   sanitizeBookingPromoParam,
@@ -109,21 +109,69 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     description: string;
   } | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+
+  async function validatePromoViaApi(code: string): Promise<boolean> {
+    const legacyToV2: Record<string, string> = {
+      standard: "regular-cleaning",
+      deep: "deep-cleaning",
+      move: "moving-cleaning",
+      carpet: "carpet-cleaning",
+      airbnb: "airbnb-cleaning",
+      office: "office-cleaning",
+    };
+    const canonical = locked.service ? adminBookingServiceSlug(String(locked.service)) : "standard";
+    const serviceSlug = legacyToV2[canonical] ?? canonical;
+    try {
+      const res = await fetch("/api/promotions/validate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          promoCode: code,
+          serviceSlug,
+          subtotalZar: Math.round(locked.finalPrice),
+          customerEmail: email.trim() || undefined,
+        }),
+      });
+      const json = (await res.json().catch(() => ({}))) as {
+        totalDiscountZar?: number;
+        applied?: Array<{ description?: string }>;
+        error?: string;
+      };
+      if (!res.ok) {
+        setPromoApplied(null);
+        setPromoError(json.error ?? "Could not validate that code.");
+        return false;
+      }
+      const discountZar = Math.max(0, Math.round(Number(json.totalDiscountZar ?? 0)));
+      if (discountZar <= 0) {
+        setPromoApplied(null);
+        setPromoError("That code isn’t valid for this booking.");
+        return false;
+      }
+      setPromoApplied({
+        code: code.toUpperCase(),
+        discountZar,
+        description: json.applied?.[0]?.description ?? "Promotion applied",
+      });
+      setPromoError(null);
+      return true;
+    } catch {
+      setPromoApplied(null);
+      setPromoError("Could not validate that code. Try again.");
+      return false;
+    }
+  }
 
   useEffect(() => {
     if (urlPromoAppliedRef.current) return;
     const code = sanitizeBookingPromoParam(searchParams.get(BOOKING_PROMO_QUERY));
     if (!code) return;
-    const result = getPromoDiscountZar(code, locked.finalPrice);
-    if (!result) return;
     urlPromoAppliedRef.current = true;
     setPromoInput(code);
-    setPromoApplied({
-      code,
-      discountZar: result.discountZar,
-      description: result.description,
-    });
-    setPromoError(null);
+    void validatePromoViaApi(code);
   }, [searchParams, locked.finalPrice]);
 
   const recurringDiscount = useMemo(() => {
@@ -133,9 +181,6 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
     return null;
   }, [locked.cleaningFrequency, locked.finalPrice]);
 
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
   const [sessionUser, setSessionUser] = useState<{ id: string; accessToken: string } | null>(null);
   const { user } = useAuth();
   const { referralDiscount, invalidMessage } = useStoredReferralCheckoutDiscount({
@@ -352,17 +397,7 @@ export const Step4Payment = forwardRef<Step4PaymentHandle, Step4PaymentProps>(fu
       setPromoError("Enter a code or leave blank.");
       return;
     }
-    const result = getPromoDiscountZar(code, locked.finalPrice);
-    if (!result) {
-      setPromoApplied(null);
-      setPromoError("That code isn’t valid for this booking.");
-      return;
-    }
-    setPromoApplied({
-      code: code.toUpperCase(),
-      discountZar: result.discountZar,
-      description: result.description,
-    });
+    void validatePromoViaApi(code);
   }
 
   function clearPromo() {

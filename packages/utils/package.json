@@ -14,7 +14,8 @@
     "./distance": "./src/distance.ts",
     "./cleanerDisplayFirstName": "./src/cleanerDisplayFirstName.ts",
     "./shaleanBillingContactEmail": "./src/shaleanBillingContactEmail.ts",
-    "./customerProfileContactFields": "./src/customerProfileContactFields.ts"
+    "./customerProfileContactFields": "./src/customerProfileContactFields.ts",
+    "./customerSupport": "./src/customerSupport.ts"
   },
   "types": "./src/index.ts",
   "files": [

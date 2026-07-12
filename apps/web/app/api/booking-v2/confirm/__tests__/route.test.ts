@@ -5,9 +5,10 @@ import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearer
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { resolveCustomerPhoneFromAuthAdmin } from "@/lib/admin/adminBookingCustomerContact";
-import { resolveBookingV2LocationContext } from "@/lib/booking-v2/bookingV2LocationContext";
-import { bookingV2SlotHasEligibleCleaners } from "@/lib/booking-v2/bookingV2SlotEligibility";
+import { resolveBookingV2LocationContext, loadBookingV2LocationContextById } from "@/lib/booking-v2/bookingV2LocationContext";
+import { bookingV2SlotHasEligibleCleaners, assessBookingV2SlotFulfillment } from "@/lib/booking-v2/bookingV2SlotEligibility";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
+import { isBookingSoftFulfillmentEnabled } from "@/lib/booking/availabilityFlags";
 
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: vi.fn() }));
 vi.mock("@/lib/supabase/bookingRouteBearerAuth", () => ({ resolveBookingRouteBearerAuth: vi.fn() }));
@@ -21,10 +22,22 @@ vi.mock("@/lib/admin/adminBookingCustomerContact", () => ({
 }));
 vi.mock("@/lib/booking-v2/bookingV2LocationContext", () => ({
   resolveBookingV2LocationContext: vi.fn(),
+  loadBookingV2LocationContextById: vi.fn(),
 }));
 vi.mock("@/lib/booking-v2/bookingV2SlotEligibility", () => ({
   bookingV2SlotHasEligibleCleaners: vi.fn(),
+  assessBookingV2SlotFulfillment: vi.fn(),
 }));
+vi.mock("@/lib/booking/logBookingDemandEvent", () => ({
+  logBookingDemandEvent: vi.fn(),
+}));
+vi.mock("@/lib/booking/availabilityFlags", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/booking/availabilityFlags")>();
+  return {
+    ...actual,
+    isBookingSoftFulfillmentEnabled: vi.fn(() => true),
+  };
+});
 vi.mock("@/lib/booking/getEligibleCleaners", () => ({ getEligibleCleaners: vi.fn() }));
 vi.mock("@/lib/referrals/validateReferral", () => ({
   validateReferralForCheckout: vi.fn().mockResolvedValue({ valid: false }),
@@ -133,6 +146,7 @@ describe("POST /api/booking-v2/confirm", () => {
         serviceFeeRule: "flat",
         serviceFeeFlatCents: 3000,
         recurringDiscounts: {},
+        propertyFactorRates: {},
       },
     } as never);
     vi.mocked(resolveBookingV2LocationContext).mockResolvedValue({
@@ -141,12 +155,28 @@ describe("POST /api/booking-v2/confirm", () => {
       latitude: -33.98,
       longitude: 18.46,
     });
+    vi.mocked(loadBookingV2LocationContextById).mockResolvedValue({
+      locationId: "00000000-0000-4000-8000-000000000010",
+      cityId: "00000000-0000-4000-8000-000000000020",
+      latitude: -33.98,
+      longitude: 18.46,
+    });
     vi.mocked(bookingV2SlotHasEligibleCleaners).mockResolvedValue(true);
+    vi.mocked(assessBookingV2SlotFulfillment).mockResolvedValue({
+      mode: "instant",
+      reason: "eligible_cleaner_available",
+      instantCount: 1,
+      opsCount: 1,
+      requiresPayment: true,
+      customerMessage: "",
+    });
+    vi.mocked(isBookingSoftFulfillmentEnabled).mockReturnValue(true);
     vi.mocked(getEligibleCleaners).mockResolvedValue([]);
   });
 
   it("returns 422 when suburb cannot be resolved to a service area", async () => {
     vi.mocked(resolveBookingV2LocationContext).mockResolvedValue(null);
+    vi.mocked(loadBookingV2LocationContextById).mockResolvedValue(null);
     const admin = mockAdminForConfirm();
     vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
 
@@ -163,8 +193,15 @@ describe("POST /api/booking-v2/confirm", () => {
     expect(json.error).toMatch(/service area/i);
   });
 
-  it("returns 409 when no solo cleaners are eligible for the slot", async () => {
-    vi.mocked(bookingV2SlotHasEligibleCleaners).mockResolvedValue(false);
+  it("returns AREA_REVIEW_REQUIRED when soft fulfillment finds no coverage", async () => {
+    vi.mocked(assessBookingV2SlotFulfillment).mockResolvedValue({
+      mode: "area_review",
+      reason: "no_active_cleaner_coverage",
+      instantCount: 0,
+      opsCount: 0,
+      requiresPayment: false,
+      customerMessage: "We're expanding into your area.",
+    });
     const admin = mockAdminForConfirm();
     vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
 
@@ -177,8 +214,35 @@ describe("POST /api/booking-v2/confirm", () => {
     );
 
     expect(res.status).toBe(409);
-    const json = (await res.json()) as { error?: string };
-    expect(json.error).toMatch(/no cleaners are available/i);
+    const json = (await res.json()) as { code?: string; fulfillmentMode?: string };
+    expect(json.code).toBe("AREA_REVIEW_REQUIRED");
+    expect(json.fulfillmentMode).toBe("area_review");
+  });
+
+  it("allows ops_assignment confirm when no instant cleaner but coverage exists", async () => {
+    vi.mocked(assessBookingV2SlotFulfillment).mockResolvedValue({
+      mode: "ops_assignment",
+      reason: "ops_assignable_coverage",
+      instantCount: 0,
+      opsCount: 2,
+      requiresPayment: true,
+      customerMessage: "We'll assign shortly.",
+    });
+    const admin = mockAdminForConfirm();
+    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+
+    const res = await POST(
+      new Request("http://localhost/api/booking-v2/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+        body: JSON.stringify(basePayload),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const row = admin.insert.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.fulfillment_mode).toBe("ops_assignment");
+    expect(row.dispatch_status).toBe("unassigned");
   });
 
   it("inserts booking with location_id and canonical service_slug when eligible", async () => {

@@ -20,6 +20,7 @@ import { resolveCustomerPhoneFromAuthAdmin, trimCustomerPhone } from "@/lib/admi
 import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import {
+  loadBookingV2LocationContextById,
   resolveBookingV2LocationContext,
   type BookingV2LocationContext,
 } from "@/lib/booking-v2/bookingV2LocationContext";
@@ -29,14 +30,19 @@ import {
 } from "@/lib/booking/persistPreferredCleaners";
 import { validatePreferredCleanersForSlot } from "@/lib/booking/validatePreferredCleanersForSlot";
 import {
-  bookingV2SlotHasEligibleCleaners,
+  assessBookingV2SlotFulfillment,
 } from "@/lib/booking-v2/bookingV2SlotEligibility";
+import { isBookingSoftFulfillmentEnabled } from "@/lib/booking/availabilityFlags";
+import { logBookingDemandEvent } from "@/lib/booking/logBookingDemandEvent";
+import { SOFT_FULFILLMENT_CUSTOMER_COPY } from "@/lib/booking/bookingFulfillmentMode";
+import type { BookingFulfillmentMode } from "@/lib/booking/bookingFulfillmentMode";
 import { canonicalServiceSlugFromBookingV2 } from "@/lib/booking-v2/bookingV2ServiceSlug";
 import { spendCleaningCredit } from "@/lib/referrals/credits";
 import { buildReferralCheckoutSnapshot } from "@/lib/referrals/referralCheckoutMetadata";
 import { buildReferralCheckoutFingerprint } from "@/lib/referrals/checkoutFingerprint";
 import { resolveReferralClientIp } from "@/lib/referrals/clientIp";
 import { validateReferralForCheckout } from "@/lib/referrals/validateReferral";
+import { getPaystackPublicKey } from "@/lib/payments/paystackPublicKey";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import { assertV2ConfirmQuoteIntegrity } from "@/lib/booking/quote/validateBookingV2Quote";
 import type { CustomerPricingBreakdown, CustomerTotalInput } from "@/lib/booking-v2/types";
@@ -48,6 +54,9 @@ import {
   getActiveMembershipDiscountPercent,
 } from "@/lib/promotions/server";
 import type { AppliedPromotionDiscount } from "@/lib/promotions/types";
+import { recordCoveredSettlement } from "@/lib/payments/recordCoveredSettlement";
+import { resolveCheckoutPromoEligibilityExtras } from "@/lib/promotions/resolveCheckoutPromoEligibilityExtras";
+import { bookingPaidAmountColumnsFromZar } from "@/lib/booking/bookingPaidAmountColumns";
 
 export const runtime = "nodejs";
 
@@ -59,6 +68,7 @@ const UUID_RE =
 /**
  * Promo / referral / credit can cover the full total. Never leave a R0 booking
  * in `pending_payment` or send the customer to Paystack with amount 0.
+ * Phase 4: also writes a zero-amount payment_transactions ledger row.
  */
 async function settleFullyCoveredBookingV2(
   supabase: SupabaseAdmin,
@@ -76,6 +86,14 @@ async function settleFullyCoveredBookingV2(
       billing_type: "prepaid",
     })
     .eq("id", bookingId);
+
+  const ledger = await recordCoveredSettlement(supabase, {
+    bookingId,
+    paidAtIso: now,
+  });
+  if (!ledger.ok) {
+    console.warn("[booking-v2/confirm] R0 settlement ledger failed:", ledger.error);
+  }
   return true;
 }
 
@@ -91,10 +109,11 @@ async function resolveConfirmLocationContext(
   const clientLocId = data.serviceAreaLocationId?.trim() ?? "";
   let ctx: BookingV2LocationContext | null = null;
 
+  // Prefer the structured location id from Details (same id used for available-cleaners).
   if (clientLocId && UUID_RE.test(clientLocId)) {
-    const resolved = await resolveBookingV2LocationContext(supabase, data.suburb);
-    if (resolved && resolved.locationId === clientLocId) {
-      ctx = resolved;
+    ctx = await loadBookingV2LocationContextById(supabase, clientLocId);
+    if (ctx && data.serviceAreaCityId?.trim() && UUID_RE.test(data.serviceAreaCityId.trim())) {
+      ctx = { ...ctx, cityId: ctx.cityId ?? data.serviceAreaCityId.trim() };
     }
   }
   if (!ctx) {
@@ -246,21 +265,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Selected team was not found. Refresh and try again." }, { status: 422 });
     }
     if (!picked.available) {
-      const reason = teamLoad.platformAtCapacity
-        ? "No team slots available for this date. Please choose another date."
-        : `${picked.name} is not available for this date. Please select another team or date.`;
-      return NextResponse.json({ error: reason }, { status: 409 });
+      if (!isBookingSoftFulfillmentEnabled()) {
+        const reason = teamLoad.platformAtCapacity
+          ? "No team slots available for this date. Please choose another date."
+          : `${picked.name} is not available for this date. Please select another team or date.`;
+        return NextResponse.json({ error: reason }, { status: 409 });
+      }
+      // Soft path: keep team preference; ops will confirm capacity.
     }
   }
 
   // ── 5. Resolve customer name from user_profiles ──────────────────────────────
   const { data: profileRow } = await supabase
     .from("user_profiles")
-    .select("full_name")
+    .select("full_name, tier")
     .eq("id", userId)
     .maybeSingle();
 
   const customerName: string = profileRow?.full_name ?? "";
+  const vipTier =
+    profileRow && typeof (profileRow as { tier?: unknown }).tier === "string"
+      ? String((profileRow as { tier: string }).tier)
+      : null;
 
   const customerPhoneFromAuth = await resolveCustomerPhoneFromAuthAdmin(supabase, userId);
   const customerPhone = trimCustomerPhone(data.contactPhone) ?? customerPhoneFromAuth;
@@ -287,6 +313,7 @@ export async function POST(request: Request) {
     },
     liveConfig: null,
     feesConfig: null,
+    vipTier,
   });
 
   try {
@@ -329,6 +356,7 @@ export async function POST(request: Request) {
       },
       liveConfig,
       feesConfig,
+      vipTier,
     });
     catalogLoaded = true;
   } catch (e) {
@@ -360,6 +388,7 @@ export async function POST(request: Request) {
     feesConfig: feesConfig ?? defaultBookingV2FeesConfig(),
     equipmentRequired: equipmentRequiredFlag,
     equipmentQuote: serverEquipmentQuote,
+    vipTier,
   };
 
   const clientPricingSummary = parsed.data.pricingSummary as CustomerPricingBreakdown & { total?: number };
@@ -431,9 +460,12 @@ export async function POST(request: Request) {
 
   let preferredCleanerIds: string[] = [];
   let preferredExtras = preferredCleanerInsertExtras([]);
+  let fulfillmentMode: BookingFulfillmentMode = "instant";
+  let fulfillmentReason = "eligible_cleaner_available";
+  let fulfillmentCustomerMessage = "";
 
   if (data.cleanerMode === "individual_cleaners") {
-    const hasEligible = await bookingV2SlotHasEligibleCleaners(supabase, {
+    const assessment = await assessBookingV2SlotFulfillment(supabase, {
       serviceSlug: data.serviceSlug,
       date: data.date,
       time: timeHm,
@@ -441,31 +473,85 @@ export async function POST(request: Request) {
       serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
       durationMinutes,
     });
-    if (!hasEligible) {
+    fulfillmentMode = assessment.mode;
+    fulfillmentReason = assessment.reason;
+    fulfillmentCustomerMessage = assessment.customerMessage;
+
+    if (assessment.mode === "area_review") {
+      void logBookingDemandEvent(supabase, {
+        eventType: "slot_exhausted",
+        suburb: data.suburb,
+        city: data.city,
+        postalCode: data.postalCode,
+        locationId: locationCtx.locationId,
+        serviceSlug: data.serviceSlug,
+        requestedDate: data.date,
+        requestedTime: timeHm,
+        fulfillmentMode: "area_review",
+        userId,
+        source: "web_v2_confirm",
+        metadata: { reason: assessment.reason },
+      });
       return NextResponse.json(
         {
-          error:
-            "No cleaners are available for this date and time in your area. Please choose another slot or contact us.",
+          error: assessment.customerMessage || SOFT_FULFILLMENT_CUSTOMER_COPY.areaReview,
+          code: "AREA_REVIEW_REQUIRED",
+          fulfillmentMode: "area_review",
+          requiresPayment: false,
+          customerMessage: assessment.customerMessage || SOFT_FULFILLMENT_CUSTOMER_COPY.areaReview,
         },
         { status: 409 },
       );
     }
 
-    const preferredValidation = await validatePreferredCleanersForSlot({
-      admin: supabase,
-      selectedCleanerIds: data.selectedCleanerIds ?? [],
-      maxSelect: data.cleanerCount,
-      date: data.date,
-      timeHm,
-      durationMinutes,
-      locationId: locationCtx.locationId,
-      serviceType: canonicalServiceSlug,
-    });
-    if (!preferredValidation.ok) {
-      return NextResponse.json({ error: preferredValidation.error }, { status: 409 });
+    if (assessment.mode === "instant") {
+      // Keep preferred cleaner validation on the instant path only.
+      const preferredValidation = await validatePreferredCleanersForSlot({
+        admin: supabase,
+        selectedCleanerIds: data.selectedCleanerIds ?? [],
+        maxSelect: data.cleanerCount,
+        date: data.date,
+        timeHm,
+        durationMinutes,
+        locationId: locationCtx.locationId,
+        serviceType: canonicalServiceSlug,
+      });
+      if (!preferredValidation.ok) {
+        return NextResponse.json({ error: preferredValidation.error }, { status: 409 });
+      }
+      preferredCleanerIds = preferredValidation.ids;
+      preferredExtras = preferredCleanerInsertExtras(preferredCleanerIds);
+    } else {
+      // ops_assignment: drop preferred cleaners that are not slot-eligible; reserve without preference.
+      preferredCleanerIds = [];
+      preferredExtras = preferredCleanerInsertExtras([]);
+      void logBookingDemandEvent(supabase, {
+        eventType: "ops_reserve_started",
+        suburb: data.suburb,
+        city: data.city,
+        postalCode: data.postalCode,
+        locationId: locationCtx.locationId,
+        serviceSlug: data.serviceSlug,
+        requestedDate: data.date,
+        requestedTime: timeHm,
+        fulfillmentMode: "ops_assignment",
+        userId,
+        source: "web_v2_confirm",
+        metadata: { reason: assessment.reason, opsCount: assessment.opsCount },
+      });
     }
-    preferredCleanerIds = preferredValidation.ids;
-    preferredExtras = preferredCleanerInsertExtras(preferredCleanerIds);
+  } else if (data.cleanerMode === "team" && isBookingSoftFulfillmentEnabled()) {
+    // If team was unavailable we still reach here; mark as ops reserve for the queue.
+    const teamLoad = await loadDispatchTeamsForBooking(supabase, {
+      dateYmd: data.date,
+      serviceSlug: data.serviceSlug,
+    });
+    const picked = teamLoad.teams.find((t) => t.id === data.assignedTeamId);
+    if (picked && !picked.available) {
+      fulfillmentMode = "ops_assignment";
+      fulfillmentReason = "team_capacity_ops_reserve";
+      fulfillmentCustomerMessage = SOFT_FULFILLMENT_CUSTOMER_COPY.opsAssignment;
+    }
   }
 
   const locationFields = locationPersistFields(locationCtx);
@@ -479,7 +565,7 @@ export async function POST(request: Request) {
     clientIp: resolveReferralClientIp(request),
     userAgent: request.headers.get("user-agent"),
   });
-  // Soft-fail like promo eval: never let referral validation abort confirm.
+  // Hard-fail referral validation errors (Phase 1). Invalid codes stay soft (valid:false).
   let referralValidation: Awaited<ReturnType<typeof validateReferralForCheckout>> = {
     valid: false,
     reason: "code_not_found",
@@ -495,8 +581,12 @@ export async function POST(request: Request) {
         serviceSlug: data.serviceSlug,
         checkoutFingerprint: referralCheckoutFingerprint,
       });
-    } catch {
-      referralValidation = { valid: false, reason: "code_not_found" };
+    } catch (err) {
+      console.error("[booking-v2/confirm] referral validation failed:", err);
+      return NextResponse.json(
+        { error: "Could not validate referral code. Please try again." },
+        { status: 503 },
+      );
     }
   }
   const referralDiscountZar = referralValidation.valid ? referralValidation.discountZar : 0;
@@ -513,6 +603,11 @@ export async function POST(request: Request) {
       getCompletedBookingCount(supabase, userId, email ?? ""),
       getActiveMembershipDiscountPercent(supabase, userId),
     ]);
+    const promoExtras = await resolveCheckoutPromoEligibilityExtras(supabase, {
+      userId,
+      locationId: locationCtx.locationId,
+      completedBookingCount,
+    });
     const promoEval = await evaluateCheckoutPromotions(supabase, {
       userId,
       customerEmail: email ?? "",
@@ -522,15 +617,21 @@ export async function POST(request: Request) {
       cityId: locationCtx.cityId,
       locationId: locationCtx.locationId,
       suburb: data.suburb,
+      suburbId: promoExtras.suburbId,
+      customerSegments: promoExtras.customerSegments,
       subtotalZar: preDiscountTotalZar,
       promoCode: promoCodeInput || null,
       membershipDiscountPercent,
     });
     promotionApplied = promoEval.applied;
     promotionDiscountZar = promoEval.totalDiscountZar;
-  } catch {
-    promotionApplied = [];
-    promotionDiscountZar = 0;
+  } catch (err) {
+    // Phase 1: never silently zero discounts — fail confirm so the customer can retry.
+    console.error("[booking-v2/confirm] promotion evaluation failed:", err);
+    return NextResponse.json(
+      { error: "Could not apply promotions. Please try again." },
+      { status: 503 },
+    );
   }
 
   // Payable amount must match what Paystack charges — otherwise webhook finalize
@@ -548,8 +649,7 @@ export async function POST(request: Request) {
   const persistPricing = {
     ...persistPricingBase,
     total_price: payAmountZar,
-    total_paid_zar: payAmountZar,
-    amount_paid_cents: Math.round(payAmountZar * 100),
+    ...bookingPaidAmountColumnsFromZar(payAmountZar),
   };
 
   // ── 7. Generate Paystack reference ────────────────────────────────────────────
@@ -600,6 +700,9 @@ export async function POST(request: Request) {
         ...locationFields,
         price_snapshot: priceSnapshot,
         service_slug: canonicalServiceSlug,
+        fulfillment_mode: fulfillmentMode,
+        fulfillment_reason: fulfillmentReason,
+        dispatch_status: fulfillmentMode === "ops_assignment" ? "unassigned" : "searching",
         ...(data.cleanerMode === "individual_cleaners"
           ? {
               cleaner_count: Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount,
@@ -638,6 +741,8 @@ export async function POST(request: Request) {
               }
             : {}),
           payTotalZar: payAmountZar,
+          fulfillmentMode,
+          fulfillmentReason,
           ...preferredExtras.snapshotExtension,
           confirmedAt: new Date().toISOString(),
         },
@@ -678,8 +783,7 @@ export async function POST(request: Request) {
             .from("bookings")
             .update({
               total_price: payAmountZar,
-              total_paid_zar: payAmountZar,
-              amount_paid_cents: Math.round(payAmountZar * 100),
+              ...bookingPaidAmountColumnsFromZar(payAmountZar),
               price_snapshot: { ...priceSnapshot, cleaning_credit_zar: creditAppliedZar, total_price: payAmountZar, pay_total_zar: payAmountZar },
             })
             .eq("id", existingBooking.id);
@@ -691,8 +795,7 @@ export async function POST(request: Request) {
           .from("bookings")
           .update({
             total_price: payAmountZar,
-            total_paid_zar: payAmountZar,
-            amount_paid_cents: Math.round(payAmountZar * 100),
+            ...bookingPaidAmountColumnsFromZar(payAmountZar),
             price_snapshot: { ...priceSnapshot, cleaning_credit_zar: 0, total_price: payAmountZar, pay_total_zar: payAmountZar },
           })
           .eq("id", existingBooking.id);
@@ -729,7 +832,10 @@ export async function POST(request: Request) {
       referralAppliedZar,
       promotionAppliedZar,
       promotionsApplied: promotionApplied,
+      fulfillmentMode,
       requiresPayment,
+      customerMessage: fulfillmentCustomerMessage,
+      ...(getPaystackPublicKey() ? { paystackPublicKey: getPaystackPublicKey() } : {}),
     });
   }
 
@@ -751,7 +857,9 @@ export async function POST(request: Request) {
       // Status
       status: "pending_payment",
       payment_status: "pending",
-      dispatch_status: "searching",
+      dispatch_status: fulfillmentMode === "ops_assignment" ? "unassigned" : "searching",
+      fulfillment_mode: fulfillmentMode,
+      fulfillment_reason: fulfillmentReason,
 
       // Location
       location: data.address,
@@ -827,6 +935,8 @@ export async function POST(request: Request) {
             }
           : {}),
         payTotalZar: payAmountZar,
+        fulfillmentMode,
+        fulfillmentReason,
         ...preferredExtras.snapshotExtension,
         confirmedAt: new Date().toISOString(),
       },
@@ -836,8 +946,15 @@ export async function POST(request: Request) {
 
   if (insertErr || !inserted?.id) {
     console.error("[booking-v2/confirm] insert error:", insertErr?.message, insertErr?.code);
+    const missingCol =
+      /fulfillment_mode|fulfillment_reason|PGRST204|schema cache/i.test(insertErr?.message ?? "") ||
+      insertErr?.code === "PGRST204";
     return NextResponse.json(
-      { error: "Could not save your booking. Please try again." },
+      {
+        error: missingCol
+          ? "Booking save is temporarily unavailable (database migration pending). Please try again shortly."
+          : "Could not save your booking. Please try again.",
+      },
       { status: 500 },
     );
   }
@@ -867,8 +984,7 @@ export async function POST(request: Request) {
           .from("bookings")
           .update({
             total_price: payAmountZar,
-            total_paid_zar: payAmountZar,
-            amount_paid_cents: Math.round(payAmountZar * 100),
+            ...bookingPaidAmountColumnsFromZar(payAmountZar),
             price_snapshot: {
               ...priceSnapshot,
               cleaning_credit_zar: creditAppliedZar,
@@ -884,8 +1000,7 @@ export async function POST(request: Request) {
         .from("bookings")
         .update({
           total_price: payAmountZar,
-          total_paid_zar: payAmountZar,
-          amount_paid_cents: Math.round(payAmountZar * 100),
+          ...bookingPaidAmountColumnsFromZar(payAmountZar),
           price_snapshot: {
             ...priceSnapshot,
             cleaning_credit_zar: 0,
@@ -923,6 +1038,9 @@ export async function POST(request: Request) {
     referralAppliedZar,
     promotionAppliedZar,
     promotionsApplied: promotionApplied,
+    fulfillmentMode,
     requiresPayment,
+    customerMessage: fulfillmentCustomerMessage,
+    ...(getPaystackPublicKey() ? { paystackPublicKey: getPaystackPublicKey() } : {}),
   });
 }

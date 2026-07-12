@@ -125,6 +125,48 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
+  // Phase 2: dispute / chargeback events — mark booking refund_status without Paystack refund call.
+  const disputeEvents = new Set([
+    "charge.dispute.create",
+    "charge.dispute.remind",
+    "charge.dispute.resolve",
+    "chargeback",
+    "charge.dispute",
+  ]);
+  if (event.event && disputeEvents.has(event.event) && event.data) {
+    const d = event.data as Record<string, unknown>;
+    const reference =
+      typeof d.reference === "string"
+        ? d.reference
+        : typeof (d as { transaction?: { reference?: string } }).transaction?.reference === "string"
+          ? String((d as { transaction: { reference: string } }).transaction.reference)
+          : "";
+    const admin = getSupabaseAdmin();
+    if (admin && reference) {
+      const { markBookingChargeback } = await import("@/lib/booking/refundBookingPayment");
+      let bookingId: string | null = null;
+      const { data: b } = await admin
+        .from("bookings")
+        .select("id")
+        .eq("paystack_reference", reference)
+        .maybeSingle();
+      if (b && typeof (b as { id?: string }).id === "string") bookingId = (b as { id: string }).id;
+      if (bookingId) {
+        await markBookingChargeback(admin, {
+          bookingId,
+          paystackReference: reference,
+          note: `Paystack event ${event.event}`,
+        });
+      } else {
+        await reportOperationalIssue("warn", "paystack/webhook", "chargeback.booking_not_found", {
+          reference,
+          event: event.event,
+        });
+      }
+    }
+    return NextResponse.json({ received: true });
+  }
+
   if (event.event !== "charge.success" || !event.data) {
     return NextResponse.json({ received: true });
   }
@@ -344,7 +386,9 @@ export async function POST(request: Request) {
       });
       // Backfill Zoho + recurring even when finalize was already done by the verify
       // path — both are idempotent (zoho_invoice_id guard + recurring plan dedup).
-      await syncPaidBookingSideEffects(supabase, {
+      // Do not await: Paystack retries webhooks when the handler is slow; Zoho can
+      // stall for minutes on OAuth / rate-limit backoff.
+      void syncPaidBookingSideEffects(supabase, {
         bookingId: persistedHead.bookingId,
         reference,
         amountCents: amount,
@@ -409,8 +453,9 @@ export async function POST(request: Request) {
     });
 
     // Idempotent: Zoho invoice + recurring plan provisioning.
+    // Fire-and-forget — same reason as verify pipeline / admin mark-paid.
     if (supabase) {
-      await syncPaidBookingSideEffects(supabase, {
+      void syncPaidBookingSideEffects(supabase, {
         bookingId: result.bookingId,
         reference,
         amountCents: amount,

@@ -2,6 +2,8 @@
  * Single source of truth for Shalean cleaner job payout rules (v3).
  * Pure functions only — no Supabase, no Date.now() for tenure or appointment math.
  *
+ * Tips (`tip_zar`) are NOT included — see `lib/payout/tipPolicy.ts` (TIP_PASSTHROUGH_TO_CLEANER=false).
+ *
  * **Rollback:** set `USE_LEGACY_PAYOUT_ENGINE=true` to restore v1 `computeBookingEarnings` (DB caps)
  * and legacy line-item share allocation without `canonicalDisplayCents`.
  */

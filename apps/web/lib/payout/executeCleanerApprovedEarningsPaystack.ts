@@ -53,10 +53,18 @@ export async function executeCleanerApprovedEarningsPaystack(
   }
 
   /**
-   * Phase 15A measurement only. Dual-rail exclusion is now enforced in
-   * `claim_cleaner_earnings_for_paystack` (migration 20261065).
+   * Phase 15A measurement + Phase 3 I3 soft gate (app layer).
+   * Dual-rail exclusion is also enforced in `claim_cleaner_earnings_for_paystack` (20261065).
    */
   await measurePhase15aLedgerClaimShadowEligibility(admin, cid);
+
+  const { assertLedgerClaimNotOnWeeklyRail } = await import(
+    "@/lib/payout/assertLedgerClaimNotOnWeeklyRail"
+  );
+  const dualRail = await assertLedgerClaimNotOnWeeklyRail(admin, cid);
+  if (!dualRail.ok) {
+    return { ok: false, error: dualRail.error, code: dualRail.code, status: 409 };
+  }
 
   void logPayoutAuditEvent(admin, {
     eventType: "ledger_disburse_requested",

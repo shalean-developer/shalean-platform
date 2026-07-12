@@ -4,7 +4,6 @@ import type {
   CustomerPricingBreakdown,
   CustomerTotalInput,
   PricingLineItem,
-  RecurringDiscountRule,
 } from "@/lib/booking-v2/types";
 import {
   computePropertyFactors,
@@ -12,45 +11,14 @@ import {
 } from "@/lib/booking-v2/propertyFactorPricing";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import { resolveBookingV2DurationWorkload } from "@/lib/booking/quote/resolveBookingDurationWorkload";
+import {
+  applyRecurringDiscountZar,
+  applyVipToCleaningSubtotalZar,
+  computeServiceFeeZar,
+  VIP_APPLIES_ON_BOOKING_V2,
+} from "@shalean/pricing";
 
-export function computeServiceFeeZar(
-  subtotalBeforeServiceFee: number,
-  feesConfig: BookingV2FeesConfig,
-): number {
-  const rule = feesConfig.serviceFeeRule;
-  if (rule === "none") return 0;
-
-  const subtotalCents = Math.max(0, Math.round(subtotalBeforeServiceFee * 100));
-
-  if (rule === "percent") {
-    return Math.round((subtotalCents * feesConfig.serviceFeePercent) / 100) / 100;
-  }
-  if (rule === "percent_floor") {
-    return Math.max(20, Math.round((subtotalCents * feesConfig.serviceFeePercent) / 100) / 100);
-  }
-  if (rule === "optimized") {
-    const cents = Math.max(2000, Math.min(5000, Math.round(subtotalCents * 0.05)));
-    return cents / 100;
-  }
-  return feesConfig.serviceFeeFlatCents / 100;
-}
-
-export function applyRecurringDiscountZar(
-  amountBeforeDiscount: number,
-  bookingType: "once_off" | "recurring",
-  recurringFrequency: string,
-  feesConfig: BookingV2FeesConfig,
-): number {
-  if (bookingType !== "recurring" || !recurringFrequency) return 0;
-  const rule: RecurringDiscountRule | undefined =
-    feesConfig.recurringDiscounts[recurringFrequency];
-  if (!rule || rule.value <= 0) return 0;
-
-  if (rule.type === "fixed") {
-    return Math.min(Math.round(rule.value), Math.round(amountBeforeDiscount));
-  }
-  return Math.round((amountBeforeDiscount * rule.value) / 100);
-}
+export { computeServiceFeeZar, applyRecurringDiscountZar } from "@shalean/pricing";
 
 function computeSelectedExtras(
   selectedExtras: string[],
@@ -151,14 +119,25 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
     catalog.pricePerExtraCleaner,
   );
 
-  const cleaning_service_subtotal =
+  const cleaning_service_subtotal_gross =
     base_service_price +
     factors.property_factors_total +
     selected_extras_total +
     extra_cleaner_cost;
 
-  const subtotal_before_service_fee =
-    cleaning_service_subtotal + equipment_logistics_fee;
+  const vip = VIP_APPLIES_ON_BOOKING_V2
+    ? applyVipToCleaningSubtotalZar(cleaning_service_subtotal_gross, input.vipTier)
+    : {
+        vipTier: "regular" as const,
+        vipMultiplier: 1,
+        vipDiscountZar: 0,
+        cleaningSubtotalAfterVipZar: cleaning_service_subtotal_gross,
+      };
+
+  const cleaning_service_subtotal = vip.cleaningSubtotalAfterVipZar;
+  const vip_discount_zar = vip.vipDiscountZar;
+
+  const subtotal_before_service_fee = cleaning_service_subtotal + equipment_logistics_fee;
 
   const service_fee = computeServiceFeeZar(subtotal_before_service_fee, feesConfig);
 
@@ -170,36 +149,31 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
     feesConfig,
   );
 
-  const estimated_total = Math.max(
-    0,
-    Math.round(beforeDiscount - recurring_discount),
-  );
+  const estimated_total = Math.max(0, Math.round(beforeDiscount - recurring_discount));
 
   const duration_workload = resolveDurationWorkloadForInput(input);
   const estimated_duration_minutes = duration_workload.duration_minutes;
 
-  const lineItems = buildCustomerPriceLineItems(
-    {
-      serviceLabel,
-      serviceSlug,
-      base_service_price,
-      factorLines: factors.factorLines,
-      selected_extras,
-      cleaning_service_subtotal,
-      equipmentQuote: input.equipmentQuote ?? null,
-      equipmentRequired: Boolean(input.equipmentRequired),
-      showEquipmentQuestion,
-      equipment_logistics_fee,
-      extra_cleaner_cost,
-      cleanerCount,
-      service_fee,
-      recurring_discount,
-      bookingType,
-      recurringFrequency,
-      serviceDetails,
-    },
-    feesConfig,
-  );
+  const lineItems = buildCustomerPriceLineItems({
+    serviceLabel,
+    serviceSlug,
+    base_service_price,
+    factorLines: factors.factorLines,
+    selected_extras,
+    cleaning_service_subtotal,
+    vip_discount_zar,
+    equipmentQuote: input.equipmentQuote ?? null,
+    equipmentRequired: Boolean(input.equipmentRequired),
+    showEquipmentQuestion,
+    equipment_logistics_fee,
+    extra_cleaner_cost,
+    cleanerCount,
+    service_fee,
+    recurring_discount,
+    bookingType,
+    recurringFrequency,
+    serviceDetails,
+  });
 
   return {
     base_service_price,
@@ -217,12 +191,15 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
     equipment_distance_charge,
     manual_quote_required,
     cleaning_service_subtotal,
+    vip_discount_zar,
+    vip_tier: vip.vipTier,
     extra_cleaner_cost,
     subtotal_before_service_fee,
     service_fee,
     recurring_discount,
     estimated_total,
     estimated_duration_minutes,
+    team_scaled_duration_minutes: duration_workload.team_scaled_duration_minutes,
     lineItems,
     basePrice: base_service_price,
     extrasTotal: selected_extras_total,
@@ -238,6 +215,7 @@ type LineItemBuildInput = {
   factorLines: Array<{ label: string; amountZar: number }>;
   selected_extras: CustomerPricingBreakdown["selected_extras"];
   cleaning_service_subtotal: number;
+  vip_discount_zar: number;
   equipmentQuote: EquipmentQuoteResult | null;
   equipmentRequired: boolean;
   showEquipmentQuestion: boolean;
@@ -262,7 +240,7 @@ export function buildCustomerPriceLineItems(
   if (showEquipmentBreakdown) {
     lines.push({
       label: "Cleaning service total",
-      amountZar: input.cleaning_service_subtotal,
+      amountZar: input.cleaning_service_subtotal + input.vip_discount_zar,
     });
   } else {
     lines.push({ label: `${input.serviceLabel} (base)`, amountZar: input.base_service_price });
@@ -284,6 +262,10 @@ export function buildCustomerPriceLineItems(
         amountZar: input.extra_cleaner_cost,
       });
     }
+  }
+
+  if (input.vip_discount_zar > 0) {
+    lines.push({ label: "VIP loyalty discount", amountZar: -input.vip_discount_zar });
   }
 
   if (showEquipmentBreakdown && input.equipmentQuote) {
@@ -328,7 +310,11 @@ export function buildCustomerPriceLineItems(
 
 export function buildAdminPricingLines(
   breakdown: CustomerPricingBreakdown,
-  adminExtras?: { suppliesEquipmentCostZar?: number; companyRevenueCents?: number | null; cleanerEarningsCents?: number | null },
+  adminExtras?: {
+    suppliesEquipmentCostZar?: number;
+    companyRevenueCents?: number | null;
+    cleanerEarningsCents?: number | null;
+  },
 ): PricingLineItem[] {
   const lines = [...breakdown.lineItems];
   if (adminExtras?.suppliesEquipmentCostZar != null && adminExtras.suppliesEquipmentCostZar > 0) {

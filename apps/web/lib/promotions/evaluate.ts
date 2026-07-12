@@ -65,6 +65,23 @@ export function checkCustomerEligibility(
   if (rules.requires_membership && (ctx.membershipDiscountPercent ?? 0) <= 0) {
     return "Requires an active membership.";
   }
+  if (rules.membership_plan_slugs?.length) {
+    const plan = (ctx.membershipPlanSlug ?? "").trim().toLowerCase();
+    const allowed = rules.membership_plan_slugs.map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (!plan || !allowed.includes(plan)) {
+      return "Requires a qualifying membership plan.";
+    }
+  }
+  if (rules.customer_segments?.length) {
+    const segs = new Set((ctx.customerSegments ?? []).map((s) => s.trim().toLowerCase()).filter(Boolean));
+    const need = rules.customer_segments.map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (!need.some((s) => segs.has(s))) {
+      return "Not available for your customer segment.";
+    }
+  }
+  if (rules.one_per_year && ctx.promoRedeemedThisYear) {
+    return "This offer can only be used once per year.";
+  }
   if (rules.user_ids?.length && ctx.userId && !rules.user_ids.includes(ctx.userId)) {
     return "Not available for this account.";
   }
@@ -91,6 +108,13 @@ export function checkBookingEligibility(
   }
   if (rules.location_ids?.length && ctx.locationId && !rules.location_ids.includes(ctx.locationId)) {
     return "Not available in this area.";
+  }
+  if (rules.suburb_ids?.length) {
+    const suburbKey = (ctx.suburbId ?? ctx.suburb ?? "").trim().toLowerCase();
+    const allowed = rules.suburb_ids.map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (!suburbKey || !allowed.includes(suburbKey)) {
+      return "Not available in this suburb.";
+    }
   }
   return null;
 }
@@ -148,12 +172,15 @@ export function evaluatePromotions(args: {
   ctx: CheckoutPromotionContext;
   /** Per-promotion redemption counts for this customer (already applied). */
   customerRedemptionCounts?: Record<string, number>;
+  /** Per-promotion redemptions in the current calendar year (one_per_year). */
+  customerRedemptionCountsThisYear?: Record<string, number>;
 }): PromotionEvaluationResult {
   const now = args.ctx.now ?? new Date();
   const eligible: AppliedPromotionDiscount[] = [];
   const rejected: PromotionEvaluationResult["rejected"] = [];
   const code = normalizePromoCode(args.ctx.promoCode);
   const redemptionCounts = args.customerRedemptionCounts ?? {};
+  const yearCounts = args.customerRedemptionCountsThisYear ?? {};
 
   for (const promo of args.promotions) {
     // Referral / birthday credit types are not checkout % discounts here
@@ -179,10 +206,11 @@ export function evaluatePromotions(args: {
       continue;
     }
 
-    const customerReason = checkCustomerEligibility(
-      asObject<CustomerEligibility>(promo.customer_eligibility),
-      args.ctx,
-    );
+    const customerElig = asObject<CustomerEligibility>(promo.customer_eligibility);
+    const customerReason = checkCustomerEligibility(customerElig, {
+      ...args.ctx,
+      promoRedeemedThisYear: (yearCounts[promo.id] ?? 0) > 0,
+    });
     if (customerReason) {
       rejected.push({ promotionId: promo.id, name: promo.name, reason: customerReason });
       continue;

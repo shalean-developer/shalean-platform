@@ -1,8 +1,7 @@
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
+import { PAYMENT_AMOUNT_MISMATCH_EPS_ZAR } from "@/lib/payments/paymentAmountMismatch";
 
-/** Mismatch noise floor (ZAR): small rounding / timing differences below this are ignored. */
-const MISMATCH_EPS_ZAR = 1;
 /** Alert when |expected − actual| exceeds this — likely config, tax, or fraud signal. */
 const HIGH_SEVERITY_DIFF_ZAR = 5;
 
@@ -18,7 +17,7 @@ export function recordPaystackPricingMismatch(fields: {
   const actualZar = Math.round(fields.amountCents / 100);
   if (!Number.isFinite(actualZar)) return;
   const diffZar = actualZar - fields.expectedZar;
-  if (Math.abs(diffZar) <= MISMATCH_EPS_ZAR) return;
+  if (Math.abs(diffZar) <= PAYMENT_AMOUNT_MISMATCH_EPS_ZAR) return;
 
   metrics.increment("pricing.mismatch.total", {
     bookingId: fields.bookingId ?? null,

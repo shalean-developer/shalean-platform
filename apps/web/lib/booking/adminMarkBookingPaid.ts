@@ -16,6 +16,7 @@ import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { markBookingPaidFromAdminSettlement } from "@/lib/booking/paymentFinalizationBookingCommands";
+import { bookingPaidAmountColumnsFromCents } from "@/lib/booking/bookingPaidAmountColumns";
 import { cancelUnsentBookingPaymentRecoveryJobs } from "@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs";
 import { recordBookingSideEffects } from "@/lib/booking/recordBookingSideEffects";
 import { syncPaidBookingSideEffects } from "@/lib/booking/syncPaidBookingSideEffects";
@@ -364,9 +365,7 @@ export async function adminMarkBookingPaid(
    * Off-platform traceability is captured via `payment_method` + `payment_reference_external`.
    */
   const patch: Record<string, unknown> = {
-    amount_paid_cents: amountCents,
-    total_paid_cents: amountCents,
-    total_paid_zar: Math.round(amountCents / 100),
+    ...bookingPaidAmountColumnsFromCents(amountCents),
     payment_completed_at: paidMoment,
     payment_status: "success",
     paid_at: paidMoment,

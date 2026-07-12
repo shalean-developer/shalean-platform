@@ -406,25 +406,59 @@ export async function getCustomerRedemptionCounts(
   return counts;
 }
 
+/** Redemptions in the current UTC calendar year (for one_per_year eligibility). */
+export async function getCustomerRedemptionCountsThisYear(
+  admin: Admin,
+  userId: string | null,
+  promotionIds: string[],
+): Promise<Record<string, number>> {
+  if (!userId || promotionIds.length === 0) return {};
+  const yearStart = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toISOString();
+  const { data } = await admin
+    .from("promotion_redemptions")
+    .select("promotion_id")
+    .eq("user_id", userId)
+    .eq("status", "applied")
+    .in("promotion_id", promotionIds)
+    .gte("created_at", yearStart);
+  const counts: Record<string, number> = {};
+  for (const row of data ?? []) {
+    const id = String(row.promotion_id);
+    counts[id] = (counts[id] ?? 0) + 1;
+  }
+  return counts;
+}
+
 export async function getActiveMembershipDiscountPercent(
   admin: Admin,
   userId: string | null,
 ): Promise<number> {
-  if (!userId) return 0;
+  const ctx = await getActiveMembershipContext(admin, userId);
+  return ctx.discountPercent;
+}
+
+export async function getActiveMembershipContext(
+  admin: Admin,
+  userId: string | null,
+): Promise<{ discountPercent: number; planSlug: string | null }> {
+  if (!userId) return { discountPercent: 0, planSlug: null };
   const { data: membership } = await admin
     .from("customer_memberships")
     .select("plan_id")
     .eq("user_id", userId)
     .eq("status", "active")
     .maybeSingle();
-  if (!membership?.plan_id) return 0;
+  if (!membership?.plan_id) return { discountPercent: 0, planSlug: null };
   const { data: plan } = await admin
     .from("membership_plans")
-    .select("discount_percent, enabled")
+    .select("discount_percent, enabled, slug")
     .eq("id", membership.plan_id)
     .maybeSingle();
-  if (!plan?.enabled) return 0;
-  return Number(plan.discount_percent ?? 0);
+  if (!plan?.enabled) return { discountPercent: 0, planSlug: null };
+  return {
+    discountPercent: Number(plan.discount_percent ?? 0),
+    planSlug: typeof plan.slug === "string" ? plan.slug : null,
+  };
 }
 
 export async function evaluateCheckoutPromotions(
@@ -443,14 +477,14 @@ export async function evaluateCheckoutPromotions(
     ctx.completedBookingCount >= 0
       ? ctx.completedBookingCount
       : await getCompletedBookingCount(admin, ctx.userId, ctx.customerEmail);
+  const membershipCtx = await getActiveMembershipContext(admin, ctx.userId);
   const membershipDiscountPercent =
-    ctx.membershipDiscountPercent ??
-    (await getActiveMembershipDiscountPercent(admin, ctx.userId));
-  const customerRedemptionCounts = await getCustomerRedemptionCounts(
-    admin,
-    ctx.userId,
-    promotions.map((p) => p.id),
-  );
+    ctx.membershipDiscountPercent ?? membershipCtx.discountPercent;
+  const promotionIds = promotions.map((p) => p.id);
+  const [customerRedemptionCounts, customerRedemptionCountsThisYear] = await Promise.all([
+    getCustomerRedemptionCounts(admin, ctx.userId, promotionIds),
+    getCustomerRedemptionCountsThisYear(admin, ctx.userId, promotionIds),
+  ]);
 
   return evaluatePromotions({
     promotions,
@@ -459,8 +493,10 @@ export async function evaluateCheckoutPromotions(
       ...ctx,
       completedBookingCount,
       membershipDiscountPercent,
+      membershipPlanSlug: ctx.membershipPlanSlug ?? membershipCtx.planSlug,
     },
     customerRedemptionCounts,
+    customerRedemptionCountsThisYear,
   });
 }
 
@@ -569,21 +605,58 @@ export async function applyPromotionRedemptions(
     }
     if (error) continue;
 
-    const { data: promo } = await admin
-      .from("promotions")
-      .select("redemptions_count, budget_spent_zar, revenue_generated_zar")
-      .eq("id", discount.promotionId)
-      .maybeSingle();
-    if (promo) {
-      await admin
+    const { data: counterRaw, error: counterErr } = await admin.rpc(
+      "increment_promotion_redemption_counters",
+      {
+        p_promotion_id: discount.promotionId,
+        p_discount_zar: discount.discountZar,
+        p_revenue_zar: args.bookingRevenueZar,
+      },
+    );
+    if (counterErr) {
+      // Fallback: optimistic concurrency update if RPC not yet migrated.
+      const { data: promo } = await admin
         .from("promotions")
-        .update({
-          redemptions_count: Number(promo.redemptions_count ?? 0) + 1,
-          budget_spent_zar: Number(promo.budget_spent_zar ?? 0) + discount.discountZar,
-          revenue_generated_zar: Number(promo.revenue_generated_zar ?? 0) + args.bookingRevenueZar,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("id", discount.promotionId);
+        .select("redemptions_count, budget_spent_zar, revenue_generated_zar, budget_zar, usage_limit_total")
+        .eq("id", discount.promotionId)
+        .maybeSingle();
+      if (promo) {
+        const prevCount = Number(promo.redemptions_count ?? 0);
+        const prevSpent = Number(promo.budget_spent_zar ?? 0);
+        const usageLimit =
+          promo.usage_limit_total == null ? null : Number(promo.usage_limit_total);
+        const budgetZar = promo.budget_zar == null ? null : Number(promo.budget_zar);
+        if (usageLimit != null && prevCount >= usageLimit) {
+          throw new Error("Promotion usage limit reached.");
+        }
+        if (budgetZar != null && prevSpent + discount.discountZar > budgetZar) {
+          throw new Error("Promotion budget exhausted.");
+        }
+        const { data: updatedRows, error: updateErr } = await admin
+          .from("promotions")
+          .update({
+            redemptions_count: prevCount + 1,
+            budget_spent_zar: prevSpent + discount.discountZar,
+            revenue_generated_zar: Number(promo.revenue_generated_zar ?? 0) + args.bookingRevenueZar,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", discount.promotionId)
+          .eq("redemptions_count", prevCount)
+          .select("id");
+        if (updateErr) throw new Error(updateErr.message);
+        if (!updatedRows?.length) {
+          throw new Error("Promotion counter race — retry checkout.");
+        }
+      }
+    } else {
+      const counter = counterRaw as { ok?: boolean; reason?: string } | null;
+      if (counter && counter.ok === false) {
+        throw new Error(
+          counter.reason === "limit_or_budget_exceeded"
+            ? "Promotion limit or budget reached."
+            : `Promotion counter update failed (${counter.reason ?? "unknown"}).`,
+        );
+      }
     }
     await recordPromotionEvent(admin, {
       promotionId: discount.promotionId,

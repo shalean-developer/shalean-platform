@@ -187,7 +187,7 @@ export function CleanerPreferenceSection({
           </p>
         ) : (
           <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs text-slate-500">
-            No cleaners available for this slot — we&apos;ll assign the best available.
+            No cleaners online for this slot — reserve and we&apos;ll assign the best available.
           </p>
         )
       ) : (

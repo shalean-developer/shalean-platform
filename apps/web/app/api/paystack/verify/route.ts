@@ -81,10 +81,22 @@ type PaystackVerifyJson = {
 };
 
 async function fetchPaystackVerify(reference: string, secret: string): Promise<PaystackVerifyJson> {
-  const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
-    headers: { Authorization: `Bearer ${secret}` },
-  });
-  return (await res.json()) as PaystackVerifyJson;
+  try {
+    const res = await fetch(`https://api.paystack.co/transaction/verify/${encodeURIComponent(reference)}`, {
+      headers: { Authorization: `Bearer ${secret}` },
+      // Bound remote verify so /account/success does not sit on "Still confirming…" forever.
+      signal: AbortSignal.timeout(12_000),
+    });
+    return (await res.json()) as PaystackVerifyJson;
+  } catch (err) {
+    const aborted =
+      (err instanceof DOMException && err.name === "AbortError") ||
+      (err instanceof Error && err.name === "AbortError");
+    return {
+      status: false,
+      message: aborted ? "Paystack verify timed out." : err instanceof Error ? err.message : "Paystack verify failed.",
+    };
+  }
 }
 
 /**

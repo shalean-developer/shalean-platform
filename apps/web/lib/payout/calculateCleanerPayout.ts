@@ -38,15 +38,16 @@ export type CleanerPayoutResult = {
 
 /**
  * Total paid for the job in **cents** (ZAR).
+ * Phase 4: prefer `amount_paid_cents` (gateway cash SoT), then fall back to ZAR.
  */
 export function resolveTotalPaidCents(totalPaidZar: number | null | undefined, amountPaidCents: number | null | undefined): number {
-  const zar = Number(totalPaidZar);
-  if (Number.isFinite(zar) && zar > 0) {
-    return Math.max(0, Math.round(zar * 100));
-  }
   const cents = Number(amountPaidCents);
   if (Number.isFinite(cents) && cents > 0) {
     return Math.max(0, Math.round(cents));
+  }
+  const zar = Number(totalPaidZar);
+  if (Number.isFinite(zar) && zar > 0) {
+    return Math.max(0, Math.round(zar * 100));
   }
   return 0;
 }
@@ -64,6 +65,7 @@ function payoutBaseCentsFromPriceSnapshot(snapshot: unknown): number | null {
 /**
  * Resolve payout base (cleaner share pool) and platform fee from stored booking columns.
  * Legacy rows: `base_amount_cents` null → entire amount paid is the payout base; fee treated as 0 for split.
+ * When tip policy keeps tips with the platform, subtract tip from that full-paid fallback.
  */
 export function resolvePayoutBaseAndServiceFeeCents(params: {
   baseAmountCents: number | null | undefined;
@@ -89,7 +91,11 @@ export function resolvePayoutBaseAndServiceFeeCents(params: {
   }
 
   if (baseStored == null || baseStored <= 0) {
-    return { payoutBaseCents: totalCents, serviceFeeCents: 0 };
+    const tipCents = tipCentsFromPriceSnapshot(params.priceSnapshot);
+    return {
+      payoutBaseCents: Math.max(0, totalCents - tipCents),
+      serviceFeeCents: 0,
+    };
   }
 
   if (baseStored + feeStored > totalCents + 5) {
@@ -101,10 +107,20 @@ export function resolvePayoutBaseAndServiceFeeCents(params: {
     if (totalCents <= 0) {
       return { payoutBaseCents: baseStored, serviceFeeCents: feeStored };
     }
-    return { payoutBaseCents: totalCents, serviceFeeCents: 0 };
+    const tipCents = tipCentsFromPriceSnapshot(params.priceSnapshot);
+    return { payoutBaseCents: Math.max(0, totalCents - tipCents), serviceFeeCents: 0 };
   }
 
   return { payoutBaseCents: baseStored, serviceFeeCents: feeStored };
+}
+
+function tipCentsFromPriceSnapshot(snapshot: unknown): number {
+  // Tips stay with platform (TIP_PASSTHROUGH_TO_CLEANER=false) — exclude from cleaner pool.
+  if (snapshot == null || typeof snapshot !== "object" || Array.isArray(snapshot)) return 0;
+  const o = snapshot as Record<string, unknown>;
+  const tipZar = Number(o.tip_zar ?? o.tipZar ?? 0);
+  if (!Number.isFinite(tipZar) || tipZar <= 0) return 0;
+  return Math.max(0, Math.round(tipZar * 100));
 }
 
 /**

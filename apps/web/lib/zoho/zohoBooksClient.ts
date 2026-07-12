@@ -21,6 +21,11 @@ import "server-only";
 const ACCOUNTS_DOMAIN = process.env.ZOHO_ACCOUNTS_DOMAIN ?? "accounts.zoho.com";
 const API_DOMAIN = process.env.ZOHO_API_DOMAIN ?? "www.zohoapis.com";
 const ORG_ID = process.env.ZOHO_ORGANIZATION_ID ?? "";
+/** Per-request ceiling — payment confirm must not wait on a hung Zoho socket. */
+const ZOHO_FETCH_TIMEOUT_MS = 10_000;
+/** Cap rate-limit retries so a 429 cannot burn minutes inside a request. */
+const ZOHO_RATE_LIMIT_MAX_ATTEMPTS = 2;
+const ZOHO_RATE_LIMIT_BASE_WAIT_MS = 2_000;
 
 type TokenCache = { accessToken: string; expiresAt: number };
 let _tokenCache: TokenCache | null = null;
@@ -46,7 +51,12 @@ async function getAccessToken(): Promise<string> {
     refresh_token: refreshToken,
   });
 
-  const res = await fetch(url, { method: "POST", body, cache: "no-store" });
+  const res = await fetch(url, {
+    method: "POST",
+    body,
+    cache: "no-store",
+    signal: AbortSignal.timeout(ZOHO_FETCH_TIMEOUT_MS),
+  });
   if (!res.ok) {
     const text = await res.text().catch(() => "");
     throw new Error(`Zoho token refresh failed (${res.status}): ${text}`);
@@ -83,6 +93,7 @@ async function request<T>(
       "Content-Type": "application/json;charset=UTF-8",
     },
     cache: "no-store",
+    signal: AbortSignal.timeout(ZOHO_FETCH_TIMEOUT_MS),
   };
 
   if (body !== undefined) {
@@ -95,8 +106,8 @@ async function request<T>(
   const rateLimited =
     res.status === 429 || json.code === 45 || /rate limit/i.test(String(json.message ?? ""));
 
-  if (rateLimited && attempt < 5) {
-    const waitMs = Math.min(60_000, 5_000 * 2 ** attempt);
+  if (rateLimited && attempt < ZOHO_RATE_LIMIT_MAX_ATTEMPTS) {
+    const waitMs = Math.min(8_000, ZOHO_RATE_LIMIT_BASE_WAIT_MS * 2 ** attempt);
     await new Promise((resolve) => setTimeout(resolve, waitMs));
     return request<T>(method, path, body, attempt + 1);
   }
@@ -122,6 +133,7 @@ async function requestBinary(path: string): Promise<ArrayBuffer> {
     method: "GET",
     headers: { Authorization: `Zoho-oauthtoken ${token}` },
     cache: "no-store",
+    signal: AbortSignal.timeout(ZOHO_FETCH_TIMEOUT_MS),
   });
 
   if (!res.ok) {

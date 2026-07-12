@@ -165,9 +165,17 @@ export type CheckoutPromotionContext = {
   cityId?: string | null;
   locationId?: string | null;
   suburb?: string | null;
+  /** Prefer UUID suburb/location id when restricting by suburb_ids. */
+  suburbId?: string | null;
   subtotalZar: number;
   promoCode?: string | null;
   membershipDiscountPercent?: number;
+  /** Active membership plan slug when customer has a membership. */
+  membershipPlanSlug?: string | null;
+  /** Segment tags for the customer (admin CRM). */
+  customerSegments?: string[];
+  /** True when this promo code/id was already redeemed by the customer this calendar year. */
+  promoRedeemedThisYear?: boolean;
   now?: Date;
 };
 
