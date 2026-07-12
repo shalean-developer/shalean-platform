@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import type {
@@ -20,6 +20,8 @@ import { CUSTOMER_SUPPORT_WHATSAPP_E164 } from "@/lib/site/customerSupport";
 import { resolveCustomerTotalPaidZar } from "@/lib/booking/customerBookingReference";
 const VERIFY_MAX_ATTEMPTS = 3;
 const VERIFY_RETRY_DELAY_MS = 1500;
+/** Per-attempt fetch timeout — prevents "Confirming…" from hanging forever on a stuck verify. */
+const VERIFY_FETCH_TIMEOUT_MS = 15_000;
 
 function PageShell({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -81,7 +83,8 @@ function mapVerifySuccessToStatus(data: PaystackVerifyPostSuccess): StatusPayloa
 }
 
 function SuccessContent() {
-  const searchParams = useSearchParams();  const reference = searchParams.get("reference") ?? searchParams.get("trxref");
+  const searchParams = useSearchParams();
+  const reference = searchParams.get("reference") ?? searchParams.get("trxref");
 
   const [phase, setPhase] = useState<
     "missing" | "finalizing" | "success" | "persist_pending" | "needs_retry" | "failed"
@@ -90,6 +93,9 @@ function SuccessContent() {
   const [statusData, setStatusData] = useState<StatusPayload | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [hasSession, setHasSession] = useState(false);
+  const runIdRef = useRef(0);
+  const completedRef = useRef(false);
+
   useEffect(() => {
     const sb = getSupabaseBrowser();
     if (!sb) return;
@@ -98,54 +104,71 @@ function SuccessContent() {
 
   const finalizeBooking = useCallback(async (): Promise<boolean> => {
     if (!reference) return false;
+    if (completedRef.current) return true;
+
+    const runId = ++runIdRef.current;
     setPhase("finalizing");
 
     for (let attempt = 1; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
+      if (runId !== runIdRef.current) return false;
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), VERIFY_FETCH_TIMEOUT_MS);
       try {
         const res = await fetch("/api/paystack/verify", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ reference }),
+          signal: controller.signal,
         });
 
         const data = (await res.json()) as PaystackVerifyPostResponse;
+        if (runId !== runIdRef.current) return false;
 
         if (res.ok && data.success && data.paymentStatus === "success") {
           const okData = data as PaystackVerifyPostSuccess;
           setStatusData(mapVerifySuccessToStatus(okData));
-          setErrorMessage(null);          markRetargetingCandidate(false);
+          setErrorMessage(null);
+          markRetargetingCandidate(false);
           clearStoredReferral("customer");
 
           if (isBookingPersisted(okData)) {
-            trackGrowthEvent(ANALYTICS_EVENTS.COMPLETE_BOOKING, {
-              reference: okData.reference ?? null,
-              booking_id: okData.bookingId ?? null,
-              assignment_type: okData.assignmentType ?? null,
-              fallback_reason: okData.fallbackReason ?? null,
-              attempted_cleaner_id: okData.attemptedCleanerId ?? null,
-              assigned_cleaner_id: okData.assignedCleanerId ?? null,
-              selected_cleaner_id: okData.selectedCleanerId ?? null,
-            });
-            const completedSnap = isSnapshot(okData.bookingSnapshot)
-              ? (okData.bookingSnapshot as BookingSnapshotV1)
-              : null;
-            const completedLocked = completedSnap?.locked;
-            trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_COMPLETED, completedLocked, {
-              reference: okData.reference ?? null,
-              booking_id: okData.bookingId ?? null,
-              service_type: completedLocked?.service_type ?? completedLocked?.service ?? completedSnap?.flat?.service ?? null,
-              selected_extras: completedLocked?.extras ?? completedSnap?.flat?.extras ?? [],
-              estimated_price: completedSnap?.total_zar ?? completedLocked?.finalPrice ?? null,
-              estimated_hours: completedLocked?.finalHours ?? null,
-              cleaner_mode: okData.selectedCleanerId || completedSnap?.cleaner_id ? "manual" : "auto",
-              cleaner_id: okData.selectedCleanerId ?? completedSnap?.cleaner_id ?? null,
-              assignment_type: okData.assignmentType ?? null,
-              fallback_reason: okData.fallbackReason ?? null,
-              attempted_cleaner_id: okData.attemptedCleanerId ?? null,
-              assigned_cleaner_id: okData.assignedCleanerId ?? null,
-              selected_cleaner_id: okData.selectedCleanerId ?? null,
-            });
+            // Confirm UI first — analytics must not block leaving "Confirming…".
+            completedRef.current = true;
+            setPhase("success");
+
             try {
+              trackGrowthEvent(ANALYTICS_EVENTS.COMPLETE_BOOKING, {
+                reference: okData.reference ?? null,
+                booking_id: okData.bookingId ?? null,
+                assignment_type: okData.assignmentType ?? null,
+                fallback_reason: okData.fallbackReason ?? null,
+                attempted_cleaner_id: okData.attemptedCleanerId ?? null,
+                assigned_cleaner_id: okData.assignedCleanerId ?? null,
+                selected_cleaner_id: okData.selectedCleanerId ?? null,
+              });
+              const completedSnap = isSnapshot(okData.bookingSnapshot)
+                ? (okData.bookingSnapshot as BookingSnapshotV1)
+                : null;
+              const completedLocked = completedSnap?.locked;
+              trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_COMPLETED, completedLocked, {
+                reference: okData.reference ?? null,
+                booking_id: okData.bookingId ?? null,
+                service_type:
+                  completedLocked?.service_type ??
+                  completedLocked?.service ??
+                  completedSnap?.flat?.service ??
+                  null,
+                selected_extras: completedLocked?.extras ?? completedSnap?.flat?.extras ?? [],
+                estimated_price: completedSnap?.total_zar ?? completedLocked?.finalPrice ?? null,
+                estimated_hours: completedLocked?.finalHours ?? null,
+                cleaner_mode: okData.selectedCleanerId || completedSnap?.cleaner_id ? "manual" : "auto",
+                cleaner_id: okData.selectedCleanerId ?? completedSnap?.cleaner_id ?? null,
+                assignment_type: okData.assignmentType ?? null,
+                fallback_reason: okData.fallbackReason ?? null,
+                attempted_cleaner_id: okData.attemptedCleanerId ?? null,
+                assigned_cleaner_id: okData.assignedCleanerId ?? null,
+                selected_cleaner_id: okData.selectedCleanerId ?? null,
+              });
               const refKey = String(okData.reference ?? reference ?? "").trim();
               const k = refKey ? `shalean_payment_completed_${refKey}` : "";
               if (typeof sessionStorage !== "undefined" && k) {
@@ -164,62 +187,44 @@ function SuccessContent() {
                   booking_saved: true,
                 });
               }
-            } catch {
-              trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_COMPLETED, {
-                reference: okData.reference ?? null,
-                booking_id: okData.bookingId ?? null,
-                booking_saved: true,
+              const completedSnapForAds = isSnapshot(okData.bookingSnapshot)
+                ? (okData.bookingSnapshot as BookingSnapshotV1)
+                : null;
+              trackClientPurchase({
+                reference: String(okData.reference ?? reference ?? "").trim(),
+                bookingId: okData.bookingId ?? null,
+                amountCents: okData.amountCents ?? null,
+                valueZar:
+                  typeof okData.amountCents === "number" && okData.amountCents > 0
+                    ? Math.round(okData.amountCents / 100)
+                    : (completedSnapForAds?.total_zar ?? null),
+                currency: okData.currency ?? "ZAR",
+                email: okData.customerEmail ?? completedSnapForAds?.customer?.email ?? null,
+                phone: completedSnapForAds?.customer?.phone ?? null,
               });
+            } catch {
+              // non-fatal — confirmation already shown
             }
-            const completedSnapForAds = isSnapshot(okData.bookingSnapshot)
-              ? (okData.bookingSnapshot as BookingSnapshotV1)
-              : null;
-            trackClientPurchase({
-              reference: String(okData.reference ?? reference ?? "").trim(),
-              bookingId: okData.bookingId ?? null,
-              amountCents: okData.amountCents ?? null,
-              valueZar:
-                typeof okData.amountCents === "number" && okData.amountCents > 0
-                  ? Math.round(okData.amountCents / 100)
-                  : (completedSnapForAds?.total_zar ?? null),
-              currency: okData.currency ?? "ZAR",
-              email: okData.customerEmail ?? completedSnapForAds?.customer?.email ?? null,
-              phone: completedSnapForAds?.customer?.phone ?? null,
-            });
-            setPhase("success");
             return true;
           }
 
+          completedRef.current = true;
+          setPhase("persist_pending");
           try {
             const refKey = String(okData.reference ?? reference ?? "").trim();
             const k = refKey ? `shalean_payment_persist_pending_${refKey}` : "";
-            if (typeof sessionStorage !== "undefined" && k) {
-              if (!sessionStorage.getItem(k)) {
-                sessionStorage.setItem(k, "1");
-                trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_COMPLETED, {
-                  reference: okData.reference ?? null,
-                  booking_id: null,
-                  persist_pending: true,
-                  booking_saved: false,
-                });
-              }
-            } else {
-              trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_COMPLETED, {
-                reference: okData.reference ?? null,
-                booking_id: null,
-                persist_pending: true,
-                booking_saved: false,
-              });
+            if (typeof sessionStorage !== "undefined" && k && !sessionStorage.getItem(k)) {
+              sessionStorage.setItem(k, "1");
             }
-          } catch {
             trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_COMPLETED, {
               reference: okData.reference ?? null,
               booking_id: null,
               persist_pending: true,
               booking_saved: false,
             });
+          } catch {
+            // non-fatal
           }
-          setPhase("persist_pending");
           return true;
         }
 
@@ -251,27 +256,37 @@ function SuccessContent() {
         }
         setPhase("needs_retry");
         return false;
-      } catch {
-        setErrorMessage("Network error.");
+      } catch (err) {
+        if (runId !== runIdRef.current) return false;
+        const aborted =
+          (err instanceof DOMException && err.name === "AbortError") ||
+          (err instanceof Error && err.name === "AbortError");
+        setErrorMessage(aborted ? "Confirmation is taking longer than expected." : "Network error.");
         if (attempt < VERIFY_MAX_ATTEMPTS) {
           await new Promise((r) => setTimeout(r, VERIFY_RETRY_DELAY_MS));
           continue;
         }
         setPhase("needs_retry");
         return false;
+      } finally {
+        window.clearTimeout(timeoutId);
       }
     }
 
-    setPhase("needs_retry");
+    if (runId === runIdRef.current) setPhase("needs_retry");
     return false;
   }, [reference]);
 
   useEffect(() => {
     if (!reference) return;
+    completedRef.current = false;
     const id = requestAnimationFrame(() => {
       void finalizeBooking();
     });
-    return () => cancelAnimationFrame(id);
+    return () => {
+      cancelAnimationFrame(id);
+      runIdRef.current += 1;
+    };
   }, [reference, finalizeBooking]);
 
   if (phase === "missing") {

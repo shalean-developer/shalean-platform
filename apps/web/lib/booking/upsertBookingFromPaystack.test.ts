@@ -233,6 +233,23 @@ describe("detectMonthlyManagedRowForPaystackFinalize (Paystack finalize payment_
     expect(result).toBe(true);
   });
 
+  it("prepaid bv2_ checkout ref overrides monthly flags so payment_status can be success", async () => {
+    const result = await detectMonthlyManagedRowForPaystackFinalize(
+      fakeAdmin("monthly"),
+      {
+        id: "b6",
+        status: "pending_payment",
+        is_monthly_billing_booking: true,
+        billing_type: "recurring_invoice",
+        monthly_invoice_id: "00000000-0000-4000-8000-00000000bbbb",
+        payment_status: "pending_monthly",
+      },
+      "user-2",
+      "bv2_1783869227426_wue9tg",
+    );
+    expect(result).toBe(false);
+  });
+
   it("no existing row but resolved customer is monthly: returns true (defensive guard for new-insert path)", async () => {
     const result = await detectMonthlyManagedRowForPaystackFinalize(
       fakeAdmin("monthly"),

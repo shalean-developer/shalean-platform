@@ -81,23 +81,42 @@ import {
 } from "@/lib/booking/paystackBookingIdLookup";
 
 /**
+ * One-off prepaid checkout references (booking-v2 / widget) always settle via Paystack
+ * charge.success — never treat them as monthly-invoice managed for payment_status writes.
+ */
+export function isPrepaidPaystackCheckoutReference(reference: string | null | undefined): boolean {
+  const ref = String(reference ?? "").trim().toLowerCase();
+  if (!ref) return false;
+  return (
+    ref.startsWith("bv2_") ||
+    ref.startsWith("bk_") ||
+    ref.startsWith("booking_") ||
+    ref.startsWith("pay_")
+  );
+}
+
+/**
  * `payment_status='success'` is the single signal `bookingPayableForWeeklyBatch` (prepaid path) keys off.
  * Monthly-managed rows (recurring/monthly customers) keep their own lifecycle states
  * (`pending_monthly` → `success` set by `applyMonthlyInvoicePayment`) and must NOT be flipped
- * to `success` by Paystack one-off finalize.
+ * to `success` by Paystack one-off finalize — **except** prepaid checkout refs (`bv2_…`), which
+ * are always card-settled at booking time even if a monthly profile trigger attached invoice flags.
  *
  * Sources of truth, in order:
- *   1. Already-persisted `bookings` columns (existing row): `is_monthly_billing_booking`,
+ *   1. Prepaid checkout reference → not monthly-managed for payment_status.
+ *   2. Already-persisted `bookings` columns (existing row): `is_monthly_billing_booking`,
  *      `billing_type ∈ {recurring_invoice, monthly_contract}`, `monthly_invoice_id`,
  *      `payment_status='pending_monthly'`.
- *   2. Resolved `user_profiles.billing_type='monthly'` (no-existing-row insert path; the DB
+ *   3. Resolved `user_profiles.billing_type='monthly'` (no-existing-row insert path; the DB
  *      `bookings_after_write_monthly_invoice` trigger respects `success` once set, so we must guard here).
  */
 export async function detectMonthlyManagedRowForPaystackFinalize(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   existing: Record<string, unknown> | null,
   userIdResolved: string | null,
+  paystackReference?: string | null,
 ): Promise<boolean> {
+  if (isPrepaidPaystackCheckoutReference(paystackReference)) return false;
   if (existing && typeof existing === "object") {
     if ((existing as { is_monthly_billing_booking?: unknown }).is_monthly_billing_booking === true) return true;
     const bt = String((existing as { billing_type?: unknown }).billing_type ?? "").trim().toLowerCase();
@@ -243,7 +262,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
 
   const existingSelect =
-    "id, status, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type" as const;
+    "id, status, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode" as const;
 
   const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
@@ -711,6 +730,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     supabase,
     (existing as Record<string, unknown> | null) ?? null,
     userIdResolved,
+    input.paystackReference,
   );
   const paystackFinalizePaymentStatus: { payment_status?: "success" } = isMonthlyManagedRow
     ? {}
@@ -1104,8 +1124,18 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       const skipAutoDispatchForV2Team =
         String(pendingExisting?.cleaner_mode ?? "").trim().toLowerCase() === "team" &&
         Boolean(String(pendingExisting?.assigned_team_id ?? "").trim());
+      /** Soft ops reserves wait for manual assignment — do not auto-dispatch. */
+      const fulfillmentMode = String(
+        (pendingExisting as { fulfillment_mode?: string | null } | null | undefined)?.fulfillment_mode ?? "",
+      )
+        .trim()
+        .toLowerCase();
+      const skipAutoDispatchForOpsReserve = fulfillmentMode === "ops_assignment";
       /** Smart dispatch unless explicitly disabled (`AUTO_DISPATCH_CLEANERS=false`). */
-      const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false" && !skipAutoDispatchForV2Team;
+      const autoDispatch =
+        process.env.AUTO_DISPATCH_CLEANERS !== "false" &&
+        !skipAutoDispatchForV2Team &&
+        !skipAutoDispatchForOpsReserve;
       const offerAssignFallback = process.env.CHECKOUT_ADMIN_OFFER_ASSIGN_FALLBACK === "true";
       if (autoDispatch) {
         const r = await assignBestCleaner(supabase, id, {
