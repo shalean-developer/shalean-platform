@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { X } from "lucide-react";
+import { promoBookingHref, trackPromoEvent } from "./promoCta";
 
 type DisplayPromo = {
   id: string;
@@ -94,19 +95,22 @@ export function PromotionAnnouncementBar() {
         ) : null}
         {cd ? <span className="ml-2 opacity-90">· {cd}</span> : null}
       </p>
-      <Link
-        href={promo.landingPagePath || "/book"}
-        className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-slate-900"
-        onClick={() => {
-          void fetch("/api/promotions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ promotionId: promo.id, eventType: "click" }),
-          });
-        }}
-      >
-        {promo.cta}
-      </Link>
+      <div className="flex shrink-0 items-center gap-2">
+        <Link
+          href={promoBookingHref(promo.promoCode)}
+          className="rounded-full bg-white/95 px-3 py-1 text-xs font-semibold text-slate-900"
+          onClick={() => trackPromoEvent(promo.id, "click")}
+        >
+          {promo.cta || "Book now"}
+        </Link>
+        <Link
+          href={promo.landingPagePath}
+          className="rounded-full border border-white/40 bg-white/10 px-3 py-1 text-xs font-semibold text-white hover:bg-white/20"
+          onClick={() => trackPromoEvent(promo.id, "landing_visit")}
+        >
+          Learn more
+        </Link>
+      </div>
       <button
         type="button"
         aria-label="Dismiss"

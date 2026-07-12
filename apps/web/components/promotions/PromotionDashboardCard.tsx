@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Gift } from "lucide-react";
 import { PromotionCountdown } from "./PromotionCountdown";
+import { promoBookingHref, trackPromoEvent } from "./promoCta";
 
 type DisplayPromo = {
   id: string;
@@ -56,12 +57,22 @@ export function PromotionDashboardCard() {
           {promo.countdown ? (
             <PromotionCountdown endsAt={promo.endsAt} className="mt-3" />
           ) : null}
-          <Link
-            href={promo.landingPagePath || "/book"}
-            className="mt-4 inline-flex rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"
-          >
-            {promo.cta}
-          </Link>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Link
+              href={promoBookingHref(promo.promoCode)}
+              className="inline-flex rounded-full bg-emerald-700 px-4 py-2 text-sm font-semibold text-white"
+              onClick={() => trackPromoEvent(promo.id, "click")}
+            >
+              {promo.cta || "Book now"}
+            </Link>
+            <Link
+              href={promo.landingPagePath}
+              className="inline-flex rounded-full border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-50"
+              onClick={() => trackPromoEvent(promo.id, "landing_visit")}
+            >
+              Learn more
+            </Link>
+          </div>
         </div>
       </div>
     </div>

@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from "react";
 import Link from "next/link";
 import { Sparkles, X } from "lucide-react";
 import { PromotionCountdown } from "./PromotionCountdown";
+import { promoBookingHref, trackPromoEvent } from "./promoCta";
 
 type DisplayPromo = {
   id: string;
@@ -213,23 +214,26 @@ export function PromotionPopup() {
 
           {promo.countdown ? <PromotionCountdown endsAt={promo.endsAt} /> : null}
 
-          <Link
-            href={promo.landingPagePath || "/book"}
-            className="inline-flex w-full items-center justify-center rounded-2xl px-4 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:brightness-110"
-            style={{
-              background: `linear-gradient(135deg, ${primary}, ${accent})`,
-              boxShadow: `0 12px 28px ${primary}33`,
-            }}
-            onClick={() => {
-              void fetch("/api/promotions", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ promotionId: promo.id, eventType: "click" }),
-              });
-            }}
-          >
-            {promo.cta}
-          </Link>
+          <div className="space-y-2.5">
+            <Link
+              href={promoBookingHref(promo.promoCode)}
+              className="inline-flex w-full items-center justify-center rounded-2xl px-4 py-3.5 text-sm font-semibold text-white shadow-lg transition hover:brightness-110"
+              style={{
+                background: `linear-gradient(135deg, ${primary}, ${accent})`,
+                boxShadow: `0 12px 28px ${primary}33`,
+              }}
+              onClick={() => trackPromoEvent(promo.id, "click")}
+            >
+              {promo.cta || "Book now"}
+            </Link>
+            <Link
+              href={promo.landingPagePath}
+              className="inline-flex w-full items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+              onClick={() => trackPromoEvent(promo.id, "landing_visit")}
+            >
+              Learn more
+            </Link>
+          </div>
           <button
             type="button"
             className="w-full py-1 text-center text-sm font-medium text-slate-500 transition hover:text-slate-800"

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Tag } from "lucide-react";
 import { PromotionCountdown } from "./PromotionCountdown";
+import { trackPromoEvent } from "./promoCta";
 
 type DisplayPromo = {
   id: string;
@@ -63,17 +64,11 @@ export function PromotionBookingBanner() {
         </div>
       </div>
       <Link
-        href={promo.landingPagePath || "#"}
+        href={promo.landingPagePath}
         className="shrink-0 rounded-full bg-emerald-700 px-3 py-1.5 text-xs font-semibold text-white"
-        onClick={() => {
-          void fetch("/api/promotions", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ promotionId: promo.id, eventType: "click" }),
-          });
-        }}
+        onClick={() => trackPromoEvent(promo.id, "landing_visit")}
       >
-        {promo.cta}
+        Learn more
       </Link>
     </div>
   );

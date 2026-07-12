@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { PromotionCountdown } from "./PromotionCountdown";
+import { promoBookingHref, trackPromoEvent } from "./promoCta";
 
 type DisplayPromo = {
   id: string;
@@ -75,19 +76,22 @@ export function PromotionFeaturedCard() {
             {promo.countdown ? (
               <PromotionCountdown endsAt={promo.endsAt} className="pt-2" />
             ) : null}
-            <Link
-              href={promo.landingPagePath || "/book"}
-              className="inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-900"
-              onClick={() => {
-                void fetch("/api/promotions", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({ promotionId: promo.id, eventType: "click" }),
-                });
-              }}
-            >
-              {promo.cta}
-            </Link>
+            <div className="flex flex-wrap gap-3 pt-1">
+              <Link
+                href={promoBookingHref(promo.promoCode)}
+                className="inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-900"
+                onClick={() => trackPromoEvent(promo.id, "click")}
+              >
+                {promo.cta || "Book now"}
+              </Link>
+              <Link
+                href={promo.landingPagePath}
+                className="inline-flex rounded-full border border-white/40 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/20"
+                onClick={() => trackPromoEvent(promo.id, "landing_visit")}
+              >
+                Learn more
+              </Link>
+            </div>
           </div>
           {promo.heroImageUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
