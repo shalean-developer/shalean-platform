@@ -236,6 +236,29 @@ export async function setPromotionStatus(
   return updatePromotion(admin, id, { status }, actor);
 }
 
+/** Reactivate a paused, ended, or expired campaign. Clears a past ends_at so sync does not re-expire it. */
+export async function resumePromotion(
+  admin: Admin,
+  id: string,
+  actor?: string,
+): Promise<PromotionRow> {
+  const before = await getPromotionById(admin, id);
+  if (!before) throw new Error("Promotion not found.");
+
+  const patch: Partial<CreatePromotionInput> & { status: PromotionStatus } = {
+    status: "active",
+  };
+  if (
+    (before.status === "ended" || before.status === "expired") &&
+    before.ends_at &&
+    new Date(before.ends_at).getTime() <= Date.now()
+  ) {
+    patch.ends_at = null;
+  }
+
+  return updatePromotion(admin, id, patch, actor);
+}
+
 export async function deletePromotion(
   admin: Admin,
   id: string,

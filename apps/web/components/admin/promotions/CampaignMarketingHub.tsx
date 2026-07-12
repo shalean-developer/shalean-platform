@@ -162,6 +162,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detailContent, setDetailContent] = useState<ContentRow[]>([]);
   const [detailAssets, setDetailAssets] = useState<AssetRow[]>([]);
+  const editPanelRef = useRef<HTMLDivElement>(null);
   const emptyForm = {
     name: "",
     description: "",
@@ -314,7 +315,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     }
   }
 
-  async function runAction(id: string, action: string) {
+  async function runAction(id: string, action: string): Promise<boolean> {
     setBusy(`${id}:${action}`);
     const res = await adminFetch(`/api/admin/promotions/${id}`, {
       method: "POST",
@@ -323,11 +324,20 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     setBusy(null);
     if (res.error) {
       emitAdminToast(res.error, "error");
-      return;
+      return false;
     }
-    emitAdminToast(`Campaign ${action}d.`, "success");
+    const doneLabel: Record<string, string> = {
+      pause: "paused",
+      resume: "resumed",
+      end: "ended",
+      activate: "activated",
+      schedule: "scheduled",
+      duplicate: "duplicated",
+    };
+    emitAdminToast(`Campaign ${doneLabel[action] ?? `${action}d`}.`, "success");
     void refetch();
     void loadAnalytics();
+    return true;
   }
 
   async function generateCampaign(id: string) {
@@ -360,6 +370,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
 
   function openEdit(p: PromotionRow) {
     setShowCreate(false);
+    setSelectedId(null);
     setEditingId(p.id);
     setEditForm({
       name: p.name,
@@ -380,6 +391,14 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
       generate: false,
     });
   }
+
+  useEffect(() => {
+    if (!editingId) return;
+    const frame = requestAnimationFrame(() => {
+      editPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [editingId]);
 
   async function saveEdit() {
     if (!editingId || !editForm.name.trim()) return;
@@ -769,6 +788,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                               <Button
                                 size="sm"
                                 variant="outline"
+                                title="Pause campaign"
                                 disabled={busy === `${p.id}:pause`}
                                 onClick={() => void runAction(p.id, "pause")}
                               >
@@ -776,14 +796,35 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                               </Button>
                             ) : p.status === "paused" ||
                               p.status === "draft" ||
-                              p.status === "scheduled" ? (
+                              p.status === "scheduled" ||
+                              p.status === "ended" ||
+                              p.status === "expired" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
-                                disabled={busy === `${p.id}:resume` || busy === `${p.id}:activate`}
-                                onClick={() =>
-                                  void runAction(p.id, p.status === "paused" ? "resume" : "activate")
+                                title={
+                                  p.status === "ended" || p.status === "expired"
+                                    ? "Resume campaign"
+                                    : p.status === "paused"
+                                      ? "Resume campaign"
+                                      : "Activate campaign"
                                 }
+                                disabled={busy === `${p.id}:resume` || busy === `${p.id}:activate`}
+                                onClick={() => {
+                                  const revive = p.status === "ended" || p.status === "expired";
+                                  const action =
+                                    p.status === "draft" || p.status === "scheduled"
+                                      ? "activate"
+                                      : "resume";
+                                  void runAction(p.id, action).then((ok) => {
+                                    if (ok && revive) {
+                                      emitAdminToast(
+                                        "Past end date cleared if needed. Use Edit to set a new end date.",
+                                        "success",
+                                      );
+                                    }
+                                  });
+                                }}
                               >
                                 <Play className="h-3.5 w-3.5" />
                               </Button>
@@ -881,7 +922,10 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
             ) : null}
 
             {editingId ? (
-              <div className="rounded-2xl border border-slate-200 bg-white p-5 space-y-4">
+              <div
+                ref={editPanelRef}
+                className="scroll-mt-4 rounded-2xl border border-slate-200 bg-white p-5 space-y-4"
+              >
                 <h2 className="text-lg font-semibold">Edit campaign</h2>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>

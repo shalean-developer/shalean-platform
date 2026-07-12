@@ -5,6 +5,7 @@ import {
   deletePromotion,
   duplicatePromotion,
   getPromotionById,
+  resumePromotion,
   setPromotionStatus,
   updatePromotion,
 } from "@/lib/promotions/server";
@@ -124,7 +125,7 @@ export async function POST(request: Request, ctx: Ctx) {
       return NextResponse.json({ promotion: await setPromotionStatus(admin, id, "paused", auth.email) });
     }
     if (body.action === "resume") {
-      return NextResponse.json({ promotion: await setPromotionStatus(admin, id, "active", auth.email) });
+      return NextResponse.json({ promotion: await resumePromotion(admin, id, auth.email) });
     }
     if (body.action === "end") {
       return NextResponse.json({ promotion: await setPromotionStatus(admin, id, "ended", auth.email) });
