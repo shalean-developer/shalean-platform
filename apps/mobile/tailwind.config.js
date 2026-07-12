@@ -5,6 +5,7 @@ module.exports = {
     "./components/**/*.{js,jsx,ts,tsx}",
     "./features/**/*.{js,jsx,ts,tsx}",
     "./providers/**/*.{js,jsx,ts,tsx}",
+    "../../packages/mobile-ui/src/**/*.{js,jsx,ts,tsx}",
   ],
   presets: [require("nativewind/preset")],
   theme: {
@@ -24,10 +25,15 @@ module.exports = {
           fg: "#047857",
           border: "#a7f3d0",
         },
+        credit: {
+          bg: "#ecfdf5",
+          fg: "#047857",
+          border: "#a7f3d0",
+        },
         surface: {
-          DEFAULT: "#f4f6f5",
+          DEFAULT: "#f4f6f8",
           card: "#ffffff",
-          muted: "#e8ece9",
+          muted: "#e8ecf1",
           elevated: "#ffffff",
         },
         ink: {
@@ -64,13 +70,26 @@ module.exports = {
         "2xl": "24px",
       },
       fontSize: {
-        display: ["28px", { lineHeight: "34px", fontWeight: "700" }],
-        title: ["22px", { lineHeight: "28px", fontWeight: "700" }],
-        heading: ["18px", { lineHeight: "24px", fontWeight: "600" }],
-        body: ["16px", { lineHeight: "22px" }],
-        caption: ["13px", { lineHeight: "18px" }],
-        label: ["12px", { lineHeight: "16px", fontWeight: "600" }],
-        overline: ["11px", { lineHeight: "14px", fontWeight: "600" }],
+        /** App title / hero heading */
+        display: ["28px", { lineHeight: "36px", fontWeight: "700" }],
+        /** Screen titles */
+        title: ["24px", { lineHeight: "32px", fontWeight: "600" }],
+        /** Section headings */
+        heading: ["20px", { lineHeight: "28px", fontWeight: "600" }],
+        /** Card titles */
+        card: ["18px", { lineHeight: "24px", fontWeight: "600" }],
+        /** Body text */
+        body: ["16px", { lineHeight: "24px", fontWeight: "400" }],
+        /** Secondary / descriptions */
+        caption: ["14px", { lineHeight: "20px", fontWeight: "400" }],
+        /** Small labels (minimum size) */
+        label: ["12px", { lineHeight: "16px", fontWeight: "500" }],
+        /** Button labels */
+        button: ["16px", { lineHeight: "24px", fontWeight: "600" }],
+        /** Navigation tabs */
+        tab: ["12px", { lineHeight: "16px", fontWeight: "500" }],
+        /** @deprecated Prefer `label` — kept ≥12px for a11y */
+        overline: ["12px", { lineHeight: "16px", fontWeight: "500" }],
       },
       fontFamily: {
         sans: ["System"],

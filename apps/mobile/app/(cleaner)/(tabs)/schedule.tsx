@@ -157,7 +157,7 @@ export default function ScheduleScreen() {
               </SectionCard>
             ) : null}
 
-            <Text className="mb-2 mt-4 text-overline font-semibold uppercase tracking-wide text-ink-muted">
+            <Text className="mb-2 mt-4 text-label font-semibold uppercase tracking-wide text-ink-muted">
               {dayJobs.length === 0
                 ? "No jobs this day"
                 : `${dayJobs.length} job${dayJobs.length === 1 ? "" : "s"}`}

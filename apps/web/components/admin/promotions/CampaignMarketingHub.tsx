@@ -310,6 +310,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
   const [allAssets, setAllAssets] = useState<AssetRow[]>([]);
   const [facebookConfigured, setFacebookConfigured] = useState(false);
   const [facebookHint, setFacebookHint] = useState<string | null>(null);
+  const [googleConfigured, setGoogleConfigured] = useState(false);
+  const [googleHint, setGoogleHint] = useState<string | null>(null);
 
   const loadAnalytics = useCallback(async () => {
     const res = await adminFetch<AnalyticsPayload>("/api/admin/promotions/analytics");
@@ -351,6 +353,16 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     } else {
       setFacebookHint(null);
     }
+  }, []);
+
+  const loadGoogleStatus = useCallback(async () => {
+    const res = await adminFetch<{
+      configured: boolean;
+      connected?: boolean;
+      hint?: string | null;
+    }>("/api/admin/promotions/publish-google-business");
+    setGoogleConfigured(Boolean(res.data?.configured));
+    setGoogleHint(res.data?.hint ?? null);
   }, []);
 
   const loadContentHub = useCallback(async () => {
@@ -397,6 +409,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     void loadTemplates();
     void loadContentHub();
     void loadFacebookStatus();
+    void loadGoogleStatus();
   }, [
     loadAnalytics,
     loadMemberships,
@@ -404,6 +417,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     loadTemplates,
     loadContentHub,
     loadFacebookStatus,
+    loadGoogleStatus,
   ]);
 
   async function loadDetail(id: string) {
@@ -732,6 +746,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
           assets={allAssets}
           facebookConfigured={facebookConfigured}
           facebookHint={facebookHint}
+          googleConfigured={googleConfigured}
+          googleHint={googleHint}
           emptyLabel={`No ${meta.title.toLowerCase()} yet. Generate a campaign first.`}
           onAssetUpdated={(asset) => {
             setAllAssets((prev) => {
@@ -1463,6 +1479,8 @@ function ContentList({
   assets,
   facebookConfigured,
   facebookHint,
+  googleConfigured,
+  googleHint,
   emptyLabel,
   onAssetUpdated,
 }: {
@@ -1470,6 +1488,8 @@ function ContentList({
   assets: AssetRow[];
   facebookConfigured: boolean;
   facebookHint: string | null;
+  googleConfigured: boolean;
+  googleHint: string | null;
   emptyLabel: string;
   onAssetUpdated?: (asset: AssetRow) => void;
 }) {
@@ -1497,6 +1517,19 @@ function ContentList({
           {facebookHint}
         </p>
       ) : null}
+      {!googleConfigured ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {googleHint ?? (
+            <>
+              Google Business one-click publish needs a connected location. Open{" "}
+              <Link href="/office/marketing/connected-accounts" className="font-medium underline">
+                Connected Accounts
+              </Link>{" "}
+              to connect Google Business Profile.
+            </>
+          )}
+        </p>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-2">
         {content.map((c) => (
           <SocialContentCard
@@ -1518,6 +1551,7 @@ function ContentList({
               null
             }
             facebookConfigured={facebookConfigured}
+            googleConfigured={googleConfigured}
             onAssetUpdated={onAssetUpdated}
           />
         ))}
@@ -1530,11 +1564,13 @@ function SocialContentCard({
   content,
   asset,
   facebookConfigured,
+  googleConfigured,
   onAssetUpdated,
 }: {
   content: ContentRow;
   asset: AssetRow | null;
   facebookConfigured: boolean;
+  googleConfigured: boolean;
   onAssetUpdated?: (asset: AssetRow) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -1619,6 +1655,49 @@ function SocialContentCard({
         return;
       }
       emitAdminToast(`Posted to Facebook (id ${res.data?.postId ?? "ok"}).`, "success");
+    } catch (e) {
+      emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function publishGoogleBusiness() {
+    setBusy("gbp");
+    try {
+      let imageDataUrl: string | null = null;
+      let imageUrl: string | null = null;
+      if (customImage && activeAsset?.image_url) {
+        imageUrl = activeAsset.image_url;
+      } else if (cardRef.current) {
+        imageDataUrl = await captureNodeAsPngDataUrl(cardRef.current);
+      }
+      const link = canonicalizePublicSiteUrl(
+        typeof payload.landing === "string"
+          ? payload.landing
+          : content.promotion?.slug
+            ? `https://shalean.co.za/campaigns/${content.promotion.slug}`
+            : "https://shalean.co.za/book",
+      );
+      const res = await adminFetch<{ postName: string }>(
+        "/api/admin/promotions/publish-google-business",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            message: content.body,
+            imageDataUrl,
+            imageUrl,
+            link,
+            promotionId: content.promotion_id ?? null,
+            campaignName: content.promotion?.name ?? null,
+          }),
+        },
+      );
+      if (res.error) {
+        emitAdminToast(res.error, "error");
+        return;
+      }
+      emitAdminToast(`Posted to Google Business (${res.data?.postName ?? "ok"}).`, "success");
     } catch (e) {
       emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
     } finally {
@@ -1795,6 +1874,25 @@ function SocialContentCard({
               <Share2 className="mr-1.5 h-3.5 w-3.5" />
             )}
             Post to Facebook
+          </Button>
+        ) : null}
+        {content.channel === "google_business" ? (
+          <Button
+            size="sm"
+            disabled={!googleConfigured || busy === "gbp"}
+            onClick={() => void publishGoogleBusiness()}
+            title={
+              googleConfigured
+                ? "Upload image and create a Google Business local post"
+                : "Connect Google Business Profile in Connected Accounts"
+            }
+          >
+            {busy === "gbp" ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Share2 className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Upload to Google Business
           </Button>
         ) : null}
       </div>

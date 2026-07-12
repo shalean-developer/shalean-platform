@@ -56,7 +56,7 @@ export function NextJobHero({ job }: Props) {
       accessibilityLabel={`Next up: ${customer} at ${time}`}
     >
       <View className="bg-brand-50 px-4 py-2">
-        <Text className="text-overline font-semibold uppercase tracking-wide text-brand-600">
+        <Text className="text-label font-semibold uppercase tracking-wide text-brand-600">
           Next up
         </Text>
       </View>

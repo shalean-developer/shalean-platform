@@ -22,6 +22,7 @@
     "@react-navigation/elements": "^2.3.8",
     "@react-navigation/native": "^7.1.6",
     "@shalean/api-client": "file:../../packages/api-client",
+    "@shalean/mobile-ui": "file:../../packages/mobile-ui",
     "@shalean/types": "file:../../packages/types",
     "@shalean/utils": "file:../../packages/utils",
     "@shalean/validation": "file:../../packages/validation",

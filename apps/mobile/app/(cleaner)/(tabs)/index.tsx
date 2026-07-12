@@ -229,7 +229,7 @@ export default function TodayScreen() {
             {nextJob ? <NextJobHero job={nextJob} /> : null}
 
             {remainingJobs.length > 0 ? (
-              <Text className="mb-2 text-overline font-semibold uppercase tracking-wide text-ink-muted">
+              <Text className="mb-2 text-label font-semibold uppercase tracking-wide text-ink-muted">
                 Later today
               </Text>
             ) : null}

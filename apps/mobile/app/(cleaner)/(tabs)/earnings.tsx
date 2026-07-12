@@ -152,7 +152,7 @@ export default function EarningsScreen() {
               })}
             </View>
 
-            <Text className="mb-2 mt-4 text-overline font-semibold uppercase tracking-wide text-ink-muted">
+            <Text className="mb-2 mt-4 text-label font-semibold uppercase tracking-wide text-ink-muted">
               Payment history
             </Text>
           </View>

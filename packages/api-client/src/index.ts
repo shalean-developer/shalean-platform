@@ -4,8 +4,8 @@
  * Pure TypeScript. No React, Next.js, Expo, or browser globals required
  * (uses globalThis.fetch when available; inject config.fetch otherwise).
  *
- * Domain wrappers (booking, cleaner, customer, payments) are intentionally
- * not included — add them in a later phase.
+ * Domain factories live under `./domains` — thin path wrappers only.
+ * Server owns pricing, discounts, ownership, and payment finalization.
  */
 
 export type {
@@ -42,3 +42,44 @@ export {
 } from "./parse";
 
 export { createApiClient } from "./createApiClient";
+
+export {
+  createAuthApi,
+  createHealthApi,
+  createCustomerBookingsApi,
+  createBookingV2Api,
+  createCustomerDashboardApi,
+  createCustomerRecurringApi,
+  createRebookApi,
+  createReferralsApi,
+  createPromotionsApi,
+  createPaystackApi,
+  createCustomerProfileApi,
+  createCustomerAddressesApi,
+  createCustomerInvoicesApi,
+  createCustomerNotificationsApi,
+  createCustomerDevicesApi,
+  createCustomerReviewsApi,
+} from "./domains";
+
+export type {
+  AuthApi,
+  ResolveProfileResponse,
+  ResolveProfileFailureBody,
+  HealthApi,
+  HealthResponse,
+  CustomerBookingsApi,
+  BookingV2Api,
+  CustomerDashboardApi,
+  CustomerRecurringApi,
+  RebookApi,
+  ReferralsApi,
+  PromotionsApi,
+  PaystackApi,
+  CustomerProfileApi,
+  CustomerAddressesApi,
+  CustomerInvoicesApi,
+  CustomerNotificationsApi,
+  CustomerDevicesApi,
+  CustomerReviewsApi,
+} from "./domains";

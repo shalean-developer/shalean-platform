@@ -133,7 +133,7 @@ export default function JobDetailScreen() {
 
         {access.length > 0 ? (
           <View className="rounded-2xl border border-status-warning-fg bg-status-warning-bg p-4">
-            <Text className="mb-2 text-overline font-semibold uppercase tracking-wide text-status-warning-fg">
+            <Text className="mb-2 text-label font-semibold uppercase tracking-wide text-status-warning-fg">
               Access
             </Text>
             {access.map((line) => (

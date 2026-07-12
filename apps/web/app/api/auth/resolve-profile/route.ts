@@ -55,6 +55,7 @@ export async function POST(request: Request) {
       ok: true,
       userId: uid,
       role: resolved.role,
+      email: email ?? null,
       dashboardRoute: dashboardRouteForRole(resolved.role),
       /** @deprecated use `role` — kept for older clients */
       isCleaner: resolved.role === "cleaner",

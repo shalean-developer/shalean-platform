@@ -111,9 +111,13 @@ export async function adminFetch<T = unknown>(
       },
     });
 
-    const json = (await res.json().catch(() => ({}))) as T & { error?: string };
+    const json = (await res.json().catch(() => ({}))) as T & { error?: string; code?: string };
     if (!res.ok) {
-      return { ok: false, error: (json as { error?: string }).error ?? `Error ${res.status}` };
+      return {
+        ok: false,
+        error: (json as { error?: string }).error ?? `Error ${res.status}`,
+        data: json,
+      };
     }
     return { ok: true, data: json };
   } catch (e) {

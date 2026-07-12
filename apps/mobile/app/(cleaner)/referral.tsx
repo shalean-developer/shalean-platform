@@ -86,7 +86,7 @@ export default function ReferralScreen() {
         refreshControl={<RefreshControl refreshing={isRefetching} onRefresh={() => void onRefresh()} />}
       >
         <SectionCard elevated>
-          <Text className="text-overline font-semibold uppercase tracking-wide text-ink-muted">
+          <Text className="text-label font-semibold uppercase tracking-wide text-ink-muted">
             Your code
           </Text>
           <Text

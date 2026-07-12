@@ -1,0 +1,27 @@
+{
+  "extends": "expo/tsconfig.base",
+  "compilerOptions": {
+    "strict": true,
+    "preserveSymlinks": true,
+    "paths": {
+      "@/*": ["./*"],
+      "@shalean/api-client": ["../../packages/api-client/src/index.ts"],
+      "@shalean/api-client/*": ["../../packages/api-client/src/*"],
+      "@shalean/utils": ["../../packages/utils/src/index.ts"],
+      "@shalean/utils/*": ["../../packages/utils/src/*"],
+      "@shalean/types": ["../../packages/types/src/index.ts"],
+      "@shalean/types/*": ["../../packages/types/src/*"],
+      "@shalean/validation": ["../../packages/validation/src/index.ts"],
+      "@shalean/validation/*": ["../../packages/validation/src/*"],
+      "@shalean/pricing": ["../../packages/pricing/src/index.ts"],
+      "@shalean/pricing/*": ["../../packages/pricing/src/*"]
+    }
+  },
+  "include": [
+    "**/*.ts",
+    "**/*.tsx",
+    ".expo/types/**/*.ts",
+    "expo-env.d.ts",
+    "nativewind-env.d.ts"
+  ]
+}

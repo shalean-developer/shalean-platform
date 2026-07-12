@@ -1,5 +1,6 @@
-# Repo-root EAS ignore — keep Android uploads limited to mobile + shared packages.
+# Repo-root EAS ignore — keep Android uploads limited to Expo apps + shared packages.
 # Paths are relative to this file (monorepo root).
+# Used by apps/mobile and apps/customer-mobile EAS builds.
 
 # Web app (not needed for Expo native builds)
 apps/web/
@@ -35,6 +36,8 @@ supabase/functions/
 *.md
 !apps/mobile/README.md
 !apps/mobile/docs/**
+!apps/customer-mobile/README.md
+!apps/customer-mobile/docs/**
 
 # Cursor / IDE
 .cursor/

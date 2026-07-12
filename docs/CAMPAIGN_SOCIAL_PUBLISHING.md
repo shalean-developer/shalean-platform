@@ -2,11 +2,14 @@
 
 ## In Office (after Generate)
 
-1. Open **Growth → Social** (or **Assets**)
+1. Open **Growth → Social Posts** (or **Assets**)
 2. On each channel card:
    - **Copy text** — caption / email HTML
    - **Download PNG** — branded image at the correct size
    - **Post to Facebook** (Facebook cards only) — publishes image + caption to your Page when configured
+   - **Upload to Google Business** (Google Business cards only) — creates a local post with image when OAuth is connected
+
+Also open **Growth → Connected Accounts** to connect Google Business Profile, pick a location, and review publish history.
 
 ## Facebook one-click env
 
@@ -42,8 +45,62 @@ If you see `(#200) The permission(s) publish_actions are not available`, the env
 
 Without these env vars, Copy + Download PNG still work for manual posting in Meta Business Suite / Creator Studio.
 
+## Google Business Profile (OAuth)
+
+Google publishing uses the official OAuth 2.0 authorization-code flow with offline access (refresh tokens). Tokens are encrypted at rest in `social_accounts`.
+
+### Env
+
+```
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+GOOGLE_REDIRECT_URI=https://shalean.co.za/api/oauth/google/callback
+# Optional dedicated 64-char hex key (otherwise derived from GOOGLE_CLIENT_SECRET):
+# SOCIAL_TOKEN_ENCRYPTION_KEY=
+```
+
+Local example redirect URI: `http://localhost:3000/api/oauth/google/callback`
+
+### Google Cloud setup
+
+1. Create (or reuse) a Google Cloud project
+2. Enable APIs:
+   - **My Business Account Management API**
+   - **My Business Business Information API**
+   - **Google My Business API** (Local Posts `v4`)
+3. Configure the OAuth consent screen (Internal for Workspace-only, or External + test users)
+4. Create **OAuth client ID** → Application type **Web application**
+5. Add Authorized redirect URI = `GOOGLE_REDIRECT_URI`
+6. Request scope: `https://www.googleapis.com/auth/business.manage`
+7. Ensure the Google account that connects owns/manages the Business Profile location
+
+### Connect flow
+
+1. Admin opens **Growth → Connected Accounts**
+2. Click **Connect** on Google Business Profile → Google consent
+3. Callback stores encrypted refresh + access tokens, lists accounts/locations
+4. If multiple locations exist, pick one on the Connected Accounts page
+5. On **Social Posts**, use **Upload to Google Business** on a `google_business` card
+
+### Publishing behaviour
+
+- Captures/uploads the campaign image to the public `campaign-media` bucket (Local Posts require a public `sourceUrl`)
+- Creates a `STANDARD` local post via `POST https://mybusiness.googleapis.com/v4/accounts/{accountId}/locations/{locationId}/localPosts`
+- Auto-refreshes access tokens; reconnect only if the refresh token is revoked
+- Writes `social_publish_history` + `promotion_audit_log` (`publish_google_business`)
+
+### Routes
+
+| Route | Purpose |
+|-------|---------|
+| `GET /api/oauth/google` | Start OAuth (Bearer returns `{ url }`; browser redirects) |
+| `GET /api/oauth/google/callback` | Exchange code, store tokens, redirect to Connected Accounts |
+| `GET/POST /api/admin/social-accounts` | Status, select location, refresh, disconnect |
+| `GET/POST /api/admin/promotions/publish-google-business` | Diagnose + publish |
+
 ## Manual fallback
 
 1. Copy text from Social
 2. Download PNG from Social or Assets
-3. Facebook → Create post → paste + upload image → Publish
+3. Facebook → Create post → paste + upload image → Publish  
+   or Google Business Profile → Create post → paste + upload image → Publish

@@ -9,6 +9,8 @@ Shalean now has a full **Marketing Campaign Management System** built on the exi
 1. Apply migrations (in order):
    - `supabase/migrations/20261066_promotions_campaign_system.sql`
    - `supabase/migrations/20261067_campaign_marketing_content.sql`
+   - `supabase/migrations/20261069_campaign_media_storage.sql`
+   - `supabase/migrations/20261070_social_accounts.sql` (Google Business OAuth + publish history)
 2. Deploy the web app (cron `/api/cron/promotions` already in `vercel.json`)
 3. Open **Office → Growth → Campaigns**
 4. Create a campaign or **Launch** a template, then click **Generate** (sparkles icon)
@@ -17,7 +19,7 @@ Optional: set `OPENAI_API_KEY` to polish social/email copy with AI. Template cop
 
 ## Posting to Facebook / social
 
-See [CAMPAIGN_SOCIAL_PUBLISHING.md](./CAMPAIGN_SOCIAL_PUBLISHING.md) — Copy text, Download PNG, and optional one-click Facebook Page publish (`FACEBOOK_PAGE_ID` + `FACEBOOK_PAGE_ACCESS_TOKEN`).
+See [CAMPAIGN_SOCIAL_PUBLISHING.md](./CAMPAIGN_SOCIAL_PUBLISHING.md) — Copy text, Download PNG, optional Facebook Page publish (`FACEBOOK_PAGE_*`), and Google Business Profile OAuth publish (`GOOGLE_CLIENT_*`).
 
 ## Admin navigation
 
@@ -26,6 +28,7 @@ Office → Growth
   ├── Marketing ROI          /office/marketing
   ├── Campaigns              /office/marketing/campaigns
   ├── Social Posts           /office/marketing/social
+  ├── Connected Accounts     /office/marketing/connected-accounts
   ├── Email Campaigns        /office/marketing/email
   ├── Landing Pages          /office/marketing/landing-pages
   ├── Campaign Analytics     /office/marketing/analytics

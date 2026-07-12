@@ -24,7 +24,7 @@ export function JobProgressStepper({ job }: Props) {
       }
       accessibilityValue={{ min: 0, max: 4, now: cancelled ? 0 : Math.min(active, 4) }}
     >
-      <Text className="mb-3 px-1 text-overline font-semibold uppercase tracking-wide text-ink-muted">
+      <Text className="mb-3 px-1 text-label font-semibold uppercase tracking-wide text-ink-muted">
         Progress
       </Text>
       {cancelled ? (

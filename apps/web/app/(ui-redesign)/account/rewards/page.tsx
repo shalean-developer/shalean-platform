@@ -128,10 +128,12 @@ export default function AccountRewardsPage() {
           </p>
           {data.membership ? (
             <p className="mt-1 text-xs text-slate-500">
-              Saved {formatZar(data.membership.savingsToDateZar)} to date
+              Saved {formatZar(data.membership.savingsToDateZar)} to date · discount applies at checkout
             </p>
           ) : (
-            <p className="mt-1 text-xs text-slate-500">Ask us about membership plans</p>
+            <p className="mt-1 text-xs text-slate-500">
+              Membership plans are assigned by Shalean — ask support if you&apos;d like one
+            </p>
           )}
         </div>
       </div>

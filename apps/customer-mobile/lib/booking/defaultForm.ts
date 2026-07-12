@@ -1,0 +1,70 @@
+import type { CustomerPricingBreakdown } from "@/services/types/bookingV2";
+import { defaultCleanerMode, type ServiceSlug } from "@/lib/booking/serviceMeta";
+import type { BookingFormData } from "@/lib/booking/types";
+
+export function emptyPricingBreakdown(): CustomerPricingBreakdown {
+  return {
+    base_service_price: 0,
+    property_factors_total: 0,
+    bedrooms_price: 0,
+    bathrooms_price: 0,
+    extra_rooms_price: 0,
+    property_size_price: 0,
+    selected_extras: [],
+    selected_extras_total: 0,
+    supplies_equipment_fee: 0,
+    equipment_logistics_fee: 0,
+    equipment_distance_km: 0,
+    equipment_base_fee: 0,
+    equipment_distance_charge: 0,
+    manual_quote_required: false,
+    cleaning_service_subtotal: 0,
+    extra_cleaner_cost: 0,
+    subtotal_before_service_fee: 0,
+    service_fee: 0,
+    recurring_discount: 0,
+    estimated_total: 0,
+    estimated_duration_minutes: 0,
+    lineItems: [],
+    basePrice: 0,
+    extrasTotal: 0,
+    cleanerSurcharge: 0,
+    total: 0,
+  };
+}
+
+export function defaultBookingFormData(serviceSlug: ServiceSlug): BookingFormData {
+  return {
+    serviceSlug,
+    serviceDetails: {},
+    address: "",
+    suburb: "",
+    serviceAreaLocationId: "",
+    serviceAreaCityId: "",
+    city: "Cape Town",
+    postalCode: "",
+    accessInstructions: "",
+    parkingInstructions: "",
+    gateCode: "",
+    contactPhone: "",
+    selectedExtras: [],
+    equipmentRequired: "no",
+    equipmentQuote: null,
+    bookingType: "once_off",
+    date: "",
+    time: "",
+    alternativeDate: "",
+    alternativeTime: "",
+    recurringFrequency: "",
+    recurringDays: [],
+    recurringStartDate: "",
+    recurringEndDate: "",
+    cleanerMode: defaultCleanerMode(serviceSlug),
+    assignedTeamId: "",
+    assignedTeamName: "",
+    cleanerCount: 1,
+    selectedCleanerIds: [],
+    selectedCleanerDetails: [],
+    pricingSummary: emptyPricingBreakdown(),
+  };
+}

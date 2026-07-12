@@ -3,6 +3,7 @@ export {
   spacing,
   radius,
   typography,
+  textStyle,
   shadows,
   touchTarget,
   iconSize,
