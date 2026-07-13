@@ -93,14 +93,19 @@ function CustomSelect({
         onClick={() => setOpen((v) => !v)}
         suppressHydrationWarning
         className={cn(
-          "flex w-full items-center justify-between rounded-xl border bg-white px-4 py-2.5 text-sm shadow-sm transition",
+          "flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm transition sm:px-4",
           open
             ? "border-blue-500 ring-2 ring-blue-500/20"
             : "border-slate-200 hover:border-slate-300",
           error && "border-red-400",
         )}
       >
-        <span className={selected ? "text-slate-800" : "text-slate-400"}>
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate text-left",
+            selected ? "text-slate-800" : "text-slate-400",
+          )}
+        >
           {selected?.label ?? placeholder}
         </span>
         <ChevronDown
@@ -151,15 +156,34 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
   const fieldKey = `serviceDetails.${question.key}`;
   const fieldError = (errors.serviceDetails as Record<string, { message?: string }> | undefined)?.[question.key]?.message;
 
+  /** Shorter labels on narrow screens so room selects keep usable control width. */
+  const mobileShortLabel =
+    question.key === "bedrooms"
+      ? "Bedrooms"
+      : question.key === "bathrooms"
+        ? "Bathrooms"
+        : question.key === "extraRooms"
+          ? "Extra rooms"
+          : null;
+
+  const labelNode = mobileShortLabel ? (
+    <>
+      <span className="sm:hidden">{mobileShortLabel}</span>
+      <span className="hidden sm:inline">{question.label}</span>
+    </>
+  ) : (
+    question.label
+  );
+
   if (shouldUseHorizontalOptionCards(question)) {
     return <ServiceQuestionOptionCards question={question} />;
   }
 
   if (question.type === "select") {
     return (
-      <div>
+      <div className="min-w-0 w-full">
         <FieldLabel htmlFor={question.key} required={question.required}>
-          {question.label}
+          {labelNode}
         </FieldLabel>
         <Controller
           name={fieldKey}
@@ -171,7 +195,9 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
               options={question.options ?? []}
               value={String(field.value ?? "")}
               onChange={field.onChange}
-              placeholder="Select…"
+              placeholder={
+                question.key === "extraRooms" ? "Select extra rooms" : "Select…"
+              }
               error={fieldError}
             />
           )}
@@ -184,9 +210,9 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
 
   if (question.type === "textarea") {
     return (
-      <div>
+      <div className="min-w-0 w-full">
         <FieldLabel htmlFor={question.key} required={question.required}>
-          {question.label}
+          {labelNode}
         </FieldLabel>
         <textarea
           id={question.key}
@@ -202,9 +228,9 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
 
   if (question.type === "number") {
     return (
-      <div>
+      <div className="min-w-0 w-full">
         <FieldLabel htmlFor={question.key} required={question.required}>
-          {question.label}
+          {labelNode}
         </FieldLabel>
         <input
           id={question.key}
@@ -225,9 +251,9 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
 
   // Default: text
   return (
-    <div>
+    <div className="min-w-0 w-full">
       <FieldLabel htmlFor={question.key} required={question.required}>
-        {question.label}
+        {labelNode}
       </FieldLabel>
       <input
         id={question.key}
@@ -309,18 +335,38 @@ export function Step1Details() {
         {questionGroups.map((group) => {
           if (group.type === "inline") {
             const isRooms = group.groupName === "rooms";
+            const count = group.questions.length;
             return (
               <div
                 key={group.groupName}
-                className={cn(isRooms ? "grid gap-4" : "w-full space-y-4")}
-                style={
+                className={cn(
                   isRooms
-                    ? { gridTemplateColumns: `repeat(${group.questions.length}, minmax(0, 1fr))` }
-                    : undefined
-                }
+                    ? cn(
+                        "grid gap-3",
+                        // Never force 3 equal columns below sm — that crushes selects at 320–375px.
+                        "grid-cols-1 min-[350px]:grid-cols-2",
+                        count >= 3 ? "sm:grid-cols-3" : "sm:grid-cols-2",
+                      )
+                    : "w-full space-y-4",
+                )}
               >
-                {group.questions.map((q) => (
-                  <ServiceQuestion key={q.key} question={q} />
+                {group.questions.map((q, index) => (
+                  <div
+                    key={q.key}
+                    className={cn(
+                      "min-w-0",
+                      // Extra rooms (or 3rd rooms-group field): full width under the 2-col band.
+                      isRooms &&
+                        count === 3 &&
+                        index === 2 &&
+                        "min-[350px]:col-span-2 sm:col-span-1",
+                      isRooms && count > 3 && index >= 2 && index === count - 1 && count % 2 === 1
+                        ? "min-[350px]:col-span-2 sm:col-span-1"
+                        : null,
+                    )}
+                  >
+                    <ServiceQuestion question={q} />
+                  </div>
                 ))}
               </div>
             );
@@ -349,7 +395,7 @@ export function Step1Details() {
           />
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <FieldLabel htmlFor="parkingInstructions">Parking (optional)</FieldLabel>
             <input
@@ -413,11 +459,11 @@ export function Step1Details() {
                     )}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center justify-between">
-                      <p className={cn("text-sm font-semibold", checked ? "text-blue-700" : "text-slate-800")}>
+                    <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                      <p className={cn("min-w-0 flex-1 text-sm font-semibold", checked ? "text-blue-700" : "text-slate-800")}>
                         {extra.label}
                       </p>
-                      <p className={cn("text-sm font-bold", checked ? "text-blue-600" : "text-slate-600")}>
+                      <p className={cn("shrink-0 text-sm font-bold", checked ? "text-blue-600" : "text-slate-600")}>
                         +R{extra.priceZar}
                       </p>
                     </div>

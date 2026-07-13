@@ -13,7 +13,7 @@ import { YesNoToggleRow } from "@/src/features/booking-v2/components/YesNoToggle
 
 function optionGridClass(count: number): string {
   if (count <= 2) return "grid-cols-2";
-  if (count === 3) return "grid-cols-3";
+  if (count === 3) return "grid-cols-1 sm:grid-cols-3";
   if (count === 4) return "grid-cols-2 sm:grid-cols-4";
   return "grid-cols-2 sm:grid-cols-3";
 }
@@ -108,8 +108,8 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
                   onClick={() => field.onChange(opt.value)}
                   suppressHydrationWarning
                   className={cn(
-                    "rounded-xl border text-center font-medium transition",
-                    compact ? "px-2 py-2 text-xs" : "px-3 py-2.5 text-sm",
+                    "min-h-11 rounded-xl border text-center font-medium transition",
+                    compact ? "px-2 py-2.5 text-xs" : "px-3 py-2.5 text-sm",
                     selected
                       ? "border-blue-600 bg-blue-600 text-white shadow-sm"
                       : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50/60",

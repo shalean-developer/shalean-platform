@@ -38,7 +38,7 @@ function FieldLabel({
   required?: boolean;
 }) {
   return (
-    <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium text-slate-700">
+    <label htmlFor={htmlFor} className="mb-1.5 block text-sm font-medium leading-snug text-slate-700">
       {children}
       {required ? <span className="ml-1 text-red-500">*</span> : null}
     </label>
@@ -89,18 +89,26 @@ function SearchableSelect({
   );
 
   return (
-    <div ref={containerRef} className="relative">
+    <div ref={containerRef} className="relative w-full min-w-0">
       <button
         id={id}
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "flex w-full items-center justify-between rounded-xl border bg-white px-4 py-2.5 text-sm shadow-sm transition",
+          "flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm transition sm:px-4",
           open ? "border-blue-500 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300",
           error && "border-red-400",
         )}
       >
-        <span className={value ? "text-slate-800" : "text-slate-400"}>{value || placeholder}</span>
+        <span
+          className={cn(
+            "min-w-0 flex-1 truncate text-left",
+            value ? "text-slate-800" : "text-slate-400",
+          )}
+          title={value || undefined}
+        >
+          {value || placeholder}
+        </span>
         <ChevronDown
           className={cn(
             "h-4 w-4 shrink-0 text-slate-400 transition-transform duration-150",
@@ -118,7 +126,7 @@ function SearchableSelect({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search suburb…"
-              className="flex-1 bg-transparent text-sm text-slate-800 placeholder-slate-400 outline-none"
+              className="min-w-0 flex-1 bg-transparent text-sm text-slate-800 placeholder-slate-400 outline-none"
             />
             {query ? (
               <button type="button" onClick={() => setQuery("")}>
@@ -142,13 +150,13 @@ function SearchableSelect({
                       setQuery("");
                     }}
                     className={cn(
-                      "flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition",
+                      "flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm transition",
                       isSelected
                         ? "bg-blue-50 font-medium text-blue-700"
                         : "text-slate-700 hover:bg-slate-50",
                     )}
                   >
-                    {opt}
+                    <span className="min-w-0 break-words">{opt}</span>
                     {isSelected ? <Check className="h-4 w-4 shrink-0 text-blue-600" /> : null}
                   </button>
                 );
@@ -414,8 +422,8 @@ export function PropertyAddressSection() {
             </p>
           ) : null}
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
+            <div className="min-w-0">
               <FieldLabel htmlFor="address" required>
                 Street address
               </FieldLabel>
@@ -427,11 +435,11 @@ export function PropertyAddressSection() {
                   required: "Street address is required",
                   minLength: { value: 5, message: "Enter a full street address" },
                 })}
-                className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               />
               <FieldError message={errors.address?.message} />
             </div>
-            <div>
+            <div className="min-w-0">
               <FieldLabel htmlFor="suburb" required>
                 Suburb
               </FieldLabel>
@@ -458,7 +466,7 @@ export function PropertyAddressSection() {
                 <p className="mt-1 text-xs text-red-500">{locationError}</p>
               ) : null}
             </div>
-            <div>
+            <div className="min-w-0 sm:col-span-2">
               <FieldLabel htmlFor="contactPhone" required>
                 Contact phone
               </FieldLabel>
@@ -474,7 +482,7 @@ export function PropertyAddressSection() {
                   autoComplete="tel"
                   placeholder="+27 82 123 4567 or 0821234567"
                   {...register("contactPhone", contactPhoneRules)}
-                  className="block w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                  className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                 />
               </div>
               <FieldError message={errors.contactPhone?.message} />

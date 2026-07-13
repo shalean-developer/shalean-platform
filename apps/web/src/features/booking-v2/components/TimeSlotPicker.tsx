@@ -103,7 +103,7 @@ export function TimeSlotPicker({
                 type="button"
                 onClick={() => onChange(slot)}
                 className={cn(
-                  "rounded-xl border text-center font-semibold transition",
+                  "min-h-11 rounded-xl border text-center font-semibold transition",
                   compact ? "px-2 py-2.5 text-sm" : "px-3 py-3 text-sm",
                   selected
                     ? "border-blue-600 bg-blue-600 text-white shadow-sm"

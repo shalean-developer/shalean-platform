@@ -23,6 +23,28 @@ const BADGE_CONFIG: Record<CleanerBadge, { label: string; className: string }> =
   },
 };
 
+const AREA_SPLIT = /[,·|/]+/;
+
+/** Compact service-area display: show up to 2 areas, then "+N more". */
+export function formatAreasServedPreview(
+  areasServed: string | null | undefined,
+  maxVisible = 2,
+): { primary: string; moreCount: number } | null {
+  if (!areasServed?.trim()) return null;
+  const parts = areasServed
+    .split(AREA_SPLIT)
+    .map((p) => p.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return null;
+  if (parts.length <= maxVisible) {
+    return { primary: parts.join(" · "), moreCount: 0 };
+  }
+  return {
+    primary: parts.slice(0, maxVisible).join(" · "),
+    moreCount: parts.length - maxVisible,
+  };
+}
+
 type Props = {
   cleaner: AvailableCleanerV2;
   isSelected: boolean;
@@ -31,25 +53,29 @@ type Props = {
 };
 
 export function CleanerCard({ cleaner, isSelected, isDisabled = false, onSelect }: Props) {
+  const areas = formatAreasServedPreview(cleaner.areasServed);
+  const showBadges = cleaner.badges.length > 0 || cleaner.slotEligible;
+
   return (
     <button
       type="button"
+      role="checkbox"
+      aria-checked={isSelected}
       disabled={isDisabled}
       onClick={onSelect}
       className={cn(
-        "relative flex w-full flex-col gap-2.5 rounded-2xl border p-4 text-left transition",
+        "relative w-full max-w-full min-w-0 overflow-hidden rounded-2xl border p-3 text-left transition sm:p-4",
         isSelected && !isDisabled && "border-blue-600 bg-blue-50 shadow-sm ring-1 ring-blue-600/10",
-        !isSelected && !isDisabled &&
+        !isSelected &&
+          !isDisabled &&
           "border-slate-200 bg-white hover:border-blue-300 hover:shadow-sm",
         isDisabled && "cursor-not-allowed border-slate-100 bg-slate-50 opacity-50",
       )}
     >
-      {/* Top row: avatar + info + checkmark */}
-      <div className="flex items-start gap-3">
-        {/* Avatar */}
+      <div className="flex min-w-0 items-start gap-3">
         <div
           className={cn(
-            "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold",
+            "flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold sm:h-12 sm:w-12 sm:text-sm",
             isDisabled ? "bg-slate-100 text-slate-400" : cleaner.avatarColor,
           )}
           aria-hidden
@@ -57,72 +83,81 @@ export function CleanerCard({ cleaner, isSelected, isDisabled = false, onSelect 
           {cleaner.initials}
         </div>
 
-        {/* Name, rating, jobs */}
         <div className="min-w-0 flex-1">
-          <p
-            className={cn(
-              "text-sm font-semibold leading-snug",
-              isSelected ? "text-blue-900" : "text-slate-900",
-            )}
-          >
-            {cleaner.name}
-          </p>
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <p
+                className={cn(
+                  "truncate text-sm font-semibold leading-snug",
+                  isSelected ? "text-blue-900" : "text-slate-900",
+                )}
+              >
+                {cleaner.name}
+              </p>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                {cleaner.rating != null ? (
+                  <span className="inline-flex items-center gap-0.5 text-xs text-slate-600">
+                    <Star className="h-3 w-3 shrink-0 fill-amber-400 text-amber-400" aria-hidden />
+                    {cleaner.rating.toFixed(1)}
+                  </span>
+                ) : null}
+                <span className="text-xs text-slate-500">
+                  {cleaner.jobsCompleted.toLocaleString()} jobs
+                </span>
+              </div>
+            </div>
 
-          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5">
-            {cleaner.rating != null ? (
-              <span className="flex items-center gap-0.5 text-xs text-slate-600">
-                <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden />
-                {cleaner.rating.toFixed(1)}
-              </span>
-            ) : null}
-            <span className="text-xs text-slate-500">
-              {cleaner.jobsCompleted.toLocaleString()} jobs
+            <span
+              className={cn(
+                "mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center",
+                !isSelected && "opacity-0",
+              )}
+              aria-hidden={!isSelected}
+            >
+              <CheckCircle2 className="h-5 w-5 text-blue-600" />
             </span>
           </div>
 
-          {cleaner.areasServed && (
-            <p className="mt-0.5 flex items-center gap-1 truncate text-xs text-slate-500">
-              <MapPin className="h-3 w-3 shrink-0" aria-hidden />
-              {cleaner.areasServed}
-            </p>
-          )}
-        </div>
+          {areas ? (
+            <div className="mt-1.5 min-w-0 text-xs text-slate-500">
+              <p className="flex min-w-0 items-start gap-1">
+                <MapPin className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+                <span className="min-w-0 line-clamp-2 break-words">{areas.primary}</span>
+              </p>
+              {areas.moreCount > 0 ? (
+                <p className="mt-0.5 pl-4 text-[11px] font-medium text-slate-400">
+                  +{areas.moreCount} more area{areas.moreCount > 1 ? "s" : ""}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
 
-        {/* Selected checkmark */}
-        {isSelected && (
-          <CheckCircle2
-            className="mt-0.5 h-5 w-5 shrink-0 text-blue-600"
-            aria-label="Selected"
-          />
-        )}
+          {showBadges ? (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {cleaner.slotEligible ? (
+                <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
+                  Available
+                </span>
+              ) : null}
+              {cleaner.badges.map((badge) => {
+                const cfg = BADGE_CONFIG[badge];
+                return (
+                  <span
+                    key={badge}
+                    className={cn("rounded-full px-2 py-0.5 text-xs font-medium", cfg.className)}
+                  >
+                    {cfg.label}
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
+
+          {isDisabled && cleaner.unavailableReason ? (
+            <p className="mt-1.5 text-xs text-slate-500">{cleaner.unavailableReason}</p>
+          ) : null}
+        </div>
       </div>
-
-      {/* Badges + availability */}
-      {(cleaner.badges.length > 0 || cleaner.slotEligible) && (
-        <div className="flex flex-wrap gap-1.5">
-          {cleaner.slotEligible && (
-            <span className="rounded-full border border-green-200 bg-green-50 px-2 py-0.5 text-xs font-medium text-green-700">
-              Available
-            </span>
-          )}
-          {cleaner.badges.map((badge) => {
-            const cfg = BADGE_CONFIG[badge];
-            return (
-              <span
-                key={badge}
-                className={cn("rounded-full px-2 py-0.5 text-xs font-medium", cfg.className)}
-              >
-                {cfg.label}
-              </span>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Disabled reason */}
-      {isDisabled && cleaner.unavailableReason && (
-        <p className="text-xs text-slate-500">{cleaner.unavailableReason}</p>
-      )}
     </button>
   );
 }

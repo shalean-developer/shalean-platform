@@ -219,7 +219,7 @@ function CustomCalendar({
               disabled={disabled}
               onClick={() => !disabled && onChange(ds)}
               className={cn(
-                "flex h-9 w-full items-center justify-center rounded-lg text-sm transition",
+                "flex h-10 w-full items-center justify-center rounded-lg text-sm transition sm:h-9",
                 disabled && "cursor-not-allowed text-slate-200",
                 !disabled &&
                   !selected &&
@@ -350,7 +350,7 @@ export function Step2Schedule() {
           name="bookingType"
           control={control}
           render={({ field }) => (
-            <div className="flex justify-center gap-3">
+            <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
               {[
                 { value: "once_off", label: "Once-off" },
                 { value: "recurring", label: "Recurring" },
@@ -360,7 +360,7 @@ export function Step2Schedule() {
                   type="button"
                   onClick={() => field.onChange(opt.value)}
                   className={cn(
-                    "min-w-[120px] rounded-xl border px-6 py-3 text-sm font-semibold transition",
+                    "min-h-11 w-full rounded-xl border px-6 py-3 text-sm font-semibold transition sm:w-auto sm:min-w-[120px]",
                     field.value === opt.value
                       ? "border-blue-600 bg-blue-50 text-blue-700"
                       : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
@@ -384,9 +384,9 @@ export function Step2Schedule() {
 
         <div className="grid gap-4 lg:grid-cols-2">
           {/* Date card */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <p className="mb-3 text-sm font-semibold text-slate-800">Pick a date</p>
-            <div className="flex justify-center">
+            <div className="flex w-full justify-center">
               <Controller
                 name="date"
                 control={control}
@@ -405,7 +405,7 @@ export function Step2Schedule() {
           </div>
 
           {/* Time card */}
-          <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <p className="mb-1 text-sm font-semibold text-slate-800">
               Pick a time <span className="text-red-500">*</span>
             </p>
@@ -535,7 +535,7 @@ export function Step2Schedule() {
             )}
 
             {/* Start / end date */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div>
                 <label
                   htmlFor="recurringStartDate"

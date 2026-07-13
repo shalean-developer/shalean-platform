@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { CleanerCountSelector } from "@/src/features/booking-v2/components/CleanerCountSelector";
 import { CleanerPreferenceSection } from "@/src/features/booking-v2/components/CleanerPreferenceSection";
+import { formatAreasServedPreview } from "@/src/features/booking-v2/components/CleanerCard";
 import { EquipmentSection } from "@/src/features/booking-v2/components/EquipmentSection";
 import { TeamAvailabilitySection } from "@/src/features/booking-v2/components/TeamAvailabilitySection";
 import type { AvailableCleanerV2 } from "@/src/features/booking-v2/types";
@@ -248,38 +249,53 @@ function EditModal({
   }, []);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      role="dialog" aria-modal="true" aria-labelledby="edit-modal-title">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center p-0 sm:items-center sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="edit-modal-title"
+    >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onCancel} />
 
-      {/* Card */}
-      <div className="relative z-10 flex w-full max-w-lg flex-col rounded-2xl bg-white shadow-2xl"
-        style={{ maxHeight: "90vh" }}>
+      {/* Card — dvh + safe-area so iOS Safari doesn't clip the footer */}
+      <div
+        className="relative z-10 flex w-full max-w-lg flex-col rounded-t-2xl bg-white shadow-2xl sm:rounded-2xl"
+        style={{ maxHeight: "min(90dvh, calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)))" }}
+      >
         {/* Header */}
-        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-5 py-4">
-          <h3 id="edit-modal-title" className="text-base font-bold text-slate-900">
+        <div className="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-4 sm:px-5">
+          <h3 id="edit-modal-title" className="min-w-0 pr-2 text-base font-bold text-slate-900">
             {title}
           </h3>
-          <button type="button" onClick={onCancel}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+          >
             <X className="h-4 w-4" />
           </button>
         </div>
 
-        {/* Scrollable body */}
-        <div className="flex-1 overflow-y-auto px-5 py-5">
+        {/* Scrollable body — only scroll container inside the modal */}
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-5 sm:px-5">
           <div className="space-y-5">{children}</div>
         </div>
 
         {/* Footer */}
-        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-100 px-5 py-4">
-          <button type="button" onClick={onCancel}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+        <div className="flex shrink-0 items-center justify-end gap-3 border-t border-slate-100 px-4 py-4 pb-[max(1rem,env(safe-area-inset-bottom))] sm:px-5">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex min-h-11 items-center rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+          >
             Cancel
           </button>
-          <button type="button" onClick={onSave}
-            className="rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700">
+          <button
+            type="button"
+            onClick={onSave}
+            className="inline-flex min-h-11 items-center rounded-xl bg-blue-600 px-5 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
+          >
             Save changes
           </button>
         </div>
@@ -709,8 +725,10 @@ function ExtrasEditPanel() {
 // ─── Cleaner preview card (read-only, used in the Review step) ─────────────────
 
 function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
+  const areas = formatAreasServedPreview(cleaner.areasServed);
+
   return (
-    <div className="flex flex-col items-center gap-2 rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-4 text-center">
+    <div className="flex min-w-0 max-w-full flex-col items-center gap-2 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-4 text-center">
       {/* Avatar */}
       <div
         className={cn(
@@ -723,7 +741,7 @@ function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
       </div>
 
       {/* Name */}
-      <p className="text-sm font-semibold leading-snug text-slate-900">{cleaner.name}</p>
+      <p className="w-full truncate text-sm font-semibold leading-snug text-slate-900">{cleaner.name}</p>
 
       {/* Rating + jobs */}
       <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
@@ -737,9 +755,14 @@ function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
       </div>
 
       {/* Areas */}
-      {cleaner.areasServed && (
-        <p className="text-xs text-slate-400">{cleaner.areasServed}</p>
-      )}
+      {areas ? (
+        <div className="w-full min-w-0 text-xs text-slate-400">
+          <p className="line-clamp-2 break-words">{areas.primary}</p>
+          {areas.moreCount > 0 ? (
+            <p className="mt-0.5 font-medium">+{areas.moreCount} more</p>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* Badge */}
       <span className="rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-xs font-medium text-blue-700">
@@ -763,26 +786,26 @@ function ReviewSection({
   children: React.ReactNode;
 }) {
   return (
-    <div className="overflow-hidden rounded-2xl border border-slate-100 bg-white">
+    <div className="rounded-2xl border border-slate-100 bg-white">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50/60 px-5 py-3.5">
-        <div className="flex items-center gap-2.5">
-          <span className="flex h-5 w-5 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
             {number}
           </span>
-          <h3 className="text-sm font-bold text-slate-800">{title}</h3>
+          <h3 className="truncate text-sm font-bold text-slate-800">{title}</h3>
         </div>
         <button
           type="button"
           onClick={onEdit}
-          className="flex items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
+          className="inline-flex min-h-9 shrink-0 items-center gap-1 rounded-lg px-2.5 py-1 text-xs font-semibold text-blue-600 transition hover:bg-blue-50 hover:text-blue-700"
         >
           <Pencil className="h-3 w-3" aria-hidden />
           Edit
         </button>
       </div>
       {/* Body */}
-      <div className="px-5 py-4">{children}</div>
+      <div className="min-w-0 px-4 py-4 sm:px-5">{children}</div>
     </div>
   );
 }
@@ -894,13 +917,13 @@ export function Step3Review() {
         </div>
 
         {/* Service badge */}
-        <div className="flex items-center gap-4 rounded-2xl border border-blue-100 bg-blue-50 px-5 py-4">
+        <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4 sm:gap-4 sm:px-5">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600">
             <config.icon className="h-6 w-6 text-white" aria-hidden />
           </div>
           <div className="min-w-0">
             <p className="text-base font-bold text-blue-900">{serviceLabel}</p>
-            <p className="mt-0.5 truncate text-xs text-blue-700/80">{serviceDescription}</p>
+            <p className="mt-0.5 text-xs text-blue-700/80 sm:truncate">{serviceDescription}</p>
           </div>
         </div>
 
@@ -1167,14 +1190,14 @@ export function Step3Review() {
         </ReviewSection>
 
         {/* Price breakdown */}
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 bg-slate-50/60 px-5 py-3.5">
+        <div className="rounded-2xl border border-slate-200 bg-white">
+          <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
             <h3 className="text-sm font-bold text-slate-800">Price breakdown</h3>
           </div>
 
-          <div className="space-y-2.5 px-5 py-4">
+          <div className="min-w-0 space-y-2.5 px-4 py-4 sm:px-5">
             <CustomerPriceBreakdown pricing={pricingSummary} />
-            <div className="flex items-center justify-between border-t border-slate-100 pt-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
               <span className="text-base font-bold text-slate-900">Estimated total</span>
               <span className="text-2xl font-bold text-blue-600">
                 R{estimatedTotal.toLocaleString("en-ZA")}
@@ -1182,7 +1205,7 @@ export function Step3Review() {
             </div>
           </div>
 
-          <div className="border-t border-slate-100 bg-slate-50 px-5 py-3">
+          <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 sm:px-5">
             <p className="text-xs text-slate-400">
               Final amount confirmed before payment. No hidden fees.
             </p>
@@ -1190,7 +1213,7 @@ export function Step3Review() {
         </div>
 
         {/* Trust strip */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
           {[
             { Icon: ShieldCheck, label: "Vetted cleaners" },
             { Icon: CreditCard, label: "Secure payment" },
@@ -1198,9 +1221,9 @@ export function Step3Review() {
           ].map(({ Icon, label }) => (
             <div
               key={label}
-              className="flex flex-col items-center gap-1.5 rounded-xl border border-slate-100 bg-white p-3 text-center"
+              className="flex flex-row items-center gap-2.5 rounded-xl border border-slate-100 bg-white p-3 sm:flex-col sm:items-center sm:gap-1.5 sm:text-center"
             >
-              <Icon className="h-5 w-5 text-blue-600" aria-hidden />
+              <Icon className="h-5 w-5 shrink-0 text-blue-600" aria-hidden />
               <p className="text-xs font-medium text-slate-600">{label}</p>
             </div>
           ))}

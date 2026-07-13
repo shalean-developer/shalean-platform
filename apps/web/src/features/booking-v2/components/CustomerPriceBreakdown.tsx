@@ -50,7 +50,7 @@ export function CustomerPriceBreakdown({
               item.amountZar < 0 && "text-emerald-700",
             )}
           >
-            <span className="truncate">{item.label}</span>
+            <span className="min-w-0 truncate">{item.label}</span>
             <span className={cn("shrink-0 tabular-nums font-medium", item.amountZar < 0 && "text-emerald-700")}>
               {formatZar(item.amountZar)}
             </span>
@@ -86,7 +86,7 @@ export function SelectedExtrasList({
     <ul className={cn("space-y-2", className)}>
       {extras.map((extra) => (
         <li key={extra.extra_id} className="flex items-center justify-between gap-2 text-sm">
-          <span className="text-slate-700">{extra.name}</span>
+          <span className="min-w-0 text-slate-700">{extra.name}</span>
           <span className="font-semibold text-slate-900 tabular-nums">
             +R{extra.total.toLocaleString("en-ZA")}
           </span>

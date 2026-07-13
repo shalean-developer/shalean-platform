@@ -150,7 +150,7 @@ export function CleanerPreferenceSection({
         >
           <Users className="h-5 w-5" aria-hidden />
         </div>
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
           <p
             className={cn(
               "text-sm font-semibold",
@@ -170,7 +170,7 @@ export function CleanerPreferenceSection({
 
       {/* Cleaner list */}
       {loading ? (
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
           {Array.from({ length: 4 }).map((_, i) => (
             <div key={i} className="h-24 animate-pulse rounded-2xl bg-slate-100" />
           ))}
@@ -210,7 +210,7 @@ export function CleanerPreferenceSection({
             </p>
           ) : null}
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
             {visibleCleaners.map((cleaner) => {
               const isSelected = selectedIds.includes(cleaner.id);
               // Only truly unavailable cleaners are disabled — never based on selection count
