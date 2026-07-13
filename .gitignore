@@ -19,3 +19,5 @@ route-audit-temp.json
 
 # Local SEO data exports (keep *.example.json)
 apps/web/tmp/gsc-rows.json
+
+supabase/.branches/

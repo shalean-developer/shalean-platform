@@ -1,0 +1,29 @@
+name: migration-governance
+
+on:
+  pull_request:
+    paths:
+      - "supabase/migrations/**"
+      - "scripts/validate-supabase-migrations.mjs"
+      - "package.json"
+      - ".github/workflows/migration-governance.yml"
+      - "docs/database-baseline/migration-governance.md"
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "scripts/validate-supabase-migrations.mjs"
+      - "package.json"
+      - ".github/workflows/migration-governance.yml"
+      - "docs/database-baseline/migration-governance.md"
+
+jobs:
+  validate-migration-filenames:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Validate active Supabase migration filenames
+        run: npm run db:migrations:validate
