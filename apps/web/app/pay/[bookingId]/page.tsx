@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { loadPayBookingLanding } from "@/lib/pay/payBookingLanding";
+import { PayBookingCheckoutClient } from "@/components/pay/PayBookingCheckoutClient";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -37,13 +39,26 @@ export default async function PayBookingPage({
 
   const land = await loadPayBookingLanding(bookingId, reference);
   if (!land.ok) {
+    if (land.alreadyPaid) {
+      const successRef = land.reference?.trim() || reference;
+      redirect(`/account/success?reference=${encodeURIComponent(successRef)}`);
+    }
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col justify-center gap-4 px-4 py-16 text-center">
         <h1 className="text-xl font-semibold text-neutral-900">Unable to open checkout</h1>
         <p className="text-sm text-neutral-600">{land.error}</p>
-        <Link href="/book" className="text-sm font-medium text-blue-600 hover:underline">
-          Start a new booking
-        </Link>
+        {land.retryable ? (
+          <PayBookingCheckoutClient
+            bookingId={bookingId}
+            reference={reference}
+            mode="retry_only"
+            initialError={land.error}
+          />
+        ) : (
+          <Link href="/book" className="text-sm font-medium text-blue-600 hover:underline">
+            Start a new booking
+          </Link>
+        )}
       </main>
     );
   }
@@ -58,6 +73,12 @@ export default async function PayBookingPage({
       <div className="mb-2 text-sm font-medium text-blue-600">Shalean</div>
       <h1 className="text-2xl font-semibold tracking-tight text-neutral-900">Complete your payment</h1>
       <p className="mt-2 text-sm text-neutral-600">Review your visit below, then continue to our secure checkout.</p>
+
+      {land.refreshed && land.message ? (
+        <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {land.message}
+        </p>
+      ) : null}
 
       <div className="mt-8 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
         <p className="text-xs font-medium uppercase tracking-wide text-neutral-500">Service</p>
@@ -75,12 +96,12 @@ export default async function PayBookingPage({
       </div>
 
       <div className="mt-8 flex flex-col gap-3">
-        <a
-          href={land.authorizationUrl}
-          className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-center text-sm font-semibold text-white shadow hover:bg-blue-700"
-        >
-          Pay now — secure checkout
-        </a>
+        <PayBookingCheckoutClient
+          bookingId={land.bookingId}
+          reference={land.reference}
+          authorizationUrl={land.authorizationUrl}
+          mode="checkout"
+        />
         <p className="text-center text-xs text-neutral-500">
           You will complete payment on Paystack (cards, EFT, and more). We never store your card on our servers.
         </p>

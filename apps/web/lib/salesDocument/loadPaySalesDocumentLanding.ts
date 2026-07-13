@@ -41,7 +41,7 @@ export async function loadPaySalesDocumentLanding(
   const { data: row, error } = await admin
     .from("sales_documents")
     .select(
-      "id, document_type, status, customer_name, line_items, total_cents, balance_cents, paystack_reference, payment_link, payment_link_expires_at",
+      "id, document_type, status, customer_name, customer_email, line_items, total_cents, balance_cents, paystack_reference, payment_link, payment_link_expires_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -82,13 +82,41 @@ export async function loadPaySalesDocumentLanding(
 
   const expiresAt =
     typeof r.payment_link_expires_at === "string" ? r.payment_link_expires_at : null;
-  if (expiresAt && new Date(expiresAt).getTime() < Date.now()) {
-    return { ok: false, httpStatus: 410, error: "This payment link has expired." };
-  }
+  const linkExpired = Boolean(expiresAt && new Date(expiresAt).getTime() < Date.now());
+  let paymentLink = typeof r.payment_link === "string" ? r.payment_link.trim() : "";
 
-  const paymentLink = typeof r.payment_link === "string" ? r.payment_link : "";
-  if (!paymentLink) {
-    return { ok: false, httpStatus: 410, error: "Payment link is not available." };
+  if (!paymentLink || linkExpired) {
+    const email = String(r.customer_email ?? "").trim();
+    if (!email) {
+      return {
+        ok: false,
+        httpStatus: 410,
+        error: linkExpired ? "This payment link has expired." : "Payment link is not available.",
+      };
+    }
+    const { initializePaystackForSalesDocument } = await import(
+      "@/lib/salesDocument/initializePaystackForSalesDocument"
+    );
+    // Force a fresh Paystack session when the stored link is missing or past TTL.
+    if (linkExpired && paymentLink) {
+      await admin
+        .from("sales_documents")
+        .update({ payment_link: null })
+        .eq("id", id);
+    }
+    const init = await initializePaystackForSalesDocument(admin, {
+      documentId: id,
+      customerEmail: email,
+    });
+    if (!init.ok || !init.authorizationUrl?.trim()) {
+      return {
+        ok: false,
+        httpStatus: 503,
+        error:
+          "We could not start the secure payment checkout. Your invoice is safe and no payment was taken. Please try again.",
+      };
+    }
+    paymentLink = init.authorizationUrl.trim();
   }
 
   const lineItems = Array.isArray(r.line_items) ? r.line_items : [];

@@ -203,19 +203,13 @@ export function useUnifiedPaymentFlow({
       setError("This booking has no customer email. Contact support.");
       return;
     }
-    const tip = 0;
-    const amount = Math.max(100, Math.round(summary.priceZar * 100));
-    const paystackRef = `pay_${crypto.randomUUID()}`;
-    const metadata = buildInlinePaystackMetadata(summary, email, tip, {
-      paymentMode,
-      attributionSource,
-    });
-    if (typeof metadata.price_snapshot !== "string" || !metadata.price_snapshot.trim()) {
-      setError("Invalid checkout preview. Refresh and try again.");
+    if (summary.priceZar <= 0) {
+      setError("Invalid checkout amount.");
       return;
     }
 
     void (async () => {
+      setBusy(true);
       try {
         const preRes = await fetch("/api/bookings/payment-precheck", {
           method: "POST",
@@ -232,27 +226,69 @@ export function useUnifiedPaymentFlow({
               ? preJson.error.trim()
               : "This checkout is no longer available. Refresh the page or start again.";
           setError(msg);
+          setBusy(false);
           return;
         }
-      } catch {
-        setError("Could not verify checkout. Check your connection and try again.");
-        return;
-      }
 
-      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, stateForEvents, {
-        payment_provider: "paystack",
-        payment_mode: paymentMode,
-        paystack_flow: "inline",
-        booking_id: summary.id,
-      });
-      trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_INITIATED, {
-        step: "booking_payment",
-        booking_id: summary.id,
-        payment_mode: paymentMode,
-        total_zar: summary.priceZar,
-      });
-      setBusy(true);
-      try {
+        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, stateForEvents, {
+          payment_provider: "paystack",
+          payment_mode: paymentMode,
+          paystack_flow: "ensure_session_redirect",
+          booking_id: summary.id,
+        });
+        trackGrowthEvent(ANALYTICS_EVENTS.PAYMENT_INITIATED, {
+          step: "booking_payment",
+          booking_id: summary.id,
+          payment_mode: paymentMode,
+          total_zar: summary.priceZar,
+        });
+
+        // Prefer server-side session recovery (persisted authorization_url) over client-only
+        // Inline refs — survives refresh, mobile tab kill, and abandoned checkout.
+        const { getSession } = await import("@/lib/auth/authClient");
+        const session = await getSession();
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (session?.access_token) {
+          headers.Authorization = `Bearer ${session.access_token}`;
+        }
+        const sessRes = await fetch(`/api/bookings/${encodeURIComponent(summary.id)}/payment-session`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({}),
+        });
+        const sessJson = (await sessRes.json()) as {
+          status?: string;
+          authorizationUrl?: string;
+          reference?: string;
+          error?: string;
+          message?: string;
+        };
+
+        if (sessJson.status === "paid") {
+          const ref = (sessJson.reference ?? "").trim();
+          router.push(ref ? `/account/success?reference=${encodeURIComponent(ref)}` : "/account/bookings");
+          return;
+        }
+
+        if (sessJson.status === "ready" && typeof sessJson.authorizationUrl === "string" && sessJson.authorizationUrl.trim()) {
+          if (sessJson.message) setMessage(sessJson.message);
+          window.location.assign(sessJson.authorizationUrl.trim());
+          return;
+        }
+
+        // Fallback: legacy Inline checkout when session recovery cannot run (e.g. guest without ref).
+        const tip = 0;
+        const amount = Math.max(100, Math.round(summary.priceZar * 100));
+        const paystackRef = `pay_${crypto.randomUUID()}`;
+        const metadata = buildInlinePaystackMetadata(summary, email, tip, {
+          paymentMode,
+          attributionSource,
+        });
+        if (typeof metadata.price_snapshot !== "string" || !metadata.price_snapshot.trim()) {
+          setError("Invalid checkout preview. Refresh and try again.");
+          setBusy(false);
+          return;
+        }
         initializePayment({
           email,
           amount,
@@ -274,12 +310,14 @@ export function useUnifiedPaymentFlow({
             setMessage("Payment cancelled.");
           },
         });
+        // Keep busy=true until Inline callbacks fire.
+        return;
       } catch (e) {
-        setBusy(false);
         setError(e instanceof Error ? e.message : "Could not start checkout.");
+        setBusy(false);
       }
     })();
-  }, [summary, paymentMode, attributionSource, stateForEvents, verifyAndFinish]);
+  }, [summary, paymentMode, attributionSource, stateForEvents, verifyAndFinish, router]);
 
   const payDisabled = summary.priceZar <= 0 || !summary.email?.trim();
 

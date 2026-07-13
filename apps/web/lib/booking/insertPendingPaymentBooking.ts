@@ -93,10 +93,9 @@ export async function insertPendingPaymentBookingRow(
    * customer rows. Mirrors what `lib/admin/adminPaystackPostInitialize.ts`
    * does for admin-created rows but uses the customer-scoped TTL helper
    * `customerPaymentLinkTtlMs()` so customer/admin TTLs can be tuned
-   * independently. The actual `payment_link` (Paystack auth URL) is
-   * returned to the client by `paystackInitializeCore` and not persisted
-   * for customer rows; the cron correctly fires on TTL alone — it does
-   * NOT require `payment_link IS NOT NULL`.
+   * independently. The Paystack `authorization_url` is persisted onto
+   * `payment_link` after initialize succeeds (`paystackInitializeCore` /
+   * `ensureBookingPaymentSession`) so branded `/pay` recovery works.
    */
   const paymentLinkExpiresAt = new Date(Date.now() + customerPaymentLinkTtlMs()).toISOString();
 

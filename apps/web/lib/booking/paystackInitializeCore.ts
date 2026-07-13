@@ -3,6 +3,7 @@ import "server-only";
 import crypto from "crypto";
 
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
+import { customerPaymentLinkTtlMs } from "@/lib/booking/adminPaymentLinkState";
 import { buildCheckoutVisitLineItems, zarToCents } from "@/lib/booking/buildBookingLineItems";
 import { computeCheckoutTotalZar, MAX_TIP_ZAR } from "@/lib/booking/checkoutTotal";
 import type { LockedBooking } from "@/lib/booking/lockedBooking";
@@ -1054,6 +1055,27 @@ export async function processPaystackInitializeBody(
       status: 500,
       error: "Checkout started but booking could not be linked. Please try again.",
     };
+  }
+
+  // Persist authorization_url so branded `/pay/{id}?ref=` and recovery emails can reopen checkout
+  // after refresh / abandoned sessions (customer checkout historically omitted payment_link).
+  {
+    const expiresAt = new Date(Date.now() + customerPaymentLinkTtlMs()).toISOString();
+    const { error: linkErr } = await admin
+      .from("bookings")
+      .update({
+        payment_link: authUrl,
+        payment_link_expires_at: expiresAt,
+        paystack_reference: reference,
+      })
+      .eq("id", resolvedBookingId)
+      .eq("status", "pending_payment");
+    if (linkErr) {
+      await reportOperationalIssue("error", "paystackInitializeCore", `payment_link persist failed: ${linkErr.message}`, {
+        bookingId: resolvedBookingId,
+        reference,
+      });
+    }
   }
 
   return {

@@ -261,6 +261,7 @@ function PaymentSection({ user }: { user: User }) {
 
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
   const [creditBalance, setCreditBalance] = useState(0);
   const [applyCredit, setApplyCredit] = useState(false);
   const [promoCode, setPromoCode] = useState("");
@@ -391,6 +392,42 @@ function PaymentSection({ user }: { user: User }) {
         return;
       }
 
+      // Retry path: booking already created — recover Paystack session instead of inserting again.
+      if (pendingBookingId) {
+        const sessRes = await fetch(`/api/bookings/${encodeURIComponent(pendingBookingId)}/payment-session`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+          body: JSON.stringify({}),
+        });
+        const sessJson = (await sessRes.json()) as {
+          status?: string;
+          authorizationUrl?: string;
+          reference?: string;
+          error?: string;
+          message?: string;
+        };
+        if (sessJson.status === "paid") {
+          const ref = (sessJson.reference ?? "").trim();
+          clearBookingV2DraftStorage();
+          window.location.assign(bookingV2SuccessHref(ref || pendingBookingId));
+          return;
+        }
+        if (sessJson.status === "ready" && sessJson.authorizationUrl?.trim()) {
+          if (sessJson.message) setError(sessJson.message);
+          window.location.assign(sessJson.authorizationUrl.trim());
+          return;
+        }
+        setError(
+          sessJson.error?.trim() ||
+            "We could not start the secure payment checkout. Your booking is safe and no payment was taken. Please try again.",
+        );
+        setConfirming(false);
+        return;
+      }
+
       const confirmRes = await fetch("/api/booking-v2/confirm", {
         method: "POST",
         headers: {
@@ -469,6 +506,7 @@ function PaymentSection({ user }: { user: User }) {
       }
 
       const { paystackReference, bookingId } = confirmJson;
+      setPendingBookingId(bookingId);
       const chargeAmount = confirmJson.payAmountZar ?? payTotal;
       const requiresPayment = confirmJson.requiresPayment !== false && chargeAmount > 0;
 
@@ -515,7 +553,37 @@ function PaymentSection({ user }: { user: User }) {
         booking_id: bookingId,
       });
 
-      // 2. Launch Paystack inline checkout
+      // Server-side Paystack session (persists authorization_url). Redirect is more reliable than
+      // Inline popups on mobile / in-app browsers, and enables `/pay` recovery after refresh.
+      const sessRes = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/payment-session`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ reference: paystackReference }),
+      });
+      const sessJson = (await sessRes.json()) as {
+        status?: string;
+        authorizationUrl?: string;
+        reference?: string;
+        error?: string;
+        message?: string;
+      };
+
+      if (sessJson.status === "paid") {
+        clearBookingV2DraftStorage();
+        window.location.assign(bookingV2SuccessHref((sessJson.reference ?? paystackReference) || bookingId));
+        return;
+      }
+
+      if (sessJson.status === "ready" && sessJson.authorizationUrl?.trim()) {
+        if (sessJson.message) setError(sessJson.message);
+        window.location.assign(sessJson.authorizationUrl.trim());
+        return;
+      }
+
+      // Fallback: Inline popup if session recovery failed (e.g. transient Paystack outage).
       const { getAcquisitionPayloadFields } = await import("@/lib/analytics/acquisitionContext");
       const acq = getAcquisitionPayloadFields();
       const gclid = typeof acq.gclid === "string" ? acq.gclid.trim() : "";
@@ -543,8 +611,6 @@ function PaymentSection({ user }: { user: User }) {
             paystackReference ||
             bookingId ||
             "";
-          // Navigate first — do not clearBooking() here. Clearing draft + Fast Refresh
-          // remount can strand the user on Step 4 instead of /account/success.
           redirectToBookingV2Success(ref);
         },
         onCancel: () => {
@@ -557,10 +623,8 @@ function PaymentSection({ user }: { user: User }) {
           setConfirming(false);
         },
       };
-      // Inline SDK typings omit `metadata`; runtime accepts it (same as `initializePayment`).
       popup.newTransaction(paystackOpts as Parameters<typeof popup.newTransaction>[0]);
 
-      // If the popup never calls back (closed tab / browser quirk), unlock the button.
       window.setTimeout(() => {
         setConfirming((still) => {
           if (still) {

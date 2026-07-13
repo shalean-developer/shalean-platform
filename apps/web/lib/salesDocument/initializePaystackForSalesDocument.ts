@@ -20,6 +20,7 @@ type DocRow = {
   balance_cents: number | null;
   paystack_reference: string | null;
   payment_link: string | null;
+  payment_link_expires_at?: string | null;
 };
 
 function isDuplicatePaystackReferenceMessage(msg: string): boolean {
@@ -42,7 +43,7 @@ export async function initializePaystackForSalesDocument(
   const { data: inv, error } = await admin
     .from("sales_documents")
     .select(
-      "id, document_type, status, total_cents, balance_cents, paystack_reference, payment_link",
+      "id, document_type, status, total_cents, balance_cents, paystack_reference, payment_link, payment_link_expires_at",
     )
     .eq("id", params.documentId)
     .maybeSingle();
@@ -66,6 +67,8 @@ export async function initializePaystackForSalesDocument(
   const reference = salesDocumentPaystackReference(row.id);
   const existingRef = String(row.paystack_reference ?? "").trim();
   const existingLink = String(row.payment_link ?? "").trim();
+  const expiresAt = typeof row.payment_link_expires_at === "string" ? row.payment_link_expires_at : null;
+  const linkExpired = Boolean(expiresAt && new Date(expiresAt).getTime() < Date.now());
 
   if (!existingRef || existingRef !== reference) {
     const { error: refErr } = await admin
@@ -75,7 +78,7 @@ export async function initializePaystackForSalesDocument(
     if (refErr) return { ok: false, error: refErr.message };
   }
 
-  if (existingLink) {
+  if (existingLink && !linkExpired) {
     return {
       ok: true,
       authorizationUrl: existingLink,

@@ -47,7 +47,7 @@ export async function loadPayMonthlyInvoiceLanding(
 
   const { data: row, error } = await admin
     .from("monthly_invoices")
-    .select("id, month, status, balance_cents, paystack_reference, payment_link")
+    .select("id, month, status, balance_cents, paystack_reference, payment_link, customer_id")
     .eq("id", id)
     .maybeSingle();
 
@@ -74,9 +74,35 @@ export async function loadPayMonthlyInvoiceLanding(
     return { ok: false, httpStatus: 410, error: "Nothing is due on this invoice." };
   }
 
-  const paymentLink = typeof r.payment_link === "string" ? r.payment_link : "";
+  let paymentLink = typeof r.payment_link === "string" ? r.payment_link.trim() : "";
   if (!paymentLink) {
-    return { ok: false, httpStatus: 410, error: "Payment link is not available." };
+    const { resolveMonthlyInvoiceCustomerEmail } = await import(
+      "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail"
+    );
+    const { initializePaystackForMonthlyInvoice } = await import(
+      "@/lib/monthlyInvoice/initializePaystackForMonthlyInvoice"
+    );
+    const customerId = typeof r.customer_id === "string" ? r.customer_id : "";
+    const email = await resolveMonthlyInvoiceCustomerEmail(admin, {
+      customerId,
+      invoiceId: id,
+    });
+    if (!email) {
+      return { ok: false, httpStatus: 410, error: "Payment link is not available." };
+    }
+    const init = await initializePaystackForMonthlyInvoice(admin, {
+      invoiceId: id,
+      customerEmail: email,
+    });
+    if (!init.ok || !init.authorizationUrl?.trim()) {
+      return {
+        ok: false,
+        httpStatus: 503,
+        error:
+          "We could not start the secure payment checkout. Your invoice is safe and no payment was taken. Please try again.",
+      };
+    }
+    paymentLink = init.authorizationUrl.trim();
   }
 
   const month = typeof r.month === "string" ? r.month : "";
