@@ -138,14 +138,14 @@ export async function initializePaystackForSalesDocument(
 
   const authUrl = json.data.authorization_url;
   const ref = json.data.reference ?? reference;
-  const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
+  const paymentLinkExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
   const { error: patchErr } = await admin
     .from("sales_documents")
     .update({
       paystack_reference: ref,
       payment_link: authUrl,
-      payment_link_expires_at: expiresAt,
+      payment_link_expires_at: paymentLinkExpiresAt,
       balance_cents: balance,
       ...(statusNorm === "draft" ? { status: "sent", sent_at: new Date().toISOString() } : {}),
     })
