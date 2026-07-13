@@ -2,6 +2,10 @@
 
 Documentation-only overview of how the current booking stack fits together. **No business logic lives in this file.**
 
+> **Canonical customer intake (2026):** `/book` → `POST /api/booking-v2/confirm` → payment-session / Paystack → `/api/paystack/webhook` or `/api/paystack/verify` → `finalizePaidBooking`.  
+> Legacy `/api/booking/lock` is retired unless explicitly re-enabled.  
+> **Payment semantics ADR:** [`docs/adr/2026-07-13-booking-payment-settlement-cash-columns.md`](../adr/2026-07-13-booking-payment-settlement-cash-columns.md) — `payment_status` settles; cash columns are collected cash only.
+
 ---
 
 ## 1. Full booking flow

@@ -24,6 +24,7 @@ import { resolvePersistCleanerIdForBooking } from "@/lib/payout/bookingEarningsI
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { resetBookingCleanerLineEarnings } from "@/lib/payout/resetBookingCleanerLineEarnings";
 import { PAYMENT_AMOUNT_MISMATCH_EPS_CENTS } from "@/lib/payments/paymentAmountMismatch";
+import { bookingIsCustomerPaymentSettled } from "@/lib/booking/bookingPaymentSettlementState";
 import {
   computeAdminV2RepriceAuthoritativeQuote,
   isV2AuthoritativeBookingRow,
@@ -119,17 +120,7 @@ export function canonicalizeExtraSlugs(slugs: readonly string[]): string[] {
 }
 
 export function bookingRowSignalsPaid(b: Record<string, unknown>): boolean {
-  const p = b.payment_completed_at;
-  if (p != null && String(p).trim() !== "") return true;
-  const ps = String(b.payment_status ?? "")
-    .trim()
-    .toLowerCase();
-  if (ps === "success" || ps === "paid" || ps === "completed") return true;
-  const ap = Number(b.amount_paid_cents ?? b.total_paid_cents);
-  if (Number.isFinite(ap) && ap > 0) return true;
-  const tpz = Number(b.total_paid_zar);
-  if (Number.isFinite(tpz) && tpz > 0) return true;
-  return false;
+  return bookingIsCustomerPaymentSettled(b);
 }
 
 function resolveEffectivePaidCents(b: Record<string, unknown>): number {

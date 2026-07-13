@@ -7,6 +7,10 @@ import {
   quoteEquipmentForAddress,
 } from "@/lib/booking-v2/equipmentPricing";
 import { loadEquipmentPricingConfig } from "@/lib/booking-v2/loadEquipmentPricingConfig";
+import {
+  buildAdminEquipmentFeeUpdatePatch,
+  type AdminEquipmentFeeBookingRow,
+} from "@/lib/booking/adminEquipmentFeeUpdate";
 
 export const runtime = "nodejs";
 
@@ -52,20 +56,22 @@ export async function PATCH(request: Request, context: RouteContext) {
   const { data: existing, error: readErr } = await admin
     .from("bookings")
     .select(
-      "id, location, suburb, total_paid_zar, equipment_logistics_fee, equipment_required, manual_quote_required",
+      "id, location, suburb, status, payment_status, payment_completed_at, total_price, total_paid_zar, total_paid_cents, amount_paid_cents, equipment_logistics_fee, equipment_required, manual_quote_required",
     )
     .eq("id", bookingId)
     .maybeSingle();
 
-  if (readErr) return NextResponse.json({ error: readErr.message }, { status: 500 });
+  if (readErr) return NextResponse.json({ error: "Could not load booking." }, { status: 500 });
   if (!existing?.id) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+
+  const row = existing as AdminEquipmentFeeBookingRow;
 
   const equipConfig = await loadEquipmentPricingConfig();
   let quote = equipmentRequired
     ? await quoteEquipmentForAddress({
         config: equipConfig,
-        address: address || String(existing.location ?? ""),
-        suburb: suburb || String(existing.suburb ?? "Cape Town"),
+        address: address || String(row.location ?? ""),
+        suburb: suburb || String(row.suburb ?? "Cape Town"),
         city,
         postalCode,
         equipmentRequired: true,
@@ -92,42 +98,51 @@ export async function PATCH(request: Request, context: RouteContext) {
     overrideReason: overrideReason || null,
   });
 
-  const prevFee = Number(existing.equipment_logistics_fee ?? 0);
+  const prevFee = Number(row.equipment_logistics_fee ?? 0);
   const nextFee = equipmentRequired ? quote?.logistics_fee ?? 0 : 0;
-  const feeDelta = nextFee - prevFee;
-  const prevTotal = Number(existing.total_paid_zar ?? 0);
-  const nextTotal = Math.max(0, Math.round(prevTotal + feeDelta));
+  const built = buildAdminEquipmentFeeUpdatePatch({
+    existing: row,
+    equipmentPatch,
+    nextFee,
+    prevFee,
+  });
 
-  const { error: updateErr } = await admin
-    .from("bookings")
-    .update({
-      ...equipmentPatch,
-      total_paid_zar: nextTotal,
-      amount_paid_cents: nextTotal * 100,
-    })
-    .eq("id", bookingId);
+  const { error: updateErr } = await admin.from("bookings").update(built.patch).eq("id", bookingId);
 
-  if (updateErr) return NextResponse.json({ error: updateErr.message }, { status: 500 });
+  if (updateErr) return NextResponse.json({ error: "Could not update equipment pricing." }, { status: 500 });
 
   await admin.from("booking_changes").insert({
     booking_id: bookingId,
     changed_by: auth.userId,
     before: {
-      equipment_required: existing.equipment_required,
-      equipment_logistics_fee: existing.equipment_logistics_fee,
-      total_paid_zar: existing.total_paid_zar,
+      equipment_required: row.equipment_required,
+      equipment_logistics_fee: row.equipment_logistics_fee,
+      total_price: row.total_price,
+      total_paid_zar: row.total_paid_zar,
+      amount_paid_cents: row.amount_paid_cents,
     },
     after: {
       equipment_required: equipmentRequired,
       equipment_logistics_fee: nextFee,
-      total_paid_zar: nextTotal,
+      total_price: built.nextTotalPrice,
+      total_paid_zar: built.preservedCashZar,
+      amount_paid_cents: built.paid ? Math.round(built.preservedCashZar * 100) : 0,
+      payment_mismatch: built.paymentMismatch,
     },
     summary: {
       equipment_fee_override: overrideFee != null && overrideFee !== prevFee,
       reason: overrideReason || null,
-      fee_delta: feeDelta,
+      fee_delta: nextFee - prevFee,
+      cash_preserved: built.paid,
+      payment_mismatch: built.paymentMismatch,
     },
   });
 
-  return NextResponse.json({ ok: true, equipment_logistics_fee: nextFee, total_paid_zar: nextTotal });
+  return NextResponse.json({
+    ok: true,
+    equipment_logistics_fee: built.nextFee,
+    total_price: built.nextTotalPrice,
+    total_paid_zar: built.preservedCashZar,
+    payment_mismatch: built.paymentMismatch,
+  });
 }

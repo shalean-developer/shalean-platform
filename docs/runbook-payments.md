@@ -1,5 +1,21 @@
 # Runbook: Payments & bookings (Paystack + Supabase)
 
+## Collected cash vs payable (Phase A — 2026-07-13)
+
+| Field | Meaning |
+|-------|---------|
+| `payment_status` | Authoritative settlement state |
+| `amount_paid_cents` / `total_paid_*` | **Collected cash only** (never “amount due”) |
+| `total_price` / `price_snapshot.pay_total_zar` | Payable / expected charge |
+
+**Unpaid** (`pending_payment`): cash columns must be **0**. If you see positive cash on pending rows, treat as anomaly — dry-run `apps/web/scripts/repairPendingCollectedCashAnomaly.ts`.
+
+**R0 (fully covered):** `payment_status=success`, cash **0**, `payment_completed_at` set, ledger `payment_transactions` with `gateway_reference=r0:{bookingId}`, `payment_channel=promo_credit_cover`, and linkage via `payment_transaction_id`. Constrained by `booking_zero_cash_success_is_r0`. Structured logs: `r0_settlement_*`.
+
+**ADR:** [`docs/adr/2026-07-13-booking-payment-settlement-cash-columns.md`](adr/2026-07-13-booking-payment-settlement-cash-columns.md).
+
+---
+
 ## Verify APIs — do not mix these up
 
 | Route | Use case | Reference in body |

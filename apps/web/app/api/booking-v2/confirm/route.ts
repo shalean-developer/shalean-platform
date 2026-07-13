@@ -54,9 +54,9 @@ import {
   getActiveMembershipDiscountPercent,
 } from "@/lib/promotions/server";
 import type { AppliedPromotionDiscount } from "@/lib/promotions/types";
-import { recordCoveredSettlement } from "@/lib/payments/recordCoveredSettlement";
 import { resolveCheckoutPromoEligibilityExtras } from "@/lib/promotions/resolveCheckoutPromoEligibilityExtras";
-import { bookingPaidAmountColumnsFromZar } from "@/lib/booking/bookingPaidAmountColumns";
+import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
+import { settleFullyCoveredBooking } from "@/lib/payments/settleFullyCoveredBooking";
 
 export const runtime = "nodejs";
 
@@ -65,36 +65,23 @@ type SupabaseAdmin = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-/**
- * Promo / referral / credit can cover the full total. Never leave a R0 booking
- * in `pending_payment` or send the customer to Paystack with amount 0.
- * Phase 4: also writes a zero-amount payment_transactions ledger row.
- */
-async function settleFullyCoveredBookingV2(
+async function trySettleFullyCoveredOrError(
   supabase: SupabaseAdmin,
   bookingId: string,
   payAmountZar: number,
-): Promise<boolean> {
-  if (payAmountZar > 0) return false;
-  const now = new Date().toISOString();
-  await supabase
-    .from("bookings")
-    .update({
-      status: "pending",
-      payment_status: "success",
-      payment_completed_at: now,
-      billing_type: "prepaid",
-    })
-    .eq("id", bookingId);
-
-  const ledger = await recordCoveredSettlement(supabase, {
-    bookingId,
-    paidAtIso: now,
-  });
-  if (!ledger.ok) {
-    console.warn("[booking-v2/confirm] R0 settlement ledger failed:", ledger.error);
+): Promise<{ requiresPayment: true } | { requiresPayment: false } | { errorResponse: NextResponse }> {
+  if (payAmountZar > 0) return { requiresPayment: true };
+  const settled = await settleFullyCoveredBooking(supabase, { bookingId, payAmountZar });
+  if (!settled.ok) {
+    console.error("[booking-v2/confirm] R0 settlement failed:", settled.error, settled.code);
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Could not complete zero-balance settlement. Please try again or contact support." },
+        { status: 503 },
+      ),
+    };
   }
-  return true;
+  return { requiresPayment: false };
 }
 
 async function resolveConfirmLocationContext(
@@ -646,10 +633,11 @@ export async function POST(request: Request) {
   // Credit is spent after the booking row exists; snapshot assumes the capped amount.
   payAmountZar = Math.max(0, payAmountZar - creditToApplyCap);
 
+  // Payable lives in total_price / price_snapshot; collected cash stays zero until settlement.
   const persistPricing = {
     ...persistPricingBase,
     total_price: payAmountZar,
-    ...bookingPaidAmountColumnsFromZar(payAmountZar),
+    ...bookingUncollectedCashColumns(),
   };
 
   // ── 7. Generate Paystack reference ────────────────────────────────────────────
@@ -783,7 +771,7 @@ export async function POST(request: Request) {
             .from("bookings")
             .update({
               total_price: payAmountZar,
-              ...bookingPaidAmountColumnsFromZar(payAmountZar),
+              ...bookingUncollectedCashColumns(),
               price_snapshot: { ...priceSnapshot, cleaning_credit_zar: creditAppliedZar, total_price: payAmountZar, pay_total_zar: payAmountZar },
             })
             .eq("id", existingBooking.id);
@@ -795,7 +783,7 @@ export async function POST(request: Request) {
           .from("bookings")
           .update({
             total_price: payAmountZar,
-            ...bookingPaidAmountColumnsFromZar(payAmountZar),
+            ...bookingUncollectedCashColumns(),
             price_snapshot: { ...priceSnapshot, cleaning_credit_zar: 0, total_price: payAmountZar, pay_total_zar: payAmountZar },
           })
           .eq("id", existingBooking.id);
@@ -817,11 +805,9 @@ export async function POST(request: Request) {
       }
     }
 
-    const requiresPayment = !(await settleFullyCoveredBookingV2(
-      supabase,
-      existingBooking.id,
-      payAmountZar,
-    ));
+    const r0Existing = await trySettleFullyCoveredOrError(supabase, existingBooking.id, payAmountZar);
+    if ("errorResponse" in r0Existing) return r0Existing.errorResponse;
+    const requiresPayment = r0Existing.requiresPayment;
 
     return NextResponse.json({
       success: true,
@@ -984,7 +970,7 @@ export async function POST(request: Request) {
           .from("bookings")
           .update({
             total_price: payAmountZar,
-            ...bookingPaidAmountColumnsFromZar(payAmountZar),
+            ...bookingUncollectedCashColumns(),
             price_snapshot: {
               ...priceSnapshot,
               cleaning_credit_zar: creditAppliedZar,
@@ -1000,7 +986,7 @@ export async function POST(request: Request) {
         .from("bookings")
         .update({
           total_price: payAmountZar,
-          ...bookingPaidAmountColumnsFromZar(payAmountZar),
+          ...bookingUncollectedCashColumns(),
           price_snapshot: {
             ...priceSnapshot,
             cleaning_credit_zar: 0,
@@ -1027,7 +1013,9 @@ export async function POST(request: Request) {
     }
   }
 
-  const requiresPayment = !(await settleFullyCoveredBookingV2(supabase, inserted.id, payAmountZar));
+  const r0Inserted = await trySettleFullyCoveredOrError(supabase, inserted.id, payAmountZar);
+  if ("errorResponse" in r0Inserted) return r0Inserted.errorResponse;
+  const requiresPayment = r0Inserted.requiresPayment;
 
   return NextResponse.json({
     success: true,

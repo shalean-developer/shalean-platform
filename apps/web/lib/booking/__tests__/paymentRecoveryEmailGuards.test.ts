@@ -16,7 +16,24 @@ describe("paymentRecoveryEmailGuards", () => {
 
   it("detects successful Paystack payment signals", () => {
     expect(hasSuccessfulPaystackPayment({ payment_status: "success" })).toBe(true);
-    expect(hasSuccessfulPaystackPayment({ status: "pending_payment", amount_paid_cents: 12000 })).toBe(true);
+    expect(hasSuccessfulPaystackPayment({ status: "pending_payment", amount_paid_cents: 12000 })).toBe(false);
+    expect(
+      hasSuccessfulPaystackPayment({
+        status: "assigned",
+        payment_status: null,
+        amount_paid_cents: 12000,
+      }),
+    ).toBe(true);
+  });
+
+  it("keeps unpaid pending bookings eligible for recovery even with anomalous cash columns", () => {
+    expect(
+      isBookingUnpaidForPaymentRecovery({
+        status: "pending_payment",
+        payment_status: "pending",
+        amount_paid_cents: 12000,
+      }),
+    ).toBe(true);
   });
 
   it("skips reminders when booking is cancelled or paid", () => {

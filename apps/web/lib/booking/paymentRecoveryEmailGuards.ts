@@ -1,5 +1,5 @@
 import type { BookingPaidSignalRow } from "@/lib/payout/bookingEarningsIntegrity";
-import { bookingPaidCustomerSignalsPresent } from "@/lib/payout/adminBookingAssignmentEarningsGate";
+import { bookingIsCustomerPaymentSettled } from "@/lib/booking/bookingPaymentSettlementState";
 import { PAYMENT_RECOVERY_SKIP, type PaymentRecoveryJobType } from "@/lib/booking/paymentRecoverySkipReasons";
 import { classifySendError, TERMINAL_FAILURE_ATTEMPTS } from "@/lib/booking/lifecycleEmailGuards";
 
@@ -17,10 +17,9 @@ export function isBookingPaymentExpiredStatus(booking: { status?: string | null 
   return String(booking.status ?? "").trim().toLowerCase() === "payment_expired";
 }
 
+/** Settlement-sensitive: authoritative payment_status (+ documented historical compatibility). */
 export function hasSuccessfulPaystackPayment(booking: Record<string, unknown>): boolean {
-  const ps = String(booking.payment_status ?? "").trim().toLowerCase();
-  if (ps === "success" || ps === "paid" || ps === "succeeded" || ps === "pending_monthly") return true;
-  return bookingPaidCustomerSignalsPresent(booking as BookingPaidSignalRow);
+  return bookingIsCustomerPaymentSettled(booking as BookingPaidSignalRow & { status?: string | null });
 }
 
 export function isBookingUnpaidForPaymentRecovery(booking: Record<string, unknown>): boolean {

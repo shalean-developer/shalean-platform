@@ -43,6 +43,7 @@ export function bookingsPersistSelectListForPersist(): string {
 
 export type BookingPaidSignalRow = {
   id?: string;
+  status?: string | null;
   total_paid_zar?: number | null;
   total_paid_cents?: number | null;
   amount_paid_cents?: number | null;
@@ -64,9 +65,14 @@ export function bookingPaymentRecomputeBlockedByRefund(r: BookingPaidSignalRow):
 /**
  * Whether a row with `display_earnings_cents = 0` should be treated as **stuck** and recomputed.
  * Uses several signals so we are not blocked when one column lags (webhook order, partial writes).
+ * Pending/expired bookings never count positive cash columns as settlement (BK-001).
  */
 export function bookingSignalsPaidForZeroDisplayRecompute(r: BookingPaidSignalRow): boolean {
   if (bookingPaymentRecomputeBlockedByRefund(r)) return false;
+  const st = String(r.status ?? "").trim().toLowerCase();
+  if (st === "pending_payment" || st === "payment_expired") {
+    return PAID_LIKE_PAYMENT_STATUS.has(String(r.payment_status ?? "").trim().toLowerCase());
+  }
   if (resolveTotalPaidCents(r.total_paid_zar, r.total_paid_cents ?? r.amount_paid_cents) > 0) return true;
   const tpc = Number(r.total_paid_cents);
   if (Number.isFinite(tpc) && tpc > 0) return true;
