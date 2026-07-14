@@ -9,7 +9,7 @@
 ## Added
 
 - ADR: booking payment settlement vs cash columns.
-- Forward migration `20261076_bookings_r0_paid_amount_constraint.sql`.
+- Forward migration `20260714140000_bookings_r0_paid_amount_constraint.sql`.
 - Dry-run data repair script `repairPendingCollectedCashAnomaly.ts`.
 
 ## Not in this release

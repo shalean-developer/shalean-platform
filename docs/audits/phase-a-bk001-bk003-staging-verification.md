@@ -10,7 +10,7 @@
 ## Preconditions
 
 1. Deploy app branch to staging.
-2. Apply forward migration `20261076_bookings_r0_paid_amount_constraint.sql` to **staging** DB only.
+2. Apply forward migration `20260714140000_bookings_r0_paid_amount_constraint.sql` to **staging** DB only.
 3. Confirm Paystack **test** keys and webhook URL point at staging.
 4. Do not enable real customer notifications for validation accounts.
 5. Use synthetic customers / emails only.

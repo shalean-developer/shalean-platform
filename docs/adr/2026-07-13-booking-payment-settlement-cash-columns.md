@@ -42,7 +42,7 @@ Canonical helper: `apps/web/lib/booking/bookingPaymentSettlementState.ts` (`book
 
 ## Migration
 
-Forward migration `20261076_bookings_r0_paid_amount_constraint.sql`:
+Forward migration `20260714140000_bookings_r0_paid_amount_constraint.sql`:
 
 - Narrows `bookings_paid_requires_amount` to allow zero cash when linked R0 ledger exists.
 - Adds `settle_booking_fully_covered(uuid)` for atomic R0 settle.

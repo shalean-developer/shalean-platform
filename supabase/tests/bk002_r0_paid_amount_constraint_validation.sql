@@ -1,4 +1,4 @@
--- Isolated validation cases for 20261076_bookings_r0_paid_amount_constraint.sql
+-- Isolated validation cases for 20260714140000_bookings_r0_paid_amount_constraint.sql
 -- Run ONLY against a local/isolated database after applying that migration.
 -- Do not run against production.
 --

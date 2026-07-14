@@ -156,4 +156,88 @@ describe("settleFullyCoveredBooking", () => {
       expect(result.code).toBe("persist_failed");
     }
   });
+
+  it("fallback applies full R0 paid-state transition with zero collected cash", async () => {
+    const updatePayloads: Record<string, unknown>[] = [];
+    const updateEq = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        maybeSingle: vi.fn().mockResolvedValue({
+          data: {
+            id: "00000000-0000-4000-8000-000000000001",
+            payment_status: "success",
+            amount_paid_cents: 0,
+            payment_transaction_id: "tx-fallback",
+          },
+          error: null,
+        }),
+      }),
+    });
+    const update = vi.fn((payload: Record<string, unknown>) => {
+      updatePayloads.push(payload);
+      return { eq: updateEq };
+    });
+    const admin = {
+      rpc: vi.fn().mockResolvedValue({
+        data: null,
+        error: { message: "Could not find the function settle_booking_fully_covered", code: "PGRST202" },
+      }),
+      from: vi.fn((table: string) => {
+        if (table === "bookings") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnValue({
+                maybeSingle: vi.fn().mockResolvedValue({
+                  data: {
+                    id: "00000000-0000-4000-8000-000000000001",
+                    status: "pending_payment",
+                    payment_status: "pending",
+                    total_price: 0,
+                    payment_transaction_id: null,
+                    payment_completed_at: null,
+                  },
+                  error: null,
+                }),
+              }),
+            }),
+            update,
+          };
+        }
+        if (table === "payment_transactions") {
+          return {
+            select: vi.fn().mockReturnValue({
+              eq: vi.fn().mockReturnThis(),
+              maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+            }),
+            insert: vi.fn().mockReturnValue({
+              select: vi.fn().mockReturnValue({
+                single: vi.fn().mockResolvedValue({ data: { id: "tx-fallback" }, error: null }),
+              }),
+            }),
+          };
+        }
+        return {};
+      }),
+    };
+
+    const result = await settleFullyCoveredBooking(admin as never, {
+      bookingId: "00000000-0000-4000-8000-000000000001",
+      payAmountZar: 0,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      alreadySettled: false,
+      paymentTransactionId: "tx-fallback",
+    });
+    expect(updatePayloads[0]).toMatchObject({
+      status: "pending",
+      payment_status: "success",
+      billing_type: "prepaid",
+      payment_transaction_id: "tx-fallback",
+      amount_paid_cents: 0,
+      total_paid_cents: 0,
+      total_paid_zar: 0,
+    });
+    expect(updatePayloads[0]).toHaveProperty("payment_completed_at");
+  });
 });
