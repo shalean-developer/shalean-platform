@@ -3,5 +3,8 @@
   "private": true,
   "engines": {
     "node": ">=20"
+  },
+  "scripts": {
+    "db:migrations:validate": "node scripts/validate-supabase-migrations.mjs"
   }
 }

@@ -1,5 +1,8 @@
 # Shalean Platform — Supabase local config (Edge Functions + migrations).
 # See docs/backend-migration-architecture.md
+# Active migrations: supabase/migrations (14-digit filenames only).
+# Archive (ignored by CLI): supabase/migrations-legacy
+# Governance: docs/database-baseline/migration-governance.md · npm run db:migrations:validate
 
 [api]
 enabled = true
