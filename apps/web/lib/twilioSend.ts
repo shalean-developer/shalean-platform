@@ -1,5 +1,9 @@
 import twilio from "twilio";
 import {
+  applyOutboundBodyMarker,
+  decideOutboundPhone,
+} from "@/lib/env/outboundMessagingSafety";
+import {
   getSmsOutboundDecision,
   type CommunicationRecipientKind,
 } from "@/lib/notifications/communicationPolicy";
@@ -79,7 +83,7 @@ export async function sendSms(params: {
     process.env.TWILIO_FROM_NUMBER?.trim() ||
     "";
   const to = normalizeToE164(params.toPhone);
-  const body = params.message.replace(/\r\n/g, "\n").trimEnd();
+  let body = params.message.replace(/\r\n/g, "\n").trimEnd();
 
   if (!sid || !token || !from) {
     return { ok: false, error: "twilio_not_configured" };
@@ -87,6 +91,12 @@ export async function sendSms(params: {
   if (!to) {
     return { ok: false, error: "invalid_phone" };
   }
+
+  const phoneGate = decideOutboundPhone(to);
+  if (!phoneGate.allowed) {
+    return { ok: false, error: phoneGate.reason };
+  }
+  body = applyOutboundBodyMarker(body);
 
   try {
     const client = twilio(sid, token);
