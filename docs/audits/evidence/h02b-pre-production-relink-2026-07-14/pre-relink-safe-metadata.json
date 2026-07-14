@@ -1,0 +1,35 @@
+﻿{
+    "git_branch":  "staging",
+    "origin_main":  "99526d72fca841fdc189eaf33720655a564675b0",
+    "pre_relink":  {
+                       "linked_project_json":  {
+                                                   "organization_id_masked":  "cfzsfp****",
+                                                   "ref_masked":  "tchaye****xlvfu",
+                                                   "name":  "shalean-platform",
+                                                   "organization_slug_masked":  "cfzsfp****",
+                                                   "note":  "STALE parent metadata; --linked uses project-ref not this file alone"
+                                               },
+                       "data_shape":  {
+                                          "auth_users":  0,
+                                          "public_bookings":  0
+                                      },
+                       "file_timestamps":  {
+                                               "pooler_url":  "2026-07-14T14:04:02.7774925+02:00",
+                                               "linked_project_json":  "2026-07-13T22:47:52.2212826+02:00",
+                                               "project_ref":  "2026-07-14T14:04:05.5885604+02:00"
+                                           },
+                       "project_ref_length":  20,
+                       "identity_conclusion":  "development preview branch hborcp**** of parent tchaye****; with_data=false",
+                       "migration_list_summary":  "baseline remote+local; eight Phase 1.11 local-only; zero archaeology remote versions (branch history, NOT production)",
+                       "pooler":  {
+                                      "host":  "aws-0-eu-west-3.pooler.supabase.com",
+                                      "password_present":  false,
+                                      "tenant_masked":  "hborcp****",
+                                      "note":  "pooler URL contained role@host only in this capture; password omitted from evidence"
+                                  },
+                       "project_ref_masked":  "hborcp****jnfei"
+                   },
+    "captured_at":  "2026-07-14T16:02:39.1797767+02:00",
+    "cli_version":  "2.109.1",
+    "git_head":  "99526d72fca841fdc189eaf33720655a564675b0"
+}

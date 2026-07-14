@@ -1,0 +1,62 @@
+﻿{
+  "captured_at_africa_johannesburg": "2026-07-14T16:23:00+02:00",
+  "command": "npx supabase backups list --project-ref tchaye****xlvfu --output json",
+  "note": "Read-only list only. Restore / PITR restore was not executed.",
+  "result": {
+    "backups": [
+      {
+        "id": 1108905187,
+        "inserted_at": "2026-07-14T00:37:50.739Z",
+        "is_physical_backup": true,
+        "status": "COMPLETED"
+      },
+      {
+        "id": 1100822216,
+        "inserted_at": "2026-07-13T00:34:49.741Z",
+        "is_physical_backup": true,
+        "status": "COMPLETED"
+      },
+      {
+        "id": 1092925418,
+        "inserted_at": "2026-07-12T00:37:31.698Z",
+        "is_physical_backup": true,
+        "status": "COMPLETED"
+      },
+      {
+        "id": 1085058436,
+        "inserted_at": "2026-07-11T00:37:34.663Z",
+        "is_physical_backup": true,
+        "status": "COMPLETED"
+      },
+      {
+        "id": 1077221300,
+        "inserted_at": "2026-07-10T00:37:08.981Z",
+        "is_physical_backup": true,
+        "status": "COMPLETED"
+      },
+      {
+        "id": 1069433906,
+        "inserted_at": "2026-07-09T00:36:35.411Z",
+        "is_physical_backup": true,
+        "status": "COMPLETED"
+      },
+      {
+        "id": 1061667345,
+        "inserted_at": "2026-07-08T00:34:53.682Z",
+        "is_physical_backup": true,
+        "status": "COMPLETED"
+      },
+      {
+        "id": 1053975995,
+        "inserted_at": "2026-07-07T00:36:22.265Z",
+        "is_physical_backup": true,
+        "status": "COMPLETED"
+      }
+    ],
+    "physical_backup_data": {},
+    "pitr_enabled": false,
+    "region": "eu-west-3",
+    "walg_enabled": true
+  }
+}
+
