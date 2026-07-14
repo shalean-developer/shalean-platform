@@ -213,6 +213,29 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
   // and the per-booking branch is hard-rejected by the
   // `admin_mark_completed_unsafe_for_payment_link` guard. See
   // `app/api/admin/bookings/__tests__/adminMarkCompletedPaystackGuard.test.ts`.
+
+  /*
+   * R1 / R0 zero-cash settlement writer.
+   * Source: `lib/payments/settleFullyCoveredBooking.ts`
+   * Approved write target: `bookings` (fallback path only when RPC missing)
+   * Allowed fields: status → "pending", payment_status → "success",
+   *   payment_completed_at, billing_type, payment_transaction_id,
+   *   plus bookingUncollectedCashColumns() (amount_paid_cents=0).
+   * Transaction / RPC boundary: prefers `settle_booking_fully_covered` RPC
+   *   (migration 20260714140000); app fallback is ledger-then-update.
+   * Callers: booking-v2 confirm / covered-settlement routes (via helper).
+   * Tests: `lib/payments/__tests__/settleFullyCoveredBooking.test.ts`
+   * Approved because it is the controlled R0/R1 writer that replaced the
+   * prior direct status write on `booking-v2/confirm`. Deny-by-default
+   * inventory — do not treat this as licence for new payment writers.
+   */
+  "lib/payments/settleFullyCoveredBooking.ts",
+
+  // Payment-session bootstrap (pending_payment) — documented live offender retained.
+  "lib/booking/ensureBookingPaymentSession.ts",
+
+  // Admin area-review fulfillment transitions (cancel / convert to pending_payment).
+  "app/api/admin/bookings/[id]/fulfillment/route.ts",
 ]);
 
 /**
@@ -730,44 +753,21 @@ describe("H-16 bookings.status direct-write allow-list", () => {
      *                            the documented lifecycle (e.g. the
      *                            `assign_team_and_sync_roster` RPC).
      */
+    /**
+     * Post-H01 baseline-era inventory. Historical pre-baseline SQL lives in
+     * `supabase/migrations-legacy/` and is subsumed by the production baseline;
+     * scanners for this guard only enumerate the active migrations directory.
+     */
     const ALLOWED_SQL_BOOKINGS_STATUS_MUTATIONS: ReadonlyMap<
       string,
       "one_time_data_fix" | "lifecycle_rpc"
     > = new Map([
-      // ---- one-time historical data fixes ------------------------------
-      // Legacy `confirmed → pending` cleanup at marketplace launch.
-      ["20260429_marketplace_cleaners.sql", "one_time_data_fix"],
-      // Repair `cleaner_response_status` drift: pre-active states whose
-      // cleaner already started → in_progress.
-      ["20260608_bookings_operational_status_drift_repair.sql", "one_time_data_fix"],
-      // Backfill: pending rows that already had a cleaner_id /
-      // selected_cleaner_id → assigned (mirrors the new
-      // `bookings_assigned_requires_status` constraint).
-      ["20260847_bookings_fix_pending_with_cleaner_assigned_guard.sql", "one_time_data_fix"],
-      // Payment invariant dedupe (one-shot repair of
-      // pending/pending_payment / payment-status mismatches).
-      ["20260850_bookings_payment_invariants_dedupe.sql", "one_time_data_fix"],
-
-      // ---- approved lifecycle RPC migrations ---------------------------
-      // `assign_team_and_sync_roster` RPC — server-side counterpart to the
-      // `assignCleaner` paid-booking auto-assign helper for team jobs.
-      // Sets `status = 'assigned'` only when a pending booking with no
-      // cleaner is being promoted. Successive migrations refine the same
-      // RPC (atomicity, JSON return, lifecycle preservation, payout owner
-      // persistence, lead cleaner id) without altering the state semantic.
-      ["20260854_assign_team_sync_roster_atomic.sql", "lifecycle_rpc"],
-      ["20260855_assign_team_json_result_and_roster_repair_cron.sql", "lifecycle_rpc"],
-      ["20260883_assign_team_admin_preserve_cleaner_lifecycle.sql", "lifecycle_rpc"],
-      ["20260926_assign_team_sync_roster_persist_payout_owner.sql", "lifecycle_rpc"],
-      ["20260928_assign_team_lead_cleaner_id.sql", "lifecycle_rpc"],
-      ["20261033_assign_team_admin_promote_status_on_assign.sql", "lifecycle_rpc"],
-      // M-12: `accept_dispatch_offer_atomic` RPC. Single-tx counterpart to
-      // the cleaner-side `acceptDispatchOffer` flow — atomically marks the
-      // winning offer accepted, the losers as `superseded`, and promotes
-      // `bookings.status` to `'assigned'` in one statement. Replaces the
-      // previous direct `dispatchOffers.ts` write (now removed from the
-      // approved file allow-list above).
-      ["20260944_m12_accept_dispatch_offer_atomic.sql", "lifecycle_rpc"],
+      // Squashed production baseline embeds historical lifecycle / repair
+      // UPDATE statements (formerly separate migrations under migrations-legacy).
+      ["20260714010000_production_baseline.sql", "one_time_data_fix"],
+      // R1: `settle_booking_fully_covered` RPC — controlled zero-cash success
+      // settlement; status may move pending_payment → pending when payable=0.
+      ["20260714140000_bookings_r0_paid_amount_constraint.sql", "lifecycle_rpc"],
     ]);
 
     const offenders: string[] = [];

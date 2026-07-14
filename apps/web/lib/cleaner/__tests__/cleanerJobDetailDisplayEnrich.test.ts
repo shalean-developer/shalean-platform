@@ -18,13 +18,42 @@ describe("formatCleanerJobLocationDisplay", () => {
 });
 
 describe("durationHoursFromBookingRecord", () => {
-  it("reads estimated_duration_minutes from pricing_summary", () => {
+  it("reads estimated_duration_minutes from a structured pricing_summary", () => {
+    expect(
+      durationHoursFromBookingRecord({
+        booking_snapshot: null,
+        pricing_summary: {
+          base_service_price: 250,
+          estimated_total: 460,
+          estimated_duration_minutes: 330,
+        },
+      }),
+    ).toBe(5.5);
+  });
+
+  it("ignores sparse unstructured pricing_summary and falls back to snapshot default hours", () => {
+    // Sparse fixtures without base_service_price + estimated_total are not structured
+    // breakdowns; duration must not invent hours from a lone estimated_duration_minutes key.
     expect(
       durationHoursFromBookingRecord({
         booking_snapshot: null,
         pricing_summary: { estimated_duration_minutes: 330 },
       }),
-    ).toBe(5.5);
+    ).toBe(2);
+  });
+
+  it("prefers duration_minutes column over pricing_summary", () => {
+    expect(
+      durationHoursFromBookingRecord({
+        duration_minutes: 180,
+        booking_snapshot: null,
+        pricing_summary: {
+          base_service_price: 250,
+          estimated_total: 460,
+          estimated_duration_minutes: 330,
+        },
+      }),
+    ).toBe(3);
   });
 });
 

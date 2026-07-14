@@ -4,14 +4,13 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../../..");
-const migrationPath = path.join(
-  repoRoot,
-  "supabase/migrations/20260932_dispatch_offer_counters_idempotent.sql",
+const { sql: migrationSql } = readRepositoryMigration(
+  "20260932_dispatch_offer_counters_idempotent.sql",
 );
-
-const migrationSql = readFileSync(migrationPath, "utf8");
 
 /** Strip `--` line comments and `/* … *​/` block comments so assertions
  * never false-match against doc-comment prose at the top of the file. */

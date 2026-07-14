@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
+
 /**
  * M-20: `notification_logs.booking_id` integrity hardening — regression suite.
  *
@@ -83,10 +85,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // __tests__ → notifications → lib → web (= webRoot, 3 ups) → apps → repo (= repoRoot, 5 ups)
 const webRoot = path.resolve(__dirname, "..", "..", "..");
 const repoRoot = path.resolve(webRoot, "..", "..");
-const migrationPath = path.join(
-  repoRoot,
-  "supabase/migrations/20260947_m20_notification_logs_booking_id_uuid_chk.sql",
-);
 const writerPath = path.join(webRoot, "lib/notifications/notificationLogWrite.ts");
 
 const SAMPLE_UUID = "11111111-2222-4333-8444-555555555555";
@@ -431,12 +429,16 @@ describe("M-20 writer call-site audit: every writeNotificationLog passes a UUID-
 // Contract A — Migration content
 // ---------------------------------------------------------------------------
 describe("M-20 supabase/migrations/20260947 — content invariants", () => {
-  const sql = readFileSync(migrationPath, "utf8");
+  const { sql, resolved } = readRepositoryMigration(
+    "20260947_m20_notification_logs_booking_id_uuid_chk.sql",
+  );
   const sqlCode = sql.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, " ");
   const sqlCodeLower = sqlCode.toLowerCase();
 
   it("migration file exists and is non-empty", () => {
     expect(sql.length).toBeGreaterThan(0);
+    expect(resolved.absolutePath).toBeTruthy();
+    expect(["active", "legacy"]).toContain(resolved.kind);
   });
 
   it("DROPs the constraint IF EXISTS first so the migration is idempotent", () => {

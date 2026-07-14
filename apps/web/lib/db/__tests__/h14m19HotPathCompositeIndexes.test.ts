@@ -1,15 +1,20 @@
-import { readdirSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import {
+  listActiveMigrationFilenames,
+  readRepositoryMigration,
+} from "@/lib/audit/resolveRepositoryMigration";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../../..");
 const migrationsDir = path.join(repoRoot, "supabase", "migrations");
-const migrationPath = path.join(
-  migrationsDir,
-  "20260942_h14_m19_hot_path_composite_indexes.sql",
-);
+const {
+  sql: migrationSql,
+  resolved: migrationResolved,
+} = readRepositoryMigration("20260942_h14_m19_hot_path_composite_indexes.sql");
 const runbookPath = path.join(
   repoRoot,
   "supabase",
@@ -17,7 +22,6 @@ const runbookPath = path.join(
   "h14_m19_hot_path_composite_indexes_concurrently.sql",
 );
 
-const migrationSql = readFileSync(migrationPath, "utf8");
 const runbookSql = readFileSync(runbookPath, "utf8");
 const runbookSqlLower = runbookSql.toLowerCase();
 
@@ -197,8 +201,8 @@ describe("H-14 / M-19 migration: hardening rules", () => {
 
   it("no other migration already creates an identically-named index (no duplicate-name collision)", () => {
     const newNames = new Set(EXPECTED_INDEXES.map((x) => x.name));
-    const allMigrations = readdirSync(migrationsDir).filter((f) => f.endsWith(".sql"));
-    const me = path.basename(migrationPath);
+    const allMigrations = listActiveMigrationFilenames({ repoRoot });
+    const me = migrationResolved.filename;
     for (const file of allMigrations) {
       if (file === me) continue;
       const src = readFileSync(path.join(migrationsDir, file), "utf8").toLowerCase();

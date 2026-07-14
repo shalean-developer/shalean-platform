@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
 import { acquireCronLock, releaseCronLock, withCronLock } from "../cronLock";
 import { CRON_LOCK_KEYS } from "../cronLockKeys";
 
@@ -211,19 +212,7 @@ describe("H-15 cron lock — behavioural", () => {
 // Migration content guard
 // ---------------------------------------------------------------------------
 describe("H-15 cron lock — migration content", () => {
-  // __dirname = .../apps/web/lib/cron/__tests__
-  //   → web = .../apps/web        (up 3)
-  //   → repo root = .../          (up 5)
-  const webRootForMigration = path.resolve(__dirname, "..", "..", "..");
-  const repoRoot = path.resolve(webRootForMigration, "..", "..");
-  // H01 folded archaeology into production_baseline; original SQL retained in migrations-legacy.
-  const migration = path.join(
-    repoRoot,
-    "supabase",
-    "migrations-legacy",
-    "20260941_cron_run_leases.sql",
-  );
-  const sql = readFileSync(migration, "utf8");
+  const { sql } = readRepositoryMigration("20260941_cron_run_leases.sql");
 
   it("creates the cron_run_leases table idempotently", () => {
     expect(sql).toMatch(/create\s+table\s+if\s+not\s+exists\s+public\.cron_run_leases/i);
