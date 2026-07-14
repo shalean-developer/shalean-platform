@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
+
 /**
  * M-21: `system_logs` retention prune — regression suite.
  *
@@ -65,10 +67,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(__dirname, "../../../../..");
 const repoRoot = path.resolve(webRoot, "../..");
 const routePath = path.join(webRoot, "app/api/cron/prune-system-logs/route.ts");
-const migrationPath = path.join(
-  repoRoot,
-  "supabase/migrations/20260494_system_logs_prune_analytics_rpc.sql",
-);
 const envExamplePath = path.join(webRoot, ".env.example");
 const h15TestPath = path.join(
   webRoot,
@@ -318,7 +316,7 @@ describe("M-21 prune-system-logs route — GET delegates to POST", () => {
 // Contract — Migration content (RPC clamp + scope isolation)
 // ---------------------------------------------------------------------------
 describe("M-21 supabase/migrations/20260494 prune_system_logs RPC — content invariants", () => {
-  const sql = readFileSync(migrationPath, "utf8");
+  const { sql } = readRepositoryMigration("20260494_system_logs_prune_analytics_rpc.sql");
   const sqlLower = sql.toLowerCase();
   // Strip comments before checking statement-level invariants so prose can't false-match.
   const sqlCode = sql.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, " ");

@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../../..");
 const webRoot = path.resolve(__dirname, "../../..");
@@ -37,11 +39,9 @@ const webRoot = path.resolve(__dirname, "../../..");
  * accidentally couple them.
  */
 
-const migrationPath = path.join(
-  repoRoot,
-  "supabase/migrations/20260945_m18_cleaner_payouts_unique_period.sql",
+const { sql: migrationSrc } = readRepositoryMigration(
+  "20260945_m18_cleaner_payouts_unique_period.sql",
 );
-const migrationSrc = readFileSync(migrationPath, "utf8");
 const migrationLower = migrationSrc.toLowerCase();
 /** Migration source with -- and block comments stripped, used when matching SQL statements only. */
 const migrationCode = migrationSrc

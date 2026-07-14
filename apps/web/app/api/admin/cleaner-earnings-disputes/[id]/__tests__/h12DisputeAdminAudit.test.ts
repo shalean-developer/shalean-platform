@@ -3,6 +3,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
+
 vi.mock("@/lib/auth/requireAdminApi", () => ({
   requireAdminApi: vi.fn(),
 }));
@@ -342,7 +344,7 @@ describe("H-12: source content guards", () => {
   }
 
   it("migration 20260940 adds the expected admin audit columns + extends action CHECK", () => {
-    const sql = readFile("supabase/migrations/20260940_h12_dispute_admin_audit_fields.sql");
+    const { sql } = readRepositoryMigration("20260940_h12_dispute_admin_audit_fields.sql");
     // disputes columns
     expect(sql).toMatch(/cleaner_earnings_disputes[\s\S]*add column if not exists reviewed_by uuid references auth\.users/i);
     expect(sql).toMatch(/cleaner_earnings_disputes[\s\S]*add column if not exists reviewed_by_email text/i);
@@ -361,7 +363,7 @@ describe("H-12: source content guards", () => {
   });
 
   it("migration is idempotent (uses ADD COLUMN IF NOT EXISTS + DROP CONSTRAINT IF EXISTS)", () => {
-    const sql = readFile("supabase/migrations/20260940_h12_dispute_admin_audit_fields.sql");
+    const { sql } = readRepositoryMigration("20260940_h12_dispute_admin_audit_fields.sql");
     const ifNotExistsCount = (sql.match(/add column if not exists/gi) ?? []).length;
     expect(ifNotExistsCount).toBeGreaterThanOrEqual(7);
     expect(sql).toMatch(/drop constraint if exists/i);
@@ -369,13 +371,14 @@ describe("H-12: source content guards", () => {
 
   it("migration does not modify payout formulas or cleaner-visible behavior", () => {
     const stripComments = (s: string) => s.replace(/--[^\n]*/g, "").replace(/\/\*[^]*?\*\//g, "");
-    const sql = stripComments(readFile("supabase/migrations/20260940_h12_dispute_admin_audit_fields.sql"));
-    expect(/\bcleaner_payout_cents\b/i.test(sql)).toBe(false);
-    expect(/\bdisplay_earnings_cents\b/i.test(sql)).toBe(false);
-    expect(/\bamount_paid_cents\b/i.test(sql)).toBe(false);
-    expect(/\bcleaner_earnings\b(?!_disputes|_adjustments|_disbursements|_idx|_uidx|_actions)/i.test(sql)).toBe(false);
-    expect(/drop policy/i.test(sql)).toBe(false);
-    expect(/alter\s+table[^;]*disable\s+row\s+level\s+security/i.test(sql)).toBe(false);
+    const { sql } = readRepositoryMigration("20260940_h12_dispute_admin_audit_fields.sql");
+    const strippedSql = stripComments(sql);
+    expect(/\bcleaner_payout_cents\b/i.test(strippedSql)).toBe(false);
+    expect(/\bdisplay_earnings_cents\b/i.test(strippedSql)).toBe(false);
+    expect(/\bamount_paid_cents\b/i.test(strippedSql)).toBe(false);
+    expect(/\bcleaner_earnings\b(?!_disputes|_adjustments|_disbursements|_idx|_uidx|_actions)/i.test(strippedSql)).toBe(false);
+    expect(/drop policy/i.test(strippedSql)).toBe(false);
+    expect(/alter\s+table[^;]*disable\s+row\s+level\s+security/i.test(strippedSql)).toBe(false);
     // does not change the dispute status CHECK (open/reviewing/resolved/rejected)
     expect(/cleaner_earnings_disputes_status_check/i.test(sql)).toBe(false);
   });

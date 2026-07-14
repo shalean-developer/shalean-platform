@@ -2,16 +2,8 @@ name: web-test
 
 on:
   pull_request:
-    paths:
-      - "apps/web/**"
-      - "packages/**"
-      - ".github/workflows/web-test.yml"
   push:
     branches: [main]
-    paths:
-      - "apps/web/**"
-      - "packages/**"
-      - ".github/workflows/web-test.yml"
 
 jobs:
   vitest:
@@ -21,18 +13,66 @@ jobs:
         working-directory: apps/web
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect whether web / package paths changed
+        id: filter
+        shell: bash
+        working-directory: .
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+              echo "run_suite=true" >> "$GITHUB_OUTPUT"
+              echo "No reliable push base; running full suite."
+              exit 0
+            fi
+          fi
+          CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
+          echo "Changed paths:"
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|\.github/workflows/web-test\.yml)'; then
+            echo "run_suite=true" >> "$GITHUB_OUTPUT"
+            echo "Web/package paths changed — running vitest suite."
+          else
+            echo "run_suite=false" >> "$GITHUB_OUTPUT"
+            echo "No web/package path changes — reporting successful no-op for required vitest check."
+          fi
+
+      - name: Docs-only / unrelated change — required-check no-op
+        if: steps.filter.outputs.run_suite != 'true'
+        working-directory: .
+        run: |
+          echo "web-test: no-op success (documentation or unrelated paths only)."
+          echo "Required check context 'vitest' reports terminal success without running expensive steps."
+
       - uses: actions/setup-node@v4
+        if: steps.filter.outputs.run_suite == 'true'
         with:
           node-version: "20"
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
+
       - name: Install
+        if: steps.filter.outputs.run_suite == 'true'
         run: npm ci
+
       - name: Production dependency audit (high+)
+        if: steps.filter.outputs.run_suite == 'true'
         run: npm run audit:production
+
       - name: Critical tests (payments + referrals)
+        if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical
+
       - name: Revenue path tests (booking, dispatch, cleaner API, cron locks)
+        if: steps.filter.outputs.run_suite == 'true'
         run: >-
           npm run test --
           lib/booking/__tests__/cleanerServicePreferenceEligibility.test.ts
@@ -41,26 +81,42 @@ jobs:
           app/api/cleaner/__tests__/cleanerJobsTeamApi.test.ts
           lib/cron/__tests__/h15CronLockOverlapPrevention.test.ts
           lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts
+
       - name: Blog route governance
+        if: steps.filter.outputs.run_suite == 'true'
         run: npm run validate:blog-routes && npm run audit:internal-links && npm run validate:cms-blog-links
+
       - name: Typecheck
+        if: steps.filter.outputs.run_suite == 'true'
         run: npm run typecheck
+
       - name: Booking core ESLint gate
+        if: steps.filter.outputs.run_suite == 'true'
         run: npm run lint:booking-core
+
       - name: Blog SEO governance report
+        if: steps.filter.outputs.run_suite == 'true'
         run: npm run report:blog-seo-governance
+
       - name: Canonical purity report
+        if: steps.filter.outputs.run_suite == 'true'
         run: npm run report:canonical-purity
+
       - name: Live SEO validation
+        if: steps.filter.outputs.run_suite == 'true'
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
           LIVE_SEO_EXTENDED: ${{ vars.LIVE_SEO_EXTENDED || '1' }}
         run: npm run validate:live-seo
+
       - name: Live internal link crawl
+        if: steps.filter.outputs.run_suite == 'true'
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
         run: npm run validate:live-internal-links
+
       - name: Search Console readiness
+        if: steps.filter.outputs.run_suite == 'true'
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
           REQUIRE_GSC_VERIFICATION: ${{ vars.REQUIRE_GSC_VERIFICATION || '0' }}

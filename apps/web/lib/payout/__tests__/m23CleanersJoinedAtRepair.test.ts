@@ -4,15 +4,12 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../../..");
 const webRoot = path.resolve(__dirname, "..", "..", "..");
-const migrationPath = path.join(
-  repoRoot,
-  "supabase/migrations/20260933_cleaners_joined_at_repair.sql",
-);
-
-const migrationSql = readFileSync(migrationPath, "utf8");
+const { sql: migrationSql } = readRepositoryMigration("20260933_cleaners_joined_at_repair.sql");
 
 function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, " ");

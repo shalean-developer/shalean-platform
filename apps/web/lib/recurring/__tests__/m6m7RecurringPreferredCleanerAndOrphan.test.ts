@@ -3,6 +3,8 @@ import { join, resolve } from "node:path";
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
+
 vi.mock("@/lib/logging/systemLog", () => ({
   reportOperationalIssue: vi.fn().mockResolvedValue(undefined),
   logSystemEvent: vi.fn().mockResolvedValue(undefined),
@@ -554,7 +556,9 @@ describe("M-7: refreshRecurringPaymentStateForBooking detects orphan recurring_i
 
 describe("M-6 + M-7: static guards", () => {
   it("M-6 migration exists and adds preferred_cleaner_id with cleaner FK + ON DELETE SET NULL", () => {
-    const sql = readSrc("supabase", "migrations", "20260943_m6_recurring_preferred_cleaner.sql");
+    const { sql, resolved } = readRepositoryMigration("20260943_m6_recurring_preferred_cleaner.sql");
+    expect(resolved.absolutePath).toBeTruthy();
+    expect(["active", "legacy"]).toContain(resolved.kind);
     expect(sql).toContain("alter table public.recurring_bookings");
     expect(sql).toContain("add column if not exists preferred_cleaner_id");
     expect(sql).toContain("references public.cleaners (id)");

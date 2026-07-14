@@ -3,13 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../../..");
-const migrationPath = path.join(
-  repoRoot,
-  "supabase/migrations/20260938_h10_cleaner_financial_rls_identity_fix.sql",
+const { sql: migrationSrc } = readRepositoryMigration(
+  "20260938_h10_cleaner_financial_rls_identity_fix.sql",
 );
-const migrationSrc = readFileSync(migrationPath, "utf8");
 const migrationLower = migrationSrc.toLowerCase();
 /** Migration source with -- and /* *\/ comments stripped — used by tests
  * that need to operate on actual SQL statements only (the doc header

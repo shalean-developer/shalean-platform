@@ -4,7 +4,10 @@ import {
   classifyCanonicalDurationDelta,
   isLargeCanonicalDurationMismatch,
 } from "@/lib/pricing/canonicalDurationShadow";
-import { quoteCheckoutZarWithSnapshot } from "@/lib/pricing/pricingEngineSnapshot";
+import {
+  estimateLegacyTariffDurationHoursSnapshot,
+  quoteCheckoutZarWithSnapshot,
+} from "@/lib/pricing/pricingEngineSnapshot";
 import { vitestTestPricingRatesSnapshot } from "@/lib/pricing/testPricingSnapshot";
 
 const snap = vitestTestPricingRatesSnapshot();
@@ -25,17 +28,21 @@ describe("canonical duration shadow diagnostics (Phase 2D-A)", () => {
     expect(isLargeCanonicalDurationMismatch("critical")).toBe(true);
   });
 
-  it("attaches shadow diagnostics while preserving legacy quote hours", () => {
+  it("attaches shadow diagnostics while quote hours follow the unified duration axis", () => {
     const job = { service: "standard" as const, rooms: 2, bathrooms: 1, extraRooms: 0, extras: [] as string[] };
     const quoted = quoteCheckoutZarWithSnapshot(snap, job, "10:00", "regular", { cleanersCount: 1 });
+    const legacyTariffHours = estimateLegacyTariffDurationHoursSnapshot(snap, job);
 
-    expect(quoted.hours).toBe(2.7);
+    // Quote money hours use the unified/canonical duration axis (not legacy tariff hours).
+    expect(quoted.hours).toBe(4.5);
+    expect(legacyTariffHours).toBe(2.7);
     expect(quoted.durationDiagnostics).toMatchObject({
       mode: "shadow",
-      legacy_duration_minutes: 162,
       canonical_duration_minutes: 270,
-      delta_minutes: 108,
-      delta_severity: "high",
+      // Runtime quote hours are fed as the shadow "legacyHours" input after unified adoption.
+      legacy_duration_minutes: 270,
+      delta_minutes: 0,
+      delta_severity: "parity",
     });
   });
 
@@ -51,7 +58,7 @@ describe("canonical duration shadow diagnostics (Phase 2D-A)", () => {
     expect(diagnostics.delta_severity).toBe("parity");
   });
 
-  it("surfaces extras-heavy jobs as larger shadow deltas without changing runtime hours", () => {
+  it("surfaces extras-heavy jobs with elevated complexity on the unified hours axis", () => {
     const job = {
       service: "standard" as const,
       rooms: 2,
@@ -60,14 +67,15 @@ describe("canonical duration shadow diagnostics (Phase 2D-A)", () => {
       extras: ["inside-oven", "inside-fridge", "inside-cabinets", "interior-walls"],
     };
     const quoted = quoteCheckoutZarWithSnapshot(snap, job, "10:00", "regular", { cleanersCount: 1 });
+    const legacyTariffHours = estimateLegacyTariffDurationHoursSnapshot(snap, job);
 
-    expect(quoted.hours).toBe(2.7);
+    expect(quoted.hours).toBe(7.3);
+    expect(legacyTariffHours).toBe(2.7);
     expect(quoted.durationDiagnostics).toMatchObject({
       canonical_duration_minutes: 435,
-      delta_minutes: 273,
-      delta_severity: "critical",
       operational_complexity: "elevated",
     });
+    expect(quoted.hours).toBeGreaterThan(legacyTariffHours);
   });
 
   it("flags large-property jobs with guards in shadow diagnostics", () => {

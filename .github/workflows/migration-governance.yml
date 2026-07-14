@@ -2,28 +2,56 @@ name: migration-governance
 
 on:
   pull_request:
-    paths:
-      - "supabase/migrations/**"
-      - "scripts/validate-supabase-migrations.mjs"
-      - "package.json"
-      - ".github/workflows/migration-governance.yml"
-      - "docs/database-baseline/migration-governance.md"
   push:
     branches: [main]
-    paths:
-      - "supabase/migrations/**"
-      - "scripts/validate-supabase-migrations.mjs"
-      - "package.json"
-      - ".github/workflows/migration-governance.yml"
-      - "docs/database-baseline/migration-governance.md"
 
 jobs:
   validate-migration-filenames:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Detect whether migration governance paths changed
+        id: filter
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE="${{ github.event.pull_request.base.sha }}"
+            HEAD="${{ github.event.pull_request.head.sha }}"
+          else
+            BASE="${{ github.event.before }}"
+            HEAD="${{ github.sha }}"
+            if [ -z "$BASE" ] || [ "$BASE" = "0000000000000000000000000000000000000000" ]; then
+              echo "run_validate=true" >> "$GITHUB_OUTPUT"
+              echo "No reliable push base; running migration validation."
+              exit 0
+            fi
+          fi
+          CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
+          echo "Changed paths:"
+          echo "$CHANGED"
+          if echo "$CHANGED" | grep -Eq '^(supabase/migrations/|scripts/validate-supabase-migrations\.mjs|package\.json|\.github/workflows/migration-governance\.yml|docs/database-baseline/migration-governance\.md)'; then
+            echo "run_validate=true" >> "$GITHUB_OUTPUT"
+            echo "Migration governance paths changed — running filename validation."
+          else
+            echo "run_validate=false" >> "$GITHUB_OUTPUT"
+            echo "No migration-path changes — reporting successful no-op for required validate-migration-filenames check."
+          fi
+
+      - name: Docs-only / unrelated change — required-check no-op
+        if: steps.filter.outputs.run_validate != 'true'
+        run: |
+          echo "migration-governance: no-op success (no active migration / validator path changes)."
+          echo "Required check context 'validate-migration-filenames' reports terminal success."
+
       - uses: actions/setup-node@v4
+        if: steps.filter.outputs.run_validate == 'true'
         with:
           node-version: "20"
+
       - name: Validate active Supabase migration filenames
+        if: steps.filter.outputs.run_validate == 'true'
         run: npm run db:migrations:validate

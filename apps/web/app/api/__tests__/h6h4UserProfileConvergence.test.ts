@@ -1,7 +1,13 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+
+import {
+  listActiveMigrationFilenames,
+  readRepositoryMigration,
+  resolveRepositoryMigration,
+} from "@/lib/audit/resolveRepositoryMigration";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // __dirname == apps/web/app/api/__tests__
@@ -9,8 +15,6 @@ const webRoot = path.resolve(__dirname, "../../..");
 const repoRoot = path.resolve(webRoot, "../..");
 
 const r = (rel: string) => readFileSync(path.join(webRoot, rel), "utf8");
-const m = (rel: string) =>
-  readFileSync(path.join(repoRoot, "supabase/migrations", rel), "utf8");
 
 const stripSql = (s: string) =>
   s.replace(/\/\*[\s\S]*?\*\//g, " ").replace(/--[^\n]*/g, " ");
@@ -167,7 +171,7 @@ describe("H-6 / H-4 — recurring cron no longer silently downgrades missing pro
 });
 
 describe("H-6 / H-4 — backfill migration: 20260939_h6_h4_user_profiles_backfill.sql", () => {
-  const sql = m("20260939_h6_h4_user_profiles_backfill.sql");
+  const { sql } = readRepositoryMigration("20260939_h6_h4_user_profiles_backfill.sql");
   const code = stripSql(sql);
   const lower = code.toLowerCase();
 
@@ -223,13 +227,14 @@ describe("H-6 / H-4 — repo sweep: future migrations may not reintroduce silent
   });
 
   it("the backfill migration is the canonical orphan-repair landmark and stays at version 20260939", () => {
-    const dir = path.join(repoRoot, "supabase", "migrations");
-    const files = readdirSync(dir).filter((f) => f.endsWith(".sql"));
     const target = "20260939_h6_h4_user_profiles_backfill.sql";
-    expect(files).toContain(target);
-    // No other migration should be a 'user_profiles_backfill' AFTER this one
+    const resolved = resolveRepositoryMigration(target);
+    expect(resolved.filename).toBe(target);
+    expect(["active", "legacy"]).toContain(resolved.kind);
+    // No other active migration should be a 'user_profiles_backfill' AFTER this one
     // (a future run-once would clobber this canonical landmark; future repairs
     // should be properly named, e.g. 'user_profiles_orphan_repair_2027_01').
+    const files = listActiveMigrationFilenames({ repoRoot });
     const conflicting = files.filter(
       (f) => f > target && /user_profiles_backfill\.sql$/i.test(f),
     );

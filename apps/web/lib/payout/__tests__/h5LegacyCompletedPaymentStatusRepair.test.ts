@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
 import {
   bookingPayableForWeeklyBatch,
   type BookingRowForWeeklyBatchEligibility,
@@ -10,11 +11,9 @@ import {
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../../..");
-const migrationPath = path.join(
-  repoRoot,
-  "supabase/migrations/20260937_h5_legacy_completed_payment_status_repair.sql",
+const { sql } = readRepositoryMigration(
+  "20260937_h5_legacy_completed_payment_status_repair.sql",
 );
-const sql = readFileSync(migrationPath, "utf8");
 const sqlLower = sql.toLowerCase();
 
 /**

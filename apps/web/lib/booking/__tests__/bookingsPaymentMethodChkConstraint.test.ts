@@ -1,14 +1,15 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const repoRoot = path.resolve(__dirname, "../../../../..");
-const migrationPath = path.join(
-  repoRoot,
-  "supabase/migrations/20260936_bookings_payment_method_chk_add_eft_card.sql",
-);
+const {
+  sql: migrationSql,
+  resolved: migrationResolved,
+} = readRepositoryMigration("20260936_bookings_payment_method_chk_add_eft_card.sql");
 const adminMarkPaidPath = path.join(__dirname, "..", "adminMarkBookingPaid.ts");
 const adminMarkPaidRoutePath = path.join(
   __dirname,
@@ -30,12 +31,13 @@ const adminMarkPaidRoutePath = path.join(
  */
 describe("bookings_payment_method_chk: cash | zoho | eft | card", () => {
   it("migration file exists at the documented path", () => {
-    const stat = readFileSync(migrationPath, "utf8");
-    expect(stat.length).toBeGreaterThan(0);
+    expect(migrationSql.length).toBeGreaterThan(0);
+    expect(existsSync(migrationResolved.absolutePath)).toBe(true);
+    expect(["active", "legacy"]).toContain(migrationResolved.kind);
   });
 
   it("migration drops then re-adds the constraint with all four allowed values", () => {
-    const sql = readFileSync(migrationPath, "utf8");
+    const sql = migrationSql;
 
     expect(sql).toMatch(
       /alter\s+table\s+public\.bookings\s+drop\s+constraint\s+if\s+exists\s+bookings_payment_method_chk\s*;/i,
@@ -47,7 +49,7 @@ describe("bookings_payment_method_chk: cash | zoho | eft | card", () => {
   });
 
   it("migration is idempotent (uses DROP IF EXISTS, no ALTER ... ADD without DROP first)", () => {
-    const sql = readFileSync(migrationPath, "utf8").toLowerCase();
+    const sql = migrationSql.toLowerCase();
     const dropIdx = sql.indexOf("drop constraint if exists bookings_payment_method_chk");
     const addIdx = sql.indexOf("add constraint bookings_payment_method_chk");
     expect(dropIdx).toBeGreaterThan(-1);
@@ -55,7 +57,7 @@ describe("bookings_payment_method_chk: cash | zoho | eft | card", () => {
   });
 
   it("migration scope is isolated: no payout / earnings / business-logic ALTERs", () => {
-    const sql = readFileSync(migrationPath, "utf8").toLowerCase();
+    const sql = migrationSql.toLowerCase();
     expect(sql).not.toMatch(/cleaner_payouts/);
     expect(sql).not.toMatch(/cleaner_earnings/);
     expect(sql).not.toMatch(/dispatch_offers/);

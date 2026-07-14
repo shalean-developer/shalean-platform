@@ -148,7 +148,8 @@ const CLASSIFIED_RUNTIME_DIRECT_WRITERS: readonly RuntimeClassification[] = [
   {
     file: "app/api/booking-v2/confirm/route.ts",
     category: "legacy_intake_exception",
-    rationale: "Customer booking confirm route inserts the canonical pending-payment booking row.",
+    rationale:
+      "Customer booking confirm route inserts the canonical pending-payment booking row. R1 zero-cash settlement status writes moved to settleFullyCoveredBooking (no direct status update here).",
   },
   {
     file: "lib/booking/upsertBookingFromPaystack.ts",
@@ -251,6 +252,32 @@ const CLASSIFIED_RUNTIME_DIRECT_WRITERS: readonly RuntimeClassification[] = [
     category: "legacy_admin_exception",
     rationale: "Team lead promotion syncs booking header cleaner fields to the appointed lead.",
   },
+  {
+    file: "lib/payments/settleFullyCoveredBooking.ts",
+    category: "legacy_payment_exception",
+    rationale:
+      "R1 controlled writer: prefers settle_booking_fully_covered RPC; app fallback updates status+payment_status for fully covered zero-cash success. Replaced prior direct status write on booking-v2/confirm.",
+  },
+  {
+    file: "lib/booking/ensureBookingPaymentSession.ts",
+    category: "legacy_payment_exception",
+    rationale: "Payment-session bootstrap writes pending_payment status when creating/refreshing Paystack links.",
+  },
+  {
+    file: "lib/booking/refundBookingPayment.ts",
+    category: "legacy_payment_exception",
+    rationale: "Refund path updates payment_status on the booking after gateway refund.",
+  },
+  {
+    file: "app/api/booking-v2/area-review/route.ts",
+    category: "legacy_intake_exception",
+    rationale: "Area-review intake insert writes initial status/dispatch_status/payment_status for ops review bookings.",
+  },
+  {
+    file: "app/api/admin/bookings/[id]/fulfillment/route.ts",
+    category: "legacy_admin_exception",
+    rationale: "Admin fulfillment cancel/convert transitions for area-review bookings.",
+  },
 ];
 
 type SqlCategory = "one_time_data_fix" | "runtime_rpc_definition";
@@ -261,132 +288,24 @@ type SqlClassification = {
   rationale: string;
 };
 
+/**
+ * Active-tree only (post-H01 squash). Historical classifications that lived under
+ * `supabase/migrations-legacy/` are subsumed by the production baseline and are
+ * intentionally not listed here — this inventory must track what the active
+ * scanner discovers under `supabase/migrations/`.
+ */
 const CLASSIFIED_SQL_BOOKINGS_HIGH_RISK_MUTATIONS: readonly SqlClassification[] = [
-  { file: "20260429_marketplace_cleaners.sql", category: "one_time_data_fix", rationale: "Legacy status cleanup." },
   {
-    file: "20260440_dispatch_status_job_offers_alias.sql",
+    file: "20260714010000_production_baseline.sql",
     category: "one_time_data_fix",
-    rationale: "Dispatch status repair/backfill.",
+    rationale:
+      "Production baseline embeds historical high-risk bookings UPDATE/RPC bodies from migrations-legacy (status, dispatch, team, payout columns).",
   },
   {
-    file: "20260474_dispatch_no_cleaner_cleaner_is_active.sql",
-    category: "one_time_data_fix",
-    rationale: "Dispatch status repair/backfill.",
-  },
-  {
-    file: "20260489_bookings_became_pending_at_unassignable_dispatch.sql",
-    category: "one_time_data_fix",
-    rationale: "Dispatch status repair/backfill.",
-  },
-  {
-    file: "20260608_bookings_operational_status_drift_repair.sql",
-    category: "one_time_data_fix",
-    rationale: "Operational status drift repair.",
-  },
-  {
-    file: "20260610_bookings_dispatch_unassigned_status.sql",
-    category: "one_time_data_fix",
-    rationale: "Dispatch status repair/backfill.",
-  },
-  {
-    file: "20260611_bookings_dispatch_accepted_status.sql",
-    category: "one_time_data_fix",
-    rationale: "Dispatch status repair/backfill.",
-  },
-  {
-    file: "20260700_monthly_billing_invoices.sql",
-    category: "one_time_data_fix",
-    rationale: "Monthly billing payment-status backfill/repair.",
-  },
-  {
-    file: "20260727_admin_mark_payout_paid_rpc.sql",
+    file: "20260714140000_bookings_r0_paid_amount_constraint.sql",
     category: "runtime_rpc_definition",
-    rationale: "Admin payout-paid RPC definition.",
-  },
-  {
-    file: "20260729_bookings_payout_owner_and_frozen_invariants.sql",
-    category: "one_time_data_fix",
-    rationale: "Payout owner/frozen-state invariant repair.",
-  },
-  {
-    file: "20260730_admin_mark_payout_paid_team_members.sql",
-    category: "runtime_rpc_definition",
-    rationale: "Admin payout-paid team-member RPC refinement.",
-  },
-  {
-    file: "20260731_bookings_team_requires_payout_owner.sql",
-    category: "one_time_data_fix",
-    rationale: "Team payout-owner invariant repair.",
-  },
-  {
-    file: "20260804_bookings_completed_requires_display_earnings.sql",
-    category: "one_time_data_fix",
-    rationale: "Completed-booking display earnings invariant repair.",
-  },
-  {
-    file: "20260847_bookings_fix_pending_with_cleaner_assigned_guard.sql",
-    category: "one_time_data_fix",
-    rationale: "Pending-with-cleaner status repair.",
-  },
-  {
-    file: "20260850_bookings_payment_invariants_dedupe.sql",
-    category: "one_time_data_fix",
-    rationale: "Payment/status invariant repair.",
-  },
-  {
-    file: "20260853_booking_cleaners_roster.sql",
-    category: "one_time_data_fix",
-    rationale: "Roster/payout-owner backfill.",
-  },
-  {
-    file: "20260854_assign_team_sync_roster_atomic.sql",
-    category: "runtime_rpc_definition",
-    rationale: "assign_team_and_sync_roster RPC definition.",
-  },
-  {
-    file: "20260855_assign_team_json_result_and_roster_repair_cron.sql",
-    category: "runtime_rpc_definition",
-    rationale: "assign_team_and_sync_roster RPC refinement.",
-  },
-  {
-    file: "20260883_assign_team_admin_preserve_cleaner_lifecycle.sql",
-    category: "runtime_rpc_definition",
-    rationale: "assign_team_and_sync_roster admin lifecycle preservation.",
-  },
-  {
-    file: "20260913_bookings_payment_status_repair.sql",
-    category: "one_time_data_fix",
-    rationale: "Payment-status repair.",
-  },
-  {
-    file: "20260926_assign_team_sync_roster_persist_payout_owner.sql",
-    category: "runtime_rpc_definition",
-    rationale: "assign_team_and_sync_roster payout-owner persistence.",
-  },
-  {
-    file: "20260928_assign_team_lead_cleaner_id.sql",
-    category: "runtime_rpc_definition",
-    rationale: "assign_team_and_sync_roster lead-cleaner-id refinement.",
-  },
-  {
-    file: "20261033_assign_team_admin_promote_status_on_assign.sql",
-    category: "runtime_rpc_definition",
-    rationale: "assign_team_and_sync_roster admin variant promotes status when setting cleaner_id.",
-  },
-  {
-    file: "20261045_retire_pre_july_pending_cleaner_earnings.sql",
-    category: "one_time_data_fix",
-    rationale: "One-shot pre-July 2026 payout pipeline retirement marks stale pending rows paid.",
-  },
-  {
-    file: "20260937_h5_legacy_completed_payment_status_repair.sql",
-    category: "one_time_data_fix",
-    rationale: "Legacy completed payment-status repair.",
-  },
-  {
-    file: "20260944_m12_accept_dispatch_offer_atomic.sql",
-    category: "runtime_rpc_definition",
-    rationale: "accept_dispatch_offer_atomic RPC definition.",
+    rationale:
+      "R1 settle_booking_fully_covered RPC may set status/payment_status for fully covered zero-cash success settlements.",
   },
 ];
 

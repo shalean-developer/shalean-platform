@@ -4,6 +4,8 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it } from "vitest";
 
+import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, "../../../../..");
 
@@ -43,30 +45,31 @@ const repoRoot = path.resolve(__dirname, "../../../../..");
  * not reference any of those surfaces.
  */
 
-const migrationPath = path.join(
-  repoRoot,
-  "supabase/migrations/20260946_m24_historical_dispatch_offers_cleanup.sql",
+const { sql: migrationSrc } = readRepositoryMigration(
+  "20260946_m24_historical_dispatch_offers_cleanup.sql",
 );
-const verifyPath = path.join(
-  repoRoot,
-  "supabase/queries/m24_historical_dispatch_offers_cleanup_verify.sql",
+const { sql: earningsSnapshotMigrationSql } = readRepositoryMigration(
+  "20260934_dispatch_offers_earnings_snapshot.sql",
 );
-const earningsSnapshotMigrationPath = path.join(
-  repoRoot,
-  "supabase/migrations/20260934_dispatch_offers_earnings_snapshot.sql",
-);
-const dispatchV3Path = path.join(
-  repoRoot,
-  "supabase/migrations/20260437_dispatch_v3_offers_acceptance.sql",
+const { sql: dispatchV3Sql } = readRepositoryMigration(
+  "20260437_dispatch_v3_offers_acceptance.sql",
 );
 
-const migrationSrc = readFileSync(migrationPath, "utf8");
+const { sql: expireOffersMaintenanceSql } = readRepositoryMigration(
+  "20260467_pg_cron_expire_offers_and_http_maintenance.sql",
+);
+
 const migrationLower = migrationSrc.toLowerCase();
 /** Migration source with -- and block comments stripped — used when a regex must match SQL statements only (the doc header legitimately mentions everything as prose). */
 const migrationCode = migrationSrc
   .replace(/\/\*[\s\S]*?\*\//g, " ")
   .replace(/--[^\n]*/g, " ");
 const migrationCodeLower = migrationCode.toLowerCase();
+
+const verifyPath = path.join(
+  repoRoot,
+  "supabase/queries/m24_historical_dispatch_offers_cleanup_verify.sql",
+);
 
 const verifySrc = readFileSync(verifyPath, "utf8");
 const verifyLower = verifySrc.toLowerCase();
@@ -253,28 +256,28 @@ describe("M-24 verification: m24_historical_dispatch_offers_cleanup_verify.sql",
 // ---------------------------------------------------------------------------
 describe("M-24 schema preconditions: dispatch_offers shape stays intact", () => {
   it("status enum still includes 'pending' and 'expired' (20260437)", () => {
-    const src = readFileSync(dispatchV3Path, "utf8").toLowerCase();
+    const src = dispatchV3Sql.toLowerCase();
     expect(src).toMatch(
       /status\s+text\s+not\s+null\s+default\s+'pending'\s+check\s*\(\s*status\s+in\s*\('pending',\s*'accepted',\s*'rejected',\s*'expired'\)\s*\)/,
     );
   });
 
   it("dispatch_offers_one_pending_per_booking_uidx stays a partial index on pending only (so flipping pending → expired never duplicates)", () => {
-    const src = readFileSync(dispatchV3Path, "utf8").toLowerCase();
+    const src = dispatchV3Sql.toLowerCase();
     expect(src).toMatch(
       /create\s+unique\s+index\s+if\s+not\s+exists\s+dispatch_offers_one_pending_per_booking_uidx[\s\S]*?where\s+status\s*=\s*'pending'/,
     );
   });
 
   it("display_earnings_cents column is nullable with a >= 0 check (20260934)", () => {
-    const src = readFileSync(earningsSnapshotMigrationPath, "utf8").toLowerCase();
+    const src = earningsSnapshotMigrationSql.toLowerCase();
     expect(src).toMatch(
       /add\s+column\s+if\s+not\s+exists\s+display_earnings_cents\s+integer[\s\S]*?check\s*\(\s*display_earnings_cents\s+is\s+null\s+or\s+display_earnings_cents\s*>=\s*0\s*\)/,
     );
   });
 
   it("earnings_snapshot_source + earnings_snapshot_at columns exist on dispatch_offers", () => {
-    const src = readFileSync(earningsSnapshotMigrationPath, "utf8").toLowerCase();
+    const src = earningsSnapshotMigrationSql.toLowerCase();
     expect(src).toMatch(/add\s+column\s+if\s+not\s+exists\s+earnings_snapshot_source\s+text/);
     expect(src).toMatch(/add\s+column\s+if\s+not\s+exists\s+earnings_snapshot_at\s+timestamptz/);
   });
@@ -297,10 +300,7 @@ describe("M-24 mirrors the runtime expiry contract (does not replace it)", () =>
   });
 
   it("expire_pending_dispatch_offers RPC still uses the same predicates (20260467)", () => {
-    const src = readFileSync(
-      path.join(repoRoot, "supabase/migrations/20260467_pg_cron_expire_offers_and_http_maintenance.sql"),
-      "utf8",
-    ).toLowerCase();
+    const src = expireOffersMaintenanceSql.toLowerCase();
     expect(src).toMatch(
       /from\s+public\.dispatch_offers\s+d\s+where\s+d\.status\s*=\s*'pending'\s+and\s+d\.expires_at\s*<\s*now\(\)/,
     );
