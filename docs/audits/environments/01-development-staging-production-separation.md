@@ -14,17 +14,10 @@
 
 # Executive Decision
 
-**NO-GO — ENVIRONMENT SEPARATION NOT VERIFIED**
+**PASS — VERCEL ENVIRONMENT MAPPING VERIFIED** *(ENV-02)*  
+**CONDITIONAL** for full environment separation until persistence + schema + write isolation.
 
-Supabase branch **database isolation is verified** (distinct project refs, API URLs, server addresses, anon key refs, and row-count profiles). Repository fail-closed guards and identity UI were implemented on `chore/environment-separation`.
-
-Full PASS is blocked because:
-
-1. Vercel environment variable scopes (Production vs Preview branch-scoped staging/development) **could not be read or configured** in this session (CLI token lacks team project access; Vercel MCP has no env-list tool).
-2. Paystack live/test mode per Vercel target therefore **cannot be evidenced** without dashboard inspection (values not pulled; secrets not printed).
-3. End-to-end Phase 10 deployment validation (staging write isolation proof via deployed URLs) was **not completed**.
-4. Schema/migration history remains **divergent** across main / staging / development (expected for governed prod; staging ahead of prod; development baseline-only).
-5. Staging and development Supabase branches are currently **ephemeral** (`persistent: false`).
+ENV-01 verified Supabase branch database isolation. ENV-02 configured and verified Vercel branch-scoped mapping with health-endpoint proof. Remaining blockers: ephemeral staging/development Supabase branches (`persistent: false`), schema drift, and deferred write-isolation seeding.
 
 ---
 
@@ -336,21 +329,230 @@ Production customer presentation remains unchanged when `SHALEAN_APP_ENV=product
 
 ---
 
-# Final Decision
+# Final Decision (ENV-01)
 
-**NO-GO — ENVIRONMENT SEPARATION NOT VERIFIED**
+**NO-GO — ENVIRONMENT SEPARATION NOT VERIFIED** *(superseded by ENV-02 below for Vercel mapping)*
 
-Database isolation across Supabase branches is verified. End-to-end environment separation (Vercel variable mapping + payment mode evidence + deployed write isolation) is **not** verified.
+Database isolation across Supabase branches is verified. End-to-end environment separation (Vercel variable mapping + payment mode evidence + deployed write isolation) was **not** verified in ENV-01.
 
 ---
 
-# Next Authorized Action
+# Vercel Branch-Scoped Variable Evidence
 
-1. **Dashboard (human):** configure branch-scoped Vercel Preview env vars for `staging` and `development`; purge conflicting unscoped Preview secrets; set Production `SHALEAN_APP_ENV=production` + live Paystack + main Supabase.
-2. Merge PR from `chore/environment-separation` after review (guards + docs only).
-3. Redeploy `staging` / `development`; capture `/api/health/environment` JSON (redacted) as evidence.
-4. Authorize development schema catch-up + synthetic seed (non-prod only).
-5. Re-run ENV-01 Phase 10 validation; only then flip decision to **PASS**.
+| Field | Value |
+|-------|-------|
+| **Activity** | ENV-02 Vercel branch environment mapping |
+| **Audit timestamp (UTC)** | `2026-07-14T22:18:00Z` |
+| **Vercel project** | `shalean-platform` (`prj_eA7rHVSDiDXslAmrGwkdS4BtlVAc`) |
+| **Method** | Authenticated Vercel dashboard API (scopes only; no secret values printed) |
+
+### Pre-configuration inventory (names + scopes only)
+
+| Variable family | Before | After |
+|-----------------|--------|-------|
+| Supabase URL / anon / service role | Production **and** unscoped Preview | Production-only + Preview/`staging` + Preview/`development` |
+| Paystack public / secret | Production **and** unscoped Preview | Production-only + Preview/`staging` + Preview/`development` |
+| `NEXT_PUBLIC_APP_URL` / `NEXT_PUBLIC_SITE_URL` | Production **and** unscoped Preview | Production-only + branch-scoped Preview |
+| `SHALEAN_APP_ENV` | missing | `production` / Preview `staging` / Preview `development` |
+| `OUTBOUND_MESSAGING_DISABLED` | missing | Preview `staging` + Preview `development` = `true` |
+| `SMS_OUTBOUND_ENABLED` | Production **and** Preview | Production-only + Preview staging/development = `false` |
+| Resend / Twilio / Meta / Zoho / GSC / Cron | Production **and** Preview | Production-only |
+
+### Target scopes (verified present)
+
+| Git branch | Vercel target | Supabase ref | Paystack | `SHALEAN_APP_ENV` |
+|------------|---------------|--------------|----------|-------------------|
+| `main` | Production | `tchayecuvzssixyxlvfu` | live | `production` |
+| `staging` | Preview + git branch `staging` | `gfvdiczqyrvlmynvgegd` | test | `staging` |
+| `development` | Preview + git branch `development` | `hborcpvarvgynjsjnfei` | test | `development` |
+
+---
+
+# Unsafe Preview Overrides Removed
+
+Narrowed **29** unscoped `Production and Preview` variables to **Production only**, including:
+
+- `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- `PAYSTACK_SECRET_KEY`, `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY`
+- `NEXT_PUBLIC_APP_URL`, `NEXT_PUBLIC_SITE_URL`, `GOOGLE_REDIRECT_URI`, `CRON_SECRET`
+- `RESEND_*`, `TWILIO_*`, `SMS_OUTBOUND_ENABLED`, Meta pixel/CAPI, Zoho, `GSC_SITE_URL`
+
+Post-change check: **zero** unscoped Preview values remain for Supabase/Paystack/APP/SITE identity vars.
+
+During development repair, corrupted `f`-prefixed duplicates (`fNEXT_PUBLIC_SUPABASE_URL`, etc.) were deleted and replaced with correct branch-scoped keys.
+
+---
+
+# PR #7 Review and Merge
+
+| Check | Result |
+|-------|--------|
+| Scope | Fail-closed env/Paystack guards, outbound messaging gates, STAGING/DEVELOPMENT banner, robots/noindex, `/api/health/environment`, audit doc |
+| Migrations / prod DB logic | **None** |
+| Service-role exposure | Server-only; health endpoint returns refs/modes/prefixes only |
+| Production banner | Absent when `SHALEAN_APP_ENV=production` / git `main` |
+| Required checks | `vitest` pass, `validate-migration-filenames` pass, GitGuardian pass, Vercel pass (after relative-import fix `dfa012fb`) |
+| Merge | **Merged** to `main` as `5b75f3d5` |
+| Customer domains after merge | Unchanged — production assignment remains `dpl_ErXv83MUSC5MNY5wZj6vq5XPGVWi` |
+| Promote | **Not performed** (staged main `dpl_3G4NyWyFZBtyahDgppqr14mgvDmn` left unpromoted) |
+
+`staging` and `development` fast-forwarded to include PR #7.
+
+---
+
+# Development Deployment Verification
+
+| Field | Value |
+|-------|-------|
+| Deployment ID | `dpl_6H8rbxBMdrRiE2mFtgB2UqJrvKW7` |
+| Commit | `84312e7d` |
+| URL | `https://shalean-platform-bxfm1rclx-shalean-cleaning-services.vercel.app` |
+| Branch alias | `shalean-platform-git-development-shalean-cleaning-services.vercel.app` |
+
+---
+
+# Staging Deployment Verification
+
+| Field | Value |
+|-------|-------|
+| Deployment ID | `dpl_z3FEHSXvCd2cQjBQ45EMr9E8rQsb` |
+| Commit | `5b75f3d5` |
+| URL | `https://shalean-platform-eyc00nbd8-shalean-cleaning-services.vercel.app` |
+| Branch alias | `shalean-platform-git-staging-shalean-cleaning-services.vercel.app` |
+
+---
+
+# Health Endpoint Results
+
+`GET /api/health/environment` (no secrets returned):
+
+### Staging (`dpl_z3FEHSXv…`)
+
+```json
+{
+  "status": "ok",
+  "deployment": "staging",
+  "gitBranch": "staging",
+  "shaleanAppEnv": "staging",
+  "supabase": {
+    "configuredRef": "gfvdiczqyrvlmynvgegd",
+    "expectedRef": "gfvdiczqyrvlmynvgegd",
+    "urlHost": "gfvdiczqyrvlmynvgegd.supabase.co"
+  },
+  "paystack": { "secretMode": "test", "publicMode": "test", "secretPrefix": "sk_test_…", "publicPrefix": "pk_test_…" },
+  "messaging": { "outboundDisabled": true, "smsOutboundEnabled": false },
+  "issues": []
+}
+```
+
+### Development (`dpl_6H8rbxBM…`)
+
+```json
+{
+  "status": "ok",
+  "deployment": "development",
+  "gitBranch": "development",
+  "shaleanAppEnv": "development",
+  "supabase": {
+    "configuredRef": "hborcpvarvgynjsjnfei",
+    "expectedRef": "hborcpvarvgynjsjnfei",
+    "urlHost": "hborcpvarvgynjsjnfei.supabase.co"
+  },
+  "paystack": { "secretMode": "test", "publicMode": "test", "secretPrefix": "sk_test_…", "publicPrefix": "pk_test_…" },
+  "messaging": { "outboundDisabled": true, "smsOutboundEnabled": false },
+  "issues": []
+}
+```
+
+### Staged production / main (not promoted; domains unchanged)
+
+```json
+{
+  "status": "ok",
+  "deployment": "production",
+  "gitBranch": "main",
+  "shaleanAppEnv": "production",
+  "supabase": {
+    "configuredRef": "tchayecuvzssixyxlvfu",
+    "expectedRef": "tchayecuvzssixyxlvfu"
+  },
+  "paystack": { "secretMode": "live", "publicMode": "live", "secretPrefix": "sk_live_…", "publicPrefix": "pk_live_…" },
+  "issues": []
+}
+```
+
+---
+
+# Paystack Mode Evidence
+
+| Environment | Secret mode | Public mode | Evidence |
+|-------------|-------------|-------------|----------|
+| Production (staged main) | live | live | health endpoint |
+| Staging | test | test | health endpoint |
+| Development | test | test | health endpoint |
+
+No non-production deployment reported live Paystack.
+
+---
+
+# Messaging Safety Evidence
+
+| Control | Staging | Development | Production |
+|---------|---------|-------------|------------|
+| `OUTBOUND_MESSAGING_DISABLED` | `true` | `true` | unset / false |
+| `SMS_OUTBOUND_ENABLED` | `false` | `false` | production policy only (Preview scope removed) |
+| Resend / Twilio credentials on Preview | removed (Production-only) | removed | present |
+| Repo fail-closed allowlists | active via PR #7 | active | production path unchanged |
+
+Non-production outbound is suppressed unless an explicit allowlist / lab override is configured.
+
+---
+
+# Supabase Persistence Decision
+
+| Branch | Project ref | `persistent` | Decision |
+|--------|-------------|--------------|----------|
+| main / production | `tchayecuvzssixyxlvfu` | `false`* | Never reset; treat as production |
+| staging | `gfvdiczqyrvlmynvgegd` | **`false`** | **BLOCKER** for long-lived UAT fixtures |
+| development | `hborcpvarvgynjsjnfei` | **`false`** | **BLOCKER** for long-lived UAT fixtures |
+
+\* Dashboard reports `persistent: false` on default main; still never reset.
+
+**Required before seeding long-lived UAT data:** convert/recreate staging and development as persistent Supabase branches, or provision dedicated persistent projects.
+
+---
+
+# Write-Isolation Evidence
+
+**Not executed.** Schema/persistence gate failed (`persistent: false` on staging and development). Synthetic markers were not written.
+
+---
+
+# Remaining Blockers
+
+1. Staging + development Supabase branches remain ephemeral (`persistent: false`).
+2. Schema alignment across main / staging / development remains divergent (ENV-01).
+3. Write-isolation proof deferred until persistence + schema approval.
+4. Staging branch metadata still `MIGRATIONS_FAILED` (ops follow-up).
+
+---
+
+# Final Decision
+
+## PASS — VERCEL ENVIRONMENT MAPPING VERIFIED
+
+Satisfied:
+
+- `main` → production Supabase (`tchayecuvzssixyxlvfu`) + live Paystack
+- `staging` → staging Supabase (`gfvdiczqyrvlmynvgegd`) + test Paystack only
+- `development` → development Supabase (`hborcpvarvgynjsjnfei`) + test Paystack only
+- Unsafe unscoped Preview overrides removed for identity integrations
+- Messaging constrained on staging/development (`OUTBOUND_MESSAGING_DISABLED=true`; prod Resend/Twilio Preview scopes removed)
+- Health endpoints prove deployed identities (no credentials exposed)
+- Customer domains unchanged (`dpl_ErXv83…`)
+- No production migration; no production promote
+
+**Environment separation as a whole remains conditional** until persistent databases, schema alignment, and write isolation are verified.
 
 ---
 
