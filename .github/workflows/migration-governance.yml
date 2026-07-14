@@ -1,21 +1,11 @@
 name: migration-governance
 
 on:
+  # Always run on PRs so required status check `validate-migration-filenames`
+  # is reportable for every merge to main (path filters would stall required checks).
   pull_request:
-    paths:
-      - "supabase/migrations/**"
-      - "scripts/validate-supabase-migrations.mjs"
-      - "package.json"
-      - ".github/workflows/migration-governance.yml"
-      - "docs/database-baseline/migration-governance.md"
   push:
     branches: [main]
-    paths:
-      - "supabase/migrations/**"
-      - "scripts/validate-supabase-migrations.mjs"
-      - "package.json"
-      - ".github/workflows/migration-governance.yml"
-      - "docs/database-baseline/migration-governance.md"
 
 jobs:
   validate-migration-filenames:

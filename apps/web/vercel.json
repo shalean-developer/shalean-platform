@@ -1,5 +1,9 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm ci",
+  "github": {
+    "autoAlias": false
+  },
   "crons": [
     {
       "path": "/api/cron/referral-credit-reminders",

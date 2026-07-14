@@ -1,17 +1,10 @@
 name: web-test
 
 on:
+  # Always run on PRs so required status check `vitest` is reportable for every merge to main.
   pull_request:
-    paths:
-      - "apps/web/**"
-      - "packages/**"
-      - ".github/workflows/web-test.yml"
   push:
     branches: [main]
-    paths:
-      - "apps/web/**"
-      - "packages/**"
-      - ".github/workflows/web-test.yml"
 
 jobs:
   vitest:

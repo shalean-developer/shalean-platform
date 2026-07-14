@@ -1,0 +1,54 @@
+name: release-evidence-reminder
+
+# Manual gate helper — does NOT deploy or promote.
+# Run when assembling a production Go packet.
+
+on:
+  workflow_dispatch:
+    inputs:
+      change_id:
+        description: "Change ID for the release evidence pack"
+        required: true
+        type: string
+      git_sha:
+        description: "Approved release Git SHA"
+        required: true
+        type: string
+      rc_deployment_id:
+        description: "Release Candidate Vercel deployment ID"
+        required: true
+        type: string
+      migrations:
+        description: "Migration versions or N/A"
+        required: true
+        type: string
+        default: "N/A"
+
+jobs:
+  print-evidence-checklist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit release evidence checklist
+        run: |
+          cat <<EOF
+          ## Release evidence checklist (manual)
+
+          Change ID: ${{ inputs.change_id }}
+          Git SHA: ${{ inputs.git_sha }}
+          RC deployment: ${{ inputs.rc_deployment_id }}
+          Migrations: ${{ inputs.migrations }}
+
+          Required artefacts (attach/link in docs/releases/):
+          - [ ] Go / No-Go packet
+          - [ ] Migration Approval (or N/A)
+          - [ ] Deployment Approval
+          - [ ] Instant Rollback target ID
+          - [ ] Staging smoke results
+          - [ ] Production smoke results (post-promote)
+          - [ ] Hostname → dpl verification
+
+          Forbidden in this workflow:
+          - vercel promote
+          - supabase db push / migrate to production
+          - MCP apply_migration
+          EOF

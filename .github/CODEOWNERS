@@ -1,0 +1,26 @@
+# CODEOWNERS — Release-control path ownership
+#
+# Repository owner is a personal GitHub account (no org teams yet).
+# Paths below require CODEOWNERS awareness; required code-owner reviews
+# are intentionally OFF until a second human reviewer exists.
+# See docs/governance/release-control/13-r1-2x-implementation-report.md
+
+# Release / governance docs
+/docs/governance/ @shalean-developer
+/docs/audits/r1-release-recovery/ @shalean-developer
+/docs/releases/ @shalean-developer
+
+# Database migrations
+/supabase/migrations/ @shalean-developer
+
+# CI / release automation
+/.github/workflows/ @shalean-developer
+/.github/CODEOWNERS @shalean-developer
+
+# Payment / booking API surfaces
+/apps/web/app/api/ @shalean-developer
+/apps/web/lib/booking/ @shalean-developer
+/apps/web/lib/payments/ @shalean-developer
+
+# Vercel project config (production alias behavior)
+/apps/web/vercel.json @shalean-developer
