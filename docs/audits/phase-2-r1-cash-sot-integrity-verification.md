@@ -6,6 +6,7 @@
 | **Branch** | `fix/p2-r1-cash-sot-integrity` |
 | **Baseline** | `main` @ `45ccd98f28c892d4598a253e1386f7dfec84f1e5` |
 | **Phase A source commit (cherry-picked)** | `10eceaf3a4248c5f1eea6c95339946846ca6c58d` |
+| **Branch tip** | `68cf44d0d1a1de2cedb5568b7179f4afe47d467d` |
 | **Scope** | R1 only — cash collected SoT integrity |
 | **Merged to main** | No |
 | **Deployed** | No |
