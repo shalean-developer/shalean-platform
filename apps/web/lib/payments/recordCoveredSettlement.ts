@@ -16,10 +16,17 @@ export async function recordCoveredSettlement(
     bookingId: string;
     currencyCode?: string;
     paidAtIso?: string | null;
+    /**
+     * When true (default), also links `bookings.payment_transaction_id` if still null.
+     * R0 settle prefers false so the booking success update can set cash + link atomically
+     * against `bookings_paid_requires_amount`.
+     */
+    linkBookingPaymentTransactionId?: boolean;
   },
 ): Promise<RecordCoveredSettlementResult> {
   const bookingId = params.bookingId.trim();
   if (!bookingId) return { ok: false, error: "missing_booking_id" };
+  const linkBooking = params.linkBookingPaymentTransactionId !== false;
 
   const ref = `r0:${bookingId}`;
   const { data: existing } = await admin
@@ -30,7 +37,16 @@ export async function recordCoveredSettlement(
     .maybeSingle();
 
   if (existing?.id) {
-    return { ok: true, created: false, paymentTransactionId: String(existing.id) };
+    const paymentTransactionId = String(existing.id);
+    if (linkBooking) {
+      const { error: linkErr } = await admin
+        .from("bookings")
+        .update({ payment_transaction_id: paymentTransactionId })
+        .eq("id", bookingId)
+        .is("payment_transaction_id", null);
+      if (linkErr) return { ok: false, error: linkErr.message };
+    }
+    return { ok: true, created: false, paymentTransactionId };
   }
 
   const paidAt = params.paidAtIso?.trim() || new Date().toISOString();
@@ -69,17 +85,29 @@ export async function recordCoveredSettlement(
       .eq("gateway_reference", ref)
       .maybeSingle();
     if (raced?.id) {
-      return { ok: true, created: false, paymentTransactionId: String(raced.id) };
+      const paymentTransactionId = String(raced.id);
+      if (linkBooking) {
+        const { error: linkErr } = await admin
+          .from("bookings")
+          .update({ payment_transaction_id: paymentTransactionId })
+          .eq("id", bookingId)
+          .is("payment_transaction_id", null);
+        if (linkErr) return { ok: false, error: linkErr.message };
+      }
+      return { ok: true, created: false, paymentTransactionId };
     }
     return { ok: false, error: error.message };
   }
 
   const paymentTransactionId = String((inserted as { id: string }).id);
-  await admin
-    .from("bookings")
-    .update({ payment_transaction_id: paymentTransactionId })
-    .eq("id", bookingId)
-    .is("payment_transaction_id", null);
+  if (linkBooking) {
+    const { error: linkErr } = await admin
+      .from("bookings")
+      .update({ payment_transaction_id: paymentTransactionId })
+      .eq("id", bookingId)
+      .is("payment_transaction_id", null);
+    if (linkErr) return { ok: false, error: linkErr.message };
+  }
 
   return { ok: true, created: true, paymentTransactionId };
 }

@@ -39,7 +39,9 @@ describe("bookingQuotePersistence (Phase 2)", () => {
     expect(patch.duration_minutes).toBe(quote.duration_minutes);
     expect(patch.estimated_duration_minutes).toBe(quote.duration_minutes);
     expect(patch.duration_hours).toBe(quote.duration_hours);
-    expect(patch.total_paid_zar).toBe(quote.customer_price_zar);
+    expect(patch.total_price).toBe(Math.round(quote.customer_price_zar));
+    expect(patch).not.toHaveProperty("amount_paid_cents");
+    expect(patch).not.toHaveProperty("total_paid_zar");
     expect(patch.quote_calculation_version).toBe(quote.calculation_version);
     expect(typeof patch.estimated_finish_at).toBe("string");
     expect(patch.cleaner_workload).toBe(quote.cleaner_workload);

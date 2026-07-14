@@ -42,6 +42,25 @@ vi.mock("@/lib/booking/getEligibleCleaners", () => ({ getEligibleCleaners: vi.fn
 vi.mock("@/lib/referrals/validateReferral", () => ({
   validateReferralForCheckout: vi.fn().mockResolvedValue({ valid: false }),
 }));
+vi.mock("@/lib/promotions/server", () => ({
+  evaluateCheckoutPromotions: vi.fn().mockResolvedValue({ applied: [], totalDiscountZar: 0 }),
+  applyPromotionRedemptions: vi.fn().mockResolvedValue(undefined),
+  getCompletedBookingCount: vi.fn().mockResolvedValue(0),
+  getActiveMembershipDiscountPercent: vi.fn().mockResolvedValue(0),
+}));
+vi.mock("@/lib/promotions/resolveCheckoutPromoEligibilityExtras", () => ({
+  resolveCheckoutPromoEligibilityExtras: vi.fn().mockResolvedValue({
+    suburbId: null,
+    customerSegments: [],
+  }),
+}));
+vi.mock("@/lib/payments/settleFullyCoveredBooking", () => ({
+  settleFullyCoveredBooking: vi.fn().mockResolvedValue({
+    ok: true,
+    alreadySettled: false,
+    paymentTransactionId: "tx-r0",
+  }),
+}));
 
 const basePayload = {
   serviceSlug: "regular-cleaning" as const,
@@ -258,7 +277,7 @@ describe("POST /api/booking-v2/confirm", () => {
     );
 
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { success?: boolean; bookingId?: string };
+    const json = (await res.json()) as { success?: boolean; bookingId?: string; payAmountZar?: number };
     expect(json.success).toBe(true);
     expect(admin.insert).toHaveBeenCalled();
     const row = admin.insert.mock.calls[0]?.[0] as Record<string, unknown>;
@@ -268,5 +287,13 @@ describe("POST /api/booking-v2/confirm", () => {
     expect(row.latitude).toBe(-33.98);
     expect(row.longitude).toBe(18.46);
     expect(row.dispatch_status).toBe("searching");
+    // BK-001: unpaid confirm must not write collected-cash columns.
+    expect(row.amount_paid_cents).toBe(0);
+    expect(row.total_paid_cents).toBe(0);
+    expect(row.total_paid_zar).toBe(0);
+    expect(row.payment_status).toBe("pending");
+    expect(row.status).toBe("pending_payment");
+    expect(Number(row.total_price)).toBeGreaterThan(0);
+    expect(json.payAmountZar).toBe(row.total_price);
   });
 });

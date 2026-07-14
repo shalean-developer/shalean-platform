@@ -46,9 +46,24 @@ describe("bookingRequiresPersistedEarningsBeforeCleanerNotify", () => {
 });
 
 describe("bookingPaidCustomerSignalsPresent", () => {
-  it("detects amount_paid_cents", () => {
-    expect(bookingPaidCustomerSignalsPresent({ total_paid_zar: null, total_paid_cents: null, amount_paid_cents: 100 })).toBe(
-      true,
-    );
+  it("detects amount_paid_cents on non-pending rows", () => {
+    expect(
+      bookingPaidCustomerSignalsPresent({
+        status: "assigned",
+        total_paid_zar: null,
+        total_paid_cents: null,
+        amount_paid_cents: 100,
+      }),
+    ).toBe(true);
+  });
+
+  it("ignores positive cents on pending_payment", () => {
+    expect(
+      bookingPaidCustomerSignalsPresent({
+        status: "pending_payment",
+        payment_status: "pending",
+        amount_paid_cents: 12_000,
+      }),
+    ).toBe(false);
   });
 });

@@ -142,11 +142,10 @@ export function buildAuthoritativeQuotePersistPatch(
       ? estimatedFinishAtIso(input.schedule.date, input.schedule.time, durationMinutes)
       : null;
 
+  // Payable/quote only — never write collected-cash columns here (BK-001).
   return {
     pricing_summary: breakdown,
-    total_paid_zar: breakdown.estimated_total,
     total_price: Math.round(breakdown.estimated_total),
-    amount_paid_cents: Math.round(breakdown.estimated_total * 100),
     service_fee_cents: Math.round(breakdown.service_fee * 100),
     base_amount_cents: Math.round(breakdown.subtotal_before_service_fee * 100),
     recurring_discount_cents: Math.round(breakdown.recurring_discount * 100),
@@ -159,15 +158,12 @@ export function buildAuthoritativeQuotePersistPatch(
   };
 }
 
-/** Duration + pricing_summary sync without overwriting Paystack-collected payment amounts. */
+/** Duration + pricing_summary sync without overwriting payable or collected-cash columns. */
 export function buildAuthoritativeQuoteDurationOnlyPatch(
   input: AuthoritativeQuotePersistInput,
 ): Record<string, unknown> {
   const full = buildAuthoritativeQuotePersistPatch(input);
   const {
-    amount_paid_cents: _amountPaid,
-    total_paid_cents: _totalPaid,
-    total_paid_zar: _totalPaidZar,
     total_price: _totalPrice,
     base_amount_cents: _base,
     service_fee_cents: _fee,

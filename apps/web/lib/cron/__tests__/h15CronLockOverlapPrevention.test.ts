@@ -216,10 +216,11 @@ describe("H-15 cron lock — migration content", () => {
   //   → repo root = .../          (up 5)
   const webRootForMigration = path.resolve(__dirname, "..", "..", "..");
   const repoRoot = path.resolve(webRootForMigration, "..", "..");
+  // H01 folded archaeology into production_baseline; original SQL retained in migrations-legacy.
   const migration = path.join(
     repoRoot,
     "supabase",
-    "migrations",
+    "migrations-legacy",
     "20260941_cron_run_leases.sql",
   );
   const sql = readFileSync(migration, "utf8");

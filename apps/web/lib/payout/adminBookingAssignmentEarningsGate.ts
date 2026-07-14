@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { bookingIsCustomerPaymentSettled } from "@/lib/booking/bookingPaymentSettlementState";
 import { resolveTotalPaidCents } from "@/lib/payout/calculateCleanerPayout";
 import {
   bookingPaymentRecomputeBlockedByRefund,
@@ -19,7 +20,14 @@ export function adminBookingBeforeAssignmentPatchSelectList(): string {
 
 export type AdminBookingAssignmentBeforeRow = Record<string, unknown>;
 
+/**
+ * Customer-paid signal for earnings/cleaner gates.
+ * Does not treat pending_payment cash anomalies as settled (BK-001).
+ */
 export function bookingPaidCustomerSignalsPresent(row: BookingPaidSignalRow): boolean {
+  if (bookingIsCustomerPaymentSettled(row)) return true;
+  const st = String(row.status ?? "").trim().toLowerCase();
+  if (st === "pending_payment" || st === "payment_expired") return false;
   if (resolveTotalPaidCents(row.total_paid_zar, row.total_paid_cents ?? row.amount_paid_cents) > 0) return true;
   return bookingSignalsPaidForZeroDisplayRecompute(row);
 }
