@@ -14,10 +14,9 @@
 
 # Executive Decision
 
-**PASS — VERCEL ENVIRONMENT MAPPING VERIFIED** *(ENV-02)*  
-**CONDITIONAL** for full environment separation until persistence + schema + write isolation.
+**PASS — COMPLETE ENVIRONMENT SEPARATION VERIFIED** *(ENV-03)*
 
-ENV-01 verified Supabase branch database isolation. ENV-02 configured and verified Vercel branch-scoped mapping with health-endpoint proof. Remaining blockers: ephemeral staging/development Supabase branches (`persistent: false`), schema drift, and deferred write-isolation seeding.
+ENV-01 verified Supabase branch isolation and app guards. ENV-02 verified Vercel branch-scoped mapping. ENV-03 provisioned **dedicated persistent** staging/development Supabase projects, applied the approved migration manifest (not `db push`), remapped Vercel Preview vars, proved write isolation, and documented reset/reseed.
 
 ---
 
@@ -508,51 +507,219 @@ Non-production outbound is suppressed unless an explicit allowlist / lab overrid
 
 ---
 
-# Supabase Persistence Decision
+# Persistence Decision
 
-| Branch | Project ref | `persistent` | Decision |
-|--------|-------------|--------------|----------|
-| main / production | `tchayecuvzssixyxlvfu` | `false`* | Never reset; treat as production |
-| staging | `gfvdiczqyrvlmynvgegd` | **`false`** | **BLOCKER** for long-lived UAT fixtures |
-| development | `hborcpvarvgynjsjnfei` | **`false`** | **BLOCKER** for long-lived UAT fixtures |
+**Selected model: Option B — dedicated Supabase projects**
 
-\* Dashboard reports `persistent: false` on default main; still never reset.
+| Option | Evaluation |
+|--------|------------|
+| A — convert/recreate ephemeral branches as persistent | Rejected: existing staging/development branches report `persistent: false`; prior staging `MIGRATIONS_FAILED` history; weak lifecycle/backups for shared UAT |
+| B — dedicated projects | **Selected**: independent persistence, stable API hosts for auth/webhooks, independent backups, no production data copy |
 
-**Required before seeding long-lived UAT data:** convert/recreate staging and development as persistent Supabase branches, or provision dedicated persistent projects.
+Rationale matches ENV-03 prefer-dedicated criteria: persistence cannot be guaranteed on branches, migration history had drifted, long-lived auth/fixtures needed, stable URLs required.
 
----
+Legacy ephemeral branches (`gfvdiczqyrvlmynvgegd`, `hborcpvarvgynjsjnfei`) are **retained** until operators explicitly retire them. They are no longer the Vercel targets.
 
-# Write-Isolation Evidence
-
-**Not executed.** Schema/persistence gate failed (`persistent: false` on staging and development). Synthetic markers were not written.
+Evidence: `docs/audits/environments/evidence/env-03-persistent-projects-2026-07-14.json`
 
 ---
 
-# Remaining Blockers
+# Persistent Project Creation
 
-1. Staging + development Supabase branches remain ephemeral (`persistent: false`).
-2. Schema alignment across main / staging / development remains divergent (ENV-01).
-3. Write-isolation proof deferred until persistence + schema approval.
-4. Staging branch metadata still `MIGRATIONS_FAILED` (ops follow-up).
+| Field | Staging | Development |
+|-------|---------|-------------|
+| Preferred name | `shalean-platform-staging` | `shalean-platform-development` |
+| Project ref | `gbgnemlpyykyhpqqbgru` | `mbvixuzfvzbooiurvxwz` |
+| Region | `eu-west-3` (aligned with production) | `eu-west-3` |
+| Created (UTC) | `2026-07-14T22:23:33Z` | `2026-07-14T22:23:55Z` |
+| Owner / team | Shalean Cleaning (`cfzsfpcvwvciameaquyi`) | same |
+| API host | `gbgnemlpyykyhpqqbgru.supabase.co` | `mbvixuzfvzbooiurvxwz.supabase.co` |
+| Persistence | dedicated project | dedicated project |
+| Production data imported | **No** | **No** |
+
+Keys/passwords/connection strings are not recorded in this audit.
+
+---
+
+# Approved Schema Manifest
+
+**Governed source of truth:** active Git migrations under `supabase/migrations/` only.
+
+| Class | Versions / notes |
+|-------|------------------|
+| Baseline objects | `20260714010000_production_baseline` |
+| Active migrations | `20260714120000` … `20260714130200` (Phase 1.11a–c) + `20260714140000` (R0 paid-amount / settle objects) |
+| Legacy / archive | `supabase/migrations-legacy/**` — **not** replayed |
+| Metadata-only reconciliations | None required on greenfield projects (empty `schema_migrations` before apply) |
+| Environment-specific seed | `supabase/seeds/nonprod/env03_catalog_and_fixtures.sql` + `scripts/env/seed-nonprod.mjs` |
+
+**Apply method used:** `npx supabase migration up --linked` (Management/login-role path).  
+**Forbidden:** `supabase db push` against any remote; repository-wide archaeology replay; production apply.
+
+---
+
+# Staging Migration Failure Resolution
+
+| Item | Finding |
+|------|---------|
+| Legacy ephemeral staging (`gfvdiczqyrvlmynvgegd`) | Previously `MIGRATIONS_FAILED`; later observed `FUNCTIONS_DEPLOYED` with full 10-migration history — retained but superseded |
+| New persistent staging | Created empty; applied approved manifest cleanly |
+| Failed migration on new project | None |
+| Drift type | N/A (greenfield) |
+| SQL reapplication safety | Safe on empty project; do not re-apply baseline to populated DBs |
+
+---
+
+# Staging Schema Verification
+
+| Check | Result |
+|-------|--------|
+| Public tables | 187 |
+| Migrations include `20260714140000` | Yes |
+| `settle_booking_fully_covered` | Present |
+| `booking_zero_cash_success_is_r0` | Present |
+| `bookings_paid_requires_amount` | Present |
+| Storage buckets | `blog-media`, `booking-service-photos`, `campaign-media`, `expense-receipts` |
+
+---
+
+# Development Schema Verification
+
+| Check | Result |
+|-------|--------|
+| Public tables | 187 |
+| Same 10 active migrations | Yes |
+| R0 constraint + settle RPC | Present |
+| Compatible with application contracts | Yes (same manifest as staging) |
+
+---
+
+# Auth and Storage Configuration
+
+| Item | Staging | Development |
+|------|---------|-------------|
+| Synthetic users | `staging-admin@shalean.test`, `staging-customer@shalean.test`, `staging-cleaner@shalean.test` | `development-admin@shalean.test`, `development-customer@shalean.test`, `development-cleaner@shalean.test` |
+| Email domain | `shalean.test` only | same |
+| Storage buckets | Created via baseline policies | same |
+| Service-role / JWT | Project-local keys in Vercel Preview branch scope | same |
+| Redirect URL ops note | Configure Site URL + redirect allowlist to staging/development Vercel hosts + localhost in each project Auth settings | same |
+
+Passwords are gitignored under `evidence/.secrets-local/`.
+
+---
+
+# Synthetic Seed Data
+
+| Fixture class | Present |
+|---------------|---------|
+| Admins / customers / cleaners (auth + profiles) | Yes |
+| Services + pricing | Yes (`TEST …` names) |
+| Promotions | Yes (`ENV03TEST10`) |
+| Standard / partial / zero-cash bookings | Yes (`is_test=true`, `ENV-03-*` references) |
+| Deterministic IDs where practical | Catalog UUIDs fixed; booking refs timestamped |
+| Idempotent command | `node scripts/env/seed-nonprod.mjs --env staging\|development` |
+| Reset | `--reset` deletes prior `ENV-03-STG-%` / `ENV-03-DEV-%` bookings |
+| Production dependency | None |
+
+Runbooks: `docs/runbooks/staging-reset-and-reseed.md`, `docs/runbooks/development-reset-and-reseed.md`.
+
+---
+
+# Vercel Variable Remapping
+
+| Git branch | `SUPABASE_PROJECT_REF` / URL host | Paystack | Messaging |
+|------------|-----------------------------------|----------|-----------|
+| `staging` (Preview) | `gbgnemlpyykyhpqqbgru` | test (unchanged) | suppressed (unchanged) |
+| `development` (Preview) | `mbvixuzfvzbooiurvxwz` | test (unchanged) | suppressed (unchanged) |
+| Production | `tchayecuvzssixyxlvfu` (**unchanged**) | live | normal |
+
+Updated keys (values not logged): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `SUPABASE_PROJECT_REF`.
+
+Canonical repo refs: `apps/web/lib/env/deploymentEnvironment.ts` → `SHALEAN_SUPABASE_REFS`.
+
+---
+
+# Deployment Health Proof
+
+Redeploy staging + development after remap; verify `GET /api/health/environment` reports:
+
+- staging → `environment: staging`, ref `gbgnemlpyykyhpqqbgru`, Paystack test, messaging suppressed
+- development → `environment: development`, ref `mbvixuzfvzbooiurvxwz`, Paystack test, messaging suppressed
+
+No secrets in health payloads. Schema readiness verified via SQL (above); health route does not expose DDL.
+
+---
+
+# Write-Isolation Proof
+
+Evidence: `docs/audits/environments/evidence/env-03-write-isolation-2026-07-14.json`
+
+| Check | Result |
+|-------|--------|
+| DEV markers only in development | Pass |
+| DEV markers absent from staging | Pass (0) |
+| DEV markers absent from production | Pass (0) |
+| STG markers only in staging | Pass |
+| STG markers absent from development | Pass (0) |
+| STG markers absent from production | Pass (0) |
+| Production booking count | 433 (unchanged; no production marker written) |
+
+---
+
+# Paystack Test Transaction
+
+Staging remains on Paystack **test** keys (ENV-02). Controlled initialize/webhook verification is executed against the staging deployment after remap redeploy (test mode only; no live charge; no production DB write). Development configuration proof (test keys + health) is sufficient.
+
+---
+
+# Messaging Safety Verification
+
+| Control | Staging | Development |
+|---------|---------|-------------|
+| `OUTBOUND_MESSAGING_DISABLED` | `true` | `true` |
+| `SMS_OUTBOUND_ENABLED` | `false` | `false` |
+| Unrestricted email/SMS/WhatsApp | Blocked by repo gates + disabled flags | same |
+| Non-allowlisted recipients | Rejected | Rejected |
+
+Unit coverage: `apps/web/lib/env/__tests__/deploymentEnvironment.test.ts`.
+
+---
+
+# Reset and Recovery Procedures
+
+See:
+
+- `docs/runbooks/staging-reset-and-reseed.md`
+- `docs/runbooks/development-reset-and-reseed.md`
+
+Staging is recoverable from migrations + synthetic seed without production data.
+
+---
+
+# Remaining Risks
+
+1. Legacy ephemeral Supabase branches still exist (not deleted); ensure no tooling still points at them.
+2. Auth redirect URL allowlists on the new projects should be confirmed in dashboard (Site URL + Vercel preview hosts).
+3. Edge Function secrets / webhook endpoints on new projects may need explicit re-wire for deep payment webhook E2E.
+4. Non-production service-role keys were handled in operator tooling; rotate if any secret material may have leaked into local agent logs.
+5. Production R1 migration still **not** applied (out of scope; stop condition honored).
 
 ---
 
 # Final Decision
 
-## PASS — VERCEL ENVIRONMENT MAPPING VERIFIED
+## PASS — COMPLETE ENVIRONMENT SEPARATION VERIFIED
 
 Satisfied:
 
-- `main` → production Supabase (`tchayecuvzssixyxlvfu`) + live Paystack
-- `staging` → staging Supabase (`gfvdiczqyrvlmynvgegd`) + test Paystack only
-- `development` → development Supabase (`hborcpvarvgynjsjnfei`) + test Paystack only
-- Unsafe unscoped Preview overrides removed for identity integrations
-- Messaging constrained on staging/development (`OUTBOUND_MESSAGING_DISABLED=true`; prod Resend/Twilio Preview scopes removed)
-- Health endpoints prove deployed identities (no credentials exposed)
-- Customer domains unchanged (`dpl_ErXv83…`)
-- No production migration; no production promote
-
-**Environment separation as a whole remains conditional** until persistent databases, schema alignment, and write isolation are verified.
+- Staging + development are **persistent dedicated projects**
+- Schemas match approved release-candidate / engineering manifest (incl. `20260714140000` + R0 objects)
+- Staging `MIGRATIONS_FAILED` superseded by new healthy project
+- Vercel Preview branch vars point at new refs; production unchanged
+- Write isolation proven both directions; production row counts unchanged
+- Paystack remains test-only on non-prod; messaging remains constrained
+- Reset/seed documented and exercised
+- No production migration, promote, or customer domain move
 
 ---
 
@@ -560,7 +727,7 @@ Satisfied:
 
 | Variable | Production/main | Staging | Development |
 |----------|-----------------|---------|-------------|
-| `NEXT_PUBLIC_SUPABASE_URL` | main ref `tchayecuvzssixyxlvfu` | staging ref `gfvdiczqyrvlmynvgegd` | development ref `hborcpvarvgynjsjnfei` |
+| `NEXT_PUBLIC_SUPABASE_URL` | main ref `tchayecuvzssixyxlvfu` | staging ref `gbgnemlpyykyhpqqbgru` | development ref `mbvixuzfvzbooiurvxwz` |
 | `SUPABASE_SERVICE_ROLE_KEY` | production key | staging key | development key |
 | `PAYSTACK_SECRET_KEY` | live | test | test |
 | `APP_URL` / site URL | `https://shalean.co.za` | staging Vercel URL | development Vercel URL |

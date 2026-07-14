@@ -38,8 +38,11 @@ describe("resolveDeploymentEnvironment", () => {
 
 describe("supabase refs", () => {
   it("parses project ref from URL", () => {
-    expect(supabaseRefFromUrl("https://gfvdiczqyrvlmynvgegd.supabase.co")).toBe(
+    expect(supabaseRefFromUrl(`https://${SHALEAN_SUPABASE_REFS.staging}.supabase.co`)).toBe(
       SHALEAN_SUPABASE_REFS.staging,
+    );
+    expect(supabaseRefFromUrl(`https://${SHALEAN_SUPABASE_REFS.development}.supabase.co`)).toBe(
+      SHALEAN_SUPABASE_REFS.development,
     );
   });
 

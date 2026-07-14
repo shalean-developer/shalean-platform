@@ -1,0 +1,17 @@
+{
+  "env": "staging",
+  "ref": "gbgnemlpyykyhpqqbgru",
+  "isolationMarker": "ENV-03-STG-20260714T230115Z",
+  "bookingReferences": [
+    "ENV-03-STG-20260714T230115Z-pending",
+    "ENV-03-STG-20260714T230115Z-partial",
+    "ENV-03-STG-20260714T230115Z-zerocash"
+  ],
+  "authEmails": [
+    "staging-admin@shalean.test",
+    "staging-customer@shalean.test",
+    "staging-cleaner@shalean.test"
+  ],
+  "createdAuth": [],
+  "timestamp": "2026-07-14T23:01:16.824Z"
+}

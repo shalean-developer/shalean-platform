@@ -1,0 +1,61 @@
+{
+  "decision": "Option B — dedicated Supabase projects",
+  "organization": {
+    "id": "cfzsfpcvwvciameaquyi",
+    "name": "Shalean Cleaning"
+  },
+  "projects": [
+    {
+      "name": "shalean-platform-staging",
+      "ref": "gbgnemlpyykyhpqqbgru",
+      "region": "eu-west-3",
+      "created_at": "2026-07-14T22:23:33.920012Z",
+      "api_host": "gbgnemlpyykyhpqqbgru.supabase.co",
+      "db_host": "db.gbgnemlpyykyhpqqbgru.supabase.co",
+      "persistence": "dedicated_project",
+      "cost_confirmed_usd_monthly": 10
+    },
+    {
+      "name": "shalean-platform-development",
+      "ref": "mbvixuzfvzbooiurvxwz",
+      "region": "eu-west-3",
+      "created_at": "2026-07-14T22:23:55.703877Z",
+      "api_host": "mbvixuzfvzbooiurvxwz.supabase.co",
+      "db_host": "db.mbvixuzfvzbooiurvxwz.supabase.co",
+      "persistence": "dedicated_project",
+      "cost_confirmed_usd_monthly": 10
+    }
+  ],
+  "legacy_ephemeral_branches_retained": [
+    {
+      "name": "staging",
+      "ref": "gfvdiczqyrvlmynvgegd",
+      "persistent": false,
+      "deleted": false
+    },
+    {
+      "name": "development",
+      "ref": "hborcpvarvgynjsjnfei",
+      "persistent": false,
+      "deleted": false
+    }
+  ],
+  "production_unchanged": {
+    "ref": "tchayecuvzssixyxlvfu",
+    "migrated": false,
+    "promoted": false
+  },
+  "schema_apply_method": "supabase migration up --linked (not db push)",
+  "migrations_applied": [
+    "20260714010000_production_baseline",
+    "20260714120000_phase_111a_definer_rpc_execute_lockdown",
+    "20260714120100_phase_111a_storage_least_privilege_policies",
+    "20260714120200_phase_111b_admin_views_security_invoker",
+    "20260714120300_phase_111b_log_retention_controls",
+    "20260714120400_phase_111b_cascade_fk_audit_comments",
+    "20260714130000_phase_111c_revoke_service_role_only_table_grants",
+    "20260714130100_phase_111c_strip_dangerous_client_table_privileges",
+    "20260714130200_phase_111c_default_privileges_hardening",
+    "20260714140000_bookings_r0_paid_amount_constraint"
+  ]
+}

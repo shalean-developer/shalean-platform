@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-07-14T23:01:45Z",
+  "staging_ref": "gbgnemlpyykyhpqqbgru",
+  "development_ref": "mbvixuzfvzbooiurvxwz",
+  "production_ref": "tchayecuvzssixyxlvfu",
+  "staging_markers": [
+    "ENV-03-STG-20260714T230115Z-pending",
+    "ENV-03-STG-20260714T230115Z-partial",
+    "ENV-03-STG-20260714T230115Z-zerocash"
+  ],
+  "development_markers": [
+    "ENV-03-DEV-20260714T230143Z-pending",
+    "ENV-03-DEV-20260714T230143Z-partial",
+    "ENV-03-DEV-20260714T230143Z-zerocash"
+  ],
+  "checks": {
+    "dev_markers_only_in_development": true,
+    "stg_markers_only_in_staging": true,
+    "dev_markers_in_staging": 0,
+    "stg_markers_in_development": 0,
+    "env03_markers_in_production": 0,
+    "production_bookings_total": 433,
+    "production_marker_created": false
+  }
+}
