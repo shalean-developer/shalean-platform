@@ -1,0 +1,89 @@
+﻿"public"."accept_dispatch_offer_atomic"("p_offer_id" "uuid", "p_cleaner_id" "uuid", "p_response_latency_ms" integer, "p_assign_meta" "jsonb" DEFAULT '{}'::"jsonb", "p_truth_patch" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
+"public"."add_team_members_guarded"("p_team_id" "uuid", "p_cleaner_ids" "uuid"[]) RETURNS "jsonb"
+"public"."admin_billing_switch_finalize"("p_customer_id" "uuid", "p_billing_type" "text", "p_target_schedule_type" "text", "p_schedule_enforced" boolean, "p_confirm" boolean, "p_confirm_strict" boolean, "p_strict_flip_enabled" boolean) RETURNS "jsonb"
+"public"."admin_mark_payout_paid"("p_cleaner_ids" "uuid"[]) RETURNS TABLE("updated_count" bigint, "payout_run_id" "uuid")
+"public"."admin_whatsapp_reliability_metrics"("p_since" timestamp with time zone) RETURNS "jsonb"
+"public"."admin_whatsapp_reliability_metrics"("p_since" timestamp with time zone, "p_until" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS "jsonb"
+"public"."append_booking_conversion_analytics"("p_payload" "jsonb") RETURNS "uuid"
+"public"."apply_cleaning_credit_transaction"("p_user_id" "uuid", "p_amount_zar" numeric, "p_type" "text", "p_referral_id" "uuid" DEFAULT NULL::"uuid", "p_booking_id" "uuid" DEFAULT NULL::"uuid", "p_note" "text" DEFAULT NULL::"text", "p_created_by" "text" DEFAULT NULL::"text") RETURNS TABLE("ok" boolean, "balance_after_zar" numeric, "error_message" "text")
+"public"."approve_cleaner_change_request"("p_request_id" "uuid", "p_reviewer" "text" DEFAULT NULL::"text") RETURNS "void"
+"public"."assign_booking_reference"() RETURNS "trigger"
+"public"."assign_team_and_sync_roster"("p_booking_id" "uuid", "p_team_id" "uuid", "p_payout_owner_cleaner_id" "uuid", "p_team_member_count_snapshot" integer, "p_variant" "text", "p_source" "text" DEFAULT NULL::"text", "p_assigned_at" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS "jsonb"
+"public"."bookings_after_write_monthly_invoice"() RETURNS "trigger"
+"public"."bookings_before_delete_monthly_invoice"() RETURNS "trigger"
+"public"."bookings_lock_under_finalized_monthly_invoice"() RETURNS "trigger"
+"public"."bookings_record_payment_link_delivery"("p_booking_id" "uuid", "p_payment_link_delivery" "jsonb", "p_touch_last_sent_at" boolean DEFAULT true) RETURNS "void"
+"public"."claim_booking_dispatch_recovery_lease"("p_booking_id" "uuid", "p_lease_seconds" integer) RETURNS "jsonb"
+"public"."claim_booking_earnings_recompute"("p_booking_id" "uuid", "p_cooldown_seconds" integer DEFAULT 120) RETURNS TABLE("claimed" boolean, "next_allowed_at" timestamp with time zone)
+"public"."claim_cleaner_earnings_for_paystack"("p_cleaner_id" "uuid") RETURNS "uuid"
+"public"."claim_team_capacity_slot"("p_team_id" "uuid", "p_booking_date" "date", "p_capacity_per_day" integer) RETURNS boolean
+"public"."dispatch_cleaner_offer_accepted"("p_cleaner_id" "uuid") RETURNS "void"
+"public"."dispatch_cleaner_offer_sent"("p_cleaner_id" "uuid") RETURNS "void"
+"public"."dispatch_expire_peer_offers"("p_booking_id" "uuid", "p_winner_offer_id" "uuid") RETURNS "void"
+"public"."dispatch_record_offer_response"("p_cleaner_id" "uuid", "p_latency_ms" double precision, "p_accepted" boolean) RETURNS "void"
+"public"."draft_monthly_invoice_due_date"("p_invoice_id" "uuid", "p_month" "text") RETURNS "date"
+"public"."enqueue_stranded_pending_bookings"("p_limit" integer DEFAULT 50) RETURNS "jsonb"
+"public"."expire_old_offers"() RETURNS "jsonb"
+"public"."expire_pending_dispatch_offers"("p_limit" integer DEFAULT 100) RETURNS "jsonb"
+"public"."increment_monthly_invoice_reminder_count"("p_invoice_id" "uuid") RETURNS "void"
+"public"."increment_promotion_redemption_counters"("p_promotion_id" "uuid", "p_discount_zar" numeric, "p_revenue_zar" numeric) RETURNS "jsonb"
+"public"."increment_user_profile_stats"("p_user_id" "uuid", "p_amount" bigint) RETURNS "void"
+"public"."initialize_customer_draft_booking"("p_scheduled_start" timestamp with time zone, "p_scheduled_end" timestamp with time zone, "p_service_timezone" "text", "p_address_line1" "text", "p_locality" "text", "p_region" "text", "p_postal_code" "text", "p_country_code" "text", "p_service_notes" "text", "p_currency" "text", "p_subtotal_cents" bigint, "p_fees_cents" bigint, "p_tax_cents" bigint, "p_total_cents" bigint, "p_metadata" "jsonb" DEFAULT '{}'::"jsonb", "p_service_slug" "text" DEFAULT NULL::"text", "p_estimate_status" "text" DEFAULT NULL::"text", "p_estimated_at" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_quote_id" "uuid" DEFAULT NULL::"uuid", "p_pricing_engine_version" "text" DEFAULT NULL::"text") RETURNS TABLE("id" "uuid", "status" "public"."booking_status", "customer_id" "uuid", "scheduled_start" timestamp with time zone, "scheduled_end" timestamp with time zone, "created_at" timestamp with time zone, "row_version" integer, "idempotent_replay" boolean)
+"public"."invoice_adjustments_after_insert_route"() RETURNS "trigger"
+"public"."invoice_adjustments_block_if_month_closed"() RETURNS "trigger"
+"public"."invoke_nextjs_cron"("cron_path" "text") RETURNS bigint
+"public"."jsonb_array_tail"("p_arr" "jsonb", "p_max" integer) RETURNS "jsonb"
+"public"."link_booking_to_user"() RETURNS "trigger"
+"public"."list_bookings_due_user_selected_recovery"("p_max_attempts" integer, "p_limit" integer, "p_offset" integer DEFAULT 0) RETURNS TABLE("id" "uuid", "selected_cleaner_id" "uuid")
+"public"."mark_bookings_paid_for_cleaner_payout"("p_payout_id" "uuid") RETURNS integer
+"public"."mark_bookings_paid_for_earnings_disbursement"("p_disbursement_id" "uuid") RETURNS integer
+"public"."mark_monthly_invoice_overdue_flags"("p_today" "date") RETURNS integer
+"public"."monthly_invoice_append_snapshot_event"("p_invoice_id" "uuid", "p_event" "jsonb") RETURNS "void"
+"public"."monthly_invoice_due_date"("p_month" "text") RETURNS "date"
+"public"."monthly_invoice_hard_close"("p_invoice_id" "uuid") RETURNS "void"
+"public"."monthly_invoice_last_event_times"("p_invoice_ids" "uuid"[]) RETURNS TABLE("invoice_id" "uuid", "last_event_at" timestamp with time zone)
+"public"."monthly_invoices_after_status_paid_append_closed"() RETURNS "trigger"
+"public"."monthly_invoices_append_invoice_closed_event"() RETURNS "trigger"
+"public"."monthly_invoices_before_write_auto_close"() RETURNS "trigger"
+"public"."monthly_invoices_stamp_adjustments_applied_at"() RETURNS "trigger"
+"public"."monthly_invoices_touch_updated_at"() RETURNS "trigger"
+"public"."notification_system_logs_daily"("p_days" integer DEFAULT 7) RETURNS "jsonb"
+"public"."notification_system_logs_summary"("p_days" integer DEFAULT 7) RETURNS "jsonb"
+"public"."payout_period_is_canonical_jhb_month"("p_start" "date", "p_end" "date") RETURNS boolean
+"public"."populate_daily_analytics_rollups"("p_day" "date") RETURNS "void"
+"public"."prune_cleaner_job_lifecycle_idempotency"() RETURNS bigint
+"public"."prune_dispatch_offer_exposure_dedupe"("p_retention_days" integer DEFAULT 30) RETURNS bigint
+"public"."prune_short_lived_notification_idempotency_claims"() RETURNS bigint
+"public"."prune_system_logs"("p_retention_days" integer DEFAULT 30) RETURNS bigint
+"public"."public_marketing_reviews_for_area"("p_area" "text", "p_limit" integer DEFAULT 4) RETURNS "jsonb"
+"public"."public_review_banner_stats"() RETURNS "jsonb"
+"public"."purge_stale_pending_payment_bookings"() RETURNS "jsonb"
+"public"."recalculate_user_tier"("p_user_id" "uuid") RETURNS "void"
+"public"."recompute_monthly_invoice_totals"("p_invoice_id" "uuid") RETURNS "void"
+"public"."record_monthly_invoice_view"("invoice_id" "uuid") RETURNS "void"
+"public"."record_sales_document_view"("doc_id" "uuid") RETURNS "void"
+"public"."refresh_analytics_materialized_views"() RETURNS "void"
+"public"."refresh_cleaner_rating"("p_cleaner_id" "uuid") RETURNS "void"
+"public"."refresh_dispatch_experiment_snapshots"("p_week_start" "date" DEFAULT NULL::"date") RETURNS integer
+"public"."release_cron_lock"("p_job_name" "text", "p_holder_id" "uuid") RETURNS boolean
+"public"."release_team_capacity_slot"("p_team_id" "uuid", "p_booking_date" "date") RETURNS boolean
+"public"."repair_empty_team_booking_rosters"("p_batch" integer DEFAULT 40) RETURNS integer
+"public"."replace_booking_cleaners_admin_atomic"("p_booking_id" "uuid", "p_rows" "jsonb") RETURNS "void"
+"public"."replace_booking_line_items_atomic"("p_booking_id" "uuid", "p_rows" "jsonb") RETURNS integer
+"public"."resolve_admin_monthly_booking_race"("p_our_id" "uuid", "p_user_id" "uuid", "p_date" "text", "p_time" "text", "p_service_slug" "text", "p_force" boolean) RETURNS "jsonb"
+"public"."resolve_auth_user_id_by_email"("p_email" "text") RETURNS "uuid"
+"public"."retry_unassigned_jobs"() RETURNS "jsonb"
+"public"."run_analytics_warehouse_nightly"() RETURNS "void"
+"public"."run_dispatch_cycle"() RETURNS "jsonb"
+"public"."sales_documents_touch_updated_at"() RETURNS "trigger"
+"public"."set_updated_at"() RETURNS "trigger"
+"public"."sync_booking_cleaners_for_team_booking"("p_booking_id" "uuid", "p_source" "text" DEFAULT 'sync'::"text") RETURNS "void"
+"public"."sync_promotion_statuses"() RETURNS integer
+"public"."touch_bookings_updated_at"() RETURNS "trigger"
+"public"."touch_payout_integrity_first_seen"("p_booking_id" "uuid") RETURNS timestamp with time zone
+"public"."trg_bookings_completed_refresh_tier"() RETURNS "trigger"
+"public"."trg_reviews_refresh_cleaner"() RETURNS "trigger"
+"public"."try_acquire_cron_lock"("p_job_name" "text", "p_holder_id" "uuid", "p_lease_seconds" integer DEFAULT 600) RETURNS boolean
+"public"."user_has_booking_with_cleaner"("p_cleaner_id" "uuid") RETURNS boolean
+"public"."user_owns_booking"("p_booking_id" "uuid") RETURNS boolean
+"public"."user_profiles_prevent_customer_billing_change"() RETURNS "trigger"
