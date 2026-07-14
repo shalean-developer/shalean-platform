@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-07-14T23:23:06.482Z",
+  "ok": true,
+  "http": 200,
+  "message": "Authorization URL created",
+  "reference": "ENV03-PAY-1784071385708",
+  "hasAuthorizationUrl": true,
+  "keyMode": "test",
+  "emailUsed": "staging.customer+env03@example.com",
+  "note": "Test-mode initialize only; staging deployment health proves sk_test/pk_test. No live charge; production bookings unchanged at 433."
+}
