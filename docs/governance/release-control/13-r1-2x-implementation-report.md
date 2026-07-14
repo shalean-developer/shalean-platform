@@ -165,6 +165,8 @@ See [15-production-release-checklist.md](./15-production-release-checklist.md).
 
 Release-control hardening is implemented with documented platform limitations (Vercel Option A pending team-admin Dashboard toggle; required human approvals not enforceable with sole collaborator).
 
+**Repository landing:** PR https://github.com/shalean-developer/shalean-platform/pull/4 — **do not merge** until Option A is confirmed or Instant Rollback operator is standing by (merge of `main` would otherwise risk re-aliasing R1).
+
 **R1 may proceed to the production release gate (R1.3) only with these compensating controls:**
 
 1. Team admin enables Option A (`Auto-assign Custom Production Domains` = Off) and records proof before R1 promote.
