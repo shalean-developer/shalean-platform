@@ -1,4 +1,5 @@
-import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
+import { getDefaultFromAddress } from "@/lib/email/resendFrom";
+import { safeResendSend } from "@/lib/email/safeResendSend";
 import { sendEmailFromTemplateKey } from "@/lib/email/sendTemplateEmail";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
@@ -38,11 +39,9 @@ async function sendLegacyCustomerEmail(params: {
   logEventType: string;
   payload?: Record<string, unknown>;
 }): Promise<{ sent: boolean; error?: string }> {
-  const resend = getResend();
-  if (!resend) return { sent: false, error: "Email not configured" };
   const from = getDefaultFromAddress();
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await safeResendSend({
       from,
       to: params.to,
       subject: params.subject,

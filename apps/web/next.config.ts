@@ -1,11 +1,33 @@
 import type { NextConfig } from "next";
 import path from "path";
 import { fileURLToPath } from "url";
+import { collectEnvironmentSafetyIssues } from "./lib/env/assertEnvironmentSafety";
 import { loadLocationSeoFeedbackJsonForNextEnv } from "./lib/seo/load-location-seo-feedback-env";
 import { programmaticBlogCleanupRedirects } from "./lib/seo/programmaticBlogCleanupRedirects";
 
 const turbopackRoot = path.dirname(fileURLToPath(import.meta.url));
 const locationSeoFeedbackJson = loadLocationSeoFeedbackJsonForNextEnv(turbopackRoot);
+
+/** Fail closed on Vercel (or when explicitly enabled) if Paystack/DB env mapping is unsafe. */
+{
+  const enforce =
+    process.env.VERCEL === "1" || process.env.SHALEAN_ENFORCE_ENV_SAFETY === "true";
+  if (enforce) {
+    const fatal = collectEnvironmentSafetyIssues(process.env).filter((issue) =>
+      [
+        "paystack_live_in_non_production",
+        "paystack_test_in_production",
+        "supabase_ref_mismatch",
+        "paystack_public_secret_mismatch",
+      ].includes(issue.code),
+    );
+    if (fatal.length > 0) {
+      throw new Error(
+        `[shalean-env-safety] ${fatal.map((f) => f.message).join(" | ")}`,
+      );
+    }
+  }
+}
 
 function supabaseImageHost(): string | null {
   try {

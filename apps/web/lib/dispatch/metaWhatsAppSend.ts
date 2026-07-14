@@ -3,6 +3,10 @@ import { createHmac, timingSafeEqual } from "crypto";
 import axios, { isAxiosError } from "axios";
 
 import { metaGraphSendRetryDelayMs } from "@/lib/dispatch/metaSendRetry";
+import {
+  applyOutboundBodyMarker,
+  decideOutboundPhone,
+} from "@/lib/env/outboundMessagingSafety";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { logWhatsAppEvent } from "@/lib/whatsapp/logWhatsAppEvent";
 import {
@@ -274,6 +278,13 @@ export async function sendViaMetaWhatsApp(params: {
     return out;
   }
 
+  const phoneGate = decideOutboundPhone(`+${toDigits}`);
+  if (!phoneGate.allowed) {
+    const out: MetaWhatsAppDeliveryResult = { ok: false, error: phoneGate.reason };
+    await emitMetaDeliveryAudit(params.deliveryLog, toDigits, out, "text");
+    return out;
+  }
+
   if (isMetaSendCircuitOpen()) {
     const out: MetaWhatsAppDeliveryResult = {
       ok: false,
@@ -287,7 +298,7 @@ export async function sendViaMetaWhatsApp(params: {
     messaging_product: "whatsapp",
     to: toDigits,
     type: "text",
-    text: { body: params.message },
+    text: { body: applyOutboundBodyMarker(params.message) },
   };
 
   let lastFailure: ParsedFailure | null = null;
@@ -420,6 +431,13 @@ export async function sendViaMetaWhatsAppTemplateBody(params: {
   const toDigits = metaWhatsAppToDigits(params.phone);
   if (toDigits.length < 10 || toDigits.length > 15) {
     const out: MetaWhatsAppDeliveryResult = { ok: false, error: `Invalid WhatsApp recipient digits length=${toDigits.length}` };
+    await emitMetaDeliveryAudit(params.deliveryLog, toDigits, out, "template");
+    return out;
+  }
+
+  const phoneGate = decideOutboundPhone(`+${toDigits}`);
+  if (!phoneGate.allowed) {
+    const out: MetaWhatsAppDeliveryResult = { ok: false, error: phoneGate.reason };
     await emitMetaDeliveryAudit(params.deliveryLog, toDigits, out, "template");
     return out;
   }

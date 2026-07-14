@@ -8,6 +8,7 @@ import { GoogleAds } from "@/components/analytics/GoogleAds";
 import { GoogleTagManager } from "@/components/analytics/GoogleTagManager";
 import { MetaPixel } from "@/components/analytics/MetaPixel";
 import { SessionReplayProvider } from "@/components/analytics/SessionReplayProvider";
+import { NonProductionBanner } from "@/components/env/NonProductionBanner";
 import { GlobalTopNav } from "@/components/nav/GlobalTopNav";
 import { geistSans } from "@/lib/fonts/appFonts";
 import { ROOT_METADATA } from "@/lib/site/rootMetadata";
@@ -46,6 +47,7 @@ export default function RootLayout({
       <head />
       <body className="min-h-full flex flex-col">
         <AppNotificationProviders>
+          <NonProductionBanner />
           <SessionReplayProvider />
           <GlobalTopNav />
           {children}

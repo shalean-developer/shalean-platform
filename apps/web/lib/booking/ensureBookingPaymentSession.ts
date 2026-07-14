@@ -12,6 +12,7 @@ import {
 } from "@/lib/booking/bookingPaymentAttemptHistory";
 import { PAYMENT_ERROR_CODES, type PaymentErrorCode } from "@/lib/booking/paymentErrorCodes";
 import { detectPaystackKeyModeMismatch } from "@/lib/booking/paystackKeyModeConsistency";
+import { assertEnvironmentPaymentSafety } from "@/lib/env/assertEnvironmentSafety";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
@@ -460,6 +461,17 @@ async function ensureBookingPaymentSessionInner(
       bookingId: id,
       errorCode: keyMismatch.errorCode,
       error: keyMismatch.error,
+      retryable: false,
+    };
+  }
+
+  const envSafety = assertEnvironmentPaymentSafety();
+  if (envSafety) {
+    return {
+      status: "failed",
+      bookingId: id,
+      errorCode: PAYMENT_ERROR_CODES.PAYMENT_CONFIGURATION_ERROR,
+      error: envSafety.message,
       retryable: false,
     };
   }

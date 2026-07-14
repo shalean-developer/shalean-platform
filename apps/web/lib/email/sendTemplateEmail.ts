@@ -1,5 +1,6 @@
 import { wrapBrandedEmailContent } from "@/lib/email/emailBrandShell";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
+import { safeResendSend } from "@/lib/email/safeResendSend";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { getVariableAllowlistFromRow, parseTemplateVariableAllowlist, renderTemplate } from "@/lib/templates/render";
@@ -137,7 +138,7 @@ export async function sendEmailFromTemplateKey(params: {
   }
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await safeResendSend({
       from: getDefaultFromAddress(),
       to: params.to,
       subject,
