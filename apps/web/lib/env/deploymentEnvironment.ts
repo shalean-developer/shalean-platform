@@ -15,8 +15,10 @@ export type ShaleanDeploymentEnv =
 /** Canonical Supabase project refs for governed environments (never secrets). */
 export const SHALEAN_SUPABASE_REFS = {
   production: "tchayecuvzssixyxlvfu",
-  staging: "gfvdiczqyrvlmynvgegd",
-  development: "hborcpvarvgynjsjnfei",
+  /** Persistent dedicated project (ENV-03). Legacy ephemeral branch: gfvdiczqyrvlmynvgegd */
+  staging: "gbgnemlpyykyhpqqbgru",
+  /** Persistent dedicated project (ENV-03). Legacy ephemeral branch: hborcpvarvgynjsjnfei */
+  development: "mbvixuzfvzbooiurvxwz",
 } as const;
 
 export type EnvLike = Record<string, string | undefined>;

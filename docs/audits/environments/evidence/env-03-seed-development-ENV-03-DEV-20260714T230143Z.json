@@ -1,0 +1,17 @@
+{
+  "env": "development",
+  "ref": "mbvixuzfvzbooiurvxwz",
+  "isolationMarker": "ENV-03-DEV-20260714T230143Z",
+  "bookingReferences": [
+    "ENV-03-DEV-20260714T230143Z-pending",
+    "ENV-03-DEV-20260714T230143Z-partial",
+    "ENV-03-DEV-20260714T230143Z-zerocash"
+  ],
+  "authEmails": [
+    "development-admin@shalean.test",
+    "development-customer@shalean.test",
+    "development-cleaner@shalean.test"
+  ],
+  "createdAuth": [],
+  "timestamp": "2026-07-14T23:01:44.493Z"
+}

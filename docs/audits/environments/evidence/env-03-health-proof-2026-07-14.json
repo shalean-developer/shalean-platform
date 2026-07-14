@@ -1,0 +1,40 @@
+{
+  "timestamp": "2026-07-14T23:22:17Z",
+  "staging": {
+    "deploymentId": "dpl_5aURGUQpDUPdYDtEUegspMjSXDLF",
+    "url": "shalean-platform-ew5n9kyw9-shalean-cleaning-services.vercel.app",
+    "commit": "7ad147a4",
+    "health": {
+      "status": "ok",
+      "deployment": "staging",
+      "configuredRef": "gbgnemlpyykyhpqqbgru",
+      "expectedRef": "gbgnemlpyykyhpqqbgru",
+      "paystackSecretMode": "test",
+      "paystackPublicMode": "test",
+      "outboundDisabled": true,
+      "smsOutboundEnabled": false,
+      "issues": []
+    }
+  },
+  "development": {
+    "deploymentId": "dpl_9GF5GHf72rHJ6NLHih2TtYg2TFq6",
+    "url": "shalean-platform-6m9v2skxl-shalean-cleaning-services.vercel.app",
+    "commit": "7ad147a4",
+    "health": {
+      "status": "ok",
+      "deployment": "development",
+      "configuredRef": "mbvixuzfvzbooiurvxwz",
+      "expectedRef": "mbvixuzfvzbooiurvxwz",
+      "paystackSecretMode": "test",
+      "paystackPublicMode": "test",
+      "outboundDisabled": true,
+      "smsOutboundEnabled": false,
+      "issues": []
+    }
+  },
+  "production": {
+    "customerDomainsUnchanged": true,
+    "noPromotionPerformed": true,
+    "bookingsTotal": 433
+  }
+}
