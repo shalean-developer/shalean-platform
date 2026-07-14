@@ -5,7 +5,7 @@ import {
   supabaseRefFromUrl,
   type EnvLike,
   type ShaleanDeploymentEnv,
-} from "@/lib/env/deploymentEnvironment";
+} from "./deploymentEnvironment";
 
 export type PaystackKeyMode = "live" | "test" | "unknown" | "missing";
 
