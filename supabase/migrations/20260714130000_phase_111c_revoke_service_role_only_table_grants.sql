@@ -5,6 +5,10 @@
 -- edge service_role / RPCs. Client roles retained GRANT ALL (incl. TRUNCATE) while
 -- RLS often denied access — defense-in-depth revoke removes privilege surface.
 --
+-- Scope: TABLE privileges only (anon + authenticated). Does NOT revoke from
+-- service_role, postgres, or supabase_admin. Does NOT use REVOKE … FROM PUBLIC.
+-- Sequences, functions, and types are out of scope here (see …130100 / …130200).
+--
 -- DOES NOT touch customer/marketing/cleaner relations that have authenticated or
 -- public RLS policies used by browser/RSC clients (bookings, blog_*, user_*, etc.).
 
@@ -158,10 +162,9 @@ BEGIN
     END IF;
 
     -- Why: eliminate client-role privilege on service_role-only relations (F-SEC-005).
-    EXECUTE format('REVOKE ALL ON TABLE public.%I FROM PUBLIC', t);
     EXECUTE format('REVOKE ALL ON TABLE public.%I FROM anon', t);
     EXECUTE format('REVOKE ALL ON TABLE public.%I FROM authenticated', t);
-    -- Why: preserve app server / edge / cron access path.
+    -- Why: preserve app server / edge / cron access path (never revoke service_role).
     EXECUTE format('GRANT ALL ON TABLE public.%I TO service_role', t);
   END LOOP;
 END $$;

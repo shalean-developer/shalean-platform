@@ -4,6 +4,10 @@
 -- Baseline ALTER DEFAULT PRIVILEGES granted ALL on TABLES/SEQUENCES/FUNCTIONS
 -- created by role postgres to anon + authenticated. That reopens privilege debt
 -- on every new migration object. Close the amplifier; service_role retains ALL.
+--
+-- Owner/schema: FOR ROLE postgres IN SCHEMA public (migration object owner).
+-- TYPES default privileges are out of scope for 1.11C.
+-- Does NOT revoke default privileges from service_role or postgres.
 
 BEGIN;
 
