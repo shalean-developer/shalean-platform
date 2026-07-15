@@ -18,17 +18,15 @@ import {
   parseStoredJobPriceBreakdown,
   parseStoredPriceBreakdown,
 } from "@/lib/dashboard/storedPriceBreakdown";
-import type { DashboardBooking } from "@/lib/dashboard/types";
 import { CustomerBookingStatusBadge } from "@/components/dashboard/customer-booking-status-badge";
+import { customerBookingTimelineForBooking } from "@/lib/dashboard/customerBookingTimeline";
 import {
   canCustomerModifyDashboardBooking,
-  customerBookingDetailTimelineConfirmedDone,
   dashboardBookingCustomerSurface,
 } from "@/lib/dashboard/dashboardBookingOperational";
 import { leaveReviewHrefForBooking } from "@/lib/dashboard/customerBookingReviewUi";
 import {
   customerBookingDetailHeaderDataAttributes,
-  customerBookingDetailOperationalPhase,
   customerPreferredDispatchNotice,
 } from "@/lib/dashboard/customerBookingDisplay";
 import { Button } from "@/components/ui/button";
@@ -44,47 +42,11 @@ import { useDashboardToast } from "@/components/dashboard/dashboard-toast-contex
 
 type WindowWithBreakdownTrack = Window & { __trackedBookingBreakdown?: Record<string, true> };
 
-type TimelineStep = { label: string; done: boolean; tone?: "danger" };
-
 function formatZarLine(zar: number): string {
   const abs = Math.abs(Math.round(zar));
   const fmt = abs.toLocaleString("en-ZA");
   if (zar < 0) return `−R ${fmt}`;
   return `R ${fmt}`;
-}
-
-function timelineForBooking(b: DashboardBooking): TimelineStep[] {
-  const phase = customerBookingDetailOperationalPhase(b);
-  const cleanerAssigned = Boolean(b.cleaner?.name?.trim()) || phase === "accepted" || phase === "assigned";
-  if (phase === "cancelled") {
-    return [
-      { label: "Booked", done: true },
-      { label: "Confirmed", done: false },
-      { label: "Cancelled", done: true, tone: "danger" },
-    ];
-  }
-  if (phase === "failed") {
-    return [
-      { label: "Booked", done: true },
-      { label: "Confirmed", done: false },
-      { label: "Failed", done: true, tone: "danger" },
-    ];
-  }
-  if (phase === "completed") {
-    return [
-      { label: "Booked", done: true },
-      { label: "Confirmed", done: true },
-      { label: "Cleaner assigned", done: true },
-      { label: "Completed", done: true },
-    ];
-  }
-  const confirmed = customerBookingDetailTimelineConfirmedDone(b);
-  return [
-    { label: "Booked", done: true },
-    { label: "Confirmed", done: confirmed },
-    { label: "Cleaner assigned", done: confirmed && cleanerAssigned },
-    { label: "Completed", done: false },
-  ];
 }
 
 export default function AccountBookingDetailPage() {
@@ -101,7 +63,7 @@ export default function AccountBookingDetailPage() {
   const [resDate, setResDate] = useState("");
   const [resTime, setResTime] = useState("");
 
-  const timeline = useMemo(() => (booking ? timelineForBooking(booking) : []), [booking]);
+  const timeline = useMemo(() => (booking ? customerBookingTimelineForBooking(booking) : []), [booking]);
   const rescheduleSlots = useMemo(() => (resDate ? filterBookableTimeSlots(resDate) : []), [resDate]);
   const crossMonthBlocked = useMemo(
     () => (booking && resDate ? rescheduleCrossMonthBlocked(booking, resDate) : false),

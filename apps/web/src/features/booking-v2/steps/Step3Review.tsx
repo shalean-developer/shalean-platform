@@ -21,6 +21,7 @@ import { CleanerCountSelector } from "@/src/features/booking-v2/components/Clean
 import { CleanerPreferenceSection } from "@/src/features/booking-v2/components/CleanerPreferenceSection";
 import { formatAreasServedPreview } from "@/src/features/booking-v2/components/CleanerCard";
 import { EquipmentSection } from "@/src/features/booking-v2/components/EquipmentSection";
+import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
 import { TeamAvailabilitySection } from "@/src/features/booking-v2/components/TeamAvailabilitySection";
 import type { AvailableCleanerV2 } from "@/src/features/booking-v2/types";
 import { cn } from "@/lib/utils";
@@ -44,6 +45,10 @@ import {
   shouldUseHorizontalOptionCards,
 } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
 import { getBookingLocationOptions } from "@/lib/locations/bookingLocations";
+import {
+  CONTACT_PHONE_VALIDATION_MESSAGE,
+  isValidContactPhone,
+} from "@/lib/booking/contactPhoneValidation";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -175,6 +180,31 @@ function ModalQuestionField({ question }: { question: FormQuestion }) {
   }
 
   if (question.type === "select") {
+    if (question.key === "bedrooms" || question.key === "bathrooms") {
+      const kind = question.key as "bedrooms" | "bathrooms";
+      return (
+        <div>
+          <label htmlFor={question.key} className="mb-1.5 block text-sm font-medium text-slate-700">
+            {question.label}
+            {question.required && <span className="ml-1 text-red-500">*</span>}
+          </label>
+          <Controller
+            name={fieldKey}
+            control={control}
+            render={({ field }) => (
+              <RoomCountSelector
+                id={question.key}
+                kind={kind}
+                value={String(field.value ?? "")}
+                onChange={field.onChange}
+              />
+            )}
+          />
+          {question.hint && <p className="mt-1 text-xs text-slate-400">{question.hint}</p>}
+        </div>
+      );
+    }
+
     return (
       <div>
         <label htmlFor={question.key} className="mb-1.5 block text-sm font-medium text-slate-700">
@@ -304,95 +334,122 @@ function EditModal({
   );
 }
 
-// ─── Details edit panel ────────────────────────────────────────────────────────
+// ─── Location edit panel ───────────────────────────────────────────────────────
 
-function DetailsEditPanel() {
-  const { serviceSlug, liveConfig } = useBookingV2();
-  const config = SERVICE_CONFIG[serviceSlug];
-  const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+function LocationEditPanel() {
   const { register, control } = useFormContext<BookingV2FormData>();
 
   return (
-    <div className="space-y-5">
-      {/* Location */}
+    <div className="space-y-3">
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Location
-        </p>
-        <div className="space-y-3">
-          <div>
-            <label htmlFor="edit-address" className="mb-1.5 block text-sm font-medium text-slate-700">
-              Street address <span className="text-red-500">*</span>
-            </label>
-            <input id="edit-address" type="text"
-              {...register("address", { required: true, minLength: 5 })}
-              className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-          </div>
-
-          <div>
-            <label htmlFor="edit-suburb" className="mb-1.5 block text-sm font-medium text-slate-700">
-              Suburb <span className="text-red-500">*</span>
-            </label>
-            <Controller name="suburb" control={control}
-              render={({ field }) => (
-                <select id="edit-suburb" value={field.value ?? ""}
-                  onChange={(e) => field.onChange(e.target.value)}
-                  className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20">
-                  <option value="">Select suburb…</option>
-                  {getBookingLocationOptions().map((s) => (
-                    <option key={s} value={s}>{s}</option>
-                  ))}
-                </select>
-              )}
-            />
-          </div>
-
-          <div>
-            <label htmlFor="edit-access" className="mb-1.5 block text-sm font-medium text-slate-700">
-              Access instructions (optional)
-            </label>
-            <input id="edit-access" type="text"
-              placeholder="e.g. Ring bell, use side gate…"
-              {...register("accessInstructions")}
-              className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-          </div>
-
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label htmlFor="edit-parking" className="mb-1.5 block text-sm font-medium text-slate-700">
-                Parking (optional)
-              </label>
-              <input id="edit-parking" type="text" placeholder="Street parking…"
-                {...register("parkingInstructions")}
-                className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-            </div>
-            <div>
-              <label htmlFor="edit-gate" className="mb-1.5 block text-sm font-medium text-slate-700">
-                Gate code (optional)
-              </label>
-              <input id="edit-gate" type="text" placeholder="e.g. #1234"
-                {...register("gateCode")}
-                className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-            </div>
-          </div>
-        </div>
+        <label htmlFor="edit-address" className="mb-1.5 block text-sm font-medium text-slate-700">
+          Street address <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="edit-address"
+          type="text"
+          {...register("address", { required: true, minLength: 5 })}
+          className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        />
       </div>
 
-      <EquipmentSection />
-
-      <hr className="border-slate-100" />
-
-      {/* Service-specific questions */}
       <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          About the clean
-        </p>
-        <div className="space-y-4">
-          {step1Questions.map((q) => (
-            <ModalQuestionField key={q.key} question={q} />
-          ))}
+        <label htmlFor="edit-suburb" className="mb-1.5 block text-sm font-medium text-slate-700">
+          Suburb <span className="text-red-500">*</span>
+        </label>
+        <Controller
+          name="suburb"
+          control={control}
+          render={({ field }) => (
+            <select
+              id="edit-suburb"
+              value={field.value ?? ""}
+              onChange={(e) => field.onChange(e.target.value)}
+              className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            >
+              <option value="">Select suburb…</option>
+              {getBookingLocationOptions().map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          )}
+        />
+      </div>
+
+      <div>
+        <label htmlFor="edit-contact-phone" className="mb-1.5 block text-sm font-medium text-slate-700">
+          Contact phone <span className="text-red-500">*</span>
+        </label>
+        <input
+          id="edit-contact-phone"
+          type="tel"
+          {...register("contactPhone", {
+            required: "Enter a contact phone number",
+            validate: (value) => isValidContactPhone(value) || CONTACT_PHONE_VALIDATION_MESSAGE,
+          })}
+          className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        />
+      </div>
+
+      <div>
+        <label htmlFor="edit-access" className="mb-1.5 block text-sm font-medium text-slate-700">
+          Access instructions (optional)
+        </label>
+        <input
+          id="edit-access"
+          type="text"
+          placeholder="e.g. Ring bell, use side gate…"
+          {...register("accessInstructions")}
+          className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div>
+          <label htmlFor="edit-parking" className="mb-1.5 block text-sm font-medium text-slate-700">
+            Parking (optional)
+          </label>
+          <input
+            id="edit-parking"
+            type="text"
+            placeholder="Street parking…"
+            {...register("parkingInstructions")}
+            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          />
+        </div>
+        <div>
+          <label htmlFor="edit-gate" className="mb-1.5 block text-sm font-medium text-slate-700">
+            Gate code (optional)
+          </label>
+          <input
+            id="edit-gate"
+            type="text"
+            placeholder="e.g. #1234"
+            {...register("gateCode")}
+            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+          />
         </div>
       </div>
+    </div>
+  );
+}
+
+function EquipmentEditPanel() {
+  return <EquipmentSection />;
+}
+
+function PropertyEditPanel() {
+  const { serviceSlug, liveConfig } = useBookingV2();
+  const config = SERVICE_CONFIG[serviceSlug];
+  const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+
+  return (
+    <div className="space-y-4">
+      {step1Questions.map((q) => (
+        <ModalQuestionField key={q.key} question={q} />
+      ))}
     </div>
   );
 }
@@ -400,24 +457,13 @@ function DetailsEditPanel() {
 // ─── Schedule edit panel ───────────────────────────────────────────────────────
 
 function ScheduleEditPanel() {
-  const { serviceSlug, liveConfig, scheduling } = useBookingV2();
-  const config = SERVICE_CONFIG[serviceSlug];
-  const isTeamMode = (liveConfig?.cleanerMode ?? config.cleanerMode) === "team";
+  const { scheduling } = useBookingV2();
 
   const { control, watch, setValue } = useFormContext<BookingV2FormData>();
   const bookingType = watch("bookingType");
   const date = watch("date");
-  const time = watch("time");
-  const cleanerCount = watch("cleanerCount") ?? 1;
   const recurringFrequency = watch("recurringFrequency");
-  const selectedCleanerIds = watch("selectedCleanerIds") ?? [];
-  const selectedCleanerDetails = watch("selectedCleanerDetails") ?? [];
-  const assignedTeamId = watch("assignedTeamId") ?? "";
-  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
 
-  const durationMinutes = Math.round(
-    (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
-  );
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
@@ -425,26 +471,6 @@ function ScheduleEditPanel() {
       setValue("recurringFrequency", "weekly", { shouldDirty: true });
     }
   }, [bookingType, recurringFrequency, setValue]);
-
-  function toggleCleaner(cleaner: AvailableCleanerV2) {
-    const ids = selectedCleanerIds;
-    const details = selectedCleanerDetails;
-    if (ids.includes(cleaner.id)) {
-      setValue("selectedCleanerIds", ids.filter((c) => c !== cleaner.id));
-      setValue("selectedCleanerDetails", details.filter((c) => c.id !== cleaner.id));
-    } else if (ids.length < cleanerCount) {
-      setValue("selectedCleanerIds", [...ids, cleaner.id]);
-      setValue("selectedCleanerDetails", [...details, cleaner]);
-    } else {
-      setValue("selectedCleanerIds", [...ids.slice(1), cleaner.id]);
-      setValue("selectedCleanerDetails", [...details.slice(1), cleaner]);
-    }
-  }
-
-  function clearCleanerSelection() {
-    setValue("selectedCleanerIds", []);
-    setValue("selectedCleanerDetails", []);
-  }
 
   return (
     <div className="space-y-5">
@@ -599,11 +625,51 @@ function ScheduleEditPanel() {
           </div>
         </>
       )}
+    </div>
+  );
+}
 
-      <hr className="border-slate-100" />
+function CleanerEditPanel() {
+  const { serviceSlug, liveConfig } = useBookingV2();
+  const config = SERVICE_CONFIG[serviceSlug];
+  const isTeamMode = (liveConfig?.cleanerMode ?? config.cleanerMode) === "team";
 
-      {/* Team availability */}
-      {isTeamMode && (
+  const { watch, setValue } = useFormContext<BookingV2FormData>();
+  const date = watch("date");
+  const time = watch("time");
+  const cleanerCount = watch("cleanerCount") ?? 1;
+  const selectedCleanerIds = watch("selectedCleanerIds") ?? [];
+  const selectedCleanerDetails = watch("selectedCleanerDetails") ?? [];
+  const assignedTeamId = watch("assignedTeamId") ?? "";
+  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
+
+  const durationMinutes = Math.round(
+    (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
+  );
+
+  function toggleCleaner(cleaner: AvailableCleanerV2) {
+    const ids = selectedCleanerIds;
+    const details = selectedCleanerDetails;
+    if (ids.includes(cleaner.id)) {
+      setValue("selectedCleanerIds", ids.filter((c) => c !== cleaner.id));
+      setValue("selectedCleanerDetails", details.filter((c) => c.id !== cleaner.id));
+    } else if (ids.length < cleanerCount) {
+      setValue("selectedCleanerIds", [...ids, cleaner.id]);
+      setValue("selectedCleanerDetails", [...details, cleaner]);
+    } else {
+      setValue("selectedCleanerIds", [...ids.slice(1), cleaner.id]);
+      setValue("selectedCleanerDetails", [...details.slice(1), cleaner]);
+    }
+  }
+
+  function clearCleanerSelection() {
+    setValue("selectedCleanerIds", []);
+    setValue("selectedCleanerDetails", []);
+  }
+
+  return (
+    <div className="space-y-4">
+      {isTeamMode ? (
         <TeamAvailabilitySection
           date={date}
           serviceSlug={serviceSlug}
@@ -613,11 +679,8 @@ function ScheduleEditPanel() {
             setValue("assignedTeamName", name);
           }}
         />
-      )}
-
-      {/* Individual cleaners */}
-      {!isTeamMode && (
-        <div className="space-y-4">
+      ) : (
+        <>
           <CleanerCountSelector
             value={cleanerCount}
             onChange={(n) => {
@@ -647,7 +710,7 @@ function ScheduleEditPanel() {
               ])
             }
           />
-        </div>
+        </>
       )}
     </div>
   );
@@ -812,7 +875,7 @@ function ReviewSection({
 
 // ─── Step 3 ─────────────────────────────────────────────────────────────────────
 
-type EditPanel = "details" | "schedule" | "extras" | null;
+type EditPanel = "location" | "equipment" | "property" | "schedule" | "cleaner" | "extras" | null;
 
 export function Step3Review() {
   const { serviceSlug, liveConfig } = useBookingV2();
@@ -889,14 +952,29 @@ export function Step3Review() {
   return (
     <>
       {/* ── Edit modals ── */}
-      {editPanel === "details" && (
-        <EditModal title="Edit property & details" onSave={saveEdit} onCancel={cancelEdit}>
-          <DetailsEditPanel />
+      {editPanel === "location" && (
+        <EditModal title="Edit location" onSave={saveEdit} onCancel={cancelEdit}>
+          <LocationEditPanel />
+        </EditModal>
+      )}
+      {editPanel === "equipment" && (
+        <EditModal title="Edit equipment" onSave={saveEdit} onCancel={cancelEdit}>
+          <EquipmentEditPanel />
+        </EditModal>
+      )}
+      {editPanel === "property" && (
+        <EditModal title="Edit clean details" onSave={saveEdit} onCancel={cancelEdit}>
+          <PropertyEditPanel />
         </EditModal>
       )}
       {editPanel === "schedule" && (
         <EditModal title="Edit schedule" onSave={saveEdit} onCancel={cancelEdit}>
           <ScheduleEditPanel />
+        </EditModal>
+      )}
+      {editPanel === "cleaner" && (
+        <EditModal title="Edit cleaner preference" onSave={saveEdit} onCancel={cancelEdit}>
+          <CleanerEditPanel />
         </EditModal>
       )}
       {editPanel === "extras" && (
@@ -928,7 +1006,7 @@ export function Step3Review() {
         </div>
 
         {/* ① Location */}
-        <ReviewSection number={1} title="Location" onEdit={() => openEdit("details")}>
+        <ReviewSection number={1} title="Location" onEdit={() => openEdit("location")}>
           <div className="flex items-start gap-2.5">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" aria-hidden />
             <div>
@@ -964,7 +1042,7 @@ export function Step3Review() {
         </ReviewSection>
 
         {(values.equipmentRequired === "yes" || values.equipmentRequired === "no") && (
-          <ReviewSection number={2} title="Equipment" onEdit={() => openEdit("details")}>
+          <ReviewSection number={2} title="Equipment" onEdit={() => openEdit("equipment")}>
             <div className="flex items-start gap-2.5">
               <Package className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" aria-hidden />
               <div>
@@ -994,7 +1072,7 @@ export function Step3Review() {
 
         {/* ② Clean details */}
         {serviceDetails.length > 0 && (
-          <ReviewSection number={2} title="Clean details" onEdit={() => openEdit("details")}>
+          <ReviewSection number={2} title="Clean details" onEdit={() => openEdit("property")}>
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               {serviceDetails.map(([key, val]) => {
                 const question = step1Questions.find((q) => q.key === key);
@@ -1115,7 +1193,7 @@ export function Step3Review() {
             <ReviewSection
               number={serviceDetails.length > 0 ? 4 : 3}
               title="Cleaner preference"
-              onEdit={() => openEdit("schedule")}
+              onEdit={() => openEdit("cleaner")}
             >
               {!hasDetails && !hasIds ? (
                 <div className="flex items-center gap-3">
@@ -1143,7 +1221,7 @@ export function Step3Review() {
                   {cleanerIds.length} preferred cleaner{cleanerIds.length > 1 ? "s" : ""} selected.
                   <button
                     type="button"
-                    onClick={() => openEdit("schedule")}
+                    onClick={() => openEdit("cleaner")}
                     className="ml-1.5 font-medium text-blue-600 hover:underline"
                   >
                     Go back to view

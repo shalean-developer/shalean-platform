@@ -189,12 +189,24 @@ const EXTRA_DURATION_POLICIES: Record<string, ExtraDurationPolicy> = {
   laundry: durationExtra("laundry", 30, 0.25),
   "interior-windows": durationExtra("interior-windows", 45, 0.35),
   "water-plants": durationExtra("water-plants", 15, 0.08),
+  "inside-wardrobes": durationExtra("inside-wardrobes", 30, 0.25),
+  "blinds-cleaning": durationExtra("blinds-cleaning", 30, 0.25),
   "balcony-cleaning": durationExtra("balcony-cleaning", 45, 0.35, "elevated"),
   "carpet-cleaning": durationExtra("carpet-cleaning", 60, 0.5, "specialized"),
   "ceiling-cleaning": durationExtra("ceiling-cleaning", 45, 0.4, "elevated"),
   "garage-cleaning": durationExtra("garage-cleaning", 45, 0.35, "elevated"),
   "mattress-cleaning": durationExtra("mattress-cleaning", 45, 0.35, "specialized"),
   "outside-windows": durationExtra("outside-windows", 45, 0.35, "elevated"),
+  "deposit-preparation": durationExtra("deposit-preparation", 45, 0.4, "elevated"),
+  "appliances-cleaning": durationExtra("appliances-cleaning", 45, 0.35),
+  "office-kitchen": durationExtra("office-kitchen", 30, 0.25),
+  "office-sanitisation": durationExtra("office-sanitisation", 30, 0.25),
+  "waste-removal": durationExtra("waste-removal", 20, 0.15),
+  "stain-treatment": durationExtra("stain-treatment", 30, 0.3, "specialized"),
+  "pet-odour-treatment": durationExtra("pet-odour-treatment", 30, 0.3, "specialized"),
+  "fabric-protector": durationExtra("fabric-protector", 20, 0.15),
+  "welcome-setup": durationExtra("welcome-setup", 20, 0.15),
+  "inspection-photos": durationExtra("inspection-photos", 15, 0.08),
   "extra-cleaner": {
     slug: "extra-cleaner",
     durationEffect: "team_scaling_modifier",
@@ -297,7 +309,7 @@ export function getCanonicalDurationExtraPolicy(slug: string): ExtraDurationPoli
 
 export function resolveCanonicalDurationWorkload(input: DurationWorkloadInput): DurationWorkloadResult {
   const servicePolicy = getCanonicalDurationServicePolicy(input.service);
-  const rooms = clampInt(input.rooms, 1, 1, 25);
+  const rooms = clampInt(input.rooms, 0, 0, 25);
   const bathrooms = clampInt(input.bathrooms, 1, 1, 25);
   const extraRooms = clampInt(input.extraRooms, 0, 0, 25);
   const guards: string[] = [];

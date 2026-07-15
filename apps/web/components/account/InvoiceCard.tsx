@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { FileText, ExternalLink } from "lucide-react";
+import { Download, ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatZarFromCents } from "@/lib/dashboard/formatZar";
 import { customerMonthlyInvoiceStatusLabel } from "@/lib/dashboard/monthlyInvoiceUi";
@@ -48,6 +48,8 @@ export function InvoiceCard({ invoice: inv }: InvoiceCardProps) {
   const balance = balanceFor(inv);
   const payHref = typeof inv.payment_link === "string" ? inv.payment_link.trim() : "";
   const canPay = balance > 0 && inv.status !== "paid" && Boolean(payHref);
+  const pdfHref = `/api/account/invoices/monthly/${inv.id}/pdf`;
+  const hasZoho = Boolean(inv.zoho_invoice_id?.trim());
 
   return (
     <div
@@ -107,6 +109,18 @@ export function InvoiceCard({ invoice: inv }: InvoiceCardProps) {
               </a>
             </Button>
           ) : null}
+          {hasZoho ? (
+            <Button asChild variant="outline" size="sm" className="rounded-xl">
+              <a href={pdfHref} target="_blank" rel="noopener noreferrer">
+                <Download className="mr-1.5 h-4 w-4" />
+                PDF
+              </a>
+            </Button>
+          ) : (
+            <span className="inline-flex items-center rounded-xl border border-dashed border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500">
+              Invoice syncing
+            </span>
+          )}
           <Button asChild variant="outline" size="sm" className="rounded-xl">
             <Link href={`/account/invoices/${inv.id}`}>View</Link>
           </Button>

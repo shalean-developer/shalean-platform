@@ -16,6 +16,8 @@ import {
   ServiceQuestionOptionCards,
   shouldUseHorizontalOptionCards,
 } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
+import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
+import { WhatsIncludedModal } from "@/src/features/booking-v2/components/WhatsIncludedModal";
 
 // ─── Shared field components ───────────────────────────────────────────────────
 
@@ -177,6 +179,31 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
 
   if (shouldUseHorizontalOptionCards(question)) {
     return <ServiceQuestionOptionCards question={question} />;
+  }
+
+  if (question.key === "bedrooms" || question.key === "bathrooms") {
+    return (
+      <div className="min-w-0 w-full">
+        <FieldLabel htmlFor={question.key} required={question.required}>
+          {labelNode}
+        </FieldLabel>
+        <Controller
+          name={fieldKey}
+          control={control}
+          rules={{ required: question.required ? `${question.label} is required` : false }}
+          render={({ field }) => (
+            <RoomCountSelector
+              id={question.key}
+              kind={question.key as "bedrooms" | "bathrooms"}
+              value={String(field.value ?? "")}
+              onChange={field.onChange}
+              error={fieldError}
+            />
+          )}
+        />
+        {question.hint && <FieldHint>{question.hint}</FieldHint>}
+      </div>
+    );
   }
 
   if (question.type === "select") {
@@ -358,17 +385,9 @@ export function Step1Details() {
           About the clean
         </h3>
         {serviceSlug === "regular-cleaning" ? (
-          <details className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <summary className="cursor-pointer text-sm font-semibold text-slate-800">
-              What&apos;s included in standard cleaning
-            </summary>
-            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
-              <li>Kitchens, bathrooms, bedrooms, and living areas dusted and wiped</li>
-              <li>Floors vacuumed and mopped; surfaces and mirrors cleaned</li>
-              <li>Bins emptied; general tidy of high-touch areas</li>
-              <li>Add-on extras (oven, fridge, windows, etc.) are optional and priced separately</li>
-            </ul>
-          </details>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+            <WhatsIncludedModal />
+          </div>
         ) : null}
         {questionGroups.map((group) => {
           if (group.type === "inline") {

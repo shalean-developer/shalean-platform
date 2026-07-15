@@ -7,6 +7,7 @@ import {
 import { EXTRA_CLEANER_SERVICE_SLUGS } from "@/lib/booking-v2/propertyFactorPricing";
 import type { BookingV2CatalogConfig, BookingV2ServiceDefinition } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { DB_SLUG_MAP, EXTRA_TYPE_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
+import { extraSlugsForService } from "@/lib/booking-v2/serviceExtraSlugs";
 
 /** Slugs stored in pricing_extras but not shown as customer add-on cards. */
 export const BOOKING_V2_INTERNAL_EXTRA_SLUGS = new Set(["extra-cleaner", "supplies-kit"]);
@@ -22,6 +23,7 @@ export function buildDefaultBookingV2CatalogConfig(): BookingV2CatalogConfig {
       description: config.description,
       cleanerMode: config.cleanerMode,
       extraTypes: [...EXTRA_TYPE_MAP[slug]],
+      extraSlugs: [...extraSlugsForService(slug)],
       showEquipmentQuestion: serviceShowsEquipmentQuestion(slug),
       showCleaningProductsQuestion: serviceShowsEquipmentQuestion(slug),
       allowsExtraCleaner: EXTRA_CLEANER_SERVICE_SLUGS.has(slug),
@@ -83,7 +85,7 @@ export function parseBookingV2CatalogConfig(raw: unknown): BookingV2CatalogConfi
       extraTypes,
       extraSlugs: Array.isArray(row.extraSlugs)
         ? row.extraSlugs.filter((s): s is string => typeof s === "string" && s.trim().length > 0)
-        : undefined,
+        : [...extraSlugsForService(slug as ServiceSlug)],
       showEquipmentQuestion:
         row.showEquipmentQuestion === true ||
         (row.showEquipmentQuestion !== false &&
