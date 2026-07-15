@@ -141,7 +141,9 @@ export default function AccountPaymentsPage() {
             <div>
               <p className="font-semibold text-gray-900">Paystack &amp; monthly billing</p>
               <p className="mt-1 text-sm text-gray-500">
-                One-off bookings are paid securely via Paystack at checkout. Monthly plan visits appear on your invoice until billed.
+                One-off bookings are paid securely at checkout. Monthly plan visits appear on your invoice until billed.
+                If a refund is issued, this list shows Partially refunded or Fully refunded — bank timing is usually 5–10
+                business days. Contact support if you need help.
               </p>
             </div>
           </div>

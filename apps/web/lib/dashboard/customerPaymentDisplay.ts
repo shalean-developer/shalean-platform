@@ -82,6 +82,30 @@ export function customerPaymentRowDisplay(booking: DashboardBooking): CustomerPa
       rowMuted: false,
     };
   }
+
+  const refundStatus = String(
+    (row as { refund_status?: string | null }).refund_status ?? "",
+  )
+    .trim()
+    .toLowerCase();
+  const refundedAt = String((row as { refunded_at?: string | null }).refunded_at ?? "").trim();
+  if (ps === "refunded" || refundStatus === "full" || refundStatus === "chargeback" || refundStatus === "reversed") {
+    return {
+      badgeLabel: refundStatus === "chargeback" ? "Chargeback" : "Fully refunded",
+      badgeTone: "neutral",
+      countsAsPaidTransaction: false,
+      rowMuted: true,
+    };
+  }
+  if (refundStatus === "partial" || refundedAt) {
+    return {
+      badgeLabel: "Partially refunded",
+      badgeTone: "warning",
+      countsAsPaidTransaction: true,
+      rowMuted: false,
+    };
+  }
+
   return {
     badgeLabel: "Paid",
     badgeTone: "success",
