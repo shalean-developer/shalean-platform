@@ -289,8 +289,16 @@ export function ReferralLandingView() {
                   <Button type="button" variant="outline" className="justify-start rounded-xl" onClick={shareFacebook} disabled={!shareUrlReady}>
                     <Share2 className="mr-2 h-4 w-4 text-blue-600" /> Facebook
                   </Button>
-                  <Button type="button" variant="outline" className="justify-start rounded-xl" onClick={() => void copyLink()} disabled={!shareUrlReady}>
-                    <Copy className="mr-2 h-4 w-4" /> {copied ? "Copied!" : "Copy Link"}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="justify-start rounded-xl text-slate-900 focus-visible:outline-blue-600"
+                    onClick={() => void copyLink()}
+                    disabled={!shareUrlReady}
+                    aria-label={copied ? "Referral link copied" : "Copy referral link"}
+                  >
+                    <Copy className="mr-2 h-4 w-4 text-blue-600" aria-hidden />{" "}
+                    {copied ? "Copied!" : "Copy Link"}
                   </Button>
                 </div>
               </div>

@@ -35,6 +35,8 @@ export type FormQuestion = {
   hint?: string;
   group?: string;
   centered?: boolean;
+  /** When set, question is shown only if `serviceDetails[key]` is one of `values`. */
+  showWhen?: { key: string; values: string[] };
 };
 
 export type ServiceExtra = {
@@ -261,15 +263,15 @@ const MOVING_QUESTIONS: FormQuestion[] = [
   },
   {
     key: "moveType",
-    label: "Move type",
+    label: "Is this a move-in or move-out clean?",
     type: "radio",
     required: true,
     centered: true,
     options: [
-      { value: "move_out", label: "Moving out (end of tenancy)" },
-      { value: "move_in", label: "Moving in (new property)" },
-      { value: "both", label: "Both move-out and move-in" },
+      { value: "move_out", label: "Move-out" },
+      { value: "move_in", label: "Move-in" },
     ],
+    hint: "Choose one — we’ll tailor questions for that clean.",
   },
   {
     key: "bedrooms",
@@ -313,28 +315,31 @@ const MOVING_QUESTIONS: FormQuestion[] = [
   },
   {
     key: "furnished",
-    label: "Is the property furnished?",
+    label: "Is the property furnished or empty?",
     type: "radio",
     required: true,
     group: "yesno",
     centered: true,
+    showWhen: { key: "moveType", values: ["move_out", "both"] },
     options: [
-      { value: "yes", label: "Yes" },
-      { value: "no", label: "No — empty property" },
+      { value: "yes", label: "Furnished — furniture still inside" },
+      { value: "no", label: "Empty — cleared for handover" },
     ],
-    hint: "Empty properties are often faster to clean.",
+    hint: "Empty homes are usually quicker; furnished homes need more care around belongings.",
   },
   {
     key: "depositInspection",
-    label: "Is this for a deposit inspection?",
+    label: "Is this for a final rental / deposit inspection?",
     type: "radio",
     required: true,
     group: "yesno",
     centered: true,
+    showWhen: { key: "moveType", values: ["move_out", "both"] },
     options: [
-      { value: "yes", label: "Yes" },
-      { value: "no", label: "No" },
+      { value: "yes", label: "Yes — landlord or agency inspection" },
+      { value: "no", label: "No — general move-out clean" },
     ],
+    hint: "We’ll prioritise skirting, cupboards, and other inspection hotspots when yes.",
   },
   {
     key: "specialInstructions",

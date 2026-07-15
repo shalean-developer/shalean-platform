@@ -14,20 +14,32 @@ type Props = {
   locations: HomeLocation[];
 };
 
-function mergeSuburbNames(locations: HomeLocation[]): string[] {
+type AreaLink = { name: string; href: string | null };
+
+function locationHrefByName(name: string): string | null {
+  const match = PROGRAMMATIC_LOCATIONS.find(
+    (loc) => loc.name.toLowerCase() === name.trim().toLowerCase(),
+  );
+  return match ? `/locations/${match.slug}` : null;
+}
+
+function mergeSuburbLinks(locations: HomeLocation[]): AreaLink[] {
   const seen = new Set<string>();
-  const names: string[] = [];
+  const links: AreaLink[] = [];
   for (const loc of PROGRAMMATIC_LOCATIONS) {
     if (seen.has(loc.name)) continue;
     seen.add(loc.name);
-    names.push(loc.name);
+    links.push({ name: loc.name, href: `/locations/${loc.slug}` });
   }
   for (const loc of locations) {
     if (seen.has(loc.name)) continue;
     seen.add(loc.name);
-    names.push(loc.name);
+    links.push({
+      name: loc.name,
+      href: loc.slug ? `/locations/${loc.slug}` : locationHrefByName(loc.name),
+    });
   }
-  return names.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+  return links.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
 }
 
 /**
@@ -36,10 +48,10 @@ function mergeSuburbNames(locations: HomeLocation[]): string[] {
  */
 export function MarketingAreasSection({ locations }: Props) {
   const bookHref = marketingHomeBookingHref();
-  const allSuburbs = mergeSuburbNames(locations);
+  const allSuburbs = mergeSuburbLinks(locations);
 
   const chipClass = cn(
-    "inline-flex w-full min-w-0 justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-normal leading-snug text-slate-700 shadow-none sm:px-4 sm:py-2.5 sm:text-sm lg:justify-start lg:px-3 lg:py-2 lg:text-xs xl:px-4 xl:text-sm",
+    "inline-flex w-full min-w-0 justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-normal leading-snug text-slate-700 shadow-none transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 sm:px-4 sm:py-2.5 sm:text-sm lg:justify-start lg:px-3 lg:py-2 lg:text-xs xl:px-4 xl:text-sm",
   );
 
   return (
@@ -79,14 +91,20 @@ export function MarketingAreasSection({ locations }: Props) {
         <div className="mt-10 md:mt-12">
           <h3 className="text-sm font-bold text-slate-900 md:text-base">Popular cleaning areas</h3>
           <div className="mt-2 flex flex-wrap gap-2 text-sm md:text-base" aria-label="Popular cleaning areas">
-            {POPULAR_AREA_NAMES.map((name) => (
-              <span
-                key={name}
-                className="inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm"
-              >
-                {name}
-              </span>
-            ))}
+            {POPULAR_AREA_NAMES.map((name) => {
+              const href = locationHrefByName(name);
+              const className =
+                "inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800";
+              return href ? (
+                <SafeInternalLink key={name} href={href} className={className}>
+                  {name}
+                </SafeInternalLink>
+              ) : (
+                <span key={name} className={className}>
+                  {name}
+                </span>
+              );
+            })}
           </div>
         </div>
 
@@ -94,9 +112,15 @@ export function MarketingAreasSection({ locations }: Props) {
           className="mt-12 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 md:mt-12 md:grid-cols-3 md:gap-3 lg:mt-10 lg:grid-cols-4 lg:gap-2 xl:grid-cols-5 xl:gap-3"
           aria-label="All Cape Town suburbs we serve"
         >
-          {allSuburbs.map((name) => (
+          {allSuburbs.map(({ name, href }) => (
             <li key={name} className="min-w-0">
-              <span className={chipClass}>{name}</span>
+              {href ? (
+                <SafeInternalLink href={href} className={chipClass}>
+                  {name}
+                </SafeInternalLink>
+              ) : (
+                <span className={chipClass}>{name}</span>
+              )}
             </li>
           ))}
         </ul>

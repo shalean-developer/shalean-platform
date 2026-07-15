@@ -2,7 +2,7 @@ import { MARKETING_SERVICE_NAV_LINKS } from "@/lib/marketing/marketingServiceNav
 
 export const MARKETING_HEADER_NAV = {
   services: "/services",
-  pricing: "/book",
+  pricing: "/cleaning-prices-cape-town",
   about: "/about",
   help: "/faq",
   contact: "/contact",
@@ -14,7 +14,7 @@ export const MARKETING_HEADER_NAV_LINKS: MarketingHeaderNavLink[] = [
   { label: "Services", href: MARKETING_HEADER_NAV.services, dropdown: true },
   { label: "Pricing", href: MARKETING_HEADER_NAV.pricing },
   { label: "About", href: MARKETING_HEADER_NAV.about },
-  { label: "Help", href: MARKETING_HEADER_NAV.help },
+  { label: "FAQ", href: MARKETING_HEADER_NAV.help },
   { label: "Contact", href: MARKETING_HEADER_NAV.contact },
 ];
 

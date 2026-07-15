@@ -13,7 +13,7 @@ type Props = {
 export function TrustItem({ children, icon: Icon = Check, className }: Props) {
   return (
     <li className={cn("flex items-start gap-3 text-sm font-medium text-zinc-800 sm:text-base", className)}>
-      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-emerald-800">
+      <span className="mt-0.5 flex size-6 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-800">
         <Icon className="size-3.5" strokeWidth={2.5} aria-hidden />
       </span>
       <span>{children}</span>

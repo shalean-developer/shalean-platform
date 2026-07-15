@@ -11,15 +11,15 @@ export function FaqTrustStrip() {
             <span>{GOOGLE_BUSINESS_REVIEWS.rating} rating</span>
           </li>
           <li className="flex items-center gap-2">
-            <ShieldCheck className="size-5 text-emerald-700" aria-hidden />
+            <ShieldCheck className="size-5 text-blue-700" aria-hidden />
             <span>Background-checked cleaners</span>
           </li>
           <li className="flex items-center gap-2">
-            <Lock className="size-5 text-emerald-700" aria-hidden />
+            <Lock className="size-5 text-blue-700" aria-hidden />
             <span>Secure booking</span>
           </li>
           <li className="flex items-center gap-2">
-            <span className="flex size-5 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-800" aria-hidden>
+            <span className="flex size-5 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-800" aria-hidden>
               ✓
             </span>
             <span>Thousands of homes served</span>

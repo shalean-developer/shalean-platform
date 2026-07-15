@@ -21,6 +21,7 @@ import {
   Star,
   UserRound,
 } from "lucide-react";
+import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -172,14 +173,10 @@ export function AccountSidebar() {
   return (
     <aside className="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col border-r border-gray-100 bg-white md:flex">
       {/* Logo */}
-      <div className="flex h-16 items-center gap-3 border-b border-gray-100 px-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 shadow-sm">
-          <Sparkles className="h-4 w-4 text-white" strokeWidth={2} />
-        </div>
-        <div>
-          <p className="text-sm font-bold tracking-tight text-blue-700">Shalean</p>
-          <p className="text-[10px] font-medium text-gray-400">Cleaning Services</p>
-        </div>
+      <div className="flex h-16 items-center border-b border-gray-100 px-5">
+        <Link href="/" className="flex min-w-0 items-center" aria-label="Shalean home">
+          <ShaleanNavLogo className="h-8 w-auto" intrinsicHeight={64} />
+        </Link>
       </div>
 
       {/* Nav groups */}

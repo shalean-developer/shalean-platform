@@ -55,6 +55,7 @@ function formatZarLine(zar: number): string {
 
 function timelineForBooking(b: DashboardBooking): TimelineStep[] {
   const phase = customerBookingDetailOperationalPhase(b);
+  const cleanerAssigned = Boolean(b.cleaner?.name?.trim()) || phase === "accepted" || phase === "assigned";
   if (phase === "cancelled") {
     return [
       { label: "Booked", done: true },
@@ -73,12 +74,15 @@ function timelineForBooking(b: DashboardBooking): TimelineStep[] {
     return [
       { label: "Booked", done: true },
       { label: "Confirmed", done: true },
+      { label: "Cleaner assigned", done: true },
       { label: "Completed", done: true },
     ];
   }
+  const confirmed = customerBookingDetailTimelineConfirmedDone(b);
   return [
     { label: "Booked", done: true },
-    { label: "Confirmed", done: customerBookingDetailTimelineConfirmedDone(b) },
+    { label: "Confirmed", done: confirmed },
+    { label: "Cleaner assigned", done: confirmed && cleanerAssigned },
     { label: "Completed", done: false },
   ];
 }
@@ -470,7 +474,9 @@ export default function AccountBookingDetailPage() {
                 </div>
               ) : (
                 <p className="text-sm text-muted-foreground">
-                  {booking.cleaner ? "Your assigned cleaner." : "To be assigned before your visit."}
+                  {booking.cleaner
+                    ? "Your assigned cleaner."
+                    : "Awaiting cleaner assignment — we’ll confirm who is coming before your visit."}
                 </p>
               )}
             </CardContent>

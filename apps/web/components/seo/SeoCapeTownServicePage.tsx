@@ -457,7 +457,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
 
       {slug === "window-cleaning-cape-town" ? <WindowCleaningServiceTypesSection /> : null}
 
-      <section id="included" className="scroll-mt-24 border-b border-blue-100 bg-blue-50/40 py-16">
+      <section id="included" className="scroll-mt-28 border-b border-blue-100 bg-blue-50/40 py-16">
         <div className="mx-auto max-w-4xl px-4">
           <h2 className="text-2xl font-bold tracking-tight text-zinc-900">{includedHeading}</h2>
           <p className="mt-3 text-zinc-600">Exact scope follows your online quote—below is the typical checklist for this service type.</p>

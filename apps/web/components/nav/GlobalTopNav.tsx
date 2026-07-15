@@ -23,14 +23,15 @@ import {
 } from "@/lib/marketing/marketingMobileLayout";
 
 const bookingHref = "/book";
+const pricingHref = "/cleaning-prices-cape-town";
 
 type NavLink = { label: string; href: string; dropdown?: boolean };
 
 const navLinks: NavLink[] = [
   { label: "Services", href: "/services", dropdown: true },
-  { label: "Pricing", href: bookingHref },
+  { label: "Pricing", href: pricingHref },
   { label: "About", href: "/about" },
-  { label: "Help", href: "/faq" },
+  { label: "FAQ", href: "/faq" },
   { label: "Contact", href: "/contact" },
 ];
 

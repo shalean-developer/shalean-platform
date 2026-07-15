@@ -44,7 +44,7 @@ export function AboutReviewsRotator({ reviews, intervalMs = 7000 }: Props) {
               aria-label={`Show review ${idx + 1}`}
               className={cn(
                 "flex h-11 w-11 items-center justify-center rounded-full transition",
-                idx === i ? "bg-emerald-600" : "bg-transparent",
+                idx === i ? "bg-blue-600" : "bg-transparent",
               )}
               onClick={() => setI(idx)}
             >

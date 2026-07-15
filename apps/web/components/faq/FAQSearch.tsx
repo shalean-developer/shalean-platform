@@ -24,7 +24,7 @@ export function FAQSearch({ value, onChange, id = "faq-search" }: Props) {
           placeholder="Search questions (e.g. price, supplies, same-day)"
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-3 pl-11 pr-4 text-base text-zinc-900 placeholder:text-zinc-500 focus:border-emerald-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
+          className="w-full rounded-xl border border-zinc-200 bg-zinc-50 py-3 pl-11 pr-4 text-base text-zinc-900 placeholder:text-zinc-500 focus:border-blue-500 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20"
         />
       </div>
     </div>

@@ -311,7 +311,7 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
             </ul>
             <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
               <GrowthCtaLink
-                href="/book"
+                href="/quote"
                 source="cleaning_prices_cta_instant_quote"
                 className={marketingPrimaryCtaClassName}
               >

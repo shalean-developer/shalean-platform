@@ -198,7 +198,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
           </div>
           <div>
             <label htmlFor="su-phone" className="mb-1.5 block text-sm font-medium text-slate-700">
-              Phone number <span className="text-slate-400 text-xs font-normal">(optional)</span>
+              Phone number <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
@@ -222,7 +222,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             <PasswordInput
               id="su-password"
               autoComplete="new-password"
-              placeholder="Min. 6 characters"
+              placeholder="At least 8 characters"
               {...signUpForm.register("password")}
               className="rounded-xl border-slate-200 py-2.5 text-sm shadow-sm focus-visible:outline-blue-500"
             />
@@ -653,7 +653,8 @@ function PaymentSection({ user }: { user: User }) {
         <h3 className="text-lg font-bold text-slate-900">Confirm & pay</h3>
         <p className="mt-1 text-sm text-slate-500">
           You&apos;re logged in as <span className="font-medium text-slate-700">{user.email}</span>.
-          Review the total below and complete payment via Paystack.
+          You&apos;ll pay securely with Paystack, then return here for your Shalean confirmation and booking
+          reference.
         </p>
       </div>
 
@@ -783,7 +784,7 @@ function PaymentSection({ user }: { user: User }) {
       <div className="flex flex-col gap-2">
         {[
           { Icon: ShieldCheck, label: "Vetted and background-checked cleaners" },
-          { Icon: CreditCard, label: "Secure payment powered by Paystack" },
+          { Icon: CreditCard, label: "Secure card payment — you’ll get a Shalean confirmation after" },
           { Icon: CheckCircle2, label: "100% satisfaction guarantee ? we'll make it right" },
         ].map(({ Icon, label }) => (
           <div key={label} className="flex items-center gap-2 text-xs text-slate-500">

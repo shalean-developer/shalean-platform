@@ -301,18 +301,46 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
 
         {/* Total + trust footer (pinned on desktop) */}
         <div className="shrink-0 space-y-3 px-4 py-4 sm:px-5">
-          <div className="rounded-xl bg-blue-50 px-4 py-3 ring-1 ring-inset ring-blue-100">
+            <div className="rounded-xl bg-blue-50 px-4 py-3 ring-1 ring-inset ring-blue-100">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-base font-bold text-slate-900">Estimated total</span>
+              <span className="text-base font-bold text-slate-900">
+                {values.bookingType === "recurring" ? "Price per visit" : "Estimated total"}
+              </span>
               <span className="text-xl font-extrabold text-blue-600">
                 {hasPriceBreakdown
                   ? `R${displayTotal.toLocaleString("en-ZA")}`
                   : `From R${(liveConfig?.basePrice ?? config.basePrice).toLocaleString("en-ZA")}`}
               </span>
             </div>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Final amount confirmed before payment. No hidden fees.
-            </p>
+            {values.bookingType === "recurring" && values.recurringFrequency ? (
+              <div className="mt-1.5 space-y-0.5 text-xs text-slate-600">
+                <p>
+                  {recurringFrequencyLabel(values.recurringFrequency)} plan
+                  {(values.recurringDays ?? []).length > 0
+                    ? ` · ${values.recurringDays.join(", ")}`
+                    : ""}
+                </p>
+                <p>
+                  Estimated monthly spend: about R
+                  {(
+                    displayTotal *
+                    (values.recurringFrequency === "weekly"
+                      ? 4
+                      : values.recurringFrequency === "fortnightly"
+                        ? 2
+                        : 1)
+                  ).toLocaleString("en-ZA")}{" "}
+                  (based on this visit price).
+                </p>
+                <p className="text-slate-500">
+                  Future visits are charged at the same per-visit price unless you change your plan.
+                </p>
+              </div>
+            ) : (
+              <p className="mt-0.5 text-xs text-slate-500">
+                Final amount confirmed before payment. No hidden fees.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-3">
