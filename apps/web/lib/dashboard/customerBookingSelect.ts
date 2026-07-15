@@ -34,6 +34,8 @@ const CUSTOMER_BOOKING_SELECT_FIELDS = [
   "selected_cleaner_id",
   "preferred_dispatch_status",
   "payment_status",
+  "refund_status",
+  "refunded_at",
   "booking_snapshot",
   "created_at",
   "booking_reference",

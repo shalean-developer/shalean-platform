@@ -1,0 +1,34 @@
+{
+  "ticket": "PRINCESS-UAT-PRD",
+  "at": "2026-07-15T23:34:01.976Z",
+  "staging_base": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+  "staging_supabase_ref": "gbgnemlpyykyhpqqbgru",
+  "production_supabase_ref": "tchayecuvzssixyxlvfu",
+  "paystack_mode": "test (no live refund executed)",
+  "real_refund_executed": false,
+  "simulation": {
+    "mode": "local_contract_plus_staging_identity",
+    "reason": "PR D forbids creating/executing real refunds in this task; provider integration proven via mocked Paystack contract tests. Staging identity verified; production untouched.",
+    "local_contract_suite": "apps/web/lib/booking/refund/__tests__/princessPrdRefundContract.test.ts",
+    "covered": [
+      "full refund",
+      "cumulative partial refunds",
+      "over-refund rejection",
+      "duplicate full rejection",
+      "provider failure + retry",
+      "maker-checker self-approve rejection",
+      "ledger reconciliation assertions"
+    ]
+  },
+  "checks": {
+    "staging_ref_matches": true,
+    "production_ref_distinct": true,
+    "production_unchanged_declared": true,
+    "staging_db_probe_skipped": true,
+    "staging_db_probe_skip_reason": "missing staging supabase url keys",
+    "staging_refund_route_reachable": true,
+    "staging_refund_route_status": 401,
+    "staging_refund_route_unauth_denied": true
+  },
+  "verdict": "PASS_SIMULATION — provider path covered locally; no real refund; production unchanged"
+}

@@ -176,6 +176,66 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
+  // Princess PR D: refund lifecycle events — confirm pending/submitted local refunds.
+  const refundEvents = new Set([
+    "refund.processed",
+    "refund.failed",
+    "refund.pending",
+    "charge.refunded",
+  ]);
+  if (event.event && refundEvents.has(event.event) && event.data) {
+    const d = event.data as Record<string, unknown>;
+    const reference =
+      typeof d.transaction_reference === "string"
+        ? d.transaction_reference
+        : typeof (d as { transaction?: { reference?: string } }).transaction?.reference === "string"
+          ? String((d as { transaction: { reference: string } }).transaction.reference)
+          : typeof d.reference === "string"
+            ? d.reference
+            : "";
+    const statusRaw = String(d.status ?? event.event).toLowerCase();
+    const providerState =
+      event.event === "refund.failed" || statusRaw.includes("fail")
+        ? ("failed" as const)
+        : event.event === "refund.pending" || statusRaw.includes("pending")
+          ? ("pending" as const)
+          : ("succeeded" as const);
+    const amountCents =
+      typeof d.amount === "number" && Number.isFinite(d.amount) ? Math.round(d.amount) : null;
+    const providerReference =
+      d.id != null ? String(d.id) : typeof d.refund_reference === "string" ? d.refund_reference : null;
+
+    const admin = getSupabaseAdmin();
+    if (admin && reference) {
+      const { applyBookingRefundProviderUpdate } = await import("@/lib/booking/refundBookingPayment");
+      const { data: b } = await admin
+        .from("bookings")
+        .select("id")
+        .eq("paystack_reference", reference)
+        .maybeSingle();
+      const bookingId =
+        b && typeof (b as { id?: string }).id === "string" ? (b as { id: string }).id : null;
+      if (bookingId) {
+        await applyBookingRefundProviderUpdate(admin, {
+          bookingId,
+          paystackReference: reference,
+          providerState,
+          providerReference,
+          amountCents,
+          note: `Paystack event ${event.event}`,
+        });
+      }
+      logPaymentStructured("payment_refund_webhook", {
+        event: event.event,
+        booking_id: bookingId,
+        reference_masked: reference.length > 8 ? `${reference.slice(0, 4)}…${reference.slice(-4)}` : "…",
+        provider_state: providerState,
+        amount_cents: amountCents,
+      });
+    }
+    return NextResponse.json({ received: true });
+  }
+
   if (event.event !== "charge.success" || !event.data) {
     logPaymentStructured("payment_webhook_outcome", {
       outcome: "acknowledged_no_settle",
