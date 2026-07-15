@@ -175,36 +175,36 @@ function ModalQuestionField({ question }: { question: FormQuestion }) {
   const { register, control } = useFormContext() as any;
   const fieldKey = `serviceDetails.${question.key}`;
 
+  if (question.key === "bedrooms" || question.key === "bathrooms") {
+    const kind = question.key as "bedrooms" | "bathrooms";
+    return (
+      <div>
+        <label htmlFor={question.key} className="mb-1.5 block text-sm font-medium text-slate-700">
+          {question.label}
+          {question.required && <span className="ml-1 text-red-500">*</span>}
+        </label>
+        <Controller
+          name={fieldKey}
+          control={control}
+          render={({ field }) => (
+            <RoomCountSelector
+              id={question.key}
+              kind={kind}
+              value={String(field.value ?? "")}
+              onChange={field.onChange}
+            />
+          )}
+        />
+        {question.hint && <p className="mt-1 text-xs text-slate-400">{question.hint}</p>}
+      </div>
+    );
+  }
+
   if (shouldUseHorizontalOptionCards(question)) {
     return <ServiceQuestionOptionCards question={question} compact />;
   }
 
   if (question.type === "select") {
-    if (question.key === "bedrooms" || question.key === "bathrooms") {
-      const kind = question.key as "bedrooms" | "bathrooms";
-      return (
-        <div>
-          <label htmlFor={question.key} className="mb-1.5 block text-sm font-medium text-slate-700">
-            {question.label}
-            {question.required && <span className="ml-1 text-red-500">*</span>}
-          </label>
-          <Controller
-            name={fieldKey}
-            control={control}
-            render={({ field }) => (
-              <RoomCountSelector
-                id={question.key}
-                kind={kind}
-                value={String(field.value ?? "")}
-                onChange={field.onChange}
-              />
-            )}
-          />
-          {question.hint && <p className="mt-1 text-xs text-slate-400">{question.hint}</p>}
-        </div>
-      );
-    }
-
     return (
       <div>
         <label htmlFor={question.key} className="mb-1.5 block text-sm font-medium text-slate-700">

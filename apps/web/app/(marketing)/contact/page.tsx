@@ -7,7 +7,6 @@ import {
   CalendarPlus,
   Clock,
   CreditCard,
-  HelpCircle,
   Mail,
   MessageCircle,
   Phone,
@@ -282,28 +281,6 @@ export default function ContactPage() {
         <div className="mt-12">
           <ContactPageForm />
         </div>
-
-        <section className="mt-10 flex flex-wrap items-center gap-3" aria-label="Quick links">
-          <Link
-            href="/faq"
-            className="inline-flex min-h-11 items-center gap-2 rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
-          >
-            <HelpCircle className="h-4 w-4 text-blue-600" aria-hidden />
-            Help Centre / FAQ
-          </Link>
-          <Link
-            href="/quote"
-            className="inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            Get a free quote
-          </Link>
-          <Link
-            href={bookingHref}
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
-          >
-            Book online
-          </Link>
-        </section>
       </main>
       <FooterSection />
     </div>

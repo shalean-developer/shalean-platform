@@ -177,10 +177,6 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
     question.label
   );
 
-  if (shouldUseHorizontalOptionCards(question)) {
-    return <ServiceQuestionOptionCards question={question} />;
-  }
-
   if (question.key === "bedrooms" || question.key === "bathrooms") {
     return (
       <div className="min-w-0 w-full">
@@ -204,6 +200,10 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
         {question.hint && <FieldHint>{question.hint}</FieldHint>}
       </div>
     );
+  }
+
+  if (shouldUseHorizontalOptionCards(question)) {
+    return <ServiceQuestionOptionCards question={question} />;
   }
 
   if (question.type === "select") {
