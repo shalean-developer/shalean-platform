@@ -96,6 +96,7 @@ const EXTRA_DURATION_MINUTES: Record<string, number> = {
   "office-kitchen": 30,
   "office-sanitisation": 30,
   "waste-removal": 20,
+  "sofa-upholstery": 45,
   "stain-treatment": 30,
   "pet-odour-treatment": 30,
   "fabric-protector": 20,
@@ -142,9 +143,21 @@ export function resolveBookingV2DurationEstimate(input: {
   if (serviceSlug === "carpet-cleaning") {
     rooms = parseServiceDetailCount(input.serviceDetails, "carpetRooms");
     bathrooms = 0;
-    extraRooms = 0;
+    const rugs = parseServiceDetailCount(input.serviceDetails, "rugCount");
+    extraRooms = rugs;
+    const sofas = parseServiceDetailCount(input.serviceDetails, "sofaCount");
+    if (sofas > 0) extraRooms += sofas;
   } else if (serviceSlug === "office-cleaning") {
-    rooms = 0;
+    const size = String(input.serviceDetails.officeSize ?? "")
+      .trim()
+      .toLowerCase();
+    const sizeRooms: Record<string, number> = {
+      small: 1,
+      medium: 2,
+      large: 4,
+      enterprise: 6,
+    };
+    rooms = sizeRooms[size] ?? 1;
     extraRooms = 0;
   }
 

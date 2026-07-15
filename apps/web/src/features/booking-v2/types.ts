@@ -83,6 +83,11 @@ export type BookingV2FormData = {
 
   // Derived pricing (computed, not user-entered)
   pricingSummary: CustomerPricingBreakdown;
+  /**
+   * Persisted across Paystack redirect cancel so Step 4 can retry payment
+   * without creating a duplicate booking.
+   */
+  pendingBookingId?: string | null;
 };
 
 export function defaultBookingFormData(serviceSlug: ServiceSlug, cleanerMode: CleanerMode): BookingV2FormData {
@@ -118,5 +123,6 @@ export function defaultBookingFormData(serviceSlug: ServiceSlug, cleanerMode: Cl
     selectedCleanerIds: [],
     selectedCleanerDetails: [],
     pricingSummary: emptyCustomerPricingBreakdown(),
+    pendingBookingId: null,
   };
 }

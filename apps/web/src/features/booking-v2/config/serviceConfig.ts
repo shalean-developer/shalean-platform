@@ -372,6 +372,7 @@ const OFFICE_QUESTIONS: FormQuestion[] = [
       { value: "weekly", label: "Weekly" },
       { value: "once_off", label: "Once-off" },
     ],
+    hint: "How often you need cleaning — this does not change today’s visit price. Choose a recurring plan on the schedule step if you want a plan discount.",
   },
   {
     key: "afterHours",
@@ -425,8 +426,25 @@ const CARPET_QUESTIONS: FormQuestion[] = [
       { value: "2", label: "2 rooms" },
       { value: "3", label: "3 rooms" },
       { value: "4", label: "4 rooms" },
-      { value: "5", label: "5+ rooms" },
+      { value: "5", label: "5 rooms" },
+      { value: "6", label: "6+ rooms" },
     ],
+    hint: "Each carpeted room is priced and timed separately.",
+  },
+  {
+    key: "rugCount",
+    label: "Number of rugs",
+    type: "select",
+    required: true,
+    group: "rooms",
+    options: [
+      { value: "0", label: "No rugs" },
+      { value: "1", label: "1 rug" },
+      { value: "2", label: "2 rugs" },
+      { value: "3", label: "3 rugs" },
+      { value: "4", label: "4+ rugs" },
+    ],
+    hint: "Area rugs and runners — priced per rug.",
   },
   {
     key: "carpetType",
@@ -438,20 +456,7 @@ const CARPET_QUESTIONS: FormQuestion[] = [
       { value: "standard", label: "Standard pile" },
       { value: "thick_pile", label: "Thick / shag pile" },
       { value: "berber", label: "Berber / loop" },
-      { value: "persian_rug", label: "Persian / area rug" },
-    ],
-  },
-  {
-    key: "sofaCount",
-    label: "Number of sofas to clean",
-    type: "select",
-    required: true,
-    group: "rooms",
-    options: [
-      { value: "0", label: "No sofas" },
-      { value: "1", label: "1 sofa" },
-      { value: "2", label: "2 sofas" },
-      { value: "3", label: "3+ sofas" },
+      { value: "persian_rug", label: "Persian / delicate" },
     ],
   },
   {
@@ -487,6 +492,12 @@ const CARPET_QUESTIONS: FormQuestion[] = [
 ];
 
 const CARPET_EXTRAS: ServiceExtra[] = [
+  {
+    id: "sofa-upholstery",
+    label: "Sofa / upholstery",
+    description: "Clean one sofa or upholstered seat (add more via notes if needed)",
+    priceZar: 250,
+  },
   { id: "stain-treatment", label: "Stain treatment", description: "Professional stain removal", priceZar: 200 },
   { id: "pet-odour-treatment", label: "Pet odour treatment", description: "Enzyme-based odour neutraliser", priceZar: 220 },
   { id: "fabric-protector", label: "Fabric protector", description: "Scotchgard-style protection spray", priceZar: 180 },

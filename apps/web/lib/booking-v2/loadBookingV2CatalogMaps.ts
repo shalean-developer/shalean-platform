@@ -5,7 +5,7 @@ export const DB_SLUG_MAP: Record<ServiceSlug, string> = {
   "regular-cleaning": "standard",
   "deep-cleaning": "deep",
   "moving-cleaning": "move",
-  "office-cleaning": "standard",
+  "office-cleaning": "office",
   "carpet-cleaning": "carpet",
   "airbnb-cleaning": "airbnb",
 };

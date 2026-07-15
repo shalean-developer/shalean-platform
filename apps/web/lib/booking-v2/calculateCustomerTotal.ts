@@ -200,6 +200,7 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
     estimated_total,
     estimated_duration_minutes,
     team_scaled_duration_minutes: duration_workload.team_scaled_duration_minutes,
+    factorLines: factors.factorLines,
     lineItems,
     basePrice: base_service_price,
     extrasTotal: selected_extras_total,

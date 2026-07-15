@@ -16,22 +16,28 @@ export default async function PayBookingPage({
   searchParams,
 }: {
   params: Promise<{ bookingId: string }>;
-  searchParams: Promise<{ ref?: string }>;
+  searchParams: Promise<{ ref?: string; reference?: string; trxref?: string }>;
 }) {
   const { bookingId } = await params;
-  const { ref } = await searchParams;
-  const reference = ref?.trim() ?? "";
+  const sp = await searchParams;
+  const reference =
+    sp.ref?.trim() || sp.reference?.trim() || sp.trxref?.trim() || "";
 
   if (!reference) {
+    // Cancelled Paystack return without ref — still allow owner retry via payment-session.
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col justify-center gap-4 px-4 py-16 text-center">
-        <h1 className="text-xl font-semibold text-neutral-900">Payment link incomplete</h1>
+        <h1 className="text-xl font-semibold text-neutral-900">Payment not completed</h1>
         <p className="text-sm text-neutral-600">
-          Open the pay link from your message or email. If something is wrong, reply to the thread we sent you or
-          contact support.
+          Your booking is still reserved. You can retry payment below — no duplicate booking will be created.
         </p>
-        <Link href="/" className="text-sm font-medium text-blue-600 hover:underline">
-          Back to home
+        <PayBookingCheckoutClient
+          bookingId={bookingId}
+          reference=""
+          mode="retry_only"
+        />
+        <Link href="/book" className="text-sm font-medium text-blue-600 hover:underline">
+          Back to booking
         </Link>
       </main>
     );

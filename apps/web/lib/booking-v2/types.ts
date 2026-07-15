@@ -49,6 +49,8 @@ export type CustomerPricingBreakdown = {
   duration_hours?: number;
   team_scaled_duration_minutes?: number;
   cleaner_workload?: number;
+  /** Property-factor keys consumed by the quote (quote consumption guard). */
+  factorLines?: Array<{ key: string; label: string; amountZar: number }>;
   /** HMAC binding price + duration + inputs ({@link BOOKING_QUOTE_ENGINE_VERSION}). */
   quote_signature?: string;
   calculation_version?: number;
@@ -94,6 +96,8 @@ export type PropertyFactorRatesConfig = {
   carpetType?: Record<string, number>;
   stains?: Record<string, number>;
   carpetRooms_per_room_zar?: number;
+  rugs_per_unit_zar?: number;
+  sofa_per_unit_zar?: number;
 };
 
 export type CustomerTotalInput = {

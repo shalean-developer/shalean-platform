@@ -1,0 +1,1876 @@
+﻿
+> web@0.1.0 typecheck
+> node --max-old-space-size=8192 ./node_modules/typescript/bin/tsc --noEmit -p tsconfig.json
+
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/about/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/areas-we-serve/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/campaigns/[slug]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/cleaning-prices-cape-town/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/cleaning-services-cape-town/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/contact/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/faq/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/maid-services-cape-town/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/quote/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/refer/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(marketing)/reviews/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/addresses/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/book/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/bookings/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/bookings/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/help/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/invoices/[invoiceId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/invoices/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/notifications/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/payments/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/profile/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/recurring/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/referrals/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/reviews/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/rewards/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/sales-documents/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/account/sales-documents/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/book/[serviceSlug]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/book/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/book/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/book/payment/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/earnings/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/job/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/list/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/profile/availability/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/profile/help/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/profile/notifications/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/profile/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/jobs/profile/payout/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/analytics/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/billing/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/blog/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/blog/new/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/blog/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/booking-profitability/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/bookings/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/bookings/create/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/bookings/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/budgets/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/business-health/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/cash-flow/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/cleaner-applications/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/cleaner-performance/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/cleaner-report-feedback/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/cleaners/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/cleaners/[id]/payouts/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/cleaners/manage/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/cleaners/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/conversion/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/customers/[userId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/customers/create/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/customers/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/disputes/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/expense-reports/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/expense-vendors/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/expenses/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/financial-dashboard/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/funnel-intelligence/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/invoices/[invoiceId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/invoices/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/launch-check/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/lifecycle-emails/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/marketing/analytics/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/marketing/assets/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/marketing/campaigns/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/marketing/connected-accounts/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/marketing/email/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/marketing/landing-pages/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/marketing/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/marketing/social/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/marketing/templates/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/metrics/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/notification-logs/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/notifications/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/operations/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/ops-health/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/ops-queue/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/payment-reconciliation/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/payout-runs/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/payouts/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/payouts/phase15a-diagnostics/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/payouts/runs/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/pricing/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/promotions/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/recurring-expenses/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/recurring/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/referral-finance/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/referral-fraud/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/referral-reconciliation/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/referrals/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/review-funnel/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/reviews/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/sales-documents/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/sales-documents/create/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/sales-documents/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/schedule/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/seo-attribution/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/seo-insights/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/sla-breaches/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/teams/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/templates/editor/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/templates/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/office/zoho-integration/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/rebook/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/(ui-redesign)/rebook/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/[city]/[suburb]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/[city]/cleaning-services/[location]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/account/success/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/account/success/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/admin/cleaners/[id]/payouts/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/admin/customers/create/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/account/invoices/booking/[bookingId]/pdf/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/account/invoices/monthly/[invoiceId]/pdf/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/account/rewards/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/account/sales-documents/[id]/pdf/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/addresses/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/ai-insights/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/analytics/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/billing-documents/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/billing-documents/sync/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/blog/cluster-peers/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/blog/media/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/blog/posts/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/blog/posts/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/blog/taxonomy/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/booking-funnel/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/booking-notification-timeline/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/booking-profitability/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/adjust-payout-earnings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/assign-direct/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/assign-eligibility/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/assign-smart/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/assign-team/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/assign/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/change-status/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/cleaners/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/earnings-preview/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/edit-details/preview/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/edit-details/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/equipment/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/expenses/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/fix-earnings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/fulfillment/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/invoice-pdf/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/issue-reports/[reportId]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/mark-paid/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/offer/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/reassign/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/refund/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/remove-cleaner-payout/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/repair-roster/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/replacement-candidates/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/resend-confirmation-emails/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/resend-payment-link/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/reset-earnings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/retry-charge/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/retry-dispatch/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/roster/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/send-review-request/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/sla-escalate/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/[id]/track/latest/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/customer-saved-addresses/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/customers/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/last-visit-price/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/restore-recurring-assignments/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/bookings/with-payment/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/budgets/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/budgets/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/business-health/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/campaign-templates/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cash-flow/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaner-applications/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaner-applications/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaner-change-requests/[id]/approve/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaner-change-requests/[id]/reject/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaner-change-requests/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaner-earnings-disputes/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaner-earnings-disputes/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaner-performance/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaner-report-feedback/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaner-report-feedback/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/[id]/availability/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/[id]/locations/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/[id]/password/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/[id]/payouts/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/[id]/preferences/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/[id]/recovery-link/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/available/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/backfill-auth/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/earnings/approve/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/earnings/disburse/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/earnings/disbursements/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/earnings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleaners/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cleanup-logs/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/conversion-dashboard/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/conversion-experiment-bookings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/conversion-experiments/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/create-cleaner/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/cron-health/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/customers/[userId]/addresses/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/customers/[userId]/billing/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/customers/[userId]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/customers/bulk-delete/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/customers/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/dashboard-stats/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/dispatch-metrics/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/email/health/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/[id]/approval-history/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/[id]/approve/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/[id]/reject/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/accounts/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/categories/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/receipt/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/reports/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/upload/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/vendors/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/expenses/vendors/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/export-notification-metrics/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/export-notifications/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/financial-dashboard/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/growth/effectiveness/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/growth/metrics/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/[invoiceId]/adjustments/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/[invoiceId]/hard-close/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/[invoiceId]/mark-paid/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/[invoiceId]/pdf/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/[invoiceId]/refund/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/[invoiceId]/resend-email/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/[invoiceId]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/[invoiceId]/send/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/[invoiceId]/sync-payment/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/[invoiceId]/sync-zoho/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/repair-child-settlement-drift/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/repair-payment-state-drift/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/invoices/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/launch-check/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/lifecycle-emails/analytics/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/lifecycle-emails/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/lifecycle-emails/settings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/lifecycle-emails/test/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/marketing-automation/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/marketing/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/me/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/memberships/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/notification-alerts/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/notification-logs/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/notification-monitoring/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/notification-system-logs-summary/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/notifications/retry/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/office-analytics/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/office-notifications/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/office-operations/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/office-ops-health/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/office-review-funnel/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/office-templates/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/ops-health/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/ops-queue/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/ops-snapshot/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payment-reconciliation/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payments/backfill-paystack/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payout-runs/[id]/approve/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payout-runs/[id]/process/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payout-runs/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payout-runs/freeze/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payout-runs/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/[id]/amount/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/[id]/approve/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/[id]/export/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/[id]/mark-paid/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/[id]/pay/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/backfill-missing/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/cleaner-visits/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/eligible/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/generate/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/mark-paid/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/period-report/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/phase15a-anomalies/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/recalculate-earnings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/run/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/runs/[id]/approve/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/runs/[id]/export/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/runs/[id]/process/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/runs/[id]/retry/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/runs/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/runs/freeze/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/payouts/runs/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/pricing-booking-config/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/pricing-catalog-audit/[id]/rollback/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/pricing-catalog-audit/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/pricing-extras/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/pricing-services/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/promotions/[id]/generate/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/promotions/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/promotions/analytics/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/promotions/assets/image/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/promotions/publish-facebook/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/promotions/publish-google-business/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/promotions/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring-batch-backfill-may-to-today/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring-expenses/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring-expenses/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring/[id]/backfill-occurrences/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring/[id]/cancel/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring/[id]/pause/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring/[id]/reconcile-schedule/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring/[id]/resume/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring/[id]/skip/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/recurring/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/referral-finance/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/referrals/[id]/actions/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/referrals/campaigns/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/referrals/fraud/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/referrals/reconciliation/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/referrals/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/referrals/settings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/reset-cleaner-password/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/reviews/analytics/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/reviews/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/routes/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/sales-documents/[id]/convert/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/sales-documents/[id]/mark-paid/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/sales-documents/[id]/pdf/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/sales-documents/[id]/reconcile-payment/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/sales-documents/[id]/refund/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/sales-documents/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/sales-documents/[id]/send/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/sales-documents/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/schedule/day/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/seo-attribution/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/seo-insights/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/seo/gsc-sync/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/social-accounts/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/subscriptions/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/teams/[id]/members/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/teams/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/teams/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/templates/preview/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/templates/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/templates/test-send/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/update-cleaner-email/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/whatsapp-queue-metrics/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/zoho-integration/retry/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/admin/zoho-integration/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/ai/booking-agent/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/analytics/booking-event/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/analytics/event/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/auth/create-from-guest/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/auth/forgot-password/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/auth/link-guest-bookings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/auth/resolve-profile/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/book/confirm/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking-v2/area-review/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking-v2/available-cleaners/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking-v2/cleaners/[id]/public-profile/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking-v2/confirm/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking-v2/equipment-quote/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking-v2/resolve-location/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking-v2/services/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking-v2/team-availability/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/assistant-event/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/checkout/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/cleaners/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/complete/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/lock/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/price/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/quote/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/recovery-capture/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/resolve-location/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/revalidate-lock/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/service-locations/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/status/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/time-slots/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/trust-stats/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/validate/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/widget-draft/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/booking/widget-quote/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/bookings/[id]/payment-session/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/bookings/flow-intake/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/bookings/link-user/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/bookings/me/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/bookings/payment-precheck/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/bookings/review/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/bookings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cities/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/apply/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/bookings/[id]/accept/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/bookings/[id]/complete/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/bookings/[id]/en-route/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/bookings/[id]/start/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/dashboard/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/earnings/breakdown/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/earnings/dispute/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/earnings/reconcile/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/earnings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/jobs/[id]/issue/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/jobs/[id]/on-the-way/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/jobs/[id]/qa/checklist/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/jobs/[id]/qa/photos/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/jobs/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/jobs/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/lifecycle-telemetry/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/location/update/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/login/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/magic-session/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/me/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/offers/[id]/accept/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/offers/[id]/decline/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/offers/[id]/exposed/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/offers/[id]/respond/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/offers/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/payment-details/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/profile-summary/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/referrals/me/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/report-feedback/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/respond/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/roster/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/route/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/work-settings/request/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaner/work-settings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaners/available/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cleaners/lookup/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/accounting-sync/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/ai-optimize/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/analytics-warehouse/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/assignment-ack-timeout/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/backfill-paystack-payments/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/booking-lifecycle/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/booking-reminders/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/charge-monthly-invoices/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/charge-recurring-bookings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/cleaner-earnings-auto-payout/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/create-payout-run/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/customer-retention/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/deferred-payment-link-emails/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/dispatch-expiry/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/dispatch-timeouts/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/expire-pending-payments/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/extend-cleaner-availability/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/finalize-monthly-invoices/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/finance-daily-automation/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/freeze-payouts/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/generate-payouts/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/generate-recurring-bookings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/generate-recurring-expenses/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/gsc-sync/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/mark-monthly-invoices-overdue/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/notification-health/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/ops-health/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/payment-link-reminders/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/payment-recovery/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/payout-integrity-daily/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/process-payout-transfer-outbox/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/promotions/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/prune-admin-idempotency/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/prune-system-logs/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/reconcile-paystack-transfers/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/recurring-precharge-reminders/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/referral-campaigns/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/referral-credit-expiry/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/referral-credit-reminders/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/repair-monthly-payment-state-drift/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/retry-failed-jobs/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/send-invoice-reminders/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/seo-optimization/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/subscription-bookings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/cron/whatsapp-worker/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/addresses/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/addresses/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/bookings/[id]/cancel/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/bookings/[id]/reschedule/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/bookings/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/bookings/[id]/track/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/bookings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/devices/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/invoices/booking/[bookingId]/pdf/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/invoices/monthly/[invoiceId]/pdf/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/invoices/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/notifications/mark-read/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/notifications/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/customer/profile/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/dashboard/bookings/[id]/cancel/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/dashboard/bookings/[id]/reschedule/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/dashboard/bookings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/dashboard/notifications/mark-read/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/dashboard/summary/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/dispatch/assign/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/health/environment/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/health/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/me/recurring/[id]/cancel/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/me/recurring/[id]/pause/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/me/recurring/[id]/resume/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/me/recurring/[id]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/me/recurring/[id]/skip/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/me/recurring/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/me/reviews/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/newsletter/subscribe/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/oauth/google/callback/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/oauth/google/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/offers/[token]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/offers/accept/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/offers/decline/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/pay/[bookingId]/preview/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/payments/verify/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/paystack/banks/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/paystack/initialize/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/paystack/status/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/paystack/verify/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/paystack/webhook/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/pricing/catalog/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/promotions/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/promotions/validate/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/public/pricing-catalog/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/public/quote-request/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/public/sales-documents/[id]/accept/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/public/sales-documents/[id]/pdf/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/rebook/prefill/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/referrals/credit/history/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/referrals/credit/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/referrals/me/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/referrals/settings/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/referrals/submit/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/referrals/validate-checkout/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/subscriptions/me/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/test-email/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/test/create-booking/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/test/whatsapp-meta-direct/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/test/whatsapp-send/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/validate-booking-price/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/webhooks/paystack/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/api/webhooks/whatsapp/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/admin/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/callback/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/cleaner/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/customer/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/forgot-password/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/login/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/login/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/reset-password/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/auth/signup/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/blog/[slug]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/blog/category/[slug]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/blog/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/blog/tag/[slug]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/booking/(checkout)/cleaner/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/booking/(checkout)/details/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/booking/(checkout)/extras/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/booking/(checkout)/payment/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/booking/(checkout)/schedule/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/booking/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/booking/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/booking/recover/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/booking/recover/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/booking/success/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/apply/form/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/apply/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/dashboard/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/earnings/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/jobs/[id]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/jobs/[id]/receipt/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/jobs/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/login/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/login/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/cleaner/profile/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/complete-profile/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/complete-profile/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/doc/[documentId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/go/[target]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/locations/[slug]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/locations/cape-town-cleaning-services/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/locations/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/login/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/login/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/lp/cleaning/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/offer/[token]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/pay/[bookingId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/pay/doc/[documentId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/pay/doc/[documentId]/success/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/pay/invoice/[invoiceId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/pay/invoice/[invoiceId]/success/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/payment/[bookingId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/payment/success/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/privacy-policy/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/r/offer/[token]/route.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/review/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/services/[service]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/services/airbnb-cleaning-claremont/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/services/airbnb-cleaning-green-point/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/services/airbnb-cleaning-sea-point/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/services/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/signup/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/signup/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/terms-of-service/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/track/[bookingId]/layout.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'
+error TS6053: File 'C:/Users/info/shalean-platform/apps/web/.next/types/app/track/[bookingId]/page.ts' not found.
+  The file is in the program because:
+    Matched by include pattern '.next/types/**/*.ts' in 'tsconfig.json'

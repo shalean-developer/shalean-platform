@@ -266,7 +266,21 @@ function PaymentSection({ user }: { user: User }) {
 
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
+  const [pendingBookingId, setPendingBookingIdState] = useState<string | null>(
+    () => values.pendingBookingId?.trim() || null,
+  );
+
+  function setPendingBookingId(id: string | null) {
+    setPendingBookingIdState(id);
+    setValue("pendingBookingId", id, { shouldDirty: false, shouldValidate: false });
+  }
+
+  // Restore pending booking after Paystack redirect cancel / remount.
+  useEffect(() => {
+    const stored = values.pendingBookingId?.trim();
+    if (stored && !pendingBookingId) setPendingBookingIdState(stored);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount / draft hydrate only
+  }, []);
   const [creditBalance, setCreditBalance] = useState(0);
   const [applyCredit, setApplyCredit] = useState(false);
   const [promoCode, setPromoCode] = useState("");
@@ -416,7 +430,9 @@ function PaymentSection({ user }: { user: User }) {
           authorizationUrl?: string;
           reference?: string;
           error?: string;
+          errorCode?: string;
           message?: string;
+          code?: string;
         };
         if (sessJson.status === "paid") {
           const ref = (sessJson.reference ?? "").trim();
@@ -429,12 +445,22 @@ function PaymentSection({ user }: { user: User }) {
           window.location.assign(sessJson.authorizationUrl.trim());
           return;
         }
-        setError(
-          sessJson.error?.trim() ||
-            "We could not start the secure payment checkout. Your booking is safe and no payment was taken. Please try again.",
-        );
-        setConfirming(false);
-        return;
+        const notFound =
+          sessRes.status === 404 ||
+          sessJson.errorCode === "PAYMENT_BOOKING_NOT_FOUND" ||
+          sessJson.code === "PAYMENT_BOOKING_NOT_FOUND" ||
+          /could not find this booking/i.test(sessJson.error ?? "");
+        if (notFound) {
+          // Pending row gone — clear and fall through to confirm (reuse or insert).
+          setPendingBookingId(null);
+        } else {
+          setError(
+            sessJson.error?.trim() ||
+              "We could not start the secure payment checkout. Your booking is safe and no payment was taken. Please try again.",
+          );
+          setConfirming(false);
+          return;
+        }
       }
 
       const confirmRes = await fetch("/api/booking-v2/confirm", {
