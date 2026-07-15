@@ -223,6 +223,15 @@ Batches 2–4 and custom recurrence backlog remain open after Batch 1 stop condi
 
 # Final Decision
 
-**Pre-remediation:** NO-GO — FARAI BOOKING UAT REMAINS BLOCKED  
+**Current:** **NO-GO — FARAI BOOKING UAT REMAINS BLOCKED** pending merge/deploy of PR #10 and Farai retest on the staging preview.
 
-**Post Batch 1 + fixtures (pending verification):** decision recorded in `02-batch1-booking-blockers-implementation.md` / `03-batch1-uat-fixtures-implementation.md`.
+| Gate | Status |
+|------|--------|
+| Defect reconciliation | Done — `01-farai-uat-defect-reconciliation.md` |
+| Code remediation (BOOK-003/004) | Done on `fix/farai-uat-booking-blockers` |
+| Staging fixtures seed | Done against `gbgnemlpyykyhpqqbgru` (8 cleaners, 4 teams) |
+| PR into staging | Open — https://github.com/shalean-developer/shalean-platform/pull/10 |
+| Staging UI verification after deploy | Pending |
+| Production unchanged | Confirmed (no prod mutations) |
+
+After PR merge + staging smoke of the 12-point checklist, re-evaluate for **PASS — FARAI BOOKING UAT BLOCKERS REMEDIATED**.
