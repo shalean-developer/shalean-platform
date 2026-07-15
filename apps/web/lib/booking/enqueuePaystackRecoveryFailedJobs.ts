@@ -8,6 +8,7 @@ function shouldRunRecoveryEnqueue(result: UpsertBookingFromPaystackResult): bool
   return (
     !result.bookingId ||
     (result.reason === "amount_mismatch" && result.recoveryEnqueue === true) ||
+    (result.reason === "currency_mismatch" && result.recoveryEnqueue === true) ||
     (result.reason === "finalization_failed" && result.recoveryEnqueue === true)
   );
 }
@@ -33,7 +34,10 @@ export async function enqueuePaystackRecoveryFailedJobs(input: {
     }
   }
 
-  if (result.reason === "amount_mismatch" && result.recoveryEnqueue === true) {
+  if (
+    (result.reason === "amount_mismatch" || result.reason === "currency_mismatch") &&
+    result.recoveryEnqueue === true
+  ) {
     const mismatchPayload: PaymentMismatchFailedPayload = {
       paystackReference: basePayload.paystackReference,
       bookingId: result.bookingId,
@@ -45,6 +49,7 @@ export async function enqueuePaystackRecoveryFailedJobs(input: {
       await reportOperationalIssue("critical", "enqueuePaystackRecoveryFailedJobs", "payment_mismatch failed_jobs enqueue failed", {
         reference,
         bookingId: result.bookingId,
+        reason: result.reason,
       });
     }
   }

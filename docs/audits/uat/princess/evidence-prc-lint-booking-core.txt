@@ -1,0 +1,4 @@
+
+> web@0.1.0 lint:booking-core
+> eslint lib/dashboard lib/customer hooks/useBookings.ts app/api/customer/bookings app/api/booking-v2 "app/(ui-redesign)/account/payments/page.tsx"
+

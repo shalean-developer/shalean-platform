@@ -1,0 +1,68 @@
+
+ RUN  v3.2.6 C:/Users/info/shalean-platform/apps/web
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > reuses a usable stored payment link
+{"event":"payment_initialize","at":"2026-07-15T22:42:28.981Z","booking_id":"11111111-1111-4111-8111-111111111111","reference":"ref_ok","result":"reused"}
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > creates a fresh checkout when payment_link is missing
+{"event":"payment_initialize","at":"2026-07-15T22:42:28.988Z","booking_id":"11111111-1111-4111-8111-111111111111","reference":"ignored","result":"ready","refreshed":true,"reason":"PAYMENT_LINK_MISSING","amount_cents":40000}
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > treats missing authorization_url as initialization failure
+{"event":"payment_initialize","at":"2026-07-15T22:42:28.990Z","booking_id":"11111111-1111-4111-8111-111111111111","reference":"bps_mrmo11xa_5fc8372d","result":"failed","error_code":"PAYMENT_INITIALIZATION_FAILED","paystack_message":null,"missing_authorization_url":true}
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > denies access for another customer
+{"event":"payment_initialize","at":"2026-07-15T22:42:28.991Z","booking_id":"11111111-1111-4111-8111-111111111111","result":"denied","error_code":"PAYMENT_ACCESS_DENIED"}
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > dedupes concurrent ensure calls into one Paystack initialize
+{"event":"payment_initialize","at":"2026-07-15T22:42:29.036Z","booking_id":"11111111-1111-4111-8111-111111111111","reference":"bps_concurrent","result":"ready","refreshed":true,"reason":"PAYMENT_LINK_MISSING","amount_cents":40000}
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > finalizes when Paystack already reports success for the stored reference
+{"event":"payment_initialize","at":"2026-07-15T22:42:29.037Z","booking_id":"11111111-1111-4111-8111-111111111111","reference":"bv2_paid","result":"paid_via_verify","error_code":"PAYMENT_ALREADY_COMPLETED"}
+
+ Γ£ô lib/booking/__tests__/ensureBookingPaymentSession.test.ts (11 tests) 69ms
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö callback/webhook ordering > A. callback-first then webhook: second call is skipped (no double settle)
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.091Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"verify","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/finalizePaystackChargeSuccess.test.ts > finalizePaystackChargeSuccess > double finalize (verify + verify) invokes upsert twice without throwing
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.091Z","reference":"dup-ref","finalize_source":"verify","payment_path":"legacy_or_unknown","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.093Z","reference":"dup-ref","finalize_source":"verify","payment_path":"legacy_or_unknown","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö callback/webhook ordering > A. callback-first then webhook: second call is skipped (no double settle)
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.094Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"webhook","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/finalizePaystackChargeSuccess.test.ts > finalizePaystackChargeSuccess > surfaces amount_mismatch from upsert
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.097Z","reference":"mis","finalize_source":"webhook","payment_path":"legacy_or_unknown","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö callback/webhook ordering > B. webhook-first then callback: second call is skipped (same final booking)
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.098Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"webhook","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö callback/webhook ordering > B. webhook-first then callback: second call is skipped (same final booking)
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.098Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"verify","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö callback/webhook ordering > parallel finalize for same reference remains reference-keyed
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.100Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"verify","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.100Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"webhook","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+ Γ£ô lib/booking/finalizePaystackChargeSuccess.test.ts (2 tests) 12ms
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö currency / booking mismatch at finalize > surfaces currency_mismatch without notifying
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.101Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"webhook","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö currency / booking mismatch at finalize > surfaces booking_mismatch without notifying
+{"event":"payment_finalize_signal","at":"2026-07-15T22:42:29.102Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"verify","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+ Γ£ô app/api/paystack/webhook/__tests__/princessPrcWebhookContract.test.ts (14 tests) 425ms
+   Γ£ô Princess PR C ΓÇö Paystack webhook contract > 1. accepts a valid signature and settles via finalizePaidBooking  395ms
+ Γ£ô lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts (5 tests) 16ms
+stdout | lib/booking/upsertBookingFromPaystack.test.ts > upsertBookingFromPaystack > throws if price snapshot missing
+{"event":"payment_finalize","at":"2026-07-15T22:42:35.007Z","reference":"ref-missing-snap","status":"missing_price_snapshot","metadata_key_count":0,"source":null}
+
+stdout | lib/booking/upsertBookingFromPaystack.test.ts > upsertBookingFromPaystack > returns skipped if booking already finalized (non pending_payment)
+{"event":"payment_finalize","at":"2026-07-15T22:42:35.009Z","reference":"ref-already-paid","status":"skipped_already_persisted","booking_id":"00000000-0000-4000-8000-000000000001","source":null}
+
+ Γ£ô lib/booking/upsertBookingFromPaystack.test.ts (13 tests) 11ms
+
+ Test Files  5 passed (5)
+      Tests  45 passed (45)
+   Start at  00:42:27
+   Duration  6.98s (transform 3.16s, setup 0ms, collect 7.27s, tests 532ms, environment 1ms, prepare 1.18s)
+

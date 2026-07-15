@@ -1,0 +1,18 @@
+Supabase active migration filename governance
+Active dir: supabase\migrations
+SQL files:  10
+Timestamps: 10 unique
+
+WARN  Ignoring archive directory supabase\migrations-legacy (not used for active replay).
+
+OK    20260714010000_production_baseline.sql
+OK    20260714120000_phase_111a_definer_rpc_execute_lockdown.sql
+OK    20260714120100_phase_111a_storage_least_privilege_policies.sql
+OK    20260714120200_phase_111b_admin_views_security_invoker.sql
+OK    20260714120300_phase_111b_log_retention_controls.sql
+OK    20260714120400_phase_111b_cascade_fk_audit_comments.sql
+OK    20260714130000_phase_111c_revoke_service_role_only_table_grants.sql
+OK    20260714130100_phase_111c_strip_dangerous_client_table_privileges.sql
+OK    20260714130200_phase_111c_default_privileges_hardening.sql
+OK    20260714140000_bookings_r0_paid_amount_constraint.sql
+db:migrations:validate PASS

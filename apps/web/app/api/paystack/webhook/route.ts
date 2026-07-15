@@ -41,6 +41,8 @@ import {
   recordPaystackMonthlyInvoicePayment,
   recordPaystackSalesDocumentPayment,
 } from "@/lib/payments/recordPaystackSettlement";
+import { isCheckoutCurrencyZar, maskPaystackReference } from "@/lib/payments/paymentAmountMismatch";
+import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,6 +61,13 @@ export async function POST(request: Request) {
   if (!signature || !timingSafeEqualString(hash, signature)) {
     await reportOperationalIssue("warn", "paystack/webhook", "paystack.webhook.signature_invalid", {
       errorType: "paystack_webhook_signature_invalid",
+      has_signature: Boolean(signature),
+    });
+    logPaymentStructured("payment_webhook_outcome", {
+      outcome: "rejected",
+      rejection_reason: signature ? "invalid_signature" : "missing_signature",
+      event: null,
+      reference_masked: null,
     });
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
@@ -168,6 +177,12 @@ export async function POST(request: Request) {
   }
 
   if (event.event !== "charge.success" || !event.data) {
+    logPaymentStructured("payment_webhook_outcome", {
+      outcome: "acknowledged_no_settle",
+      event: event.event ?? null,
+      reference_masked: null,
+      rejection_reason: event.event ? "unknown_or_non_settle_event" : "missing_event",
+    });
     return NextResponse.json({ received: true });
   }
 
@@ -178,9 +193,20 @@ export async function POST(request: Request) {
       : typeof (data as { reference?: unknown }).reference === "string"
         ? String((data as { reference: string }).reference)
         : "";
+  const gatewayEventId =
+    data.id != null && (typeof data.id === "number" || typeof data.id === "string")
+      ? String(data.id)
+      : null;
 
   if (!reference) {
     await reportOperationalIssue("warn", "paystack/webhook", "charge.success missing reference");
+    logPaymentStructured("payment_webhook_outcome", {
+      outcome: "rejected",
+      rejection_reason: "missing_reference",
+      event: "charge.success",
+      gateway_event_id: gatewayEventId,
+      reference_masked: null,
+    });
     return NextResponse.json({ received: true });
   }
 
@@ -188,7 +214,10 @@ export async function POST(request: Request) {
     level: "info",
     source: "paystack/webhook",
     message: "paystack.webhook.received",
-    context: { reference },
+    context: {
+      reference_masked: maskPaystackReference(reference),
+      gateway_event_id: gatewayEventId,
+    },
   });
 
   const supabase = getSupabaseAdmin();
@@ -309,6 +338,23 @@ export async function POST(request: Request) {
   const amount = typeof data.amount === "number" ? data.amount : 0;
   const currency = typeof data.currency === "string" ? data.currency : "ZAR";
 
+  if (!isCheckoutCurrencyZar(currency)) {
+    await reportOperationalIssue("critical", "paystack/webhook", "charge.success currency_mismatch", {
+      reference_masked: maskPaystackReference(reference),
+      currency,
+      errorType: "payment_currency_mismatch",
+    });
+    logPaymentStructured("payment_webhook_outcome", {
+      outcome: "rejected",
+      rejection_reason: "currency_mismatch",
+      event: "charge.success",
+      reference_masked: maskPaystackReference(reference),
+      gateway_event_id: gatewayEventId,
+      currency,
+    });
+    // Still run finalize so upsert quarantines the pending_payment row (idempotent).
+  }
+
   const customerBlock = data.customer as { email?: string } | undefined;
   const emailFromCustomer = typeof customerBlock?.email === "string" ? customerBlock.email.trim() : "";
 
@@ -382,7 +428,21 @@ export async function POST(request: Request) {
         level: "info",
         source: "paystack/webhook",
         message: "paystack.webhook.idempotent_skip_finalize",
-        context: { reference, bookingId: persistedHead.bookingId, status: persistedHead.status },
+        context: {
+          reference_masked: maskPaystackReference(reference),
+          bookingId: persistedHead.bookingId,
+          status: persistedHead.status,
+          gateway_event_id: gatewayEventId,
+          idempotency_result: "already_persisted",
+        },
+      });
+      logPaymentStructured("payment_webhook_outcome", {
+        outcome: "idempotent_skip",
+        event: "charge.success",
+        reference_masked: maskPaystackReference(reference),
+        booking_id: persistedHead.bookingId,
+        gateway_event_id: gatewayEventId,
+        idempotency_result: "already_persisted",
       });
       // Backfill Zoho + recurring even when finalize was already done by the verify
       // path — both are idempotent (zoho_invoice_id guard + recurring plan dedup).
@@ -427,7 +487,8 @@ export async function POST(request: Request) {
 
   if (result.error) {
     await reportOperationalIssue("critical", "paystack/webhook", `charge.success: booking upsert failed: ${result.error}`, {
-      reference,
+      reference_masked: maskPaystackReference(reference),
+      gateway_event_id: gatewayEventId,
     });
   }
 
@@ -449,7 +510,21 @@ export async function POST(request: Request) {
       level: "info",
       source: "paystack/webhook",
       message: "paystack.booking.created",
-      context: { reference, bookingId: result.bookingId, skipped: result.skipped },
+      context: {
+        reference_masked: maskPaystackReference(reference),
+        bookingId: result.bookingId,
+        skipped: result.skipped,
+        gateway_event_id: gatewayEventId,
+      },
+    });
+    logPaymentStructured("payment_webhook_outcome", {
+      outcome: result.skipped ? "idempotent_skip" : "settled",
+      event: "charge.success",
+      reference_masked: maskPaystackReference(reference),
+      booking_id: result.bookingId,
+      gateway_event_id: gatewayEventId,
+      idempotency_result: result.skipped ? "skipped_finalize" : "settled",
+      settlement_at: new Date().toISOString(),
     });
 
     // Idempotent: Zoho invoice + recurring plan provisioning.
@@ -469,6 +544,15 @@ export async function POST(request: Request) {
         chargeData: paystackChargeDataFromRecord(data),
       });
     }
+  } else {
+    logPaymentStructured("payment_webhook_outcome", {
+      outcome: "rejected",
+      rejection_reason: result.error ?? (!finalizeOp.ok ? finalizeOp.code : null) ?? "finalize_failed",
+      event: "charge.success",
+      reference_masked: maskPaystackReference(reference),
+      booking_id: result.bookingId,
+      gateway_event_id: gatewayEventId,
+    });
   }
 
   return NextResponse.json({ received: true });

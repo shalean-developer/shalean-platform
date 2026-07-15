@@ -162,9 +162,13 @@ export async function finalizePaidBooking(
     const code =
       data.reason === "amount_mismatch"
         ? "payment_amount_mismatch"
-        : data.reason === "finalization_failed"
-          ? "payment_finalization_failed"
-          : "payment_finalize_failed";
+        : data.reason === "currency_mismatch"
+          ? "payment_currency_mismatch"
+          : data.reason === "booking_mismatch"
+            ? "payment_booking_mismatch"
+            : data.reason === "finalization_failed"
+              ? "payment_finalization_failed"
+              : "payment_finalize_failed";
     const message = data.error?.trim() || "Payment finalize did not complete successfully.";
     return {
       ok: false,
