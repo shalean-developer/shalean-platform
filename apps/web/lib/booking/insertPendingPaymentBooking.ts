@@ -16,6 +16,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import { scheduleBookingPaymentRecoveryJobs } from "@/lib/booking/bookingPaymentRecoveryJobs";
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
+import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 export { provisionalPriceSnapshotFromLocked };
 
@@ -112,6 +114,11 @@ export async function insertPendingPaymentBookingRow(
       ? params.customerAuthUserId.trim().toLowerCase()
       : null;
 
+  // Staging (and current production) use `customer_id` only — writing `user_id`
+  // yields PostgREST PGRST204 and the customer-facing "Could not reserve" 503.
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  const ownershipPatch = authUid ? bookingCustomerOwnershipPatch(authUid, ownershipColumn) : {};
+
   const { data, error } = await admin
     .from("bookings")
     .insert({
@@ -119,7 +126,7 @@ export async function insertPendingPaymentBookingRow(
       customer_email: email,
       customer_name: null,
       customer_phone: null,
-      ...(authUid ? { customer_id: authUid, user_id: authUid } : { user_id: null }),
+      ...ownershipPatch,
       ...(params.slotDuplicateExempt === true ? { slot_duplicate_exempt: true } : {}),
       ...(params.adminForceSlotOverride === true ? { admin_force_slot_override: true } : {}),
       amount_paid_cents: 0,
@@ -252,6 +259,10 @@ export async function updatePendingPaymentBookingForInit(
       : lockedDurationMinutesFromBookingSnapshot(params.bookingSnapshot);
   const durationMinutesPatch = durationMinutes != null ? { duration_minutes: durationMinutes } : {};
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  const ownershipPatch =
+    params.userId != null ? bookingCustomerOwnershipPatch(params.userId, ownershipColumn) : {};
+
   const { error } = await admin
     .from("bookings")
     .update({
@@ -265,8 +276,8 @@ export async function updatePendingPaymentBookingForInit(
       total_paid_zar: params.totalPaidZar,
       customer_name: params.customerName,
       customer_phone: params.customerPhone,
-      /** Guest checkout passes `userId: null` — do not overwrite `user_id` already set by `auto_link_booking_user` on insert. */
-      ...(params.userId != null ? { user_id: params.userId } : {}),
+      /** Guest checkout passes `userId: null` — do not overwrite ownership already set by insert trigger. */
+      ...ownershipPatch,
       location_id: params.locationId,
       city_id: params.cityId,
       surge_multiplier: params.surgeMultiplier,

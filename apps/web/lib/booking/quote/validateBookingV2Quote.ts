@@ -86,6 +86,16 @@ export function assertV2ConfirmQuoteIntegrity(params: {
     };
   }
 
+  // Catalog/rates unresolved: base and total both zero means the quote never calculated.
+  if (serverBreakdown.base_service_price <= 0 && serverBreakdown.estimated_total <= 0) {
+    return {
+      ok: false,
+      status: 422,
+      error: "Your quote could not be calculated. Please refresh pricing and try again.",
+      code: "quote_recompute_failed",
+    };
+  }
+
   const signatureInputs = buildBookingV2QuoteSignatureInputs(quoteInput, serverBreakdown);
   if (!verifyBookingV2QuoteBreakdown(serverBreakdown, signatureInputs)) {
     return {

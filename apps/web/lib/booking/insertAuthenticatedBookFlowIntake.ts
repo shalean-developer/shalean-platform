@@ -4,6 +4,8 @@ import type { BookingCustomerAuthType } from "@/lib/booking/paystackChargeTypes"
 import type { BookingFlowIntakeInput } from "@/lib/booking/insertBookingFlowIntake";
 import { insertBookingFromFlowIntake } from "@/lib/booking/insertBookingFlowIntake";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 export type AuthenticatedBookFlowIntakeInput = BookingFlowIntakeInput & {
   userId: string;
@@ -11,7 +13,7 @@ export type AuthenticatedBookFlowIntakeInput = BookingFlowIntakeInput & {
 };
 
 /**
- * `/book` flow intake — authenticated customers only. Wraps flow intake and stamps `user_id`
+ * `/book` flow intake — authenticated customers only. Wraps flow intake and stamps ownership
  * on the booking row and snapshot (never guest).
  */
 export async function insertAuthenticatedBookFlowIntake(
@@ -54,10 +56,11 @@ export async function insertAuthenticatedBookFlowIntake(
     type: input.authType,
   };
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { error: upErr } = await admin
     .from("bookings")
     .update({
-      user_id: userId,
+      ...bookingCustomerOwnershipPatch(userId, ownershipColumn),
       booking_snapshot: snap,
     })
     .eq("id", result.bookingId)

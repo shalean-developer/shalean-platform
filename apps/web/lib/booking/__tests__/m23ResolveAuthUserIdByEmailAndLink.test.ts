@@ -219,9 +219,10 @@ describe("M-23: 20260935 runtime call sites still call the RPC by the documented
     expect(src).toMatch(/resolve_auth_user_id_by_email\s+RPC/);
   });
 
-  it("insertPendingPaymentBooking inserts with `user_id: null` (and trusts the BEFORE INSERT trigger to backfill)", () => {
+  it("insertPendingPaymentBooking uses schema-aware ownership (customer_id or user_id) and never hardcodes both", () => {
     const src = readFileSync(path.join(webRoot, "lib/booking/insertPendingPaymentBooking.ts"), "utf8");
-    expect(src).toMatch(/user_id:\s*null/);
-    expect(src).toMatch(/auto_link_booking_user/);
+    expect(src).toMatch(/resolveBookingOwnershipColumn/);
+    expect(src).toMatch(/bookingCustomerOwnershipPatch/);
+    expect(src).not.toMatch(/customer_id:\s*authUid,\s*user_id:\s*authUid/);
   });
 });

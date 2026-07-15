@@ -148,19 +148,22 @@ export function BookingV2Provider({
 
   useEffect(() => {
     fetch("/api/booking-v2/services")
-      .then((r) => r.json())
-      .then(
-        (json: {
+      .then(async (r) => {
+        if (!r.ok) throw new Error(`catalog_http_${r.status}`);
+        return r.json() as Promise<{
           catalog?: ServicesCatalog;
           feesConfig?: BookingV2FeesConfig;
           scheduling?: BookingV2SchedulingConfig;
-        }) => {
+        }>;
+      })
+      .then((json) => {
         if (json.catalog) setCatalog(json.catalog);
         if (json.feesConfig) setFeesConfig(json.feesConfig);
         if (json.scheduling) setScheduling({ ...DEFAULT_SCHEDULING, ...json.scheduling });
-      },
-      )
-      .catch(() => { /* fall back to static config */ })
+      })
+      .catch(() => {
+        /* fall back to static config — pricing still recomputes from SERVICE_CONFIG */
+      })
       .finally(() => setCatalogLoading(false));
   }, []);
 
