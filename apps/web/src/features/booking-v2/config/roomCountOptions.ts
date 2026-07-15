@@ -3,17 +3,25 @@
 export const BEDROOM_CHIP_VALUES = ["0", "1", "2", "3", "4", "5", "6+"] as const;
 export const BATHROOM_CHIP_VALUES = ["1", "2", "3", "4", "5", "6+"] as const;
 
+/** Display label for the 6+ chip — custom input opens only after selecting this. */
+export const ROOM_COUNT_CUSTOM_CHIP_LABEL = "6+ Custom";
+
 export type BedroomChipValue = (typeof BEDROOM_CHIP_VALUES)[number];
 export type BathroomChipValue = (typeof BATHROOM_CHIP_VALUES)[number];
 
 export const BEDROOM_COUNT_OPTIONS = BEDROOM_CHIP_VALUES.map((value) => ({
   value,
-  label: value === "0" ? "0 bedrooms" : value === "6+" ? "6+ bedrooms" : `${value} bedroom${value === "1" ? "" : "s"}`,
+  label:
+    value === "0"
+      ? "0 bedrooms"
+      : value === "6+"
+        ? ROOM_COUNT_CUSTOM_CHIP_LABEL
+        : `${value} bedroom${value === "1" ? "" : "s"}`,
 }));
 
 export const BATHROOM_COUNT_OPTIONS = BATHROOM_CHIP_VALUES.map((value) => ({
   value,
-  label: value === "6+" ? "6+ bathrooms" : `${value} bathroom${value === "1" ? "" : "s"}`,
+  label: value === "6+" ? ROOM_COUNT_CUSTOM_CHIP_LABEL : `${value} bathroom${value === "1" ? "" : "s"}`,
 }));
 
 /** Map a stored exact count to the chip that should appear selected. */
@@ -29,4 +37,8 @@ export function roomCountToChip(value: string | number | undefined | null, kind:
 export function isExactRoomCount(value: string | number | undefined | null): boolean {
   const n = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
   return Number.isFinite(n) && n >= 0;
+}
+
+export function roomCountChipLabel(chip: string): string {
+  return chip === "6+" ? ROOM_COUNT_CUSTOM_CHIP_LABEL : chip;
 }

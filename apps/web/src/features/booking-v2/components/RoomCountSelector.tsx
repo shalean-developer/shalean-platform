@@ -5,6 +5,7 @@ import { cn } from "@/lib/utils";
 import {
   BATHROOM_CHIP_VALUES,
   BEDROOM_CHIP_VALUES,
+  roomCountChipLabel,
   roomCountToChip,
 } from "@/src/features/booking-v2/config/roomCountOptions";
 
@@ -19,14 +20,14 @@ type RoomCountSelectorProps = {
 };
 
 /**
- * Chip selector for bedrooms (0–5, 6+) or bathrooms (1–5, 6+).
- * Selecting 6+ opens a numeric popup so pricing uses the exact count.
+ * Chip selector for bedrooms (0–5, 6+ Custom) or bathrooms (1–5, 6+ Custom).
+ * The custom numeric input appears only after selecting 6+ Custom.
  */
 export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCountSelectorProps) {
   const chips = kind === "bedrooms" ? BEDROOM_CHIP_VALUES : BATHROOM_CHIP_VALUES;
   const selectedChip = roomCountToChip(value, kind);
   const [customOpen, setCustomOpen] = useState(false);
-  const [draft, setDraft] = useState(value && Number(value) >= 6 ? String(value) : "7");
+  const [draft, setDraft] = useState(value && Number(value) >= 6 ? String(value) : "6");
 
   useEffect(() => {
     if (!customOpen) return;
@@ -39,7 +40,7 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
 
   function selectChip(chip: string) {
     if (chip === "6+") {
-      setDraft(value && Number(value) >= 6 ? String(value) : "7");
+      setDraft(value && Number(value) >= 6 ? String(value) : "6");
       setCustomOpen(true);
       return;
     }
@@ -63,19 +64,22 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
       >
         {chips.map((chip) => {
           const active = selectedChip === chip;
+          const label = roomCountChipLabel(chip);
           return (
             <button
               key={chip}
               type="button"
               onClick={() => selectChip(chip)}
+              aria-label={chip === "6+" ? label : undefined}
               className={cn(
-                "inline-flex min-h-10 min-w-10 items-center justify-center rounded-xl border px-3 text-sm font-semibold transition",
+                "inline-flex min-h-10 items-center justify-center rounded-xl border px-3 text-sm font-semibold transition",
+                chip === "6+" ? "min-w-[5.5rem]" : "min-w-10",
                 active
                   ? "border-blue-600 bg-blue-600 text-white shadow-sm"
                   : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50",
               )}
             >
-              {chip}
+              {label}
             </button>
           );
         })}
@@ -99,7 +103,9 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
             <h4 id={`${id}-custom-title`} className="text-base font-bold text-slate-900">
               Enter exact {kind === "bedrooms" ? "bedroom" : "bathroom"} count
             </h4>
-            <p className="mt-1 text-sm text-slate-500">Pricing and duration use the exact number you enter.</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Enter 6 or more. Pricing and duration use the exact number you enter.
+            </p>
             <input
               type="number"
               inputMode="numeric"
