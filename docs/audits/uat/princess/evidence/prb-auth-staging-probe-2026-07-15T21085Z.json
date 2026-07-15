@@ -1,0 +1,183 @@
+{
+  "task": "PRINCESS-UAT-PRB",
+  "timestamp": "2026-07-15T21:08:59.698Z",
+  "stagingRef": "gbgnemlpyykyhpqqbgru",
+  "productionRef": "tchayecuvzssixyxlvfu",
+  "stagingUrl": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+  "health": {
+    "status": 200,
+    "ms": 2582,
+    "body": {
+      "status": "ok",
+      "service": "shalean-environment",
+      "timestamp": "2026-07-15T21:09:03.743Z",
+      "deployment": "staging",
+      "vercelEnv": "preview",
+      "gitBranch": "staging",
+      "shaleanAppEnv": "staging",
+      "supabase": {
+        "configuredRef": "gbgnemlpyykyhpqqbgru",
+        "expectedRef": "gbgnemlpyykyhpqqbgru",
+        "urlHost": "gbgnemlpyykyhpqqbgru.supabase.co"
+      },
+      "paystack": {
+        "secretMode": "test",
+        "publicMode": "test",
+        "secretPrefix": "sk_test_…",
+        "publicPrefix": "pk_test_…"
+      },
+      "messaging": {
+        "outboundDisabled": true,
+        "emailAllowlistConfigured": false,
+        "phoneAllowlistConfigured": false,
+        "smsOutboundEnabled": false
+      },
+      "issues": []
+    }
+  },
+  "login": {
+    "princess": {
+      "ok": true,
+      "authMs": 638,
+      "resolveProfileMs": 1343,
+      "resolveStatus": 200,
+      "role": "admin",
+      "dashboardRoute": "/office",
+      "userId": "e99ac17b-1a2f-4173-a44b-c94be39cd9e5"
+    },
+    "controlAdmin": {
+      "ok": true,
+      "authMs": 314,
+      "resolveProfileMs": 1109,
+      "resolveStatus": 200,
+      "role": "admin",
+      "dashboardRoute": "/office",
+      "userId": "1ae77ec6-52a6-42a6-9a6d-69d705804396"
+    },
+    "customer": {
+      "ok": true,
+      "authMs": 296,
+      "resolveProfileMs": 751,
+      "resolveStatus": 200,
+      "role": "customer",
+      "dashboardRoute": "/account",
+      "userId": "ec21ee3b-5a35-4a25-9f98-d42ba9054e41"
+    },
+    "cleaner": {
+      "ok": true,
+      "authMs": 302,
+      "resolveProfileMs": 1063,
+      "resolveStatus": 200,
+      "role": "cleaner",
+      "dashboardRoute": "/jobs",
+      "userId": "d55d54f9-1be8-4abf-b991-9d67e113e5b9"
+    },
+    "invalidCredentials": {
+      "ok": true,
+      "error": "Invalid login credentials",
+      "ms": 296
+    }
+  },
+  "passwordReset": {
+    "generateLinkMs": 274,
+    "generateOk": true,
+    "actionHost": "gbgnemlpyykyhpqqbgru.supabase.co",
+    "redirectHost": "shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+    "redirectToConfigured": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app/auth/reset-password",
+    "pointsOnlyToStaging": true,
+    "productionLeak": false,
+    "forgotApi": {
+      "email": "staging-admin@shalean.test",
+      "status": 502,
+      "ms": 893,
+      "sent": null,
+      "code": null,
+      "error": "We could not send the reset email. Try again in a few minutes."
+    }
+  },
+  "authz": {
+    "unauthenticatedAccount": {
+      "status": 307,
+      "location": "/login?redirect=%2Faccount",
+      "redirectsToLogin": true
+    },
+    "princess": {
+      "/api/admin/teams": {
+        "status": 200,
+        "error": null
+      },
+      "/api/admin/dashboard-stats": {
+        "status": 200,
+        "error": null
+      },
+      "/api/admin/ops-snapshot": {
+        "status": 200,
+        "error": null
+      },
+      "/api/customer/profile": {
+        "status": 200,
+        "error": null
+      },
+      "/api/cleaner/me": {
+        "status": 403,
+        "error": "Not a cleaner account."
+      }
+    },
+    "customer": {
+      "/api/admin/teams": {
+        "status": 403,
+        "error": "Forbidden."
+      },
+      "/api/admin/dashboard-stats": {
+        "status": 403,
+        "error": "Forbidden."
+      },
+      "/api/admin/ops-snapshot": {
+        "status": 403,
+        "error": "Forbidden."
+      },
+      "/api/customer/profile": {
+        "status": 200,
+        "error": null
+      },
+      "/api/cleaner/me": {
+        "status": 403,
+        "error": "Not a cleaner account."
+      }
+    },
+    "cleaner": {
+      "/api/admin/teams": {
+        "status": 403,
+        "error": "Forbidden."
+      },
+      "/api/admin/dashboard-stats": {
+        "status": 403,
+        "error": "Forbidden."
+      },
+      "/api/admin/ops-snapshot": {
+        "status": 403,
+        "error": "Forbidden."
+      },
+      "/api/customer/profile": {
+        "status": 200,
+        "error": null
+      },
+      "/api/cleaner/me": {
+        "status": 200,
+        "error": null
+      }
+    },
+    "revokedSession": {
+      "beforeStatus": 200,
+      "afterStatus": 401,
+      "afterError": "Invalid or expired session.",
+      "deniesAfterRevoke": true
+    }
+  },
+  "productionNonImpact": {
+    "stagingKeysRef": "gbgnemlpyykyhpqqbgru",
+    "productionRefUntouched": "tchayecuvzssixyxlvfu",
+    "passwordResetProductionLeak": false
+  },
+  "pass": true
+}

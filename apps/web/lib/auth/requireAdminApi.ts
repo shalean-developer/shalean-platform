@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
-import { isAdmin } from "@/lib/auth/admin";
+import { evaluateAdminAllowlist } from "@/lib/auth/admin";
 
 export async function requireAdminApi(
   request: Request,
@@ -19,6 +19,15 @@ export async function requireAdminApi(
     data: { user },
     error: userErr,
   } = await pub.auth.getUser(token);
-  if (userErr || !user?.email || !isAdmin(user.email)) return { ok: false, status: 403, error: "Forbidden." };
+  if (userErr || !user?.id) {
+    return { ok: false, status: 401, error: "Invalid or expired session." };
+  }
+  if (!user.email) {
+    return { ok: false, status: 403, error: "Forbidden." };
+  }
+
+  const allow = evaluateAdminAllowlist(user.email);
+  if (!allow.ok) return { ok: false, status: allow.status, error: allow.error };
+
   return { ok: true, userId: user.id, email: user.email };
 }
