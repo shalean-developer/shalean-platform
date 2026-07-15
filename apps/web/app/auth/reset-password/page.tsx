@@ -7,6 +7,7 @@ import { AlertCircle, CheckCircle2 } from "lucide-react";
 import { AuthCard } from "@/components/auth/AuthShell";
 import { PasswordInput } from "@/components/ui/password-input";
 import { updatePassword } from "@/lib/auth/authClient";
+import { bootstrapPasswordRecoverySession } from "@/lib/auth/bootstrapPasswordRecoverySession";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 function ResetPasswordForm() {
@@ -37,19 +38,14 @@ function ResetPasswordForm() {
     });
 
     void (async () => {
-      for (let i = 0; i < 15; i++) {
-        const { data } = await sb.auth.getSession();
-        if (!active) return;
-        if (data.session) {
-          setSessionReady(true);
-          setSessionError(null);
-          return;
-        }
-        await new Promise((r) => setTimeout(r, 200));
+      const result = await bootstrapPasswordRecoverySession(sb.auth, window.location.href);
+      if (!active) return;
+      if (result.ok) {
+        setSessionReady(true);
+        setSessionError(null);
+        return;
       }
-      if (active) {
-        setSessionError("This reset link is invalid or has expired. Request a new one from the sign-in page.");
-      }
+      setSessionError(result.message);
     })();
 
     return () => {
