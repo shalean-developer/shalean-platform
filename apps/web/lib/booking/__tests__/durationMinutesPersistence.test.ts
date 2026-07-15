@@ -2,7 +2,11 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("@/lib/customer/customerBookingsForUser", () => ({
+  resolveBookingOwnershipColumn: vi.fn(async () => "customer_id" as const),
+}));
 
 import { existingBookingOccupancyWindow } from "@/lib/booking/cleanerSlotEligibility";
 import {

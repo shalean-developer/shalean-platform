@@ -4,6 +4,7 @@ import { PRICING_ENGINE_ALGORITHM_VERSION } from "@/lib/pricing/engineVersion";
 import type { PricingRatesSnapshot, SnapshotBundleRow } from "@/lib/pricing/pricingRatesSnapshot";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
+import { resolvePricingServiceRow } from "@/lib/booking-v2/resolvePricingServiceSlug";
 
 const SERVICE_KEYS: readonly BookingServiceId[] = [
   "standard",
@@ -113,9 +114,12 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     min_hours: DEFAULT_SERVICE_DURATION_LIMITS.minHours,
     max_hours: DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
   });
-  const baseTariff = bySlug.standard ?? bySlug[Object.keys(bySlug)[0] ?? ""] ?? fallback;
+  const baseTariff =
+    resolvePricingServiceRow(bySlug, "standard") ??
+    bySlug[Object.keys(bySlug)[0] ?? ""] ??
+    fallback;
   for (const k of SERVICE_KEYS) {
-    services[k] = bySlug[k] ?? baseTariff;
+    services[k] = resolvePricingServiceRow(bySlug, k) ?? baseTariff;
   }
 
   const { data: extRows, error: extErr } = await supabase

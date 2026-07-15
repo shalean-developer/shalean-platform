@@ -1,6 +1,9 @@
 import type { CustomerPricingBreakdown, CustomerTotalInput } from "@/lib/booking-v2/types";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import { verifyBookingV2QuoteBreakdown } from "@/lib/booking/quote/resolveBookingQuote";
+import { assertQuotePricingInputsConsumed } from "@/lib/booking-v2/assertQuotePricingInputsConsumed";
+import { DB_SLUG_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
+import { resolveMovingPricingSlug } from "@/lib/booking-v2/resolvePricingServiceSlug";
 
 const MAX_PRICE_DRIFT_RATIO = 0.01;
 const MAX_DURATION_DRIFT_RATIO = 0.01;
@@ -11,7 +14,12 @@ export type V2QuoteValidationFailureCode =
   | "quote_signature_invalid"
   | "quote_client_signature_mismatch"
   | "quote_price_drift"
-  | "quote_duration_drift";
+  | "quote_duration_drift"
+  | "quote_missing_canonical_service"
+  | "quote_missing_pricing_input"
+  | "quote_stale_total"
+  | "quote_duration_failed"
+  | "quote_field_not_consumed";
 
 export type V2QuoteValidationFailure = {
   ok: false;
@@ -83,6 +91,35 @@ export function assertV2ConfirmQuoteIntegrity(params: {
       status: 422,
       error: "We could not verify your quote. Please refresh and try again.",
       code: "quote_signature_missing",
+    };
+  }
+
+  // Catalog/rates unresolved: base and total both zero means the quote never calculated.
+  if (serverBreakdown.base_service_price <= 0 && serverBreakdown.estimated_total <= 0) {
+    return {
+      ok: false,
+      status: 422,
+      error: "Your quote could not be calculated. Please refresh pricing and try again.",
+      code: "quote_recompute_failed",
+    };
+  }
+
+  const canonicalPricingKey =
+    quoteInput.serviceSlug === "moving-cleaning"
+      ? resolveMovingPricingSlug(quoteInput.serviceDetails?.moveType)
+      : DB_SLUG_MAP[quoteInput.serviceSlug];
+  const consumption = assertQuotePricingInputsConsumed({
+    serviceSlug: quoteInput.serviceSlug,
+    quoteInput,
+    breakdown: serverBreakdown,
+    canonicalPricingKey,
+  });
+  if (!consumption.ok) {
+    return {
+      ok: false,
+      status: 422,
+      error: consumption.error,
+      code: consumption.code,
     };
   }
 

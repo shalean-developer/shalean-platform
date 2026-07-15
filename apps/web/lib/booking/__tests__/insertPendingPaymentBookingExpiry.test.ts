@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+vi.mock("@/lib/customer/customerBookingsForUser", () => ({
+  resolveBookingOwnershipColumn: vi.fn(async () => "customer_id" as const),
+}));
+
 import { insertPendingPaymentBookingRow } from "@/lib/booking/insertPendingPaymentBooking";
 import {
   adminPaymentLinkTtlMs,

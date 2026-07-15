@@ -203,6 +203,7 @@ const EXTRA_DURATION_POLICIES: Record<string, ExtraDurationPolicy> = {
   "office-sanitisation": durationExtra("office-sanitisation", 30, 0.25),
   "waste-removal": durationExtra("waste-removal", 20, 0.15),
   "stain-treatment": durationExtra("stain-treatment", 30, 0.3, "specialized"),
+  "sofa-upholstery": durationExtra("sofa-upholstery", 45, 0.35, "specialized"),
   "pet-odour-treatment": durationExtra("pet-odour-treatment", 30, 0.3, "specialized"),
   "fabric-protector": durationExtra("fabric-protector", 20, 0.15),
   "welcome-setup": durationExtra("welcome-setup", 20, 0.15),

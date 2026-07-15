@@ -33,6 +33,7 @@ import type {
   BookingV2FormData,
 } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
+import { formatEstimatedCleaningTimeLabel } from "@/lib/booking-v2/formatEstimatedCleaningTime";
 import {
   RECURRING_FREQUENCY_OPTIONS,
   RECURRING_WEEKDAYS,
@@ -1168,7 +1169,9 @@ export function Step3Review() {
 
             <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
               <Clock className="h-3 w-3 text-blue-500" />
-              ~{estimatedDurationHours} hrs
+              {values.pricingSummary?.estimated_duration_minutes > 0
+                ? formatEstimatedCleaningTimeLabel(values.pricingSummary.estimated_duration_minutes)
+                : `Estimated cleaning time: ${estimatedDurationHours} hours`}
             </span>
           </div>
 

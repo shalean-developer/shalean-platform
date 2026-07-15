@@ -935,11 +935,25 @@ export async function POST(request: Request) {
     const missingCol =
       /fulfillment_mode|fulfillment_reason|PGRST204|schema cache/i.test(insertErr?.message ?? "") ||
       insertErr?.code === "PGRST204";
+    const duplicateSlot =
+      insertErr?.code === "23505" ||
+      /duplicate key|unique constraint|idx_bookings_unique_active_customer_slot/i.test(insertErr?.message ?? "");
+    if (duplicateSlot) {
+      return NextResponse.json(
+        {
+          error:
+            "You already have an active booking in this time slot. Open your bookings or choose a different time.",
+          code: "SLOT_ALREADY_RESERVED",
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json(
       {
         error: missingCol
           ? "Booking save is temporarily unavailable (database migration pending). Please try again shortly."
           : "Could not save your booking. Please try again.",
+        code: missingCol ? "BOOKING_SCHEMA_MISMATCH" : "RESERVATION_FAILED",
       },
       { status: 500 },
     );

@@ -23,6 +23,7 @@ import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurr
 import type { BookingV2FormData, BookingStep } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { formatAreasServedPreview } from "@/src/features/booking-v2/components/CleanerCard";
+import { formatEstimatedCleaningTimeLabel, estimatedCleaningHoursFromMinutes } from "@/lib/booking-v2/formatEstimatedCleaningTime";
 
 const TRUST_BADGES = [
   { Icon: ShieldCheck, title: "Vetted cleaners", desc: "Background checked & verified", color: "text-green-600" },
@@ -100,10 +101,10 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const config = SERVICE_CONFIG[values.serviceSlug];
   const pricing = values.pricingSummary;
   const displayTotal = pricing.estimated_total ?? pricing.total ?? 0;
-  const durationHours =
-    pricing.estimated_duration_minutes > 0
-      ? (pricing.estimated_duration_minutes / 60).toFixed(1).replace(/\.0$/, "")
-      : String(liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours);
+  const durationHours = estimatedCleaningHoursFromMinutes(
+    pricing.estimated_duration_minutes,
+    liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours,
+  );
   const hasAddress = values.address.length >= 5;
   const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(values.date);
   const hasExtras = values.selectedExtras.length > 0;
@@ -114,7 +115,11 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const durationRow = (
     <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
       <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      <span>Est. {durationHours}h duration</span>
+      <span>
+        {pricing.estimated_duration_minutes > 0
+          ? formatEstimatedCleaningTimeLabel(pricing.estimated_duration_minutes)
+          : `Estimated cleaning time: ${durationHours} hours`}
+      </span>
     </div>
   );
 
