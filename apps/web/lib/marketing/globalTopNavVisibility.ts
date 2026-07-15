@@ -11,6 +11,7 @@ const MARKETING_HOME_HEADER_PATHS = new Set([
   "/faq",
   "/reviews",
   "/contact",
+  "/areas-we-serve",
   "/refer",
   "/quote",
   "/maid-services-cape-town",

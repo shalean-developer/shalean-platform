@@ -31,4 +31,31 @@ describe("SERVICE_EXTRA_SLUGS", () => {
     expect(carpet).not.toBe(deep);
     expect(carpet).not.toBe(moving);
   });
+
+  it("matches Farai UAT Batch 2 product extras per service", () => {
+    expect(SERVICE_EXTRA_SLUGS["regular-cleaning"]).toEqual([
+      "inside-fridge",
+      "inside-oven",
+      "laundry",
+      "ironing",
+      "interior-windows",
+    ]);
+    expect(SERVICE_EXTRA_SLUGS["deep-cleaning"]).toEqual([
+      "inside-cabinets",
+      "inside-wardrobes",
+      "blinds-cleaning",
+      "interior-walls",
+    ]);
+    expect(SERVICE_EXTRA_SLUGS["moving-cleaning"]).toEqual([
+      "deposit-preparation",
+      "appliances-cleaning",
+      "inside-cabinets",
+      "garage-cleaning",
+    ]);
+    expect(SERVICE_EXTRA_SLUGS["office-cleaning"]).toEqual([
+      "office-kitchen",
+      "office-sanitisation",
+      "waste-removal",
+    ]);
+  });
 });

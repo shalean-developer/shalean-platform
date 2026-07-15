@@ -59,12 +59,31 @@ function buildExtrasForService(
     })
     .sort((a, b) => a[1].sort_order - b[1].sort_order || a[0].localeCompare(b[0]));
 
-  return rows.map(([slug, row]) => ({
-    id: slug,
-    label: row.name,
-    description: row.description,
-    priceZar: row.price,
-    isPopular: row.is_popular,
+  if (rows.length > 0) {
+    return rows.map(([slug, row]) => ({
+      id: slug,
+      label: row.name,
+      description: row.description,
+      priceZar: row.price,
+      isPopular: row.is_popular,
+    }));
+  }
+
+  // Staging/dev catalogs may lack pricing_extras rows — fall back to static service extras.
+  const staticExtras = SERVICE_CONFIG[serviceDef.slug]?.extras ?? [];
+  const filtered = allowlist?.length
+    ? staticExtras.filter((e) => {
+        const id = normalizeExtraSlug(e.id);
+        return allowlist.includes(id) || allowlist.includes(e.id);
+      })
+    : staticExtras;
+
+  return filtered.map((e) => ({
+    id: normalizeExtraSlug(e.id),
+    label: e.label,
+    description: e.description,
+    priceZar: e.priceZar,
+    isPopular: false,
   }));
 }
 

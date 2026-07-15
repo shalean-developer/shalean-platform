@@ -137,6 +137,12 @@ export function MarketingAreasSection({ locations }: Props) {
             <span className="sr-only">Book a cleaner</span>
             <ArrowUpRight size={20} strokeWidth={2.25} aria-hidden />
           </GrowthCtaLink>
+          <SafeInternalLink
+            href="/areas-we-serve"
+            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800"
+          >
+            View all suburbs
+          </SafeInternalLink>
         </div>
       </div>
     </section>
