@@ -459,11 +459,24 @@ export function PropertyAddressSection() {
                 )}
               />
               <FieldError message={errors.suburb?.message} />
+              <FieldError message={errors.serviceAreaLocationId?.message} />
               {locationLoading && suburbValue?.trim() ? (
-                <p className="mt-1 text-xs text-slate-500">Checking service area…</p>
+                <p className="mt-1 text-xs text-slate-500" role="status">
+                  Checking service area…
+                </p>
               ) : null}
               {!locationLoading && locationError && suburbValue?.trim() ? (
-                <p className="mt-1 text-xs text-red-500">{locationError}</p>
+                <p className="mt-1 text-xs text-red-500" role="alert">
+                  {locationError}
+                </p>
+              ) : null}
+              {!locationLoading &&
+              !locationError &&
+              suburbValue?.trim() &&
+              !resolvedLocation?.locationId ? (
+                <p className="mt-1 text-xs text-amber-700" role="status">
+                  Select a supported suburb from the list to continue.
+                </p>
               ) : null}
             </div>
             <div className="min-w-0 sm:col-span-2">

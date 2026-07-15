@@ -61,7 +61,14 @@ export const step1Schema = z.object({
   serviceDetails: z.preprocess(normalizeServiceDetails, z.record(serviceDetailValueSchema)),
   address: z.string().min(5, "Enter your street address"),
   suburb: z.string().min(2, "Enter your suburb"),
-  serviceAreaLocationId: z.string().optional().default(""),
+  serviceAreaLocationId: z
+    .string()
+    .trim()
+    .min(1, "Select a supported suburb so we can check availability")
+    .regex(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      "Select a supported suburb so we can check availability",
+    ),
   serviceAreaCityId: z.string().optional().default(""),
   city: z.string().optional().default("Cape Town"),
   postalCode: z.string().optional().default(""),

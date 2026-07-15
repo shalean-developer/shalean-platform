@@ -17,12 +17,26 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "suburb is required." }, { status: 400 });
   }
 
+  if (suburb.toLowerCase() === "other") {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "unsupported_area",
+        error:
+          "We don’t currently list that area for instant online booking. Choose a nearby supported suburb, or contact us to check coverage.",
+      },
+      { status: 422 },
+    );
+  }
+
   const ctx = await resolveBookingV2LocationContext(admin, suburb);
   if (!ctx) {
     return NextResponse.json(
       {
         ok: false,
-        error: "We could not match that suburb to a service area. Choose a suburb from the list or contact us.",
+        code: "unresolved_suburb",
+        error:
+          "We could not match that suburb to a service area. Choose a suburb from the list, or contact us if you need coverage nearby.",
       },
       { status: 422 },
     );

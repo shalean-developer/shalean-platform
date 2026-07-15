@@ -37,14 +37,44 @@ Creates:
 
 Passwords: `docs/audits/environments/evidence/.secrets-local/staging.synthetic-passwords.env` (gitignored).
 
+### Farai booking UAT fixtures (cleaners + teams)
+
+```bash
+# Idempotent seed — staging only (ref gbgnemlpyykyhpqqbgru)
+node scripts/env/seed-uat-booking-fixtures.mjs --env staging
+
+# Optional: remove prior FARAI-UAT cleaners/teams/conflict booking first
+node scripts/env/seed-uat-booking-fixtures.mjs --env staging --reset
+```
+
+Creates:
+
+- 8 synthetic cleaners (`uat-book-cleaner-0N@shalean.test`, names prefixed `UAT`)
+- `cleaner_locations` for Sea Point / Claremont / scenario coverage
+- 2 Deep Cleaning teams + 2 Move Cleaning teams
+- One conflict booking (`FARAI-UAT-BOOK-CONFLICT-*`)
+- Upserts critical `locations` rows by slug (including Devil's Peak Estate, Simon's Town)
+
+Passwords: `docs/audits/environments/evidence/.secrets-local/staging.uat-booking-passwords.env` (gitignored).
+
+**Never** run against production (`tchayecuvzssixyxlvfu`). The script refuses production refs.
+
 ## Safe cleanup
 
 ```sql
 -- staging project only
 delete from public.bookings where paystack_reference like 'ENV-03-STG-%';
+delete from public.bookings where paystack_reference like 'FARAI-UAT-BOOK-%';
 ```
 
 Auth users may be retained for stable UAT logins; delete only if rotating fixtures.
+
+Farai cleaner/team reset (preferred):
+
+```bash
+node scripts/env/seed-uat-booking-fixtures.mjs --env staging --reset
+node scripts/env/seed-uat-booking-fixtures.mjs --env staging
+```
 
 ## Backup / recovery
 
