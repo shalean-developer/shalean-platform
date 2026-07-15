@@ -264,14 +264,30 @@ export function BookingV2Provider({
     };
   }, [form]);
 
-  const goToStep = useCallback(
-    (step: BookingStep) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("step", String(step));
-      router.push(`/book/${serviceSlug}?${params.toString()}`);
-    },
-    [router, searchParams, serviceSlug],
-  );
+  /** When service area changes, drop incompatible schedule / cleaner / team selections. */
+  const prevLocationIdRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const subscription = form.watch((values, info) => {
+      if (info.name && info.name !== "serviceAreaLocationId" && info.name !== "suburb") return;
+      const nextId = (values.serviceAreaLocationId ?? "").trim();
+      const prev = prevLocationIdRef.current;
+      if (prev === undefined) {
+        prevLocationIdRef.current = nextId;
+        return;
+      }
+      if (prev === nextId) return;
+      prevLocationIdRef.current = nextId;
+      form.setValue("date", "", { shouldDirty: true });
+      form.setValue("time", "", { shouldDirty: true });
+      form.setValue("alternativeDate", "", { shouldDirty: true });
+      form.setValue("alternativeTime", "", { shouldDirty: true });
+      form.setValue("selectedCleanerIds", [], { shouldDirty: true });
+      form.setValue("selectedCleanerDetails", [], { shouldDirty: true });
+      form.setValue("assignedTeamId", "", { shouldDirty: true });
+      form.setValue("assignedTeamName", "", { shouldDirty: true });
+    });
+    return () => subscription.unsubscribe();
+  }, [form]);
 
   const canGoNext = useCallback(
     async (step: BookingStep): Promise<boolean> => {
@@ -317,6 +333,15 @@ export function BookingV2Provider({
     [form, scheduling],
   );
 
+  const goToStep = useCallback(
+    (step: BookingStep) => {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("step", String(step));
+      router.push(`/book/${serviceSlug}?${params.toString()}`);
+    },
+    [router, searchParams, serviceSlug],
+  );
+
   const goNext = useCallback(async () => {
     const ok = await canGoNext(currentStep);
     if (!ok) return;
@@ -327,6 +352,19 @@ export function BookingV2Provider({
     if (currentStep > 1) goToStep((currentStep - 1) as BookingStep);
     else router.push("/book");
   }, [currentStep, goToStep, router]);
+
+  /** Deep-link / stale draft guard: Step 2+ requires a resolved service area. */
+  useEffect(() => {
+    if (currentStep < 2) return;
+    const locationId = form.getValues("serviceAreaLocationId")?.trim() ?? "";
+    const uuidOk =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+        locationId,
+      );
+    if (!uuidOk) {
+      goToStep(1);
+    }
+  }, [currentStep, form, goToStep]);
 
   const clearBooking = useCallback(() => {
     clearStorage();

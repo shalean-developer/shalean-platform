@@ -112,12 +112,15 @@ function CustomCalendar({
   onChange,
   minDate,
   embedded,
+  disabled = false,
 }: {
   value: string;
   onChange: (date: string) => void;
   minDate?: string;
   /** Drop outer card chrome when nested inside a parent card. */
   embedded?: boolean;
+  /** When true, all day cells are non-interactive (e.g. service area unresolved). */
+  disabled?: boolean;
 }) {
   const todayStr = new Date().toISOString().split("T")[0];
 
@@ -142,6 +145,7 @@ function CustomCalendar({
   while (cells.length % 7 !== 0) cells.push(null);
 
   function prevMonth() {
+    if (disabled) return;
     if (viewMonth === 0) {
       setViewMonth(11);
       setViewYear((y) => y - 1);
@@ -150,6 +154,7 @@ function CustomCalendar({
     }
   }
   function nextMonth() {
+    if (disabled) return;
     if (viewMonth === 11) {
       setViewMonth(0);
       setViewYear((y) => y + 1);
@@ -167,15 +172,18 @@ function CustomCalendar({
       className={cn(
         "w-full",
         embedded ? "max-w-none p-0" : "max-w-sm rounded-2xl border border-slate-200 bg-white p-4 shadow-sm",
+        disabled && "pointer-events-none opacity-50",
       )}
+      aria-disabled={disabled || undefined}
     >
       {/* Month / year header */}
       <div className="mb-4 flex items-center justify-between">
         <button
           type="button"
           onClick={prevMonth}
+          disabled={disabled}
           aria-label="Previous month"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronLeft className="h-4 w-4" />
         </button>
@@ -185,8 +193,9 @@ function CustomCalendar({
         <button
           type="button"
           onClick={nextMonth}
+          disabled={disabled}
           aria-label="Next month"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50"
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
         >
           <ChevronRight className="h-4 w-4" />
         </button>
@@ -209,23 +218,23 @@ function CustomCalendar({
         {cells.map((day, idx) => {
           if (!day) return <div key={idx} />;
           const ds = toDateStr(day);
-          const disabled = !!(minDate && ds < minDate);
+          const dayDisabled = disabled || !!(minDate && ds < minDate);
           const selected = value === ds;
           const isToday = todayStr === ds;
           return (
             <button
               key={idx}
               type="button"
-              disabled={disabled}
-              onClick={() => !disabled && onChange(ds)}
+              disabled={dayDisabled}
+              onClick={() => !dayDisabled && onChange(ds)}
               className={cn(
                 "flex h-10 w-full items-center justify-center rounded-lg text-sm transition sm:h-9",
-                disabled && "cursor-not-allowed text-slate-200",
-                !disabled &&
+                dayDisabled && "cursor-not-allowed text-slate-200",
+                !dayDisabled &&
                   !selected &&
                   !isToday &&
                   "text-slate-700 hover:bg-blue-50 hover:text-blue-600",
-                !disabled &&
+                !dayDisabled &&
                   isToday &&
                   !selected &&
                   "font-bold text-blue-600 ring-2 ring-blue-200 ring-offset-1",
@@ -244,7 +253,7 @@ function CustomCalendar({
 // ─── Step 2 ─────────────────────────────────────────────────────────────────────
 
 export function Step2Schedule() {
-  const { serviceSlug, liveConfig, scheduling } = useBookingV2();
+  const { serviceSlug, liveConfig, scheduling, goToStep } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
   const copy = STEP2_COPY[serviceSlug];
   const isTeamMode = (liveConfig?.cleanerMode ?? config.cleanerMode) === "team";
@@ -339,6 +348,27 @@ export function Step2Schedule() {
         <p className="mt-1 text-sm text-slate-500">{copy.subtitle}</p>
       </div>
 
+      {!areaResolved ? (
+        <div
+          className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+          role="status"
+        >
+          <p className="font-medium">Confirm your suburb in Step 1 before choosing a date.</p>
+          <p className="mt-1 text-amber-900/80">
+            {suburb?.trim()
+              ? "We could not match that suburb to a service area yet."
+              : "A supported service area is required for availability."}
+          </p>
+          <button
+            type="button"
+            onClick={() => goToStep(1)}
+            className="mt-3 inline-flex min-h-10 items-center rounded-lg bg-amber-900 px-3 py-2 text-xs font-semibold text-white transition hover:bg-amber-800"
+          >
+            Return to Step 1
+          </button>
+        </div>
+      ) : null}
+
       <hr className="border-slate-200" />
 
       {/* ── Booking type ── */}
@@ -359,11 +389,13 @@ export function Step2Schedule() {
                   key={opt.value}
                   type="button"
                   onClick={() => field.onChange(opt.value)}
+                  disabled={!areaResolved}
                   className={cn(
                     "min-h-11 w-full rounded-xl border px-6 py-3 text-sm font-semibold transition sm:w-auto sm:min-w-[120px]",
                     field.value === opt.value
                       ? "border-blue-600 bg-blue-50 text-blue-700"
                       : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
+                    !areaResolved && "cursor-not-allowed opacity-50",
                   )}
                 >
                   {opt.label}
@@ -397,6 +429,7 @@ export function Step2Schedule() {
                     onChange={field.onChange}
                     minDate={today}
                     embedded
+                    disabled={!areaResolved}
                   />
                 )}
               />
@@ -418,14 +451,16 @@ export function Step2Schedule() {
                   : suburb?.trim()
                     ? "Confirm your suburb in Step 1 to see available times."
                     : "Select a suburb in Step 1 first."
-                : "Select a date first."}
+                : areaResolved
+                  ? "Select a date first."
+                  : "Return to Step 1 and select a supported suburb first."}
             </p>
             <Controller
               name="time"
               control={control}
               rules={{ required: "Select a time" }}
               render={({ field }) =>
-                date ? (
+                date && areaResolved ? (
                   <TimeSlotPicker
                     dateYmd={date}
                     value={field.value ?? ""}
@@ -439,7 +474,7 @@ export function Step2Schedule() {
                   />
                 ) : (
                   <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
-                    Choose a date to see available times
+                    {areaResolved ? "Choose a date to see available times" : "Confirm suburb in Step 1 first"}
                   </p>
                 )
               }
