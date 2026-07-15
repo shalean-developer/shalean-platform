@@ -12,12 +12,22 @@ type ShaleanNavLogoProps = {
   intrinsicHeight?: number;
   /** LCP hint — enable only when the wordmark is above-the-fold on the route. */
   priority?: boolean;
+  /**
+   * `onDark` — white silhouette for navy/dark surfaces (footer, dark CTAs).
+   * Prefer this over ad-hoc `brightness-0 invert` on consumers.
+   */
+  variant?: "default" | "onDark";
 };
 
 /**
  * Full wordmark (`public/images/shalean-logo.png`). Transparent PNG; use `h-* w-auto` in `className`.
  */
-export function ShaleanNavLogo({ className, intrinsicHeight = 204, priority = false }: ShaleanNavLogoProps) {
+export function ShaleanNavLogo({
+  className,
+  intrinsicHeight = 204,
+  priority = false,
+  variant = "default",
+}: ShaleanNavLogoProps) {
   const intrinsicWidth = Math.round(intrinsicHeight * (SHALEAN_LOGO_WIDTH / SHALEAN_LOGO_HEIGHT));
 
   return (
@@ -27,7 +37,11 @@ export function ShaleanNavLogo({ className, intrinsicHeight = 204, priority = fa
       alt="Shalean Cleaning Services"
       width={intrinsicWidth}
       height={intrinsicHeight}
-      className={cn("object-contain object-left min-w-0 max-w-full", className)}
+      className={cn(
+        "object-contain object-left min-w-0 max-w-full",
+        variant === "onDark" && "brightness-0 invert",
+        className,
+      )}
       sizes="(max-width: 640px) 140px, 200px"
       priority={priority}
     />

@@ -465,7 +465,11 @@ export default function ServicesHubPage() {
         </section>
 
         {/* Accordions */}
-        <section className="border-t border-zinc-100 bg-white" aria-labelledby="included-heading">
+        <section
+          id="included"
+          className="scroll-mt-28 border-t border-zinc-100 bg-white"
+          aria-labelledby="included-heading"
+        >
           <Section>
             <ServicesHubAccordions
               serviceDetails={[...serviceDetails]}

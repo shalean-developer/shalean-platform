@@ -36,15 +36,22 @@ describe("rebookFromBookingRow", () => {
     ).toBe("/book/deep-cleaning?rebook=x&step=2");
   });
 
-  it("maps row fields and clears schedule/cleaners", () => {
-    const patch = bookingV2FormPatchFromBookingRow(baseRow(), "regular-cleaning", "individual_cleaners");
+  it("maps row fields, equipment, preferred cleaner, and clears schedule", () => {
+    const row = {
+      ...baseRow(),
+      selected_cleaner_id: "cleaner-1",
+      booking_snapshot: { equipmentRequired: "yes", selectedCleanerIds: ["cleaner-1"] },
+    } as BookingRow;
+    const patch = bookingV2FormPatchFromBookingRow(row, "regular-cleaning", "individual_cleaners");
     expect(patch.suburb).toBe("Sea Point");
     expect(patch.address).toBe("12 Main Rd");
     expect(patch.serviceDetails).toEqual({ bedrooms: "3", bathrooms: "2", propertyType: "house" });
     expect(patch.selectedExtras).toEqual(["inside_oven"]);
     expect(patch.accessInstructions).toBe("Ring bell");
+    expect(patch.equipmentRequired).toBe("yes");
+    expect(patch.selectedCleanerIds).toEqual(["cleaner-1"]);
     expect(patch.date).toBe("");
     expect(patch.time).toBe("");
-    expect(patch.selectedCleanerIds).toEqual([]);
+    expect(patch.serviceAreaLocationId).toBe("");
   });
 });

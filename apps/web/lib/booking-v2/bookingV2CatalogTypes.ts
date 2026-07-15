@@ -12,6 +12,8 @@ export type BookingV2FormQuestion = {
   hint?: string;
   group?: string;
   centered?: boolean;
+  /** When set, question is shown only if `serviceDetails[key]` is one of `values`. */
+  showWhen?: { key: string; values: string[] };
 };
 
 export type BookingV2ExtraTypeFilter = "light" | "heavy" | "all";

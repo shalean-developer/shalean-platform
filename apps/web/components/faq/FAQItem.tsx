@@ -16,8 +16,8 @@ export function FAQItem({ item }: Props) {
       <AccordionTrigger
         className={cn(
           "py-5 text-left text-base font-semibold text-zinc-900 hover:bg-zinc-50/90 hover:no-underline",
-          "data-[state=open]:border-l-4 data-[state=open]:border-emerald-600 data-[state=open]:bg-emerald-50/70 data-[state=open]:pl-3 sm:data-[state=open]:pl-4",
-          "[&[data-state=open]>svg]:rotate-180 [&[data-state=open]>svg]:text-emerald-700 [&_svg]:text-emerald-600",
+          "data-[state=open]:border-l-4 data-[state=open]:border-blue-600 data-[state=open]:bg-blue-50/70 data-[state=open]:pl-3 sm:data-[state=open]:pl-4",
+          "[&[data-state=open]>svg]:rotate-180 [&[data-state=open]>svg]:text-blue-700 [&_svg]:text-blue-600",
         )}
       >
         {item.question}

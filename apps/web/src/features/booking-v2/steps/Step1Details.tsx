@@ -300,9 +300,34 @@ export function Step1Details() {
   const config = SERVICE_CONFIG[serviceSlug];
   const { register, watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
+  const serviceDetails = watch("serviceDetails") ?? {};
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+
+  function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
+    if (!question.showWhen) return true;
+    const current = String(serviceDetails[question.showWhen.key] ?? "");
+    return question.showWhen.values.includes(current);
+  }
+
+  const moveTypeValue = String(serviceDetails.moveType ?? "");
+
+  // Clear answers for questions hidden by move-type (and similar) gates.
+  useEffect(() => {
+    for (const q of step1Questions) {
+      if (!q.showWhen) continue;
+      const current = String(serviceDetails[q.showWhen.key] ?? "");
+      const visible = q.showWhen.values.includes(current);
+      if (visible) continue;
+      if (serviceDetails[q.key] === undefined || serviceDetails[q.key] === "") continue;
+      setValue(`serviceDetails.${q.key}` as "serviceDetails.bedrooms", "" as never, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear only when controlling gate changes
+  }, [moveTypeValue, step1Questions, setValue]);
 
   function toggleExtra(id: string) {
     const current = selectedExtras;
@@ -313,7 +338,7 @@ export function Step1Details() {
   }
 
   const questionGroups = groupQuestions(
-    step1Questions.filter((q) => q.key !== "cleaningProducts"),
+    step1Questions.filter((q) => q.key !== "cleaningProducts" && isQuestionVisible(q)),
   );
 
   return (
@@ -332,6 +357,19 @@ export function Step1Details() {
         <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
           About the clean
         </h3>
+        {serviceSlug === "regular-cleaning" ? (
+          <details className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+            <summary className="cursor-pointer text-sm font-semibold text-slate-800">
+              What&apos;s included in standard cleaning
+            </summary>
+            <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-slate-600">
+              <li>Kitchens, bathrooms, bedrooms, and living areas dusted and wiped</li>
+              <li>Floors vacuumed and mopped; surfaces and mirrors cleaned</li>
+              <li>Bins emptied; general tidy of high-touch areas</li>
+              <li>Add-on extras (oven, fridge, windows, etc.) are optional and priced separately</li>
+            </ul>
+          </details>
+        ) : null}
         {questionGroups.map((group) => {
           if (group.type === "inline") {
             const isRooms = group.groupName === "rooms";
@@ -431,6 +469,9 @@ export function Step1Details() {
             <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
               Add-on extras
             </h3>
+            <p className="text-center text-xs text-slate-500">
+              Optional extras are not included in the base clean — add only what you need.
+            </p>
           <div className="grid gap-3 sm:grid-cols-2">
             {extras.map((extra) => {
               const checked = selectedExtras.includes(extra.id);

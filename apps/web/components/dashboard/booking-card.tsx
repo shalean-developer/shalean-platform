@@ -94,17 +94,28 @@ function getConfirmationBadge(booking: DashboardBooking): { label: string; class
 
   const rawStatus = String(booking.raw.status ?? "").trim().toLowerCase();
   const ps = String(booking.raw.payment_status ?? "").trim().toLowerCase();
+  const hasCleaner = Boolean(booking.cleaner?.name?.trim());
 
-  if (
-    rawStatus === "pending_payment" ||
-    rawStatus === "pending" ||
-    st === "pending" ||
-    st === "pending_payment" ||
-    ps === "pending_monthly"
-  ) {
+  if (rawStatus === "pending_payment" || st === "pending_payment") {
     return {
-      label: "Pending",
+      label: "Awaiting payment",
       className: "bg-amber-50 text-amber-700 border border-amber-200",
+    };
+  }
+
+  if (ps === "pending_monthly") {
+    return {
+      label: "Billed monthly",
+      className: "bg-sky-50 text-sky-700 border border-sky-200",
+    };
+  }
+
+  if (rawStatus === "pending" || st === "pending") {
+    return {
+      label: hasCleaner ? "Confirmed" : "Awaiting cleaner",
+      className: hasCleaner
+        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+        : "bg-amber-50 text-amber-700 border border-amber-200",
     };
   }
 

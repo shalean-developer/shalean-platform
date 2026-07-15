@@ -17,11 +17,11 @@ export function ReviewCard({ quote, author, initials, suburb, className }: Props
         className,
       )}
     >
-      <Quote className="absolute right-5 top-5 size-10 text-emerald-100 sm:size-12" strokeWidth={1} aria-hidden />
+      <Quote className="absolute right-5 top-5 size-10 text-blue-100 sm:size-12" strokeWidth={1} aria-hidden />
       <blockquote className="relative flex-1 pt-2 text-base leading-relaxed text-zinc-700 sm:text-[17px]">&ldquo;{quote}&rdquo;</blockquote>
       <figcaption className="relative mt-6 flex items-center gap-4 border-t border-zinc-100 pt-6">
         <div
-          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-sm font-bold text-emerald-900 ring-2 ring-white shadow"
+          className="flex size-11 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-bold text-blue-900 ring-2 ring-white shadow"
           aria-hidden
         >
           {initials}

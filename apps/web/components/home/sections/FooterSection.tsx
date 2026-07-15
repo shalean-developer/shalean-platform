@@ -29,8 +29,7 @@ const FOOTER_COMPANY = [
 
 const FOOTER_SUPPORT = [
   { label: "Get Free Quote", href: "/quote" },
-  { label: "Help Centre", href: "/faq" },
-  { label: "Cleaning FAQs", href: "/faq" },
+  { label: "Help & FAQs", href: "/faq" },
   { label: "Booking & Payments", href: "/book" },
   { label: "Terms & Conditions", href: "/terms-of-service" },
   { label: "Privacy Policy", href: "/privacy-policy" },
@@ -72,7 +71,7 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
 
             {/* Col 1 — Brand */}
             <div className="lg:col-span-1">
-              <ShaleanNavLogo className="h-9 w-auto brightness-0 invert" />
+              <ShaleanNavLogo variant="onDark" className="h-9 w-auto" />
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">
                 Reliable, professional cleaning services in Cape Town. We clean so you can live.
               </p>

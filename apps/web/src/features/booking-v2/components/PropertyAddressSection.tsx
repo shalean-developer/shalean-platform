@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useFormContext, Controller } from "react-hook-form";
 import { Home, MapPin, Phone, UserRound, ChevronDown, Check, Search, X } from "lucide-react";
@@ -15,6 +16,11 @@ import {
 } from "@/lib/booking/contactPhoneValidation";
 import { getBookingLocationOptions } from "@/lib/locations/bookingLocations";
 import { useBookingV2LocationResolve } from "@/lib/booking-v2/useBookingV2LocationResolve";
+import {
+  CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
+  CUSTOMER_SUPPORT_TELEPHONE_TEL,
+  customerSupportWhatsAppHref,
+} from "@/lib/site/customerSupport";
 
 const contactPhoneRules = {
   required: "Enter a contact phone number",
@@ -466,9 +472,34 @@ export function PropertyAddressSection() {
                 </p>
               ) : null}
               {!locationLoading && locationError && suburbValue?.trim() ? (
-                <p className="mt-1 text-xs text-red-500" role="alert">
-                  {locationError}
-                </p>
+                <div className="mt-2 space-y-2 rounded-xl border border-red-100 bg-red-50/80 px-3 py-2.5" role="alert">
+                  <p className="text-xs text-red-700">{locationError}</p>
+                  <p className="text-xs text-slate-600">
+                    Choose a nearby supported suburb from the list, or contact us and we&apos;ll check coverage for you.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <a
+                      href={CUSTOMER_SUPPORT_TELEPHONE_TEL}
+                      className="inline-flex min-h-9 items-center rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                    >
+                      Call {CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}
+                    </a>
+                    <a
+                      href={customerSupportWhatsAppHref()}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex min-h-9 items-center rounded-lg border border-green-200 bg-white px-3 text-xs font-semibold text-green-800 hover:bg-green-50"
+                    >
+                      WhatsApp support
+                    </a>
+                    <Link
+                      href="/#locations"
+                      className="inline-flex min-h-9 items-center rounded-lg border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-800 hover:bg-blue-50"
+                    >
+                      Areas we serve
+                    </Link>
+                  </div>
+                </div>
               ) : null}
               {!locationLoading &&
               !locationError &&

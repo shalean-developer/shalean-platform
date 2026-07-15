@@ -13,6 +13,6 @@ export const MARKETING_FOOTER_SERVICE_LINKS = [
   { label: "Deep Cleaning", href: "/services/deep-cleaning-cape-town" },
   { label: "Move-in / Move-out", href: "/services/move-out-cleaning-cape-town" },
   { label: "Office Cleaning", href: "/services/office-cleaning-cape-town" },
-  { label: "Window Cleaning", href: "/services" },
-  { label: "Laundry & Ironing", href: "/services" },
+  { label: "Window Cleaning", href: "/services/window-cleaning-cape-town" },
+  { label: "Airbnb Cleaning", href: "/services/airbnb-cleaning-cape-town" },
 ] as const;

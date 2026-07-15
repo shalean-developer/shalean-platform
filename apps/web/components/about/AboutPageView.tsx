@@ -82,9 +82,9 @@ export function AboutPageView() {
 
       <article>
         {/* 1. Hero */}
-        <section className="border-b border-emerald-100 bg-gradient-to-b from-emerald-50/80 via-white to-white">
+        <section className="border-b border-blue-100 bg-gradient-to-b from-blue-50/80 via-white to-white">
           <div className="mx-auto max-w-6xl px-4 pt-12 pb-14 sm:px-6 sm:pt-16 lg:px-8">
-            <p className="text-sm font-semibold uppercase tracking-wide text-emerald-800">Cape Town · Since {ABOUT_FOUNDING_YEAR}</p>
+            <p className="text-sm font-semibold uppercase tracking-wide text-blue-800">Cape Town · Since {ABOUT_FOUNDING_YEAR}</p>
             <h1 className="mt-3 max-w-3xl text-3xl font-bold tracking-tight text-zinc-900 sm:text-4xl lg:text-[2.6rem] lg:leading-[1.12]">
               Trusted Home Cleaning Services in Cape Town
             </h1>
@@ -100,14 +100,14 @@ export function AboutPageView() {
               <GrowthCtaLink
                 href="/book"
                 source="about_hero_book"
-                className="inline-flex min-h-12 items-center justify-center rounded-xl bg-emerald-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-emerald-700"
+                className="inline-flex min-h-12 items-center justify-center rounded-xl bg-blue-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
               >
                 Book a cleaner
               </GrowthCtaLink>
               <GetFreeQuoteLink
                 source="about_hero"
                 variant="outline"
-                className="border-emerald-600 text-emerald-900 hover:bg-emerald-50"
+                className="border-blue-600 text-blue-900 hover:bg-blue-50"
               />
             </div>
           </div>
@@ -203,7 +203,7 @@ export function AboutPageView() {
               },
             ].map(({ Icon, title, body }) => (
               <li key={title} className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm">
-                <div className="flex size-11 items-center justify-center rounded-xl bg-emerald-100 text-emerald-800">
+                <div className="flex size-11 items-center justify-center rounded-xl bg-blue-100 text-blue-800">
                   <Icon className="size-6" strokeWidth={1.75} aria-hidden />
                 </div>
                 <h3 className="mt-4 text-lg font-bold text-zinc-900">{title}</h3>
@@ -296,7 +296,7 @@ export function AboutPageView() {
               <GrowthCtaLink
                 href="/book"
                 source="about_team_price"
-                className="mt-8 inline-flex min-h-11 items-center justify-center rounded-xl bg-emerald-600 px-6 text-sm font-semibold text-white transition hover:bg-emerald-700"
+                className="mt-8 inline-flex min-h-11 items-center justify-center rounded-xl bg-blue-600 px-6 text-sm font-semibold text-white transition hover:bg-blue-700"
               >
                 Get your price
               </GrowthCtaLink>
@@ -305,26 +305,26 @@ export function AboutPageView() {
         </section>
 
         {/* 8. Final CTA */}
-        <section className="border-t border-emerald-950 bg-emerald-950 py-16 text-white" aria-labelledby="about-final-heading">
+        <section className="border-t border-blue-950 bg-blue-950 py-16 text-white" aria-labelledby="about-final-heading">
           <div className="mx-auto max-w-6xl px-4 text-center sm:px-6 lg:px-8">
             <h2 id="about-final-heading" className="text-2xl font-bold tracking-tight sm:text-3xl">
               Ready for a cleaner home?
             </h2>
-            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-emerald-100/95 sm:text-base">
+            <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-blue-100/95 sm:text-base">
               Lock scope online—your total is clear before we dispatch.
             </p>
             <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
               <GrowthCtaLink
                 href="/book"
                 source="about_footer_book"
-                className="inline-flex min-h-12 w-full max-w-xs items-center justify-center rounded-xl bg-white px-8 text-base font-semibold text-emerald-950 transition hover:bg-emerald-50 sm:w-auto"
+                className="inline-flex min-h-12 w-full max-w-xs items-center justify-center rounded-xl bg-white px-8 text-base font-semibold text-blue-950 transition hover:bg-blue-50 sm:w-auto"
               >
                 Book now
               </GrowthCtaLink>
               <GrowthCtaLink
                 href="/book"
                 source="about_footer_price"
-                className="inline-flex min-h-12 w-full max-w-xs items-center justify-center rounded-xl border border-emerald-400/90 px-8 text-base font-semibold text-white transition hover:bg-emerald-900/40 sm:w-auto"
+                className="inline-flex min-h-12 w-full max-w-xs items-center justify-center rounded-xl border border-blue-400/90 px-8 text-base font-semibold text-white transition hover:bg-blue-900/40 sm:w-auto"
               >
                 Get your price
               </GrowthCtaLink>

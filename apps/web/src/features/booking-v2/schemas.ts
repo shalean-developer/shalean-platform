@@ -15,12 +15,6 @@ const contactPhoneField = z
   .min(1, "Enter a contact phone number")
   .refine(isValidContactPhone, { message: CONTACT_PHONE_VALIDATION_MESSAGE });
 
-const optionalContactPhoneField = z
-  .string()
-  .optional()
-  .or(z.literal(""))
-  .refine((v) => !v || isValidContactPhone(v), { message: CONTACT_PHONE_VALIDATION_MESSAGE });
-
 // ─── Step 1: Details ───────────────────────────────────────────────────────────
 
 const equipmentQuoteSchema = z
@@ -168,7 +162,7 @@ export const signInSchema = z.object({
 export const signUpSchema = z.object({
   fullName: z.string().min(2, "Enter your full name"),
   email: z.string().email("Enter a valid email address"),
-  phone: optionalContactPhoneField,
+  phone: contactPhoneField,
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 
