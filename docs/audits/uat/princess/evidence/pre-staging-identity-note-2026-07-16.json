@@ -1,0 +1,7 @@
+﻿{
+    "productionTouched":  false,
+    "stagingUrl":  "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+    "note":  "Anonymous /api/health and cron routes may return Vercel Deployment Protection HTML (200). App-level CRON_SECRET rejection is covered by local verifyCronSecret tests. Staging identity previously verified as gbgnemlpyykyhpqqbgru (see prb-auth-staging-probe).",
+    "productionRef":  "tchayecuvzssixyxlvfu",
+    "ticket":  "PRINCESS-UAT-PRE"
+}

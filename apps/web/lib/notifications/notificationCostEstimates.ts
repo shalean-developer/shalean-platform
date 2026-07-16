@@ -7,7 +7,9 @@ function numEnv(key: string, fallback: number): number {
 }
 
 /** Single-message estimate in USD by channel. */
-export function estimatedNotificationCostUsd(channel: "email" | "whatsapp" | "sms"): number {
+export function estimatedNotificationCostUsd(
+  channel: "email" | "whatsapp" | "sms" | "push",
+): number {
   switch (channel) {
     case "email":
       return numEnv("NOTIFICATION_COST_EMAIL_USD", 0.0004);
@@ -15,6 +17,8 @@ export function estimatedNotificationCostUsd(channel: "email" | "whatsapp" | "sm
       return numEnv("NOTIFICATION_COST_WHATSAPP_USD", 0.005);
     case "sms":
       return numEnv("NOTIFICATION_COST_SMS_USD", 0.08);
+    case "push":
+      return numEnv("NOTIFICATION_COST_PUSH_USD", 0);
     default:
       return 0;
   }

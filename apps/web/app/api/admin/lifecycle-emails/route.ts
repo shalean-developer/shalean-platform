@@ -84,6 +84,10 @@ export async function GET(request: Request) {
     },
     cron: {
       last_success_at: monitoring.lastCronSuccessAt,
+      last_failure_at: monitoring.lastCronFailureAt,
+      last_invoked_at: monitoring.lastCronInvokedAt,
+      health_status: monitoring.cronHealth.status,
+      environment: monitoring.cronHealth.environment,
       pending_count: monitoring.pendingCount,
       oldest_pending_scheduled_for: monitoring.oldestPendingScheduledFor,
     },

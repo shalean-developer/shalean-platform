@@ -3,6 +3,12 @@ import {
   recordNotificationAlertFired,
   type AlertSeverity,
 } from "@/lib/admin/notificationMonitoring";
+import {
+  classifyCronRunHealth,
+  type CronRunHealthSnapshot,
+  type CronRunRow,
+} from "@/lib/cron/cronRunHealth";
+import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
 import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
@@ -75,6 +81,9 @@ export type LifecycleMonitoringSnapshot = {
   oldestPendingScheduledFor: string | null;
   recentFailures: number;
   lastCronSuccessAt: string | null;
+  lastCronFailureAt: string | null;
+  lastCronInvokedAt: string | null;
+  cronHealth: CronRunHealthSnapshot;
   alertsFired: string[];
 };
 
@@ -100,12 +109,10 @@ export async function evaluateLifecycleEmailAlerts(
       .gte("processed_at", new Date(now - FAILURE_SPIKE_WINDOW_MINUTES * 60_000).toISOString()),
     admin
       .from("cron_runs")
-      .select("created_at")
+      .select("created_at, status, message")
       .eq("job_name", "booking-lifecycle")
-      .eq("status", "success")
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(20),
   ]);
 
   const pendingCount = pendingRes.count ?? 0;
@@ -114,8 +121,17 @@ export async function evaluateLifecycleEmailAlerts(
       ? oldestRes.data.scheduled_for
       : null;
   const recentFailures = failuresRes.count ?? 0;
-  const lastCronSuccessAt =
-    cronRes.data && typeof cronRes.data.created_at === "string" ? cronRes.data.created_at : null;
+  const cronRows = (cronRes.data ?? []) as CronRunRow[];
+  const cronHealth = classifyCronRunHealth({
+    jobName: "booking-lifecycle",
+    rows: cronRows,
+    nowMs: now,
+    staleAfterMinutes: CRON_STALE_MINUTES,
+    environment: resolveDeploymentEnvironment(),
+  });
+  const lastCronSuccessAt = cronHealth.lastSuccessAt;
+  const lastCronFailureAt = cronHealth.lastFailureAt;
+  const lastCronInvokedAt = cronHealth.lastInvokedAt;
 
   if (recentFailures >= FAILURE_SPIKE_THRESHOLD) {
     alertsFired.push("lifecycle_resend_failures_spike");
@@ -171,6 +187,9 @@ export async function evaluateLifecycleEmailAlerts(
     oldestPendingScheduledFor,
     recentFailures,
     lastCronSuccessAt,
+    lastCronFailureAt,
+    lastCronInvokedAt,
+    cronHealth,
     alertsFired,
   };
 }

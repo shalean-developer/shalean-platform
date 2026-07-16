@@ -32,6 +32,14 @@ export async function upsertUserPushToken(
       : null;
   const now = new Date().toISOString();
 
+  // Expo tokens are device-unique: reclaim from any other user before upsert.
+  const { error: reclaimErr } = await admin
+    .from("user_push_tokens")
+    .delete()
+    .eq("token", token)
+    .neq("user_id", input.userId);
+  if (reclaimErr) return { ok: false, error: reclaimErr.message, status: 500 };
+
   const { data: existing, error: selErr } = await admin
     .from("user_push_tokens")
     .select("id")

@@ -15,8 +15,8 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 const M20_BOOKING_ID_UUID_RE =
   /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
-export type NotificationLogChannel = "email" | "whatsapp" | "sms";
-export type NotificationLogProvider = "resend" | "twilio" | "meta";
+export type NotificationLogChannel = "email" | "whatsapp" | "sms" | "push";
+export type NotificationLogProvider = "resend" | "twilio" | "meta" | "expo";
 export type NotificationLogStatus = "sent" | "failed";
 
 export type NotificationLogWriteInput = {
