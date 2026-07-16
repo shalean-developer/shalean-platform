@@ -129,6 +129,10 @@ export function classifyResendSendError(error: ResendLikeError | null | undefine
     : null;
   const messageRaw = String(error.message ?? "").trim();
 
+  // `safeResendSend` uses synthetic block reasons (non-production allowlist gating).
+  // These are deployment/config issues, not transient provider failures.
+  if (name === "outbound_blocked") return "permanent_config";
+
   if (PERMANENT_CONFIG_SENTINEL_MESSAGES.some((m) => messageRaw === m)) {
     return "permanent_config";
   }

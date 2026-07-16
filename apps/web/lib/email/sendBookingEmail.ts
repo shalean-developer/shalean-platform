@@ -9,6 +9,7 @@ import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { emailSafeGoUrl } from "@/lib/email/emailSafeGoUrl";
 import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
+import { safeResendSend } from "@/lib/email/safeResendSend";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { logPipelineEmailTelemetry } from "@/lib/notifications/notificationEmailTelemetry";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
@@ -259,7 +260,7 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   }
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await safeResendSend({
       from,
       to: p.customerEmail,
       subject: legacySubject,

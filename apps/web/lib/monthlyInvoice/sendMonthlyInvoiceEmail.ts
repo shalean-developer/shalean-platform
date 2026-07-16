@@ -5,6 +5,7 @@ import {
   type EmailSendErrorClassification,
   type ResendLikeError,
 } from "@/lib/email/classifyResendSendError";
+import { safeResendSend } from "@/lib/email/safeResendSend";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { loadMonthlyInvoiceEmailPdfAttachment } from "@/lib/monthlyInvoice/loadMonthlyInvoiceEmailPdfAttachment";
 import { renderMonthlyInvoicePaymentLinksHtml } from "@/lib/monthlyInvoice/monthlyInvoicePaymentLinkHtml";
@@ -98,7 +99,7 @@ export async function sendMonthlyInvoiceEmail(params: {
     <p>Thank you for choosing Shalean.</p>
   `;
 
-  const { error } = await resend.emails.send({
+  const { error } = await safeResendSend({
     from: getDefaultFromAddress(),
     to: params.to,
     subject,
@@ -188,7 +189,7 @@ export async function sendMonthlyInvoiceReminderEmail(params: {
     <p>Thank you,<br/>Shalean Cleaning Services</p>
   `;
 
-  const { error } = await resend.emails.send({
+  const { error } = await safeResendSend({
     from: getDefaultFromAddress(),
     to: params.to,
     subject,
