@@ -103,9 +103,9 @@ Method: SHA-256 hash compare of the historical fixture against local secret file
 |------|--------|
 | Open incident `34868884` | Attempted |
 | Authenticate to GitGuardian | **Blocked** — browser redirected to GitHub OAuth login; agent has no GG API key |
-| Classify as test credential / false positive / invalid secret | **Not completed** |
+| Classify as test credential / false positive / invalid secret | **Not completed** (dashboard auth blocked) — superseded by authorized history rewrite |
 | Operator note (ready to paste) | See below |
-| Refresh GG PR check | **Not completed** — still **FAILURE** on HEAD |
+| Refresh GG PR check | **Completed via rewrite** — GG **PASS** on rewritten HEAD `9056b396…` |
 
 **Prepared dismissal note (for dashboard):**
 
@@ -220,6 +220,7 @@ Authorized under ticket **PRINCESS-UAT-PRE-GG-REWRITE** after the prior GATE dec
 | Clean base retained | `f3246e3ebe7db0eef4cb0cd495eb6e53e5a39d68` |
 | Old remote / reviewed HEAD | `9d4a16a34f1dbafe3895bdfac31a06e67ed2f21c` |
 | New rewritten commit | `9056b3969df4b3e3da880255e6bb6e2a7b9b31af` |
+| Evidence follow-up commits (docs only) | `9ff033cf…`, `04b58f8a…` (current PR HEAD) |
 | Commit subject | `fix(notifications): harden push retry and cron reliability` |
 | Commits dropped from PR reachability | `bdf96849…`, `1d28835f…`, `9d4a16a3…` |
 | Reachable PR commits after rewrite | `f3246e3e…` → `9056b396…` |
