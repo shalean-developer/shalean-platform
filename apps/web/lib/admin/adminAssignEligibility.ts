@@ -568,7 +568,7 @@ export async function computeAssignEligibility(
 
   const { data: dayBookings } = await admin
     .from("bookings")
-    .select("id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, time, date, booking_date, duration_minutes, status")
+    .select("id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, time, date, duration_minutes, status")
     .eq("date", bookingDateYmd)
     .in("cleaner_id", cleanerIds)
     .neq("id", bookingId);

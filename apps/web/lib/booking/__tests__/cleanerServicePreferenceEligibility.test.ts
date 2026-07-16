@@ -86,7 +86,7 @@ function adminWithPrefs(
             return {
               in() {
                 return {
-                  or() {
+                  eq() {
                     return Promise.resolve({ data: bookings, error: null });
                   },
                 };
@@ -331,7 +331,7 @@ describe("getAvailableCleaners /api/booking/cleaners pool", () => {
               return {
                 in() {
                   return {
-                    or() {
+                    eq() {
                       return Promise.resolve({ data: [], error: null });
                     },
                   };
