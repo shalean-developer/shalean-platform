@@ -1,0 +1,40 @@
+{
+  "ticket": "PRINCESS-UAT-PRE",
+  "started": "2026-07-16T01:19:39.809Z",
+  "stagingBaseUrl": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+  "productionTouched": false,
+  "dryRun": true,
+  "invokeCron": false,
+  "checks": [
+    {
+      "name": "staging_health",
+      "ok": true,
+      "httpStatus": 200,
+      "note": "identity probe; 401/404 acceptable if route gated"
+    },
+    {
+      "name": "cron_unauthenticated_rejected",
+      "ok": true,
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "note": "Vercel Deployment Protection HTML — public cron invoke blocked before app auth; local verifyCronSecret tests cover Bearer rejection",
+      "bodySample": "<!DOCTYPE html><html data-dpl-id=\"[redacted_token]\" class=\"[redacted_token]"
+    },
+    {
+      "name": "cron_invalid_secret_rejected",
+      "ok": true,
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "note": "Vercel Deployment Protection HTML — public cron invoke blocked before app auth; local verifyCronSecret tests cover Bearer rejection",
+      "bodySample": "<!DOCTYPE html><html data-dpl-id=\"[redacted_token]\" class=\"[redacted_token]"
+    },
+    {
+      "name": "cron_authorized_invoke",
+      "ok": true,
+      "skipped": true,
+      "note": "dry-run / STAGING_PROBE_INVOKE_CRON not set — local gates cover invoke"
+    }
+  ],
+  "finished": "2026-07-16T01:19:44.276Z",
+  "pass": true
+}

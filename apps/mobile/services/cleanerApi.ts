@@ -68,4 +68,22 @@ export const CleanerApi = {
       json: body,
     });
   },
+
+  /** Register Expo push token with backend (auth user id from JWT). */
+  registerPushDevice(body: {
+    token: string;
+    platform?: string;
+  }): Promise<ApiResult<{ ok?: boolean; app?: string }>> {
+    return getMobileApiClient().requestJson("/api/cleaner/devices", {
+      method: "POST",
+      json: body,
+    });
+  },
+
+  unregisterPushDevice(body: { token: string }): Promise<ApiResult<{ ok?: boolean }>> {
+    return getMobileApiClient().requestJson("/api/cleaner/devices", {
+      method: "DELETE",
+      json: body,
+    });
+  },
 };

@@ -2,7 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
-export type NotificationIdempotencyChannel = "email" | "sms" | "in_app";
+export type NotificationIdempotencyChannel = "email" | "sms" | "in_app" | "push";
 
 export type TryClaimNotificationIdempotencyParams = {
   /** Paystack payment reference — primary dedupe key with eventType + channel. */

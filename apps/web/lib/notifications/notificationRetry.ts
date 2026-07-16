@@ -1,9 +1,11 @@
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
+import { safeResendSend } from "@/lib/email/safeResendSend";
 import {
   getSmsOutboundDecision,
   type CommunicationRecipientKind,
 } from "@/lib/notifications/communicationPolicy";
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
+import { dispatchExpoPush } from "@/lib/push/dispatchExpoPush";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { abortWhatsAppQueueJob, enqueueWhatsApp, flushWhatsAppJobById } from "@/lib/whatsapp/queue";
 
@@ -107,8 +109,7 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
     if (!subject || !html) {
       return { ok: false, error: "Email retry requires payload.subject and payload.html.", httpStatus: 400 };
     }
-    const resend = getResend();
-    if (!resend) {
+    if (!getResend()) {
       await writeNotificationLog({
         ...baseLog,
         channel: "email",
@@ -119,13 +120,15 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
       return { ok: false, error: "Resend is not configured.", httpStatus: 503 };
     }
     try {
-      const { error } = await resend.emails.send({
+      // Must use safeResendSend so staging allowlist / suppression cannot be bypassed.
+      const { error } = await safeResendSend({
         from: getDefaultFromAddress(),
         to: row.recipient,
         subject,
         html,
       });
       if (error) {
+        const blocked = error.name === "outbound_blocked";
         await writeNotificationLog({
           ...baseLog,
           channel: "email",
@@ -133,7 +136,11 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
           error: error.message,
           provider: "resend",
         });
-        return { ok: false, error: error.message, httpStatus: 502 };
+        return {
+          ok: false,
+          error: error.message,
+          httpStatus: blocked ? 403 : error.name === "resend_unconfigured" ? 503 : 502,
+        };
       }
       await writeNotificationLog({
         ...baseLog,
@@ -237,6 +244,71 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
       provider: "meta",
     });
     return { ok: true };
+  }
+
+  if (row.channel === "push" && row.provider === "expo") {
+    const title = typeof payload.title === "string" ? payload.title : "";
+    const body = typeof payload.body === "string" ? payload.body : "";
+    const userId =
+      typeof payload.user_id === "string"
+        ? payload.user_id
+        : typeof payload.userId === "string"
+          ? payload.userId
+          : "";
+    if (!title || !body) {
+      return { ok: false, error: "Push retry requires payload.title and payload.body.", httpStatus: 400 };
+    }
+    if (!userId) {
+      return { ok: false, error: "Push retry requires payload.user_id.", httpStatus: 400 };
+    }
+    const admin = getSupabaseAdmin();
+    if (!admin) {
+      return { ok: false, error: "Supabase is not configured.", httpStatus: 503 };
+    }
+    const priorAttempts = Number(payload.attempts);
+    const outcome = await dispatchExpoPush(
+      { admin },
+      {
+        userId,
+        token: row.recipient,
+        title,
+        body,
+        data:
+          payload.data && typeof payload.data === "object" && !Array.isArray(payload.data)
+            ? (payload.data as Record<string, unknown>)
+            : undefined,
+        eventType: row.event_type ?? "admin_retry",
+        templateKey: row.template_key,
+        role:
+          String(row.role ?? "").toLowerCase() === "cleaner"
+            ? "cleaner"
+            : String(row.role ?? "").toLowerCase() === "admin"
+              ? "admin"
+              : "customer",
+        bookingId: row.booking_id,
+        idempotencyKey:
+          typeof payload.idempotency_key === "string" && payload.idempotency_key.trim()
+            ? `admin_retry:${row.id}:${payload.idempotency_key}`
+            : `admin_retry:${row.id}`,
+        priorAttempts: Number.isFinite(priorAttempts) && priorAttempts > 0 ? 0 : 0,
+        app: payload.app === "cleaner" ? "cleaner" : "customer",
+      },
+    );
+    if (outcome.status === "sent" || outcome.status === "skipped_duplicate") {
+      return { ok: true };
+    }
+    if (outcome.status === "retry") {
+      return {
+        ok: false,
+        error: `Push retry scheduled: ${outcome.errorCategory}`,
+        httpStatus: 502,
+      };
+    }
+    return {
+      ok: false,
+      error: `Push dead-letter: ${outcome.errorCategory}`,
+      httpStatus: 502,
+    };
   }
 
   if (row.channel === "sms" && row.provider === "twilio") {

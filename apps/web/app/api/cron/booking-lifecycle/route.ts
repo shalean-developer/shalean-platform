@@ -297,6 +297,15 @@ export async function POST(request: Request) {
       message: jobErr.message,
       context: {},
     });
+    await logCronRun({
+      jobName: "booking-lifecycle",
+      status: "error",
+      message: `load_lifecycle_jobs_failed`,
+      context: {
+        errorCategory: "db_query_failed",
+        pastBookingsMarkedCompleted: complete.completed,
+      },
+    });
     return NextResponse.json({ error: jobErr.message }, { status: 500 });
   }
 
