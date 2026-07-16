@@ -190,6 +190,81 @@ An automated verification pass was run against the latest PR HEAD to establish c
 
 ---
 
+## 8b. Root-Cause Diagnosis — Preview Git-Branch Scope Mismatch
+
+**Diagnosis date:** 2026-07-16T21:38Z · **Mode:** read-only code + runtime trace · **Scope target:** PR branch `fix/mkt-001a-security-hardening`, deployment `dpl_BnjkHU46E1eFTqt3vG1EULqMCPd9` @ `d1b4510f`.
+
+### Verdict
+
+The missing values are **not** a code defect, a variable-name mismatch, a `NEXT_PUBLIC_*` build-inlining artifact, or a runtime-initialization bug. They are a **Vercel environment *scope* mismatch**: the Supabase (and Paystack / URL / identity) variables are configured as **Preview + specific git-branch** records scoped to the **`staging`** (and `development`) branches — not "all Preview branches." The PR-branch preview `fix/mkt-001a-security-hardening` therefore receives **none** of them. The code reads the correct names; there is simply nothing in `process.env` for this branch's deployment to read.
+
+### Decisive runtime evidence — `/api/health/environment`
+
+Live fetch on the PR-HEAD preview (`dpl_BnjkHU46E1eFTqt3vG1EULqMCPd9` @ `d1b4510f`, via temporary bypass):
+
+```json
+{"status":"ok","service":"shalean-environment","timestamp":"2026-07-16T21:37:56.190Z",
+ "deployment":"preview","vercelEnv":"preview","gitBranch":"fix/mkt-001a-security-hardening",
+ "shaleanAppEnv":null,
+ "supabase":{"configuredRef":null,"expectedRef":null,"urlHost":null},
+ "paystack":{"secretMode":"missing","publicMode":"missing","secretPrefix":"(unset)","publicPrefix":"(unset)"},
+ "messaging":{"outboundDisabled":false,"emailAllowlistConfigured":false,"phoneAllowlistConfigured":false,"smsOutboundEnabled":false},
+ "issues":[]}
+```
+
+The deployment is genuinely in the **Preview** environment (Vercel *system* vars `VERCEL_ENV=preview`, `VERCEL_GIT_COMMIT_REF` are present), yet **every custom project variable is absent** — Supabase, Paystack, `SHALEAN_APP_ENV`, the outbound-email allowlist. That breadth is the tell: a name or inlining problem would affect only specific variables; an entire empty custom-env set points to branch-scope filtering. `issues:[]` is expected here because with no Supabase URL at all there is nothing to mismatch, and `VERCEL_GIT_COMMIT_REF` is present (so `env_identity_unknown` does not fire).
+
+### Evidence table 1 — code paths that read the variables / report the flags
+
+| Flag / client | File & line | Exact `process.env.*` read | Expected Vercel var(s) | Name mismatch? |
+|---|---|---|---|---|
+| `urlPresent`, `serviceRoleKeyPresent` (Admin) | `apps/web/lib/supabase/admin.ts:31–34`, logged `:9–12` | `NEXT_PUBLIC_SUPABASE_URL` \|\| `SUPABASE_URL`; `SUPABASE_SERVICE_ROLE_KEY` \|\| `SUPABASE_SERVICE_KEY` | `NEXT_PUBLIC_SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` | No — names match exactly; values absent for this branch |
+| `urlPresent`, `anonKeyPresent` (Server/SSR) | `apps/web/lib/supabase/server.ts:23–24`, logged `:10–13` | `NEXT_PUBLIC_SUPABASE_URL`; `NEXT_PUBLIC_SUPABASE_ANON_KEY` | same | No — absent for this branch |
+| Browser client | `apps/web/lib/supabase/browser.ts:84–85` (guarded by `typeof window`) | `NEXT_PUBLIC_SUPABASE_URL`; `NEXT_PUBLIC_SUPABASE_ANON_KEY` | same | No — client-inlined at build; also absent |
+| Health `configuredRef`/`urlHost` | `apps/web/app/api/health/environment/route.ts:21` | `NEXT_PUBLIC_SUPABASE_URL` ?? `SUPABASE_URL` | same | Reports `null` → confirms both absent |
+| Build env-safety gate | `apps/web/lib/env/assertEnvironmentSafety.ts:115` | `NEXT_PUBLIC_SUPABASE_URL` ?? `SUPABASE_URL` | same | No `supabase_ref_mismatch` raised (actual+expected both null) |
+| Image host (build) | `apps/web/next.config.ts:34` | `NEXT_PUBLIC_SUPABASE_URL` | same | Undefined at build → no Supabase image host registered |
+
+Every read targets the exact names the operator configured (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`) plus optional server-side aliases (`SUPABASE_URL`, `SUPABASE_SERVICE_KEY`). A name mismatch is ruled out.
+
+### Evidence table 2 — the four candidate causes tested against evidence
+
+| Candidate cause | Fits evidence? | Why |
+|---|---|---|
+| Name mismatch | Ruled out | Code reads the identical names (+ correct aliases). If present, they would be read. |
+| `NEXT_PUBLIC` build-inlining artifact (public vars stripped at runtime) | Not the cause | The non-public runtime var `SUPABASE_SERVICE_ROLE_KEY` (read live from `process.env`, never inlined) is *also* missing. An inlining issue cannot explain a plain runtime var being absent. |
+| Runtime initialization bug (client built before env read, stale cache) | Ruled out | Module-scope caches only memoize a correctly-computed null. The `force-dynamic` health endpoint independently reports `configuredRef:null` on a fresh read. Logic is sound; inputs are empty. |
+| **Scope / git-branch targeting mismatch** | **Root cause** | `VERCEL_ENV=preview` present but *all* custom vars empty — matches Preview vars being filtered to specific branches this deployment is not on. |
+
+### Corroboration — the project's own scope contract (ENV-04)
+
+`docs/audits/environments/04-vercel-production-staging-development-variable-audit.md`:
+
+- **Approved Environment Model** places Supabase / Paystack / URLs / `SHALEAN_APP_ENV` / `CRON_SECRET` / `ADMIN_EMAILS` under **"Preview `staging`"** (and Preview `development`).
+- **Matrix rows 129–131:** `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` = **"Present (branch)" → "Correctly isolated."**
+- **Line 46:** "'Development' … means **Preview + git branch `development`**."
+- **Line 123:** only **45 *unscoped* Preview keys** "bleed into all Preview branches" — Supabase is deliberately **not** among them; it is branch-scoped.
+
+So the variables genuinely exist in Preview, but bound to `git branch = staging` (and `development`). A PR preview for `fix/mkt-001a-security-hardening` is on neither branch, so it inherits only the 45 unscoped Preview secrets + Vercel system vars — exactly what the health endpoint shows.
+
+### Root cause (one sentence)
+
+> The Supabase Preview variables are scoped to **Preview + git branch `staging`/`development`**, so the `fix/mkt-001a-security-hardening` PR-branch preview receives none of them; `urlPresent`/`anonKeyPresent`/`serviceRoleKeyPresent` are all false because those names are simply not in this deployment's environment — the code and variable names are correct.
+
+### Remediation direction (diagnosis only — not applied)
+
+Broaden the **scope** (rename nothing), then **redeploy** (required both because Vercel binds env to a deployment at build time and because the `NEXT_PUBLIC_*` values are inlined at build):
+
+1. Add `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (+ `MARKETING_OAUTH_ENCRYPTION_KEY`) as Preview records that **also target the `fix/mkt-001a-security-hardening` branch**, pointing at staging `gbgnemlpyykyhpqqbgru`. (Per governance, do not push PR HEAD onto the persistent `staging` branch merely to inherit its scope.)
+2. Redeploy PR HEAD.
+3. Verify via `/api/health/environment`: expect `supabase.configuredRef = gbgnemlpyykyhpqqbgru`, `urlHost` non-null.
+
+### No code change required
+
+The application code, variable names, alias fallbacks, `NEXT_PUBLIC_*` handling, and client-initialization logic are all correct. OPS-001 is an **environment-scoping** action, not an engineering change. Confirmed: **no code modification is required or recommended.**
+
+---
+
 ## 8. Handoff summary
 
 - **Do:** configure Preview-scoped env (§4.1) for staging `gbgnemlpyykyhpqqbgru`, redeploy `86efe59c`, verify presence + binding, run §5 matrix, record evidence in the RC3 report, return for merge authorization.
