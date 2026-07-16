@@ -465,10 +465,11 @@ export async function POST(request: Request) {
     );
   }
   if (counters.skipped_plans > 0) {
+    // Data-quality alert only — cron_runs stays success when failed === 0 so last_success_at keeps updating.
     await reportOperationalIssue(
-      "error",
+      "warn",
       "cron/generate-recurring-bookings",
-      `${counters.skipped_plans} active recurring plan(s) skipped (email/profile/billing/window)`,
+      `${counters.skipped_plans} active recurring plan(s) skipped (email/profile/billing)`,
       counters,
     );
   }

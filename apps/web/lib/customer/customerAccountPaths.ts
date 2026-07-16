@@ -14,6 +14,14 @@ export function customerAccountBookingsUrl(appBase: string): string {
   return `${appBase.replace(/\/$/, "")}${CUSTOMER_ACCOUNT_BOOKINGS_PATH}`;
 }
 
+/** Prefer booking detail when id is known; otherwise the bookings list. */
+export function customerAccountBookingUrl(appBase: string, bookingId?: string | null): string {
+  const base = appBase.replace(/\/$/, "");
+  const id = String(bookingId ?? "").trim();
+  if (id) return `${base}${customerBookingDetailPath(id)}`;
+  return `${base}${CUSTOMER_ACCOUNT_BOOKINGS_PATH}`;
+}
+
 export function customerAccountReviewsUrl(appBase: string): string {
   return `${appBase.replace(/\/$/, "")}${CUSTOMER_ACCOUNT_REVIEWS_PATH}`;
 }

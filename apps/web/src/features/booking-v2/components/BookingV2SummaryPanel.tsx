@@ -24,6 +24,7 @@ import type { BookingV2FormData, BookingStep } from "@/src/features/booking-v2/t
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { formatAreasServedPreview } from "@/src/features/booking-v2/components/CleanerCard";
 import { formatEstimatedCleaningTimeLabel, estimatedCleaningHoursFromMinutes } from "@/lib/booking-v2/formatEstimatedCleaningTime";
+import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
 
 const TRUST_BADGES = [
   { Icon: ShieldCheck, title: "Vetted cleaners", desc: "Background checked & verified", color: "text-green-600" },
@@ -319,27 +320,34 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             </div>
             {values.bookingType === "recurring" && values.recurringFrequency ? (
               <div className="mt-1.5 space-y-0.5 text-xs text-slate-600">
-                <p>
-                  {recurringFrequencyLabel(values.recurringFrequency)} plan
-                  {(values.recurringDays ?? []).length > 0
-                    ? ` · ${values.recurringDays.join(", ")}`
-                    : ""}
-                </p>
-                <p>
-                  Estimated monthly spend: about R
-                  {(
-                    displayTotal *
-                    (values.recurringFrequency === "weekly"
-                      ? 4
-                      : values.recurringFrequency === "fortnightly"
-                        ? 2
-                        : 1)
-                  ).toLocaleString("en-ZA")}{" "}
-                  (based on this visit price).
-                </p>
-                <p className="text-slate-500">
-                  Future visits are charged at the same per-visit price unless you change your plan.
-                </p>
+                {(() => {
+                  const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                    frequency: values.recurringFrequency,
+                    daysOfWeek: values.recurringDays ?? [],
+                    pricePerVisitZar: displayTotal,
+                  });
+                  return (
+                    <>
+                      <p>
+                        {recurringFrequencyLabel(values.recurringFrequency)} plan
+                        {(values.recurringDays ?? []).length > 0
+                          ? ` · ${values.recurringDays.join(", ")}`
+                          : ""}
+                      </p>
+                      <p>
+                        About {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated
+                        monthly total R{estimatedMonthlyZar.toLocaleString("en-ZA")}
+                      </p>
+                      <p className="font-medium text-slate-700">
+                        Pay today: R{displayTotal.toLocaleString("en-ZA")} (this visit)
+                      </p>
+                      <p className="text-slate-500">
+                        Each visit is billed at this per-visit price. Future visits are charged
+                        separately (or on your monthly invoice if your account uses monthly billing).
+                      </p>
+                    </>
+                  );
+                })()}
               </div>
             ) : (
               <p className="mt-0.5 text-xs text-slate-500">

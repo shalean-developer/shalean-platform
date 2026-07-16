@@ -9,6 +9,40 @@ export type EnsureCleanerEarningsLedgerResult =
   | { ok: false; error: string };
 
 /**
+ * Prefer `cleaner_id`, fall back to `payout_owner_cleaner_id` (solo jobs can complete with owner only).
+ * Exported for unit tests.
+ */
+export function resolveCleanerEarningsLedgerCleanerId(row: {
+  cleaner_id?: string | null;
+  payout_owner_cleaner_id?: string | null;
+}): string | null {
+  const cid = String(row.cleaner_id ?? "").trim();
+  if (cid) return cid;
+  const owner = String(row.payout_owner_cleaner_id ?? "").trim();
+  return owner || null;
+}
+
+/**
+ * Fill-if-empty owner stamp for solo completions.
+ * Never overwrites an existing cleaner_id / payout_owner_cleaner_id.
+ * Team jobs return {} (team payout path owns allocation).
+ */
+export function buildSoloCompletionOwnerStamp(params: {
+  isTeamJob: boolean;
+  existingCleanerId?: string | null;
+  existingPayoutOwnerId?: string | null;
+  ownerId: string | null | undefined;
+}): Record<string, string> {
+  if (params.isTeamJob) return {};
+  const ownerId = String(params.ownerId ?? "").trim();
+  if (!ownerId) return {};
+  const patch: Record<string, string> = {};
+  if (!String(params.existingCleanerId ?? "").trim()) patch.cleaner_id = ownerId;
+  if (!String(params.existingPayoutOwnerId ?? "").trim()) patch.payout_owner_cleaner_id = ownerId;
+  return patch;
+}
+
+/**
  * Inserts `cleaner_earnings` when booking is completed, line earnings finalized, solo job.
  * Idempotent on `booking_id` (unique index).
  */
@@ -22,7 +56,9 @@ export async function ensureCleanerEarningsLedgerRow(params: {
 
   const { data: b, error: bErr } = await admin
     .from("bookings")
-    .select("id, status, cleaner_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_earnings_total_cents")
+    .select(
+      "id, status, cleaner_id, payout_owner_cleaner_id, is_team_job, cleaner_line_earnings_finalized_at, cleaner_earnings_total_cents",
+    )
     .eq("id", bid)
     .maybeSingle();
   if (bErr || !b) return { ok: false, error: bErr?.message ?? "Booking not found" };
@@ -30,6 +66,7 @@ export async function ensureCleanerEarningsLedgerRow(params: {
   const row = b as {
     status?: string | null;
     cleaner_id?: string | null;
+    payout_owner_cleaner_id?: string | null;
     is_team_job?: boolean | null;
     cleaner_line_earnings_finalized_at?: string | null;
     cleaner_earnings_total_cents?: number | null;
@@ -45,7 +82,7 @@ export async function ensureCleanerEarningsLedgerRow(params: {
     return { ok: true, skipped: true, reason: "line_earnings_not_finalized" };
   }
 
-  const cleanerId = String(row.cleaner_id ?? "").trim();
+  const cleanerId = resolveCleanerEarningsLedgerCleanerId(row);
   if (!cleanerId) {
     return { ok: true, skipped: true, reason: "no_cleaner" };
   }

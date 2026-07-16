@@ -40,6 +40,7 @@ import {
   recurringFrequencyLabel,
   shouldShowRecurringDayPicker,
 } from "@/src/features/booking-v2/config/recurringScheduleOptions";
+import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
 import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
 import {
   ServiceQuestionOptionCards,
@@ -1279,16 +1280,45 @@ export function Step3Review() {
           <div className="min-w-0 space-y-2.5 px-4 py-4 sm:px-5">
             <CustomerPriceBreakdown pricing={pricingSummary} />
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
-              <span className="text-base font-bold text-slate-900">Estimated total</span>
+              <span className="text-base font-bold text-slate-900">
+                {values.bookingType === "recurring" ? "Price per visit" : "Estimated total"}
+              </span>
               <span className="text-2xl font-bold text-blue-600">
                 R{estimatedTotal.toLocaleString("en-ZA")}
               </span>
             </div>
+            {values.bookingType === "recurring" && values.recurringFrequency ? (
+              <div className="space-y-1 border-t border-slate-100 pt-3 text-xs text-slate-600">
+                {(() => {
+                  const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                    frequency: values.recurringFrequency,
+                    daysOfWeek: values.recurringDays ?? [],
+                    pricePerVisitZar: estimatedTotal,
+                  });
+                  return (
+                    <>
+                      <p>
+                        About {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated
+                        monthly total{" "}
+                        <span className="font-semibold text-slate-800">
+                          R{estimatedMonthlyZar.toLocaleString("en-ZA")}
+                        </span>
+                      </p>
+                      <p className="font-medium text-slate-700">
+                        Amount due today: R{estimatedTotal.toLocaleString("en-ZA")} (this visit)
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : null}
           </div>
 
           <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 sm:px-5">
             <p className="text-xs text-slate-400">
-              Final amount confirmed before payment. No hidden fees.
+              {values.bookingType === "recurring"
+                ? "Pay today for this visit. Future visits bill at the same per-visit price (or on your monthly invoice if enabled)."
+                : "Final amount confirmed before payment. No hidden fees."}
             </p>
           </div>
         </div>

@@ -15,7 +15,7 @@ import {
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { JOB_EARNING_UNAVAILABLE_ERROR_CODE } from "@/lib/cleaner/cleanerJobEarning";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
-import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
+import { ensureCleanerEarningsLedgerRow, buildSoloCompletionOwnerStamp } from "@/lib/payout/ensureCleanerEarningsLedger";
 import { newPayoutMoneyPathErrorId } from "@/lib/payout/payoutMoneyPathErrorId";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
 import { CLEANER_LIFECYCLE_CODE } from "@/lib/cleaner/cleanerLifecycleErrors";
@@ -1334,8 +1334,9 @@ export async function runCleanerBookingLifecycleAction(params: {
       };
     }
 
+    let persistCleanerId = cleanerId;
     try {
-      const persistCleanerId =
+      persistCleanerId =
         (await resolvePersistCleanerIdForBookingWithRoster(admin, {
           id: bookingId,
           cleaner_id: bRow.cleaner_id ?? null,
@@ -1556,6 +1557,17 @@ export async function runCleanerBookingLifecycleAction(params: {
       fillCompletedAtIfMissing: false,
       nowIso: now,
     });
+    /**
+     * Solo completions must stamp cleaner_id / payout owner when missing.
+     * Otherwise ensureCleanerEarningsLedgerRow skips (no_cleaner) and office
+     * Visits/Earnings skip the booking (perCleanerAllocationsForBooking → []).
+     */
+    const completionOwnerPatch = buildSoloCompletionOwnerStamp({
+      isTeamJob,
+      existingCleanerId: bRow.cleaner_id,
+      existingPayoutOwnerId: bRow.payout_owner_cleaner_id,
+      ownerId: persistCleanerId ?? cleanerId,
+    });
     const { error: uErr } = await updateCleanerLifecycleBookingState({
       admin,
       bookingId,
@@ -1564,6 +1576,7 @@ export async function runCleanerBookingLifecycleAction(params: {
         completed_at: now,
         cleaner_response_status: CLEANER_RESPONSE.COMPLETED,
         ...completionCoherencePatch,
+        ...completionOwnerPatch,
       },
     });
     if (!uErr) {
@@ -1572,6 +1585,12 @@ export async function runCleanerBookingLifecycleAction(params: {
         void reportOperationalIssue("warn", "cleaner/jobs/complete", `ensureCleanerEarningsLedgerRow: ${led.error}`, {
           bookingId,
           cleanerId,
+        });
+      } else if (led.skipped && led.reason === "no_cleaner") {
+        void reportOperationalIssue("warn", "cleaner/jobs/complete", "ensureCleanerEarningsLedgerRow skipped: no_cleaner", {
+          bookingId,
+          cleanerId,
+          persistCleanerId,
         });
       }
     }

@@ -718,6 +718,12 @@ export async function POST(request: Request) {
             email,
             phone: customerPhone,
           },
+          ...(data.recurringFrequency
+            ? {
+                recurringFrequency: data.recurringFrequency,
+                recurringDays: data.recurringDays?.length ? data.recurringDays : [],
+              }
+            : {}),
           ...(referralCheckoutSnapshot ? { referralCheckout: referralCheckoutSnapshot } : {}),
           ...(promotionApplied.length
             ? {
@@ -910,6 +916,12 @@ export async function POST(request: Request) {
           email,
           phone: customerPhone,
         },
+        ...(data.recurringFrequency
+          ? {
+              recurringFrequency: data.recurringFrequency,
+              recurringDays: data.recurringDays?.length ? data.recurringDays : [],
+            }
+          : {}),
         ...(referralCheckoutSnapshot ? { referralCheckout: referralCheckoutSnapshot } : {}),
         ...(promotionApplied.length
           ? {

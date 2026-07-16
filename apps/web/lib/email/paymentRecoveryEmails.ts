@@ -6,6 +6,7 @@ import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPa
 import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { trustPayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import type { PaymentRecoveryJobType } from "@/lib/booking/paymentRecoverySkipReasons";
+import { safeResendSend } from "@/lib/email/safeResendSend";
 
 function getResend(): Resend | null {
   const key = process.env.RESEND_API_KEY;
@@ -104,7 +105,7 @@ async function sendPaymentRecovery(
 
   const from = getDefaultFromAddress();
   try {
-    const { error } = await resend.emails.send({ from, to: ctx.to, subject, html });
+    const { error } = await safeResendSend({ from, to: ctx.to, subject, html });
     if (error) {
       await reportOperationalIssue("error", source, error.message, { bookingId: ctx.bookingId, email: ctx.to });
       await writeNotificationLog({
