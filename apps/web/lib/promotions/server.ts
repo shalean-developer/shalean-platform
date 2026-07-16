@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { sanitizeCampaignTermsHtml } from "./campaignTermsHtml";
 import {
   evaluatePromotions,
   mapPromotionRow,
@@ -153,7 +154,7 @@ export async function createPromotion(
     hero_image_url: input.hero_image_url ?? null,
     logo_url: input.logo_url ?? null,
     cta_label: input.cta_label ?? null,
-    terms_html: input.terms_html ?? null,
+    terms_html: input.terms_html ? sanitizeCampaignTermsHtml(input.terms_html) : null,
     template_key: input.template_key ?? null,
     display_config: input.display_config ?? {},
     created_by: actor ?? null,
@@ -217,6 +218,7 @@ export async function updatePromotion(
     if (key in patch && patch[key as keyof typeof patch] !== undefined) {
       let val = patch[key as keyof typeof patch];
       if (key === "promo_code" && typeof val === "string") val = normalizePromoCode(val) || null;
+      if (key === "terms_html") val = typeof val === "string" ? sanitizeCampaignTermsHtml(val) : null;
       update[key] = val;
     }
   }

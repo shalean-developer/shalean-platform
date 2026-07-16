@@ -3,6 +3,12 @@ import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordPromotionEvent } from "@/lib/promotions/server";
 import {
+  claimPublish,
+  markPublishFailed,
+  markPublishSucceeded,
+} from "@/lib/promotions/publishIdempotency";
+import { logSystemEvent } from "@/lib/logging/systemLog";
+import {
   createGoogleBusinessLocalPost,
   ensurePublicImageUrlForGooglePost,
   getGoogleBusinessConnectionPublic,
@@ -63,12 +69,60 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "message is required." }, { status: 400 });
   }
 
+  // Server-side idempotency (claim BEFORE media upload / provider call) so
+  // double-clicks / retries / races cannot create duplicate posts or orphan
+  // uploads (MKT-001A / WS4).
+  const admin = getSupabaseAdmin();
+  const explicitKey = request.headers.get("idempotency-key");
+  let claimId: string | null = null;
+
+  if (admin) {
+    const claim = await claimPublish(
+      admin,
+      {
+        provider: "google_business",
+        targetRef: "google_business",
+        promotionId: body.promotionId ?? null,
+        message,
+        link: body.link ?? null,
+        explicitKey,
+      },
+      auth.email,
+    );
+    if (claim.outcome === "duplicate_succeeded") {
+      return NextResponse.json({ ok: true, postName: claim.externalPostId, idempotentReplay: true });
+    }
+    if (claim.outcome === "in_progress") {
+      return NextResponse.json(
+        { error: "A publish for this content is already in progress." },
+        { status: 409 },
+      );
+    }
+    if (claim.outcome === "conflict") {
+      return NextResponse.json(
+        { error: "This idempotency key was already used with different content." },
+        { status: 409 },
+      );
+    }
+    if (claim.outcome === "claimed" || claim.outcome === "retry") {
+      claimId = claim.id;
+    } else {
+      await logSystemEvent({
+        level: "warn",
+        source: "publish_google_business",
+        message: "idempotency_claim_error",
+        context: { detail: claim.error },
+      });
+    }
+  }
+
   const media = await ensurePublicImageUrlForGooglePost({
     imageUrl: body.imageUrl,
     imageDataUrl: body.imageDataUrl,
     promotionId: body.promotionId,
   });
   if (!media.ok) {
+    if (admin && claimId) await markPublishFailed(admin, claimId, media.error);
     await recordPublishHistory({
       status: "failed",
       error: media.error,
@@ -86,6 +140,7 @@ export async function POST(request: Request) {
   });
 
   if (!result.ok) {
+    if (admin && claimId) await markPublishFailed(admin, claimId, result.error);
     await recordPublishHistory({
       status: "failed",
       error: result.error,
@@ -98,6 +153,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: result.error }, { status });
   }
 
+  if (admin && claimId) await markPublishSucceeded(admin, claimId, result.postName ?? null);
   await recordPublishHistory({
     status: "published",
     responseId: result.postName,
@@ -107,37 +163,34 @@ export async function POST(request: Request) {
     publishedBy: auth.email,
   });
 
-  if (body.promotionId) {
-    const admin = getSupabaseAdmin();
-    if (admin) {
-      try {
-        await recordPromotionEvent(admin, {
-          promotionId: body.promotionId,
-          eventType: "click",
-          metadata: {
-            channel: "google_business",
-            action: "published",
-            postId: result.postName,
-            actor: auth.email,
-          },
-        });
-        await admin.from("promotion_audit_log").insert({
-          promotion_id: body.promotionId,
-          action: "publish_google_business",
+  if (body.promotionId && admin) {
+    try {
+      await recordPromotionEvent(admin, {
+        promotionId: body.promotionId,
+        eventType: "click",
+        metadata: {
+          channel: "google_business",
+          action: "published",
+          postId: result.postName,
           actor: auth.email,
-          after_state: {
-            postName: result.postName,
-            searchUrl: result.searchUrl ?? null,
-          },
-        });
-        await admin
-          .from("campaign_content")
-          .update({ status: "published", updated_at: new Date().toISOString() })
-          .eq("promotion_id", body.promotionId)
-          .eq("channel", "google_business");
-      } catch {
-        // best-effort
-      }
+        },
+      });
+      await admin.from("promotion_audit_log").insert({
+        promotion_id: body.promotionId,
+        action: "publish_google_business",
+        actor: auth.email,
+        after_state: {
+          postName: result.postName,
+          searchUrl: result.searchUrl ?? null,
+        },
+      });
+      await admin
+        .from("campaign_content")
+        .update({ status: "published", updated_at: new Date().toISOString() })
+        .eq("promotion_id", body.promotionId)
+        .eq("channel", "google_business");
+    } catch {
+      // best-effort
     }
   }
 
