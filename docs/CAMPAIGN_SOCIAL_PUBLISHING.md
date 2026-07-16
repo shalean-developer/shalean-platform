@@ -55,9 +55,20 @@ Google publishing uses the official OAuth 2.0 authorization-code flow with offli
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=https://shalean.co.za/api/oauth/google/callback
-# Optional dedicated 64-char hex key (otherwise derived from GOOGLE_CLIENT_SECRET):
-# SOCIAL_TOKEN_ENCRYPTION_KEY=
+# REQUIRED once connected — dedicated AES-256-GCM key, independent of GOOGLE_CLIENT_SECRET:
+MARKETING_OAUTH_ENCRYPTION_KEY=
+# Optional during rotation (old key, kept until re-encryption completes):
+# MARKETING_OAUTH_ENCRYPTION_KEY_PREVIOUS=
 ```
+
+> **Security (MKT-001A):** Token encryption is decoupled from `GOOGLE_CLIENT_SECRET`.
+> Set `MARKETING_OAUTH_ENCRYPTION_KEY` to a random 64-char hex value
+> (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
+> Ciphertext is versioned (`v2:<keyId>:…`) so keys can be rotated without
+> disconnecting accounts — see
+> [`docs/runbooks/social-token-encryption-key-rotation.md`](./runbooks/social-token-encryption-key-rotation.md).
+> The legacy `SOCIAL_TOKEN_ENCRYPTION_KEY` is still accepted as a key source; the
+> old `GOOGLE_CLIENT_SECRET` fallback has been removed.
 
 Local example redirect URI: `http://localhost:3000/api/oauth/google/callback`
 

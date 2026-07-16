@@ -7,6 +7,7 @@ import {
   listCampaignContent,
 } from "@/lib/promotions/campaignContent";
 import { formatOfferLabel } from "@/lib/promotions/offerCopy";
+import { sanitizeCampaignTermsHtml } from "@/lib/promotions/campaignTermsHtml";
 import { recordPromotionEvent } from "@/lib/promotions/server";
 import { CampaignLandingClient } from "@/components/promotions/CampaignLandingClient";
 import type { PromotionRow } from "@/lib/promotions/types";
@@ -173,6 +174,12 @@ export default async function CampaignLandingPage({ params }: Props) {
 
   const bookHref = `/book?promo=${encodeURIComponent(promo.promo_code ?? promo.slug)}`;
 
+  // Defense-in-depth: sanitize at render even though terms are sanitized on write,
+  // to cover pre-remediation rows and template-generated `structured.terms`.
+  const safeTermsHtml =
+    sanitizeCampaignTermsHtml(promo.terms_html || structured.terms) ||
+    "Standard Shalean terms apply. Offer subject to eligibility and availability.";
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900">
       <header
@@ -276,12 +283,7 @@ export default async function CampaignLandingPage({ params }: Props) {
           <h2 className="text-lg font-bold text-slate-900">Terms & conditions</h2>
           <div
             className="mt-3 prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{
-              __html:
-                promo.terms_html ||
-                structured.terms ||
-                "Standard Shalean terms apply. Offer subject to eligibility and availability.",
-            }}
+            dangerouslySetInnerHTML={{ __html: safeTermsHtml }}
           />
         </section>
       </main>

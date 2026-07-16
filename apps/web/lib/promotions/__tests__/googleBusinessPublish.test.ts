@@ -12,8 +12,11 @@ describe("tokenEncryption", () => {
   const prevKey = process.env.SOCIAL_TOKEN_ENCRYPTION_KEY;
   const prevSecret = process.env.GOOGLE_CLIENT_SECRET;
 
+  const prevMktKey = process.env.MARKETING_OAUTH_ENCRYPTION_KEY;
+
   beforeEach(() => {
-    process.env.SOCIAL_TOKEN_ENCRYPTION_KEY = "a".repeat(64);
+    process.env.MARKETING_OAUTH_ENCRYPTION_KEY = "a".repeat(64);
+    delete process.env.SOCIAL_TOKEN_ENCRYPTION_KEY;
     delete process.env.GOOGLE_CLIENT_SECRET;
   });
 
@@ -22,11 +25,13 @@ describe("tokenEncryption", () => {
     else process.env.SOCIAL_TOKEN_ENCRYPTION_KEY = prevKey;
     if (prevSecret === undefined) delete process.env.GOOGLE_CLIENT_SECRET;
     else process.env.GOOGLE_CLIENT_SECRET = prevSecret;
+    if (prevMktKey === undefined) delete process.env.MARKETING_OAUTH_ENCRYPTION_KEY;
+    else process.env.MARKETING_OAUTH_ENCRYPTION_KEY = prevMktKey;
   });
 
-  it("round-trips secrets with AES-256-GCM", () => {
+  it("round-trips secrets with AES-256-GCM (v2 key-versioned envelope)", () => {
     const cipher = encryptSecret("refresh-token-value");
-    expect(cipher.startsWith("v1:")).toBe(true);
+    expect(cipher.startsWith("v2:")).toBe(true);
     expect(decryptSecret(cipher)).toBe("refresh-token-value");
   });
 
