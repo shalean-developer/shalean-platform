@@ -1,7 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
+import { buildRefundClawbackBookingSelect } from "@/lib/booking/refund/refundBookingSelect";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { reverseCleaningCredit } from "@/lib/referrals/credits";
 import { countQualifyingBookingsForCustomer } from "@/lib/referrals/eligibility";
@@ -9,6 +12,7 @@ import { getReferralProgramSettingsCached } from "@/lib/referrals/settings";
 
 type ClawbackBookingRow = {
   id: string;
+  customer_id?: string | null;
   user_id?: string | null;
   customer_email?: string | null;
   status?: string | null;
@@ -28,7 +32,7 @@ export async function processReferralClawbackForBooking(params: {
   const { admin, booking, reason } = params;
   const bookingId = booking.id;
   const email = normalizeEmail(booking.customer_email ?? "");
-  const userId = booking.user_id ?? null;
+  const userId = bookingCustomerKey(booking) || null;
   if (!email && !userId) return { clawedBack: false };
 
   const settings = await getReferralProgramSettingsCached(admin);
@@ -120,17 +124,20 @@ export async function maybeProcessReferralClawbackOnBookingChange(params: {
 
   if (newStatus !== "cancelled" && !hasRefund) return;
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: booking } = await admin
     .from("bookings")
-    .select("id, user_id, customer_email, status, refunded_at, refund_status")
+    .select(buildRefundClawbackBookingSelect(ownershipColumn))
     .eq("id", bookingId)
     .maybeSingle();
-  if (!booking?.id) return;
+  // Dynamic ownership select is a runtime string; narrow via unknown.
+  const row = booking as unknown as ClawbackBookingRow | null;
+  if (!row?.id) return;
 
   const reason = hasRefund ? "refunded" : "cancelled";
   await processReferralClawbackForBooking({
     admin,
-    booking: booking as ClawbackBookingRow,
+    booking: row,
     reason,
   });
 }
