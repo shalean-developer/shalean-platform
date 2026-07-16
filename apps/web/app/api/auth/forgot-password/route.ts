@@ -48,6 +48,18 @@ export async function POST(request: Request) {
       message: "password_reset_delivery_failed",
       context: { email, reason: result.reason },
     });
+    if (result.reason === "production_redirect") {
+      return NextResponse.json(
+        { error: "Password reset is misconfigured for this environment. Contact support." },
+        { status: 503 },
+      );
+    }
+    if (result.reason === "rate_limited") {
+      return NextResponse.json(
+        { error: "Please wait a minute before requesting another reset email." },
+        { status: 429 },
+      );
+    }
     return NextResponse.json(
       { error: "We could not send the reset email. Try again in a few minutes." },
       { status: 502 },

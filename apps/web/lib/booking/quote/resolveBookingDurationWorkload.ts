@@ -91,9 +91,24 @@ export function resolveBookingV2DurationWorkload(input: {
   if (input.serviceSlug === "carpet-cleaning") {
     rooms = parseServiceDetailCount(input.serviceDetails, "carpetRooms");
     bathrooms = 0;
-    extraRooms = 0;
+    const rugs = parseServiceDetailCount(input.serviceDetails, "rugCount");
+    // Rugs add duration via extraRooms proxy (carpet policy extraRoomMinutes).
+    extraRooms = rugs;
+    // Legacy sofa quantity still adds time when present.
+    const sofas = parseServiceDetailCount(input.serviceDetails, "sofaCount");
+    if (sofas > 0) extraRooms += sofas;
   } else if (input.serviceSlug === "office-cleaning") {
-    rooms = 0;
+    // Office size proxies room count for duration (price still uses officeSize tier).
+    const size = String(input.serviceDetails.officeSize ?? "")
+      .trim()
+      .toLowerCase();
+    const sizeRooms: Record<string, number> = {
+      small: 1,
+      medium: 2,
+      large: 4,
+      enterprise: 6,
+    };
+    rooms = sizeRooms[size] ?? 1;
     extraRooms = 0;
   }
 

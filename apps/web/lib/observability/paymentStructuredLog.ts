@@ -2,6 +2,9 @@ export type PaymentStructuredEvent =
   | "payment_initialize"
   | "payment_finalize"
   | "payment_mismatch"
+  | "payment_currency_mismatch"
+  | "payment_booking_mismatch"
+  | "payment_webhook_outcome"
   | "finalize_rejected_no_pending_row"
   | "notification_sent"
   | "notification_skipped"
@@ -13,7 +16,11 @@ export type PaymentStructuredEvent =
   | "r0_settlement_failed"
   | "r0_ledger_booking_mismatch"
   | "pending_collected_cash_anomaly"
-  | "admin_paid_booking_price_change";
+  | "admin_paid_booking_price_change"
+  | "payment_refund_proposed"
+  | "payment_refund_succeeded"
+  | "payment_refund_failed"
+  | "payment_refund_webhook";
 
 /**
  * Single-line JSON for log drains (Datadog / BigQuery / etc.).

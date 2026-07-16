@@ -75,7 +75,8 @@ export function bedroomsBathroomsFromV2ServiceDetails(
   serviceDetails: Record<string, string | number | boolean> | undefined,
 ): { bedrooms: number; bathrooms: number; extraRooms: number } {
   return {
-    bedrooms: Math.max(1, parseServiceDetailInt(serviceDetails, "bedrooms", 2)),
+    // Studios may have 0 bedrooms (UAT-BOOK-ENH-001 / UAT-PRICE-003).
+    bedrooms: Math.max(0, parseServiceDetailInt(serviceDetails, "bedrooms", 2)),
     bathrooms: Math.max(1, parseServiceDetailInt(serviceDetails, "bathrooms", 1)),
     extraRooms: Math.max(0, parseServiceDetailInt(serviceDetails, "extraRooms", 0)),
   };

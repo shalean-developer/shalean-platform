@@ -7,6 +7,10 @@ import {
   CalendarCheck,
   type LucideIcon,
 } from "lucide-react";
+import {
+  BATHROOM_COUNT_OPTIONS,
+  BEDROOM_COUNT_OPTIONS,
+} from "@/src/features/booking-v2/config/roomCountOptions";
 
 export const SERVICE_SLUGS = [
   "regular-cleaning",
@@ -35,6 +39,8 @@ export type FormQuestion = {
   hint?: string;
   group?: string;
   centered?: boolean;
+  /** When set, question is shown only if `serviceDetails[key]` is one of `values`. */
+  showWhen?: { key: string; values: string[] };
 };
 
 export type ServiceExtra = {
@@ -84,13 +90,7 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: true,
     group: "rooms",
-    options: [
-      { value: "1", label: "1 bedroom" },
-      { value: "2", label: "2 bedrooms" },
-      { value: "3", label: "3 bedrooms" },
-      { value: "4", label: "4 bedrooms" },
-      { value: "5", label: "5+ bedrooms" },
-    ],
+    options: [...BEDROOM_COUNT_OPTIONS],
   },
   {
     key: "bathrooms",
@@ -98,12 +98,7 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: true,
     group: "rooms",
-    options: [
-      { value: "1", label: "1 bathroom" },
-      { value: "2", label: "2 bathrooms" },
-      { value: "3", label: "3 bathrooms" },
-      { value: "4", label: "4+ bathrooms" },
-    ],
+    options: [...BATHROOM_COUNT_OPTIONS],
   },
   {
     key: "extraRooms",
@@ -139,12 +134,11 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
 ];
 
 const REGULAR_EXTRAS: ServiceExtra[] = [
-  { id: "inside_cabinets",  label: "Inside Cabinets",  description: "Clean inside all kitchen & bathroom cabinets", priceZar: 180 },
-  { id: "inside_oven",      label: "Inside Oven",       description: "Deep clean inside the oven",                  priceZar: 200 },
-  { id: "inside_fridge",    label: "Inside Fridge",     description: "Interior fridge clean",                       priceZar: 150 },
-  { id: "interior_walls",   label: "Interior Walls",    description: "Wipe down all interior walls",                priceZar: 150 },
-  { id: "ironing_laundry",  label: "Ironing & Laundry", description: "Wash and iron up to 2 loads",                 priceZar: 250 },
-  { id: "interior_windows", label: "Interior Windows",  description: "Clean all interior windows",                  priceZar: 180 },
+  { id: "inside-fridge", label: "Inside Fridge", description: "Interior fridge clean", priceZar: 150 },
+  { id: "inside-oven", label: "Inside Oven", description: "Deep clean inside the oven", priceZar: 200 },
+  { id: "laundry", label: "Laundry", description: "Wash and hang up to 1 load", priceZar: 150 },
+  { id: "ironing", label: "Ironing", description: "Ironing up to 1 load", priceZar: 150 },
+  { id: "interior-windows", label: "Windows", description: "Clean all interior windows", priceZar: 180 },
 ];
 
 // ─── Deep Cleaning ─────────────────────────────────────────────────────────────
@@ -168,13 +162,7 @@ const DEEP_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: true,
     group: "rooms",
-    options: [
-      { value: "1", label: "1 bedroom" },
-      { value: "2", label: "2 bedrooms" },
-      { value: "3", label: "3 bedrooms" },
-      { value: "4", label: "4 bedrooms" },
-      { value: "5", label: "5+ bedrooms" },
-    ],
+    options: [...BEDROOM_COUNT_OPTIONS],
   },
   {
     key: "bathrooms",
@@ -182,12 +170,7 @@ const DEEP_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: true,
     group: "rooms",
-    options: [
-      { value: "1", label: "1 bathroom" },
-      { value: "2", label: "2 bathrooms" },
-      { value: "3", label: "3 bathrooms" },
-      { value: "4", label: "4+ bathrooms" },
-    ],
+    options: [...BATHROOM_COUNT_OPTIONS],
   },
   {
     key: "extraRooms",
@@ -236,12 +219,10 @@ const DEEP_QUESTIONS: FormQuestion[] = [
 ];
 
 const DEEP_EXTRAS: ServiceExtra[] = [
-  { id: "balcony",         label: "Balcony Cleaning",  description: "Sweep and wash balcony or patio area", priceZar: 200 },
-  { id: "carpet_clean",    label: "Carpet Cleaning",   description: "Steam clean all carpets",              priceZar: 400 },
-  { id: "ceiling_clean",   label: "Ceiling Cleaning",  description: "Wipe down ceilings and cornices",      priceZar: 220 },
-  { id: "garage_clean",    label: "Garage Cleaning",   description: "Sweep and clean the garage",           priceZar: 200 },
-  { id: "mattress_clean",  label: "Mattress Cleaning", description: "Clean and sanitise one mattress",      priceZar: 250 },
-  { id: "outside_windows", label: "Outside Windows",   description: "Clean all exterior windows",           priceZar: 300 },
+  { id: "inside-cabinets", label: "Cupboards", description: "Clean inside kitchen and bathroom cupboards", priceZar: 180 },
+  { id: "inside-wardrobes", label: "Wardrobes", description: "Clean inside wardrobes and shelving", priceZar: 180 },
+  { id: "blinds-cleaning", label: "Blinds", description: "Dust and wipe blinds", priceZar: 200 },
+  { id: "interior-walls", label: "Walls", description: "Wipe down interior walls", priceZar: 150 },
 ];
 
 // ─── Moving Cleaning ───────────────────────────────────────────────────────────
@@ -261,15 +242,15 @@ const MOVING_QUESTIONS: FormQuestion[] = [
   },
   {
     key: "moveType",
-    label: "Move type",
+    label: "Is this a move-in or move-out clean?",
     type: "radio",
     required: true,
     centered: true,
     options: [
-      { value: "move_out", label: "Moving out (end of tenancy)" },
-      { value: "move_in", label: "Moving in (new property)" },
-      { value: "both", label: "Both move-out and move-in" },
+      { value: "move_out", label: "Move-out" },
+      { value: "move_in", label: "Move-in" },
     ],
+    hint: "Choose one — we’ll tailor questions for that clean.",
   },
   {
     key: "bedrooms",
@@ -277,13 +258,7 @@ const MOVING_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: true,
     group: "rooms",
-    options: [
-      { value: "1", label: "1 bedroom" },
-      { value: "2", label: "2 bedrooms" },
-      { value: "3", label: "3 bedrooms" },
-      { value: "4", label: "4 bedrooms" },
-      { value: "5", label: "5+ bedrooms" },
-    ],
+    options: [...BEDROOM_COUNT_OPTIONS],
   },
   {
     key: "bathrooms",
@@ -291,12 +266,7 @@ const MOVING_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: true,
     group: "rooms",
-    options: [
-      { value: "1", label: "1 bathroom" },
-      { value: "2", label: "2 bathrooms" },
-      { value: "3", label: "3 bathrooms" },
-      { value: "4", label: "4+ bathrooms" },
-    ],
+    options: [...BATHROOM_COUNT_OPTIONS],
   },
   {
     key: "extraRooms",
@@ -313,28 +283,31 @@ const MOVING_QUESTIONS: FormQuestion[] = [
   },
   {
     key: "furnished",
-    label: "Is the property furnished?",
+    label: "Is the property furnished or empty?",
     type: "radio",
     required: true,
     group: "yesno",
     centered: true,
+    showWhen: { key: "moveType", values: ["move_out", "both"] },
     options: [
-      { value: "yes", label: "Yes" },
-      { value: "no", label: "No — empty property" },
+      { value: "yes", label: "Furnished — furniture still inside" },
+      { value: "no", label: "Empty — cleared for handover" },
     ],
-    hint: "Empty properties are often faster to clean.",
+    hint: "Empty homes are usually quicker; furnished homes need more care around belongings.",
   },
   {
     key: "depositInspection",
-    label: "Is this for a deposit inspection?",
+    label: "Is this for a final rental / deposit inspection?",
     type: "radio",
     required: true,
     group: "yesno",
     centered: true,
+    showWhen: { key: "moveType", values: ["move_out", "both"] },
     options: [
-      { value: "yes", label: "Yes" },
-      { value: "no", label: "No" },
+      { value: "yes", label: "Yes — landlord or agency inspection" },
+      { value: "no", label: "No — general move-out clean" },
     ],
+    hint: "We’ll prioritise skirting, cupboards, and other inspection hotspots when yes.",
   },
   {
     key: "specialInstructions",
@@ -345,12 +318,10 @@ const MOVING_QUESTIONS: FormQuestion[] = [
 ];
 
 const MOVING_EXTRAS: ServiceExtra[] = [
-  { id: "balcony",         label: "Balcony Cleaning",  description: "Sweep and wash balcony or patio area", priceZar: 200 },
-  { id: "carpet_clean",    label: "Carpet Cleaning",   description: "Steam clean all carpets",              priceZar: 400 },
-  { id: "ceiling_clean",   label: "Ceiling Cleaning",  description: "Wipe down ceilings and cornices",      priceZar: 220 },
-  { id: "garage_clean",    label: "Garage Cleaning",   description: "Sweep and clean the garage",           priceZar: 200 },
-  { id: "mattress_clean",  label: "Mattress Cleaning", description: "Clean and sanitise one mattress",      priceZar: 250 },
-  { id: "outside_windows", label: "Outside Windows",   description: "Clean all exterior windows",           priceZar: 300 },
+  { id: "deposit-preparation", label: "Deposit preparation", description: "Extra detail for rental deposit / inspection readiness", priceZar: 250 },
+  { id: "appliances-cleaning", label: "Appliances", description: "Clean major kitchen appliances inside and out", priceZar: 220 },
+  { id: "inside-cabinets", label: "Cupboards", description: "Clean inside cabinets and cupboards", priceZar: 180 },
+  { id: "garage-cleaning", label: "Garage", description: "Sweep and clean the garage", priceZar: 200 },
 ];
 
 // ─── Office Cleaning ───────────────────────────────────────────────────────────
@@ -387,12 +358,7 @@ const OFFICE_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: true,
     group: "rooms",
-    options: [
-      { value: "1", label: "1" },
-      { value: "2", label: "2" },
-      { value: "3", label: "3" },
-      { value: "4", label: "4+" },
-    ],
+    options: [...BATHROOM_COUNT_OPTIONS],
   },
   {
     key: "frequency",
@@ -406,6 +372,7 @@ const OFFICE_QUESTIONS: FormQuestion[] = [
       { value: "weekly", label: "Weekly" },
       { value: "once_off", label: "Once-off" },
     ],
+    hint: "How often you need cleaning — this does not change today’s visit price. Choose a recurring plan on the schedule step if you want a plan discount.",
   },
   {
     key: "afterHours",
@@ -428,10 +395,9 @@ const OFFICE_QUESTIONS: FormQuestion[] = [
 ];
 
 const OFFICE_EXTRAS: ServiceExtra[] = [
-  { id: "kitchen", label: "Kitchen / break room", description: "Deep clean appliances and surfaces", priceZar: 200 },
-  { id: "windows", label: "Interior windows", description: "Clean all office windows", priceZar: 250 },
-  { id: "carpet_vacuum", label: "Deep carpet vacuum", description: "High-powered carpet clean", priceZar: 300 },
-  { id: "sanitize", label: "Sanitisation service", description: "Full surface sanitisation spray", priceZar: 180 },
+  { id: "office-kitchen", label: "Kitchen", description: "Clean shared office kitchenette", priceZar: 200 },
+  { id: "office-sanitisation", label: "Sanitisation", description: "High-touch sanitisation of desks and common areas", priceZar: 250 },
+  { id: "waste-removal", label: "Waste Removal", description: "Remove bagged office waste", priceZar: 180 },
 ];
 
 // ─── Carpet Cleaning ───────────────────────────────────────────────────────────
@@ -460,8 +426,25 @@ const CARPET_QUESTIONS: FormQuestion[] = [
       { value: "2", label: "2 rooms" },
       { value: "3", label: "3 rooms" },
       { value: "4", label: "4 rooms" },
-      { value: "5", label: "5+ rooms" },
+      { value: "5", label: "5 rooms" },
+      { value: "6", label: "6+ rooms" },
     ],
+    hint: "Each carpeted room is priced and timed separately.",
+  },
+  {
+    key: "rugCount",
+    label: "Number of rugs",
+    type: "select",
+    required: true,
+    group: "rooms",
+    options: [
+      { value: "0", label: "No rugs" },
+      { value: "1", label: "1 rug" },
+      { value: "2", label: "2 rugs" },
+      { value: "3", label: "3 rugs" },
+      { value: "4", label: "4+ rugs" },
+    ],
+    hint: "Area rugs and runners — priced per rug.",
   },
   {
     key: "carpetType",
@@ -473,20 +456,7 @@ const CARPET_QUESTIONS: FormQuestion[] = [
       { value: "standard", label: "Standard pile" },
       { value: "thick_pile", label: "Thick / shag pile" },
       { value: "berber", label: "Berber / loop" },
-      { value: "persian_rug", label: "Persian / area rug" },
-    ],
-  },
-  {
-    key: "sofaCount",
-    label: "Number of sofas to clean",
-    type: "select",
-    required: true,
-    group: "rooms",
-    options: [
-      { value: "0", label: "No sofas" },
-      { value: "1", label: "1 sofa" },
-      { value: "2", label: "2 sofas" },
-      { value: "3", label: "3+ sofas" },
+      { value: "persian_rug", label: "Persian / delicate" },
     ],
   },
   {
@@ -522,10 +492,16 @@ const CARPET_QUESTIONS: FormQuestion[] = [
 ];
 
 const CARPET_EXTRAS: ServiceExtra[] = [
-  { id: "stain_treatment", label: "Stain treatment", description: "Professional stain removal", priceZar: 200 },
-  { id: "odour_treatment", label: "Pet odour treatment", description: "Enzyme-based odour neutraliser", priceZar: 180 },
-  { id: "fabric_protection", label: "Fabric protector", description: "Scotchgard-style protection spray", priceZar: 220 },
-  { id: "mattress", label: "Mattress cleaning", description: "Clean and sanitise one mattress", priceZar: 250 },
+  {
+    id: "sofa-upholstery",
+    label: "Sofa / upholstery",
+    description: "Clean one sofa or upholstered seat (add more via notes if needed)",
+    priceZar: 250,
+  },
+  { id: "stain-treatment", label: "Stain treatment", description: "Professional stain removal", priceZar: 200 },
+  { id: "pet-odour-treatment", label: "Pet odour treatment", description: "Enzyme-based odour neutraliser", priceZar: 220 },
+  { id: "fabric-protector", label: "Fabric protector", description: "Scotchgard-style protection spray", priceZar: 180 },
+  { id: "mattress-cleaning", label: "Mattress cleaning", description: "Clean and sanitise one mattress", priceZar: 250 },
 ];
 
 // ─── Airbnb Cleaning ───────────────────────────────────────────────────────────
@@ -549,13 +525,7 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: true,
     group: "rooms",
-    options: [
-      { value: "1", label: "1 bedroom" },
-      { value: "2", label: "2 bedrooms" },
-      { value: "3", label: "3 bedrooms" },
-      { value: "4", label: "4 bedrooms" },
-      { value: "5", label: "5+ bedrooms" },
-    ],
+    options: [...BEDROOM_COUNT_OPTIONS],
   },
   {
     key: "bathrooms",
@@ -563,12 +533,7 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: true,
     group: "rooms",
-    options: [
-      { value: "1", label: "1 bathroom" },
-      { value: "2", label: "2 bathrooms" },
-      { value: "3", label: "3 bathrooms" },
-      { value: "4", label: "4+ bathrooms" },
-    ],
+    options: [...BATHROOM_COUNT_OPTIONS],
   },
   {
     key: "extraRooms",
@@ -640,11 +605,11 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
 ];
 
 const AIRBNB_EXTRAS: ServiceExtra[] = [
-  { id: "laundry", label: "Laundry & linen wash", description: "Wash, dry and fold linens", priceZar: 250 },
-  { id: "oven", label: "Oven clean", description: "Deep clean inside the oven", priceZar: 200 },
-  { id: "welcome_setup", label: "Welcome setup", description: "Arrange towels, toiletries, staging", priceZar: 150 },
-  { id: "windows_interior", label: "Interior windows", description: "Clean all interior windows", priceZar: 180 },
-  { id: "inspection_photos", label: "Post-clean photos", description: "Timestamped photos for your records", priceZar: 100 },
+  { id: "laundry", label: "Laundry", description: "Wash, dry and fold linens", priceZar: 250 },
+  { id: "inside-oven", label: "Inside Oven", description: "Deep clean inside the oven", priceZar: 200 },
+  { id: "welcome-setup", label: "Welcome setup", description: "Arrange towels, toiletries, staging", priceZar: 150 },
+  { id: "interior-windows", label: "Interior windows", description: "Clean all interior windows", priceZar: 180 },
+  { id: "inspection-photos", label: "Post-clean photos", description: "Timestamped photos for your records", priceZar: 100 },
 ];
 
 // ─── Master Config Map ──────────────────────────────────────────────────────────

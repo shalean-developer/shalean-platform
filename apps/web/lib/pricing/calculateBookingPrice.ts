@@ -50,7 +50,7 @@ export function calculateBookingPrice(
   const rawKey = String(input.serviceType ?? input.service ?? "").trim();
   if (!rawKey) return null;
   const parsed = parsePricingServiceParams(rawKey);
-  const rooms = Math.max(1, Math.round(Number(input.bedrooms) || 1));
+  const rooms = Math.max(0, Math.round(Number(input.bedrooms) || 0));
   const bathrooms = Math.max(1, Math.round(Number(input.bathrooms) || 1));
   const extraRooms = input.extraRooms ?? 0;
   const tier = normalizeVipTier(input.vipTier);

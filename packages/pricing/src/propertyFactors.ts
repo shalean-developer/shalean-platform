@@ -11,6 +11,13 @@ export type PropertyFactorRatesConfig = {
   carpetType?: Record<string, number>;
   stains?: Record<string, number>;
   carpetRooms_per_room_zar?: number;
+  /** Per-rug unit price for carpet-cleaning. */
+  rugs_per_unit_zar?: number;
+  /**
+   * Legacy sofa quantity pricing (pre–sofa-upholstery Extra).
+   * New bookings should use the Extra; this preserves older drafts/bookings.
+   */
+  sofa_per_unit_zar?: number;
 };
 
 export type PropertyFactorResult = {
@@ -151,11 +158,39 @@ export function computePropertyFactors(
         : catalog.pricePerBedroom;
 
     if (carpetRooms > 0 && perRoom > 0) {
-      property_size_price = carpetRooms * perRoom;
+      const carpetRoomsPrice = carpetRooms * perRoom;
+      property_size_price += carpetRoomsPrice;
       lines.push({
         key: "carpetRooms",
         label: `${carpetRooms} carpeted room${carpetRooms > 1 ? "s" : ""}`,
-        amountZar: property_size_price,
+        amountZar: carpetRoomsPrice,
+      });
+    }
+
+    const rugCount = parseCount(serviceDetails, "rugCount");
+    const perRug =
+      rates.rugs_per_unit_zar && rates.rugs_per_unit_zar > 0 ? rates.rugs_per_unit_zar : 0;
+    if (rugCount > 0 && perRug > 0) {
+      const rugsPrice = rugCount * perRug;
+      property_size_price += rugsPrice;
+      lines.push({
+        key: "rugCount",
+        label: `${rugCount} rug${rugCount > 1 ? "s" : ""}`,
+        amountZar: rugsPrice,
+      });
+    }
+
+    // Legacy sofa quantity (moved to sofa-upholstery Extra for new bookings).
+    const sofaCount = parseCount(serviceDetails, "sofaCount");
+    const perSofa =
+      rates.sofa_per_unit_zar && rates.sofa_per_unit_zar > 0 ? rates.sofa_per_unit_zar : 0;
+    if (sofaCount > 0 && perSofa > 0) {
+      const sofaPrice = sofaCount * perSofa;
+      property_size_price += sofaPrice;
+      lines.push({
+        key: "sofaCount",
+        label: `${sofaCount} sofa${sofaCount > 1 ? "s" : ""} (legacy)`,
+        amountZar: sofaPrice,
       });
     }
 

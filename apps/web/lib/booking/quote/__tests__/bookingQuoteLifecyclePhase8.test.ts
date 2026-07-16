@@ -20,7 +20,8 @@ import { isCompletableDisplayEarningsCents } from "@/lib/payout/bookingEarningsI
 const BOOKING_ID = "00000000-0000-4000-8000-0000000000e2";
 const CLEANER_ID = "00000000-0000-4000-8000-0000000000c1";
 const SCHEDULE = { date: "2026-07-15", time: "10:00" } as const;
-const STARTED_AT = "2026-07-15T08:00:00.000Z";
+/** Fixed wall-clock start used only for schedule-shaped fixtures; duration-gate cases use a fresh start. */
+const FIXTURE_STARTED_AT = "2026-07-15T08:00:00.000Z";
 
 type QuoteInput = Parameters<typeof resolveBookingV2Quote>[0];
 
@@ -114,11 +115,11 @@ function assignBooking(booking: MutableBookingRow, displayEarningsCents: number)
   };
 }
 
-function startBooking(booking: MutableBookingRow): MutableBookingRow {
+function startBooking(booking: MutableBookingRow, startedAt: string = FIXTURE_STARTED_AT): MutableBookingRow {
   return {
     ...booking,
     status: "in_progress",
-    started_at: STARTED_AT,
+    started_at: startedAt,
     cleaner_response_status: "started",
     en_route_at: "2026-07-15T07:30:00.000Z",
   };
@@ -145,13 +146,15 @@ describe("bookingQuoteLifecycle (Phase 8 E2E)", () => {
     expect(assigned.status).toBe("assigned");
     expect(isCompletableDisplayEarningsCents(assigned.display_earnings_cents)).toBe(true);
 
-    const inProgress = startBooking(assigned);
+    // Recent start so admin complete (which re-evaluates the gate with Date.now()) still records an override.
+    const startedAt = new Date(Date.now() - 5 * 60_000).toISOString();
+    const inProgress = startBooking(assigned, startedAt);
     expect(inProgress.status).toBe("in_progress");
-    expect(inProgress.started_at).toBe(STARTED_AT);
+    expect(inProgress.started_at).toBe(startedAt);
 
     const durationMinutes = resolvePersistedBookingDurationMinutes(inProgress)!;
     const tooEarlyMs =
-      Date.parse(STARTED_AT) + durationMinutes * CLEANER_COMPLETION_MIN_ELAPSED_RATIO * 60_000 - 5 * 60_000;
+      Date.parse(startedAt) + durationMinutes * CLEANER_COMPLETION_MIN_ELAPSED_RATIO * 60_000 - 5 * 60_000;
     const blockedGate = evaluateCleanerJobCompletionGate(inProgress, tooEarlyMs);
     expect(blockedGate.ok).toBe(false);
     if (!blockedGate.ok) {
@@ -183,7 +186,7 @@ describe("bookingQuoteLifecycle (Phase 8 E2E)", () => {
     expect(customerSurface.operationalPhase).toBe("completed");
     expect(cleanerSurface.operationalPhase).toBe("completed");
 
-    const onTimeMs = Date.parse(STARTED_AT) + durationMinutes * CLEANER_COMPLETION_MIN_ELAPSED_RATIO * 60_000 + 60_000;
+    const onTimeMs = Date.parse(startedAt) + durationMinutes * CLEANER_COMPLETION_MIN_ELAPSED_RATIO * 60_000 + 60_000;
     const allowedGate = evaluateCleanerJobCompletionGate(inProgress, onTimeMs);
     expect(allowedGate.ok).toBe(true);
     if (allowedGate.ok) {
@@ -220,7 +223,7 @@ describe("bookingQuoteLifecycle (Phase 8 E2E)", () => {
 
     const gate = evaluateCleanerJobCompletionGate(
       unsignedRow,
-      Date.parse(STARTED_AT) + 10 * 60 * 60_000,
+      Date.parse(FIXTURE_STARTED_AT) + 10 * 60 * 60_000,
     );
     expect(gate.ok).toBe(false);
     if (!gate.ok) expect(gate.code).toBe("quote_signature_missing");
@@ -241,7 +244,7 @@ describe("bookingQuoteLifecycle (Phase 8 E2E)", () => {
       booking_snapshot: null,
     };
 
-    const gate = evaluateCleanerJobCompletionGate(stripped, Date.parse(STARTED_AT) + 10 * 60 * 60_000);
+    const gate = evaluateCleanerJobCompletionGate(stripped, Date.parse(FIXTURE_STARTED_AT) + 10 * 60 * 60_000);
     expect(gate.ok).toBe(false);
     if (!gate.ok) expect(gate.code).toBe("missing_persisted_duration");
   });

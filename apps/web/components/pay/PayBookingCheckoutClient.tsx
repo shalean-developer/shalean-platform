@@ -27,13 +27,10 @@ export function PayBookingCheckoutClient({
   const [error, setError] = useState<string | null>(initialError ?? null);
   const [info, setInfo] = useState<string | null>(null);
 
-  const openCheckout = useCallback(
-    async (url: string) => {
-      // Hard navigation is more reliable on mobile / in-app browsers than popup SDKs.
-      window.location.assign(url);
-    },
-    [],
-  );
+  const openCheckout = useCallback(async (url: string) => {
+    // Hard navigation is more reliable on mobile / in-app browsers than popup SDKs.
+    window.location.assign(url);
+  }, []);
 
   const ensureAndOpen = useCallback(async () => {
     if (busy) return;
@@ -41,10 +38,16 @@ export function PayBookingCheckoutClient({
     setError(null);
     setInfo(null);
     try {
+      const { getSession } = await import("@/lib/auth/authClient");
+      const session = await getSession();
+      const ref = reference.trim();
       const res = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/payment-session`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reference }),
+        headers: {
+          "Content-Type": "application/json",
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+        },
+        body: JSON.stringify(ref ? { reference: ref } : {}),
       });
       const json = (await res.json()) as {
         status?: string;
@@ -56,8 +59,8 @@ export function PayBookingCheckoutClient({
       };
 
       if (json.status === "paid") {
-        const ref = (json.reference ?? reference).trim();
-        router.push(`/account/success?reference=${encodeURIComponent(ref)}`);
+        const paidRef = (json.reference ?? ref).trim();
+        router.push(`/account/success?reference=${encodeURIComponent(paidRef)}`);
         return;
       }
 

@@ -56,6 +56,23 @@ describe("enqueuePaystackRecoveryFailedJobs", () => {
     );
   });
 
+  it("enqueues payment_mismatch for currency_mismatch with recoveryEnqueue", async () => {
+    const result: UpsertBookingFromPaystackResult = {
+      ok: false,
+      skipped: true,
+      bookingId: "bid-cur",
+      error: "currency_mismatch",
+      reason: "currency_mismatch",
+      bookingInDatabase: true,
+      recoveryEnqueue: true,
+    };
+    await enqueuePaystackRecoveryFailedJobs({ reference: "ref-x", result, basePayload });
+    expect(enqueueFailedJob).toHaveBeenCalledWith(
+      "payment_mismatch",
+      expect.objectContaining({ bookingId: "bid-cur", currency: "ZAR" }),
+    );
+  });
+
   it("enqueues payment_reconciliation on first finalization_failed with recoveryEnqueue", async () => {
     const result: UpsertBookingFromPaystackResult = {
       ok: false,

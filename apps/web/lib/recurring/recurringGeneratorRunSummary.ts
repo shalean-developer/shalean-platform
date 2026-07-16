@@ -6,7 +6,10 @@ export type RecurringGeneratorRunCounters = {
   skipped_duplicate: number;
   /** Insert / generation errors for a scheduled occurrence date. */
   failed: number;
-  /** Active plans skipped due to missing email, profile, billing, or empty window. */
+  /**
+   * Active plans skipped due to missing email, profile, or unsupported billing.
+   * Empty generation windows are NOT counted here (healthy no-op).
+   */
   skipped_plans: number;
 };
 
@@ -27,9 +30,14 @@ export function emptyRecurringGeneratorRunCounters(scanned = 0): RecurringGenera
   };
 }
 
-/** Any hard failure — must not be logged as a silent cron success. */
+/**
+ * Hard failure = occurrence insert failures only.
+ * Plan skips (email/profile/billing) are operational data issues — still alerted —
+ * but must not mark the cron run as `error` or else `last_success_at` goes stale and
+ * the office UI falsely reports the generator “may be down”.
+ */
 export function recurringGeneratorRunHasHardFailure(counters: RecurringGeneratorRunCounters): boolean {
-  return counters.failed > 0 || counters.skipped_plans > 0;
+  return counters.failed > 0;
 }
 
 export function recurringGeneratorCronStatus(
@@ -119,14 +127,11 @@ export function recurringGeneratorCronWarning(
   const lastRunFailed = (lastRunParsed?.failed ?? 0) > 0;
   const lastRunSkippedPlans = (lastRunParsed?.skipped_plans ?? 0) > 0;
 
-  if (job.last_run_status === "error" && (lastRunFailed || lastRunSkippedPlans)) {
-    const parts: string[] = [];
-    if (lastRunFailed) parts.push(`${lastRunParsed!.failed} occurrence insert(s) failed`);
-    if (lastRunSkippedPlans) parts.push(`${lastRunParsed!.skipped_plans} plan(s) skipped (profile/email/billing)`);
+  if (lastRunFailed) {
     return {
       show: true,
       severity: "red",
-      message: `Latest generator run reported errors: ${parts.join("; ")}. Check system_logs (cron/generate-recurring-bookings) and redeploy if schema/code drift.`,
+      message: `Latest generator run reported errors: ${lastRunParsed!.failed} occurrence insert(s) failed. Check system_logs (cron/generate-recurring-bookings) and redeploy if schema/code drift.`,
     };
   }
 
@@ -153,6 +158,14 @@ export function recurringGeneratorCronWarning(
       show: true,
       severity: "amber",
       message: `Latest generator run failed (${formatTs(job.last_run_at)}). Last success ${formatTs(job.last_success_at)}.`,
+    };
+  }
+
+  if (lastRunSkippedPlans) {
+    return {
+      show: true,
+      severity: "amber",
+      message: `Generator is running (last success ${formatTs(job.last_success_at)}) but skipped ${lastRunParsed!.skipped_plans} plan(s) (profile/email/billing). Repair those plans — this is not a cron outage.`,
     };
   }
 

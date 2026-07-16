@@ -94,17 +94,28 @@ function getConfirmationBadge(booking: DashboardBooking): { label: string; class
 
   const rawStatus = String(booking.raw.status ?? "").trim().toLowerCase();
   const ps = String(booking.raw.payment_status ?? "").trim().toLowerCase();
+  const hasCleaner = Boolean(booking.cleaner?.name?.trim());
 
-  if (
-    rawStatus === "pending_payment" ||
-    rawStatus === "pending" ||
-    st === "pending" ||
-    st === "pending_payment" ||
-    ps === "pending_monthly"
-  ) {
+  if (rawStatus === "pending_payment" || st === "pending_payment") {
     return {
-      label: "Pending",
+      label: "Awaiting payment",
       className: "bg-amber-50 text-amber-700 border border-amber-200",
+    };
+  }
+
+  if (ps === "pending_monthly") {
+    return {
+      label: "Billed monthly",
+      className: "bg-sky-50 text-sky-700 border border-sky-200",
+    };
+  }
+
+  if (rawStatus === "pending" || st === "pending") {
+    return {
+      label: hasCleaner ? "Confirmed" : "Awaiting cleaner",
+      className: hasCleaner
+        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+        : "bg-amber-50 text-amber-700 border border-amber-200",
     };
   }
 
@@ -117,6 +128,8 @@ function getConfirmationBadge(booking: DashboardBooking): { label: string; class
 function getPaymentStatusDisplay(booking: DashboardBooking): { label: string; className: string } {
   const rawStatus = String(booking.raw.status ?? "").trim().toLowerCase();
   const ps = String(booking.raw.payment_status ?? "").trim().toLowerCase();
+  const refundStatus = String(booking.raw.refund_status ?? "").trim().toLowerCase();
+  const refundedAt = String(booking.raw.refunded_at ?? "").trim();
 
   if (
     rawStatus === "pending_payment" ||
@@ -128,6 +141,17 @@ function getPaymentStatusDisplay(booking: DashboardBooking): { label: string; cl
 
   if (booking.status === "cancelled" || booking.status === "failed") {
     return { label: "Not charged", className: "text-gray-400 font-medium" };
+  }
+
+  // Prefer refund_status over capture payment_status (MODEL A — capture stays success).
+  if (ps === "refunded" || refundStatus === "full" || refundStatus === "chargeback" || refundStatus === "reversed") {
+    return {
+      label: refundStatus === "chargeback" ? "Chargeback" : "Fully refunded",
+      className: "text-gray-500 font-semibold",
+    };
+  }
+  if (refundStatus === "partial" || refundedAt) {
+    return { label: "Partially refunded", className: "text-orange-500 font-semibold" };
   }
 
   return { label: "Paid", className: "text-emerald-600 font-semibold" };

@@ -2,6 +2,10 @@
   "installCommand": "npm ci",
   "crons": [
     {
+      "path": "/api/cron/booking-lifecycle",
+      "schedule": "0 2 * * *"
+    },
+    {
       "path": "/api/cron/referral-credit-reminders",
       "schedule": "0 6 * * *"
     },

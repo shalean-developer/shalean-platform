@@ -1,0 +1,1086 @@
+
+ RUN  v3.2.6 C:/Users/info/shalean-platform/apps/web
+
+ Γ£ô lib/booking/forbidCleanersAvailableFetch.test.ts (1 test) 702ms
+   Γ£ô forbid /api/cleaners/available in booking funnel > no client or scheduling code fetches the marketing roster endpoint  700ms
+ Γ£ô lib/admin/__tests__/m8AssignmentSnapshotCoverage.test.ts (4 tests) 1108ms
+   Γ£ô M-8 assignment snapshot coverage (static guard) > every assignment-mutation source in the repo is classified  1051ms
+ Γ£ô lib/auth/__tests__/princessPrbAuthSessionAuthorization.test.ts (13 tests) 2470ms
+   Γ£ô getPasswordResetRedirectBase > uses staging SITE_URL and never production apex on staging  1545ms
+ Γ£ô lib/cleaner/cleanerLifecyclePostWithRetry.test.ts (4 tests) 1036ms
+   Γ£ô postCleanerLifecycleWithRetry > invokes onPostSuccess only after definitive success following 503 retries  1015ms
+ Γ£ô app/api/paystack/__tests__/banksRoute.test.ts (2 tests) 179ms
+node.exe : stderr | app/api/cleaner/__tests__/cleanerEarningsApi.test.ts > cleaner API earnings contracts > offers 
+response includes positive displayEarningsCents
+At line:1 char:1
++ & "C:\Program Files\nodejs/node.exe" "C:\Program Files\nodejs/node_mo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (stderr | app/ap...ayEarningsCents:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+[system_logs] TypeError: supabase.from(...).insert is not a function
+    at logSystemEvent (C:\Users\info\shalean-platform\apps\web\lib\logging\systemLog.ts:65:58)
+    at GET (C:\Users\info\shalean-platform\apps\web\app\api\cleaner\offers\route.ts:241:13)
+    at C:\Users\info\shalean-platform\apps\web\app\api\cleaner\__tests__\cleanerEarningsApi.test.ts:251:17
+    at file:///C:/Users/info/shalean-platform/apps/web/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | app/api/cleaner/__tests__/cleanerEarningsApi.test.ts > cleaner API earnings contracts > offers include row 
+with null when earnings cannot be resolved
+[system_logs] TypeError: supabase.from(...).insert is not a function
+    at logSystemEvent (C:\Users\info\shalean-platform\apps\web\lib\logging\systemLog.ts:65:58)
+    at GET (C:\Users\info\shalean-platform\apps\web\app\api\cleaner\offers\route.ts:221:13)
+    at C:\Users\info\shalean-platform\apps\web\app\api\cleaner\__tests__\cleanerEarningsApi.test.ts:290:17
+    at file:///C:/Users/info/shalean-platform/apps/web/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | app/api/cleaner/__tests__/cleanerEarningsApi.test.ts > cleaner API earnings contracts > offers return null 
+display when booking has no stored cleaner earnings
+[system_logs] TypeError: supabase.from(...).insert is not a function
+    at logSystemEvent (C:\Users\info\shalean-platform\apps\web\lib\logging\systemLog.ts:65:58)
+    at GET (C:\Users\info\shalean-platform\apps\web\app\api\cleaner\offers\route.ts:221:13)
+    at C:\Users\info\shalean-platform\apps\web\app\api\cleaner\__tests__\cleanerEarningsApi.test.ts:328:17
+    at file:///C:/Users/info/shalean-platform/apps/web/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+stderr | app/api/cleaner/__tests__/cleanerEarningsApi.test.ts > cleaner API earnings contracts > team job offer has 
+null display when booking has no stored cleaner earnings
+[system_logs] TypeError: supabase.from(...).insert is not a function
+    at logSystemEvent (C:\Users\info\shalean-platform\apps\web\lib\logging\systemLog.ts:65:58)
+    at GET (C:\Users\info\shalean-platform\apps\web\app\api\cleaner\offers\route.ts:221:13)
+    at C:\Users\info\shalean-platform\apps\web\app\api\cleaner\__tests__\cleanerEarningsApi.test.ts:365:17
+    at file:///C:/Users/info/shalean-platform/apps/web/node_modules/@vitest/runner/dist/chunk-hooks.js:752:20
+
+ Γ£ô app/api/cleaner/__tests__/cleanerEarningsApi.test.ts (8 tests) 3789ms
+   Γ£ô cleaner API earnings contracts > jobs response exposes displayEarningsCents and hides internal payout fields  3558ms
+ Γ£ô lib/payout/__tests__/persistCleanerPayout.test.ts (12 tests) 3889ms
+   Γ£ô persistCleanerPayoutIfUnset > dual-writes individual booking earnings and keeps legacy fields  3174ms
+stderr | lib/payout/__tests__/m18CleanerPayoutsUniquePeriod.test.ts > M-18 generateWeeklyPayouts: 23505 
+unique-violation is handled idempotently > normal path: inserts a cleaner_payouts row and links the booking
+[supabase] Admin client unavailable: set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or 
+SUPABASE_SERVICE_KEY). { urlPresent: false, serviceRoleKeyPresent: false }
+[supabase] Next.js loads .env.local from the Next app root (this repo: apps/web/.env.local). Restart the dev server 
+after changes.
+[system_logs] info MONTHLY_PAYOUT_CREATED Cleaner monthly payout batch created {
+  cleanerId: 'cleaner-1',
+  payoutId: 'id-1',
+  bookings: 1,
+  roster_member_payouts: 0,
+  team_job_member_payouts: 0,
+  linked_rows: 1,
+  total_amount_cents: 25000,
+  period_start: '2026-07-01',
+  period_end: '2026-07-31'
+}
+
+ Γ£ô app/api/cleaner/__tests__/cleanerJobsTeamApi.test.ts (6 tests) 4027ms
+   Γ£ô GET /api/cleaner/jobs ΓÇö team visibility > mock admin returns team ids for fetchCleanerTeamIds  1413ms
+   Γ£ô GET /api/cleaner/jobs ΓÇö team visibility > team member sees team job and individual job; not other team  2168ms
+   Γ£ô GET /api/cleaner/dashboard > returns jobs + summary with same visibility as jobs list  422ms
+stderr | lib/payout/__tests__/m18CleanerPayoutsUniquePeriod.test.ts > M-18 generateWeeklyPayouts: 23505 
+unique-violation is handled idempotently > 23505 from the unique index is caught: skips cleaner, no throw, no 
+booking-link
+[supabase] Admin client unavailable: set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or 
+SUPABASE_SERVICE_KEY). { urlPresent: false, serviceRoleKeyPresent: false }
+[supabase] Next.js loads .env.local from the Next app root (this repo: apps/web/.env.local). Restart the dev server 
+after changes.
+[system_logs] info weekly_payout_duplicate_creation_blocked M-18 unique index suppressed a duplicate weekly 
+cleaner_payouts insert (idempotent skip) {
+  cleanerId: 'cleaner-1',
+  period_start: '2026-07-01',
+  period_end: '2026-07-31'
+}
+
+stderr | lib/cron/__tests__/h15CronLockOverlapPrevention.test.ts > H-15 cron lock ΓÇö behavioural > acquire RPC error 
+fails OPEN (runs work) so the lock cannot DOS cron
+[cronLock/acquire] transient db error { jobName: 'test:job-f' }
+[supabase] Admin client unavailable: set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or 
+SUPABASE_SERVICE_KEY). { urlPresent: false, serviceRoleKeyPresent: false }
+[supabase] Next.js loads .env.local from the Next app root (this repo: apps/web/.env.local). Restart the dev server 
+after changes.
+[system_logs] warn cronLock/acquire transient db error { jobName: 'test:job-f' }
+
+ Γ£ô lib/cron/__tests__/h15CronLockOverlapPrevention.test.ts (46 tests) 28ms
+stderr | lib/payout/__tests__/m18CleanerPayoutsUniquePeriod.test.ts > M-18 generateWeeklyPayouts: 23505 
+unique-violation is handled idempotently > retry storms remain idempotent: re-running after a 23505 still does nothing
+[supabase] Admin client unavailable: set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or 
+SUPABASE_SERVICE_KEY). { urlPresent: false, serviceRoleKeyPresent: false }
+[supabase] Next.js loads .env.local from the Next app root (this repo: apps/web/.env.local). Restart the dev server 
+after changes.
+[system_logs] info weekly_payout_duplicate_creation_blocked M-18 unique index suppressed a duplicate weekly 
+cleaner_payouts insert (idempotent skip) {
+  cleanerId: 'cleaner-1',
+  period_start: '2026-07-01',
+  period_end: '2026-07-31'
+}
+
+stderr | lib/payout/__tests__/m18CleanerPayoutsUniquePeriod.test.ts > M-18 generateWeeklyPayouts: 23505 
+unique-violation is handled idempotently > retry storms remain idempotent: re-running after a 23505 still does nothing
+[system_logs] info weekly_payout_duplicate_creation_blocked M-18 unique index suppressed a duplicate weekly 
+cleaner_payouts insert (idempotent skip) {
+  cleanerId: 'cleaner-1',
+  period_start: '2026-07-01',
+  period_end: '2026-07-31'
+}
+
+stderr | lib/payout/__tests__/m18CleanerPayoutsUniquePeriod.test.ts > M-18 generateWeeklyPayouts: 23505 
+unique-violation is handled idempotently > non-23505 insert errors still surface as skip + reportOperationalIssue (no 
+silent success)
+[generateWeeklyPayouts] not null violation { cleanerId: 'cleaner-1' }
+[supabase] Admin client unavailable: set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or 
+SUPABASE_SERVICE_KEY). { urlPresent: false, serviceRoleKeyPresent: false }
+[supabase] Next.js loads .env.local from the Next app root (this repo: apps/web/.env.local). Restart the dev server 
+after changes.
+[system_logs] error generateWeeklyPayouts not null violation { cleanerId: 'cleaner-1' }
+
+stderr | lib/payout/__tests__/m18CleanerPayoutsUniquePeriod.test.ts > M-18 generateWeeklyPayouts: 23505 
+unique-violation is handled idempotently > two cleaners in the same window: 23505 on cleaner A does NOT block cleaner B
+[supabase] Admin client unavailable: set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or 
+SUPABASE_SERVICE_KEY). { urlPresent: false, serviceRoleKeyPresent: false }
+[supabase] Next.js loads .env.local from the Next app root (this repo: apps/web/.env.local). Restart the dev server 
+after changes.
+[system_logs] info weekly_payout_duplicate_creation_blocked M-18 unique index suppressed a duplicate weekly 
+cleaner_payouts insert (idempotent skip) {
+  cleanerId: 'cleaner-1',
+  period_start: '2026-07-01',
+  period_end: '2026-07-31'
+}
+
+stderr | lib/payout/__tests__/m18CleanerPayoutsUniquePeriod.test.ts > M-18 generateWeeklyPayouts: 23505 
+unique-violation is handled idempotently > two cleaners in the same window: 23505 on cleaner A does NOT block cleaner B
+[system_logs] info MONTHLY_PAYOUT_CREATED Cleaner monthly payout batch created {
+  cleanerId: 'cleaner-2',
+  payoutId: 'id-1',
+  bookings: 1,
+  roster_member_payouts: 0,
+  team_job_member_payouts: 0,
+  linked_rows: 1,
+  total_amount_cents: 25000,
+  period_start: '2026-07-01',
+  period_end: '2026-07-31'
+}
+
+stderr | lib/payout/__tests__/m18CleanerPayoutsUniquePeriod.test.ts > M-18 createPayoutRun: race-loss against 
+concurrent run is rolled back, no orphan draft > happy path: links frozen payouts and keeps the draft run
+[supabase] Admin client unavailable: set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or 
+SUPABASE_SERVICE_KEY). { urlPresent: false, serviceRoleKeyPresent: false }
+[supabase] Next.js loads .env.local from the Next app root (this repo: apps/web/.env.local). Restart the dev server 
+after changes.
+[system_logs] info payout_run_created Created draft cleaner_payout_runs batch { runId: 'id-1', payoutCount: 2, 
+total_amount_cents: 15000 }
+
+ Γ£ô lib/payout/__tests__/m18CleanerPayoutsUniquePeriod.test.ts (28 tests) 4042ms
+   Γ£ô M-18 generateWeeklyPayouts: 23505 unique-violation is handled idempotently > normal path: inserts a cleaner_payouts row and links the booking  2943ms
+   Γ£ô M-18 generateWeeklyPayouts: 23505 unique-violation is handled idempotently > non-23505 insert errors still surface as skip + reportOperationalIssue (no silent success)  538ms
+ Γ£ô lib/admin/__tests__/officeOpsHealth.test.ts (21 tests) 75ms
+ Γ£ô lib/blog/routable-blog-links.test.ts (5 tests) 5319ms
+   Γ£ô programmatic blog link builders vs legacy env > when NEXT_PUBLIC_LEGACY_PROGRAMMATIC_ROUTES=false, service SEO pills never point at /blog/*  3240ms
+   Γ£ô isRoutableBlogSlug > returns false for redirect-only alias slugs (must not be linked directly)  1679ms
+ Γ£ô lib/payout/__tests__/h10CleanerFinancialRlsIdentityFix.test.ts (15 tests) 125ms
+ Γ£ô lib/booking/loadBookingPaymentServerStateSelectedCleaner.test.ts (4 tests) 625ms
+ Γ£ô app/api/paystack/webhook/__tests__/princessPrcWebhookContract.test.ts (14 tests) 940ms
+   Γ£ô Princess PR C ΓÇö Paystack webhook contract > 1. accepts a valid signature and settles via finalizePaidBooking  917ms
+ Γ£ô lib/booking/__tests__/h16BookingsStatusWriteAllowList.test.ts (10 tests) 16ms
+stderr | lib/paystack/__tests__/getSouthAfricanBanks.test.ts > getSouthAfricanBanks > uses static fallback when 
+PAYSTACK_SECRET_KEY is unset
+[south-african-banks] fallback_no_secret {"count":7}
+
+stderr | lib/paystack/__tests__/getSouthAfricanBanks.test.ts > getSouthAfricanBanks > falls back to static list when 
+Paystack returns non-ok
+[south-african-banks] paystack_list_error {"httpStatus":200,"message":"nope","page":1}
+
+stderr | lib/paystack/__tests__/getSouthAfricanBanks.test.ts > getSouthAfricanBanks > falls back to static list when 
+Paystack returns non-ok
+[south-african-banks] fallback_static {"count":7,"reason":"fetch_failed"}
+
+stderr | lib/paystack/__tests__/getSouthAfricanBanks.test.ts > getSouthAfricanBanks > serves stale cache after 
+Paystack failure when fresh cache existed
+[south-african-banks] paystack_list_error {"httpStatus":500,"message":null,"page":1}
+
+ Γ£ô lib/paystack/__tests__/getSouthAfricanBanks.test.ts (10 tests) 155ms
+ Γ£ô lib/dispatch/assignBooking.test.ts (6 tests) 98ms
+ Γ£ô app/api/cron/prune-system-logs/__tests__/m21SystemLogsRetentionPrune.test.ts (32 tests) 63ms
+ Γ£ô lib/admin/__tests__/opsHealthDashboardRender.test.ts (5 tests) 71ms
+ Γ£ô lib/admin/__tests__/marketingAttribution.test.ts (10 tests) 9ms
+ Γ£ô lib/dispatch/tests/assignTeamToBooking.test.ts (15 tests) 115ms
+ Γ£ô lib/dispatch/__tests__/dispatchOfferStateCommandConvergence.test.ts (4 tests) 16ms
+ Γ£ô app/api/cron/ops-health/__tests__/route.test.ts (10 tests) 32ms
+ Γ£ô lib/booking/__tests__/durationMinutesPersistence.test.ts (8 tests) 35ms
+ Γ£ô lib/email/__tests__/appUrl.test.ts (3 tests) 15ms
+ Γ£ô lib/monthlyInvoice/__tests__/repairPaidMonthlyInvoiceChildSettlementDrift.test.ts (9 tests) 20ms
+ Γ£ô app/api/cleaner/offers/__tests__/route.test.ts (12 tests) 37ms
+ Γ£ô lib/dispatch/__tests__/h9DispatchEscalationStatusFilter.test.ts (11 tests) 12ms
+ Γ£ô lib/booking/__tests__/m2AdminMarkBookingPaidPreservesPaystackReference.test.ts (12 tests) 31ms
+ Γ£ô lib/booking/__tests__/paymentFinalizationCommandConvergence.test.ts (6 tests) 21ms
+ Γ£ô app/api/__tests__/h6h4UserProfileConvergence.test.ts (23 tests) 20ms
+ Γ£ô lib/observability/__tests__/productionHealthMetrics.test.ts (10 tests) 37ms
+ Γ£ô lib/booking/__tests__/m23ResolveAuthUserIdByEmailAndLink.test.ts (19 tests) 23ms
+ Γ£ô lib/admin/__tests__/m8TriggerAssignmentEarningsSnapshot.test.ts (12 tests) 13ms
+ Γ£ô lib/monthlyInvoice/__tests__/markMonthlyInvoicePaidManual.settlement.test.ts (4 tests) 23ms
+ Γ£ô lib/admin/__tests__/adminManualOfferCommandConvergence.test.ts (3 tests) 30ms
+ Γ£ô lib/admin/__tests__/adminDailyWorkloadEnforcement.test.ts (6 tests) 68ms
+ Γ£ô lib/admin/__tests__/adminLifecycleStatusOverrideCommandConvergence.test.ts (4 tests) 13ms
+ Γ£ô lib/payout/__tests__/phase15aLedgerClaimShadowEligibility.test.ts (4 tests) 10ms
+ Γ£ô lib/booking/__tests__/recurringPaymentStateRefreshConvergence.test.ts (7 tests) 30ms
+stdout | lib/admin/__tests__/dashboardSystemStatus.live.test.ts > live dashboard system status > prints exact dashboard ops signals
+
+=== dashboard systemStatus ===
+{
+  "website": "operational",
+  "bookingEngine": "operational",
+  "paymentGateway": "operational",
+  "productionHealth": {
+    "generatedAt": "2026-07-15T22:45:21.308Z",
+    "totals": {
+      "critical": 0,
+      "high": 5,
+      "medium": 1,
+      "low": 0,
+      "info": 0
+    },
+    "totalFindings": 6,
+    "topFindings": [
+      {
+        "code": "cron_stale_or_missing_success",
+        "severity": "high",
+        "count": 5,
+        "message": "Critical cron jobs have no recent successful run."
+      },
+      {
+        "code": "service_database_degraded_current",
+        "severity": "medium",
+        "count": 1,
+        "message": "Supabase (DB) is degraded currently. Probe latency 5.6s (threshold 2.5s)"
+      }
+    ]
+  },
+  "cronErrorsLast24h": 0
+}
+
+=== service currentStatus ===
+website: operational ΓÇö No customer-facing errors in the last hour
+booking_engine: operational ΓÇö Operational ΓÇö cron schedule lag noted in scanner below
+payment_gateway: operational ΓÇö No payment drift detected
+database: degraded ΓÇö Probe latency 5.6s (threshold 2.5s)
+notifications: operational ΓÇö No delivery attempts in the last hour
+
+=== production health findings ===
+[high] cron_stale_or_missing_success x5
+[medium] service_database_degraded_current x1
+
+allOperationalNow: false
+
+ Γ£ô lib/admin/__tests__/dashboardSystemStatus.live.test.ts (1 test) 8857ms
+   Γ£ô live dashboard system status > prints exact dashboard ops signals  8819ms
+ Γ£ô lib/booking/checkoutLockValidation.test.ts (7 tests) 11ms
+ Γ£ô lib/monthlyInvoice/__tests__/monthlyChildAllocationConvergence.test.ts (7 tests) 10ms
+ Γ£ô lib/pricing/cleaningDurationWorkload.test.ts (11 tests) 11ms
+ Γ£ô lib/realtime/__tests__/m10CleanerRealtimeDispatchOffers.test.ts (21 tests) 10ms
+ Γ£ô lib/dispatch/__tests__/m12AcceptDispatchOfferAtomic.test.ts (9 tests) 25ms
+ Γ£ô lib/booking/__tests__/paystackRouteResponsibilityContract.test.ts (5 tests) 15ms
+ Γ£ô lib/cleaner/__tests__/cleanerJobEarning.test.ts (26 tests) 18ms
+ Γ£ô lib/booking/__tests__/recurringOccurrenceInsertionConvergence.test.ts (8 tests) 7ms
+ Γ£ô lib/payout/__tests__/paystackTransferExecutor.test.ts (4 tests) 10ms
+ Γ£ô lib/booking-v2/__tests__/princessPra2ServicePricingPaymentRecovery.test.ts (38 tests) 34ms
+stderr | lib/booking/quote/__tests__/bookingQuotePersistence.test.ts > bookingQuotePersistence (Phase 2) > 
+buildAuthoritativeQuotePersistPatch writes synchronized duration and price columns
+[booking] BOOKING_LOCK_HMAC_SECRET unset ΓÇö using a dev-only fallback. Set BOOKING_LOCK_HMAC_SECRET in .env.local and 
+restart `npm run dev`.
+
+ Γ£ô lib/booking/quote/__tests__/bookingQuotePersistence.test.ts (3 tests) 36ms
+ Γ£ô lib/email/__tests__/m9NotificationConfigBreaker.test.ts (12 tests) 9ms
+ Γ£ô lib/payout/__tests__/canonicalCleanerPayout.test.ts (15 tests) 11ms
+ Γ£ô lib/booking/__tests__/cleanerServicePreferenceEligibility.test.ts (10 tests) 36ms
+ Γ£ô lib/booking/__tests__/insertPendingPaymentBookingExpiry.test.ts (12 tests) 31ms
+ Γ£ô lib/payout/__tests__/cleanerEarningsEligibilityDrift.test.ts (9 tests) 14ms
+ Γ£ô lib/admin/__tests__/officeAnalytics.test.ts (4 tests) 9ms
+ Γ£ô lib/payout/__tests__/phase15aAnomaliesApi.route.test.ts (6 tests) 19ms
+ Γ£ô app/api/cleaner/jobs/__tests__/postAcceptTeamJob.test.ts (2 tests) 16ms
+ Γ£ô lib/monthlyInvoice/__tests__/buildMonthlyInvoiceZohoLineItems.test.ts (2 tests) 16ms
+ Γ£ô app/api/admin/bookings/[id]/assign-smart/__tests__/route.test.ts (2 tests) 11ms
+ Γ£ô lib/cleaner/__tests__/resolveCleanerEarnings.test.ts (12 tests) 8ms
+ Γ£ô lib/monthlyInvoice/__tests__/m9PermanentResendFailureBreaker.test.ts (15 tests) 68ms
+ Γ£ô lib/cleaner/__tests__/cleanerAvailabilityState.test.ts (18 tests) 8ms
+ Γ£ô lib/dispatch/__tests__/m23DispatchOfferCountersIdempotent.test.ts (16 tests) 19ms
+ Γ£ô app/api/admin/bookings/__tests__/adminMarkCompletedPaystackGuard.test.ts (8 tests) 25ms
+ Γ£ô app/api/admin/ops-health/__tests__/route.test.ts (10 tests) 172ms
+stderr | lib/booking/quote/__tests__/bookingQuoteLifecyclePhase8.test.ts > bookingQuoteLifecycle (Phase 8 E2E) > 
+chains create ΓåÆ confirm ΓåÆ assign ΓåÆ start ΓåÆ block complete ΓåÆ override ΓåÆ complete
+[booking] BOOKING_LOCK_HMAC_SECRET unset ΓÇö using a dev-only fallback. Set BOOKING_LOCK_HMAC_SECRET in .env.local and 
+restart `npm run dev`.
+
+ Γ£ô lib/booking/quote/__tests__/bookingQuoteLifecyclePhase8.test.ts (4 tests) 30ms
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > reuses a usable stored payment link
+{"event":"payment_initialize","at":"2026-07-15T22:45:30.481Z","booking_id":"11111111-1111-4111-8111-111111111111","reference":"ref_ok","result":"reused"}
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > creates a fresh checkout when payment_link is missing
+{"event":"payment_initialize","at":"2026-07-15T22:45:30.486Z","booking_id":"11111111-1111-4111-8111-111111111111","reference":"ignored","result":"ready","refreshed":true,"reason":"PAYMENT_LINK_MISSING","amount_cents":40000}
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > treats missing authorization_url as initialization failure
+{"event":"payment_initialize","at":"2026-07-15T22:45:30.488Z","booking_id":"11111111-1111-4111-8111-111111111111","reference":"bps_mrmo4xyw_08aac6a1","result":"failed","error_code":"PAYMENT_INITIALIZATION_FAILED","paystack_message":null,"missing_authorization_url":true}
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > denies access for another customer
+{"event":"payment_initialize","at":"2026-07-15T22:45:30.489Z","booking_id":"11111111-1111-4111-8111-111111111111","result":"denied","error_code":"PAYMENT_ACCESS_DENIED"}
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > dedupes concurrent ensure calls into one Paystack initialize
+{"event":"payment_initialize","at":"2026-07-15T22:45:30.522Z","booking_id":"11111111-1111-4111-8111-111111111111","reference":"bps_concurrent","result":"ready","refreshed":true,"reason":"PAYMENT_LINK_MISSING","amount_cents":40000}
+
+stdout | lib/booking/__tests__/ensureBookingPaymentSession.test.ts > ensureBookingPaymentSession > finalizes when Paystack already reports success for the stored reference
+{"event":"payment_initialize","at":"2026-07-15T22:45:30.524Z","booking_id":"11111111-1111-4111-8111-111111111111","reference":"bv2_paid","result":"paid_via_verify","error_code":"PAYMENT_ALREADY_COMPLETED"}
+
+ Γ£ô lib/booking/__tests__/ensureBookingPaymentSession.test.ts (11 tests) 61ms
+ Γ£ô app/api/admin/bookings/[id]/replacement-candidates/__tests__/route.test.ts (1 test) 41ms
+ Γ£ô lib/payout/__tests__/h5LegacyCompletedPaymentStatusRepair.test.ts (16 tests) 12ms
+ Γ£ô lib/observability/__tests__/opsHealthAcknowledgements.test.ts (5 tests) 12ms
+stderr | lib/booking/quote/__tests__/validateBookingV2Quote.test.ts > validateBookingV2Quote (Phase 4) > accepts a 
+server breakdown that verifies against its inputs
+[booking] BOOKING_LOCK_HMAC_SECRET unset ΓÇö using a dev-only fallback. Set BOOKING_LOCK_HMAC_SECRET in .env.local and 
+restart `npm run dev`.
+
+ Γ£ô lib/booking/quote/__tests__/validateBookingV2Quote.test.ts (5 tests) 21ms
+ Γ£ô lib/db/__tests__/h14m19HotPathCompositeIndexes.test.ts (29 tests) 33ms
+ Γ£ô lib/monthlyInvoice/__tests__/monthlyInvoiceBillingDates.test.ts (8 tests) 19ms
+ Γ£ô lib/booking/bookingPaystackCheckoutMetadataFlat.test.ts (17 tests) 9ms
+ Γ£ô lib/cleaner/__tests__/cleanerRecurringUnpaidVisibility.test.ts (11 tests) 20ms
+ Γ£ô app/api/admin/bookings/[id]/roster/__tests__/route.test.ts (1 test) 65ms
+ Γ£ô lib/payout/__tests__/pricingEarningsParity.test.ts (4 tests) 18ms
+ Γ£ô lib/email/__tests__/m9ClassifyResendSendError.test.ts (41 tests) 21ms
+ Γ£ô lib/salesDocument/__tests__/backfillSalesDocumentQuoteCustomers.test.ts (2 tests) 20ms
+stdout | app/api/admin/bookings/[id]/assign/__tests__/route.test.ts > POST /api/admin/bookings/[id]/assign > calls adminAssignCleanerToBooking and returns legacy success JSON
+[admin/assign] resolved cleaner {
+  bookingId: 'b-assign-1',
+  rawCleanerId: '00000000-0000-4000-8000-00000000c101',
+  cleanerId: '00000000-0000-4000-8000-00000000c101',
+  matchedBySurrogate: true
+}
+
+stdout | app/api/admin/bookings/[id]/assign/__tests__/route.test.ts > POST /api/admin/bookings/[id]/assign > returns canonical assignment warnings on force assignment without dropping legacy success fields
+[admin/assign] resolved cleaner {
+  bookingId: 'b-assign-warn',
+  rawCleanerId: '00000000-0000-4000-8000-00000000c101',
+  cleanerId: '00000000-0000-4000-8000-00000000c101',
+  matchedBySurrogate: true
+}
+
+stdout | app/api/admin/bookings/[id]/assign/__tests__/route.test.ts > POST /api/admin/bookings/[id]/assign > replays assign failure from bookingOperations
+[admin/assign] resolved cleaner {
+  bookingId: 'b-bad',
+  rawCleanerId: '00000000-0000-4000-8000-00000000c101',
+  cleanerId: '00000000-0000-4000-8000-00000000c101',
+  matchedBySurrogate: true
+}
+
+stdout | app/api/admin/bookings/[id]/assign/__tests__/route.test.ts > POST /api/admin/bookings/[id]/assign > preserves failure error and includes canonical warnings when bookingOperations supplies them
+[admin/assign] resolved cleaner {
+  bookingId: 'b-bad-warn',
+  rawCleanerId: '00000000-0000-4000-8000-00000000c101',
+  cleanerId: '00000000-0000-4000-8000-00000000c101',
+  matchedBySurrogate: true
+}
+
+ Γ£ô app/api/admin/bookings/[id]/assign/__tests__/route.test.ts (4 tests) 84ms
+ Γ£ô lib/gsc/__tests__/sync-location-gsc-metrics.test.ts (1 test) 5ms
+ Γ£ô lib/booking/__tests__/processLifecycleJob.enterprise.test.ts (9 tests) 34ms
+ Γ£ô lib/payout/__tests__/bookingEarningsIntegrity.test.ts (25 tests) 7ms
+ Γ£ô lib/dispatch/redispatchAfterOfferReject.test.ts (4 tests) 18ms
+ Γ£ô lib/booking-v2/__tests__/calculateCustomerTotal.test.ts (14 tests) 67ms
+ Γ£ô lib/booking/__tests__/describeBookingOperationalState.test.ts (7 tests) 9ms
+ Γ£ô lib/referrals/referralFraudPrevention.test.ts (5 tests) 12ms
+ Γ£ô app/api/bookings/__tests__/reviewRouteTeamEligibility.test.ts (11 tests) 26ms
+ Γ£ô lib/dashboard/__tests__/customerBookingDetailHeaderLifecycle.test.ts (5 tests) 11ms
+ Γ£ô lib/monthlyInvoice/__tests__/settleMonthlyInvoiceChildren.test.ts (3 tests) 11ms
+stdout | lib/seo/__tests__/buildMarketingSitemapEntries.test.ts
+[blogImageMap] Unique pinned blog heroes: 27 (editorial + high-conversion + flagship programmatic pins)
+[blogImageMap] Pinned slugs (unique dedicated assets): 27; total entries in BLOG_IMAGE_MAP: 83
+[blogImageMap] Routed slugs still on generated/shared pool (no pinned hero): 56
+[blogImageMap] First unpinned routed slugs: airbnb-cleaning-constantia-cape-town, airbnb-cleaning-newlands-cape-town, airbnb-cleaning-observatory-cape-town, carpet-cleaning-constantia-cape-town, carpet-cleaning-durbanville-cape-town, carpet-cleaning-green-point-cape-town, cleaning-prices-claremont-cape-town, cleaning-prices-durbanville-cape-town, cleaning-prices-gardens-cape-town, cleaning-prices-green-point-cape-town, cleaning-prices-newlands-cape-town, cleaning-prices-observatory-cape-town, cleaning-prices-rondebosch-cape-town, cleaning-prices-sea-point-cape-town, cleaning-services-claremont-cape-town, cleaning-services-durbanville-cape-town, cleaning-services-gardens-cape-town, cleaning-services-green-point-cape-town, cleaning-services-rondebosch-cape-town, cleaning-services-sea-point-cape-town, cleaning-services-wynberg-cape-town, deep-cleaning-checklist-claremont-cape-town, deep-cleaning-checklist-durbanville-cape-town, deep-cleaning-checklist-gardens-cape-town, deep-cleaning-checklist-green-point-cape-town ΓÇª
+
+stderr | lib/seo/__tests__/buildMarketingSitemapEntries.test.ts
+[blogImageMap] 17 featured image files are shared across 34 slugs (unique asset pool is smaller than routed posts). 
+Example: /images/blog/pool/cape-town-guest-bed-white-linens.webp ΓåÆ airbnb-cleaning-newlands-cape-town, 
+home-cleaning-frequency-rondebosch-cape-town 
+
+ Γ£ô app/api/admin/cleaner-earnings-disputes/[id]/__tests__/h12DisputeAdminAudit.test.ts (16 tests) 42ms
+ Γ£ô lib/payout/__tests__/m23CleanersJoinedAtRepair.test.ts (13 tests) 15ms
+ Γ£ô lib/admin/__tests__/officeSeoAttributionPresentation.test.ts (7 tests) 15ms
+stderr | lib/seo/__tests__/buildMarketingSitemapEntries.test.ts > buildMarketingSitemapEntries > includes core and 
+content marketing paths
+[supabase] Server client unavailable: set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY. { urlPresent: 
+false, anonKeyPresent: false }
+
+ Γ£ô lib/admin/payouts/__tests__/officePayoutPeriodReport.test.ts (10 tests) 13ms
+ Γ£ô lib/ads/__tests__/sendServerPurchaseConversions.test.ts (5 tests) 39ms
+ Γ£ô lib/seo/__tests__/buildMarketingSitemapEntries.test.ts (3 tests) 22ms
+ Γ£ô lib/recurring/__tests__/recurringMonthlyDriftProbes.test.ts (8 tests) 64ms
+ Γ£ô lib/dispatch/__tests__/preferredCleanerDispatch.test.ts (13 tests) 9ms
+ Γ£ô lib/audit/__tests__/resolveRepositoryMigration.test.ts (9 tests) 73ms
+ Γ£ô app/api/cleaner/jobs/[id]/issue/__tests__/postIssue.test.ts (3 tests) 12ms
+ Γ£ô lib/admin/__tests__/triggerPersistMonthlyAssignedDisplayEarnings.test.ts (9 tests) 23ms
+ Γ£ô lib/seo/metaDescription.test.ts (11 tests) 15ms
+stderr | lib/booking/quote/__tests__/bookingQuotePersistencePhase4.test.ts > buildAuthoritativeQuoteDurationOnlyPatch 
+(Phase 4) > persists duration and pricing_summary without payment cent fields
+[booking] BOOKING_LOCK_HMAC_SECRET unset ΓÇö using a dev-only fallback. Set BOOKING_LOCK_HMAC_SECRET in .env.local and 
+restart `npm run dev`.
+
+ Γ£ô lib/booking/quote/__tests__/bookingQuotePersistencePhase4.test.ts (1 test) 10ms
+ Γ£ô lib/payout/__tests__/computeEarningsFromLineItems.test.ts (4 tests) 5ms
+ Γ£ô lib/payout/__tests__/patchEarningsSummaryForCleaner.test.ts (1 test) 3ms
+ Γ£ô lib/booking/__tests__/cleanerLifecycleMutationConvergence.test.ts (9 tests) 7ms
+ Γ£ô lib/dispatch/__tests__/dispatchOfferEarningsSnapshot.test.ts (4 tests) 17ms
+ Γ£ô lib/payout/__tests__/computeCleanerOfferEarningsSnapshot.test.ts (10 tests) 9ms
+ Γ£ô lib/cleaner/earnings/__tests__/earningsV2Model.test.ts (10 tests) 16ms
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > rejects non-zero pay amounts as not R0
+{"event":"r0_settlement_started","at":"2026-07-15T22:45:38.381Z","booking_id":"00000000-0000-4000-8000-000000000001","pay_amount_zar":10}
+
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > uses RPC success path and records already_settled
+{"event":"r0_settlement_started","at":"2026-07-15T22:45:38.385Z","booking_id":"00000000-0000-4000-8000-000000000001","pay_amount_zar":0}
+
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > uses RPC success path and records already_settled
+{"event":"r0_settlement_succeeded","at":"2026-07-15T22:45:38.385Z","booking_id":"00000000-0000-4000-8000-000000000001","payment_transaction_id":"tx-1","already_settled":true,"via":"rpc"}
+
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > fallback refuses positive total_price (matches RPC not_fully_covered)
+{"event":"r0_settlement_started","at":"2026-07-15T22:45:38.386Z","booking_id":"00000000-0000-4000-8000-000000000001","pay_amount_zar":0}
+
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > fallback refuses positive total_price (matches RPC not_fully_covered)
+{"event":"r0_settlement_failed","at":"2026-07-15T22:45:38.387Z","booking_id":"00000000-0000-4000-8000-000000000001","reason":"not_fully_covered","total_price":250}
+
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > propagates RPC persistence failures
+{"event":"r0_settlement_started","at":"2026-07-15T22:45:38.388Z","booking_id":"00000000-0000-4000-8000-000000000001","pay_amount_zar":0}
+
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > propagates RPC persistence failures
+{"event":"r0_settlement_failed","at":"2026-07-15T22:45:38.388Z","booking_id":"00000000-0000-4000-8000-000000000001","reason":"rpc_failed","error":"booking_not_found"}
+
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > falls back when RPC is missing and fails when booking update errors
+{"event":"r0_settlement_started","at":"2026-07-15T22:45:38.389Z","booking_id":"00000000-0000-4000-8000-000000000001","pay_amount_zar":0}
+
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > falls back when RPC is missing and fails when booking update errors
+{"event":"r0_ledger_booking_mismatch","at":"2026-07-15T22:45:38.392Z","booking_id":"00000000-0000-4000-8000-000000000001","payment_transaction_id":"tx-fallback","reason":"booking_update_failed","error":"bookings_paid_requires_amount"}
+{"event":"r0_settlement_failed","at":"2026-07-15T22:45:38.392Z","booking_id":"00000000-0000-4000-8000-000000000001","reason":"booking_update_failed","error":"bookings_paid_requires_amount"}
+
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > fallback applies full R0 paid-state transition with zero collected cash
+{"event":"r0_settlement_started","at":"2026-07-15T22:45:38.393Z","booking_id":"00000000-0000-4000-8000-000000000001","pay_amount_zar":0}
+
+stdout | lib/payments/__tests__/settleFullyCoveredBooking.test.ts > settleFullyCoveredBooking > fallback applies full R0 paid-state transition with zero collected cash
+{"event":"r0_settlement_succeeded","at":"2026-07-15T22:45:38.395Z","booking_id":"00000000-0000-4000-8000-000000000001","already_settled":false,"payment_transaction_id":"tx-fallback","amount_paid_cents":0,"via":"app_fallback"}
+
+ Γ£ô lib/booking/lockQuoteSignature.test.ts (4 tests) 19ms
+ Γ£ô lib/payments/__tests__/settleFullyCoveredBooking.test.ts (6 tests) 32ms
+ Γ£ô lib/payout/__tests__/weeklyBatchDayYmd.test.ts (3 tests) 8ms
+ Γ£ô lib/booking/quote/__tests__/resolveBookingQuote.test.ts (3 tests) 25ms
+ Γ£ô lib/booking/__tests__/faraiUatBookingSuburbGate.test.ts (6 tests) 13ms
+ Γ£ô lib/booking/__tests__/canonicalBookingLifecycleSurface.test.ts (3 tests) 15ms
+ Γ£ô lib/salesDocument/__tests__/ensureSalesDocumentCustomer.test.ts (2 tests) 7ms
+ Γ£ô lib/salesDocument/__tests__/salesDocumentIsEditableWithoutPayment.test.ts (6 tests) 4ms
+ Γ£ô app/api/cleaner/jobs/__tests__/postStartJobAction.test.ts (2 tests) 23ms
+ Γ£ô app/api/admin/bookings/[id]/retry-dispatch/__tests__/route.test.ts (4 tests) 22ms
+ Γ£ô lib/dispatch/__tests__/m23DispatchOffersEarningsSnapshot.test.ts (15 tests) 9ms
+ Γ£ô lib/admin/__tests__/dashboardSystemStatus.test.ts (2 tests) 5ms
+ Γ£ô lib/pay/paymentDecisionEngine.test.ts (13 tests) 7ms
+ Γ£ô lib/pricing/canonicalDurationShadow.test.ts (7 tests) 11ms
+ Γ£ô lib/admin/__tests__/adminWarningPayload.test.ts (6 tests) 48ms
+ Γ£ô lib/cleaner/__tests__/applyPreviewEarningsToCleanerJobRows.test.ts (5 tests) 5ms
+ Γ£ô lib/admin/__tests__/officeSeoInsightsPresentation.test.ts (14 tests) 33ms
+ Γ£ô lib/booking/__tests__/legacyBookingToBookRedirect.test.ts (2 tests) 4ms
+ Γ£ô app/api/cleaner/bookings/[id]/en-route/__tests__/route.test.ts (1 test) 12ms
+ Γ£ô lib/booking/__tests__/teamAssignmentBookingStateCommandConvergence.test.ts (4 tests) 46ms
+ Γ£ô lib/seo/optimization/engine.test.ts (6 tests) 28ms
+ Γ£ô lib/monthlyInvoice/__tests__/applyMonthlyInvoicePaymentChildAllocation.test.ts (6 tests) 12ms
+ Γ£ô lib/email/__tests__/resolveBookingEmailFields.test.ts (5 tests) 6ms
+ Γ£ô lib/cleaner/__tests__/cleanerBookingAccess.test.ts (10 tests) 11ms
+ Γ£ô lib/blog/cms-linkable-slugs-audit.test.ts (5 tests) 31ms
+ Γ£ô lib/dispatch/__tests__/m16DispatchMetricsInsertObservability.test.ts (11 tests) 49ms
+ Γ£ô lib/reviews/__tests__/sendAdminReviewRequestEmail.test.ts (3 tests) 10ms
+ Γ£ô lib/blog/inject-rich-text-heading-anchors.test.ts (4 tests) 42ms
+ Γ£ô lib/dispatch/__tests__/m24HistoricalDispatchOffersCleanup.test.ts (28 tests) 34ms
+ Γ£ô lib/seo/__tests__/legacyPhase1EdgeRedirects.test.ts (11 tests) 8ms
+ Γ£ô lib/booking/canonicalizeBookingServiceSlug.test.ts (20 tests) 23ms
+ Γ£ô lib/payout/__tests__/resetBookingCleanerLineEarnings.test.ts (2 tests) 15ms
+ Γ£ô lib/customer/__tests__/customerBookingCanonicalLifecycle.test.ts (4 tests) 19ms
+ Γ£ô lib/booking/__tests__/deriveBookingOperationalPhase.test.ts (9 tests) 12ms
+ Γ£ô lib/payout/__tests__/phase15aAnomaliesShared.test.ts (2 tests) 8ms
+ Γ£ô lib/cleaner-dashboard/mapOfferToDashboardCard.test.ts (5 tests) 81ms
+ Γ£ô lib/admin/__tests__/officeTemplates.test.ts (4 tests) 17ms
+ Γ£ô app/api/cleaner/bookings/[id]/accept/__tests__/route.test.ts (1 test) 19ms
+ Γ£ô lib/payout/__tests__/pairedRosterPayout.test.ts (6 tests) 13ms
+ Γ£ô lib/admin/__tests__/dashboardRevenue.test.ts (7 tests) 23ms
+ Γ£ô lib/dispatch/dispatchOffers.acceptReject.test.ts (2 tests) 12ms
+ Γ£ô lib/admin/__tests__/performAdminDirectAssignToCleaner.test.ts (2 tests) 18ms
+ Γ£ô app/api/admin/bookings/with-payment/__tests__/m3WithPaymentIdempotency.test.ts (12 tests) 118ms
+ Γ£ô lib/admin/__tests__/dashboardConversion.test.ts (5 tests) 8ms
+ Γ£ô lib/reviews/__tests__/customerReviewFollowUpContract.test.ts (17 tests) 17ms
+ Γ£ô lib/booking/__tests__/buildBookingLineItems.test.ts (3 tests) 11ms
+ Γ£ô lib/cleaner/__tests__/cleanerLifecycleBookingCommandConvergence.test.ts (7 tests) 38ms
+ Γ£ô lib/booking/__tests__/paymentRecoveryEmailGuards.test.ts (6 tests) 14ms
+ Γ£ô lib/booking/quote/__tests__/healBookingDurationForScheduling.test.ts (5 tests) 12ms
+ Γ£ô lib/admin/__tests__/officeOperations.test.ts (3 tests) 20ms
+ Γ£ô lib/blog/seo/publish-validation.test.ts (4 tests) 13ms
+ Γ£ô lib/blog/blogDocumentMode.test.ts (3 tests) 29ms
+ Γ£ô lib/booking/__tests__/lifecycleEmailGuards.test.ts (9 tests) 14ms
+ Γ£ô lib/booking/cleanerSlotEligibility.test.ts (13 tests) 23ms
+ Γ£ô lib/cleaner/__tests__/deriveCleanerJobPrimaryCta.test.ts (7 tests) 21ms
+ Γ£ô lib/booking/quote/__tests__/resolveBookingDurationWorkload.test.ts (2 tests) 10ms
+ Γ£ô lib/booking/resolvePreferredDispatchScheduleAtPayment.test.ts (3 tests) 16ms
+ Γ£ô lib/booking-v2/__tests__/confirmSchemaNullCodes.test.ts (3 tests) 9ms
+ Γ£ô lib/notifications/__tests__/m20NotificationLogsBookingIdIntegrity.test.ts (33 tests) 21ms
+ Γ£ô lib/recurring/__tests__/m6m7RecurringPreferredCleanerAndOrphan.test.ts (27 tests) 61ms
+ Γ£ô lib/booking/__tests__/timeSlotsOccupancyPreload.test.ts (2 tests) 4ms
+ Γ£ô lib/dispatch/pickDispatchOfferForCleanerReply.test.ts (6 tests) 4ms
+ Γ£ô lib/booking/__tests__/refreshRecurringBookingPaymentState.test.ts (3 tests) 6ms
+ Γ£ô lib/cleaner/cleanerLifecycleSingleFlight.test.ts (1 test) 26ms
+ Γ£ô lib/recurring/__tests__/parsePreferredCleanerIdFromBody.test.ts (5 tests) 14ms
+ Γ£ô lib/booking/__tests__/paystackReplayPaymentConfirmedNotify.test.ts (1 test) 26ms
+ Γ£ô lib/payout/__tests__/bookingCompletionPositiveEarningsGateConvergence.test.ts (3 tests) 24ms
+ Γ£ô lib/booking/__tests__/checkoutDispatchOfferFailureEscalation.test.ts (1 test) 8ms
+ Γ£ô app/api/admin/bookings/[id]/__tests__/mark-paid-monthly-guard.test.ts (5 tests) 57ms
+ Γ£ô lib/booking/__tests__/phase1JHighRiskBookingsWriters.test.ts (10 tests) 9ms
+ Γ£ô lib/admin/__tests__/adminBookingOperationalRecord.test.ts (1 test) 4ms
+ Γ£ô app/api/paystack/initialize/__tests__/m4PaystackInitializeAbuseLimit.test.ts (11 tests) 68ms
+ Γ£ô lib/templates/__tests__/catalog.test.ts (2 tests) 4ms
+ Γ£ô lib/admin/__tests__/adminDashboardLifecycleDisplay.test.ts (6 tests) 13ms
+ Γ£ô lib/booking/__tests__/getEligibleCleanersExcludeBooking.test.ts (1 test) 36ms
+ Γ£ô lib/locations/__tests__/bookingLocations.test.ts (4 tests) 6ms
+ Γ£ô lib/cleaner/__tests__/cleanerAssignedOfferExpiry.test.ts (8 tests) 4ms
+ Γ£ô lib/booking-v2/__tests__/serviceQuestionYesNo.test.ts (3 tests) 9ms
+ Γ£ô lib/cleaner/__tests__/cleanerPayoutEpoch.test.ts (3 tests) 7ms
+ Γ£ô lib/dispatch/__tests__/m17OfferDeclineRedispatchDedup.test.ts (15 tests) 48ms
+ Γ£ô lib/booking/__tests__/bookingV2CustomerDisplay.test.ts (6 tests) 16ms
+ Γ£ô lib/dispatch/userSelectedOfferExpiryRetry.test.ts (5 tests) 27ms
+ Γ£ô lib/booking/checkoutCleanerEligibility.test.ts (12 tests) 15ms
+ Γ£ô lib/admin/__tests__/bookingAssignedPendingInvariant.test.ts (5 tests) 8ms
+ Γ£ô lib/booking/bookingReviewCleanerLabel.test.ts (3 tests) 8ms
+ Γ£ô lib/cleaner/__tests__/normalizeRequestedPreferredAreas.test.ts (6 tests) 10ms
+ Γ£ô lib/booking/__tests__/teamServiceTypeFromBookingSlug.test.ts (2 tests) 8ms
+ Γ£ô lib/observability/__tests__/unifiedOpsHealth.test.ts (6 tests) 13ms
+ Γ£ô lib/cleaner/__tests__/cleanerUxEstimatedPayZar.test.ts (10 tests) 9ms
+stderr | lib/booking/__tests__/sanitizeBookingExtrasForPersist.test.ts > sanitizeBookingExtrasForPersist > dedupes by 
+slug keeping first
+[sanitizeBookingExtrasForPersist] booking_extras_sanitized {
+  errorType: 'booking_extras_sanitized',
+  where: null,
+  bookingId: null,
+  inputLen: 2,
+  outputLen: 1,
+  skippedInvalid: 0,
+  skippedDup: 1,
+  droppedCount: 1
+}
+[supabase] Admin client unavailable: set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or 
+SUPABASE_SERVICE_KEY). { urlPresent: false, serviceRoleKeyPresent: false }
+[supabase] Next.js loads .env.local from the Next app root (this repo: apps/web/.env.local). Restart the dev server 
+after changes.
+[system_logs] warn sanitizeBookingExtrasForPersist booking_extras_sanitized {
+  errorType: 'booking_extras_sanitized',
+  where: null,
+  bookingId: null,
+  inputLen: 2,
+  outputLen: 1,
+  skippedInvalid: 0,
+  skippedDup: 1,
+  droppedCount: 1
+}
+
+stderr | lib/booking/__tests__/sanitizeBookingExtrasForPersist.test.ts > sanitizeBookingExtrasForPersist > truncates 
+to MAX_BOOKING_EXTRAS_ROWS
+[sanitizeBookingExtrasForPersist] booking_extras_sanitized {
+  errorType: 'booking_extras_sanitized',
+  where: null,
+  bookingId: null,
+  inputLen: 32,
+  outputLen: 24,
+  skippedInvalid: 0,
+  skippedDup: 0,
+  droppedCount: 8
+}
+[system_logs] warn sanitizeBookingExtrasForPersist booking_extras_sanitized {
+  errorType: 'booking_extras_sanitized',
+  where: null,
+  bookingId: null,
+  inputLen: 32,
+  outputLen: 24,
+  skippedInvalid: 0,
+  skippedDup: 0,
+  droppedCount: 8
+}
+
+stderr | lib/booking/__tests__/sanitizeBookingExtrasForPersist.test.ts > sanitizeBookingExtrasForPersist > accepts 
+string slugs with price 0
+[sanitizeBookingExtrasForPersist] booking_extras_sanitized {
+  errorType: 'booking_extras_sanitized',
+  where: null,
+  bookingId: null,
+  inputLen: 2,
+  outputLen: 1,
+  skippedInvalid: 1,
+  skippedDup: 0,
+  droppedCount: 1
+}
+[system_logs] warn sanitizeBookingExtrasForPersist booking_extras_sanitized {
+  errorType: 'booking_extras_sanitized',
+  where: null,
+  bookingId: null,
+  inputLen: 2,
+  outputLen: 1,
+  skippedInvalid: 1,
+  skippedDup: 0,
+  droppedCount: 1
+}
+
+stderr | lib/booking/__tests__/sanitizeBookingExtrasForPersist.test.ts > sanitizeBookingExtrasForPersist > drops 
+invalid entries
+[sanitizeBookingExtrasForPersist] booking_extras_sanitized {
+  errorType: 'booking_extras_sanitized',
+  where: null,
+  bookingId: null,
+  inputLen: 5,
+  outputLen: 1,
+  skippedInvalid: 4,
+  skippedDup: 0,
+  droppedCount: 4
+}
+[system_logs] warn sanitizeBookingExtrasForPersist booking_extras_sanitized {
+  errorType: 'booking_extras_sanitized',
+  where: null,
+  bookingId: null,
+  inputLen: 5,
+  outputLen: 1,
+  skippedInvalid: 4,
+  skippedDup: 0,
+  droppedCount: 4
+}
+
+ Γ£ô lib/booking/__tests__/sanitizeBookingExtrasForPersist.test.ts (5 tests) 15ms
+ Γ£ô lib/booking/__tests__/buildBookingLineItemsFromRow.test.ts (2 tests) 8ms
+ Γ£ô lib/admin/referralsReadModelFormat.test.ts (2 tests) 6ms
+ Γ£ô lib/cleaner/__tests__/cleanerWorkloadStatusDisplay.test.ts (4 tests) 6ms
+ Γ£ô lib/dispatch/assignmentLifecycleContract.test.ts (11 tests) 7ms
+ Γ£ô lib/admin/__tests__/landingPageAttribution.test.ts (6 tests) 8ms
+ Γ£ô lib/seo/__tests__/seoRebuildPhase1.test.ts (7 tests) 5ms
+ Γ£ô lib/templates/__tests__/render.test.ts (4 tests) 5ms
+ Γ£ô lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts (37 tests) 52ms
+stderr | app/api/booking-v2/confirm/__tests__/route.test.ts > POST /api/booking-v2/confirm > returns 422 when suburb 
+cannot be resolved to a service area
+[booking] BOOKING_LOCK_HMAC_SECRET unset ΓÇö using a dev-only fallback. Set BOOKING_LOCK_HMAC_SECRET in .env.local and 
+restart `npm run dev`.
+
+ Γ£ô app/api/booking-v2/confirm/__tests__/route.test.ts (4 tests) 62ms
+ Γ£ô lib/zoho/__tests__/resolveZohoCustomerContact.test.ts (3 tests) 5ms
+ Γ£ô lib/recurring/__tests__/reconcileRecurringPlanOccurrences.test.ts (5 tests) 34ms
+ Γ£ô lib/booking/__tests__/checkoutDispatchOfferFailureFallback.test.ts (16 tests) 38ms
+ Γ£ô lib/cleaner/__tests__/cleanerJobCompletionGate.test.ts (5 tests) 6ms
+ Γ£ô lib/payout/__tests__/teamRosterPayoutAllocation.test.ts (5 tests) 4ms
+ Γ£ô app/api/cron/booking-lifecycle/__tests__/bookingLifecycleCronCompletionNotify.test.ts (2 tests) 6ms
+ Γ£ô lib/admin/invoices/__tests__/loadInvoiceAdjustmentsForAdmin.test.ts (2 tests) 12ms
+ Γ£ô app/api/admin/bookings/customers/__tests__/h13AdminCustomerSearchBatched.test.ts (6 tests) 19ms
+ Γ£ô lib/booking/cleanerReplyIntent.test.ts (3 tests) 13ms
+ Γ£ô lib/booking/dashboardVisibilityContract.test.ts (12 tests) 5ms
+ Γ£ô lib/email/__tests__/emailSafeGoUrl.test.ts (1 test) 3ms
+ Γ£ô lib/admin/assignmentDisplay.test.ts (5 tests) 4ms
+ Γ£ô lib/payout/__tests__/bookingPayoutCapCents.test.ts (10 tests) 5ms
+ Γ£ô lib/cleaner/__tests__/cleanerOfferValue.test.ts (3 tests) 20ms
+ Γ£ô lib/booking/paymentConversionBucket.test.ts (2 tests) 5ms
+ Γ£ô lib/blog/editorialLinkValidation.test.ts (2 tests) 4ms
+ Γ£ô lib/admin/__tests__/reassignPayoutOwnerBeforeTeamMemberRemove.test.ts (3 tests) 17ms
+ Γ£ô lib/booking/serviceCapabilityEligibility.test.ts (7 tests) 10ms
+ Γ£ô lib/email/__tests__/monthlyInvoicingAnnouncementEmail.test.ts (2 tests) 4ms
+ Γ£ô lib/customer/__tests__/customerBookingOwnership.test.ts (5 tests) 10ms
+ Γ£ô lib/cleaner/__tests__/trustJobCompletionFeedback.test.ts (3 tests) 7ms
+ Γ£ô lib/booking/__tests__/createBookingUnified.test.ts (2 tests) 8ms
+ Γ£ô lib/monthlyInvoice/__tests__/settleMonthlyInvoiceChildBooking.test.ts (6 tests) 7ms
+ Γ£ô lib/analytics/__tests__/deferredGrowthCtaTrackingScript.test.ts (1 test) 7ms
+ Γ£ô lib/payout/__tests__/auditPayoutSubsystemPhase15aSql.test.ts (1 test) 9ms
+ Γ£ô lib/cleaner/__tests__/earningsLedgerShadowTotals.test.ts (6 tests) 5ms
+ Γ£ô lib/blog/__tests__/build-blog-post-view-url.test.ts (4 tests) 4ms
+ Γ£ô lib/cleaner/__tests__/cleanerJobsListDerived.test.ts (4 tests) 4ms
+ Γ£ô lib/booking/__tests__/vipDisplayChargeParity.regression.test.ts (2 tests) 6ms
+ Γ£ô lib/payout/__tests__/payoutSafetyGuards.test.ts (2 tests) 16ms
+ Γ£ô lib/booking/__tests__/m5MonthlyInvoiceRoutingConvergence.test.ts (20 tests) 65ms
+ Γ£ô lib/customer/__tests__/customerBookingTrack.test.ts (10 tests) 10ms
+ Γ£ô lib/blog/fetch-cluster-related-guides.test.ts (2 tests) 9ms
+ Γ£ô lib/dispatch/__tests__/scoreCleanerForJob.test.ts (5 tests) 4ms
+ Γ£ô lib/seo/__tests__/marketingPageSocialMeta.test.ts (1 test) 9ms
+ Γ£ô lib/booking/parseWidgetDraftCreateBody.test.ts (5 tests) 4ms
+stderr | lib/booking-v2/__tests__/princessPraPricingReservation.test.ts > PRINCESS PR-A ΓÇö quote integrity / 
+readiness > stale client quote is soft-accepted with server pricing
+[booking] BOOKING_LOCK_HMAC_SECRET unset ΓÇö using a dev-only fallback. Set BOOKING_LOCK_HMAC_SECRET in .env.local and 
+restart `npm run dev`.
+
+ Γ£ô lib/booking-v2/__tests__/princessPraPricingReservation.test.ts (14 tests) 22ms
+ Γ£ô lib/booking-v2/__tests__/equipmentPricing.test.ts (10 tests) 18ms
+ Γ£ô lib/admin/__tests__/remapAdminPathToOffice.test.ts (4 tests) 9ms
+ Γ£ô lib/auth/__tests__/postAuthRedirect.test.ts (7 tests) 9ms
+stderr | lib/payout/__tests__/executeCleanerApprovedEarningsPaystack.phase15a-order.test.ts > 
+executeCleanerApprovedEarningsPaystack ΓÇö Phase 15A ordering + outbox > runs shadow measurement before claim and 
+completes via outbox (insert before Paystack)
+[supabase] Admin client unavailable: set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or 
+SUPABASE_SERVICE_KEY). { urlPresent: false, serviceRoleKeyPresent: false }
+[supabase] Next.js loads .env.local from the Next app root (this repo: apps/web/.env.local). Restart the dev server 
+after changes.
+[system_logs] info EARNINGS_PAYSTACK_PROCESSING Cleaner earnings transfer sent; awaiting webhook {
+  disbursementId: 'dddddddd-dddd-4ddd-dddd-eeeeeeeeeeee',
+  cleanerId: 'aaaaaaaa-bbbb-4ccc-dddd-eeeeeeeeeeee',
+  initiatedBy: null,
+  transferCode: 'TC',
+  reference: 'shalean-earnings-dddddddd-dddd-4ddd-dddd-eeeeeeeeeeee'
+}
+
+ Γ£ô lib/payout/__tests__/executeCleanerApprovedEarningsPaystack.phase15a-order.test.ts (3 tests) 39ms
+ Γ£ô lib/booking/__tests__/publicDailyWorkloadAvailability.test.ts (6 tests) 19ms
+ Γ£ô lib/payout/__tests__/resolvePayoutBaseAndServiceFeeCents.test.ts (3 tests) 24ms
+ Γ£ô lib/blog/infer-heading-intent-type.test.ts (3 tests) 9ms
+ Γ£ô lib/admin/__tests__/officePayoutPeriodReportTeamAllocations.test.ts (1 test) 7ms
+ Γ£ô lib/dashboard/__tests__/customerBookingReviewUi.test.ts (3 tests) 8ms
+ Γ£ô lib/monthlyInvoice/__tests__/resolveMonthlyInvoiceCustomerEmail.test.ts (3 tests) 10ms
+ Γ£ô lib/dashboard/__tests__/customerBookingTimeline.test.ts (4 tests) 8ms
+ Γ£ô lib/booking/__tests__/bookingCustomerIdentity.test.ts (3 tests) 4ms
+ Γ£ô lib/booking/__tests__/bookingPaidAmountColumns.test.ts (4 tests) 4ms
+ Γ£ô lib/notifications/notificationCopy.test.ts (2 tests) 12ms
+ Γ£ô lib/booking/__tests__/adminBookingMutationConvergence.test.ts (9 tests) 15ms
+ Γ£ô lib/booking-v2/__tests__/roomCountOptions.test.ts (3 tests) 21ms
+ Γ£ô lib/booking/__tests__/bookingOperations.test.ts (27 tests) 55ms
+ Γ£ô lib/pay/paymentLinkDeliveryStats.test.ts (7 tests) 28ms
+ Γ£ô lib/monthlyInvoice/__tests__/monthlyInvoiceLateFeePolicy.test.ts (3 tests) 7ms
+ Γ£ô lib/booking/__tests__/bookingSlotServiceDay.test.ts (3 tests) 4ms
+ Γ£ô lib/customer/__tests__/resolveCustomerOutboundEmail.test.ts (3 tests) 6ms
+ Γ£ô app/api/admin/bookings/[id]/__tests__/patch-assignment-guard.test.ts (7 tests) 44ms
+ Γ£ô lib/booking/bookingServiceQa.test.ts (4 tests) 22ms
+ Γ£ô lib/dispatch/__tests__/resolveTeamPayoutOwnerCleanerId.test.ts (5 tests) 8ms
+ Γ£ô lib/admin/__tests__/officeScheduleDayPresentation.test.ts (17 tests) 66ms
+ Γ£ô lib/dispatch/__tests__/teamJobsPerDay.test.ts (2 tests) 31ms
+ Γ£ô lib/cleaner/__tests__/cleanerAvailabilityConfirmedCopy.test.ts (2 tests) 8ms
+ Γ£ô lib/cleaner-dashboard/computeConfirmedIdle.test.ts (6 tests) 7ms
+ Γ£ô app/api/admin/bookings/[id]/__tests__/delete-hardening.test.ts (10 tests) 36ms
+ Γ£ô lib/cleaner/__tests__/cleanerLifecycleClientErrors.test.ts (4 tests) 26ms
+ Γ£ô lib/customer/__tests__/customerNotificationsDevices.test.ts (5 tests) 4ms
+stderr | lib/booking/failedJobs.test.ts > enqueueFailedJob > returns false and writes system_logs fallback when admin 
+is missing
+[FAILED JOB INSERT ERROR] { type: 'booking_insert', err: 'no_supabase_admin' }
+
+stderr | lib/booking/failedJobs.test.ts > enqueueFailedJob > returns false and writes system_logs fallback when insert 
+errors
+[FAILED JOB INSERT ERROR] { message: 'db down', code: '57014' }
+
+ Γ£ô lib/booking/failedJobs.test.ts (3 tests) 10ms
+ Γ£ô lib/dashboard/__tests__/customerBookingModifyStatuses.test.ts (3 tests) 5ms
+ Γ£ô lib/promotions/__tests__/facebookPublish.test.ts (2 tests) 5ms
+ Γ£ô lib/monthlyInvoice/__tests__/repairMonthlyInvoicePaymentStateDriftProbeE.test.ts (2 tests) 8ms
+ Γ£ô lib/cleaner/cleanerJobPendingLifecycleQueue.test.ts (13 tests) 22ms
+ Γ£ô lib/payout/__tests__/adjustBookingTeamMemberPayoutEarnings.test.ts (1 test) 3ms
+ Γ£ô lib/cleaner/__tests__/teamMemberAvailability.test.ts (4 tests) 8ms
+ Γ£ô lib/promotions/__tests__/googleBusinessPublish.test.ts (6 tests) 38ms
+ Γ£ô lib/dispatch/cleanerPreferenceMatch.test.ts (9 tests) 17ms
+ Γ£ô lib/admin/__tests__/performAdminAssignTeam.test.ts (8 tests) 35ms
+ Γ£ô lib/booking/__tests__/paystackFinalizeGatewayCallSites.test.ts (10 tests) 32ms
+ Γ£ô lib/seo/__tests__/sitemapUptimeCheck.test.ts (3 tests) 4ms
+ Γ£ô lib/booking/__tests__/enqueuePaystackRecoveryFailedJobs.test.ts (1 test) 5ms
+ Γ£ô lib/cleaner/__tests__/cleanerRecurringPendingPaymentLifecycle.test.ts (7 tests) 16ms
+ Γ£ô lib/admin/__tests__/cleanerPerformance.test.ts (7 tests) 36ms
+ Γ£ô lib/booking/__tests__/assignmentBookingStateCommandConvergence.test.ts (6 tests) 47ms
+ Γ£ô lib/notifications/notificationIdempotencyClaim.test.ts (5 tests) 14ms
+ Γ£ô lib/cleaner/cleanerLifecycleBcMessageGuard.test.ts (3 tests) 5ms
+ Γ£ô lib/dashboard/__tests__/customerBookingCardOperationalDisplay.test.ts (6 tests) 83ms
+ Γ£ô lib/auth/__tests__/sanitizeLoginSearchParams.test.ts (3 tests) 5ms
+ Γ£ô lib/observability/__tests__/opsHealthAlerts.test.ts (9 tests) 25ms
+ Γ£ô app/api/cleaner/respond/__tests__/postRespond.test.ts (5 tests) 35ms
+ Γ£ô lib/blog/cms-blog-link-validation.test.ts (19 tests) 22ms
+ Γ£ô lib/zoho/__tests__/zohoOrderReference.test.ts (2 tests) 4ms
+ Γ£ô lib/seo/blogGovernance.test.ts (3 tests) 7ms
+ Γ£ô lib/admin/__tests__/invoiceBookingsTableStatus.test.ts (1 test) 21ms
+ Γ£ô lib/booking/__tests__/bookingOperations.assignDispatch.test.ts (5 tests) 24ms
+ Γ£ô lib/whatsapp/metaDeliveryFailureCategory.test.ts (5 tests) 7ms
+ Γ£ô lib/admin/__tests__/officeNotificationLogs.test.ts (4 tests) 10ms
+ Γ£ô lib/dispatch/offerNotificationsResilience.test.ts (2 tests) 45ms
+ Γ£ô lib/dashboard/__tests__/customerCancelCopy.test.ts (4 tests) 9ms
+ Γ£ô lib/booking/__tests__/opsAssignmentEligibility.test.ts (3 tests) 3ms
+ Γ£ô lib/marketplace-intelligence/__tests__/engines.test.ts (7 tests) 14ms
+ Γ£ô lib/cleaner/__tests__/cleanerOfferAcceptanceRank.test.ts (3 tests) 10ms
+ Γ£ô lib/dispatch/dispatchOfferCounterRpc.test.ts (4 tests) 8ms
+ Γ£ô lib/twilioSend.test.ts (5 tests) 16ms
+ Γ£ô lib/admin/__tests__/officeBookingsListExport.test.ts (1 test) 9ms
+ Γ£ô lib/booking/bookingPaymentPrecheckLogic.test.ts (4 tests) 9ms
+ Γ£ô lib/cleaner/cleanerPreferencesTypes.test.ts (1 test) 5ms
+ Γ£ô lib/booking/__tests__/bookingPaymentSettlementState.test.ts (4 tests) 10ms
+ Γ£ô lib/quote/__tests__/quotePricingExtras.test.ts (16 tests) 19ms
+ Γ£ô lib/promotions/__tests__/phase3Eligibility.contract.test.ts (4 tests) 6ms
+ Γ£ô lib/monthlyInvoice/__tests__/updateMonthlyInvoiceBillingDates.test.ts (3 tests) 14ms
+ Γ£ô lib/cleaner/__tests__/syncCleanerStatusInvariants.test.ts (8 tests) 13ms
+ Γ£ô lib/admin/invoices/__tests__/parseZarInput.test.ts (4 tests) 3ms
+ Γ£ô lib/blog/extract-blog-toc.test.ts (7 tests) 17ms
+ Γ£ô lib/booking/__tests__/adminEditDetailsRepricing.test.ts (3 tests) 31ms
+ Γ£ô lib/booking/__tests__/checkoutScheduleAvailability.test.ts (1 test) 4ms
+ Γ£ô lib/pricing/legacyDurationSelectionParity.test.ts (10 tests) 48ms
+ Γ£ô lib/payout/__tests__/bookingEarningsSnapshotCommandConvergence.test.ts (4 tests) 68ms
+ Γ£ô lib/dispatch/teamServiceTypeDb.test.ts (3 tests) 4ms
+ Γ£ô lib/admin/expenses/__tests__/profitCalculations.test.ts (3 tests) 4ms
+ Γ£ô lib/dashboard/__tests__/customerPaymentDisplay.test.ts (6 tests) 26ms
+ Γ£ô lib/booking/__tests__/promoteV2TeamBookingAfterPayment.test.ts (1 test) 3ms
+ Γ£ô lib/payout/__tests__/paystackTransferStatus.idempotency.test.ts (2 tests) 13ms
+ Γ£ô lib/admin/__tests__/teamAssignmentSlotConflicts.test.ts (1 test) 6ms
+ Γ£ô lib/customer/__tests__/documentOwnership.test.ts (4 tests) 21ms
+ Γ£ô lib/reviews/__tests__/m11m15ReviewsAutoOpenAndCleanerName.test.ts (31 tests) 25ms
+ Γ£ô lib/email/__tests__/reengagementEmailHtml.test.ts (3 tests) 7ms
+ Γ£ô lib/seo/compute-seo-momentum-movers.test.ts (4 tests) 20ms
+ Γ£ô lib/booking/customerBookingReference.test.ts (5 tests) 114ms
+ Γ£ô app/api/cleaner/bookings/[id]/start/__tests__/route.test.ts (1 test) 29ms
+ Γ£ô lib/booking/__tests__/bookingsPaymentMethodChkConstraint.test.ts (6 tests) 8ms
+ Γ£ô lib/rateLimit/paystackVerifyIpLimit.test.ts (1 test) 9ms
+ Γ£ô lib/booking/enqueuePaystackRecoveryFailedJobs.test.ts (5 tests) 8ms
+ Γ£ô lib/admin/__tests__/opsSnapshotExclusiveQueues.test.ts (8 tests) 7ms
+ Γ£ô lib/cleaner/__tests__/cleanerDashboardTodayCentsAssignedExcluded.test.ts (4 tests) 61ms
+ Γ£ô app/api/admin/bookings/[id]/assign-team/__tests__/route.test.ts (7 tests) 43ms
+stdout | lib/booking/finalizePaystackChargeSuccess.test.ts > finalizePaystackChargeSuccess > double finalize (verify + verify) invokes upsert twice without throwing
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:26.234Z","reference":"dup-ref","finalize_source":"verify","payment_path":"legacy_or_unknown","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:26.242Z","reference":"dup-ref","finalize_source":"verify","payment_path":"legacy_or_unknown","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/finalizePaystackChargeSuccess.test.ts > finalizePaystackChargeSuccess > surfaces amount_mismatch from upsert
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:26.247Z","reference":"mis","finalize_source":"webhook","payment_path":"legacy_or_unknown","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+ Γ£ô lib/booking/finalizePaystackChargeSuccess.test.ts (2 tests) 20ms
+ Γ£ô app/api/admin/bookings/[id]/cleaners/__tests__/route.test.ts (4 tests) 15ms
+stderr | lib/dispatch/__tests__/dispatchOfferAcceptPreservesAvailability.test.ts > acceptDispatchOffer ΓÇö 
+`cleaners.is_available` invariant > happy path: every cleaners.update payload omits the `is_available` key
+[supabase] Admin client unavailable: set NEXT_PUBLIC_SUPABASE_URL (or SUPABASE_URL) and SUPABASE_SERVICE_ROLE_KEY (or 
+SUPABASE_SERVICE_KEY). { urlPresent: false, serviceRoleKeyPresent: false }
+[supabase] Next.js loads .env.local from the Next app root (this repo: apps/web/.env.local). Restart the dev server 
+after changes.
+[system_logs] info dispatch_offer_accept_atomic_reject accept_atomic_db {
+  offerId: 'offer-1',
+  bookingId: 'book-1',
+  cleanerId: 'cleaner-1',
+  failure: 'db',
+  machineReason: null
+}
+
+stderr | lib/dispatch/__tests__/dispatchOfferAcceptPreservesAvailability.test.ts > acceptDispatchOffer ΓÇö 
+`cleaners.is_available` invariant > manually offline cleaner: workload sync short-circuits (status='offline'), no 
+cleaners.update fires
+[system_logs] info dispatch_offer_accept_atomic_reject accept_atomic_db {
+  offerId: 'offer-2',
+  bookingId: 'book-2',
+  cleanerId: 'cleaner-2',
+  failure: 'db',
+  machineReason: null
+}
+
+ Γ£ô lib/dispatch/__tests__/dispatchOfferAcceptPreservesAvailability.test.ts (3 tests) 58ms
+ Γ£ô lib/booking/__tests__/phase1RevenueIntegrity.test.ts (3 tests) 6ms
+stdout | lib/booking/upsertBookingFromPaystack.test.ts > upsertBookingFromPaystack > throws if price snapshot missing
+{"event":"payment_finalize","at":"2026-07-15T22:46:27.466Z","reference":"ref-missing-snap","status":"missing_price_snapshot","metadata_key_count":0,"source":null}
+
+stdout | lib/booking/upsertBookingFromPaystack.test.ts > upsertBookingFromPaystack > returns skipped if booking already finalized (non pending_payment)
+{"event":"payment_finalize","at":"2026-07-15T22:46:27.469Z","reference":"ref-already-paid","status":"skipped_already_persisted","booking_id":"00000000-0000-4000-8000-000000000001","source":null}
+
+ Γ£ô lib/booking/upsertBookingFromPaystack.test.ts (13 tests) 11ms
+ Γ£ô lib/recurring/__tests__/customerRecurringPageHelpers.test.ts (3 tests) 9ms
+ Γ£ô app/api/cleaner/jobs/__tests__/postRejectJobAction.test.ts (3 tests) 15ms
+ Γ£ô lib/pricing/pricingEngine.pricingConfig.test.ts (5 tests) 6ms
+ Γ£ô lib/admin/reporting/__tests__/bookingDurationReporting.test.ts (3 tests) 6ms
+ Γ£ô lib/cleaner/__tests__/cleanerBookingScopeSummary.test.ts (7 tests) 20ms
+ Γ£ô lib/email/__tests__/resendFrom.test.ts (7 tests) 35ms
+ Γ£ô lib/http/__tests__/retiredApiRoute.test.ts (1 test) 8ms
+ Γ£ô lib/customer/__tests__/customerProfileInvoicesAuthz.test.ts (4 tests) 14ms
+ Γ£ô lib/seo/__tests__/gsc-page-import.test.ts (6 tests) 9ms
+ Γ£ô lib/cleaner/__tests__/availabilityWeekdaysStrict.test.ts (3 tests) 9ms
+ Γ£ô lib/monthlyInvoice/__tests__/loadMonthlyInvoiceEmailPdfAttachment.test.ts (3 tests) 28ms
+ Γ£ô lib/salesDocument/__tests__/backfillSalesDocumentQuoteBookings.test.ts (2 tests) 44ms
+ Γ£ô lib/monthlyInvoice/__tests__/allocateMonthlyChildPaymentCents.test.ts (6 tests) 4ms
+ Γ£ô lib/payout/__tests__/bookingPayoutPersistEligibility.test.ts (11 tests) 6ms
+ Γ£ô lib/booking/serviceCategories.retireQuick.test.ts (3 tests) 5ms
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö callback/webhook ordering > A. callback-first then webhook: second call is skipped (no double settle)
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:30.870Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"verify","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö callback/webhook ordering > A. callback-first then webhook: second call is skipped (no double settle)
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:30.873Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"webhook","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö callback/webhook ordering > B. webhook-first then callback: second call is skipped (same final booking)
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:30.877Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"webhook","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö callback/webhook ordering > B. webhook-first then callback: second call is skipped (same final booking)
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:30.878Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"verify","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö callback/webhook ordering > parallel finalize for same reference remains reference-keyed
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:30.879Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"verify","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:30.879Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"webhook","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö currency / booking mismatch at finalize > surfaces currency_mismatch without notifying
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:30.880Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"webhook","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+stdout | lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts > Princess PR C ΓÇö currency / booking mismatch at finalize > surfaces booking_mismatch without notifying
+{"event":"payment_finalize_signal","at":"2026-07-15T22:46:30.881Z","reference":"pay_aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","finalize_source":"verify","payment_path":"inline_checkout","metadata_contract_v":null,"booking_snapshot_version":null,"selected_cleaner_meta_present":false}
+
+ Γ£ô lib/booking/__tests__/princessPrcCallbackWebhookOrdering.test.ts (5 tests) 15ms
+ Γ£ô lib/env/__tests__/deploymentEnvironment.test.ts (11 tests) 21ms
+ Γ£ô app/api/cleaner/jobs/__tests__/postEnRouteJobAction.test.ts (2 tests) 21ms
+ Γ£ô lib/customer/__tests__/customerRebookLinkToken.test.ts (6 tests) 11ms
+ Γ£ô lib/ai-autonomy/__tests__/aiAutonomy.test.ts (4 tests) 37ms
+ Γ£ô lib/promotions/__tests__/generateCampaignContent.test.ts (1 test) 8ms
+ Γ£ô lib/booking-v2/__tests__/rebookFromBookingRow.test.ts (2 tests) 7ms
+ Γ£ô lib/admin/__tests__/officeFunnelPresentation.test.ts (9 tests) 11ms
+ Γ£ô lib/admin/__tests__/ensureUserProfileForAuthUser.test.ts (9 tests) 12ms
+ Γ£ô lib/notifications/__tests__/notificationRouter.test.ts (7 tests) 8ms
+ Γ£ô lib/cleaner/__tests__/cleanerMobileBookingMap.lifecycle.test.ts (12 tests) 10ms
+ Γ£ô lib/booking/__tests__/resolveLockedBookingForAdminReprice.test.ts (3 tests) 12ms
+ Γ£ô lib/admin/__tests__/adminCustomerDetail.test.ts (2 tests) 12ms
+ Γ£ô lib/admin/__tests__/officeNotifications.test.ts (6 tests) 5ms
+ Γ£ô lib/booking/__tests__/lifecycleEmailEligibility.test.ts (9 tests) 23ms
+ Γ£ô lib/pricing/extrasConfig.test.ts (5 tests) 9ms
+ Γ£ô lib/admin/__tests__/adminBookingEarningsResetSafety.test.ts (4 tests) 12ms
+ Γ£ô lib/blog/seo/blog-cluster-collision.test.ts (4 tests) 15ms
+ Γ£ô lib/cleaner/__tests__/cleanerJobDetailDisplayEnrich.test.ts (6 tests) 16ms
+ Γ£ô lib/launch/__tests__/launchReadinessChecks.test.ts (8 tests) 50ms
+ Γ£ô lib/cleaner/__tests__/cleanerJobMagicLink.test.ts (3 tests) 49ms
+ Γ£ô lib/booking/__tests__/generateRecurringOccurrenceBooking.test.ts (4 tests) 19ms
+ Γ£ô lib/booking/__tests__/pendingCollectedCashAnomalyRepair.test.ts (5 tests) 5ms
+ Γ£ô app/api/admin/bookings/__tests__/adminAuthUserOrphanProfileRepair.test.ts (3 tests) 15ms
+ Γ£ô lib/booking/__tests__/cleanerDailyWorkloadShadow.test.ts (7 tests) 16ms
+ Γ£ô lib/booking/bookingCompletionIntegrity.test.ts (20 tests) 18ms
+ Γ£ô lib/cleaner-dashboard/dashboardErrorFanOut.test.ts (11 tests) 12ms
+ Γ£ô lib/pricing/pricingRatesSnapshot.retireQuick.test.ts (1 test) 11ms
+ Γ£ô lib/recurring/__tests__/johannesburgCalendar.test.ts (3 tests) 7ms
+ Γ£ô lib/cleaner/__tests__/pairedRosterMemberLifecycle.test.ts (6 tests) 4ms
+ Γ£ô lib/seo/__tests__/liveSeoCrawl.test.ts (5 tests) 9ms
+ Γ£ô lib/dispatch/teamServiceDetection.test.ts (4 tests) 5ms
+ Γ£ô lib/email/__tests__/sendTemplateEmail.test.ts (1 test) 4ms
+ Γ£ô lib/dashboard/__tests__/dashboardBookingOperational.test.ts (4 tests) 8ms
+ Γ£ô lib/gsc/__tests__/sync-location-gsc-meta.test.ts (2 tests) 8ms
+ Γ£ô lib/booking/__tests__/phase2SharedPricing.test.ts (3 tests) 6ms
+ Γ£ô lib/payout/__tests__/phase15aAnomalyClassification.test.ts (6 tests) 10ms
+ Γ£ô lib/admin/__tests__/adminBookingAssignmentDisplay.test.ts (4 tests) 20ms
+ Γ£ô lib/booking-v2/customerBookingTimeSlots.test.ts (4 tests) 6ms
+ Γ£ô lib/promotions/__tests__/evaluate.test.ts (8 tests) 23ms
+ Γ£ô lib/seo/__tests__/sitemapLastModified.test.ts (2 tests) 9ms
+ Γ£ô lib/admin/payouts/__tests__/officeCleanerEditableVisits.test.ts (4 tests) 3ms
+ Γ£ô lib/admin/__tests__/dashboardStatsPresentation.test.ts (5 tests) 12ms
+ Γ£ô lib/cleaner-dashboard/cleanerNavBadgeRendering.test.ts (12 tests) 9ms
+ Γ£ô lib/customer/__tests__/customerProfileContactFields.test.ts (3 tests) 5ms
+ Γ£ô lib/pricing/normalizeJobSubtotalSplit.test.ts (1 test) 5ms
+ Γ£ô lib/dispatch/metaSendRetry.test.ts (1 test) 7ms
+ Γ£ô lib/admin/__tests__/adminBookingListClassify.test.ts (4 tests) 4ms
+ Γ£ô lib/dashboard/__tests__/customerBookingRoomsExtras.test.ts (4 tests) 18ms
+stderr | lib/booking/runBookingLockValidation.test.ts > runBookingLockValidation > returns invalid when bookings 
+overlap query fails
+[LOCK VALIDATION FAILED] timeout
+
+ Γ£ô lib/dashboard/storedPriceBreakdown.test.ts (6 tests) 17ms
+ Γ£ô lib/booking/runBookingLockValidation.test.ts (1 test) 14ms
+ Γ£ô lib/cleaner/cleanerLifecycleFlushCandidates.test.ts (2 tests) 10ms
+ Γ£ô lib/cleaner-dashboard/prioritizeDashboardJobs.test.ts (2 tests) 12ms
+ Γ£ô lib/admin/adminBookingAssignmentLabels.test.ts (5 tests) 6ms
+ Γ£ô lib/payout/__tests__/adminBookingAssignmentEarningsGate.test.ts (5 tests) 7ms
+ Γ£ô lib/dispatch/__tests__/planDispatchTierWindows.test.ts (2 tests) 7ms
+ Γ£ô lib/gsc/__tests__/sync-location-gsc-queries.test.ts (1 test) 4ms
+ Γ£ô lib/blog/editorialSanitize.test.ts (4 tests) 6ms
+ Γ£ô lib/cleaner/__tests__/earningsFinanceReconcile.test.ts (4 tests) 4ms
+ Γ£ô lib/cleaner-dashboard/detectNewOfferArrivals.test.ts (6 tests) 4ms
+ Γ£ô lib/booking/insertWidgetServerBooking.test.ts (3 tests) 6ms
+ Γ£ô lib/dashboard/__tests__/mapBookingRowReporting.test.ts (2 tests) 19ms
+ Γ£ô lib/admin/__tests__/m22AdminMobileLayoutContract.test.ts (9 tests) 11ms
+ Γ£ô lib/cleaner/__tests__/mapCleanerAccountHealth.test.ts (4 tests) 5ms
+ Γ£ô lib/booking/__tests__/dashboardLifecycleAlignment.test.ts (3 tests) 8ms
+ Γ£ô lib/admin/__tests__/replacementCandidateScoring.test.ts (5 tests) 6ms
+ Γ£ô lib/marketing/__tests__/globalTopNavVisibility.test.ts (3 tests) 9ms
+ Γ£ô lib/payout/__tests__/removeCleanerFromVisitPayout.test.ts (1 test) 14ms
+ Γ£ô lib/admin/__tests__/officeOpsHealthFilters.test.ts (7 tests) 7ms
+ Γ£ô lib/booking/__tests__/runAssignmentAckTimeouts.test.ts (5 tests) 9ms
+ Γ£ô lib/salesDocument/__tests__/resolveSalesDocumentBookingServiceSlug.test.ts (6 tests) 5ms
+ Γ£ô lib/cleaner/__tests__/cleanerOfferLocationSuburb.test.ts (2 tests) 6ms
+ Γ£ô lib/booking/__tests__/phase4RevenuePolish.test.ts (4 tests) 7ms
+ Γ£ô lib/cleaner/__tests__/runCleanerBookingLifecycleAction.zeroEarningGate.test.ts (5 tests) 15ms
+ Γ£ô lib/booking/paystackBookingIdLookup.test.ts (8 tests) 6ms
+ Γ£ô lib/cleaner/__tests__/cleanerUpcomingScheduleJohannesburg.test.ts (7 tests) 6ms
+ Γ£ô lib/customer/__tests__/customerCleanerNameEnrichment.test.ts (4 tests) 10ms
+ Γ£ô lib/payout/__tests__/bookingPayableForWeeklyBatch.test.ts (11 tests) 5ms
+ Γ£ô lib/admin/__tests__/buildAdminStatusTransitionUpdates.test.ts (5 tests) 9ms
+ Γ£ô lib/payout/__tests__/cleanerEarningsEligibility.test.ts (6 tests) 8ms
+ Γ£ô lib/cleaner/cleanerLifecycleFlushQueueConcurrency.test.ts (1 test) 6ms
+ Γ£ô lib/admin/__tests__/adminCreateStandardAirbnbInference.test.ts (3 tests) 7ms
+ Γ£ô lib/booking/canonicalSlotEligibilityParams.test.ts (4 tests) 9ms
+ Γ£ô lib/launch/__tests__/launchCheckConfig.test.ts (3 tests) 6ms
+ Γ£ô lib/promotions/__tests__/offerCopy.test.ts (3 tests) 9ms
+ Γ£ô lib/cleaner/earnings/__tests__/timeline.test.ts (2 tests) 12ms
+ Γ£ô lib/admin/__tests__/adminBookingCustomerContact.test.ts (7 tests) 8ms
+ Γ£ô lib/seo/metaTitle.test.ts (7 tests) 6ms
+ Γ£ô lib/booking/priceSnapshotAdminDisplay.test.ts (8 tests) 6ms
+ Γ£ô lib/monthlyInvoice/__tests__/monthlyInvoicePaymentLinkHtml.test.ts (4 tests) 3ms
+ Γ£ô lib/admin/__tests__/deriveAdminCleanerWorkloadDisplay.test.ts (6 tests) 9ms
+ Γ£ô lib/booking/__tests__/contactPhoneValidation.test.ts (4 tests) 3ms
+ Γ£ô lib/notifications/__tests__/bookingNotifyFormat.test.ts (3 tests) 5ms
+ Γ£ô lib/seo/serviceTitleLeadPrice.test.ts (2 tests) 3ms
+ Γ£ô lib/cleaner/cleanerLifecycleNetworkSignal.test.ts (6 tests) 10ms
+ Γ£ô lib/payout/__tests__/monthBounds.test.ts (4 tests) 11ms
+ Γ£ô lib/payments/bookingPaymentSummarySelectedCleaner.test.ts (5 tests) 41ms
+ Γ£ô lib/booking/__tests__/retryDispatchBooking.test.ts (2 tests) 12ms
+ Γ£ô lib/notifications/__tests__/communicationPolicy.test.ts (3 tests) 9ms
+ Γ£ô lib/gsc/__tests__/gsc-config.test.ts (6 tests) 5ms
+ Γ£ô lib/booking/__tests__/formatCheckoutAddress.test.ts (6 tests) 8ms
+ Γ£ô lib/cleaner/__tests__/cleanerEarningsPeriodTotals.test.ts (3 tests) 19ms
+ Γ£ô lib/blog/blog-toc-section-engagement.test.ts (2 tests) 7ms
+ Γ£ô lib/recurring/__tests__/recurringGeneratorRunSummary.test.ts (5 tests) 11ms
+ Γ£ô lib/cleaner/cleanerJobLifecyclePhaseRank.test.ts (11 tests) 7ms
+ Γ£ô lib/cleaner/__tests__/cleanerZarFormat.test.ts (5 tests) 5ms
+ Γ£ô app/api/cron/booking-lifecycle/__tests__/bookingLifecycleEnterpriseHooks.test.ts (1 test) 6ms
+stdout | lib/booking/__tests__/adminEquipmentFeeUpdate.test.ts > buildAdminEquipmentFeeUpdatePatch > preserves collected cash on paid bookings and updates total_price
+{"event":"admin_paid_booking_price_change","at":"2026-07-15T22:46:46.555Z","booking_id":"b1","surface":"equipment","fee_delta_zar":200,"next_total_price_zar":1200,"amount_paid_cents_preserved":100000,"payment_mismatch":true,"payment_status":"success","booking_status":"assigned"}
+
+ Γ£ô lib/booking/__tests__/adminEquipmentFeeUpdate.test.ts (2 tests) 11ms
+ Γ£ô lib/paystack/__tests__/paystackSecretKeys.test.ts (1 test) 12ms
+ Γ£ô lib/cleaner/dispatchOffersVisibility.test.ts (11 tests) 7ms
+ Γ£ô lib/booking/__tests__/assessBookingFulfillment.test.ts (4 tests) 6ms
+ Γ£ô lib/booking/__tests__/phase3GoldenPricing.contract.test.ts (3 tests) 4ms
+ Γ£ô lib/marketing/__tests__/marketingMobileLayout.test.ts (7 tests) 11ms
+ Γ£ô lib/booking-v2/__tests__/serviceExtraSlugs.test.ts (4 tests) 9ms
+ Γ£ô lib/seo/__tests__/contactPageJsonLd.test.ts (1 test) 8ms
+ Γ£ô lib/admin/__tests__/adminAssignmentWarnings.test.ts (3 tests) 9ms
+ Γ£ô lib/email/__tests__/emailBrandShell.test.ts (3 tests) 9ms
+ Γ£ô lib/booking/__tests__/adminEditDetailsNotesOnly.test.ts (5 tests) 18ms
+ Γ£ô lib/ai-autonomy/__tests__/aiAutonomyPhase8.test.ts (2 tests) 4ms
+ Γ£ô lib/monthlyInvoice/__tests__/monthlyInvoiceStablePaystackReference.test.ts (2 tests) 7ms
+ Γ£ô lib/notifications/__tests__/notificationRouter.imports.test.ts (1 test) 4ms
+ Γ£ô lib/rateLimit/cleanerLoginIpLimit.test.ts (2 tests) 9ms
+ Γ£ô lib/cleaner/__tests__/runCleanerBookingLifecycleAction.completionNotifyGate.test.ts (1 test) 3ms
+ Γ£ô lib/dispatch/__tests__/buildDispatchTiers.test.ts (2 tests) 6ms
+ Γ£ô lib/templates/__tests__/bookingConfirmedData.test.ts (4 tests) 14ms
+ Γ£ô lib/booking/__tests__/bookingEvents.test.ts (3 tests) 4ms
+ Γ£ô lib/admin/__tests__/cleanerTenureDisplay.test.ts (8 tests) 14ms
+ Γ£ô lib/pay/paymentLinkDeliveryEvents.test.ts (5 tests) 7ms
+ Γ£ô lib/customer/__tests__/customerAddressesAuthz.test.ts (6 tests) 5ms
+ Γ£ô lib/booking-v2/__tests__/bookingV2ServiceSlug.test.ts (4 tests) 8ms
+ Γ£ô lib/admin/__tests__/loadAdminCustomersList.test.ts (7 tests) 13ms
+ Γ£ô lib/admin/__tests__/metrics.test.ts (5 tests) 9ms
+ Γ£ô lib/booking/userSelectedCleanerFromSnapshot.test.ts (6 tests) 4ms
+ Γ£ô lib/booking/paymentAmountVsSnapshot.test.ts (5 tests) 13ms
+ Γ£ô lib/cleaner-dashboard/selectActiveJob.test.ts (6 tests) 15ms
+ Γ£ô lib/cleaner/__tests__/cleanerJobsListDerivedActiveCancelled.test.ts (6 tests) 6ms
+ Γ£ô lib/seo/derive-seo-issue-signals.test.ts (5 tests) 8ms
+ Γ£ô lib/payments/__tests__/paystackFeeCalculation.test.ts (5 tests) 4ms
+ Γ£ô lib/referrals/referralCheckoutEvents.test.ts (2 tests) 7ms
+ Γ£ô lib/booking/widgetDraftOwnership.test.ts (6 tests) 4ms
+ Γ£ô lib/dispatch/assignmentTruth.test.ts (6 tests) 4ms
+ Γ£ô lib/security/__tests__/timingSafeEqualString.test.ts (3 tests) 3ms
+ Γ£ô lib/logging/__tests__/redactOperationalContext.test.ts (3 tests) 7ms
+ Γ£ô lib/dispatch/metaWhatsAppSend.policy.test.ts (2 tests) 5ms
+ Γ£ô lib/admin/__tests__/seaPointTeams.integration.test.ts (3 tests) 6ms
+ Γ£ô lib/auth/__tests__/officePortalPath.test.ts (2 tests) 3ms
+ Γ£ô lib/notifications/__tests__/bookingCancelledNotifications.test.ts (3 tests) 3ms
+ Γ£ô lib/cleaner/cleanerQueuedLifecycleFlushGuard.test.ts (4 tests) 7ms
+ Γ£ô lib/dispatch/cleanerDispatchPerformance.test.ts (2 tests) 7ms
+ Γ£ô lib/admin/__tests__/officeLaunchCheck.test.ts (1 test) 8ms
+ Γ£ô lib/payout/__tests__/adjustBookingPayoutEarnings.test.ts (2 tests) 6ms
+ Γ£ô lib/booking/__tests__/leftoverRevenuePolish.test.ts (2 tests) 3ms
+stdout | lib/blog/blogImageMap.test.ts
+[blogImageMap] Unique pinned blog heroes: 27 (editorial + high-conversion + flagship programmatic pins)
+[blogImageMap] Pinned slugs (unique dedicated assets): 27; total entries in BLOG_IMAGE_MAP: 83
+[blogImageMap] Routed slugs still on generated/shared pool (no pinned hero): 56
+[blogImageMap] First unpinned routed slugs: airbnb-cleaning-constantia-cape-town, airbnb-cleaning-newlands-cape-town, airbnb-cleaning-observatory-cape-town, carpet-cleaning-constantia-cape-town, carpet-cleaning-durbanville-cape-town, carpet-cleaning-green-point-cape-town, cleaning-prices-claremont-cape-town, cleaning-prices-durbanville-cape-town, cleaning-prices-gardens-cape-town, cleaning-prices-green-point-cape-town, cleaning-prices-newlands-cape-town, cleaning-prices-observatory-cape-town, cleaning-prices-rondebosch-cape-town, cleaning-prices-sea-point-cape-town, cleaning-services-claremont-cape-town, cleaning-services-durbanville-cape-town, cleaning-services-gardens-cape-town, cleaning-services-green-point-cape-town, cleaning-services-rondebosch-cape-town, cleaning-services-sea-point-cape-town, cleaning-services-wynberg-cape-town, deep-cleaning-checklist-claremont-cape-town, deep-cleaning-checklist-durbanville-cape-town, deep-cleaning-checklist-gardens-cape-town, deep-cleaning-checklist-green-point-cape-town ΓÇª
+
+stderr | lib/blog/blogImageMap.test.ts
+[blogImageMap] 17 featured image files are shared across 34 slugs (unique asset pool is smaller than routed posts). 
+Example: /images/blog/pool/cape-town-guest-bed-white-linens.webp ΓåÆ airbnb-cleaning-newlands-cape-town, 
+home-cleaning-frequency-rondebosch-cape-town 
+
+ Γ£ô lib/blog/blogImageMap.test.ts (9 tests) 7ms
+ Γ£ô lib/paystack/__tests__/refundPaystackTransaction.test.ts (2 tests) 4ms
+ Γ£ô lib/referrals/validateReferral.test.ts (2 tests) 6ms
+ Γ£ô lib/booking-v2/__tests__/bookingV2PaymentRedirect.test.ts (1 test) 3ms
+
+ Test Files  524 passed (524)
+      Tests  3264 passed (3264)
+   Start at  00:45:06
+   Duration  105.12s (transform 62.68s, setup 0ms, collect 371.48s, tests 46.05s, environment 198ms, prepare 182.55s)
+

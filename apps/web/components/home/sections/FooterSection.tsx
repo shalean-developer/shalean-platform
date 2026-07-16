@@ -21,6 +21,7 @@ const FOOTER_SERVICES = [...MARKETING_FOOTER_SERVICE_LINKS];
 
 const FOOTER_COMPANY = [
   { label: "About Us", href: "/about" },
+  { label: "Areas We Serve", href: "/areas-we-serve" },
   { label: "Reviews", href: "/reviews" },
   { label: "Blog", href: "/blog" },
   { label: "Careers", href: "/cleaner/apply" },
@@ -29,8 +30,7 @@ const FOOTER_COMPANY = [
 
 const FOOTER_SUPPORT = [
   { label: "Get Free Quote", href: "/quote" },
-  { label: "Help Centre", href: "/faq" },
-  { label: "Cleaning FAQs", href: "/faq" },
+  { label: "Help & FAQs", href: "/faq" },
   { label: "Booking & Payments", href: "/book" },
   { label: "Terms & Conditions", href: "/terms-of-service" },
   { label: "Privacy Policy", href: "/privacy-policy" },
@@ -70,9 +70,11 @@ export function FooterSection({ stackFloats = false }: { stackFloats?: boolean }
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
           <div className="grid gap-8 sm:grid-cols-2 sm:gap-10 lg:grid-cols-5">
 
-            {/* Col 1 — Brand */}
+            {/* Col 1 — Brand — same canonical logo as header (light plate for navy contrast) */}
             <div className="lg:col-span-1">
-              <ShaleanNavLogo className="h-9 w-auto brightness-0 invert" />
+              <div className="inline-flex rounded-lg bg-white px-2.5 py-1.5 shadow-sm">
+                <ShaleanNavLogo className="h-8 w-auto sm:h-9" intrinsicHeight={80} />
+              </div>
               <p className="mt-4 max-w-xs text-sm leading-relaxed text-slate-400">
                 Reliable, professional cleaning services in Cape Town. We clean so you can live.
               </p>

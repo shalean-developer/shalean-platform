@@ -23,6 +23,8 @@ import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurr
 import type { BookingV2FormData, BookingStep } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { formatAreasServedPreview } from "@/src/features/booking-v2/components/CleanerCard";
+import { formatEstimatedCleaningTimeLabel, estimatedCleaningHoursFromMinutes } from "@/lib/booking-v2/formatEstimatedCleaningTime";
+import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
 
 const TRUST_BADGES = [
   { Icon: ShieldCheck, title: "Vetted cleaners", desc: "Background checked & verified", color: "text-green-600" },
@@ -100,10 +102,10 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const config = SERVICE_CONFIG[values.serviceSlug];
   const pricing = values.pricingSummary;
   const displayTotal = pricing.estimated_total ?? pricing.total ?? 0;
-  const durationHours =
-    pricing.estimated_duration_minutes > 0
-      ? (pricing.estimated_duration_minutes / 60).toFixed(1).replace(/\.0$/, "")
-      : String(liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours);
+  const durationHours = estimatedCleaningHoursFromMinutes(
+    pricing.estimated_duration_minutes,
+    liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours,
+  );
   const hasAddress = values.address.length >= 5;
   const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(values.date);
   const hasExtras = values.selectedExtras.length > 0;
@@ -114,7 +116,11 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const durationRow = (
     <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
       <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      <span>Est. {durationHours}h duration</span>
+      <span>
+        {pricing.estimated_duration_minutes > 0
+          ? formatEstimatedCleaningTimeLabel(pricing.estimated_duration_minutes)
+          : `Estimated cleaning time: ${durationHours} hours`}
+      </span>
     </div>
   );
 
@@ -301,18 +307,53 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
 
         {/* Total + trust footer (pinned on desktop) */}
         <div className="shrink-0 space-y-3 px-4 py-4 sm:px-5">
-          <div className="rounded-xl bg-blue-50 px-4 py-3 ring-1 ring-inset ring-blue-100">
+            <div className="rounded-xl bg-blue-50 px-4 py-3 ring-1 ring-inset ring-blue-100">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-base font-bold text-slate-900">Estimated total</span>
+              <span className="text-base font-bold text-slate-900">
+                {values.bookingType === "recurring" ? "Price per visit" : "Estimated total"}
+              </span>
               <span className="text-xl font-extrabold text-blue-600">
                 {hasPriceBreakdown
                   ? `R${displayTotal.toLocaleString("en-ZA")}`
                   : `From R${(liveConfig?.basePrice ?? config.basePrice).toLocaleString("en-ZA")}`}
               </span>
             </div>
-            <p className="mt-0.5 text-xs text-slate-500">
-              Final amount confirmed before payment. No hidden fees.
-            </p>
+            {values.bookingType === "recurring" && values.recurringFrequency ? (
+              <div className="mt-1.5 space-y-0.5 text-xs text-slate-600">
+                {(() => {
+                  const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                    frequency: values.recurringFrequency,
+                    daysOfWeek: values.recurringDays ?? [],
+                    pricePerVisitZar: displayTotal,
+                  });
+                  return (
+                    <>
+                      <p>
+                        {recurringFrequencyLabel(values.recurringFrequency)} plan
+                        {(values.recurringDays ?? []).length > 0
+                          ? ` · ${values.recurringDays.join(", ")}`
+                          : ""}
+                      </p>
+                      <p>
+                        About {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated
+                        monthly total R{estimatedMonthlyZar.toLocaleString("en-ZA")}
+                      </p>
+                      <p className="font-medium text-slate-700">
+                        Pay today: R{displayTotal.toLocaleString("en-ZA")} (this visit)
+                      </p>
+                      <p className="text-slate-500">
+                        Each visit is billed at this per-visit price. Future visits are charged
+                        separately (or on your monthly invoice if your account uses monthly billing).
+                      </p>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <p className="mt-0.5 text-xs text-slate-500">
+                Final amount confirmed before payment. No hidden fees.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-3">

@@ -22,6 +22,7 @@ import {
   Users,
 } from "lucide-react";
 import BookingActionsDropdown from "@/components/admin/BookingActionsDropdown";
+import AdminBookingRefundDialog from "@/components/admin/AdminBookingRefundDialog";
 import { OfficeBookingDetailsShell, type OfficeTimelineStep } from "@/components/admin/office/OfficeBookingDetailsShell";
 import { BookingNotificationTimeline } from "@/components/admin/office/BookingNotificationTimeline";
 import type { BookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
@@ -150,6 +151,8 @@ type BookingDetails = {
   payout_status?: string | null;
   payment_completed_at?: string | null;
   payment_status?: string | null;
+  refunded_at?: string | null;
+  refund_status?: string | null;
   /** Off-platform settlement: cash | zoho | eft (set by admin mark-paid). */
   payment_method?: string | null;
   payment_reference_external?: string | null;
@@ -485,6 +488,33 @@ function BookingPaymentTimeline({ booking }: { booking: BookingDetails }) {
       : []),
     { key: "payout", label: "Payout", detail: payoutLabel, done: t.payoutPaid },
   ];
+
+  const refundStatus = String(booking.refund_status ?? "").trim().toLowerCase();
+  if (refundStatus || booking.refunded_at) {
+    const snap =
+      booking.booking_snapshot && typeof booking.booking_snapshot === "object"
+        ? (booking.booking_snapshot as { refund_workflow?: { refunded_cents?: number; captured_cents?: number } })
+        : null;
+    const refundedCents = Number(snap?.refund_workflow?.refunded_cents ?? 0);
+    const detail = [
+      refundStatus || "recorded",
+      booking.refunded_at ? formatShortTs(booking.refunded_at) : null,
+      refundedCents > 0 ? `R ${(refundedCents / 100).toFixed(2)} refunded` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
+    steps.splice(2, 0, {
+      key: "refund",
+      label:
+        refundStatus === "full" || refundStatus === "chargeback"
+          ? "Fully refunded"
+          : refundStatus === "partial"
+            ? "Partially refunded"
+            : "Refund recorded",
+      detail,
+      done: true,
+    });
+  }
 
   return (
     <ol className="space-y-3 border-l-2 border-zinc-200 pl-4">
@@ -930,6 +960,7 @@ export default function BookingDetailsView({
   const [issueResolveBusyId, setIssueResolveBusyId] = useState<string | null>(null);
   const [issueReportNowMs, setIssueReportNowMs] = useState(() => Date.now());
   const [detailDashboardLifecycle, setDetailDashboardLifecycle] = useState<DashboardLifecycleAlignmentWire | null>(null);
+  const [refundDialogOpen, setRefundDialogOpen] = useState(false);
 
   const detailRefreshTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const detailLoadAbortRef = useRef<AbortController | null>(null);
@@ -2455,7 +2486,19 @@ export default function BookingDetailsView({
   });
   const customerPhone = resolvedCustomerPhone ?? "Not on file";
   const customerMissingPhone = !resolvedCustomerPhone;
+  const refundStatusNorm = String(fullBooking.refund_status ?? "")
+    .trim()
+    .toLowerCase();
+  const refundPaymentLabel =
+    refundStatusNorm === "full" || refundStatusNorm === "reversed"
+      ? "Fully refunded"
+      : refundStatusNorm === "chargeback"
+        ? "Chargeback"
+        : refundStatusNorm === "partial" || fullBooking.refunded_at
+          ? "Partially refunded"
+          : null;
   const paymentStatusLabel =
+    refundPaymentLabel ||
     adminOperational?.displayBadge?.trim() ||
     (offPlatformPaidLabel ? offPlatformPaidLabel : canMarkPaid ? "Pending payment" : "Paid");
   const paymentStatusShort = shortPaymentStatusLabel(paymentStatusLabel);
@@ -2864,6 +2907,7 @@ export default function BookingDetailsView({
                   onComplete={() => void setStatusOptimistic("completed")}
                   onCancel={() => void setStatusOptimistic("cancelled")}
                   onDelete={() => void handleDeleteBooking()}
+                  onRefund={() => setRefundDialogOpen(true)}
                 />
               </div>
             </div>
@@ -4701,6 +4745,41 @@ export default function BookingDetailsView({
         </div>
       ) : null}
 
+      {fullBooking ? (
+        <AdminBookingRefundDialog
+          open={refundDialogOpen}
+          onClose={() => setRefundDialogOpen(false)}
+          bookingId={fullBooking.id}
+          paidCents={(() => {
+            const snap =
+              fullBooking.booking_snapshot && typeof fullBooking.booking_snapshot === "object"
+                ? (fullBooking.booking_snapshot as {
+                    refund_workflow?: { captured_cents?: number; refunded_cents?: number };
+                  })
+                : null;
+            const captured = Number(snap?.refund_workflow?.captured_cents);
+            if (Number.isFinite(captured) && captured > 0) return Math.round(captured);
+            const ap = Number(fullBooking.amount_paid_cents ?? fullBooking.total_paid_cents);
+            if (Number.isFinite(ap) && ap > 0) return Math.round(ap);
+            const zar = Number(fullBooking.total_paid_zar);
+            return Number.isFinite(zar) && zar > 0 ? Math.round(zar * 100) : 0;
+          })()}
+          priorRefundedCents={(() => {
+            const snap =
+              fullBooking.booking_snapshot && typeof fullBooking.booking_snapshot === "object"
+                ? (fullBooking.booking_snapshot as { refund_workflow?: { refunded_cents?: number } })
+                : null;
+            const r = Number(snap?.refund_workflow?.refunded_cents);
+            return Number.isFinite(r) && r > 0 ? Math.round(r) : 0;
+          })()}
+          refundStatus={fullBooking.refund_status ?? null}
+          getAccessToken={getAdminToken}
+          onDone={async () => {
+            setDetailRefresh((n) => n + 1);
+          }}
+        />
+      ) : null}
+
     </>
   );
 }
@@ -4740,6 +4819,10 @@ function compactScheduleRelative(date: string | null | undefined, time: string |
 function shortPaymentStatusLabel(label: string): string {
   const normalized = label.trim().toLowerCase();
   if (normalized.includes("pending")) return "Pending payment";
+  if (normalized.includes("chargeback")) return "Chargeback";
+  if (normalized.includes("refund")) {
+    return normalized.includes("partial") ? "Partially refunded" : "Fully refunded";
+  }
   if (normalized.includes("paid") || normalized.includes("success")) return "Paid";
   if (normalized.includes("overdue")) return "Overdue";
   if (normalized.includes("deposit")) return "Deposit";

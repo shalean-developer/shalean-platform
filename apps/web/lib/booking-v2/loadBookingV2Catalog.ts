@@ -15,9 +15,14 @@ import type {
   BookingV2CatalogPayload,
   BookingV2SchedulingConfig,
   LiveExtra,
+  LiveServiceConfig,
   ServicesCatalog,
 } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { DB_SLUG_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
+import {
+  resolveMovingPricingServiceRow,
+  resolvePricingServiceRow,
+} from "@/lib/booking-v2/resolvePricingServiceSlug";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
 export type {
@@ -28,6 +33,47 @@ export type {
 } from "@/lib/booking-v2/bookingV2CatalogTypes";
 
 export { DB_SLUG_MAP, EXTRA_TYPE_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
+
+type DbServiceRow = {
+  base_price: number;
+  price_per_bedroom: number;
+  price_per_bathroom: number;
+  price_per_extra_room: number;
+  duration_base: number;
+  min_hours: number;
+  max_hours: number;
+};
+
+function ratesFromDbRow(dbSvc: DbServiceRow | null | undefined, staticFallback: { basePrice: number }) {
+  return {
+    basePrice: dbSvc?.base_price && dbSvc.base_price > 0 ? dbSvc.base_price : staticFallback.basePrice,
+    pricePerBedroom: dbSvc?.price_per_bedroom && dbSvc.price_per_bedroom > 0 ? dbSvc.price_per_bedroom : 0,
+    pricePerBathroom: dbSvc?.price_per_bathroom && dbSvc.price_per_bathroom > 0 ? dbSvc.price_per_bathroom : 0,
+    pricePerExtraRoom:
+      dbSvc?.price_per_extra_room && dbSvc.price_per_extra_room > 0 ? dbSvc.price_per_extra_room : 0,
+  };
+}
+
+function attachMoveVariantRates(
+  dbServices: Record<string, DbServiceRow>,
+  staticFallback: { basePrice: number },
+): LiveServiceConfig["moveVariantRates"] {
+  const moveIn = resolvePricingServiceRow(dbServices, "move-in");
+  const moveOut = resolvePricingServiceRow(dbServices, "move-out");
+  if (!moveIn && !moveOut) return undefined;
+  return {
+    ...(moveIn
+      ? {
+          move_in: ratesFromDbRow(moveIn, staticFallback),
+        }
+      : {}),
+    ...(moveOut
+      ? {
+          move_out: ratesFromDbRow(moveOut, staticFallback),
+        }
+      : {}),
+  };
+}
 
 type DbExtraRow = {
   price: number;
@@ -59,12 +105,31 @@ function buildExtrasForService(
     })
     .sort((a, b) => a[1].sort_order - b[1].sort_order || a[0].localeCompare(b[0]));
 
-  return rows.map(([slug, row]) => ({
-    id: slug,
-    label: row.name,
-    description: row.description,
-    priceZar: row.price,
-    isPopular: row.is_popular,
+  if (rows.length > 0) {
+    return rows.map(([slug, row]) => ({
+      id: slug,
+      label: row.name,
+      description: row.description,
+      priceZar: row.price,
+      isPopular: row.is_popular,
+    }));
+  }
+
+  // Staging/dev catalogs may lack pricing_extras rows — fall back to static service extras.
+  const staticExtras = SERVICE_CONFIG[serviceDef.slug]?.extras ?? [];
+  const filtered = allowlist?.length
+    ? staticExtras.filter((e) => {
+        const id = normalizeExtraSlug(e.id);
+        return allowlist.includes(id) || allowlist.includes(e.id);
+      })
+    : staticExtras;
+
+  return filtered.map((e) => ({
+    id: normalizeExtraSlug(e.id),
+    label: e.label,
+    description: e.description,
+    priceZar: e.priceZar,
+    isPopular: false,
   }));
 }
 
@@ -79,18 +144,7 @@ const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
 export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   const admin = getSupabaseAdmin();
 
-  const dbServices: Record<
-    string,
-    {
-      base_price: number;
-      price_per_bedroom: number;
-      price_per_bathroom: number;
-      price_per_extra_room: number;
-      duration_base: number;
-      min_hours: number;
-      max_hours: number;
-    }
-  > = {};
+  const dbServices: Record<string, DbServiceRow> = {};
 
   const dbExtras: Record<string, DbExtraRow> = {};
   let configJson: unknown = null;
@@ -187,9 +241,14 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
     const slug = serviceDef.slug;
     const staticFallback = SERVICE_CONFIG[slug];
     const dbSlug = serviceDef.pricingSlug || DB_SLUG_MAP[slug];
-    const dbSvc = dbServices[dbSlug] ?? null;
+    const dbSvc =
+      (slug === "moving-cleaning"
+        ? resolveMovingPricingServiceRow(dbServices, null)
+        : resolvePricingServiceRow(dbServices, dbSlug)) ??
+      resolvePricingServiceRow(dbServices, "standard");
 
     const extras = buildExtrasForService(serviceDef, dbExtras);
+    const rates = ratesFromDbRow(dbSvc, staticFallback);
 
     catalog[slug] = {
       slug,
@@ -201,10 +260,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       showCleaningProductsQuestion: serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
       allowsExtraCleaner: serviceDef.allowsExtraCleaner,
       step1Questions: serviceDef.step1Questions,
-      basePrice: dbSvc?.base_price ?? staticFallback.basePrice,
-      pricePerBedroom: dbSvc?.price_per_bedroom ?? 0,
-      pricePerBathroom: dbSvc?.price_per_bathroom ?? 0,
-      pricePerExtraRoom: dbSvc?.price_per_extra_room ?? 0,
+      ...rates,
       pricePerExtraCleaner: feesConfig.extraCleanerFeeZar || staticFallback.pricePerExtraCleaner,
       estimatedDurationHours: dbSvc?.duration_base
         ? Math.max(1, Math.round(dbSvc.duration_base))
@@ -215,6 +271,9 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         dbSvc?.max_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
       ),
       extras,
+      ...(slug === "moving-cleaning"
+        ? { moveVariantRates: attachMoveVariantRates(dbServices, staticFallback) }
+        : {}),
     };
     activeServiceSlugs.push(slug);
   }
@@ -223,7 +282,9 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
     if (!catalog[slug]) {
       const staticFallback = SERVICE_CONFIG[slug];
       const dbSlug = DB_SLUG_MAP[slug];
-      const dbSvc = dbServices[dbSlug] ?? null;
+      const dbSvc =
+        resolvePricingServiceRow(dbServices, dbSlug) ??
+        resolvePricingServiceRow(dbServices, "standard");
       catalog[slug] = {
         slug,
         label: staticFallback.label,
@@ -234,10 +295,10 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         showCleaningProductsQuestion: slug === "regular-cleaning",
         allowsExtraCleaner: slug === "regular-cleaning" || slug === "airbnb-cleaning" || slug === "office-cleaning" || slug === "carpet-cleaning",
         step1Questions: staticFallback.step1Questions,
-        basePrice: dbSvc?.base_price ?? staticFallback.basePrice,
-        pricePerBedroom: dbSvc?.price_per_bedroom ?? 0,
-        pricePerBathroom: dbSvc?.price_per_bathroom ?? 0,
-        pricePerExtraRoom: dbSvc?.price_per_extra_room ?? 0,
+        basePrice: dbSvc?.base_price && dbSvc.base_price > 0 ? dbSvc.base_price : staticFallback.basePrice,
+        pricePerBedroom: dbSvc?.price_per_bedroom && dbSvc.price_per_bedroom > 0 ? dbSvc.price_per_bedroom : 0,
+        pricePerBathroom: dbSvc?.price_per_bathroom && dbSvc.price_per_bathroom > 0 ? dbSvc.price_per_bathroom : 0,
+        pricePerExtraRoom: dbSvc?.price_per_extra_room && dbSvc.price_per_extra_room > 0 ? dbSvc.price_per_extra_room : 0,
         pricePerExtraCleaner: feesConfig.extraCleanerFeeZar || staticFallback.pricePerExtraCleaner,
         estimatedDurationHours: dbSvc?.duration_base
           ? Math.max(1, Math.round(dbSvc.duration_base))

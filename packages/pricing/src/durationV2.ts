@@ -83,12 +83,25 @@ const EXTRA_DURATION_MINUTES: Record<string, number> = {
   laundry: 30,
   "interior-windows": 45,
   "water-plants": 15,
+  "inside-wardrobes": 30,
+  "blinds-cleaning": 30,
   "balcony-cleaning": 45,
   "carpet-cleaning": 60,
   "ceiling-cleaning": 45,
   "garage-cleaning": 45,
   "mattress-cleaning": 45,
   "outside-windows": 45,
+  "deposit-preparation": 45,
+  "appliances-cleaning": 45,
+  "office-kitchen": 30,
+  "office-sanitisation": 30,
+  "waste-removal": 20,
+  "sofa-upholstery": 45,
+  "stain-treatment": 30,
+  "pet-odour-treatment": 30,
+  "fabric-protector": 20,
+  "welcome-setup": 20,
+  "inspection-photos": 15,
 };
 
 /** Web parity: missing → 0 (canonical engine then clamps rooms/baths ≥ 1 when applicable). */
@@ -130,15 +143,28 @@ export function resolveBookingV2DurationEstimate(input: {
   if (serviceSlug === "carpet-cleaning") {
     rooms = parseServiceDetailCount(input.serviceDetails, "carpetRooms");
     bathrooms = 0;
-    extraRooms = 0;
+    const rugs = parseServiceDetailCount(input.serviceDetails, "rugCount");
+    extraRooms = rugs;
+    const sofas = parseServiceDetailCount(input.serviceDetails, "sofaCount");
+    if (sofas > 0) extraRooms += sofas;
   } else if (serviceSlug === "office-cleaning") {
-    rooms = 0;
+    const size = String(input.serviceDetails.officeSize ?? "")
+      .trim()
+      .toLowerCase();
+    const sizeRooms: Record<string, number> = {
+      small: 1,
+      medium: 2,
+      large: 4,
+      enterprise: 6,
+    };
+    rooms = sizeRooms[size] ?? 1;
     extraRooms = 0;
   }
 
   // Canonical clamp for standard/airbnb/deep/move (not office zeros).
+  // Bedrooms may be 0 (studio) — UAT-BOOK-ENH-001 / UAT-PRICE-003.
   if (serviceSlug !== "office-cleaning" && serviceSlug !== "carpet-cleaning") {
-    rooms = Math.max(1, rooms);
+    rooms = Math.max(0, rooms);
     bathrooms = Math.max(1, bathrooms);
     extraRooms = Math.max(0, extraRooms);
   } else if (serviceSlug === "carpet-cleaning") {

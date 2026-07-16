@@ -102,10 +102,10 @@ function SiteTopBarAccountInner() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="rounded-full outline-none ring-2 ring-white/25 transition hover:ring-white/50 focus-visible:ring-white/60"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full outline-none ring-2 ring-white/25 transition hover:ring-white/50 focus-visible:ring-white/60"
           aria-label="Account menu"
         >
-          <Avatar className="h-7 w-7">
+          <Avatar className="h-7 w-7 border-white/30">
             {avatarPhoto ? <AvatarImage src={avatarPhoto} alt="" referrerPolicy="no-referrer" /> : null}
             <AvatarFallback className="bg-white/15 text-xs font-semibold text-white">
               {avatarInitial}

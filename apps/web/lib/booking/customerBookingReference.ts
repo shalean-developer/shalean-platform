@@ -1,4 +1,5 @@
 const CUSTOMER_BOOKING_REF_RE = /^SHL-BK-\d{6,}$/i;
+const CUSTOMER_PAYMENT_REF_RE = /^PAY-[A-Z0-9]{4,}$/i;
 
 /** True when the value is a persisted customer reference (not a Paystack temp ref). */
 export function isCustomerBookingReference(value: string | null | undefined): boolean {
@@ -15,6 +16,20 @@ export function displayCustomerBookingReference(params: {
   const ref = String(params.bookingReference ?? "").trim();
   if (isCustomerBookingReference(ref)) return ref.toUpperCase();
   return null;
+}
+
+/**
+ * Customer-facing payment reference — never the full Paystack charge id.
+ * Example: `PAY-81CP6M` from a long provider reference.
+ */
+export function displayCustomerPaymentReference(reference: string | null | undefined): string {
+  const ref = String(reference ?? "").trim();
+  if (!ref) return "—";
+  if (CUSTOMER_PAYMENT_REF_RE.test(ref)) return ref.toUpperCase();
+  const alnum = ref.replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+  if (!alnum) return "—";
+  const suffix = alnum.length <= 6 ? alnum : alnum.slice(-6);
+  return `PAY-${suffix}`;
 }
 
 export function formatCustomerBookingTotalPaid(zar: number): string {

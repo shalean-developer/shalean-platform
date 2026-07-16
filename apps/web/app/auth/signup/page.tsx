@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { AlertCircle, Mail, User } from "lucide-react";
+import { AlertCircle, Mail, Phone, User } from "lucide-react";
 import { AuthBackLink, AuthCard, AuthLegalFooter } from "@/components/auth/AuthShell";
 import { PasswordInput } from "@/components/ui/password-input";
 import { getResolvedAuthIntent, parseIntentQuery } from "@/lib/auth/authRoleIntent";
@@ -18,6 +18,7 @@ function SignupForm() {
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
@@ -37,15 +38,24 @@ function SignupForm() {
     e.preventDefault();
     setError(null);
     setInfo(null);
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters.");
+    if (!phone.trim()) {
+      setError("Phone number is required.");
+      return;
+    }
+    if (password.length < 8) {
+      setError("Password must be at least 8 characters.");
       return;
     }
     setSubmitting(true);
     try {
-      const { user, session, error: err } = await signUp(email, password, fullName);
+      const { user, session, error: err } = await signUp(email, password, fullName, phone.trim());
       if (err) {
-        setError(err.message);
+        const msg = err.message?.toLowerCase() ?? "";
+        if (msg.includes("already") || msg.includes("registered")) {
+          setError("An account with this email already exists. Try signing in instead.");
+        } else {
+          setError("We couldn’t create your account. Please check your details and try again.");
+        }
         return;
       }
       if (session?.access_token && user) {
@@ -62,7 +72,9 @@ function SignupForm() {
         router.refresh();
         return;
       }
-      setInfo("Check your email to confirm your account, then you can log in.");
+      setInfo(
+        "Check your email for a Shalean confirmation link. Open it to activate your account, then sign in. If you don’t see it, check spam or promotions.",
+      );
     } finally {
       setSubmitting(false);
     }
@@ -116,6 +128,27 @@ function SignupForm() {
           </div>
 
           <div>
+            <label htmlFor="phone" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Phone number
+            </label>
+            <div className="relative mt-1.5">
+              <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+              <input
+                id="phone"
+                name="phone"
+                type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                required
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 pl-10 pr-3 text-sm text-zinc-900 outline-none ring-primary/30 placeholder:text-zinc-400 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+                placeholder="+27 82 123 4567"
+              />
+            </div>
+          </div>
+
+          <div>
             <label htmlFor="password" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
               Password
             </label>
@@ -124,12 +157,13 @@ function SignupForm() {
               name="password"
               autoComplete="new-password"
               required
-              minLength={6}
+              minLength={8}
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               wrapperClassName="mt-1.5"
-              placeholder="Min. 6 characters"
+              placeholder="At least 8 characters"
             />
+            <p className="mt-1.5 text-xs text-zinc-500">Use at least 8 characters. A mix of letters and numbers is safer.</p>
           </div>
 
           {error ? (

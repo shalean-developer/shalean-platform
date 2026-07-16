@@ -51,7 +51,8 @@ export async function signIn(email: string, password: string) {
   }
 
   if (data.session?.access_token && data.user) {
-    await linkBookingsToUserAfterAuth(data.session.access_token, data.user);
+    // Fire-and-forget: booking link must not block post-login role resolve / redirect.
+    void linkBookingsToUserAfterAuth(data.session.access_token, data.user);
   }
 
   return { user: data.user, session: data.session, error: null };
@@ -102,7 +103,7 @@ export async function signUp(email: string, password: string, fullName: string, 
   }
 
   if (data.session?.access_token && data.user) {
-    await linkBookingsToUserAfterAuth(data.session.access_token, data.user);
+    void linkBookingsToUserAfterAuth(data.session.access_token, data.user);
   }
 
   return { user: data.user, session: data.session, error: null };

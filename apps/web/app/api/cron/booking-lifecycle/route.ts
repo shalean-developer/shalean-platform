@@ -23,7 +23,10 @@ import {
   resolvePersistCleanerIdForBooking,
 } from "@/lib/payout/bookingEarningsIntegrity";
 import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
-import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
+import {
+  buildSoloCompletionOwnerStamp,
+  ensureCleanerEarningsLedgerRow,
+} from "@/lib/payout/ensureCleanerEarningsLedger";
 import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
 import { syncCleanersBusyAfterBookingTerminalChange } from "@/lib/cleaner/syncCleanerStatus";
 
@@ -119,9 +122,15 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
       fillCompletedAtIfMissing: false,
       nowIso: completedAt,
     });
+    const ownerStamp = buildSoloCompletionOwnerStamp({
+      isTeamJob: row.is_team_job === true,
+      existingCleanerId: cleanerId,
+      existingPayoutOwnerId: row.payout_owner_cleaner_id,
+      ownerId: persistCleanerId,
+    });
     const { error: upErr } = await admin
       .from("bookings")
-      .update({ status: "completed", completed_at: completedAt, ...cronCompletionPatch })
+      .update({ status: "completed", completed_at: completedAt, ...cronCompletionPatch, ...ownerStamp })
       .eq("id", id);
     if (upErr) {
       await reportOperationalIssue("error", "cron/booking-lifecycle", `mark completed failed: ${upErr.message}`, {
@@ -296,6 +305,15 @@ export async function POST(request: Request) {
       source: "cron/booking-lifecycle",
       message: jobErr.message,
       context: {},
+    });
+    await logCronRun({
+      jobName: "booking-lifecycle",
+      status: "error",
+      message: `load_lifecycle_jobs_failed`,
+      context: {
+        errorCategory: "db_query_failed",
+        pastBookingsMarkedCompleted: complete.completed,
+      },
     });
     return NextResponse.json({ error: jobErr.message }, { status: 500 });
   }

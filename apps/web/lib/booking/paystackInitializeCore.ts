@@ -196,7 +196,9 @@ export type PaystackInitializeFailure = {
     | "DURATION_MISMATCH"
     | "PRICING_SNAPSHOT_MISSING"
     | "PAYSTACK_SECRET_MISSING"
-    | "MONTHLY_INVOICE_BOOKING";
+    | "MONTHLY_INVOICE_BOOKING"
+    | "BOOKING_SCHEMA_MISMATCH"
+    | "RESERVATION_FAILED";
 };
 
 async function abortPaystackIfMonthlyPendingBooking(
@@ -339,10 +341,12 @@ export async function processPaystackInitializeBody(
             "This customer already has an active booking in this slot. Open the existing row, or submit again with force after acknowledging the duplicate.",
         };
       }
+      const schemaMismatch =
+        ins.pgCode === "PGRST204" || /schema cache|Could not find the .* column/i.test(ins.error);
       return {
         ok: false,
         status: 503,
-        errorCode: "PRICING_SNAPSHOT_MISSING",
+        errorCode: schemaMismatch ? "BOOKING_SCHEMA_MISMATCH" : "RESERVATION_FAILED",
         error: "Could not reserve your booking. Please try again in a moment.",
       };
     }
@@ -826,10 +830,12 @@ export async function processPaystackInitializeBody(
             "This customer already has an active booking in this slot. Open the existing row, or submit again with force after acknowledging the duplicate.",
         };
       }
+      const schemaMismatch =
+        upd.pgCode === "PGRST204" || /schema cache|Could not find the .* column/i.test(upd.error);
       return {
         ok: false,
         status: 503,
-        errorCode: "PRICING_SNAPSHOT_MISSING",
+        errorCode: schemaMismatch ? "BOOKING_SCHEMA_MISMATCH" : "RESERVATION_FAILED",
         error: "Could not reserve your booking. Please try again in a moment.",
       };
     }

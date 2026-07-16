@@ -1,8 +1,27 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { bookingLocationSlug } from "@/lib/locations/bookingLocations";
 
 const LOCATIONS_CACHE_TTL_MS = 60_000;
 let locationsCache: { rows: { id: string; name: string; slug: string | null; city_id: string | null }[]; at: number } | null =
   null;
+
+/** Align free-text resolve with booking catalog slug rules (apostrophes, aliases). */
+const RESOLVE_SLUG_ALIASES: Record<string, string> = {
+  "d-urbanvale": "durbanville",
+  durbanvale: "durbanville",
+  "cape-town-cbd": "cape-town",
+  tableview: "table-view",
+  "simons-town": "simons-town",
+  "devils-peak-estate": "devils-peak-estate",
+  "va-waterfront": "waterfront",
+  "v-a-waterfront": "waterfront",
+};
+
+export function normalizeLocationResolveSlug(label: string): string {
+  const raw = bookingLocationSlug(label);
+  if (!raw || raw === "other") return "";
+  return RESOLVE_SLUG_ALIASES[raw] ?? raw;
+}
 
 async function fetchAllLocationsForMatch(
   supabase: SupabaseClient,
@@ -31,14 +50,12 @@ async function resolveDefaultCityId(supabase: SupabaseClient): Promise<string | 
 }
 
 /**
- * Maps free-text booking/cleaner labels to `locations.id` via kebab-case slug
- * (same rule as SQL: `lower(regexp_replace(trim(label), '\s+', '-', 'g'))`).
+ * Maps free-text booking/cleaner labels to a locations slug candidate.
+ * Uses the same normalisation as the booking suburb catalog (strips apostrophes,
+ * punctuation → kebab-case) plus known aliases (e.g. D'urbanvale → durbanville).
  */
 export function locationLabelToSlug(label: string): string {
-  return label
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, "-");
+  return normalizeLocationResolveSlug(label);
 }
 
 /**
@@ -62,35 +79,61 @@ export async function resolveLocationIdFromLabel(
   return id || null;
 }
 
+function rowToContext(row: {
+  id: string;
+  city_id?: string | null;
+}): { locationId: string; cityId: string | null } {
+  const cityId = row.city_id ? String(row.city_id).trim() : "";
+  return {
+    locationId: String(row.id).trim(),
+    cityId: cityId || null,
+  };
+}
+
 export async function resolveLocationContextFromLabel(
   supabase: SupabaseClient,
   label: string | null | undefined,
 ): Promise<{ locationId: string | null; cityId: string | null }> {
   const t = typeof label === "string" ? label.trim() : "";
-  if (!t) return { locationId: null, cityId: null };
+  if (!t || t.toLowerCase() === "other") {
+    return { locationId: null, cityId: null };
+  }
+
   const slug = locationLabelToSlug(t);
   if (slug) {
     const { data } = await supabase.from("locations").select("id, city_id").eq("slug", slug).maybeSingle();
-    if (data && typeof data === "object") {
-      return {
-        locationId: "id" in data ? String((data as { id: string }).id) : null,
-        cityId: "city_id" in data ? String((data as { city_id?: string | null }).city_id ?? "") || null : null,
-      };
+    if (data && typeof data === "object" && "id" in data) {
+      return rowToContext(data as { id: string; city_id?: string | null });
     }
   }
 
   const low = t.toLowerCase();
   const rows = await fetchAllLocationsForMatch(supabase);
+
+  // Exact name match (case / whitespace insensitive) before substring heuristics.
+  for (const row of rows) {
+    const nm = String(row.name ?? "").trim().toLowerCase();
+    if (nm && nm === low) {
+      return rowToContext(row);
+    }
+  }
+
+  // Slug equality after normalising DB slug the same way as labels.
+  if (slug) {
+    for (const row of rows) {
+      const rowSlug = row.slug ? normalizeLocationResolveSlug(row.slug) : normalizeLocationResolveSlug(String(row.name ?? ""));
+      if (rowSlug && rowSlug === slug) {
+        return rowToContext(row);
+      }
+    }
+  }
+
   const sorted = [...rows].sort((a, b) => String(b.name ?? "").length - String(a.name ?? "").length);
   for (const row of sorted) {
     const nm = String(row.name ?? "").trim();
     if (nm.length < 4) continue;
-    if (low.includes(nm.toLowerCase())) {
-      const cityId = row.city_id ? String(row.city_id).trim() : "";
-      return {
-        locationId: String(row.id).trim(),
-        cityId: cityId || null,
-      };
+    if (low.includes(nm.toLowerCase()) || nm.toLowerCase().includes(low)) {
+      return rowToContext(row);
     }
   }
 

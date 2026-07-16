@@ -15,12 +15,6 @@ const contactPhoneField = z
   .min(1, "Enter a contact phone number")
   .refine(isValidContactPhone, { message: CONTACT_PHONE_VALIDATION_MESSAGE });
 
-const optionalContactPhoneField = z
-  .string()
-  .optional()
-  .or(z.literal(""))
-  .refine((v) => !v || isValidContactPhone(v), { message: CONTACT_PHONE_VALIDATION_MESSAGE });
-
 // ─── Step 1: Details ───────────────────────────────────────────────────────────
 
 const equipmentQuoteSchema = z
@@ -61,7 +55,14 @@ export const step1Schema = z.object({
   serviceDetails: z.preprocess(normalizeServiceDetails, z.record(serviceDetailValueSchema)),
   address: z.string().min(5, "Enter your street address"),
   suburb: z.string().min(2, "Enter your suburb"),
-  serviceAreaLocationId: z.string().optional().default(""),
+  serviceAreaLocationId: z
+    .string()
+    .trim()
+    .min(1, "Select a supported suburb so we can check availability")
+    .regex(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+      "Select a supported suburb so we can check availability",
+    ),
   serviceAreaCityId: z.string().optional().default(""),
   city: z.string().optional().default("Cape Town"),
   postalCode: z.string().optional().default(""),
@@ -161,7 +162,7 @@ export const signInSchema = z.object({
 export const signUpSchema = z.object({
   fullName: z.string().min(2, "Enter your full name"),
   email: z.string().email("Enter a valid email address"),
-  phone: optionalContactPhoneField,
+  phone: contactPhoneField,
   password: z.string().min(8, "Password must be at least 8 characters"),
 });
 

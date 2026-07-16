@@ -29,6 +29,9 @@ import {
   consumeBookingV2SuccessRedirect,
   redirectToBookingV2Success,
 } from "@/lib/booking-v2/bookingV2PaymentRedirect";
+import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
+import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
+import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurringScheduleOptions";
 
 // ??? Auth Form ?????????????????????????????????????????????????????????????????
 
@@ -198,7 +201,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
           </div>
           <div>
             <label htmlFor="su-phone" className="mb-1.5 block text-sm font-medium text-slate-700">
-              Phone number <span className="text-slate-400 text-xs font-normal">(optional)</span>
+              Phone number <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
@@ -222,7 +225,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             <PasswordInput
               id="su-password"
               autoComplete="new-password"
-              placeholder="Min. 6 characters"
+              placeholder="At least 8 characters"
               {...signUpForm.register("password")}
               className="rounded-xl border-slate-200 py-2.5 text-sm shadow-sm focus-visible:outline-blue-500"
             />
@@ -247,10 +250,14 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
 // ??? Payment section ????????????????????????????????????????????????????????????
 
 function PaymentSection({ user }: { user: User }) {
-  const { serviceSlug, clearBooking } = useBookingV2();
+  const { serviceSlug, clearBooking, catalogLoading } = useBookingV2();
   const { watch, setValue } = useFormContext<BookingV2FormData>();
   const values = watch();
   const config = SERVICE_CONFIG[serviceSlug];
+  const quoteReadiness = assessBookingQuoteReadiness({
+    catalogLoading,
+    pricingSummary: values.pricingSummary,
+  });
 
   // Recover if Paystack onSuccess cleared mid-navigation (HMR / Fast Refresh remount).
   useEffect(() => {
@@ -261,7 +268,21 @@ function PaymentSection({ user }: { user: User }) {
 
   const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
+  const [pendingBookingId, setPendingBookingIdState] = useState<string | null>(
+    () => values.pendingBookingId?.trim() || null,
+  );
+
+  function setPendingBookingId(id: string | null) {
+    setPendingBookingIdState(id);
+    setValue("pendingBookingId", id, { shouldDirty: false, shouldValidate: false });
+  }
+
+  // Restore pending booking after Paystack redirect cancel / remount.
+  useEffect(() => {
+    const stored = values.pendingBookingId?.trim();
+    if (stored && !pendingBookingId) setPendingBookingIdState(stored);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- mount / draft hydrate only
+  }, []);
   const [creditBalance, setCreditBalance] = useState(0);
   const [applyCredit, setApplyCredit] = useState(false);
   const [promoCode, setPromoCode] = useState("");
@@ -380,6 +401,10 @@ function PaymentSection({ user }: { user: User }) {
   }
 
   async function handleConfirmAndPay() {
+    if (!quoteReadiness.ready) {
+      setError(quoteReadiness.message ?? "Your quote is not ready. Please refresh pricing.");
+      return;
+    }
     setConfirming(true);
     setError(null);
 
@@ -407,7 +432,9 @@ function PaymentSection({ user }: { user: User }) {
           authorizationUrl?: string;
           reference?: string;
           error?: string;
+          errorCode?: string;
           message?: string;
+          code?: string;
         };
         if (sessJson.status === "paid") {
           const ref = (sessJson.reference ?? "").trim();
@@ -420,12 +447,22 @@ function PaymentSection({ user }: { user: User }) {
           window.location.assign(sessJson.authorizationUrl.trim());
           return;
         }
-        setError(
-          sessJson.error?.trim() ||
-            "We could not start the secure payment checkout. Your booking is safe and no payment was taken. Please try again.",
-        );
-        setConfirming(false);
-        return;
+        const notFound =
+          sessRes.status === 404 ||
+          sessJson.errorCode === "PAYMENT_BOOKING_NOT_FOUND" ||
+          sessJson.code === "PAYMENT_BOOKING_NOT_FOUND" ||
+          /could not find this booking/i.test(sessJson.error ?? "");
+        if (notFound) {
+          // Pending row gone — clear and fall through to confirm (reuse or insert).
+          setPendingBookingId(null);
+        } else {
+          setError(
+            sessJson.error?.trim() ||
+              "We could not start the secure payment checkout. Your booking is safe and no payment was taken. Please try again.",
+          );
+          setConfirming(false);
+          return;
+        }
       }
 
       const confirmRes = await fetch("/api/booking-v2/confirm", {
@@ -653,7 +690,8 @@ function PaymentSection({ user }: { user: User }) {
         <h3 className="text-lg font-bold text-slate-900">Confirm & pay</h3>
         <p className="mt-1 text-sm text-slate-500">
           You&apos;re logged in as <span className="font-medium text-slate-700">{user.email}</span>.
-          Review the total below and complete payment via Paystack.
+          You&apos;ll pay securely with Paystack, then return here for your Shalean confirmation and booking
+          reference.
         </p>
       </div>
 
@@ -745,9 +783,30 @@ function PaymentSection({ user }: { user: User }) {
             </div>
           ) : null}
           <div className="flex items-center justify-between text-base font-bold">
-            <span className="text-slate-800">Total to pay</span>
+            <span className="text-slate-800">
+              {values.bookingType === "recurring" ? "Pay today (this visit)" : "Total to pay"}
+            </span>
             <span className="text-blue-700">R {payTotal.toLocaleString("en-ZA")}</span>
           </div>
+          {values.bookingType === "recurring" && values.recurringFrequency ? (
+            <p className="text-xs text-slate-500">
+              {(() => {
+                const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                  frequency: values.recurringFrequency,
+                  daysOfWeek: values.recurringDays ?? [],
+                  pricePerVisitZar: payTotal,
+                });
+                return (
+                  <>
+                    {recurringFrequencyLabel(values.recurringFrequency)} · about {visitsPerMonth}{" "}
+                    visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated monthly total R
+                    {estimatedMonthlyZar.toLocaleString("en-ZA")}. Future visits bill at the same
+                    per-visit price (or on your monthly invoice if enabled).
+                  </>
+                );
+              })()}
+            </p>
+          ) : null}
         </div>
       </div>
 
@@ -758,12 +817,18 @@ function PaymentSection({ user }: { user: User }) {
           {error}
         </div>
       )}
+      {!error && !quoteReadiness.ready ? (
+        <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          {quoteReadiness.message}
+        </div>
+      ) : null}
 
       {/* Pay button */}
       <button
         type="button"
         onClick={handleConfirmAndPay}
-        disabled={confirming}
+        disabled={confirming || !quoteReadiness.ready}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-4 text-base font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
       >
         {confirming ? (
@@ -783,7 +848,7 @@ function PaymentSection({ user }: { user: User }) {
       <div className="flex flex-col gap-2">
         {[
           { Icon: ShieldCheck, label: "Vetted and background-checked cleaners" },
-          { Icon: CreditCard, label: "Secure payment powered by Paystack" },
+          { Icon: CreditCard, label: "Secure card payment — you’ll get a Shalean confirmation after" },
           { Icon: CheckCircle2, label: "100% satisfaction guarantee ? we'll make it right" },
         ].map(({ Icon, label }) => (
           <div key={label} className="flex items-center gap-2 text-xs text-slate-500">

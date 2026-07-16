@@ -41,7 +41,9 @@ describe("live dashboard system status", () => {
     });
   });
 
-  it("prints exact dashboard ops signals", async () => {
+  it(
+    "prints exact dashboard ops signals",
+    async () => {
     const fetchedAt = new Date().toISOString();
     const signals = await collectOfficeOpsHealthSignals(admin, 250, fetchedAt);
     const summary = buildOfficeOpsHealthSummary({
@@ -80,5 +82,7 @@ describe("live dashboard system status", () => {
     console.log("\nallOperationalNow:", summary.allOperationalNow);
 
     expect(dashboard).toBeTruthy();
-  });
+    },
+    60_000,
+  );
 });

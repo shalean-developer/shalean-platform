@@ -209,7 +209,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     const { data: bookingHead } = await supabase
       .from("bookings")
       .select(
-        "user_id, assignment_type, fallback_reason, customer_email, selected_cleaner_id, date, time, location, suburb, service, service_slug, booking_snapshot",
+        "user_id, assignment_type, fallback_reason, customer_email, selected_cleaner_id, cleaner_id, date, time, location, suburb, service, service_slug, booking_snapshot, booking_reference, extras, selected_extras, booking_type, recurring_frequency, recurring_days",
       )
       .eq("id", event.bookingId)
       .maybeSingle();
@@ -269,11 +269,13 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
 
     let assignedCleanerName: string | null = null;
     const selectedCleanerId = head ? String(head.selected_cleaner_id ?? "").trim() : "";
-    if (selectedCleanerId) {
+    const assignedCleanerId = head ? String(head.cleaner_id ?? "").trim() : "";
+    const cleanerLookupId = assignedCleanerId || selectedCleanerId;
+    if (cleanerLookupId) {
       const { data: cleanerRow } = await supabase
         .from("cleaners")
         .select("full_name")
-        .eq("id", selectedCleanerId)
+        .eq("id", cleanerLookupId)
         .maybeSingle();
       const name =
         cleanerRow && typeof cleanerRow === "object"
@@ -308,6 +310,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       customerEmail: resolvedEmail,
       snapshot: event.snapshot,
       bookingId: event.bookingId,
+      bookingReference: head ? String(head.booking_reference ?? "").trim() || null : null,
       assignmentType,
       fallbackReason,
       bookingRow: head ? bookingEmailRowOverlayFromRecord(head) : null,

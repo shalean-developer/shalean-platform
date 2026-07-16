@@ -1,5 +1,6 @@
 import type { StoredPriceLine } from "@/lib/dashboard/storedPriceBreakdown";
 import { normalizePricingSummary } from "@/lib/booking-v2/types";
+import { formatEstimatedCleaningTimeLabel } from "@/lib/booking-v2/formatEstimatedCleaningTime";
 
 export type AdminV2PricingLine = { label: string; value: string; emphasis?: boolean };
 
@@ -60,8 +61,13 @@ export function adminLinesFromPricingSummary(summary: unknown): AdminV2PricingLi
   });
 
   if (breakdown.estimated_duration_minutes > 0) {
-    const hrs = (breakdown.estimated_duration_minutes / 60).toFixed(1).replace(/\.0$/, "");
-    lines.push({ label: "Estimated duration", value: `${hrs} hrs` });
+    lines.push({
+      label: "Estimated cleaning time",
+      value: formatEstimatedCleaningTimeLabel(breakdown.estimated_duration_minutes).replace(
+        /^Estimated cleaning time:\s*/i,
+        "",
+      ),
+    });
   }
 
   return lines;

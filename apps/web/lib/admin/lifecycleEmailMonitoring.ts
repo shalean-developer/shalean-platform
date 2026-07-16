@@ -3,6 +3,13 @@ import {
   recordNotificationAlertFired,
   type AlertSeverity,
 } from "@/lib/admin/notificationMonitoring";
+import {
+  classifyCronRunHealth,
+  resolveBookingLifecycleCronStaleAfterMinutes,
+  type CronRunHealthSnapshot,
+  type CronRunRow,
+} from "@/lib/cron/cronRunHealth";
+import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
 import { postDispatchControlAlert } from "@/lib/ops/dispatchControlWebhook";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
@@ -16,7 +23,6 @@ export const LIFECYCLE_ALERT_KEYS = [
 export type LifecycleAlertKey = (typeof LIFECYCLE_ALERT_KEYS)[number];
 
 const COOLDOWN_MINUTES = 15;
-const CRON_STALE_MINUTES = 30;
 const FAILURE_SPIKE_WINDOW_MINUTES = 30;
 const FAILURE_SPIKE_THRESHOLD = 5;
 const BACKLOG_THRESHOLD = 100;
@@ -75,6 +81,9 @@ export type LifecycleMonitoringSnapshot = {
   oldestPendingScheduledFor: string | null;
   recentFailures: number;
   lastCronSuccessAt: string | null;
+  lastCronFailureAt: string | null;
+  lastCronInvokedAt: string | null;
+  cronHealth: CronRunHealthSnapshot;
   alertsFired: string[];
 };
 
@@ -100,12 +109,10 @@ export async function evaluateLifecycleEmailAlerts(
       .gte("processed_at", new Date(now - FAILURE_SPIKE_WINDOW_MINUTES * 60_000).toISOString()),
     admin
       .from("cron_runs")
-      .select("created_at")
+      .select("created_at, status, message")
       .eq("job_name", "booking-lifecycle")
-      .eq("status", "success")
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(20),
   ]);
 
   const pendingCount = pendingRes.count ?? 0;
@@ -114,8 +121,19 @@ export async function evaluateLifecycleEmailAlerts(
       ? oldestRes.data.scheduled_for
       : null;
   const recentFailures = failuresRes.count ?? 0;
-  const lastCronSuccessAt =
-    cronRes.data && typeof cronRes.data.created_at === "string" ? cronRes.data.created_at : null;
+  const cronRows = (cronRes.data ?? []) as CronRunRow[];
+  const deploymentEnv = resolveDeploymentEnvironment();
+  const cronStaleAfterMinutes = resolveBookingLifecycleCronStaleAfterMinutes(deploymentEnv);
+  const cronHealth = classifyCronRunHealth({
+    jobName: "booking-lifecycle",
+    rows: cronRows,
+    nowMs: now,
+    staleAfterMinutes: cronStaleAfterMinutes,
+    environment: deploymentEnv,
+  });
+  const lastCronSuccessAt = cronHealth.lastSuccessAt;
+  const lastCronFailureAt = cronHealth.lastFailureAt;
+  const lastCronInvokedAt = cronHealth.lastInvokedAt;
 
   if (recentFailures >= FAILURE_SPIKE_THRESHOLD) {
     alertsFired.push("lifecycle_resend_failures_spike");
@@ -153,16 +171,20 @@ export async function evaluateLifecycleEmailAlerts(
     }
   }
 
-  const cronStale =
-    !lastCronSuccessAt || now - Date.parse(lastCronSuccessAt) > CRON_STALE_MINUTES * 60_000;
-  if (cronStale) {
+  // Distinguish failed vs stale: do not mask genuine failures as schedule lag.
+  if (cronHealth.status === "stale" || cronHealth.status === "never_run") {
     alertsFired.push("lifecycle_cron_stale");
     await fireLifecycleAlert({
       admin,
       alertKey: "lifecycle_cron_stale",
       severity: "critical",
-      message: `booking-lifecycle cron has not succeeded in ${CRON_STALE_MINUTES}+ minutes`,
-      extra: { lastCronSuccessAt, staleMinutes: CRON_STALE_MINUTES },
+      message: `booking-lifecycle cron has not succeeded in ${cronStaleAfterMinutes}+ minutes (${cronHealth.status})`,
+      extra: {
+        lastCronSuccessAt,
+        staleMinutes: cronStaleAfterMinutes,
+        cronHealthStatus: cronHealth.status,
+        environment: deploymentEnv,
+      },
     });
   }
 
@@ -171,6 +193,9 @@ export async function evaluateLifecycleEmailAlerts(
     oldestPendingScheduledFor,
     recentFailures,
     lastCronSuccessAt,
+    lastCronFailureAt,
+    lastCronInvokedAt,
+    cronHealth,
     alertsFired,
   };
 }

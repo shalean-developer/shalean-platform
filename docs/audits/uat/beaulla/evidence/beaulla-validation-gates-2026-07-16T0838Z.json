@@ -1,0 +1,20 @@
+{
+  "ticket": "BEAULLA-OPERATIONAL-UAT",
+  "at": "2026-07-16T08:38:00Z",
+  "staging_base": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+  "deploy_sha": "9695690d19413a455b3ac306fe3a97629dd82dd9",
+  "production_touched": false,
+  "gates": {
+    "test_critical": { "result": "PASS", "files": 17, "tests": 134, "evidence": "beaulla-test-critical.txt" },
+    "vitest_full": { "result": "PARTIAL", "passed": 529, "failed": 1, "note": "dashboardSystemStatus.live.test timeout", "evidence": "beaulla-vitest-full.txt" },
+    "typecheck": { "result": "PASS" },
+    "lint_booking_core": { "result": "PASS", "evidence": "beaulla-lint-booking-core.txt" },
+    "migration_validate": { "result": "PASS", "evidence": "beaulla-migration-validate.txt" },
+    "next_build_webpack": { "result": "PASS", "evidence": "beaulla-next-build.txt" },
+    "staging_probe": { "result": "PASS", "evidence": "beaulla-staging-probe-2026-07-16T0838Z.json" },
+    "cron_health": { "result": "PASS", "status": "succeeded", "source": "princess/26 + probe" },
+    "paystack_identity": { "result": "PASS", "mode": "test" },
+    "production_non_impact": { "result": "PASS", "prod_ref": "tchayecuvzssixyxlvfu" }
+  },
+  "final_decision": "CONDITIONAL PASS — OPERATIONAL UAT COMPLETE WITH ACCEPTED NON-BLOCKING ITEMS"
+}

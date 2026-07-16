@@ -68,6 +68,9 @@ export type BookingRow = {
   cleaner_response_status?: string | null;
   /** Monthly billing sub-state when set (e.g. `pending_monthly`). */
   payment_status?: string | null;
+  /** Refund lifecycle when set (`partial` | `full` | `chargeback` | …). */
+  refund_status?: string | null;
+  refunded_at?: string | null;
   monthly_invoice_id?: string | null;
   is_monthly_billing_booking?: boolean | null;
   /** Nested from `monthly_invoices(status,is_closed)` when selected. */

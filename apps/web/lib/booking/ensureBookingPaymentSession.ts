@@ -308,7 +308,8 @@ async function initializeFreshPaystackSession(
   }
 
   const appUrl = getPublicAppUrlBase();
-  const callbackUrl = appUrl ? `${appUrl}/account/success` : undefined;
+  // Paystack appends reference/trxref; /pay page accepts those for cancel/retry recovery.
+  const callbackUrl = appUrl ? `${appUrl}/pay/${encodeURIComponent(row.id)}` : undefined;
 
   let json: {
     status?: boolean;

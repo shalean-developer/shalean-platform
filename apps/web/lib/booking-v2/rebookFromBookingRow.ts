@@ -43,7 +43,8 @@ export function rebookBookUrlFromBookingRowWithToken(
 
 /**
  * Maps a persisted booking row into booking-v2 form fields.
- * Clears schedule, cleaner selection, and pricing so the customer picks a new slot.
+ * Clears schedule and pricing so the customer picks a new slot.
+ * Prefills address, rooms, extras, equipment, instructions, and preferred cleaner when available.
  */
 export function bookingV2FormPatchFromBookingRow(
   row: BookingRow,
@@ -56,6 +57,27 @@ export function bookingV2FormPatchFromBookingRow(
   const bookingType =
     row.booking_type === "recurring" ? ("recurring" as const) : defaults.bookingType;
 
+  const snapshot =
+    row.booking_snapshot && typeof row.booking_snapshot === "object"
+      ? (row.booking_snapshot as Record<string, unknown>)
+      : null;
+
+  const equipmentFromSnap = snapshot?.equipmentRequired;
+  const equipmentRequired =
+    equipmentFromSnap === "yes" || equipmentFromSnap === true
+      ? ("yes" as const)
+      : equipmentFromSnap === "no" || equipmentFromSnap === false
+        ? ("no" as const)
+        : defaults.equipmentRequired;
+
+  const preferredCleanerId =
+    (typeof row.selected_cleaner_id === "string" && row.selected_cleaner_id.trim()) ||
+    (typeof snapshot?.selectedCleanerId === "string" && snapshot.selectedCleanerId.trim()) ||
+    (Array.isArray(snapshot?.selectedCleanerIds) &&
+      typeof snapshot.selectedCleanerIds[0] === "string" &&
+      snapshot.selectedCleanerIds[0].trim()) ||
+    "";
+
   return {
     ...defaults,
     serviceSlug,
@@ -66,13 +88,16 @@ export function bookingV2FormPatchFromBookingRow(
     parkingInstructions: row.parking_instructions?.trim() ?? "",
     gateCode: row.gate_code?.trim() ?? "",
     selectedExtras: Array.isArray(row.selected_extras) ? row.selected_extras.filter(Boolean) : [],
+    equipmentRequired,
     bookingType,
     date: "",
     time: "",
     alternativeDate: "",
     alternativeTime: "",
-    selectedCleanerIds: [],
+    // Prefer prior cleaner when still eligible; availability recalculates on Step 2.
+    selectedCleanerIds: preferredCleanerId ? [preferredCleanerId] : [],
     selectedCleanerDetails: [],
+    // Cleared so suburb resolve re-runs; deep-link guard returns to Step 1 until UUID exists.
     serviceAreaLocationId: "",
     serviceAreaCityId: "",
   };

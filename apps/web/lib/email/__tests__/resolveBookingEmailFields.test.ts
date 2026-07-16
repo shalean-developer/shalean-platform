@@ -89,4 +89,36 @@ describe("resolveBookingEmailFields", () => {
     expect(fields.timeLabel).toBe("09:00");
     expect(fields.serviceLabel).toBe("Regular Cleaning");
   });
+
+  it("builds recurring summary from booking row frequency + days (notify/resend path)", () => {
+    const fields = resolveBookingEmailFields({
+      snapshot: null,
+      bookingRow: {
+        booking_type: "recurring",
+        recurring_frequency: "weekly",
+        recurring_days: ["Tuesday", "Thursday", "Saturday"],
+        date: "2026-07-16",
+        time: "09:00",
+        location: "12 Main Rd",
+        service: "Regular Cleaning",
+      },
+    });
+    expect(fields.recurringSummary).toBe("Weekly · Tuesday • Thursday • Saturday");
+  });
+
+  it("builds recurring summary from persisted booking-v2 snapshot when row columns sparse", () => {
+    const fields = resolveBookingEmailFields({
+      snapshot: { v: 1 },
+      bookingRow: { booking_type: "recurring" },
+      persistedSnapshot: {
+        recurringFrequency: "weekly",
+        recurringDays: ["Tuesday", "Thursday", "Saturday"],
+        date: "2026-07-16",
+        time: "09:00",
+        address: "12 Main Rd",
+        serviceSlug: "regular-cleaning",
+      },
+    });
+    expect(fields.recurringSummary).toBe("Weekly · Tuesday • Thursday • Saturday");
+  });
 });

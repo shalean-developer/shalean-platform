@@ -82,4 +82,47 @@ describe("customerPaymentRowDisplay", () => {
     expect(d.badgeLabel).toBe("Awaiting payment");
     expect(d.countsAsPaidTransaction).toBe(false);
   });
+
+  it("labels full refund distinctly from Paid when capture payment_status stays success (MODEL A)", () => {
+    const d = customerPaymentRowDisplay(
+      dashboardFromRaw(
+        raw({
+          payment_status: "success",
+          refund_status: "full",
+          refunded_at: "2026-06-02T10:00:00.000Z",
+        }),
+      ),
+    );
+    expect(d.badgeLabel).toBe("Fully refunded");
+    expect(d.countsAsPaidTransaction).toBe(false);
+  });
+
+  it("still labels legacy payment_status=refunded as Fully refunded", () => {
+    const d = customerPaymentRowDisplay(
+      dashboardFromRaw(
+        raw({
+          payment_status: "refunded",
+          refund_status: "full",
+          refunded_at: "2026-06-02T10:00:00.000Z",
+        }),
+      ),
+    );
+    expect(d.badgeLabel).toBe("Fully refunded");
+    expect(d.countsAsPaidTransaction).toBe(false);
+  });
+
+  it("labels partial refund", () => {
+    const d = customerPaymentRowDisplay(
+      dashboardFromRaw(
+        raw({
+          payment_status: "success",
+          refund_status: "partial",
+          refunded_at: "2026-06-02T10:00:00.000Z",
+          amount_paid_cents: 20_000,
+        }),
+      ),
+    );
+    expect(d.badgeLabel).toBe("Partially refunded");
+    expect(d.countsAsPaidTransaction).toBe(true);
+  });
 });

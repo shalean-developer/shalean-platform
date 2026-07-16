@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useFormContext, Controller } from "react-hook-form";
 import { Home, MapPin, Phone, UserRound, ChevronDown, Check, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { getUser } from "@/lib/auth/authClient";
+import { getSession, getUser } from "@/lib/auth/authClient";
 import { useUser } from "@/hooks/useUser";
 import { useAddresses } from "@/hooks/useAddresses";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
@@ -15,6 +15,7 @@ import {
 } from "@/lib/booking/contactPhoneValidation";
 import { getBookingLocationOptions } from "@/lib/locations/bookingLocations";
 import { useBookingV2LocationResolve } from "@/lib/booking-v2/useBookingV2LocationResolve";
+import { UnsupportedSuburbModal } from "@/src/features/booking-v2/components/UnsupportedSuburbModal";
 
 const contactPhoneRules = {
   required: "Enter a contact phone number",
@@ -189,6 +190,7 @@ export function PropertyAddressSection() {
   const [addressMode, setAddressMode] = useState<AddressMode>("custom");
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [prefilled, setPrefilled] = useState(false);
+  const [unsupportedOpen, setUnsupportedOpen] = useState(false);
 
   const savedAddresses = addresses;
   const hasSavedAddresses = savedAddresses.length > 0;
@@ -239,13 +241,38 @@ export function PropertyAddressSection() {
 
   useEffect(() => {
     let cancelled = false;
-    void getUser().then((authUser) => {
+    void (async () => {
+      const authUser = await getUser();
       if (cancelled || !authUser) return;
       if (getValues("contactPhone")?.trim()) return;
+
+      const session = await getSession();
+      const token = session?.access_token;
+      if (token) {
+        try {
+          const res = await fetch("/api/customer/profile", {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const json = (await res.json()) as { profile?: { phone?: string | null; whatsapp?: string | null } };
+            const fromProfile =
+              json.profile?.phone?.trim() || json.profile?.whatsapp?.trim() || "";
+            if (!cancelled && isValidContactPhone(fromProfile)) {
+              setValue("contactPhone", fromProfile, { shouldDirty: false });
+              return;
+            }
+          }
+        } catch {
+          /* fall through to auth metadata */
+        }
+      }
+
       const meta = authUser.user_metadata as { phone?: string; whatsapp?: string } | undefined;
       const fromMeta = meta?.phone?.trim() || meta?.whatsapp?.trim() || "";
-      if (isValidContactPhone(fromMeta)) setValue("contactPhone", fromMeta, { shouldDirty: false });
-    });
+      if (!cancelled && isValidContactPhone(fromMeta)) {
+        setValue("contactPhone", fromMeta, { shouldDirty: false });
+      }
+    })();
     return () => {
       cancelled = true;
     };
@@ -314,8 +341,21 @@ export function PropertyAddressSection() {
     }
   }, [suburbValue, resolvedLocation, locationLoading, setValue]);
 
+  useEffect(() => {
+    if (!locationLoading && locationError && suburbValue?.trim()) {
+      setUnsupportedOpen(true);
+    } else if (!locationError) {
+      setUnsupportedOpen(false);
+    }
+  }, [locationLoading, locationError, suburbValue]);
+
   return (
     <section className="space-y-4">
+      <UnsupportedSuburbModal
+        open={unsupportedOpen}
+        message={locationError || "We do not currently service this suburb."}
+        onClose={() => setUnsupportedOpen(false)}
+      />
       <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
         Property address
       </h3>
@@ -459,11 +499,28 @@ export function PropertyAddressSection() {
                 )}
               />
               <FieldError message={errors.suburb?.message} />
+              <FieldError message={errors.serviceAreaLocationId?.message} />
               {locationLoading && suburbValue?.trim() ? (
-                <p className="mt-1 text-xs text-slate-500">Checking service area…</p>
+                <p className="mt-1 text-xs text-slate-500" role="status">
+                  Checking service area…
+                </p>
               ) : null}
               {!locationLoading && locationError && suburbValue?.trim() ? (
-                <p className="mt-1 text-xs text-red-500">{locationError}</p>
+                <button
+                  type="button"
+                  onClick={() => setUnsupportedOpen(true)}
+                  className="mt-2 text-left text-xs font-semibold text-red-700 underline-offset-2 hover:underline"
+                >
+                  This suburb isn&apos;t covered yet — view options
+                </button>
+              ) : null}
+              {!locationLoading &&
+              !locationError &&
+              suburbValue?.trim() &&
+              !resolvedLocation?.locationId ? (
+                <p className="mt-1 text-xs text-amber-700" role="status">
+                  Select a supported suburb from the list to continue.
+                </p>
               ) : null}
             </div>
             <div className="min-w-0 sm:col-span-2">

@@ -55,7 +55,7 @@ export function FaqPageExperience() {
             </p>
             <button
               type="button"
-              className="mt-4 text-sm font-semibold text-emerald-800 underline-offset-4 hover:underline"
+              className="mt-4 text-sm font-semibold text-blue-800 underline-offset-4 hover:underline"
               onClick={() => setQuery("")}
             >
               Clear search
@@ -85,7 +85,7 @@ export function FaqPageExperience() {
       {groupsFiltered.length > 0 ? (
         <section className="mx-auto max-w-6xl space-y-14 px-4 pb-16 sm:px-6 lg:px-8" aria-label="FAQ categories">
           {needle ? (
-            <p className="text-sm font-medium text-emerald-800">
+            <p className="text-sm font-medium text-blue-800">
               Showing {groupsFiltered.reduce((n, g) => n + g.items.length, 0)} matching questions in categories below.
             </p>
           ) : null}

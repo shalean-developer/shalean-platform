@@ -24,6 +24,15 @@ export function AreasWeServeSection() {
           />
         </div>
 
+        <p className="mt-6">
+          <Link
+            href="/areas-we-serve"
+            className="text-sm font-semibold text-blue-700 underline-offset-2 hover:underline"
+          >
+            View all suburbs we serve →
+          </Link>
+        </p>
+
         <nav className="mt-10" aria-label="Service areas">
           <ul className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
             {locations.map((loc) => (

@@ -1,0 +1,67 @@
+{
+  "ticket": "PRINCESS-UAT-PRC",
+  "at": "2026-07-15T22:52:51.057Z",
+  "staging_base": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+  "staging_supabase_ref": "gbgnemlpyykyhpqqbgru",
+  "production_supabase_ref": "tchayecuvzssixyxlvfu",
+  "checks": {
+    "environment_health": {
+      "status": 200,
+      "body_status": "ok",
+      "deployment": "staging",
+      "supabase_ref": "gbgnemlpyykyhpqqbgru",
+      "expected_ref": "gbgnemlpyykyhpqqbgru",
+      "paystack_secret_mode": "test",
+      "paystack_public_mode": "test",
+      "outbound_disabled": true,
+      "issues_count": 0
+    },
+    "invalid_signature": {
+      "status": 401,
+      "rejected": true
+    },
+    "missing_signature": {
+      "status": 401,
+      "rejected": true
+    },
+    "staging_db": {
+      "ok": true,
+      "payment_success_last_7d": 13,
+      "payment_mismatch_last_7d": 0
+    },
+    "webhook_replay_already_paid": {
+      "status": 200,
+      "received": true,
+      "booking_id_suffix": "61426b28",
+      "reference_masked": "bv2_178414…",
+      "payment_status_before": "success",
+      "payment_status_after": "success",
+      "amount_cents_unchanged": true,
+      "ledger_rows_before": 1,
+      "ledger_rows_after": 1,
+      "ledger_not_duplicated": true,
+      "one_settlement": true
+    },
+    "initialize_route_reachable": {
+      "status": 400,
+      "healthy": true
+    },
+    "production_non_impact": {
+      "ok": true,
+      "skipped_key_file": true,
+      "note": "No local production keys file; no production writes attempted."
+    },
+    "unknown_event_ack": {
+      "status": 200,
+      "received": true,
+      "used_test_secret": true
+    }
+  },
+  "verdict": {
+    "signature_rejection_ok": true,
+    "staging_reachable": true,
+    "staging_identity_ok": true,
+    "webhook_replay_one_settlement": true,
+    "production_untouched": true
+  }
+}

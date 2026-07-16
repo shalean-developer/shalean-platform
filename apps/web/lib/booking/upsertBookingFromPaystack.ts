@@ -4,7 +4,10 @@ import { bookingCustomerKey, bookingCustomerOwnershipPatch } from "@/lib/booking
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import type { CheckoutPriceSnapshotV1 } from "@/lib/booking/priceSnapshotBooking";
-import { isPaymentAmountMismatchZar } from "@/lib/payments/paymentAmountMismatch";
+import {
+  isCheckoutCurrencyZar,
+  isPaymentAmountMismatchZar,
+} from "@/lib/payments/paymentAmountMismatch";
 import {
   checkoutPriceSnapshotFromLegacyPriceSnapshotV1,
   parseCheckoutPriceSnapshotV1FromMeta,
@@ -199,7 +202,7 @@ export type UpsertBookingFromPaystackResult = {
   skipped: boolean;
   bookingId: string | null;
   error?: string;
-  reason?: "amount_mismatch" | "finalization_failed";
+  reason?: "amount_mismatch" | "currency_mismatch" | "booking_mismatch" | "finalization_failed";
   /** Row exists on disk (including mismatch / reconciliation terminal states). */
   bookingInDatabase?: boolean;
   /**
@@ -351,6 +354,38 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         bookingInDatabase: true,
       };
     }
+    /**
+     * Booking ownership: when the charge was matched by `paystack_reference`, metadata must not
+     * point at a different booking id (prevents cross-booking settlement via forged metadata).
+     */
+    if (pendingFinalizeMatch === "paystack_reference") {
+      const metaBookingId = resolveInternalBookingIdFromPaystackReference(
+        input.paystackReference,
+        input.paystackMetadata ?? null,
+      );
+      if (metaBookingId && metaBookingId !== bidEarly) {
+        logPaymentStructured("payment_booking_mismatch", {
+          reference: input.paystackReference,
+          booking_id: bidEarly,
+          metadata_booking_id: metaBookingId,
+          source: input.paystackPersistSource ?? null,
+        });
+        void reportOperationalIssue("critical", "upsertBookingFromPaystack", "booking_reference_mismatch", {
+          paystackReference: input.paystackReference,
+          bookingId: bidEarly,
+          metadataBookingId: metaBookingId,
+          errorType: "payment_booking_mismatch",
+        });
+        return {
+          ok: false,
+          skipped: true,
+          bookingId: bidEarly,
+          reason: "booking_mismatch",
+          bookingInDatabase: true,
+          error: "booking_mismatch",
+        };
+      }
+    }
     existingPendingPaymentId = bidEarly;
   }
 
@@ -396,6 +431,58 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     });
   }
 
+  if (!isCheckoutCurrencyZar(input.currency)) {
+    logPaymentStructured("payment_currency_mismatch", {
+      reference: input.paystackReference,
+      currency: String(input.currency ?? "").trim() || null,
+      booking_id: existingPendingPaymentId,
+      source: input.paystackPersistSource ?? null,
+    });
+    void recordSystemMetric({
+      metric: "pricing.currency_mismatch",
+      value: 1,
+      metadata: { reference: input.paystackReference, currency: input.currency },
+    });
+    const paidAtIso = new Date().toISOString();
+    const currencyMismatchPatch = {
+      status: "payment_mismatch" as const,
+      payment_mismatch: true,
+      payment_completed_at: paidAtIso,
+      price_snapshot: priceSnapshot as unknown as Record<string, unknown>,
+      total_price: priceSnapshot.total_zar,
+      total_paid_zar: Math.round(input.amountCents / 100),
+      amount_paid_cents: input.amountCents,
+    };
+    if (pendingFinalizeMatch === "id" && existingPendingPaymentId) {
+      await supabase
+        .from("bookings")
+        .update(currencyMismatchPatch)
+        .eq("id", existingPendingPaymentId)
+        .eq("status", "pending_payment");
+    } else if (input.paystackReference) {
+      await supabase
+        .from("bookings")
+        .update(currencyMismatchPatch)
+        .eq("paystack_reference", input.paystackReference)
+        .eq("status", "pending_payment");
+    }
+    void enqueueFailedJob("booking_finalize", {
+      paystackReference: input.paystackReference,
+      error: "currency_mismatch",
+      currency: input.currency,
+      payload: input.paystackMetadata ?? null,
+    });
+    return {
+      ok: false,
+      skipped: true,
+      bookingId: existingPendingPaymentId,
+      error: "currency_mismatch",
+      reason: "currency_mismatch",
+      bookingInDatabase: true,
+      recoveryEnqueue: true,
+    };
+  }
+
   const paidZar = input.amountCents / 100;
   const expectedZar = priceSnapshotFromMeta
     ? priceSnapshot.total_zar
@@ -405,7 +492,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         if (Number.isFinite(parsedPay) && parsedPay > 0) return parsedPay;
         return priceSnapshot.total_zar;
       })();
-    if (isPaymentAmountMismatchZar(paidZar, expectedZar)) {
+  if (isPaymentAmountMismatchZar(paidZar, expectedZar)) {
     logPaymentStructured("payment_mismatch", {
       reference: input.paystackReference,
       paid_zar: paidZar,

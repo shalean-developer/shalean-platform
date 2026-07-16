@@ -18,7 +18,10 @@ const DEFAULT_PROPERTY_FACTORS: PropertyFactorRatesConfig = {
   furnished: { yes: 50, no: 0 },
   carpetType: { standard: 0, thick_pile: 50, berber: 30, persian_rug: 80 },
   stains: { yes: 80, no: 0 },
+  /** Fallback to catalog.pricePerBedroom when 0; staging seed sets a positive rate. */
   carpetRooms_per_room_zar: 0,
+  rugs_per_unit_zar: 180,
+  sofa_per_unit_zar: 250,
 };
 
 function parseDiscountRule(raw: unknown): RecurringDiscountRule | null {
@@ -35,7 +38,11 @@ function mergePropertyFactors(raw: unknown): PropertyFactorRatesConfig {
   const src = raw as Record<string, unknown>;
   const out: PropertyFactorRatesConfig = { ...DEFAULT_PROPERTY_FACTORS };
   for (const key of Object.keys(DEFAULT_PROPERTY_FACTORS) as (keyof PropertyFactorRatesConfig)[]) {
-    if (key === "carpetRooms_per_room_zar") {
+    if (
+      key === "carpetRooms_per_room_zar" ||
+      key === "rugs_per_unit_zar" ||
+      key === "sofa_per_unit_zar"
+    ) {
       const n = Number(src[key]);
       if (Number.isFinite(n) && n >= 0) out[key] = Math.round(n);
       continue;

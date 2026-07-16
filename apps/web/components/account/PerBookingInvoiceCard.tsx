@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Download, FileText } from "lucide-react";
+import { Download, ExternalLink, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import type { PerBookingInvoice } from "@/lib/dashboard/perBookingInvoice";
 
@@ -18,6 +18,9 @@ interface PerBookingInvoiceCardProps {
 }
 
 export function PerBookingInvoiceCard({ invoice }: PerBookingInvoiceCardProps) {
+  const pdfHref = `/api/account/invoices/booking/${invoice.bookingId}/pdf`;
+  const hasZoho = Boolean(invoice.zohoInvoiceId?.trim());
+
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm transition">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -45,18 +48,28 @@ export function PerBookingInvoiceCard({ invoice }: PerBookingInvoiceCardProps) {
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {hasZoho ? (
+            <>
+              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                <a href={pdfHref} target="_blank" rel="noopener noreferrer">
+                  <Download className="mr-1.5 h-4 w-4" />
+                  PDF
+                </a>
+              </Button>
+              <Button asChild variant="outline" size="sm" className="rounded-xl">
+                <a href={pdfHref} target="_blank" rel="noopener noreferrer">
+                  <ExternalLink className="mr-1.5 h-4 w-4" />
+                  View
+                </a>
+              </Button>
+            </>
+          ) : (
+            <span className="inline-flex items-center rounded-xl border border-dashed border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-500">
+              Invoice not ready yet
+            </span>
+          )}
           <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <a
-              href={`/api/account/invoices/booking/${invoice.bookingId}/pdf`}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              <Download className="mr-1.5 h-4 w-4" />
-              PDF
-            </a>
-          </Button>
-          <Button asChild variant="outline" size="sm" className="rounded-xl">
-            <Link href={`/account/bookings/${invoice.bookingId}`}>View</Link>
+            <Link href={`/account/bookings/${invoice.bookingId}`}>Booking</Link>
           </Button>
         </div>
       </div>

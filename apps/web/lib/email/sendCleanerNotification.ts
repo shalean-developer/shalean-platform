@@ -2,6 +2,7 @@ import { Resend } from "resend";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
+import { safeResendSend } from "@/lib/email/safeResendSend";
 import { isCleanerEmailOutboundAllowed } from "@/lib/notifications/communicationPolicy";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
@@ -81,7 +82,7 @@ export async function sendCleanerNewJobEmail(params: {
     <p style="color:#666;font-size:12px">Booking ID: ${escapeHtml(params.bookingId)}</p>
   `;
 
-  const { error } = await resend.emails.send({
+  const { error } = await safeResendSend({
     from: getDefaultFromAddress(),
     to: [to],
     subject:
@@ -138,7 +139,7 @@ export async function sendCleanerBookingCancelledEmail(params: {
     <p style="color:#666;font-size:12px">Booking ID: ${escapeHtml(params.bookingId)}</p>
   `;
 
-  const { error } = await resend.emails.send({
+  const { error } = await safeResendSend({
     from: getDefaultFromAddress(),
     to: [to],
     subject: `Cancelled — do not attend (${params.dateLabel})`,

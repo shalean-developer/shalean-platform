@@ -7,6 +7,7 @@ import type { LiveServiceConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
+import { resolveMovingPricingSlug } from "@/lib/booking-v2/resolvePricingServiceSlug";
 
 export type BuildCustomerPricingFromFormParams = {
   serviceSlug: BookingV2FormData["serviceSlug"];
@@ -26,6 +27,46 @@ export type BuildCustomerPricingFromFormParams = {
   /** Loyalty tier from user_profiles (server confirm). */
   vipTier?: string | null;
 };
+
+function catalogRatesForForm(
+  serviceSlug: BookingV2FormData["serviceSlug"],
+  catalogSource: LiveServiceConfig,
+  serviceDetails: Record<string, string | number | boolean>,
+): Pick<
+  LiveServiceConfig,
+  "basePrice" | "pricePerBedroom" | "pricePerBathroom" | "pricePerExtraRoom"
+> {
+  if (serviceSlug !== "moving-cleaning" || !catalogSource.moveVariantRates) {
+    return {
+      basePrice: catalogSource.basePrice,
+      pricePerBedroom: catalogSource.pricePerBedroom,
+      pricePerBathroom: catalogSource.pricePerBathroom,
+      pricePerExtraRoom: catalogSource.pricePerExtraRoom,
+    };
+  }
+  const preferred = resolveMovingPricingSlug(serviceDetails.moveType);
+  const variant =
+    preferred === "move-in"
+      ? catalogSource.moveVariantRates.move_in
+      : preferred === "move-out"
+        ? catalogSource.moveVariantRates.move_out
+        : undefined;
+  if (!variant) {
+    return {
+      basePrice: catalogSource.basePrice,
+      pricePerBedroom: catalogSource.pricePerBedroom,
+      pricePerBathroom: catalogSource.pricePerBathroom,
+      pricePerExtraRoom: catalogSource.pricePerExtraRoom,
+    };
+  }
+  return {
+    basePrice: variant.basePrice > 0 ? variant.basePrice : catalogSource.basePrice,
+    pricePerBedroom: variant.pricePerBedroom > 0 ? variant.pricePerBedroom : catalogSource.pricePerBedroom,
+    pricePerBathroom: variant.pricePerBathroom > 0 ? variant.pricePerBathroom : catalogSource.pricePerBathroom,
+    pricePerExtraRoom:
+      variant.pricePerExtraRoom > 0 ? variant.pricePerExtraRoom : catalogSource.pricePerExtraRoom,
+  };
+}
 
 /** Shared quote input for display (client) and signed confirm (server). */
 export function buildCustomerTotalInputFromForm(
@@ -68,6 +109,8 @@ export function buildCustomerTotalInputFromForm(
   const equipmentQuote: EquipmentQuoteResult | null =
     equipmentRequired && values.equipmentQuote ? values.equipmentQuote : null;
 
+  const rates = catalogRatesForForm(serviceSlug, catalogSource, values.serviceDetails ?? {});
+
   return {
     serviceSlug,
     serviceLabel: catalogSource.label,
@@ -80,10 +123,10 @@ export function buildCustomerTotalInputFromForm(
     equipmentRequired,
     equipmentQuote,
     catalog: {
-      basePrice: catalogSource.basePrice,
-      pricePerBedroom: catalogSource.pricePerBedroom,
-      pricePerBathroom: catalogSource.pricePerBathroom,
-      pricePerExtraRoom: catalogSource.pricePerExtraRoom,
+      basePrice: rates.basePrice,
+      pricePerBedroom: rates.pricePerBedroom,
+      pricePerBathroom: rates.pricePerBathroom,
+      pricePerExtraRoom: rates.pricePerExtraRoom,
       pricePerExtraCleaner: catalogSource.pricePerExtraCleaner,
       estimatedDurationHours: catalogSource.estimatedDurationHours,
       minDurationHours: catalogSource.minDurationHours,

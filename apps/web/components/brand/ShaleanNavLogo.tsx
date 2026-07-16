@@ -5,6 +5,9 @@ import { cn } from "@/lib/utils";
 export const SHALEAN_LOGO_WIDTH = 709;
 export const SHALEAN_LOGO_HEIGHT = 204;
 
+/** Canonical brand mark — same PNG for header, footer, and all product surfaces. */
+export const SHALEAN_LOGO_SRC = `/images/shalean-logo.png?v=${BRAND_ASSET_VERSION}`;
+
 type ShaleanNavLogoProps = {
   /** Display box, e.g. `h-8 w-auto sm:h-10` */
   className?: string;
@@ -15,15 +18,20 @@ type ShaleanNavLogoProps = {
 };
 
 /**
- * Full wordmark (`public/images/shalean-logo.png`). Transparent PNG; use `h-* w-auto` in `className`.
+ * Canonical Shalean wordmark (`public/images/shalean-logo.png`).
+ * One asset for the whole platform — on dark surfaces, place on a light plate (see FooterSection).
  */
-export function ShaleanNavLogo({ className, intrinsicHeight = 204, priority = false }: ShaleanNavLogoProps) {
+export function ShaleanNavLogo({
+  className,
+  intrinsicHeight = 204,
+  priority = false,
+}: ShaleanNavLogoProps) {
   const intrinsicWidth = Math.round(intrinsicHeight * (SHALEAN_LOGO_WIDTH / SHALEAN_LOGO_HEIGHT));
 
   return (
     <Image
       key={BRAND_ASSET_VERSION}
-      src={`/images/shalean-logo.png?v=${BRAND_ASSET_VERSION}`}
+      src={SHALEAN_LOGO_SRC}
       alt="Shalean Cleaning Services"
       width={intrinsicWidth}
       height={intrinsicHeight}

@@ -3,42 +3,35 @@ import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig
 /**
  * Canonical allowlist of `pricing_extras.slug` values per booking service.
  * Used by /book and /quote so each service type shows its own add-ons.
+ * Aligned with Farai UAT Batch 2 (UAT-BOOK-010).
  */
 export const SERVICE_EXTRA_SLUGS: Record<ServiceSlug, readonly string[]> = {
   "regular-cleaning": [
-    "inside-cabinets",
-    "inside-oven",
     "inside-fridge",
-    "interior-walls",
-    "ironing",
+    "inside-oven",
     "laundry",
+    "ironing",
     "interior-windows",
-    "water-plants",
   ],
   "deep-cleaning": [
-    "balcony-cleaning",
-    "carpet-cleaning",
-    "ceiling-cleaning",
-    "garage-cleaning",
-    "mattress-cleaning",
-    "outside-windows",
+    "inside-cabinets",
+    "inside-wardrobes",
+    "blinds-cleaning",
+    "interior-walls",
   ],
   "moving-cleaning": [
-    "inside-oven",
+    "deposit-preparation",
+    "appliances-cleaning",
     "inside-cabinets",
-    "interior-walls",
-    "inside-fridge",
-    "balcony-cleaning",
     "garage-cleaning",
-    "outside-windows",
   ],
   "office-cleaning": [
     "office-kitchen",
-    "interior-windows",
-    "carpet-cleaning",
     "office-sanitisation",
+    "waste-removal",
   ],
   "carpet-cleaning": [
+    "sofa-upholstery",
     "stain-treatment",
     "pet-odour-treatment",
     "fabric-protector",

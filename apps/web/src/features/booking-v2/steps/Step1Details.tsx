@@ -16,6 +16,8 @@ import {
   ServiceQuestionOptionCards,
   shouldUseHorizontalOptionCards,
 } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
+import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
+import { WhatsIncludedModal } from "@/src/features/booking-v2/components/WhatsIncludedModal";
 
 // ─── Shared field components ───────────────────────────────────────────────────
 
@@ -175,6 +177,31 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
     question.label
   );
 
+  if (question.key === "bedrooms" || question.key === "bathrooms") {
+    return (
+      <div className="min-w-0 w-full">
+        <FieldLabel htmlFor={question.key} required={question.required}>
+          {labelNode}
+        </FieldLabel>
+        <Controller
+          name={fieldKey}
+          control={control}
+          rules={{ required: question.required ? `${question.label} is required` : false }}
+          render={({ field }) => (
+            <RoomCountSelector
+              id={question.key}
+              kind={question.key as "bedrooms" | "bathrooms"}
+              value={String(field.value ?? "")}
+              onChange={field.onChange}
+              error={fieldError}
+            />
+          )}
+        />
+        {question.hint && <FieldHint>{question.hint}</FieldHint>}
+      </div>
+    );
+  }
+
   if (shouldUseHorizontalOptionCards(question)) {
     return <ServiceQuestionOptionCards question={question} />;
   }
@@ -300,9 +327,34 @@ export function Step1Details() {
   const config = SERVICE_CONFIG[serviceSlug];
   const { register, watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
+  const serviceDetails = watch("serviceDetails") ?? {};
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+
+  function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
+    if (!question.showWhen) return true;
+    const current = String(serviceDetails[question.showWhen.key] ?? "");
+    return question.showWhen.values.includes(current);
+  }
+
+  const moveTypeValue = String(serviceDetails.moveType ?? "");
+
+  // Clear answers for questions hidden by move-type (and similar) gates.
+  useEffect(() => {
+    for (const q of step1Questions) {
+      if (!q.showWhen) continue;
+      const current = String(serviceDetails[q.showWhen.key] ?? "");
+      const visible = q.showWhen.values.includes(current);
+      if (visible) continue;
+      if (serviceDetails[q.key] === undefined || serviceDetails[q.key] === "") continue;
+      setValue(`serviceDetails.${q.key}` as "serviceDetails.bedrooms", "" as never, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- clear only when controlling gate changes
+  }, [moveTypeValue, step1Questions, setValue]);
 
   function toggleExtra(id: string) {
     const current = selectedExtras;
@@ -313,7 +365,7 @@ export function Step1Details() {
   }
 
   const questionGroups = groupQuestions(
-    step1Questions.filter((q) => q.key !== "cleaningProducts"),
+    step1Questions.filter((q) => q.key !== "cleaningProducts" && isQuestionVisible(q)),
   );
 
   return (
@@ -332,6 +384,11 @@ export function Step1Details() {
         <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
           About the clean
         </h3>
+        {serviceSlug === "regular-cleaning" ? (
+          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
+            <WhatsIncludedModal />
+          </div>
+        ) : null}
         {questionGroups.map((group) => {
           if (group.type === "inline") {
             const isRooms = group.groupName === "rooms";
@@ -431,6 +488,9 @@ export function Step1Details() {
             <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
               Add-on extras
             </h3>
+            <p className="text-center text-xs text-slate-500">
+              Optional extras are not included in the base clean — add only what you need.
+            </p>
           <div className="grid gap-3 sm:grid-cols-2">
             {extras.map((extra) => {
               const checked = selectedExtras.includes(extra.id);

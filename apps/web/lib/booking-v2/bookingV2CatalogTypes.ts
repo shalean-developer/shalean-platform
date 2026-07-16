@@ -12,6 +12,8 @@ export type BookingV2FormQuestion = {
   hint?: string;
   group?: string;
   centered?: boolean;
+  /** When set, question is shown only if `serviceDetails[key]` is one of `values`. */
+  showWhen?: { key: string; values: string[] };
 };
 
 export type BookingV2ExtraTypeFilter = "light" | "heavy" | "all";
@@ -79,6 +81,14 @@ export type LiveServiceConfig = {
   minDurationHours: number;
   maxDurationHours: number;
   extras: LiveExtra[];
+  /**
+   * Move-in / move-out room rates when dedicated pricing_services rows exist.
+   * Quote path selects by serviceDetails.moveType.
+   */
+  moveVariantRates?: {
+    move_in?: { basePrice: number; pricePerBedroom: number; pricePerBathroom: number; pricePerExtraRoom: number };
+    move_out?: { basePrice: number; pricePerBedroom: number; pricePerBathroom: number; pricePerExtraRoom: number };
+  };
 };
 
 export type ServicesCatalog = Record<ServiceSlug, LiveServiceConfig>;
