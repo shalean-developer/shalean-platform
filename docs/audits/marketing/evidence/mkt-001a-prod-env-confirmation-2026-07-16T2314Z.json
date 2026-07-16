@@ -1,0 +1,70 @@
+{
+  "artifact": "MKT-001A-PROD §3.2 production environment confirmation",
+  "mode": "read-only; names and scopes only — no secret values captured",
+  "capturedAt": "2026-07-16T23:14Z",
+  "vercel": {
+    "cli": "vercel@latest 56.3.0 (npx)",
+    "authenticatedAs": "chitekedzaf-3549",
+    "team": "shalean-cleaning-services",
+    "project": "shalean-platform (prj_eA7rHVSDiDXslAmrGwkdS4BtlVAc)",
+    "method": "vercel env ls production / preview / preview staging"
+  },
+  "marketingOauthEncryptionKey": {
+    "records": [
+      { "scope": "Preview, Production", "createdApprox": "7m ago", "serves": "production + all non-overridden preview branches" },
+      { "scope": "Preview (staging)", "createdApprox": "2h ago", "serves": "staging branch preview only" },
+      { "scope": "Preview (development)", "createdApprox": "2h ago", "serves": "development branch preview only" }
+    ],
+    "existsOnProduction": true,
+    "scopedOnlyToProduction": false,
+    "distinctFromStagingRecord": true,
+    "finding": "BLOCKER — the production-serving record is scoped Preview+Production, so its value bleeds into non-overridden PR-branch previews. Governance requires Production-only scope. Value-based independence (no reuse of GOOGLE_CLIENT_SECRET / Supabase keys / staging key) cannot be verified via CLI and requires operator attestation.",
+    "remediationOwner": "operator (Vercel dashboard); agent to re-verify scope afterward"
+  },
+  "providerCredentials": {
+    "GOOGLE_CLIENT_ID": "Preview, Production (shared; no staging-branch override)",
+    "GOOGLE_CLIENT_SECRET": "Preview, Production (shared; no staging-branch override)",
+    "GOOGLE_REDIRECT_URI": "Production only",
+    "FACEBOOK_PAGE_ACCESS_TOKEN": "Production, Preview (shared; no staging-branch override)",
+    "FACEBOOK_PAGE_ID": "Production, Preview (shared; no staging-branch override)",
+    "finding": "Present on production but shared with preview/staging (same values); step 3 asks for separation from staging. 'Valid' requires a provider-level check (operator/smoke)."
+  },
+  "supabase": {
+    "productionRef": "tchayecuvzssixyxlvfu",
+    "productionName": "shalean-platform",
+    "productionRegion": "eu-west-3",
+    "productionStatus": "ACTIVE_HEALTHY",
+    "productionMkt001aMigrations": 0,
+    "productionLatestMigration": "20261071_booking_fulfillment_mode_and_demand",
+    "stagingRef": "gbgnemlpyykyhpqqbgru",
+    "stagingName": "shalean-platform-staging",
+    "stagingHasBothMkt001aMigrations": true,
+    "stagingMkt001aMigrations": [
+      "20260716180000_mkt_001a_promotions_financial_access",
+      "20260716180100_mkt_001a_publish_idempotency"
+    ],
+    "method": "plugin-supabase-supabase list_projects / list_migrations"
+  },
+  "productionHealthEndpoint": {
+    "url": "https://shalean.co.za/api/health/environment",
+    "deployment": "production",
+    "vercelEnv": "production",
+    "gitBranch": "main",
+    "shaleanAppEnv": "production",
+    "supabaseConfiguredRef": "tchayecuvzssixyxlvfu",
+    "supabaseExpectedRef": "tchayecuvzssixyxlvfu",
+    "urlHost": "tchayecuvzssixyxlvfu.supabase.co",
+    "paystackSecretMode": "live",
+    "paystackPublicMode": "live",
+    "issues": []
+  },
+  "operatorSmokeStatus": {
+    "section": "OPS-001 §9.4 / MKT-001A-PROD §3.1",
+    "envReady": true,
+    "envReadyNote": "staging now has a branch-scoped MARKETING_OAUTH_ENCRYPTION_KEY + verified Supabase binding; the earlier missing-key blocker is resolved",
+    "runnable": true,
+    "blockedBy": "authenticated admin session + sandbox provider target (not available to agent)",
+    "owner": "operator"
+  },
+  "gateDecision": "NO-GO (unchanged); no staging→main merge, deploy, migration, or env change performed"
+}

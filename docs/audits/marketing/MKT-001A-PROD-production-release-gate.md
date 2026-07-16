@@ -60,6 +60,8 @@ The four admin-session-gated live flows (OPS-001 §9.4) could not be executed fr
 
 If the operator elects to **formally defer** any item, record the deferral + rationale here before GO. Unresolved-and-undeferred ⇒ gate stays NO-GO.
 
+> **Status update (2026-07-16T23:14Z):** the earlier blocker for this smoke (missing marketing encryption key on the staging preview) is **resolved** — staging now carries a branch-scoped `MARKETING_OAUTH_ENCRYPTION_KEY` (`Preview (staging)`) plus a verified Supabase binding, so all four checks are now **runnable on staging**. They remain **operator-gated**: each needs an authenticated admin session + a sandbox provider target, which the automation environment does not have. Per governance authorization (2026-07-16), the **operator will run these four checks on staging and record results here** before the §5 GO actions begin.
+
 ### 3.2 Production environment variables (confirm BEFORE deploy)
 
 Production runs on **live** keys — treat every change as customer-facing. Confirm on the Vercel **Production** scope (values never in git/logs/chat):
@@ -68,6 +70,30 @@ Production runs on **live** keys — treat every change as customer-facing. Conf
 - [ ] `MARKETING_OAUTH_ENCRYPTION_KEY_PREVIOUS` — only if a legacy production OAuth token must decrypt during rotation (else omit).
 - [ ] Marketing provider credentials (Facebook Page / Google Business) — only if social publishing is enabled in production; live values.
 - [ ] `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` / `SUPABASE_SERVICE_ROLE_KEY` — already present for production (confirmed indirectly by healthy prod binding); no change.
+
+#### 3.2.1 Verification record — read-only confirmation (2026-07-16T23:14Z)
+
+Agent-executed **read-only** confirmation (Vercel CLI `env ls` returns names + scopes only, never values; Supabase MCP `list_migrations`/`list_projects`; production health endpoint). No env value was read, and no scope/deploy/migration was changed. Evidence: `docs/audits/marketing/evidence/mkt-001a-prod-env-confirmation-2026-07-16T2314Z.json`.
+
+| Item | Result | Detail |
+|---|---|---|
+| Production identity (live) | ✅ | `/api/health/environment`: `deployment=production`, `gitBranch=main`, `shaleanAppEnv=production`, `configuredRef=expectedRef=tchayecuvzssixyxlvfu`, Paystack `live`, `issues:[]` |
+| MKT-001A migrations on production | ✅ 0 present | `list_migrations(tchayecuvzssixyxlvfu)` latest `20261071_booking_fulfillment_mode_and_demand` |
+| MKT-001A migrations on staging | ✅ both present | `20260716180000_mkt_001a_promotions_financial_access`, `20260716180100_mkt_001a_publish_idempotency` on `gbgnemlpyykyhpqqbgru` |
+| `MARKETING_OAUTH_ENCRYPTION_KEY` exists on production | ✅ | one record scoped `Preview, Production` (created ~7m before capture) |
+| `MARKETING_OAUTH_ENCRYPTION_KEY` **scoped only to Production** | ❌ **BLOCKER** | production-serving record is scoped **Preview + Production** → value bleeds into non-overridden PR-branch previews. Requires Production-only scope. |
+| Key distinct from staging key | ✅ (by record) | staging has its own `Preview (staging)` record + development has `Preview (development)`, both created ~2h before capture; distinct from the production-serving record |
+| Key value independence (no reuse of `GOOGLE_CLIENT_SECRET`/Supabase/staging value) | ⏳ operator attestation | not verifiable via CLI (values shown `Encrypted`) |
+| Facebook/Google production creds present | ✅ | `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `FACEBOOK_PAGE_ACCESS_TOKEN`, `FACEBOOK_PAGE_ID` on production |
+| Facebook/Google creds **separate from staging** | ⚠️ | all scoped `Preview, Production` (shared values; no staging-branch override). "Valid" requires a provider-level check (operator/smoke). |
+
+**Required operator remediation before GO (§9):**
+
+1. Re-scope the production `MARKETING_OAUTH_ENCRYPTION_KEY` record to **Production-only** (remove the `Preview` target); staging/development retain their own branch-scoped keys. Agent will re-verify scope after remediation.
+2. Attest that the production key value is newly generated and independent (not the staging key, not `GOOGLE_CLIENT_SECRET`, not a Supabase key or other application secret).
+3. Decide whether production Facebook/Google credentials should be separated from the shared Preview+Production scope, and confirm they are valid.
+
+Until item 1 is remediated and re-verified, §3.2 stays **unchecked** and the gate remains NO-GO.
 
 ### 3.3 Engineering sign-off
 
