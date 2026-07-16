@@ -128,6 +128,8 @@ function getConfirmationBadge(booking: DashboardBooking): { label: string; class
 function getPaymentStatusDisplay(booking: DashboardBooking): { label: string; className: string } {
   const rawStatus = String(booking.raw.status ?? "").trim().toLowerCase();
   const ps = String(booking.raw.payment_status ?? "").trim().toLowerCase();
+  const refundStatus = String(booking.raw.refund_status ?? "").trim().toLowerCase();
+  const refundedAt = String(booking.raw.refunded_at ?? "").trim();
 
   if (
     rawStatus === "pending_payment" ||
@@ -139,6 +141,17 @@ function getPaymentStatusDisplay(booking: DashboardBooking): { label: string; cl
 
   if (booking.status === "cancelled" || booking.status === "failed") {
     return { label: "Not charged", className: "text-gray-400 font-medium" };
+  }
+
+  // Prefer refund_status over capture payment_status (MODEL A — capture stays success).
+  if (ps === "refunded" || refundStatus === "full" || refundStatus === "chargeback" || refundStatus === "reversed") {
+    return {
+      label: refundStatus === "chargeback" ? "Chargeback" : "Fully refunded",
+      className: "text-gray-500 font-semibold",
+    };
+  }
+  if (refundStatus === "partial" || refundedAt) {
+    return { label: "Partially refunded", className: "text-orange-500 font-semibold" };
   }
 
   return { label: "Paid", className: "text-emerald-600 font-semibold" };

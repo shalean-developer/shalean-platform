@@ -6,6 +6,7 @@ import { decideRefundAmount, maskPaymentReference } from "@/lib/booking/refund/r
 import {
   assertRefundProviderTransition,
   canTransitionRefundProviderState,
+  isGovernedBookingPaymentStatus,
   paymentStatusForAggregate,
   resolveRefundAggregateStatus,
 } from "@/lib/booking/refund/refundStateMachine";
@@ -85,10 +86,19 @@ describe("Princess PR D refund state machine", () => {
     expect(assertRefundProviderTransition("succeeded", "failed").ok).toBe(false);
   });
 
-  it("never leaves payment ambiguously paid when fully refunded", () => {
+  it("keeps capture payment_status schema-valid under full/partial/chargeback (MODEL A)", () => {
     expect(resolveRefundAggregateStatus({ capturedCents: 100, refundedCents: 100 })).toBe("full");
-    expect(paymentStatusForAggregate("full", "success")).toBe("refunded");
+    expect(paymentStatusForAggregate("full", "success")).toBe("success");
     expect(paymentStatusForAggregate("partial", "success")).toBe("success");
+    expect(paymentStatusForAggregate("chargeback", "success")).toBe("success");
+    expect(paymentStatusForAggregate("full", "pending_monthly")).toBe("pending_monthly");
+    // Legacy illegal value never re-written
+    expect(paymentStatusForAggregate("full", "refunded")).toBe("success");
+    for (const aggregate of ["full", "partial", "chargeback", "none"] as const) {
+      expect(isGovernedBookingPaymentStatus(paymentStatusForAggregate(aggregate, "success"))).toBe(
+        true,
+      );
+    }
   });
 });
 
@@ -423,8 +433,11 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
     if (!result.ok) return;
     expect(result.mode).toBe("applied");
     expect(result.refundStatus).toBe("full");
-    expect(admin.getRow().payment_status).toBe("refunded");
+    // MODEL A: capture payment_status stays schema-valid; refund_status carries full.
+    expect(admin.getRow().payment_status).toBe("success");
+    expect(isGovernedBookingPaymentStatus(admin.getRow().payment_status)).toBe(true);
     expect(admin.getRow().refund_status).toBe("full");
+    expect(admin.getRow().status).toBe("completed");
     expect(admin.inserts.length).toBe(1);
     expect(String(admin.inserts[0]?.gateway_reference)).toMatch(/^refund:psk_charge_1:/);
     expect(admin.inserts[0]?.settlement_status).toBe("reversed");
@@ -481,7 +494,8 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
     expect(second.ok).toBe(true);
     if (!second.ok) return;
     expect(second.refundStatus).toBe("full");
-    expect(admin.getRow().payment_status).toBe("refunded");
+    expect(admin.getRow().payment_status).toBe("success");
+    expect(admin.getRow().refund_status).toBe("full");
     expect(admin.inserts.length).toBe(2);
   });
 
@@ -612,5 +626,46 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
     });
     expect(ok.ok).toBe(true);
     expect(refundFn).toHaveBeenCalledTimes(2);
+  });
+
+  it("chargeback does not write illegal payment_status=refunded", async () => {
+    vi.doMock("@/lib/paystack/refundPaystackTransaction", () => ({
+      refundPaystackTransaction: vi.fn(),
+    }));
+    vi.doMock("@/lib/referrals/clawback", () => ({
+      maybeProcessReferralClawbackOnBookingChange: vi.fn(async () => undefined),
+    }));
+    vi.doMock("@/lib/logging/systemLog", () => ({
+      logSystemEvent: vi.fn(async () => undefined),
+    }));
+
+    const { markBookingChargeback } = await import("@/lib/booking/refund/refundBookingPayment");
+    const admin = makeAdminMock({
+      id: "bk_cb",
+      status: "completed",
+      payment_status: "success",
+      refunded_at: null,
+      refund_status: null,
+    });
+
+    const result = await markBookingChargeback(admin as never, {
+      bookingId: "bk_cb",
+      paystackReference: "psk_cb",
+      note: "dispute",
+    });
+    expect(result.ok).toBe(true);
+    expect(admin.getRow().refund_status).toBe("chargeback");
+    expect(admin.getRow().payment_status).toBe("success");
+    expect(admin.updates.some((u) => u.payment_status != null)).toBe(false);
+  });
+
+  it("never writes payment_status=refunded in refundBookingPayment source", () => {
+    const src = readFileSync(
+      resolve(__dirname, "../refundBookingPayment.ts"),
+      "utf8",
+    );
+    expect(src).not.toMatch(/payment_status:\s*["']refunded["']/);
+    const sm = readFileSync(resolve(__dirname, "../refundStateMachine.ts"), "utf8");
+    expect(sm).not.toMatch(/return\s+["']refunded["']/);
   });
 });

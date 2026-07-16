@@ -60,6 +60,7 @@ export function assertRefundProviderTransition(
 
 /**
  * Aggregate booking payment refund label — never "paid" when fully refunded.
+ * Presentation uses `refund_status` / refund totals, not `payment_status`.
  */
 export function resolveRefundAggregateStatus(params: {
   capturedCents: number;
@@ -74,15 +75,44 @@ export function resolveRefundAggregateStatus(params: {
   return "partial";
 }
 
+/**
+ * Governed `bookings.payment_status` CHECK domain
+ * (`bookings_payment_status_check`): pending | success | failed | pending_monthly.
+ *
+ * MODEL A — immutable capture status: refunds never rewrite this column to
+ * `refunded`. Full / partial / chargeback presentation is derived from
+ * `refund_status`, `refunded_at`, and refund ledger totals.
+ */
+export const GOVERNED_BOOKING_PAYMENT_STATUSES = [
+  "pending",
+  "success",
+  "failed",
+  "pending_monthly",
+] as const;
+
+export type GovernedBookingPaymentStatus = (typeof GOVERNED_BOOKING_PAYMENT_STATUSES)[number];
+
+export function isGovernedBookingPaymentStatus(
+  value: unknown,
+): value is GovernedBookingPaymentStatus {
+  return (
+    typeof value === "string" &&
+    (GOVERNED_BOOKING_PAYMENT_STATUSES as readonly string[]).includes(value)
+  );
+}
+
+/**
+ * Preserve schema-valid capture `payment_status` after refund aggregates.
+ * Never returns `refunded` (illegal under `bookings_payment_status_check`).
+ */
 export function paymentStatusForAggregate(
-  aggregate: RefundAggregateStatus,
+  _aggregate: RefundAggregateStatus,
   priorPaymentStatus: string | null | undefined,
 ): string {
-  if (aggregate === "full" || aggregate === "chargeback") return "refunded";
-  if (aggregate === "partial") {
-    const prior = String(priorPaymentStatus ?? "").toLowerCase();
-    if (prior === "refunded") return "success";
-    return prior || "success";
-  }
-  return String(priorPaymentStatus ?? "success");
+  const prior = String(priorPaymentStatus ?? "")
+    .trim()
+    .toLowerCase();
+  if (isGovernedBookingPaymentStatus(prior)) return prior;
+  // Legacy / illegal values (e.g. historical "refunded") normalize to capture success.
+  return "success";
 }

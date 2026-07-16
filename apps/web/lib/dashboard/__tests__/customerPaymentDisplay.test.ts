@@ -83,7 +83,21 @@ describe("customerPaymentRowDisplay", () => {
     expect(d.countsAsPaidTransaction).toBe(false);
   });
 
-  it("labels full refund distinctly from Paid", () => {
+  it("labels full refund distinctly from Paid when capture payment_status stays success (MODEL A)", () => {
+    const d = customerPaymentRowDisplay(
+      dashboardFromRaw(
+        raw({
+          payment_status: "success",
+          refund_status: "full",
+          refunded_at: "2026-06-02T10:00:00.000Z",
+        }),
+      ),
+    );
+    expect(d.badgeLabel).toBe("Fully refunded");
+    expect(d.countsAsPaidTransaction).toBe(false);
+  });
+
+  it("still labels legacy payment_status=refunded as Fully refunded", () => {
     const d = customerPaymentRowDisplay(
       dashboardFromRaw(
         raw({

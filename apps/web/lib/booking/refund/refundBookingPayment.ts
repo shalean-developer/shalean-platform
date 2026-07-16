@@ -4,7 +4,6 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import {
   assertRefundProviderTransition,
-  paymentStatusForAggregate,
   resolveRefundAggregateStatus,
   type RefundProviderState,
 } from "@/lib/booking/refund/refundStateMachine";
@@ -566,8 +565,9 @@ async function markRefundSucceeded(
   const patch: Record<string, unknown> = {
     refunded_at: nowIso,
     refund_status: aggregate === "full" ? "full" : "partial",
-    payment_status: paymentStatusForAggregate(aggregate, row.payment_status),
   };
+  // MODEL A: do not rewrite payment_status — capture remains governed
+  // (pending|success|failed|pending_monthly). Refund presentation uses refund_status.
   // Keep original paid columns as capture audit when full; for partial store remaining net.
   if (aggregate === "partial") {
     patch.amount_paid_cents = remainingCents;
@@ -760,12 +760,13 @@ export async function markBookingChargeback(
   if (existing === "chargeback") return { ok: true };
 
   const nowIso = new Date().toISOString();
+  // MODEL A: do not rewrite payment_status — capture remains governed (success|…).
+  // Chargeback presentation is derived from refund_status='chargeback'.
   const { error: upErr } = await admin
     .from("bookings")
     .update({
       refunded_at: (data as { refunded_at?: string | null }).refunded_at ?? nowIso,
       refund_status: "chargeback",
-      payment_status: "refunded",
     })
     .eq("id", params.bookingId);
   if (upErr) return { ok: false, error: upErr.message };
