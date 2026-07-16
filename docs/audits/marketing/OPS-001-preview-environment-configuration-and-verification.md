@@ -169,6 +169,27 @@ Applying this gate before RC would have surfaced the missing-configuration condi
 
 ---
 
+## 8a. Execution-attempt log (agent verification, 2026-07-16T21:19Z)
+
+An automated verification pass was run against the latest PR HEAD to establish current state. It did **not** and **could not** perform the env-configuration steps (§4.1–§4.2), which require operator Vercel dashboard/CLI credentials not available to the agent environment (no env-var write tool; no Vercel CLI — confirmed in RC3).
+
+| OPS-001 step | Attempted outcome |
+|---|---|
+| 1–2. Configure Preview env / confirm staging binding | **NOT POSSIBLE from agent env** — no Vercel env-write capability. Unchanged. |
+| 3. Redeploy latest PR HEAD (`d1b4510f`) | **DONE (auto)** — the `d1b4510f` push auto-created preview `dpl_BnjkHU46E1eFTqt3vG1EULqMCPd9` (READY). |
+| 4. Temporary Deployment-Protection bypass | **DONE** — `_vercel_share` link created for the new deployment (23h TTL). |
+| 5. Confirm runtime configuration | **FAIL — backend still absent.** Live runtime logs for `dpl_BnjkHU46E1eFTqt3vG1EULqMCPd9` on `/campaigns/env03-test-10`, `/api/promotions`, `/blog/*` show `urlPresent: false`, `serviceRoleKeyPresent: false`, `anonKeyPresent: false`. Public campaign page renders in **fallback mode** (staging row not read). |
+| 6. Live verification matrix | **NOT STARTED** — cannot begin without a configured backend (§5 precondition unmet). |
+| 7. Update report + decision | This section. |
+
+**Interpretation.** The redeploy alone does **not** resolve OPS-001: a new build on the same (unconfigured) Preview scope inherits the same absent env. Step 1 (operator env configuration) is the gating action and has not occurred. No live security control was executed, so none passed or failed.
+
+**Decision (this attempt):** OPS-001 **remains OPEN / BLOCKED at step 1**. MKT-001A stays **CONDITIONAL PASS**; PR #38 open; production NO-GO. This is neither a control PASS nor a control failure — it is an unmet environment precondition.
+
+**Ready-to-resume trigger.** As soon as an operator configures the §4.1 Preview variables (for staging `gbgnemlpyykyhpqqbgru`) and a fresh PR-HEAD deployment reports `urlPresent/anonKeyPresent/serviceRoleKeyPresent = true`, the agent can immediately execute the full §5 live matrix (SSRF, stored-XSS render, OAuth decrypt/`v2` re-encrypt where a fixture/admin session is available, publish idempotency, public + admin rendering, dashboard/connected-accounts smoke, log scan) and record evidence here.
+
+---
+
 ## 8. Handoff summary
 
 - **Do:** configure Preview-scoped env (§4.1) for staging `gbgnemlpyykyhpqqbgru`, redeploy `86efe59c`, verify presence + binding, run §5 matrix, record evidence in the RC3 report, return for merge authorization.
