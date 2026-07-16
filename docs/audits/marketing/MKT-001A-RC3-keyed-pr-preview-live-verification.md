@@ -12,6 +12,10 @@
 
 ---
 
+> **UPDATE — 2026-07-16 (superseded by staging verification).** The RC3 CONDITIONAL PASS below reflects the *PR-preview* attempt, which was blocked solely by the Preview branch-scope env gap (see OPS-001 §8b). Per governance decision, **Preview verification was skipped** (not applicable to the `feature → staging → main` release path) and verification moved to the persistent `staging` environment. PR #36 then PR #38 were merged into `staging` (`d6a1bcad`); the staging live matrix **PASSED** for all agent-executable controls (binding `gbgnemlpyykyhpqqbgru`, live stored-XSS sanitization, DB financial lockdown, publish-idempotency ledger, clean logs, 62/62 control tests), with admin-session flows recorded as an operator smoke. **Authoritative outcome: `docs/audits/marketing/OPS-001-preview-environment-configuration-and-verification.md` §9.** MKT-001A is now Engineering/RC/Staging **PASS**; production remains **NO-GO** pending the separate production gate.
+
+---
+
 ## 0. Executive decision
 
 **CONDITIONAL PASS — unchanged. PR #38 stays open. Production remains NO-GO.**

@@ -5,8 +5,9 @@
 **Supersedes next-action of:** `docs/audits/marketing/MKT-001A-RC3-keyed-pr-preview-live-verification.md`
 **Related:** `docs/audits/marketing/MKT-001A-RC2-staging-operator-verification.md`, `docs/audits/environments/04-vercel-production-staging-development-variable-audit.md`
 **Owner:** DevOps / release operator (Vercel + Supabase dashboard access)
-**Status:** OPEN — blocks MKT-001A `PASS`, PR #38 merge, and production release
+**Status:** CLOSED — superseded by governance decision (Preview verification skipped; verification moved to persistent `staging`). See §9.
 **Created:** 2026-07-16
+**Closed:** 2026-07-16
 
 ---
 
@@ -32,7 +33,7 @@ The application renders (static/marketing routes work) and the code loads, but a
 
 ---
 
-## 2. Release status (as of RC3)
+## 2. Release status (updated 2026-07-16 — post staging merge)
 
 | Phase | Status |
 |---|---|
@@ -40,12 +41,14 @@ The application renders (static/marketing routes work) and the code loads, but a
 | MKT-001A Implementation | ✅ PASS |
 | MKT-001A RC | ✅ PASS |
 | MKT-001A RC2 | ✅ PASS (conditional, operator prerequisites) |
-| MKT-001A RC3 | ⚠️ CONDITIONAL PASS |
-| **OPS-001 (this task)** | ⛔ OPEN |
-| Merge (PR #38) | ⛔ Not authorized |
-| Production | ⛔ NO-GO |
+| MKT-001A RC3 | ⚠️ CONDITIONAL PASS (Preview backend absent — superseded) |
+| **OPS-001 (this task)** | ✅ CLOSED — superseded by governance decision (see §9) |
+| Preview verification | ⏭️ Skipped by governance decision (not applicable to release path) |
+| Staging verification | ✅ PASS (agent-executable scope) + operator smoke pending (see §9) |
+| Merge (PR #38) | ✅ Merged into `staging` (`d6a1bcad`) |
+| Production | ⛔ NO-GO — separate production release gate |
 
-No new engineering remediation phase is authorized. The implementation is considered complete pending live confirmation once the environment is configured.
+No new engineering remediation phase is authorized. The implementation is complete; verification was completed on the persistent `staging` environment (§9) rather than the PR-branch preview.
 
 ---
 
@@ -270,3 +273,56 @@ The application code, variable names, alias fallbacks, `NEXT_PUBLIC_*` handling,
 - **Do:** configure Preview-scoped env (§4.1) for staging `gbgnemlpyykyhpqqbgru`, redeploy `86efe59c`, verify presence + binding, run §5 matrix, record evidence in the RC3 report, return for merge authorization.
 - **Do not:** touch Production scope or deployments; place secrets in tracked artifacts; merge before a clean live PASS.
 - **Status stays:** MKT-001A CONDITIONAL PASS; PR #38 open; production NO-GO — until OPS-001 completes.
+
+> **Note (2026-07-16):** the "handoff summary" above reflects the *original* OPS-001 plan (fix the Preview scope). That plan was **superseded** — see §9. Verification was completed on the persistent `staging` environment instead.
+
+---
+
+## 9. Closure — Superseded by Staging Verification (governance decision, 2026-07-16T22:48Z)
+
+### 9.1 Decision
+
+OPS-001 asked an operator to broaden the **Preview** env scope to the PR branch so the PR-preview could run the live matrix. Per the release owner's governance decision, **that Preview-specific configuration is no longer required and OPS-001 is CLOSED as superseded.** Rationale: the release flow is `feature → staging → main`, and the persistent `staging` environment already carries the governed, branch-scoped backend variables (the exact scoping proven in §8b). Preview verification is therefore **not applicable** to the actual release path — the authoritative verification environment is `staging`.
+
+- Preview Verification: **Skipped by governance decision** (superseded by staging verification).
+- The §8b root cause (Preview + git-branch scoping) stands as the reason the PR-preview never had a backend; no code change was or is required.
+
+### 9.2 Merge executed (approved chain preserved)
+
+| Step | Result | Evidence |
+|---|---|---|
+| PR #36 `fix/r1.1-001-booking-date-fallback → staging` | ✅ MERGED | merge commit `3cc0e50c`; all checks green |
+| PR #38 retargeted to `staging` and merged | ✅ MERGED | merge commit `d6a1bcad` @ 2026-07-16T22:05:29Z |
+| PR #38 red check | ℹ️ Non-blocking | *Live internal link crawl* against production `shalean.co.za` (10 pre-existing `/locations/*` 404s) — unrelated to MKT-001A; PR was `UNSTABLE`, not `BLOCKED` |
+| Staging deployment | ✅ READY | `dpl_2vR3R1aHYmc2a1xCMAbGwaPKRgRy` @ `d6a1bcad`, holds the `staging` branch alias |
+
+### 9.3 Staging live verification matrix (executed by agent)
+
+Deployment under test: `dpl_2vR3R1aHYmc2a1xCMAbGwaPKRgRy` @ `d6a1bcad`, branch alias `shalean-platform-git-staging-shalean-cleaning-services.vercel.app` (accessed via temporary `_vercel_share` bypass). Supabase: `gbgnemlpyykyhpqqbgru`.
+
+| Gate | Result | Evidence |
+|---|---|---|
+| Supabase binding | ✅ PASS | `/api/health/environment`: `deployment=staging`, `configuredRef=expectedRef=gbgnemlpyykyhpqqbgru`, `urlHost=gbgnemlpyykyhpqqbgru.supabase.co`, `issues:[]` (not production `tchayecuvzssixyxlvfu`) |
+| Stored XSS (render) | ✅ PASS (live E2E) | Seeded probe promotion `mkt001a-xss-probe` (status `active`) with `<script>`, `<img onerror>`, `javascript:` href, `<iframe>`, `<svg onload>`. Live render kept only `<p><strong>` + text; every payload string absent; `<a>` stripped of `href` and marked `rel="nofollow noopener noreferrer"`. Probe row deleted afterward. |
+| Financial-data lockdown | ✅ PASS (DB) | `promotions` anon/authenticated grants `(none)`; `promotions_public_read_active` dropped; `public_active_promotions` view exists, anon `SELECT` only, exposes **no** `budget_zar`/`budget_spent_zar`/`revenue_generated_zar` |
+| Publish idempotency | ✅ PASS (DB + logic) | `marketing_publish_idempotency` table exists; RLS enabled; unique guard `(provider, idempotency_key)`; anon/authenticated `(none)`, service_role full. Logic: 10 tests pass |
+| SSRF-safe media | ✅ PASS (logic) | `safeRemoteMedia` — 23 tests pass |
+| OAuth encryption keyring | ✅ PASS (logic) | `tokenEncryption` — 11 tests pass |
+| Migrations applied | ✅ PASS | `20260716180000_mkt_001a_promotions_financial_access` + `20260716180100_mkt_001a_publish_idempotency` present on `gbgnemlpyykyhpqqbgru` |
+| Runtime log hygiene | ✅ PASS | 0 errors/warnings/fatals on `d6a1bcad`; **no** `[supabase] client unavailable` config-absent error (the exact error the PR-preview logged); no secret/token leakage |
+| Control suites (merged code) | ✅ 62/62 | `safeRemoteMedia` 23 · `tokenEncryption` 11 · `campaignTermsHtml` 12 · `publishIdempotency` 10 · `googleBusinessPublish` 6 |
+
+### 9.4 Operator smoke — remaining admin-session-gated flows
+
+The following require an authenticated **admin session** + a **sandbox provider target** and were **not** executable from the agent environment (no admin credentials). Their underlying logic (tests) and DB controls are verified in §9.3; these are a live-invocation smoke to run before the production gate:
+
+- [ ] **SSRF via publish** — POST an admin publish request with an unsafe `imageUrl` (localhost/private/metadata/redirect-to-private) → rejected pre-fetch; a valid HTTPS image succeeds.
+- [ ] **OAuth decrypt + `v2` re-encrypt** — reconnect a GBP/Facebook account → token stored in `v2:<keyId>` envelope; existing token (if any) decrypts.
+- [ ] **Live publish idempotency** — duplicate/concurrent publish of one promotion → exactly one external post; ledger shows one logical row.
+- [ ] **Marketing dashboard / Connected Accounts UI** — admin pages render; connect/status surfaces correct.
+
+### 9.5 Resulting status
+
+- MKT-001A — Engineering **PASS**, Release Candidate **PASS**, Staging Verification **PASS** (agent-executable scope; operator smoke §9.4 pending).
+- PR #38 — **Merged into `staging`** (`d6a1bcad`).
+- Production — **NO-GO** until the separate production release gate (prod env-var mapping incl. `MARKETING_OAUTH_ENCRYPTION_KEY` present *before* deploy, prod Supabase identity, migration/recovery plan, deployment ordering, OAuth-key transition, smoke ownership, monitoring, final GO/NO-GO).
