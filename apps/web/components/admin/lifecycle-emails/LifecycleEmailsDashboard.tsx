@@ -136,6 +136,8 @@ export function LifecycleEmailsDashboard({ routePrefix = "/office" }: Props) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [cronLastSuccess, setCronLastSuccess] = useState<string | null>(null);
+  const [cronHealthStatus, setCronHealthStatus] = useState<string | null>(null);
+  const [cronStaleAfterMinutes, setCronStaleAfterMinutes] = useState<number | null>(null);
   const [alerts, setAlerts] = useState<AlertRow[]>([]);
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
 
@@ -185,7 +187,11 @@ export function LifecycleEmailsDashboard({ routePrefix = "/office" }: Props) {
         hasMore?: boolean;
         summary?: Summary;
         settings?: Settings;
-        cron?: { last_success_at?: string | null };
+        cron?: {
+          last_success_at?: string | null;
+          health_status?: string | null;
+          stale_after_minutes?: number | null;
+        };
         alerts?: AlertRow[];
         error?: string;
       }>(`/api/admin/lifecycle-emails?${queryString}`),
@@ -202,6 +208,12 @@ export function LifecycleEmailsDashboard({ routePrefix = "/office" }: Props) {
       setSummary(listJson.summary ?? null);
       setSettings(listJson.settings ?? null);
       setCronLastSuccess(listJson.cron?.last_success_at ?? null);
+      setCronHealthStatus(listJson.cron?.health_status ?? null);
+      setCronStaleAfterMinutes(
+        typeof listJson.cron?.stale_after_minutes === "number"
+          ? listJson.cron.stale_after_minutes
+          : null,
+      );
       setAlerts(listJson.alerts ?? []);
     }
     if (analyticsRes.ok) setAnalytics(analyticsRes.data ?? null);
@@ -290,7 +302,16 @@ export function LifecycleEmailsDashboard({ routePrefix = "/office" }: Props) {
 
   const paused = settings && !settings.emails_enabled;
   const dryRun = settings?.dry_run_enabled ?? false;
-  const staleCron = cronStale(cronLastSuccess);
+  const staleCron =
+    cronHealthStatus === "stale" ||
+    cronHealthStatus === "never_run" ||
+    (cronHealthStatus == null && cronStale(cronLastSuccess));
+  const staleThresholdLabel =
+    cronStaleAfterMinutes != null
+      ? cronStaleAfterMinutes >= 60
+        ? `${Math.round(cronStaleAfterMinutes / 60)}+ hours`
+        : `${cronStaleAfterMinutes}+ minutes`
+      : "expected window";
 
   const dailyChart = useMemo(() => {
     const byDate = new Map<string, number>();
@@ -341,7 +362,8 @@ export function LifecycleEmailsDashboard({ routePrefix = "/office" }: Props) {
 
       {staleCron && (
         <div className="rounded-xl border border-rose-300 bg-rose-50 px-4 py-3 text-sm text-rose-900">
-          booking-lifecycle cron has not succeeded in 30+ minutes. Last success: {fmtTime(cronLastSuccess)}
+          booking-lifecycle cron has not succeeded within the {staleThresholdLabel} health window
+          {cronHealthStatus ? ` (${cronHealthStatus})` : ""}. Last success: {fmtTime(cronLastSuccess)}
         </div>
       )}
 

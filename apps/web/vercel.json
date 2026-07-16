@@ -3,7 +3,7 @@
   "crons": [
     {
       "path": "/api/cron/booking-lifecycle",
-      "schedule": "*/5 * * * *"
+      "schedule": "0 2 * * *"
     },
     {
       "path": "/api/cron/referral-credit-reminders",

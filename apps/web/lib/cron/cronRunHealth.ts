@@ -26,6 +26,44 @@ export type CronRunRow = {
 };
 
 /**
+ * Temporary Hobby-compatible Vercel schedule (once daily ~02:00 UTC).
+ * Not equivalent to the intended five-minute production cadence.
+ */
+export const BOOKING_LIFECYCLE_HOBBY_SCHEDULE = "0 2 * * *";
+
+/**
+ * Deferred Pro / equivalent schedule — restore only after PRE-CRON-PRO-01 gates.
+ * Must not be enabled in vercel.json while the team remains on Hobby.
+ */
+export const BOOKING_LIFECYCLE_PRO_SCHEDULE = "*/5 * * * *";
+
+export const BOOKING_LIFECYCLE_STALE_AFTER_MINUTES = {
+  /** Local / unit / manual-test feedback window */
+  localOrManual: 30,
+  /**
+   * Staging Hobby once-daily: >24h expected gap + Hobby hour-window imprecision.
+   * Suggested: more than 26 hours since last expected success.
+   */
+  hobbyDaily: 26 * 60,
+  /** Future Pro five-minute cadence (PRE-CRON-PRO-01) */
+  proFiveMinute: 30,
+} as const;
+
+/**
+ * Environment-aware stale threshold for booking-lifecycle cron health.
+ * Staging/preview on Hobby daily must not false-alarm after 30 minutes.
+ */
+export function resolveBookingLifecycleCronStaleAfterMinutes(
+  environment?: string,
+): number {
+  const env = (environment ?? "").trim().toLowerCase();
+  if (env === "staging" || env === "preview") {
+    return BOOKING_LIFECYCLE_STALE_AFTER_MINUTES.hobbyDaily;
+  }
+  return BOOKING_LIFECYCLE_STALE_AFTER_MINUTES.localOrManual;
+}
+
+/**
  * Pure classifier for operator-facing cron health (no secrets / raw payloads).
  */
 export function classifyCronRunHealth(params: {
@@ -37,9 +75,10 @@ export function classifyCronRunHealth(params: {
   staleAfterMinutes?: number;
   environment?: string;
 }): CronRunHealthSnapshot {
-  const staleAfterMinutes = params.staleAfterMinutes ?? 30;
-  const now = params.nowMs ?? Date.now();
   const env = params.environment ?? "unknown";
+  const staleAfterMinutes =
+    params.staleAfterMinutes ?? resolveBookingLifecycleCronStaleAfterMinutes(env);
+  const now = params.nowMs ?? Date.now();
 
   const sorted = [...params.rows].sort(
     (a, b) => Date.parse(b.created_at) - Date.parse(a.created_at),
@@ -148,6 +187,10 @@ export async function fetchCronRunHealth(
     .order("created_at", { ascending: false })
     .limit(20);
 
+  const environment = opts?.environment ?? "unknown";
+  const staleAfterMinutes =
+    opts?.staleAfterMinutes ?? resolveBookingLifecycleCronStaleAfterMinutes(environment);
+
   if (error) {
     return {
       jobName,
@@ -157,8 +200,8 @@ export async function fetchCronRunHealth(
       lastFailureAt: null,
       lastStatus: null,
       lastMessage: `query_error:${error.message.slice(0, 120)}`,
-      staleAfterMinutes: opts?.staleAfterMinutes ?? 30,
-      environment: opts?.environment ?? "unknown",
+      staleAfterMinutes,
+      environment,
     };
   }
 
@@ -166,7 +209,7 @@ export async function fetchCronRunHealth(
     jobName,
     rows: (data ?? []) as CronRunRow[],
     lockHeld: opts?.lockHeld,
-    staleAfterMinutes: opts?.staleAfterMinutes,
-    environment: opts?.environment,
+    staleAfterMinutes,
+    environment,
   });
 }

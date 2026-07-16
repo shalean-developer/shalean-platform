@@ -44,7 +44,7 @@ const admin = createClient(url, key, { auth: { persistSession: false } });
 const monitored = [
   { job: "generate-recurring-bookings", maxAgeMin: 30 },
   { job: "charge-recurring-bookings", maxAgeMin: 30 },
-  { job: "booking-lifecycle", maxAgeMin: 90 },
+  { job: "booking-lifecycle", maxAgeMin: 26 * 60 }, // Hobby daily staging cadence (+ buffer)
   { job: "payment-recovery", maxAgeMin: 90 },
   { job: "retry-failed-jobs", maxAgeMin: 90 },
   { job: "dispatch-timeouts", maxAgeMin: 90 },

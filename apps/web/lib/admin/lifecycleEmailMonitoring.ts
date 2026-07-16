@@ -5,6 +5,7 @@ import {
 } from "@/lib/admin/notificationMonitoring";
 import {
   classifyCronRunHealth,
+  resolveBookingLifecycleCronStaleAfterMinutes,
   type CronRunHealthSnapshot,
   type CronRunRow,
 } from "@/lib/cron/cronRunHealth";
@@ -22,7 +23,6 @@ export const LIFECYCLE_ALERT_KEYS = [
 export type LifecycleAlertKey = (typeof LIFECYCLE_ALERT_KEYS)[number];
 
 const COOLDOWN_MINUTES = 15;
-const CRON_STALE_MINUTES = 30;
 const FAILURE_SPIKE_WINDOW_MINUTES = 30;
 const FAILURE_SPIKE_THRESHOLD = 5;
 const BACKLOG_THRESHOLD = 100;
@@ -122,12 +122,14 @@ export async function evaluateLifecycleEmailAlerts(
       : null;
   const recentFailures = failuresRes.count ?? 0;
   const cronRows = (cronRes.data ?? []) as CronRunRow[];
+  const deploymentEnv = resolveDeploymentEnvironment();
+  const cronStaleAfterMinutes = resolveBookingLifecycleCronStaleAfterMinutes(deploymentEnv);
   const cronHealth = classifyCronRunHealth({
     jobName: "booking-lifecycle",
     rows: cronRows,
     nowMs: now,
-    staleAfterMinutes: CRON_STALE_MINUTES,
-    environment: resolveDeploymentEnvironment(),
+    staleAfterMinutes: cronStaleAfterMinutes,
+    environment: deploymentEnv,
   });
   const lastCronSuccessAt = cronHealth.lastSuccessAt;
   const lastCronFailureAt = cronHealth.lastFailureAt;
@@ -169,16 +171,20 @@ export async function evaluateLifecycleEmailAlerts(
     }
   }
 
-  const cronStale =
-    !lastCronSuccessAt || now - Date.parse(lastCronSuccessAt) > CRON_STALE_MINUTES * 60_000;
-  if (cronStale) {
+  // Distinguish failed vs stale: do not mask genuine failures as schedule lag.
+  if (cronHealth.status === "stale" || cronHealth.status === "never_run") {
     alertsFired.push("lifecycle_cron_stale");
     await fireLifecycleAlert({
       admin,
       alertKey: "lifecycle_cron_stale",
       severity: "critical",
-      message: `booking-lifecycle cron has not succeeded in ${CRON_STALE_MINUTES}+ minutes`,
-      extra: { lastCronSuccessAt, staleMinutes: CRON_STALE_MINUTES },
+      message: `booking-lifecycle cron has not succeeded in ${cronStaleAfterMinutes}+ minutes (${cronHealth.status})`,
+      extra: {
+        lastCronSuccessAt,
+        staleMinutes: cronStaleAfterMinutes,
+        cronHealthStatus: cronHealth.status,
+        environment: deploymentEnv,
+      },
     });
   }
 
