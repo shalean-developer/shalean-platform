@@ -106,10 +106,20 @@ describe("indexOccupyingBookingsByCleanerId + overlap", () => {
 });
 
 describe("bookingMatchesEligibilityDate", () => {
-  it("matches booking_date over date", () => {
+  it("matches on the authoritative `date` column over a legacy `booking_date`", () => {
+    // Production `bookings` has no `booking_date` column; `date` is authoritative.
     expect(
       bookingMatchesEligibilityDate(
-        { booking_date: "2026-05-10", date: "2026-01-01" } as { booking_date?: string; date?: string },
+        { date: "2026-05-10", booking_date: "2026-01-01" } as { booking_date?: string; date?: string },
+        "2026-05-10",
+      ),
+    ).toBe(true);
+  });
+
+  it("falls back to a legacy in-memory `booking_date` when `date` is absent", () => {
+    expect(
+      bookingMatchesEligibilityDate(
+        { booking_date: "2026-05-10" } as { booking_date?: string; date?: string },
         "2026-05-10",
       ),
     ).toBe(true);

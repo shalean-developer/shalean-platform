@@ -30,9 +30,9 @@ function bookingRowDateYmd(row: {
   date?: string | null;
   booking_date?: string | null;
 }): string | null {
-  const a = row.booking_date?.trim() ?? "";
   const b = row.date?.trim() ?? "";
-  return normalizeDateYmd(a || b) || null;
+  const a = row.booking_date?.trim() ?? "";
+  return normalizeDateYmd(b || a) || null;
 }
 
 function bookingWindowMinutes(row: {
@@ -176,7 +176,7 @@ export async function runBookingLockValidation(body: Record<string, unknown>): P
 
     const { data: bookingRows, error: bookErr } = await admin
       .from("bookings")
-      .select("id, status, date, booking_date, time, start_time, end_time, cleaner_id")
+      .select("id, status, date, time, start_time, end_time, cleaner_id")
       .eq("cleaner_id", cleanerId)
       .in("status", ["confirmed", "pending"]);
 

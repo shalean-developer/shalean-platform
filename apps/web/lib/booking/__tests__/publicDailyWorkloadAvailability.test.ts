@@ -45,7 +45,7 @@ function adminWithBookings(rows: Array<Record<string, unknown>>): SupabaseClient
           return {
             in() {
               return {
-                or() {
+                eq() {
                   return Promise.resolve({ data: rows, error: null });
                 },
               };

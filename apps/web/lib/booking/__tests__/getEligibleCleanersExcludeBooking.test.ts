@@ -74,7 +74,7 @@ function buildAdminMock(): SupabaseClient {
         return {
           select: () => ({
             in: () => ({
-              or: () =>
+              eq: () =>
                 Promise.resolve({
                   data: [
                     {
