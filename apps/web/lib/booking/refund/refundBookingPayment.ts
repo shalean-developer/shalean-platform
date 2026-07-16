@@ -24,7 +24,9 @@ import {
   refundMakerCheckerEnabled,
 } from "@/lib/booking/refund/refundMakerChecker";
 import { assertRefundReconciliation } from "@/lib/booking/refund/refundReconciliation";
+import { buildRefundBookingSelect } from "@/lib/booking/refund/refundBookingSelect";
 import { recordGatewayRefund } from "@/lib/booking/refund/recordGatewayRefund";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import { refundPaystackTransaction } from "@/lib/paystack/refundPaystackTransaction";
@@ -105,18 +107,18 @@ export async function refundBookingPayment(
   admin: SupabaseClient,
   params: RefundBookingParams,
 ): Promise<RefundBookingPaymentResult> {
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data, error } = await admin
     .from("bookings")
-    .select(
-      "id, status, payment_status, paystack_reference, amount_paid_cents, total_paid_cents, total_paid_zar, refunded_at, refund_status, monthly_invoice_id, user_id, customer_email, booking_snapshot, currency",
-    )
+    .select(buildRefundBookingSelect(ownershipColumn))
     .eq("id", params.bookingId)
     .maybeSingle();
 
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: "booking_not_found" };
 
-  const row = data as {
+  // Dynamic ownership select is a runtime string; narrow via unknown.
+  const row = data as unknown as {
     id: string;
     status: string | null;
     payment_status: string | null;
@@ -127,7 +129,8 @@ export async function refundBookingPayment(
     refunded_at: string | null;
     refund_status: string | null;
     monthly_invoice_id: string | null;
-    user_id: string | null;
+    customer_id?: string | null;
+    user_id?: string | null;
     customer_email: string | null;
     booking_snapshot: unknown;
     currency: string | null;
@@ -349,6 +352,7 @@ async function submitAndFinalizeRefund(
     paystack_reference: string | null;
     booking_snapshot: unknown;
     currency: string | null;
+    customer_id?: string | null;
     user_id?: string | null;
     customer_email?: string | null;
   },

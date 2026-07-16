@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 
 import { decideRefundAmount, maskPaymentReference } from "@/lib/booking/refund/refundRules";
@@ -15,6 +17,10 @@ import {
   evaluateRefundMakerChecker,
   refundMakerCheckerEnabled,
 } from "@/lib/booking/refund/refundMakerChecker";
+import {
+  buildRefundBookingSelect,
+  buildRefundClawbackBookingSelect,
+} from "@/lib/booking/refund/refundBookingSelect";
 import {
   initRefundWorkflow,
   priorSucceededRefundedCents,
@@ -189,6 +195,85 @@ describe("Princess PR D maker-checker", () => {
     });
     expect(g.ok && g.mode).toBe("approve");
   });
+
+  it("rejects amount mutation on approval (immutable proposal snapshot)", () => {
+    const g = evaluateRefundMakerChecker({
+      enabled: true,
+      adminUserId: "admin-b",
+      proposalId: "p1",
+      pendingProposal: {
+        id: "p1",
+        proposed_by: "admin-a",
+        expires_at: new Date(Date.now() + 60_000).toISOString(),
+        amount_cents: 10_000,
+      },
+      requestedAmountCents: 15_000,
+    });
+    expect(g.ok).toBe(false);
+    if (!g.ok) expect(g.code).toBe("proposal_mismatch");
+  });
+
+  it("disabled/missing config uses direct mode (no silent bypass of amount rules)", () => {
+    delete process.env.REFUND_MAKER_CHECKER;
+    delete process.env.PAYOUT_MAKER_CHECKER;
+    expect(refundMakerCheckerEnabled()).toBe(false);
+    const g = evaluateRefundMakerChecker({
+      enabled: false,
+      adminUserId: "admin-a",
+      pendingProposal: null,
+      requestedAmountCents: 10_000,
+    });
+    expect(g.ok && g.mode).toBe("direct");
+  });
+
+  it("explicit false disables even when PAYOUT_MAKER_CHECKER is true", () => {
+    process.env.REFUND_MAKER_CHECKER = "false";
+    process.env.PAYOUT_MAKER_CHECKER = "true";
+    expect(refundMakerCheckerEnabled()).toBe(false);
+  });
+});
+
+describe("Princess PR D schema-aware ownership select", () => {
+  it("builds customer_id select for current staging schema", () => {
+    const select = buildRefundBookingSelect("customer_id");
+    expect(select).toContain("customer_id");
+    expect(select).not.toMatch(/(^|,\s*)user_id(,|$)/);
+  });
+
+  it("builds legacy user_id select only when schema requires it", () => {
+    const select = buildRefundBookingSelect("user_id");
+    expect(select).toContain("user_id");
+    expect(select).not.toContain("customer_id");
+  });
+
+  it("clawback select follows the same ownership column", () => {
+    expect(buildRefundClawbackBookingSelect("customer_id")).toBe(
+      "id, customer_id, customer_email, status, refunded_at, refund_status",
+    );
+    expect(buildRefundClawbackBookingSelect("user_id")).toBe(
+      "id, user_id, customer_email, status, refunded_at, refund_status",
+    );
+  });
+
+  it("refundBookingPayment source resolves ownership and does not hardcode bookings.user_id", () => {
+    const src = readFileSync(
+      resolve(__dirname, "../refundBookingPayment.ts"),
+      "utf8",
+    );
+    expect(src).toMatch(/resolveBookingOwnershipColumn/);
+    expect(src).toMatch(/buildRefundBookingSelect\(ownershipColumn\)/);
+    // Legacy hardcoded select fragment must not return.
+    expect(src).not.toContain("monthly_invoice_id, user_id, customer_email");
+    expect(src).not.toMatch(/\.select\(\s*["'][^"']*\buser_id\b[^"']*["']/);
+  });
+
+  it("clawback source resolves ownership and does not hardcode bookings.user_id", () => {
+    const src = readFileSync(resolve(__dirname, "../../../../lib/referrals/clawback.ts"), "utf8");
+    expect(src).toMatch(/resolveBookingOwnershipColumn/);
+    expect(src).toMatch(/buildRefundClawbackBookingSelect\(ownershipColumn\)/);
+    expect(src).toMatch(/bookingCustomerKey/);
+    expect(src).not.toContain('.select("id, user_id, customer_email');
+  });
 });
 
 describe("Princess PR D refund snapshot accumulation", () => {
@@ -231,21 +316,30 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
     vi.resetModules();
     delete process.env.REFUND_MAKER_CHECKER;
     delete process.env.PAYOUT_MAKER_CHECKER;
+    vi.doMock("@/lib/customer/customerBookingsForUser", () => ({
+      resolveBookingOwnershipColumn: vi.fn(async () => "customer_id" as const),
+      resetBookingOwnershipColumnCacheForTests: vi.fn(),
+    }));
   });
 
   function makeAdminMock(initial: Record<string, unknown>) {
     let row = { ...initial };
     const updates: Record<string, unknown>[] = [];
     const inserts: Record<string, unknown>[] = [];
+    const selectCalls: string[] = [];
 
     const from = (table: string) => {
       if (table === "bookings") {
         return {
-          select: () => ({
-            eq: () => ({
-              maybeSingle: async () => ({ data: row, error: null }),
-            }),
-          }),
+          select: (cols?: string) => {
+            if (typeof cols === "string") selectCalls.push(cols);
+            return {
+              eq: () => ({
+                maybeSingle: async () => ({ data: row, error: null }),
+              }),
+              limit: async () => ({ data: [row], error: null }),
+            };
+          },
           update: (patch: Record<string, unknown>) => ({
             eq: async () => {
               updates.push(patch);
@@ -282,10 +376,11 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
       getRow: () => row,
       updates,
       inserts,
+      selectCalls,
     };
   }
 
-  it("records successful full refund with ledger line", async () => {
+  it("records successful full refund with ledger line (customer_id ownership)", async () => {
     vi.doMock("@/lib/paystack/refundPaystackTransaction", () => ({
       refundPaystackTransaction: vi.fn(async () => ({
         ok: true,
@@ -311,7 +406,7 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
       refunded_at: null,
       refund_status: null,
       monthly_invoice_id: null,
-      user_id: "u1",
+      customer_id: "cust-1",
       customer_email: "c@example.com",
       booking_snapshot: {},
       currency: "ZAR",
@@ -333,6 +428,8 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
     expect(admin.inserts.length).toBe(1);
     expect(String(admin.inserts[0]?.gateway_reference)).toMatch(/^refund:psk_charge_1:/);
     expect(admin.inserts[0]?.settlement_status).toBe("reversed");
+    expect(admin.selectCalls.some((c) => c.includes("customer_id"))).toBe(true);
+    expect(admin.selectCalls.every((c) => !/(^|,\s*)user_id(,|$)/.test(c))).toBe(true);
   });
 
   it("supports cumulative partial refunds", async () => {
@@ -361,7 +458,7 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
       refunded_at: null,
       refund_status: null,
       monthly_invoice_id: null,
-      user_id: "u1",
+      customer_id: "cust-1",
       customer_email: "c@example.com",
       booking_snapshot: {},
       currency: "ZAR",
@@ -411,7 +508,7 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
       refunded_at: null,
       refund_status: null,
       monthly_invoice_id: null,
-      user_id: null,
+      customer_id: null,
       customer_email: null,
       booking_snapshot: {},
       currency: "ZAR",
@@ -450,7 +547,7 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
       refunded_at: null,
       refund_status: null,
       monthly_invoice_id: null,
-      user_id: null,
+      customer_id: null,
       customer_email: null,
       booking_snapshot: {},
       currency: "ZAR",
@@ -496,7 +593,7 @@ describe("Princess PR D refundBookingPayment integration (mocked provider)", () 
       refunded_at: null,
       refund_status: null,
       monthly_invoice_id: null,
-      user_id: null,
+      customer_id: null,
       customer_email: null,
       booking_snapshot: {},
       currency: "ZAR",
