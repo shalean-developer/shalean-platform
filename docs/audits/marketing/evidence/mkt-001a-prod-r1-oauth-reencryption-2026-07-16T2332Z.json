@@ -1,0 +1,55 @@
+{
+  "artifact": "MKT-001A-PROD-R1 — OAuth re-encryption failure investigation",
+  "mode": "read-only; code review + staging runtime logs + staging DB envelope inspection (no secret values)",
+  "capturedAt": "2026-07-16T23:32Z",
+  "smokeResultsFromOperator": {
+    "ssrfViaPublish": "PASS",
+    "oauthReEncryption": "FAIL",
+    "publishIdempotency": "PASS",
+    "connectedAccountsUi": "PASS"
+  },
+  "stagingDeploymentUnderTest": "dpl_2vR3R1aHYmc2a1xCMAbGwaPKRgRy (branch staging @ d6a1bcad)",
+  "runtimeLogEvidence": {
+    "gbpEventsLast24h": [
+      {
+        "time": "2026-07-16T23:26:34Z",
+        "route": "GET /api/oauth/google",
+        "status": 200,
+        "event": "[gbp] oauth_start",
+        "redirectUri": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app/api/oauth/google/callback"
+      }
+    ],
+    "callbackInvocation": "NONE — no [gbp] oauth_token_exchange_ok / oauth_callback_failed / oauth_state_mismatch / oauth_denied / save_connection_* on staging",
+    "stagingErrors": "none for OAuth; the only error-level lines in window are from the OLD PR preview dpl_2gAsyztv1ZZaDwCDq9ofYmXBmT3T (fix/mkt-001a-security-hardening) '[supabase] Admin client unavailable' — unrelated to staging OAuth"
+  },
+  "stagingDbEvidence": {
+    "table": "social_accounts",
+    "rowCount": 0,
+    "interpretation": "no Google Business connection was ever persisted; the reconnect did not complete a save"
+  },
+  "flowMap": [
+    "GET /api/oauth/google (admin-gated) -> getGoogleOAuthConfig() builds redirect_uri from GOOGLE_REDIRECT_URI or NEXT_PUBLIC_SITE_URL -> logs oauth_start -> 302 to Google authorize URL",
+    "Google authorize page (consent) -> should 302 back to redirect_uri with ?code&state",
+    "GET /api/oauth/google/callback -> validate state cookie -> exchangeGoogleAuthorizationCode -> saveGoogleBusinessConnection -> encryptSecret writes v2:<keyId> to social_accounts"
+  ],
+  "failingStep": "Google authorization / redirect step, BEFORE the callback. oauth_start fires, then the browser never returns to /api/oauth/google/callback (no callback log, no token exchange, no encryption, no DB write).",
+  "exactError": "Not present in application logs — the rejection occurs on Google's domain. Definitive artifact must be captured by the operator: the Google error screen and/or the browser address bar (expected: 'Error 400: redirect_uri_mismatch'). App logs show only oauth_start with the staging callback redirectUri and nothing after.",
+  "rootCauseClassification": {
+    "newEncryptionKey": "NOT implicated — encryption never reached; MARKETING_OAUTH_ENCRYPTION_KEY IS present on staging (Preview (staging) record). Even a successful connect would encrypt fine.",
+    "legacyTokenMigration": "NOT implicated — social_accounts is empty; no legacy/v1 token to migrate.",
+    "googleOauth": "IMPLICATED — but at the OAuth CLIENT CONFIGURATION layer (authorized redirect URI), not app code.",
+    "facebookOauth": "NOT applicable — no Facebook OAuth flow exists; Facebook publishing uses a static FACEBOOK_PAGE_ACCESS_TOKEN. 'OAuth re-encryption' concerns Google Business only.",
+    "environmentConfiguration": "ROOT CAUSE (high confidence) — the staging callback URL is not registered as an Authorized redirect URI on the shared Google OAuth client (GOOGLE_CLIENT_ID). GOOGLE_REDIRECT_URI is Production-scoped only; staging derives its redirect_uri from NEXT_PUBLIC_SITE_URL, a URL the Google client does not authorize.",
+    "implementationItself": "NOT implicated — initiate + callback + token exchange + encryptSecret paths are correct; SSRF/idempotency/UI smokes passed; 62/62 unit tests incl. tokenEncryption 11."
+  },
+  "confirmationStep": "Operator re-runs Connect on staging and captures the Google error page / browser URL; and/or checks the Google Cloud OAuth client 'Authorized redirect URIs' for the staging callback URL.",
+  "remediationDirection": [
+    "Register the staging callback URL 'https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app/api/oauth/google/callback' in the Google OAuth client Authorized redirect URIs (or provision a dedicated staging Google OAuth test client and scope GOOGLE_CLIENT_ID/SECRET/GOOGLE_REDIRECT_URI to Preview (staging)).",
+    "Optionally set GOOGLE_REDIRECT_URI explicitly on the Preview (staging) scope so the redirect URI is deterministic rather than derived from NEXT_PUBLIC_SITE_URL.",
+    "Leave production GOOGLE_REDIRECT_URI (Production-only) unchanged.",
+    "Re-run ONLY the OAuth re-encryption smoke on staging; expect callback logs oauth_token_exchange_ok -> save_connection_ok and social_accounts.access_token/refresh_token stored as v2:<currentKeyId>."
+  ],
+  "verifyEnvelopeSql": "select provider, status, health, (split_part(access_token,':',1)||':'||split_part(access_token,':',2)) as access_envelope, (split_part(refresh_token,':',1)||':'||split_part(refresh_token,':',2)) as refresh_envelope from social_accounts;",
+  "codeChangeIndicated": false,
+  "gateDecision": "NO-GO (unchanged). MKT-001A NOT reopened. Blocker tracked as MKT-001A-PROD-R1."
+}

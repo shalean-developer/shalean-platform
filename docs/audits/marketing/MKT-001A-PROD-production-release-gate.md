@@ -62,6 +62,17 @@ If the operator elects to **formally defer** any item, record the deferral + rat
 
 > **Status update (2026-07-16T23:14Z):** the earlier blocker for this smoke (missing marketing encryption key on the staging preview) is **resolved** — staging now carries a branch-scoped `MARKETING_OAUTH_ENCRYPTION_KEY` (`Preview (staging)`) plus a verified Supabase binding, so all four checks are now **runnable on staging**. They remain **operator-gated**: each needs an authenticated admin session + a sandbox provider target, which the automation environment does not have. Per governance authorization (2026-07-16), the **operator will run these four checks on staging and record results here** before the §5 GO actions begin.
 
+**Operator smoke results (2026-07-16):**
+
+| Check | Result | Impact |
+|---|---|---|
+| SSRF via Publish | ✅ PASS | complete |
+| **OAuth Re-encryption** | ❌ **FAIL** | **release blocker** |
+| Publish Idempotency | ✅ PASS | complete |
+| Connected Accounts UI | ✅ PASS | complete |
+
+The OAuth re-encryption failure is investigated in **`docs/audits/marketing/MKT-001A-PROD-R1-oauth-reencryption-investigation.md`** (evidence: `evidence/mkt-001a-prod-r1-oauth-reencryption-2026-07-16T2332Z.json`). Root cause (high confidence): the **staging Google Business OAuth callback URL is not an Authorized redirect URI on the shared Google OAuth client**, so Google rejects the authorization request *before* the callback runs — the encryption key, legacy migration, Facebook, and the application code are **not** implicated. This is an OAuth-client/environment configuration gap, not a code defect. Remediation is config-only (register the staging redirect URI or provision a dedicated staging OAuth client), after which **only** the OAuth re-encryption check is re-run on staging. This does **not** reopen MKT-001A.
+
 ### 3.2 Production environment variables (confirm BEFORE deploy)
 
 Production runs on **live** keys — treat every change as customer-facing. Confirm on the Vercel **Production** scope (values never in git/logs/chat):
@@ -173,7 +184,7 @@ Migrations are forward-only; rollback is code re-promote + targeted grant/policy
 
 ## 9. GO / NO-GO checklist (final gate)
 
-- [ ] §3.1 operator smoke green on staging (or formally deferred + rationale recorded)
+- [ ] §3.1 operator smoke green on staging (or formally deferred + rationale recorded) — ⛔ **BLOCKED:** OAuth Re-encryption FAILED; see `MKT-001A-PROD-R1-oauth-reencryption-investigation.md` (staging Google OAuth redirect-URI not authorized). SSRF / Idempotency / Connected-UI passed.
 - [ ] §3.2 production `MARKETING_OAUTH_ENCRYPTION_KEY` (+ provider creds if publishing) confirmed present
 - [ ] §3.3 engineering sign-off + `staging → main` diff scope confirmed
 - [ ] §4 pre-apply production snapshot captured
@@ -182,7 +193,7 @@ Migrations are forward-only; rollback is code re-promote + targeted grant/policy
 - [ ] §7 verification plan owner assigned
 - [ ] Final decision recorded here: **GO** / **CONDITIONAL** / **NO-GO**
 
-**Current decision: NO-GO** (prerequisites outstanding). On a clean GO execution + §7 PASS, **MKT-001A closes** and MKT-001B is unblocked.
+**Current decision: NO-GO** (prerequisites outstanding). The active blocker is the **§3.1 OAuth Re-encryption smoke FAILURE** (tracked in `MKT-001A-PROD-R1-oauth-reencryption-investigation.md`); the §3.2 production key scope remediation is also still open. On a clean GO execution + §7 PASS, **MKT-001A closes** and MKT-001B is unblocked.
 
 ---
 
