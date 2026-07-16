@@ -92,7 +92,8 @@ Method: SHA-256 hash compare of the historical fixture against local secret file
 | Replacement fixture | `Authorization: "Bearer customer-session-token"` present |
 | `git grep` on HEAD for real three-part `eyJ…` tokens in source | Only truncated placeholders (`eyJ...`) in e2e docs / `.env.example`; lockfile integrity hashes are false substring hits |
 | Application / cron / migration logic | **Unchanged** by this remediation pass |
-| Other PR checks | vitest **SUCCESS**, migration-governance **SUCCESS**, Vercel **SUCCESS**; GG **FAILURE** only |
+| Other PR checks (pre-rewrite reviewed HEAD) | vitest **SUCCESS**, migration-governance **SUCCESS**, Vercel **SUCCESS**; GG **FAILURE** (history-only) |
+| Other PR checks (post-rewrite `9056b396…`) | GG **PASS**, vitest **PASS**, migration-governance **PASS**, Vercel **PASS** |
 
 ---
 
@@ -119,9 +120,9 @@ Method: SHA-256 hash compare of the historical fixture against local secret file
 | Item | Status |
 |------|--------|
 | Required check name | `GitGuardian Security Checks` |
-| HEAD conclusion | **FAILURE** |
-| Other incidents on PR | None reported beyond `34868884` |
-| Merge-satisfying? | **No** |
+| Pre-rewrite HEAD conclusion | **FAILURE** (history contained `bdf96849…`) |
+| Post-rewrite HEAD (`9056b396…`) conclusion | **PASS** / SUCCESS |
+| Merge-satisfying? | **Yes** (after rewrite) |
 
 ---
 
