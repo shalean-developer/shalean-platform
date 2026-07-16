@@ -30,6 +30,7 @@ import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { addDaysYmd, compareYmd } from "@/lib/recurring/johannesburgCalendar";
 import { describeBookingOperationalState } from "@/lib/booking/describeBookingOperationalState";
 import { frequencyLabel, formatRecurringScheduleLine } from "@/lib/recurring/formatRecurringSchedule";
+import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
 import type { CustomerRecurringPlanOption } from "@/lib/recurring/customerRecurringPlanOptions";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { cn } from "@/lib/utils";
@@ -446,6 +447,19 @@ export default function AccountRecurringPage() {
                           <p className="font-semibold tabular-nums text-gray-900">
                             R {Math.round(Number(r.price) || 0).toLocaleString("en-ZA")}
                           </p>
+                          {(() => {
+                            const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                              frequency: r.frequency,
+                              daysOfWeek: r.days_of_week,
+                              pricePerVisitZar: Number(r.price) || 0,
+                            });
+                            return (
+                              <p className="mt-1 text-xs text-gray-500">
+                                ~{visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month · est. R
+                                {estimatedMonthlyZar.toLocaleString("en-ZA")}/month
+                              </p>
+                            );
+                          })()}
                         </div>
                         {r.start_date ? (
                           <div>

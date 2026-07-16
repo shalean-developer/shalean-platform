@@ -1,0 +1,35 @@
+{
+  "ticket": "BEA-OPS-001+BEA-PAYOUT-001",
+  "started": "2026-07-16T15:22:00.000Z",
+  "productionTouched": false,
+  "branch": "beaulla/remediation-phase2-operational-defects",
+  "live_probe": {
+    "ran": false,
+    "reason": "staging.keys.env not available in agent environment",
+    "script": "scripts/env/beaulla-recurring-generator-staging-probe.mjs"
+  },
+  "code_fixes": {
+    "BEA-OPS-001": {
+      "root_cause": "skipped_plans>0 marked cron_runs as error, starving last_success_at and triggering false may-be-down after 30m",
+      "fix": "hard failure = failed>0 only; plan skips amber warn; empty windows already excluded from skipped_plans"
+    },
+    "BEA-PAYOUT-001": {
+      "root_cause": "complete path did not stamp cleaner_id; ensureCleanerEarningsLedger skipped no_cleaner; office Visits skip zero allocations",
+      "fix": "stamp cleaner_id/payout_owner on solo complete (lifecycle + booking-lifecycle cron); ledger falls back to payout_owner"
+    }
+  },
+  "unit_tests": {
+    "passed": 12,
+    "files": [
+      "apps/web/lib/recurring/__tests__/recurringGeneratorRunSummary.test.ts",
+      "apps/web/lib/payout/__tests__/ensureCleanerEarningsLedger.test.ts",
+      "apps/web/lib/cleaner/__tests__/runCleanerBookingLifecycleAction.completionOwnerStamp.test.ts"
+    ]
+  },
+  "operator_staging_actions": [
+    "Run node scripts/env/beaulla-recurring-generator-staging-probe.mjs with staging secrets",
+    "If no cron_runs: repair staging pg_cron via apps/web/scripts/print-repair-generate-recurring-pg-cron.sql.mjs using staging Preview URL + staging CRON_SECRET (never production)",
+    "Align cron_http_targets.cron_secret with Vercel Preview CRON_SECRET (sync-cron-secret-to-supabase.mjs pattern)",
+    "Backfill historic completed bookings with null cleaner_id (admin assign / targeted staging SQL) if Visits remain 0"
+  ]
+}

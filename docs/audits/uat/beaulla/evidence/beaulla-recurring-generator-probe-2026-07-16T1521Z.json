@@ -1,0 +1,18 @@
+{
+  "ticket": "BEA-OPS-001",
+  "started": "2026-07-16T15:21:55.002Z",
+  "stagingBaseUrl": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+  "expectedStagingRef": "gbgnemlpyykyhpqqbgru",
+  "productionRefForbidden": "tchayecuvzssixyxlvfu",
+  "productionTouched": false,
+  "scheduler": "supabase_pg_cron_not_vercel_json",
+  "invokeCron": false,
+  "checks": [
+    {
+      "name": "staging_supabase_creds",
+      "ok": false,
+      "detail": "missing"
+    }
+  ],
+  "health": null
+}

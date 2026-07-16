@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   displayCustomerBookingReference,
+  displayCustomerPaymentReference,
   formatCustomerBookingTotalPaid,
   isCustomerBookingReference,
   customerAccountBookingReference,
@@ -16,6 +17,12 @@ describe("customerBookingReference", () => {
   it("rejects Paystack temp refs", () => {
     expect(isCustomerBookingReference("bv2_1710000000_abc123")).toBe(false);
     expect(displayCustomerBookingReference({ bookingReference: "bv2_1710000000_abc123" })).toBeNull();
+  });
+
+  it("formats customer payment refs as PAY-######", () => {
+    expect(displayCustomerPaymentReference("bv2_1710000000_81cp6m")).toBe("PAY-81CP6M");
+    expect(displayCustomerPaymentReference("PAY-81CP6M")).toBe("PAY-81CP6M");
+    expect(displayCustomerPaymentReference("")).toBe("—");
   });
 
   it("formats totals without a space after R", () => {

@@ -30,6 +30,8 @@ import {
   redirectToBookingV2Success,
 } from "@/lib/booking-v2/bookingV2PaymentRedirect";
 import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
+import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
+import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurringScheduleOptions";
 
 // ??? Auth Form ?????????????????????????????????????????????????????????????????
 
@@ -781,9 +783,30 @@ function PaymentSection({ user }: { user: User }) {
             </div>
           ) : null}
           <div className="flex items-center justify-between text-base font-bold">
-            <span className="text-slate-800">Total to pay</span>
+            <span className="text-slate-800">
+              {values.bookingType === "recurring" ? "Pay today (this visit)" : "Total to pay"}
+            </span>
             <span className="text-blue-700">R {payTotal.toLocaleString("en-ZA")}</span>
           </div>
+          {values.bookingType === "recurring" && values.recurringFrequency ? (
+            <p className="text-xs text-slate-500">
+              {(() => {
+                const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                  frequency: values.recurringFrequency,
+                  daysOfWeek: values.recurringDays ?? [],
+                  pricePerVisitZar: payTotal,
+                });
+                return (
+                  <>
+                    {recurringFrequencyLabel(values.recurringFrequency)} · about {visitsPerMonth}{" "}
+                    visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated monthly total R
+                    {estimatedMonthlyZar.toLocaleString("en-ZA")}. Future visits bill at the same
+                    per-visit price (or on your monthly invoice if enabled).
+                  </>
+                );
+              })()}
+            </p>
+          ) : null}
         </div>
       </div>
 

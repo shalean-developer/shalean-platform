@@ -61,7 +61,7 @@ export async function resendBookingConfirmationEmails(
   const { data: row, error } = await supabase
     .from("bookings")
     .select(
-      "id, customer_email, paystack_reference, amount_paid_cents, booking_snapshot, assignment_type, fallback_reason, selected_cleaner_id, date, time, location, suburb, service, service_slug",
+      "id, customer_email, paystack_reference, amount_paid_cents, booking_snapshot, assignment_type, fallback_reason, selected_cleaner_id, cleaner_id, date, time, location, suburb, service, service_slug, booking_reference, extras, selected_extras, booking_type, recurring_frequency, recurring_days",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -98,11 +98,13 @@ export async function resendBookingConfirmationEmails(
 
   let assignedCleanerName: string | null = null;
   const selectedCleanerId = String(head.selected_cleaner_id ?? "").trim();
-  if (selectedCleanerId) {
+  const assignedCleanerId = String(head.cleaner_id ?? "").trim();
+  const cleanerLookupId = assignedCleanerId || selectedCleanerId;
+  if (cleanerLookupId) {
     const { data: cleanerRow } = await supabase
       .from("cleaners")
       .select("full_name")
-      .eq("id", selectedCleanerId)
+      .eq("id", cleanerLookupId)
       .maybeSingle();
     const name =
       cleanerRow && typeof cleanerRow === "object"
@@ -117,6 +119,7 @@ export async function resendBookingConfirmationEmails(
     customerEmail: resolvedEmail,
     snapshot,
     bookingId,
+    bookingReference: String(head.booking_reference ?? "").trim() || null,
     assignmentType: String(head.assignment_type ?? "").trim() || null,
     fallbackReason: String(head.fallback_reason ?? "").trim() || null,
     bookingRow: bookingEmailRowOverlayFromRecord(head),

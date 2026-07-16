@@ -1,4 +1,9 @@
 import { formatAdminDateTimeLine } from "@/lib/notifications/bookingNotifyFormat";
+import {
+  displayCustomerBookingReference,
+  displayCustomerPaymentReference,
+  resolveCustomerTotalPaidZar,
+} from "@/lib/booking/customerBookingReference";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import {
@@ -7,7 +12,10 @@ import {
 } from "@/lib/email/resolveBookingEmailFields";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { emailSafeGoUrl } from "@/lib/email/emailSafeGoUrl";
-import { customerAccountBookingsUrl } from "@/lib/customer/customerAccountPaths";
+import {
+  customerAccountBookingUrl,
+  customerAccountBookingsUrl,
+} from "@/lib/customer/customerAccountPaths";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
 import { safeResendSend } from "@/lib/email/safeResendSend";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -28,6 +36,7 @@ import {
   buildSavedQuoteRecoveryTemplateData,
   customerNameFromEmail,
 } from "@/lib/templates/bookingEmailTemplateData";
+import { wrapBrandedEmailContent } from "@/lib/email/emailBrandShell";
 import type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
 
 export type { BookingEmailPayload } from "@/lib/email/bookingEmailPayload";
@@ -166,24 +175,31 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   const from = getDefaultFromAddress();
   const total = p.totalPaidZar.toLocaleString("en-ZA");
   const appUrl = getPublicAppUrlBase();
-  const accountBookingsUrl = customerAccountBookingsUrl(appUrl);
+  const accountBookingsUrl = customerAccountBookingUrl(appUrl, p.bookingId);
   const bookAgainUrl = `${appUrl}/book`;
+  const bookingRef =
+    displayCustomerBookingReference({ bookingReference: p.bookingReference }) ?? "Pending";
+  const paymentRef = displayCustomerPaymentReference(p.paymentReference);
 
   const service = escapeHtml(p.serviceLabel);
   const date = escapeHtml(p.dateLabel);
   const time = escapeHtml(p.timeLabel);
   const location = escapeHtml(p.location?.trim() || "—");
-  const cleanerRow = p.cleanerName?.trim()
-    ? `<p><strong>Cleaner:</strong> ${escapeHtml(p.cleanerName.trim())}</p>`
+  const suburb = p.suburb?.trim();
+  const extras = p.extrasLabel?.trim();
+  const recurring = p.recurringSummary?.trim();
+  const cleanerStatus = escapeHtml(
+    p.cleanerStatusLabel?.trim() || p.cleanerName?.trim() || "Cleaner assignment pending",
+  );
+  const suburbRow = suburb
+    ? `<p style="margin:0 0 8px;"><strong>Suburb:</strong> ${escapeHtml(suburb)}</p>`
+    : "";
+  const extrasRow = extras ? `<p style="margin:0 0 8px;"><strong>Extras:</strong> ${escapeHtml(extras)}</p>` : "";
+  const recurringRow = recurring
+    ? `<p style="margin:0 0 8px;"><strong>Recurring:</strong> ${escapeHtml(recurring)}</p>`
     : "";
 
-  const html = `
-<div style="font-family: system-ui, -apple-system, sans-serif; max-width: 560px; margin: 0 auto; padding: 20px; color: #1f2937;">
-
-  <h2 style="margin-bottom: 8px;">
-    Shalean<span style="color:#2563eb;">.</span>
-  </h2>
-
+  const html = wrapBrandedEmailContent(`
   <h1 style="font-size: 22px; margin: 0 0 12px;">
     Your booking is confirmed ✅
   </h1>
@@ -200,23 +216,26 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
       : ""
   }
 
-  <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:20px;">
+  <div style="border:1px solid #e5e7eb; border-radius:12px; padding:16px; margin-bottom:20px; background:#ffffff;">
 
-    <p><strong>Service:</strong> ${service}</p>
-    <p><strong>Date:</strong> ${date}</p>
-    <p><strong>Time:</strong> ${time}</p>
-    <p><strong>Location:</strong> ${location}</p>
-    ${cleanerRow}
+    <p style="margin:0 0 8px;"><strong>Service:</strong> ${service}</p>
+    <p style="margin:0 0 8px;"><strong>Date:</strong> ${date}</p>
+    <p style="margin:0 0 8px;"><strong>Time:</strong> ${time}</p>
+    <p style="margin:0 0 8px;"><strong>Address:</strong> ${location}</p>
+    ${suburbRow}
+    ${extrasRow}
+    ${recurringRow}
+    <p style="margin:0 0 8px;"><strong>Cleaner:</strong> ${cleanerStatus}</p>
 
     <hr style="border:none; border-top:1px solid #eee; margin:12px 0;" />
 
-    <p style="font-size:18px;">
-      <strong>Total:</strong>
+    <p style="font-size:18px; margin:0;">
+      <strong>Total paid:</strong>
       <span style="color:#059669;">R ${total}</span>
     </p>
     <p style="font-size:12px; color:#6b7280; margin:8px 0 0;">
-      ${p.bookingId?.trim() ? `Booking ID: <span style="font-family:monospace;">${escapeHtml(p.bookingId.trim())}</span><br/>` : ""}
-      Payment ref: <span style="font-family:monospace;">${escapeHtml(p.paymentReference)}</span>
+      Booking reference: <span style="font-family:monospace;">${escapeHtml(bookingRef)}</span><br/>
+      Payment reference: <span style="font-family:monospace;">${escapeHtml(paymentRef)}</span>
     </p>
   </div>
 
@@ -227,7 +246,7 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
   </div>
 
   <a href="${escapeAttr(accountBookingsUrl)}"
-     style="display:block; text-align:center; background:#2563eb; color:white; padding:14px; border-radius:10px; text-decoration:none; font-weight:600;">
+     style="display:block; text-align:center; background:#2563eb; color:#ffffff; padding:14px; border-radius:10px; text-decoration:none; font-weight:600; margin-bottom:4px;">
      View your booking
   </a>
 
@@ -237,21 +256,15 @@ export async function sendBookingConfirmationEmail(payload: BookingEmailPayload)
       Book again in 10 seconds →
     </a>
   </p>
-
-  <p style="margin-top:20px; font-size:12px; color:#9ca3af;">
-    Need help? Reply to this email or contact support.<br/>
-    If you didn&apos;t make this booking, contact us immediately.
-  </p>
-
-</div>
-`;
+`);
 
   const legacyBid = bookingIdForNotificationLog(p);
   const legacySubject = "Your booking is confirmed";
   const legacyPayloadMeta: Record<string, unknown> = customerPaymentPayload({
     subject: legacySubject,
     html,
-    payment_reference: p.paymentReference,
+    payment_reference: paymentRef,
+    booking_reference: bookingRef,
     source: "legacy_html",
   });
   if (dbAttempt.usedRow && !dbAttempt.sent) {
@@ -1114,6 +1127,8 @@ export function buildBookingEmailPayload(params: {
   customerEmail: string;
   snapshot: BookingSnapshotV1 | null;
   bookingId?: string | null;
+  /** Customer-facing `bookings.booking_reference` (`SHL-BK-…`). */
+  bookingReference?: string | null;
   /** From `bookings.assignment_type` after checkout upsert (optional). */
   assignmentType?: string | null;
   /** From `bookings.fallback_reason` when substitution occurred. */
@@ -1127,9 +1142,10 @@ export function buildBookingEmailPayload(params: {
 }): BookingEmailPayload {
   const custName = params.snapshot?.customer?.name?.trim();
   const totalPaidZar =
-    typeof params.snapshot?.total_zar === "number"
-      ? params.snapshot.total_zar
-      : Math.max(0, Math.round(params.amountCents / 100));
+    resolveCustomerTotalPaidZar({
+      amountCents: params.amountCents,
+      snapshotTotalZar: params.snapshot?.total_zar,
+    }) ?? Math.max(0, Math.round(params.amountCents / 100));
 
   const fields = resolveBookingEmailFields({
     snapshot: params.snapshot,
@@ -1142,6 +1158,8 @@ export function buildBookingEmailPayload(params: {
 
   const at = String(params.assignmentType ?? "").toLowerCase();
   const showCleanerSubstitutionNotice = at === "auto_fallback";
+  const bookingReference =
+    displayCustomerBookingReference({ bookingReference: params.bookingReference }) ?? null;
 
   return {
     customerEmail: emailNorm,
@@ -1150,9 +1168,14 @@ export function buildBookingEmailPayload(params: {
     dateLabel: fields.dateLabel || "—",
     timeLabel: fields.timeLabel || "—",
     location: fields.location,
+    suburb: fields.suburb,
+    extrasLabel: fields.extrasLabel,
+    recurringSummary: fields.recurringSummary,
+    cleanerStatusLabel: fields.cleanerStatusLabel,
     cleanerName: fields.cleanerName,
     totalPaidZar,
-    paymentReference: params.paymentReference,
+    paymentReference: displayCustomerPaymentReference(params.paymentReference),
+    bookingReference,
     bookingId: params.bookingId?.trim() ?? null,
     showCleanerSubstitutionNotice,
     fallbackReason: params.fallbackReason?.trim() ? params.fallbackReason.trim() : null,
