@@ -264,12 +264,6 @@ const CLASSIFIED_RUNTIME_DIRECT_WRITERS: readonly RuntimeClassification[] = [
     rationale: "Payment-session bootstrap writes pending_payment status when creating/refreshing Paystack links.",
   },
   {
-    file: "lib/booking/refund/refundBookingPayment.ts",
-    category: "legacy_payment_exception",
-    rationale:
-      "Princess PR D refund path updates payment_status/refund columns after gateway refund or chargeback (claim → provider → succeed).",
-  },
-  {
     file: "app/api/booking-v2/area-review/route.ts",
     category: "legacy_intake_exception",
     rationale: "Area-review intake insert writes initial status/dispatch_status/payment_status for ops review bookings.",

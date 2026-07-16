@@ -2486,7 +2486,19 @@ export default function BookingDetailsView({
   });
   const customerPhone = resolvedCustomerPhone ?? "Not on file";
   const customerMissingPhone = !resolvedCustomerPhone;
+  const refundStatusNorm = String(fullBooking.refund_status ?? "")
+    .trim()
+    .toLowerCase();
+  const refundPaymentLabel =
+    refundStatusNorm === "full" || refundStatusNorm === "reversed"
+      ? "Fully refunded"
+      : refundStatusNorm === "chargeback"
+        ? "Chargeback"
+        : refundStatusNorm === "partial" || fullBooking.refunded_at
+          ? "Partially refunded"
+          : null;
   const paymentStatusLabel =
+    refundPaymentLabel ||
     adminOperational?.displayBadge?.trim() ||
     (offPlatformPaidLabel ? offPlatformPaidLabel : canMarkPaid ? "Pending payment" : "Paid");
   const paymentStatusShort = shortPaymentStatusLabel(paymentStatusLabel);
@@ -4807,6 +4819,10 @@ function compactScheduleRelative(date: string | null | undefined, time: string |
 function shortPaymentStatusLabel(label: string): string {
   const normalized = label.trim().toLowerCase();
   if (normalized.includes("pending")) return "Pending payment";
+  if (normalized.includes("chargeback")) return "Chargeback";
+  if (normalized.includes("refund")) {
+    return normalized.includes("partial") ? "Partially refunded" : "Fully refunded";
+  }
   if (normalized.includes("paid") || normalized.includes("success")) return "Paid";
   if (normalized.includes("overdue")) return "Overdue";
   if (normalized.includes("deposit")) return "Deposit";
