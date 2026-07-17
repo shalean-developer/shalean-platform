@@ -45,8 +45,9 @@ Admin (Connected Accounts)
       • require MARKETING_PROVIDER_FACEBOOK
       • CSRF state (httpOnly hashed cookie, 10m TTL, single-use)
       • redirect Meta dialog
-  → Meta consent (pages_show_list, pages_read_engagement, pages_manage_posts,
-      instagram_basic, instagram_content_publish)
+  → Meta consent (pages_show_list, pages_read_engagement, pages_manage_posts)
+      • or Facebook Login for Business config_id when FACEBOOK_LOGIN_CONFIG_ID is set
+        (Page + Instagram permissions from App Dashboard configuration)
   → GET /api/oauth/facebook/callback
       • validate state (reject missing/expired/mismatched/replay)
       • exchange code → short-lived user token
@@ -81,21 +82,19 @@ Key modules:
 
 ## Permission Model
 
-Requested scopes (documented minimum — MKT-001H.1):
+Requested scopes by default (Page connect — MKT-001H.1.1):
 
 | Permission | Purpose |
 |---|---|
 | `pages_show_list` | List Pages via `/me/accounts` |
 | `pages_read_engagement` | Read Page engagement needed for healthy publish surface |
 | `pages_manage_posts` | Publish feed/photo as the Page |
-| `instagram_basic` | Read Page-linked `instagram_business_account` for IG discovery |
-| `instagram_content_publish` | Instagram Content Publishing API |
+
+**Instagram (target, not raw-scoped by default):** enable via Facebook Login for Business configuration (`FACEBOOK_LOGIN_CONFIG_ID`), including `pages_read_user_content`, `instagram_basic`, and `instagram_content_publish`. Raw `scope=instagram_basic,...` without App Dashboard enablement returns Meta **Invalid Scopes**. See `MKT-001H.1-instagram-oauth-scope-remediation.md`.
 
 **Page eligibility:** tasks must include `CREATE_CONTENT` or `MANAGE`. Ineligible Pages are shown with reason and cannot be saved.
 
-**Instagram:** discovered via the Page-linked Professional account using the connected Page token after Facebook OAuth grants the Instagram scopes above. See `MKT-001H.1-instagram-oauth-scope-remediation.md`.
-
-Reconnect uses `auth_type=rerequest` so operators can approve newly added Instagram permissions.
+Reconnect uses `auth_type=rerequest` so operators can approve newly added permissions.
 
 ---
 
