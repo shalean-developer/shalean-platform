@@ -149,8 +149,10 @@ Publish APIs return structured fields (surfaced in Social Posts toasts):
 |---------|---------|
 | Growth → Social Posts | Edit caption, validate limits, publish FB/GBP, copy/download other channels |
 | Growth → Connected Accounts | Registry-aligned platform cards, GBP OAuth, publish history filters |
+| Growth → Platform Intelligence | Ops health, queue/DLQ, provider & campaign insights, rule-based recommendations |
 | `GET /api/admin/promotions/providers` | Capability / flag snapshot (no secrets) |
+| `GET /api/admin/promotions/publish-intelligence` | Aggregated intelligence snapshot (admin-only) |
 
 ### Governance
 
-MKT-001A–D may land on **staging** only while **MKT-001A-PROD** (Google Business Profile API approval) remains open. Do not merge to `main` or deploy production until that gate closes.
+MKT-001A–E (and B.2) may land on **staging** only while **MKT-001A-PROD** (Google Business Profile API approval) remains open. Do not merge to `main` or deploy production until that gate closes.
