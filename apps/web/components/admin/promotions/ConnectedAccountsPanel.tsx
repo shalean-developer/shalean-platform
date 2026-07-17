@@ -19,6 +19,10 @@ import {
   GOOGLE_BUSINESS_SAVE_ERROR_MESSAGES,
   isGoogleBusinessSaveErrorReason,
 } from "@/lib/oauth/googleBusinessSaveError";
+import {
+  FACEBOOK_SAVE_ERROR_MESSAGES,
+  isFacebookSaveErrorReason,
+} from "@/lib/oauth/metaFacebookSaveError";
 import { cn } from "@/lib/utils";
 import {
   classifyProviderUxState,
@@ -31,6 +35,14 @@ import {
   MarketingSectionSkeleton,
 } from "@/components/admin/promotions/MarketingEmptyState";
 import { MarketingSubNav } from "@/components/admin/promotions/MarketingSubNav";
+
+type FacebookPageOption = {
+  pageId: string;
+  pageName: string;
+  tasks: string[];
+  eligible: boolean;
+  ineligibleReason: string | null;
+};
 
 type PlatformCard = {
   id: string;
@@ -51,8 +63,12 @@ type PlatformCard = {
     accountName: string;
     addressLine?: string | null;
   }>;
+  pages?: FacebookPageOption[];
   lastError?: string | null;
   oauthConfigured?: boolean;
+  envFallbackAllowed?: boolean;
+  tokenSource?: string | null;
+  lastVerifiedAt?: string | null;
   featureFlag?: string;
   providerEnabled?: boolean;
   publishEnabled?: boolean;
@@ -75,18 +91,20 @@ type HistoryRow = {
 type Payload = {
   platforms: PlatformCard[];
   history: HistoryRow[];
-  oauth: { googleConfigured: boolean };
+  oauth: { googleConfigured: boolean; facebookConfigured?: boolean };
   ops?: { failedLast24h?: number };
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
-  oauth_not_configured: "Google OAuth env vars are missing. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.",
-  oauth_denied: "Google connection was cancelled or denied.",
-  oauth_failed: "Google OAuth failed. Try again or check Google Cloud credentials.",
+  oauth_not_configured:
+    "OAuth env vars are missing. For Google set GOOGLE_CLIENT_*; for Facebook set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI.",
+  oauth_denied: "Connection was cancelled or denied.",
+  oauth_failed: "OAuth failed. Try again or check provider credentials.",
   invalid_state: "OAuth state validation failed. Please start Connect again.",
-  missing_code: "Google did not return an authorization code.",
-  forbidden: "You must be signed in as an admin to connect Google Business.",
-  save_failed: "Connected to Google but saving the account failed.",
+  missing_code: "The provider did not return an authorization code.",
+  forbidden: "You must be signed in as an admin to connect this account.",
+  save_failed: "Connected but saving the account failed.",
+  provider_disabled: "This provider is disabled by feature flag.",
 };
 
 function formatWhen(iso: string | null | undefined): string {
@@ -180,12 +198,13 @@ export function ConnectedAccountsPanel() {
   useEffect(() => {
     const err = searchParams.get("error");
     if (err) {
-      // Prefer the sanitized, actionable reason the callback attached (e.g. the
-      // Business Profile API is disabled) over the generic per-error copy.
+      // Prefer the sanitized, actionable reason the callback attached over generic copy.
       const reason = searchParams.get("reason");
-      const message = isGoogleBusinessSaveErrorReason(reason)
-        ? GOOGLE_BUSINESS_SAVE_ERROR_MESSAGES[reason]
-        : (ERROR_MESSAGES[err] ?? `Connection error: ${err}`);
+      const message = isFacebookSaveErrorReason(reason)
+        ? FACEBOOK_SAVE_ERROR_MESSAGES[reason]
+        : isGoogleBusinessSaveErrorReason(reason)
+          ? GOOGLE_BUSINESS_SAVE_ERROR_MESSAGES[reason]
+          : (ERROR_MESSAGES[err] ?? `Connection error: ${err}`);
       emitAdminToast(message, "error");
     }
     if (searchParams.get("connected") === "google_business") {
@@ -193,6 +212,15 @@ export function ConnectedAccountsPanel() {
         searchParams.get("pick") === "1"
           ? "Google connected — select a Business location below."
           : "Google Business Profile connected.",
+        "success",
+      );
+      void load();
+    }
+    if (searchParams.get("connected") === "facebook") {
+      emitAdminToast(
+        searchParams.get("pick") === "1"
+          ? "Facebook connected — select the Shalean Page below."
+          : "Facebook Page connected.",
         "success",
       );
       void load();
@@ -221,6 +249,67 @@ export function ConnectedAccountsPanel() {
         return;
       }
       window.location.href = res.data.url;
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function connectFacebook() {
+    setBusy("fb_connect");
+    try {
+      const res = await adminFetch<{ url: string }>("/api/oauth/facebook");
+      if (res.error || !res.data?.url) {
+        emitAdminToast(res.error ?? "Could not start Facebook OAuth.", "error");
+        return;
+      }
+      window.location.href = res.data.url;
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function selectFacebookPage(pageId: string, confirmReplace = false) {
+    setBusy("fb_select_page");
+    try {
+      const res = await adminFetch<{ ok: boolean }>("/api/admin/social-accounts", {
+        method: "POST",
+        body: JSON.stringify({
+          action: "select_facebook_page",
+          pageId,
+          confirmReplace,
+        }),
+      });
+      if (res.error) {
+        emitAdminToast(res.error, "error");
+        return;
+      }
+      emitAdminToast("Facebook Page selected.", "success");
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function disconnectFacebook() {
+    if (
+      !window.confirm(
+        "Disconnect Facebook? Future publishing will be blocked until you reconnect. Publish history is retained. Instagram is not disconnected unless it shares this credential path.",
+      )
+    ) {
+      return;
+    }
+    setBusy("fb_disconnect");
+    try {
+      const res = await adminFetch<{ ok: boolean }>("/api/admin/social-accounts", {
+        method: "POST",
+        body: JSON.stringify({ action: "disconnect_facebook" }),
+      });
+      if (res.error) {
+        emitAdminToast(res.error, "error");
+        return;
+      }
+      emitAdminToast("Facebook disconnected.", "success");
+      await load();
     } finally {
       setBusy(null);
     }
@@ -325,7 +414,7 @@ export function ConnectedAccountsPanel() {
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Connected Accounts</h1>
         <p className="mt-1 text-sm text-slate-600">
-          Connect publishing destinations for Growth → Social Posts. Facebook uses env Page tokens;
+          Connect publishing destinations for Growth → Social Posts. Facebook uses Meta OAuth;
           Google Business Profile uses OAuth. Other channels are registered as stubs until adapters
           ship (feature flags <code className="font-mono text-xs">MARKETING_PROVIDER_*</code>).
         </p>
@@ -516,21 +605,145 @@ export function ConnectedAccountsPanel() {
                 </div>
               </div>
             ) : p.id === "facebook" ? (
-              <div className="mt-4 space-y-2 text-xs text-slate-500">
-                <p>
-                  Facebook uses server env tokens (no OAuth UI). Set{" "}
-                  <code className="font-mono">FACEBOOK_PAGE_ID</code> and{" "}
-                  <code className="font-mono">FACEBOOK_PAGE_ACCESS_TOKEN</code>, then refresh this
-                  page. Use a Page access token from Graph{" "}
-                  <code className="font-mono">/me/accounts</code>, not a User token.
-                </p>
-                <p>
-                  After env is set, verify from{" "}
-                  <Link href="/office/marketing/social" className="text-blue-700 hover:underline">
-                    Social Posts
-                  </Link>
-                  . Last successful sync/publish timestamps above show verification health.
-                </p>
+              <div className="mt-4 space-y-3">
+                <div className="space-y-1 text-xs text-slate-500">
+                  <p>
+                    Connect via Meta OAuth, then select the Shalean Facebook Page. Page tokens are
+                    encrypted at rest. Publish from{" "}
+                    <Link href="/office/marketing/social" className="text-blue-700 hover:underline">
+                      Social Posts
+                    </Link>
+                    .
+                  </p>
+                  {p.lastVerifiedAt ? (
+                    <p>
+                      Last verified: <span className="text-slate-700">{formatWhen(p.lastVerifiedAt)}</span>
+                    </p>
+                  ) : null}
+                  {p.tokenSource ? (
+                    <p>
+                      Token source:{" "}
+                      <code className="font-mono text-slate-700">{p.tokenSource}</code>
+                      {p.tokenSource === "environment_fallback"
+                        ? " (emergency/local fallback — reconnect via OAuth for normal operation)"
+                        : null}
+                    </p>
+                  ) : null}
+                </div>
+
+                {(p.pages?.length ?? 0) > 0 &&
+                (p.status === "pending_location" ||
+                  p.status === "error" ||
+                  (!p.locationName && p.connected)) ? (
+                  <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Choose a Facebook Page
+                    </p>
+                    <div className="max-h-48 space-y-2 overflow-auto">
+                      {p.pages!.map((page) => (
+                        <button
+                          key={page.pageId}
+                          type="button"
+                          disabled={busy === "fb_select_page" || !page.eligible}
+                          aria-label={`Select Facebook Page ${page.pageName}`}
+                          title={page.eligible ? undefined : page.ineligibleReason ?? "Not eligible"}
+                          onClick={() => {
+                            const replacing = Boolean(p.locationName && p.status === "connected");
+                            if (
+                              replacing &&
+                              !window.confirm(
+                                `Replace the current Facebook Page connection with “${page.pageName}”?`,
+                              )
+                            ) {
+                              return;
+                            }
+                            void selectFacebookPage(page.pageId, replacing);
+                          }}
+                          className={cn(
+                            "flex w-full flex-col rounded-xl border px-3 py-2 text-left text-sm",
+                            page.eligible
+                              ? "border-slate-200 hover:border-blue-300 hover:bg-blue-50"
+                              : "cursor-not-allowed border-slate-100 bg-slate-50 opacity-70",
+                          )}
+                        >
+                          <span className="font-medium text-slate-900">{page.pageName}</span>
+                          <span className="text-xs text-slate-500">
+                            Page {page.pageId.slice(0, 4)}…
+                            {!page.eligible && page.ineligibleReason
+                              ? ` · ${page.ineligibleReason}`
+                              : ""}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {p.providerEnabled !== false ? (
+                  <div className="flex flex-wrap gap-2">
+                    {!p.connected || p.status === "error" || p.status === "disconnected" ? (
+                      <Button
+                        size="sm"
+                        disabled={busy === "fb_connect" || p.oauthConfigured === false}
+                        onClick={() => void connectFacebook()}
+                      >
+                        {busy === "fb_connect" ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        {p.status === "error" ? "Reconnect Facebook" : "Connect Facebook"}
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === "fb_connect"}
+                        onClick={() => void connectFacebook()}
+                      >
+                        {busy === "fb_connect" ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        {p.health === "healthy" ? "Manage connection" : "Reconnect Facebook"}
+                      </Button>
+                    )}
+                    {p.connected && p.status !== "disconnected" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === "fb_disconnect"}
+                        onClick={() => void disconnectFacebook()}
+                      >
+                        {busy === "fb_disconnect" ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        Disconnect
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Provider flag is off — Connect is unavailable and publish stays blocked.
+                  </p>
+                )}
+
+                <details className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                  <summary className="cursor-pointer font-medium text-slate-700">
+                    Admin diagnostics (emergency env fallback)
+                  </summary>
+                  <p className="mt-2">
+                    Normal recovery is <strong>Reconnect Facebook</strong> via OAuth. Env tokens (
+                    <code className="font-mono">FACEBOOK_PAGE_ID</code> /{" "}
+                    <code className="font-mono">FACEBOOK_PAGE_ACCESS_TOKEN</code>) are used only when{" "}
+                    <code className="font-mono">FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK</code> is explicitly
+                    enabled. Fallback is{" "}
+                    {p.envFallbackAllowed ? "currently allowed" : "currently disabled"}.
+                  </p>
+                </details>
               </div>
             ) : p.id === "instagram" ? (
               <div className="mt-4 space-y-3">

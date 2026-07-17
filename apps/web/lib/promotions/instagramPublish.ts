@@ -16,6 +16,7 @@ import "server-only";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { encryptSecret, decryptSecret } from "@/lib/security/tokenEncryption";
 import { getFacebookPagePublishConfig } from "@/lib/promotions/facebookPublish";
+import { resolveFacebookPublishConfig } from "@/lib/promotions/facebookConnectedAccount";
 import { canonicalizePublicSiteUrl } from "@/lib/promotions/offerCopy";
 
 const IG_CAPTION_LIMIT = 2200;
@@ -146,15 +147,25 @@ export async function discoverInstagramProfessionalAccount(
   accessToken?: string,
   pageId?: string,
 ): Promise<InstagramDiscoverResult> {
-  const cfg = getFacebookPagePublishConfig();
-  const token = accessToken?.trim() || cfg?.accessToken || "";
-  const pid = pageId?.trim() || cfg?.pageId || "";
+  let token = accessToken?.trim() || "";
+  let pid = pageId?.trim() || "";
+  if (!token || !pid) {
+    const resolved = await resolveFacebookPublishConfig();
+    if (resolved.ok) {
+      token = token || resolved.config.accessToken;
+      pid = pid || resolved.config.pageId;
+    } else {
+      const cfg = getFacebookPagePublishConfig();
+      token = token || cfg?.accessToken || "";
+      pid = pid || cfg?.pageId || "";
+    }
+  }
   if (!token || !pid) {
     return {
       ok: false,
       code: "missing_page_token",
       error:
-        "Facebook Page token is required for Instagram discovery. Set FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN (Facebook Login path).",
+        "Facebook Page token is required for Instagram discovery. Connect Facebook from Connected Accounts (or enable emergency env fallback).",
     };
   }
 
@@ -246,8 +257,11 @@ export async function saveInstagramConnection(args: {
     return { ok: false, error: discovered.error, code: discovered.code };
   }
 
-  const cfg = getFacebookPagePublishConfig();
-  const token = args.accessToken?.trim() || cfg?.accessToken;
+  let token = args.accessToken?.trim() || "";
+  if (!token) {
+    const resolved = await resolveFacebookPublishConfig();
+    token = resolved.ok ? resolved.config.accessToken : getFacebookPagePublishConfig()?.accessToken || "";
+  }
   if (!token) {
     return { ok: false, error: "Missing Page access token to persist." };
   }
@@ -317,7 +331,6 @@ export async function resolveInstagramPublishConfig(): Promise<
   | { ok: false; error: string; status?: number }
 > {
   const admin = getSupabaseAdmin();
-  const fb = getFacebookPagePublishConfig();
 
   if (admin) {
     const { data } = await admin
@@ -330,10 +343,11 @@ export async function resolveInstagramPublishConfig(): Promise<
       try {
         const token = decryptSecret(data.access_token);
         const meta = (data.metadata ?? {}) as Record<string, unknown>;
+        const fbResolved = await resolveFacebookPublishConfig();
         return {
           ok: true,
           config: {
-            pageId: String(meta.pageId ?? fb?.pageId ?? ""),
+            pageId: String(meta.pageId ?? (fbResolved.ok ? fbResolved.config.pageId : "") ?? ""),
             igUserId: String(data.account_id),
             accessToken: token,
             graphVersion: graphVersion(),
@@ -349,15 +363,36 @@ export async function resolveInstagramPublishConfig(): Promise<
     }
   }
 
-  if (!fb) {
+  const fbResolved = await resolveFacebookPublishConfig();
+  if (!fbResolved.ok) {
+    const fb = getFacebookPagePublishConfig();
+    if (!fb) {
+      return {
+        ok: false,
+        error:
+          "Instagram is not connected. Connect Facebook from Connected Accounts, then connect Instagram.",
+      };
+    }
+    const discovered = await discoverInstagramProfessionalAccount(fb.accessToken, fb.pageId);
+    if (!discovered.ok) {
+      return { ok: false, error: discovered.error, status: discovered.status };
+    }
     return {
-      ok: false,
-      error:
-        "Instagram is not connected. Configure the Facebook Page token and connect Instagram from Connected Accounts.",
+      ok: true,
+      config: {
+        pageId: discovered.pageId,
+        igUserId: discovered.igUserId,
+        accessToken: fb.accessToken,
+        graphVersion: graphVersion(),
+        username: discovered.username,
+      },
     };
   }
 
-  const discovered = await discoverInstagramProfessionalAccount(fb.accessToken, fb.pageId);
+  const discovered = await discoverInstagramProfessionalAccount(
+    fbResolved.config.accessToken,
+    fbResolved.config.pageId,
+  );
   if (!discovered.ok) {
     return { ok: false, error: discovered.error, status: discovered.status };
   }
@@ -367,7 +402,7 @@ export async function resolveInstagramPublishConfig(): Promise<
     config: {
       pageId: discovered.pageId,
       igUserId: discovered.igUserId,
-      accessToken: fb.accessToken,
+      accessToken: fbResolved.config.accessToken,
       graphVersion: graphVersion(),
       username: discovered.username,
     },

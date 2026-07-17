@@ -17,6 +17,7 @@ import {
   validateInstagramImageUrl,
 } from "@/lib/promotions/instagramPublish";
 import { getFacebookPagePublishConfig } from "@/lib/promotions/facebookPublish";
+import { resolveFacebookPublishConfig } from "@/lib/promotions/facebookConnectedAccount";
 import { classifyPublishFailure } from "@/lib/promotions/publishProviderErrors";
 import type {
   ConnectionResult,
@@ -55,12 +56,12 @@ export function createInstagramProvider(): SocialProvider {
     displayName: "Instagram",
 
     async connect(): Promise<ConnectionResult> {
-      const fb = getFacebookPagePublishConfig();
-      if (!fb) {
+      const fbResolved = await resolveFacebookPublishConfig();
+      if (!fbResolved.ok && !getFacebookPagePublishConfig()) {
         return {
           ok: false,
           error:
-            "Configure FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN first (Facebook Login auth model).",
+            "Connect Facebook from Connected Accounts first (Facebook Login auth model for Instagram).",
         };
       }
       // Persist discovery using the Page token; caller supplies connectedBy via API wrapper.
@@ -82,7 +83,7 @@ export function createInstagramProvider(): SocialProvider {
         ok: false,
         unsupported: true,
         error:
-          "Instagram uses the Facebook Page token (Facebook Login). Update FACEBOOK_PAGE_ACCESS_TOKEN and reconnect.",
+          "Instagram uses the Facebook Page token (Facebook Login). Reconnect Facebook from Connected Accounts, then reconnect Instagram.",
       };
     },
 

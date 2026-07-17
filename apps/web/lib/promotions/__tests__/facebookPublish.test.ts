@@ -19,7 +19,7 @@ describe("formatFacebookGraphError", () => {
   it("passes through other Graph messages with auth guidance on 401", () => {
     const msg = formatFacebookGraphError({ message: "Invalid OAuth access token." }, 401);
     expect(msg).toContain("Invalid OAuth access token.");
-    expect(msg.toLowerCase()).toContain("facebook_page_access_token");
+    expect(msg.toLowerCase()).toContain("reconnect facebook");
   });
 
   it("maps rate limits", () => {

@@ -88,7 +88,7 @@ function recoveryFor(
       if (provider === "instagram") {
         return "Reconnect Instagram from Connected Accounts (Page-linked professional account + valid Page token).";
       }
-      return "Replace FACEBOOK_PAGE_ACCESS_TOKEN with a valid Page token (pages_manage_posts).";
+      return "Reconnect Facebook from Connected Accounts (OAuth). Env Page tokens are emergency/local fallback only.";
     case "permission":
       if (provider === "google_business") {
         return "Confirm the Google account manages the selected location and Business Profile APIs are enabled.";
@@ -96,7 +96,7 @@ function recoveryFor(
       if (provider === "instagram") {
         return "Ensure the Page token has instagram_basic, instagram_content_publish, pages_show_list, and pages_read_engagement, and that a Professional Instagram account is linked to the Page.";
       }
-      return "Ensure the Page token has pages_manage_posts and pages_read_engagement.";
+      return "Reconnect Facebook and grant pages_manage_posts + pages_read_engagement, or select a Page with CREATE_CONTENT/MANAGE.";
     case "not_found":
       if (provider === "google_business") {
         return "Re-select the Business location from Connected Accounts.";
@@ -104,7 +104,7 @@ function recoveryFor(
       if (provider === "instagram") {
         return "Verify the Instagram professional account is still linked to the selected Facebook Page.";
       }
-      return "Verify FACEBOOK_PAGE_ID matches the Page for this token.";
+      return "Verify the connected Facebook Page still exists, or reconnect and select the correct Page.";
     case "conflict":
       return "Wait for the in-progress publish to finish, or change the content / use a new Idempotency-Key for a deliberate repost.";
     case "validation":
