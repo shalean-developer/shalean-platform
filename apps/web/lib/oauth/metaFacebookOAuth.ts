@@ -5,22 +5,24 @@ import { marketingConnectedAccountsUrl } from "@/lib/oauth/googleBusinessOAuth";
 
 export { marketingConnectedAccountsUrl };
 
-/** Permissions required for Page discovery + Page publishing (MKT-001H). */
+/**
+ * Permissions for Page discovery, Page publishing, and Instagram Graph discovery
+ * via the Page-linked Professional account (MKT-001H / MKT-001H.1).
+ *
+ * `instagram_basic` is required for `/{page-id}?fields=instagram_business_account`.
+ * `instagram_content_publish` is required for Content Publishing API.
+ * Meta may require App Review before non-role users can grant these outside
+ * development mode; staging admin / app-role users are normally sufficient.
+ */
 export const FACEBOOK_OAUTH_SCOPES = [
   "pages_show_list",
   "pages_read_engagement",
   "pages_manage_posts",
+  "instagram_basic",
+  "instagram_content_publish",
 ] as const;
 
 export const FACEBOOK_OAUTH_SCOPE = FACEBOOK_OAUTH_SCOPES.join(",");
-
-/**
- * Instagram-related permissions are intentionally omitted from the Facebook
- * Connected Accounts OAuth start. MKT-001G discovers IG via the Page-linked
- * Professional account using the Page token after Facebook is connected.
- * Request `instagram_basic` / `instagram_content_publish` only if a future
- * slice needs them on the same Meta Login dialog.
- */
 
 export const FACEBOOK_OAUTH_STATE_COOKIE = "fb_oauth_state";
 export const FACEBOOK_OAUTH_STATE_MAX_AGE_SEC = 600;

@@ -1,9 +1,10 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
   formatInstagramGraphError,
   validateInstagramImageUrl,
   INSTAGRAM_CAPTION_LIMIT,
+  INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE,
 } from "@/lib/promotions/instagramPublish";
 import { createInstagramProvider } from "@/lib/promotions/providers/instagramProvider";
 import { classifyPublishFailure } from "@/lib/promotions/publishProviderErrors";
@@ -22,7 +23,16 @@ describe("MKT-001G Instagram publish helpers", () => {
     expect(formatInstagramGraphError({ code: 190, message: "expired" }, 401)).toMatch(/token/i);
     expect(
       formatInstagramGraphError({ code: 10, message: "permission" }, 403),
-    ).toMatch(/instagram_content_publish/i);
+    ).toMatch(/instagram_basic|instagram_content_publish|reconnect facebook/i);
+  });
+
+  it("exposes safer discovery-unavailable copy for missing IG field", () => {
+    expect(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE).toMatch(/could not be retrieved/i);
+    expect(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE).toMatch(/reconnect facebook/i);
+    expect(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE).toMatch(/instagram permissions/i);
+    expect(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE).not.toMatch(
+      /no instagram professional account is linked/i,
+    );
   });
 
   it("classifies Instagram failures with provider-specific recovery", () => {
@@ -34,6 +44,15 @@ describe("MKT-001G Instagram publish helpers", () => {
     expect(auth.classification).toBe("auth");
     expect(auth.retryable).toBe(false);
     expect(auth.recoveryGuidance.toLowerCase()).toContain("instagram");
+
+    const permission = classifyPublishFailure({
+      provider: "instagram",
+      httpStatus: 403,
+      rawMessage: "permission",
+    });
+    expect(permission.classification).toBe("permission");
+    expect(permission.recoveryGuidance.toLowerCase()).toMatch(/instagram_basic/);
+    expect(permission.recoveryGuidance.toLowerCase()).toMatch(/reconnect facebook/);
 
     const rate = classifyPublishFailure({
       provider: "instagram",
@@ -125,5 +144,90 @@ describe("MKT-001G Instagram migration contract", () => {
     expect(sql).toMatch(/instagram/);
     expect(sql).toMatch(/marketing_publish_idempotency/);
     expect(sql).toMatch(/social_publish_jobs/);
+  });
+});
+
+describe("MKT-001H.1 Instagram discovery messaging", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns ig_unavailable with safer copy when Graph omits IG account", async () => {
+    const { discoverInstagramProfessionalAccount } = await import(
+      "@/lib/promotions/instagramPublish"
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          id: "page-1",
+          name: "Shalean",
+        }),
+      ),
+    );
+
+    const result = await discoverInstagramProfessionalAccount("page-token", "page-1");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("ig_unavailable");
+    expect(result.error).toBe(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE);
+  });
+
+  it("classifies Graph permission failures separately from missing IG field", async () => {
+    const { discoverInstagramProfessionalAccount } = await import(
+      "@/lib/promotions/instagramPublish"
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json(
+          {
+            error: {
+              message: "(#200) Requires extended permission: instagram_basic",
+              code: 200,
+              type: "OAuthException",
+            },
+          },
+          { status: 403 },
+        ),
+      ),
+    );
+
+    const result = await discoverInstagramProfessionalAccount("page-token", "page-1");
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.code).toBe("permission");
+    expect(result.error.toLowerCase()).toMatch(/instagram_basic|reconnect facebook/);
+    expect(result.error).not.toBe(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE);
+  });
+
+  it("succeeds when instagram_business_account is present", async () => {
+    const { discoverInstagramProfessionalAccount } = await import(
+      "@/lib/promotions/instagramPublish"
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          id: "page-1",
+          name: "Shalean",
+          instagram_business_account: {
+            id: "17841400000000000",
+            username: "shalean",
+            name: "Shalean",
+          },
+        }),
+      ),
+    );
+
+    const result = await discoverInstagramProfessionalAccount("page-token", "page-1");
+    expect(result).toEqual({
+      ok: true,
+      pageId: "page-1",
+      igUserId: "17841400000000000",
+      username: "shalean",
+      name: "Shalean",
+      accountTypeHint: "professional",
+    });
   });
 });

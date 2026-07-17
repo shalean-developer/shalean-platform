@@ -117,13 +117,17 @@ export function createInstagramProvider(): SocialProvider {
         ? await discoverInstagramProfessionalAccount(fb.accessToken, fb.pageId)
         : null;
 
-      if (discovered && !discovered.ok && discovered.code === "no_ig_linked") {
+      if (
+        discovered &&
+        !discovered.ok &&
+        (discovered.code === "no_ig_linked" || discovered.code === "ig_unavailable")
+      ) {
         return {
           provider: "instagram",
           connected: false,
           configured: Boolean(fb),
           health: "disconnected",
-          statusLabel: "no_ig_linked",
+          statusLabel: discovered.code,
           targetRef: null,
           displayName: null,
           hint: discovered.error,
