@@ -1,6 +1,7 @@
 # MKT-001H.1 — Instagram OAuth Scope Remediation
 
 **Parent:** MKT-001H — Facebook Connected Accounts OAuth  
+**Follow-on:** MKT-001H.1.1 — Invalid Scopes hotfix (2026-07-17)  
 **Target:** `staging` only — do **not** merge to `main` or deploy production  
 **Date:** 2026-07-17  
 
@@ -12,50 +13,61 @@ Facebook Connected Accounts OAuth succeeded and Meta Business Suite showed a lin
 
 > No Instagram professional account is linked to this Facebook Page.
 
-Root cause: `FACEBOOK_OAUTH_SCOPES` omitted `instagram_basic` / `instagram_content_publish`. Meta’s Page field `instagram_business_account` requires at least `instagram_basic`; without it Graph often **omits** the field (HTTP 200), and the app treated that as “not linked”.
+Root cause: Page tokens lacked Instagram Graph permissions needed for `instagram_business_account`.
 
-## Remediation (focused)
+## MKT-001H.1 attempt
 
-1. Add Instagram scopes to Facebook OAuth:
+Added `instagram_basic` + `instagram_content_publish` to raw Facebook OAuth `scope`.
+
+### Staging result — BLOCKED
+
+Meta Login dialog returned:
+
+> Invalid Scopes: instagram_basic, instagram_content_publish.  
+> This message is only shown to developers. Users of your app will ignore these permissions if present.
+
+Those permission **names are still valid** in Meta’s Facebook Login for Business permission table, but they are **not grantable via raw `scope`** until the Meta app has them enabled (Instagram product + Login for Business configuration / Use Cases).
+
+## MKT-001H.1.1 remediation
+
+1. **Hotfix:** remove Instagram scopes from default `FACEBOOK_OAUTH_SCOPES` so Facebook Page connect works again.
+2. Keep target Instagram scopes documented as `FACEBOOK_INSTAGRAM_OAUTH_SCOPES` (includes dependency `pages_read_user_content`).
+3. Support optional `FACEBOOK_LOGIN_CONFIG_ID` — when set, OAuth uses Facebook Login for Business `config_id` instead of raw `scope`.
+
+### Operator Meta App Dashboard steps (required for Instagram)
+
+1. Confirm the Meta app type is **Business**.
+2. Add the **Instagram** product (Instagram API with Facebook Login).
+3. Under **Facebook Login for Business**, create a configuration that includes at least:
+   - `pages_show_list`
+   - `pages_read_engagement`
+   - `pages_manage_posts`
+   - `pages_read_user_content`
    - `instagram_basic`
    - `instagram_content_publish`
-2. Keep `auth_type=rerequest` so reconnect re-prompts for missing permissions.
-3. Safer discovery messaging:
-   - Missing `instagram_business_account` → `ig_unavailable` (do not claim unlinked).
-   - Graph permission errors → `permission` with reconnect + approve Instagram scopes guidance.
-4. Token / Graph payload redaction unchanged (`logFacebookOAuthEvent`).
+4. Copy the configuration id → set staging env `FACEBOOK_LOGIN_CONFIG_ID`.
+5. Redeploy / reconnect Facebook, approve all permissions, then retry Instagram discovery.
+
+Do **not** put `instagram_business_*` scopes on the Facebook Login dialog — those are for **Instagram Login** (`instagram.com/oauth`), a different auth model.
 
 ## Governance status (until staging smoke passes)
 
 | Gate | Status |
 | --- | --- |
-| Facebook OAuth | **PASS** (prior MKT-001H) |
-| Instagram discovery | **BLOCKED** until reconnect with new scopes on staging |
+| Facebook OAuth (Page scopes) | **PASS** after H.1.1 hotfix |
+| Instagram discovery | **BLOCKED** until Login for Business config + reconnect |
 | MKT-001H overall | **CONDITIONAL PASS** |
 | Production / `main` | **NO-GO** |
 
 ### Authoritative statement
 
-> **MKT-001H.1: CONDITIONAL PASS pending staging reconnect + Instagram discovery/publish smoke. Production and `main` remain NO-GO.**
-
-## Operator steps after staging deploy
-
-1. Disconnect Facebook on Connected Accounts (staging).
-2. Connect Facebook again and **approve Instagram permissions**.
-3. Connect Instagram / retry discovery.
-4. Controlled single-image publish smoke (if `MARKETING_PROVIDER_INSTAGRAM=1`).
-
-**Caution:** Meta App Review may be required before non-role users can grant Instagram permissions. Staging admin / app-role users are normally sufficient while the Meta app is in development mode.
+> **MKT-001H.1 / H.1.1: CONDITIONAL PASS. Instagram scopes must be granted via Facebook Login for Business config_id (or App Dashboard–enabled permissions), not raw invalid scopes. Production and `main` remain NO-GO.**
 
 ## Test / build evidence
 
-Recorded on feature branch `feature/mkt-001h1-instagram-oauth-scopes` (2026-07-17):
-
 | Gate | Result |
 | --- | --- |
-| OAuth tests (`metaFacebookOAuth.test.ts`) | **PASS** — scopes + `auth_type=rerequest` + log redaction |
-| Instagram tests (`mkt001gInstagram.test.ts`) | **PASS** — discovery messaging + permission classification |
-| Marketing regression (`lib/promotions` + `lib/oauth`) | **PASS** — 163/163 |
-| Typecheck | **PASS** |
-| Lint (changed files) | **PASS** — 0 errors |
-| `next build --webpack` | **PASS** (routes include `/api/oauth/facebook` + callback) |
+| OAuth tests | Page scopes + `config_id` path + log redaction |
+| Instagram discovery messaging | Retained from H.1 |
+| Marketing regression | Run on hotfix branch |
+| Production / `main` | **NO-GO** |

@@ -6,23 +6,38 @@ import { marketingConnectedAccountsUrl } from "@/lib/oauth/googleBusinessOAuth";
 export { marketingConnectedAccountsUrl };
 
 /**
- * Permissions for Page discovery, Page publishing, and Instagram Graph discovery
- * via the Page-linked Professional account (MKT-001H / MKT-001H.1).
+ * Page permissions for Connected Accounts Facebook OAuth (MKT-001H).
  *
- * `instagram_basic` is required for `/{page-id}?fields=instagram_business_account`.
- * `instagram_content_publish` is required for Content Publishing API.
- * Meta may require App Review before non-role users can grant these outside
- * development mode; staging admin / app-role users are normally sufficient.
+ * Instagram Graph permissions (`instagram_basic`, `instagram_content_publish`)
+ * must NOT be passed as raw `scope` values unless the Meta app has those
+ * permissions enabled on its Facebook Login / Login for Business configuration.
+ * Requesting them without App Dashboard enablement returns:
+ *   "Invalid Scopes: instagram_basic, instagram_content_publish"
+ * (developer-only dialog).
+ *
+ * Prefer Facebook Login for Business with `FACEBOOK_LOGIN_CONFIG_ID` once a
+ * dashboard configuration includes Page + Instagram permissions. See
+ * FACEBOOK_INSTAGRAM_OAUTH_SCOPES and MKT-001H.1 docs.
  */
 export const FACEBOOK_OAUTH_SCOPES = [
   "pages_show_list",
   "pages_read_engagement",
   "pages_manage_posts",
-  "instagram_basic",
-  "instagram_content_publish",
 ] as const;
 
 export const FACEBOOK_OAUTH_SCOPE = FACEBOOK_OAUTH_SCOPES.join(",");
+
+/**
+ * Target Instagram permissions for Page-linked Professional account discovery
+ * + Content Publishing (Facebook Login path). Enable these on the Meta app
+ * (Instagram product + Login for Business config) before requesting them.
+ * `instagram_basic` also depends on `pages_read_user_content`.
+ */
+export const FACEBOOK_INSTAGRAM_OAUTH_SCOPES = [
+  "pages_read_user_content",
+  "instagram_basic",
+  "instagram_content_publish",
+] as const;
 
 export const FACEBOOK_OAUTH_STATE_COOKIE = "fb_oauth_state";
 export const FACEBOOK_OAUTH_STATE_MAX_AGE_SEC = 600;
@@ -32,6 +47,8 @@ export type FacebookOAuthConfig = {
   appSecret: string;
   redirectUri: string;
   graphVersion: string;
+  /** Facebook Login for Business configuration id (preferred for Instagram scopes). */
+  loginConfigId: string | null;
 };
 
 export function getFacebookGraphApiVersion(): string {
@@ -54,11 +71,16 @@ export function getFacebookOAuthConfig(): FacebookOAuthConfig | null {
       ? `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")}/api/oauth/facebook/callback`
       : "");
   if (!appId || !appSecret || !redirectUri) return null;
+  const loginConfigId =
+    process.env.FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
+    process.env.META_FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
+    null;
   return {
     appId,
     appSecret,
     redirectUri,
     graphVersion: getFacebookGraphApiVersion(),
+    loginConfigId,
   };
 }
 
@@ -94,9 +116,17 @@ export function buildFacebookAuthUrl(cfg: FacebookOAuthConfig, state: string): s
   url.searchParams.set("redirect_uri", cfg.redirectUri);
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", FACEBOOK_OAUTH_SCOPE);
   // Re-prompt so reconnect can grant missing permissions.
   url.searchParams.set("auth_type", "rerequest");
+
+  // Facebook Login for Business: permissions live on the dashboard configuration.
+  // Do not also pass raw Instagram scopes here — that triggers "Invalid Scopes"
+  // when those permissions are not enabled on the Meta app.
+  if (cfg.loginConfigId) {
+    url.searchParams.set("config_id", cfg.loginConfigId);
+  } else {
+    url.searchParams.set("scope", FACEBOOK_OAUTH_SCOPE);
+  }
   return url.toString();
 }
 

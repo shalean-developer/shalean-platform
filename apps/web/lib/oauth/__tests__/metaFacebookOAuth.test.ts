@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("server-only", () => ({}));
 
 import {
+  FACEBOOK_INSTAGRAM_OAUTH_SCOPES,
   FACEBOOK_OAUTH_SCOPES,
   buildFacebookAuthUrl,
   classifyFacebookPageEligibility,
@@ -38,13 +39,14 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(hash).not.toBe(hashOAuthState(state + "x"));
   });
 
-  it("builds Meta auth URL with Page + Instagram permissions and rerequest", () => {
+  it("builds Meta auth URL with Page permissions and rerequest", () => {
     const url = buildFacebookAuthUrl(
       {
         appId: "app123",
         appSecret: "secret",
         redirectUri: "https://example.com/api/oauth/facebook/callback",
         graphVersion: "v22.0",
+        loginConfigId: null,
       },
       "state-abc",
     );
@@ -53,19 +55,36 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(parsed.searchParams.get("client_id")).toBe("app123");
     expect(parsed.searchParams.get("state")).toBe("state-abc");
     expect(parsed.searchParams.get("auth_type")).toBe("rerequest");
+    expect(parsed.searchParams.get("config_id")).toBeNull();
     expect(parsed.searchParams.get("scope")).toBe(FACEBOOK_OAUTH_SCOPES.join(","));
     expect(FACEBOOK_OAUTH_SCOPES).toEqual([
       "pages_show_list",
       "pages_read_engagement",
       "pages_manage_posts",
+    ]);
+    expect(parsed.searchParams.get("scope")).not.toContain("instagram_");
+    expect(FACEBOOK_INSTAGRAM_OAUTH_SCOPES).toEqual([
+      "pages_read_user_content",
       "instagram_basic",
       "instagram_content_publish",
     ]);
-    expect(parsed.searchParams.get("scope")).toContain("pages_show_list");
-    expect(parsed.searchParams.get("scope")).toContain("pages_read_engagement");
-    expect(parsed.searchParams.get("scope")).toContain("pages_manage_posts");
-    expect(parsed.searchParams.get("scope")).toContain("instagram_basic");
-    expect(parsed.searchParams.get("scope")).toContain("instagram_content_publish");
+  });
+
+  it("uses Facebook Login for Business config_id when configured", () => {
+    const url = buildFacebookAuthUrl(
+      {
+        appId: "app123",
+        appSecret: "secret",
+        redirectUri: "https://example.com/api/oauth/facebook/callback",
+        graphVersion: "v22.0",
+        loginConfigId: "cfg-instagram-pages",
+      },
+      "state-abc",
+    );
+    const parsed = new URL(url);
+    expect(parsed.searchParams.get("config_id")).toBe("cfg-instagram-pages");
+    expect(parsed.searchParams.get("scope")).toBeNull();
+    expect(parsed.searchParams.get("auth_type")).toBe("rerequest");
   });
 
   it("redacts token-like fields from OAuth log payloads", () => {
