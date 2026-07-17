@@ -157,6 +157,7 @@ export const OFFICE_NAV_MODULES: NavModule[] = [
       { label: "Campaigns", href: "/office/marketing/campaigns", icon: Gift },
       { label: "Social Posts", href: "/office/marketing/social", icon: Share2 },
       { label: "Connected Accounts", href: "/office/marketing/connected-accounts", icon: Link2 },
+      { label: "Platform Intelligence", href: "/office/marketing/intelligence", icon: Activity },
       { label: "Email Campaigns", href: "/office/marketing/email", icon: Mail },
       { label: "Landing Pages", href: "/office/marketing/landing-pages", icon: LayoutTemplate },
       { label: "Campaign Analytics", href: "/office/marketing/analytics", icon: BarChart3 },
