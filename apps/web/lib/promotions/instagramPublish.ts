@@ -227,7 +227,16 @@ export async function saveInstagramConnection(args: {
       username: string | null;
       pageId: string;
     }
-  | { ok: false; error: string; code?: InstagramDiscoverResult extends { ok: false } ? string : never }
+  | {
+      ok: false;
+      error: string;
+      code?:
+        | "missing_page_token"
+        | "no_ig_linked"
+        | "personal_rejected"
+        | "graph_error"
+        | "permission";
+    }
 > {
   const admin = getSupabaseAdmin();
   if (!admin) return { ok: false, error: "Server configuration error." };
