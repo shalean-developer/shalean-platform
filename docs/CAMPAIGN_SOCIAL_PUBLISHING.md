@@ -126,9 +126,10 @@ Publishing is orchestrated by `runPublish()` through a `SocialProvider` registry
 ### Feature flags
 
 ```
-# Defaults: facebook + google_business ON; stubs OFF
+# Fail-closed: all providers DISABLED unless explicitly enabled (1|true|on|enabled).
+# Unset must never expose an unfinished provider.
 MARKETING_PROVIDER_FACEBOOK=1
-MARKETING_PROVIDER_GOOGLE_BUSINESS=1
+MARKETING_PROVIDER_GOOGLE_BUSINESS=0
 MARKETING_PROVIDER_INSTAGRAM=0
 MARKETING_PROVIDER_LINKEDIN=0
 MARKETING_PROVIDER_PINTEREST=0
@@ -136,6 +137,8 @@ MARKETING_PROVIDER_X=0
 ```
 
 Enabling a stub flag alone does **not** implement API publishing — it only surfaces registry metadata. Do not enable stub flags in production without a real adapter + ledger migration.
+
+Production releases must record the enabled set in `docs/releases/marketing-provider-release-manifest.md`.
 
 ### Failure responses
 
@@ -155,4 +158,4 @@ Publish APIs return structured fields (surfaced in Social Posts toasts):
 
 ### Governance
 
-MKT-001A–E (and B.2) may land on **staging** only while **MKT-001A-PROD** (Google Business Profile API approval) remains open. Do not merge to `main` or deploy production until that gate closes.
+Provider-scoped production: GBP remains NO-GO under MKT-001A-PROD and stays disabled by flag. Facebook (then Instagram via MKT-001G) may proceed through independent gates. See `docs/audits/marketing/MKT-001-META-PRODUCTION-RELEASE-ASSESSMENT.md` and `docs/releases/marketing-provider-release-manifest.md`. Do not blind-promote the whole staging branch.

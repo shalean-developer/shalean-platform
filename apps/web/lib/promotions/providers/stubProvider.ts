@@ -1,7 +1,8 @@
 /**
  * MKT-001C — Stub providers for future platforms.
  *
- * Registered for discovery/capability queries; feature-flagged off by default.
+ * Registered for discovery/capability queries; feature-flagged off by default
+ * (same fail-closed policy as live adapters — enable only with MARKETING_PROVIDER_<KEY>=1).
  * Implementing a real adapter replaces the stub without changing the engine.
  */
 

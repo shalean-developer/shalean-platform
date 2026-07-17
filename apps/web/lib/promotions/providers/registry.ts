@@ -16,10 +16,13 @@ import type {
 
 const FEATURE_FLAG_PREFIX = "MARKETING_PROVIDER_";
 
-/** Default-on for live adapters; stubs stay off until explicitly enabled. */
+/**
+ * Fail-closed defaults: every provider is disabled unless explicitly enabled.
+ * Forgetting an env var must not expose an unfinished or unapproved provider.
+ */
 const DEFAULT_ENABLED: Record<ProviderKey, boolean> = {
-  facebook: true,
-  google_business: true,
+  facebook: false,
+  google_business: false,
   instagram: false,
   linkedin: false,
   pinterest: false,
@@ -31,10 +34,10 @@ function featureFlagEnvName(key: ProviderKey): string {
 }
 
 /**
- * Feature-flag resolution:
- * - MARKETING_PROVIDER_<KEY>=0|false|off → disabled
- * - MARKETING_PROVIDER_<KEY>=1|true|on → enabled
- * - unset → DEFAULT_ENABLED[key]
+ * Feature-flag resolution (server-enforced):
+ * - MARKETING_PROVIDER_<KEY>=0|false|off|disabled → disabled
+ * - MARKETING_PROVIDER_<KEY>=1|true|on|enabled → enabled
+ * - unset → DEFAULT_ENABLED[key] (all false — fail-closed)
  */
 export function isProviderFeatureEnabled(key: ProviderKey): boolean {
   const raw = process.env[featureFlagEnvName(key)]?.trim().toLowerCase();
