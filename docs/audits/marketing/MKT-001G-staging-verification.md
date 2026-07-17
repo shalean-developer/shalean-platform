@@ -28,9 +28,10 @@
 
 | Item | Value |
 |---|---|
-| Feature tip | `55e09742` |
-| Commits vs staging | `c7adb24c`, `6bd69f63`, `55e09742` |
+| Feature tip | `682a566e` |
+| Commits vs staging | `c7adb24c`, `6bd69f63`, `55e09742`, `682a566e` |
 | PR | https://github.com/shalean-developer/shalean-platform/pull/55 |
+| Vercel preview (building) | `dpl_8UKstZ9dBi9P54py18JckAUb6Nri` (prior tip `55e09742`); tip `682a566e` docs commit will redeploy |
 
 ---
 
