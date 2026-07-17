@@ -28,6 +28,12 @@ import type {
   IntelligenceWindowHours,
   PublishIntelligenceSnapshot,
 } from "@/lib/promotions/publishIntelligence";
+import { formatSafePercent } from "@/lib/promotions/marketingUx";
+import {
+  MarketingEmptyState,
+  MarketingSectionSkeleton,
+} from "@/components/admin/promotions/MarketingEmptyState";
+import { MarketingSubNav } from "@/components/admin/promotions/MarketingSubNav";
 
 type SnapshotPayload = PublishIntelligenceSnapshot & { ok?: boolean; error?: string };
 
@@ -53,9 +59,8 @@ const SEVERITY_BADGE: Record<string, string> = {
   info: "bg-slate-100 text-slate-700",
 };
 
-function pct(n: number | null | undefined): string {
-  if (n == null || Number.isNaN(n)) return "—";
-  return `${(n * 100).toFixed(0)}%`;
+function pct(n: number | null | undefined, sampleSize?: number | null): string {
+  return formatSafePercent(n, sampleSize);
 }
 
 function msLabel(ms: number | null | undefined): string {
@@ -145,6 +150,8 @@ function FindingCard({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span
+              role="status"
+              aria-label={`Severity ${item.severity}`}
               className={cn(
                 "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
                 SEVERITY_BADGE[item.severity] ?? SEVERITY_BADGE.info,
@@ -287,6 +294,9 @@ export function PlatformIntelligencePanel() {
             alerts, and explainable recommendations with runbooks. Staging-only — deterministic
             rules, not AI content generation.
           </p>
+          <div className="mt-3">
+            <MarketingSubNav active="intelligence" />
+          </div>
         </div>
         <Button type="button" variant="outline" size="sm" onClick={() => void load()} disabled={loading}>
           {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -297,15 +307,22 @@ export function PlatformIntelligencePanel() {
       <section aria-label="Filters" className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
         <div className="flex flex-wrap items-end gap-3">
           <div>
-            <p className="mb-1 text-xs font-medium text-slate-500">Time range</p>
-            <div className="flex rounded-lg border border-slate-200 p-1">
+            <p className="mb-1 text-xs font-medium text-slate-500" id="intel-window-label">
+              Time range
+            </p>
+            <div
+              className="flex min-h-9 rounded-lg border border-slate-200 p-1"
+              role="group"
+              aria-labelledby="intel-window-label"
+            >
               {WINDOW_OPTIONS.map((w) => (
                 <button
                   key={w}
                   type="button"
+                  aria-pressed={windowHours === w}
                   onClick={() => setWindowHours(w)}
                   className={cn(
-                    "rounded-md px-2.5 py-1 text-xs font-medium",
+                    "min-h-8 min-w-[2.75rem] rounded-md px-2.5 py-1 text-xs font-medium",
                     windowHours === w ? "bg-slate-900 text-white" : "text-slate-600 hover:bg-slate-50",
                   )}
                 >
@@ -318,13 +335,20 @@ export function PlatformIntelligencePanel() {
             <label className="mb-1 block text-xs font-medium text-slate-500" htmlFor="intel-provider">
               Provider
             </label>
-            <Input
+            <select
               id="intel-provider"
               value={provider}
               onChange={(e) => setProvider(e.target.value)}
-              placeholder="facebook"
-              className="h-9 w-40"
-            />
+              className="h-9 w-40 rounded-md border border-slate-200 bg-white px-2 text-sm"
+            >
+              <option value="">All providers</option>
+              <option value="facebook">facebook</option>
+              <option value="google_business">google_business</option>
+              <option value="instagram">instagram</option>
+              <option value="linkedin">linkedin</option>
+              <option value="pinterest">pinterest</option>
+              <option value="x">x</option>
+            </select>
           </div>
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-500" htmlFor="intel-campaign">
@@ -374,15 +398,17 @@ export function PlatformIntelligencePanel() {
       </section>
 
       {loading && !data ? (
-        <p className="flex items-center gap-2 text-sm text-slate-500">
-          <Loader2 className="h-4 w-4 animate-spin" /> Loading intelligence snapshot…
-        </p>
+        <MarketingSectionSkeleton label="Loading intelligence snapshot…" rows={5} />
       ) : null}
 
       {!loading && !data ? (
-        <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-          Could not load intelligence data. Confirm admin session and publish tables on this environment.
-        </p>
+        <MarketingEmptyState
+          stateKey="load_failed"
+          title="Could not load intelligence data"
+          description="Confirm your admin session and that publish history/jobs tables exist on this environment."
+          actionLabel="Retry"
+          onAction={() => void load()}
+        />
       ) : null}
 
       {data && health && queue ? (
@@ -402,9 +428,13 @@ export function PlatformIntelligencePanel() {
               <MetricCard
                 label="Success rate"
                 value={pct(health.publishSuccessRate)}
-                hint={`Failure ${pct(health.failureRate)}`}
+                hint={
+                  health.publishSuccessRate == null
+                    ? "Insufficient attempts in this window"
+                    : `Failure ${pct(health.failureRate)}`
+                }
                 icon={CheckCircle2}
-                tone="emerald"
+                tone={health.publishSuccessRate == null ? "slate" : "emerald"}
               />
               <MetricCard
                 label="Retry rate"
@@ -434,8 +464,8 @@ export function PlatformIntelligencePanel() {
             <h2 id="intel-slis-heading" className="text-sm font-semibold text-slate-800">
               Service level indicators
             </h2>
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <table className="min-w-full text-left text-sm">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+              <table className="min-w-[560px] w-full text-left text-sm">
                 <caption className="sr-only">SLI values versus targets</caption>
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
@@ -478,9 +508,7 @@ export function PlatformIntelligencePanel() {
               Alerts
             </h2>
             {data.alerts.length === 0 ? (
-              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                No operational alerts in this window.
-              </p>
+              <MarketingEmptyState stateKey="no_alerts" className="border-emerald-200 bg-emerald-50/70" />
             ) : (
               <ul className="space-y-2">
                 {data.alerts.map((a) => (
@@ -496,9 +524,10 @@ export function PlatformIntelligencePanel() {
               Recommendations
             </h2>
             {data.recommendations.length === 0 ? (
-              <p className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-                No recommendations — queue and providers look stable.
-              </p>
+              <MarketingEmptyState
+                stateKey="no_intelligence_findings"
+                className="border-emerald-200 bg-emerald-50/70"
+              />
             ) : (
               <ul className="space-y-2">
                 {data.recommendations.map((r) => (
@@ -560,8 +589,8 @@ export function PlatformIntelligencePanel() {
               <h2 id="intel-providers-heading" className="text-sm font-semibold text-slate-800">
                 Provider intelligence
               </h2>
-              <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-                <table className="min-w-full text-left text-sm">
+              <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                <table className="min-w-[480px] w-full text-left text-sm">
                   <caption className="sr-only">Provider success rates and error categories</caption>
                   <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                     <tr>
@@ -574,16 +603,21 @@ export function PlatformIntelligencePanel() {
                   <tbody>
                     {data.providers.length === 0 ? (
                       <tr>
-                        <td colSpan={4} className="px-3 py-4 text-slate-500">
-                          No provider activity in this window.
+                        <td colSpan={4} className="px-3 py-4">
+                          <MarketingEmptyState
+                            stateKey="insufficient_analytics"
+                            className="border-0 bg-transparent py-2"
+                          />
                         </td>
                       </tr>
                     ) : (
                       data.providers.map((p) => (
                         <tr key={p.provider} className="border-t border-slate-100">
-                          <td className="px-3 py-2 font-medium text-slate-900">{p.provider}</td>
+                          <td className="px-3 py-2 font-medium text-slate-900 break-words">
+                            {p.provider}
+                          </td>
                           <td className="px-3 py-2 text-slate-700">
-                            {pct(p.successRate)}
+                            {pct(p.successRate, p.attempts)}
                             <span className="block text-xs text-slate-500">
                               {p.successCount}/{p.attempts} · {msLabel(p.avgLatencyMs)}
                             </span>
@@ -678,31 +712,49 @@ export function PlatformIntelligencePanel() {
               Trends
             </h2>
             <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <div className="flex h-40 items-end gap-1">
-                {data.trends.map((t) => {
-                  const total = t.published + t.failed + t.retries + t.dlq;
-                  const h = Math.max(4, Math.round((total / maxTrend) * 140));
-                  return (
-                    <div key={t.day} className="flex flex-1 flex-col items-center gap-1">
-                      <div
-                        className="flex w-full flex-col justify-end overflow-hidden rounded-t bg-slate-100"
-                        style={{ height: h }}
-                        title={`${t.day}: ${t.published} ok, ${t.failed} fail, ${t.retries} retry, ${t.dlq} dlq`}
-                      >
-                        <div
-                          className="bg-emerald-500"
-                          style={{ height: `${total ? (t.published / total) * 100 : 0}%` }}
-                        />
-                        <div
-                          className="bg-rose-400"
-                          style={{ height: `${total ? (t.failed / total) * 100 : 0}%` }}
-                        />
-                      </div>
-                      <span className="text-[9px] text-slate-400">{t.day.slice(5)}</span>
-                    </div>
-                  );
-                })}
-              </div>
+              {data.trends.every((t) => t.published + t.failed + t.retries + t.dlq === 0) ? (
+                <MarketingEmptyState stateKey="insufficient_analytics" className="border-0 bg-transparent" />
+              ) : (
+                <>
+                  <div
+                    className="flex h-40 items-end gap-1"
+                    role="img"
+                    aria-label="Daily publish trend chart"
+                  >
+                    {data.trends.map((t) => {
+                      const total = t.published + t.failed + t.retries + t.dlq;
+                      const h = Math.max(4, Math.round((total / maxTrend) * 140));
+                      return (
+                        <div key={t.day} className="flex flex-1 flex-col items-center gap-1">
+                          <div
+                            className="flex w-full flex-col justify-end overflow-hidden rounded-t bg-slate-100"
+                            style={{ height: h }}
+                            title={`${t.day}: ${t.published} ok, ${t.failed} fail, ${t.retries} retry, ${t.dlq} dlq`}
+                          >
+                            <div
+                              className="bg-emerald-500"
+                              style={{ height: `${total ? (t.published / total) * 100 : 0}%` }}
+                            />
+                            <div
+                              className="bg-rose-400"
+                              style={{ height: `${total ? (t.failed / total) * 100 : 0}%` }}
+                            />
+                          </div>
+                          <span className="text-[9px] text-slate-400">{t.day.slice(5)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <ul className="sr-only">
+                    {data.trends.map((t) => (
+                      <li key={`a11y-${t.day}`}>
+                        {t.day}: {t.published} published, {t.failed} failed, {t.retries} retries,{" "}
+                        {t.dlq} dead-letter
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
             </div>
           </section>
 
@@ -710,8 +762,8 @@ export function PlatformIntelligencePanel() {
             <h2 id="intel-dlq-heading" className="text-sm font-semibold text-slate-800">
               Drill-down · DLQ & recent failures
             </h2>
-            <div className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-              <table className="min-w-full text-left text-sm">
+            <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+              <table className="min-w-[720px] w-full text-left text-sm">
                 <caption className="sr-only">Dead-letter jobs and recent failures</caption>
                 <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                   <tr>
@@ -739,13 +791,17 @@ export function PlatformIntelligencePanel() {
                         <span className="font-medium">{j.failureClass ?? "unknown"}</span>
                         <span className="block truncate text-xs text-slate-500">{j.lastError ?? ""}</span>
                       </td>
-                      <td className="px-3 py-2 font-mono text-xs">{j.correlationId}</td>
+                      <td className="max-w-[8rem] break-all px-3 py-2 font-mono text-xs">
+                        {j.correlationId}
+                      </td>
                       <td className="px-3 py-2">
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
+                          className="min-h-9"
                           disabled={replaying === j.id}
+                          aria-label={`Replay dead-letter job ${j.id}`}
                           onClick={() => void replayDlq(j.id)}
                         >
                           {replaying === j.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Replay"}
@@ -771,8 +827,8 @@ export function PlatformIntelligencePanel() {
                     ))}
                   {data.drilldown.dlqJobs.length === 0 && data.drilldown.recentFailures.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="px-3 py-4 text-slate-500">
-                        No DLQ jobs or recent failures in this window.
+                      <td colSpan={7} className="px-3 py-4">
+                        <MarketingEmptyState stateKey="no_dlq_jobs" className="border-0 bg-transparent py-2" />
                       </td>
                     </tr>
                   ) : null}

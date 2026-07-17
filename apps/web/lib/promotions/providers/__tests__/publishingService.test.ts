@@ -10,27 +10,61 @@ vi.mock("@/lib/promotions/publishObservability", () => ({
   logPublishEvent: vi.fn(async () => undefined),
 }));
 
-vi.mock("@/lib/promotions/publishIdempotency", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/promotions/publishIdempotency")>(
-    "@/lib/promotions/publishIdempotency",
-  );
+vi.mock("@/lib/promotions/publishJobs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/promotions/publishJobs")>();
   return {
     ...actual,
-    claimPublish: vi.fn(),
-    markPublishSucceeded: vi.fn(async () => undefined),
-    markPublishFailed: vi.fn(async () => undefined),
+    enqueuePublishJob: vi.fn(),
+    leaseSpecificPublishJob: vi.fn(),
+    executePublishJob: vi.fn(),
+    newPublishJobHolderId: () => "holder-test",
   };
 });
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
-  claimPublish,
-  markPublishFailed,
-  markPublishSucceeded,
-} from "@/lib/promotions/publishIdempotency";
+  enqueuePublishJob,
+  executePublishJob,
+  leaseSpecificPublishJob,
+} from "@/lib/promotions/publishJobs";
 import { createEmptyProviderRegistry } from "@/lib/promotions/providers/registry";
 import { runPublish, publishOutcomeToHttp } from "@/lib/promotions/providers/publishingService";
 import type { SocialProvider } from "@/lib/promotions/providers/types";
+import type { SocialPublishJobRow } from "@/lib/promotions/publishJobs";
+
+function makeJob(overrides?: Partial<SocialPublishJobRow>): SocialPublishJobRow {
+  return {
+    id: "job-1",
+    provider: "facebook",
+    idempotency_key: "key-1",
+    request_hash: "hash-1",
+    target_ref: "page-1",
+    promotion_id: null,
+    campaign_name: null,
+    payload: { message: "Hello world" },
+    published_by: "admin@test.com",
+    correlation_id: "corr-test-001",
+    status: "queued",
+    scheduled_for: new Date().toISOString(),
+    next_attempt_at: null,
+    attempts: 0,
+    max_attempts: 5,
+    last_error: null,
+    failure_class: null,
+    retryable: null,
+    external_post_id: null,
+    ledger_id: null,
+    lease_holder: null,
+    lease_expires_at: null,
+    dead_lettered_at: null,
+    replayed_from_job_id: null,
+    cancelled_at: null,
+    processed_at: null,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
 
 function makeFacebookLikeProvider(overrides?: Partial<SocialProvider>): SocialProvider {
   return {
@@ -102,7 +136,7 @@ describe("MKT-001C runPublish publishing service", () => {
       expect(outcome.httpStatus).toBe(503);
       expect(outcome.body.classification).toBe("provider_unavailable");
     }
-    expect(claimPublish).not.toHaveBeenCalled();
+    expect(enqueuePublishJob).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported provider keys", async () => {
@@ -120,20 +154,27 @@ describe("MKT-001C runPublish publishing service", () => {
     }
   });
 
-  it("claims then publishes and marks succeeded", async () => {
-    vi.mocked(claimPublish).mockResolvedValue({
-      outcome: "claimed",
-      id: "claim-1",
-      idempotencyKey: "key-1",
-      attempts: 1,
+  it("enqueues, leases, executes and returns success", async () => {
+    const queued = makeJob({ status: "queued" });
+    const leased = makeJob({ status: "leased", lease_holder: "holder-test", attempts: 1 });
+    vi.mocked(enqueuePublishJob).mockResolvedValue({
+      outcome: "enqueued",
+      job: queued,
+      created: true,
     });
+    vi.mocked(leaseSpecificPublishJob).mockResolvedValue(leased);
+    vi.mocked(executePublishJob).mockResolvedValue({
+      job: { ...leased, status: "succeeded", external_post_id: "post-99" },
+      serviceState: "succeeded",
+      correlationId: "corr-test-001",
+      httpStatus: 200,
+      body: { ok: true },
+      result: { ok: true, externalPostId: "post-99", postId: "post-99" },
+      providerCalled: true,
+    });
+
     const registry = createEmptyProviderRegistry();
-    const publish = vi.fn(async () => ({
-      ok: true as const,
-      externalPostId: "post-99",
-      postId: "post-99",
-    }));
-    registry.register(makeFacebookLikeProvider({ publish }));
+    registry.register(makeFacebookLikeProvider());
 
     const outcome = await runPublish({
       providerKey: "facebook",
@@ -143,12 +184,9 @@ describe("MKT-001C runPublish publishing service", () => {
     });
 
     expect(outcome.ok).toBe(true);
-    expect(publish).toHaveBeenCalledOnce();
-    expect(markPublishSucceeded).toHaveBeenCalledWith(
-      expect.anything(),
-      "claim-1",
-      "post-99",
-    );
+    expect(enqueuePublishJob).toHaveBeenCalledOnce();
+    expect(leaseSpecificPublishJob).toHaveBeenCalledOnce();
+    expect(executePublishJob).toHaveBeenCalledOnce();
     if (outcome.ok) {
       const http = publishOutcomeToHttp(outcome);
       expect(http.status).toBe(200);
@@ -157,13 +195,20 @@ describe("MKT-001C runPublish publishing service", () => {
     }
   });
 
-  it("returns idempotent replay without calling provider.publish", async () => {
-    vi.mocked(claimPublish).mockResolvedValue({
-      outcome: "duplicate_succeeded",
-      externalPostId: "existing-post",
+  it("returns idempotent replay when existing job already succeeded", async () => {
+    const succeeded = makeJob({
+      status: "succeeded",
+      external_post_id: "existing-post",
+      attempts: 1,
     });
-    const publish = vi.fn();
+    vi.mocked(enqueuePublishJob).mockResolvedValue({
+      outcome: "existing_active",
+      job: succeeded,
+      created: false,
+    });
+
     const registry = createEmptyProviderRegistry();
+    const publish = vi.fn();
     registry.register(makeFacebookLikeProvider({ publish }));
 
     const outcome = await runPublish({
@@ -178,22 +223,36 @@ describe("MKT-001C runPublish publishing service", () => {
       expect(outcome.idempotentReplay).toBe(true);
       expect(outcome.result.externalPostId).toBe("existing-post");
     }
+    expect(leaseSpecificPublishJob).not.toHaveBeenCalled();
+    expect(executePublishJob).not.toHaveBeenCalled();
     expect(publish).not.toHaveBeenCalled();
   });
 
-  it("marks failed and returns classified error body", async () => {
-    vi.mocked(claimPublish).mockResolvedValue({
-      outcome: "claimed",
-      id: "claim-2",
-      idempotencyKey: "key-2",
-      attempts: 1,
+  it("returns classified failure body from executePublishJob", async () => {
+    const queued = makeJob({ status: "queued" });
+    const leased = makeJob({ status: "leased", lease_holder: "holder-test", attempts: 1 });
+    vi.mocked(enqueuePublishJob).mockResolvedValue({
+      outcome: "enqueued",
+      job: queued,
+      created: true,
     });
+    vi.mocked(leaseSpecificPublishJob).mockResolvedValue(leased);
+    vi.mocked(executePublishJob).mockResolvedValue({
+      job: leased,
+      serviceState: "failed",
+      correlationId: "corr-test-001",
+      httpStatus: 429,
+      body: {
+        error: "rate limited",
+        classification: "rate_limit",
+        retryable: true,
+        correlationId: "corr-test-001",
+      },
+      providerCalled: true,
+    });
+
     const registry = createEmptyProviderRegistry();
-    registry.register(
-      makeFacebookLikeProvider({
-        publish: async () => ({ ok: false, error: "rate limited", status: 429 }),
-      }),
-    );
+    registry.register(makeFacebookLikeProvider());
 
     const outcome = await runPublish({
       providerKey: "facebook",
@@ -202,7 +261,6 @@ describe("MKT-001C runPublish publishing service", () => {
       registry,
     });
 
-    expect(markPublishFailed).toHaveBeenCalled();
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) {
       expect(outcome.httpStatus).toBe(429);

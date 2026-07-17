@@ -20,6 +20,17 @@ import {
   isGoogleBusinessSaveErrorReason,
 } from "@/lib/oauth/googleBusinessSaveError";
 import { cn } from "@/lib/utils";
+import {
+  classifyProviderUxState,
+  isProviderPublishReady,
+  providerUxStateLabel,
+  type ProviderUxState,
+} from "@/lib/promotions/marketingUx";
+import {
+  MarketingEmptyState,
+  MarketingSectionSkeleton,
+} from "@/components/admin/promotions/MarketingEmptyState";
+import { MarketingSubNav } from "@/components/admin/promotions/MarketingSubNav";
 
 type PlatformCard = {
   id: string;
@@ -87,26 +98,29 @@ function formatWhen(iso: string | null | undefined): string {
   }
 }
 
-function StatusBadge({ status, health }: { status: string; health: string }) {
-  const connected = status === "connected";
-  const pending = status === "pending_location";
-  const error = status === "error" || health === "error";
-  const degraded = !error && health === "degraded";
-  const soon = status === "coming_soon" || status === "disabled";
+const UX_BADGE_CLASS: Record<ProviderUxState, string> = {
+  connected: "bg-emerald-50 text-emerald-800",
+  configured: "bg-blue-50 text-blue-800",
+  available: "bg-slate-100 text-slate-700",
+  pending_location: "bg-amber-50 text-amber-900",
+  degraded: "bg-amber-50 text-amber-900",
+  expired: "bg-rose-50 text-rose-800",
+  error: "bg-rose-50 text-rose-800",
+  temporarily_unavailable: "bg-amber-50 text-amber-900",
+  disabled: "bg-slate-100 text-slate-500",
+  unsupported: "bg-slate-100 text-slate-500",
+};
 
-  const label = soon
-    ? status === "disabled"
-      ? "Flagged — adapter pending"
-      : "Coming soon"
-    : error
-      ? "Needs attention"
-      : degraded
-        ? "Token / provider issue"
-        : connected
-          ? "Connected"
-          : pending
-            ? "Select location"
-            : "Disconnected";
+function StatusBadge({ card }: { card: PlatformCard }) {
+  const state = classifyProviderUxState(card);
+  const label = providerUxStateLabel(state);
+  const healthy = state === "connected";
+  const warn =
+    state === "pending_location" ||
+    state === "degraded" ||
+    state === "temporarily_unavailable" ||
+    state === "expired" ||
+    state === "error";
 
   return (
     <span
@@ -114,19 +128,12 @@ function StatusBadge({ status, health }: { status: string; health: string }) {
       aria-label={label}
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
-        connected && !degraded && !error && "bg-emerald-50 text-emerald-800",
-        pending && "bg-amber-50 text-amber-900",
-        degraded && "bg-amber-50 text-amber-900",
-        error && "bg-rose-50 text-rose-800",
-        soon && "bg-slate-100 text-slate-500",
-        !connected && !pending && !error && !soon && !degraded && "bg-slate-100 text-slate-600",
+        UX_BADGE_CLASS[state],
       )}
     >
-      {connected && !degraded && !error ? (
+      {healthy ? (
         <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-      ) : soon ? (
-        <Circle className="h-3.5 w-3.5" aria-hidden />
-      ) : error || pending || degraded ? (
+      ) : warn ? (
         <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
       ) : (
         <Circle className="h-3.5 w-3.5" aria-hidden />
@@ -134,6 +141,16 @@ function StatusBadge({ status, health }: { status: string; health: string }) {
       {label}
     </span>
   );
+}
+
+function capabilityRibbon(card: PlatformCard): string {
+  const state = classifyProviderUxState(card);
+  if (isProviderPublishReady(card) || state === "connected") return "Publish ready";
+  if (state === "pending_location") return "Location required";
+  if (state === "available" || state === "configured") return "Configured / connect";
+  if (state === "degraded" || state === "expired" || state === "error") return "Recovery needed";
+  if (state === "disabled") return "Flag disabled";
+  return "Copy / download only";
 }
 
 export function ConnectedAccountsPanel() {
@@ -236,11 +253,28 @@ export function ConnectedAccountsPanel() {
 
   if (loading && !data) {
     return (
-      <div className="flex items-center gap-2 text-slate-500">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading connected accounts…
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold text-slate-900">Connected Accounts</h1>
+        <MarketingSectionSkeleton label="Loading connected accounts…" rows={4} />
       </div>
     );
   }
+
+  if (!loading && !data) {
+    return (
+      <div className="space-y-4">
+        <h1 className="text-2xl font-semibold text-slate-900">Connected Accounts</h1>
+        <MarketingEmptyState
+          stateKey="load_failed"
+          actionLabel="Retry"
+          onAction={() => void load()}
+        />
+      </div>
+    );
+  }
+
+  const platforms = data?.platforms ?? [];
+  const publishReadyCount = platforms.filter((p) => isProviderPublishReady(p)).length;
 
   return (
     <div className="space-y-8">
@@ -251,11 +285,9 @@ export function ConnectedAccountsPanel() {
           Google Business Profile uses OAuth. Other channels are registered as stubs until adapters
           ship (feature flags <code className="font-mono text-xs">MARKETING_PROVIDER_*</code>).
         </p>
-        <p className="mt-2 text-sm">
-          <Link href="/office/marketing/social" className="text-blue-700 hover:underline">
-            Back to Social Posts
-          </Link>
-        </p>
+        <div className="mt-3">
+          <MarketingSubNav active="connected-accounts" />
+        </div>
         {failedLast24h > 0 ? (
           <p
             role="status"
@@ -265,30 +297,40 @@ export function ConnectedAccountsPanel() {
             <Link href="/office/marketing/social" className="font-medium underline">
               Retry from Social Posts
             </Link>
+            {" · "}
+            <Link
+              href="/office/marketing/intelligence?focus=dlq"
+              className="font-medium underline"
+            >
+              Inspect DLQ / failures
+            </Link>
             .
           </p>
         ) : null}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        {(data?.platforms ?? []).map((p) => (
+      {publishReadyCount === 0 ? (
+        <MarketingEmptyState stateKey="no_connected_providers" />
+      ) : null}
+
+      <div className="grid gap-4 sm:grid-cols-1 lg:grid-cols-2">
+        {platforms.map((p) => (
           <div key={p.id} className="rounded-2xl border border-slate-200 bg-white p-5">
             <div className="flex flex-wrap items-start justify-between gap-2">
-              <div>
-                <p className="text-lg font-semibold text-slate-900">{p.label}</p>
+              <div className="min-w-0">
+                <p className="text-lg font-semibold text-slate-900 break-words">{p.label}</p>
                 <div className="mt-1">
-                  <StatusBadge status={p.status} health={p.health} />
+                  <StatusBadge card={p} />
                 </div>
               </div>
-              {p.available ? (
-                <span className="text-xs font-medium uppercase tracking-wide text-emerald-700">
-                  {p.publishEnabled ? "Publish ready" : "Available"}
-                </span>
-              ) : (
-                <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Copy / download only
-                </span>
-              )}
+              <span
+                className={cn(
+                  "text-xs font-medium uppercase tracking-wide",
+                  isProviderPublishReady(p) ? "text-emerald-700" : "text-slate-400",
+                )}
+              >
+                {capabilityRibbon(p)}
+              </span>
             </div>
 
             {p.featureFlag ? (
@@ -430,13 +472,27 @@ export function ConnectedAccountsPanel() {
                 </div>
               </div>
             ) : p.id === "facebook" ? (
+              <div className="mt-4 space-y-2 text-xs text-slate-500">
+                <p>
+                  Facebook uses server env tokens (no OAuth UI). Set{" "}
+                  <code className="font-mono">FACEBOOK_PAGE_ID</code> and{" "}
+                  <code className="font-mono">FACEBOOK_PAGE_ACCESS_TOKEN</code>, then refresh this
+                  page. Use a Page access token from Graph{" "}
+                  <code className="font-mono">/me/accounts</code>, not a User token.
+                </p>
+                <p>
+                  After env is set, verify from{" "}
+                  <Link href="/office/marketing/social" className="text-blue-700 hover:underline">
+                    Social Posts
+                  </Link>
+                  . Last successful sync/publish timestamps above show verification health.
+                </p>
+              </div>
+            ) : !p.publishEnabled ? (
               <p className="mt-4 text-xs text-slate-500">
-                Configure <code className="font-mono">FACEBOOK_PAGE_ID</code> and{" "}
-                <code className="font-mono">FACEBOOK_PAGE_ACCESS_TOKEN</code> in server env. See{" "}
-                <Link href="/office/marketing/social" className="text-blue-700 hover:underline">
-                  Social Posts
-                </Link>
-                .
+                Adapter not publish-enabled. Caption copy and creative download remain available on
+                Social Posts; one-click publish stays disabled so this channel is never implied as
+                live.
               </p>
             ) : null}
           </div>
@@ -475,12 +531,30 @@ export function ConnectedAccountsPanel() {
           ))}
         </div>
         {(filteredHistory.length ?? 0) === 0 ? (
-          <p className="mt-3 rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-            {historyFilter === "all" ? "No publishes yet." : `No ${historyFilter} rows.`}
-          </p>
+          <div className="mt-3">
+            <MarketingEmptyState
+              stateKey={
+                historyFilter === "failed"
+                  ? "no_failed_jobs"
+                  : historyFilter === "all"
+                    ? "no_publish_history"
+                    : "no_filter_results"
+              }
+              title={
+                historyFilter === "published"
+                  ? "No successful publishes in this filter"
+                  : undefined
+              }
+              description={
+                historyFilter === "published"
+                  ? "Successful publishes will appear after a one-click post from Social Posts."
+                  : undefined
+              }
+            />
+          </div>
         ) : (
-          <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
-            <table className="min-w-full text-left text-sm">
+          <div className="mt-3 overflow-x-auto rounded-2xl border border-slate-200">
+            <table className="min-w-[640px] w-full text-left text-sm">
               <caption className="sr-only">
                 Social publish history filtered by {historyFilter}
               </caption>
