@@ -1,4 +1,4 @@
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   computePublishJobBackoffMs,
@@ -399,10 +399,18 @@ describe("MKT-001B.2 sanitize payload", () => {
 });
 
 describe("MKT-001B.2 durable queue safety gates", () => {
+  const prevFacebookFlag = process.env.MARKETING_PROVIDER_FACEBOOK;
+
   beforeEach(() => {
+    process.env.MARKETING_PROVIDER_FACEBOOK = "1";
     const registry = new ProviderRegistry();
     registry.register(mockProvider({}));
     setProviderRegistryForTests(registry);
+  });
+
+  afterEach(() => {
+    if (prevFacebookFlag === undefined) delete process.env.MARKETING_PROVIDER_FACEBOOK;
+    else process.env.MARKETING_PROVIDER_FACEBOOK = prevFacebookFlag;
   });
 
   it("enqueue retries do not create duplicate logical jobs", async () => {
