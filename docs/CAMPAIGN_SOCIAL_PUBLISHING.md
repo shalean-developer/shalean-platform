@@ -9,9 +9,27 @@
    - **Post to Facebook** (Facebook cards only) — publishes image + caption to your Page when configured
    - **Upload to Google Business** (Google Business cards only) — creates a local post with image when OAuth is connected
 
-Also open **Growth → Connected Accounts** to connect Google Business Profile, pick a location, and review publish history.
+Also open **Growth → Connected Accounts** to connect Facebook (Meta OAuth) or Google Business Profile, pick a Page/location, and review publish history.
 
-## Facebook one-click env
+## Facebook Connected Accounts (OAuth — preferred)
+
+1. Set Meta app credentials:
+
+```
+FACEBOOK_APP_ID=...
+FACEBOOK_APP_SECRET=...
+FACEBOOK_REDIRECT_URI=https://your-host/api/oauth/facebook/callback
+MARKETING_PROVIDER_FACEBOOK=1
+MARKETING_OAUTH_ENCRYPTION_KEY=...   # same key used for GBP/IG token encryption
+FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK=0  # keep disabled for normal operation
+```
+
+2. In **Connected Accounts**, click **Connect Facebook**, approve Meta permissions (`pages_show_list`, `pages_read_engagement`, `pages_manage_posts`), and select the Shalean Page if more than one is returned.
+3. Page tokens are encrypted in `social_accounts`. Publishing prefers the connected account; expired tokens show **Reconnect Facebook**.
+
+### Emergency / local env fallback only
+
+Only when `FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK=1` (disabled by default):
 
 ```
 FACEBOOK_PAGE_ID=your_numeric_page_id
@@ -19,6 +37,8 @@ FACEBOOK_PAGE_ACCESS_TOKEN=page_token_with_pages_manage_posts
 ```
 
 Optional: `FACEBOOK_GRAPH_API_VERSION=v22.0` (default `v22.0`)
+
+Do **not** use env tokens as the normal recovery path — reconnect via OAuth first.
 
 ### Required token type (important)
 
@@ -30,7 +50,7 @@ You need a **Page access token** with:
 - `pages_read_engagement`
 - (usually also) `pages_show_list` when generating the token
 
-### How to get a Page token (Graph API Explorer)
+### How to get a Page token for emergency fallback (Graph API Explorer)
 
 1. Open [Graph API Explorer](https://developers.facebook.com/tools/explorer/)
 2. Select your Meta app
@@ -41,9 +61,9 @@ You need a **Page access token** with:
 7. Copy that row’s **`id`** → `FACEBOOK_PAGE_ID`
 8. For production, exchange for a long-lived Page token (or use a System User token from Meta Business Suite)
 
-If you see `(#200) The permission(s) publish_actions are not available`, the env token is almost certainly a **User** token. Replace it with the Page token from step 6.
+If you see `(#200) The permission(s) publish_actions are not available`, the env token is almost certainly a **User** token. Replace it with the Page token from step 6 — or reconnect via OAuth.
 
-Without these env vars, Copy + Download PNG still work for manual posting in Meta Business Suite / Creator Studio.
+Without a connected account (and with env fallback disabled), Copy + Download PNG still work for manual posting in Meta Business Suite / Creator Studio.
 
 ## Google Business Profile (OAuth)
 

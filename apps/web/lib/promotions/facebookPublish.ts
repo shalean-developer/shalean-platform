@@ -2,6 +2,11 @@ import "server-only";
 
 import { canonicalizePublicSiteUrl } from "@/lib/promotions/offerCopy";
 import { fetchRemoteImageSafely } from "@/lib/security/safeRemoteMedia";
+import { isFacebookEnvTokenFallbackAllowed } from "@/lib/oauth/metaFacebookOAuth";
+import {
+  markFacebookConnectionAuthFailure,
+  resolveFacebookPublishConfig,
+} from "@/lib/promotions/facebookConnectedAccount";
 
 export type FacebookPublishConfig = {
   pageId: string;
@@ -9,6 +14,10 @@ export type FacebookPublishConfig = {
   graphVersion: string;
 };
 
+/**
+ * Sync env-only Page token reader (emergency/local fallback + Instagram discovery aid).
+ * Publishing must prefer {@link resolveFacebookPublishConfig} (connected account first).
+ */
 export function getFacebookPagePublishConfig(): FacebookPublishConfig | null {
   const pageId =
     process.env.FACEBOOK_PAGE_ID?.trim() || process.env.META_FACEBOOK_PAGE_ID?.trim() || "";
@@ -23,6 +32,8 @@ export function getFacebookPagePublishConfig(): FacebookPublishConfig | null {
     "v22.0";
   return { pageId, accessToken, graphVersion };
 }
+
+export { resolveFacebookPublishConfig };
 
 export type FacebookPublishResult =
   | { ok: true; postId: string; photoId?: string }
@@ -62,14 +73,14 @@ export function formatFacebookGraphError(err: GraphErrorBody | undefined, httpSt
   ) {
     return (
       (raw || "Facebook access token is invalid or expired.") +
-      " Update FACEBOOK_PAGE_ACCESS_TOKEN with a valid Page token from Graph API Explorer (/me/accounts)."
+      " Reconnect Facebook from Connected Accounts (OAuth). Env Page tokens are emergency/local fallback only."
     );
   }
 
   if (lower.includes("pages_manage_posts") || lower.includes("(#200)") || httpStatus === 403) {
     return (
       (raw || "Facebook permission error (#200).") +
-      " Ensure FACEBOOK_PAGE_ACCESS_TOKEN is a Page token with pages_manage_posts (from /me/accounts), not a User token."
+      " Reconnect Facebook and grant pages_manage_posts, or select a Page with CREATE_CONTENT/MANAGE."
     );
   }
 
@@ -171,7 +182,7 @@ export async function assertFacebookPageToken(cfg: FacebookPublishConfig): Promi
   }
 }
 
-/** Admin diagnostics: is the configured token a Page token for FACEBOOK_PAGE_ID? */
+/** Admin diagnostics: connected-account token first, then optional env fallback. */
 export async function diagnoseFacebookPagePublishConfig(): Promise<{
   configured: boolean;
   pageId: string | null;
@@ -180,9 +191,10 @@ export async function diagnoseFacebookPagePublishConfig(): Promise<{
   tokenSubjectName: string | null;
   okForPublish: boolean;
   hint: string | null;
+  source: "connected_account" | "environment_fallback" | null;
 }> {
-  const cfg = getFacebookPagePublishConfig();
-  if (!cfg) {
+  const resolved = await resolveFacebookPublishConfig();
+  if (!resolved.ok) {
     return {
       configured: false,
       pageId: null,
@@ -190,10 +202,12 @@ export async function diagnoseFacebookPagePublishConfig(): Promise<{
       tokenSubjectId: null,
       tokenSubjectName: null,
       okForPublish: false,
-      hint: "Set FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN.",
+      hint: resolved.error,
+      source: null,
     };
   }
 
+  const cfg = resolved.config;
   try {
     const meRes = await fetch(
       graphUrl(cfg, "me", { fields: "id,name", access_token: cfg.accessToken }),
@@ -205,6 +219,13 @@ export async function diagnoseFacebookPagePublishConfig(): Promise<{
       error?: GraphErrorBody;
     };
     if (!meRes.ok || me.error || !me.id) {
+      const hint = formatFacebookGraphError(me.error, meRes.status);
+      if (resolved.source === "connected_account" && (meRes.status === 401 || me.error?.code === 190)) {
+        await markFacebookConnectionAuthFailure({
+          category: "token_expired",
+          message: hint,
+        });
+      }
       return {
         configured: true,
         pageId: cfg.pageId,
@@ -212,7 +233,8 @@ export async function diagnoseFacebookPagePublishConfig(): Promise<{
         tokenSubjectId: null,
         tokenSubjectName: null,
         okForPublish: false,
-        hint: formatFacebookGraphError(me.error, meRes.status),
+        hint,
+        source: resolved.source,
       };
     }
 
@@ -226,7 +248,10 @@ export async function diagnoseFacebookPagePublishConfig(): Promise<{
       okForPublish: isPage,
       hint: isPage
         ? null
-        : "Token is a User token. Replace FACEBOOK_PAGE_ACCESS_TOKEN with the access_token from GET /me/accounts for this Page, then restart/redeploy.",
+        : resolved.source === "environment_fallback"
+          ? "Env fallback token is a User token. Reconnect Facebook via OAuth and select a Page, or set a Page token from /me/accounts."
+          : "Stored token is not a Page token for the selected Page. Reconnect Facebook and select the correct Page.",
+      source: resolved.source,
     };
   } catch (e) {
     return {
@@ -237,6 +262,7 @@ export async function diagnoseFacebookPagePublishConfig(): Promise<{
       tokenSubjectName: null,
       okForPublish: false,
       hint: e instanceof Error ? e.message : "Token diagnosis failed.",
+      source: resolved.source,
     };
   }
 }
@@ -251,17 +277,25 @@ export async function publishFacebookPagePhoto(args: {
   imageDataUrl: string;
   link?: string | null;
 }): Promise<FacebookPublishResult> {
-  const cfg = getFacebookPagePublishConfig();
-  if (!cfg) {
-    return {
-      ok: false,
-      error:
-        "Facebook publishing is not configured. Set FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN (Page token with pages_manage_posts).",
-    };
+  const resolved = await resolveFacebookPublishConfig();
+  if (!resolved.ok) {
+    return { ok: false, error: resolved.error, status: resolved.status };
   }
+  const cfg = resolved.config;
 
   const preflight = await assertFacebookPageToken(cfg);
-  if (preflight) return preflight;
+  if (preflight && !preflight.ok) {
+    if (
+      resolved.source === "connected_account" &&
+      (preflight.status === 401 || /expired|invalid oauth/i.test(preflight.error))
+    ) {
+      await markFacebookConnectionAuthFailure({
+        category: "token_expired",
+        message: preflight.error,
+      });
+    }
+    return preflight;
+  }
 
   const match = args.imageDataUrl.match(/^data:(image\/(?:png|jpeg|jpg|webp));base64,(.+)$/i);
   if (!match) {
@@ -299,11 +333,17 @@ export async function publishFacebookPagePhoto(args: {
       error?: GraphErrorBody;
     };
     if (!res.ok || json.error) {
-      return {
-        ok: false,
-        status: res.status,
-        error: formatFacebookGraphError(json.error, res.status),
-      };
+      const error = formatFacebookGraphError(json.error, res.status);
+      if (
+        resolved.source === "connected_account" &&
+        (res.status === 401 || json.error?.code === 190)
+      ) {
+        await markFacebookConnectionAuthFailure({
+          category: "token_expired",
+          message: error,
+        });
+      }
+      return { ok: false, status: res.status, error };
     }
     return {
       ok: true,
@@ -347,17 +387,25 @@ export async function publishFacebookPageFeed(args: {
   message: string;
   link?: string | null;
 }): Promise<FacebookPublishResult> {
-  const cfg = getFacebookPagePublishConfig();
-  if (!cfg) {
-    return {
-      ok: false,
-      error:
-        "Facebook publishing is not configured. Set FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN (Page token with pages_manage_posts).",
-    };
+  const resolved = await resolveFacebookPublishConfig();
+  if (!resolved.ok) {
+    return { ok: false, error: resolved.error, status: resolved.status };
   }
+  const cfg = resolved.config;
 
   const preflight = await assertFacebookPageToken(cfg);
-  if (preflight) return preflight;
+  if (preflight && !preflight.ok) {
+    if (
+      resolved.source === "connected_account" &&
+      (preflight.status === 401 || /expired|invalid oauth/i.test(preflight.error))
+    ) {
+      await markFacebookConnectionAuthFailure({
+        category: "token_expired",
+        message: preflight.error,
+      });
+    }
+    return preflight;
+  }
 
   const body: Record<string, string> = {
     message: args.message.trim().slice(0, 8000),
@@ -377,11 +425,17 @@ export async function publishFacebookPageFeed(args: {
       error?: GraphErrorBody;
     };
     if (!res.ok || json.error) {
-      return {
-        ok: false,
-        status: res.status,
-        error: formatFacebookGraphError(json.error, res.status),
-      };
+      const error = formatFacebookGraphError(json.error, res.status);
+      if (
+        resolved.source === "connected_account" &&
+        (res.status === 401 || json.error?.code === 190)
+      ) {
+        await markFacebookConnectionAuthFailure({
+          category: "token_expired",
+          message: error,
+        });
+      }
+      return { ok: false, status: res.status, error };
     }
     return { ok: true, postId: json.id ?? "unknown" };
   } catch (e) {
@@ -390,4 +444,9 @@ export async function publishFacebookPageFeed(args: {
       error: e instanceof Error ? e.message : "Failed to reach Facebook Graph API.",
     };
   }
+}
+
+/** @deprecated Prefer diagnose / resolve — kept for callers that only need the flag. */
+export function isFacebookEnvFallbackEnabled(): boolean {
+  return isFacebookEnvTokenFallbackAllowed();
 }

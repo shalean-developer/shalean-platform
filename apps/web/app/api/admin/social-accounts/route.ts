@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { diagnoseFacebookPagePublishConfig, getFacebookPagePublishConfig } from "@/lib/promotions/facebookPublish";
+import { diagnoseFacebookPagePublishConfig } from "@/lib/promotions/facebookPublish";
+import {
+  disconnectFacebookConnection,
+  getFacebookConnectionPublic,
+  selectFacebookPage,
+} from "@/lib/promotions/facebookConnectedAccount";
 import {
   disconnectGoogleBusiness,
   getGoogleBusinessConnectionPublic,
@@ -10,6 +15,7 @@ import {
   selectGoogleBusinessLocation,
 } from "@/lib/google-business";
 import { isGoogleOAuthConfigured } from "@/lib/oauth/googleBusinessOAuth";
+import { isFacebookOAuthConfigured, isFacebookEnvTokenFallbackAllowed } from "@/lib/oauth/metaFacebookOAuth";
 import { getProviderRegistry } from "@/lib/promotions/providers";
 import type { ProviderKey } from "@/lib/promotions/providers/types";
 
@@ -29,9 +35,12 @@ type PlatformCard = {
   accountName?: string | null;
   locationName?: string | null;
   locations?: unknown[];
+  pages?: unknown[];
   lastError?: string | null;
   oauthConfigured?: boolean;
-  /** MKT-001D — registry metadata */
+  envFallbackAllowed?: boolean;
+  tokenSource?: string | null;
+  lastVerifiedAt?: string | null;
   featureFlag?: string;
   providerEnabled?: boolean;
   publishEnabled?: boolean;
@@ -42,14 +51,14 @@ type PlatformCard = {
 
 /**
  * GET — Connected Accounts overview for Marketing Hub.
- * Live FB/GBP diagnostics + registry-aligned stubs (MKT-001D).
+ * Live FB/GBP/IG diagnostics + registry-aligned stubs (MKT-001D / MKT-001H).
  */
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
+  const fbPublic = await getFacebookConnectionPublic();
   const fbDiag = await diagnoseFacebookPagePublishConfig();
-  const fbCfg = getFacebookPagePublishConfig();
   const gbp = await getGoogleBusinessConnectionPublic();
   const registry = getProviderRegistry();
 
@@ -85,22 +94,60 @@ export async function GET(request: Request) {
     };
 
     if (key === "facebook") {
+      const acct = fbPublic.account;
+      const status =
+        !entry.enabled
+          ? "disabled"
+          : acct?.status === "pending_location"
+            ? "pending_location"
+            : acct?.status === "error" || (fbDiag.configured && !fbDiag.okForPublish)
+              ? "error"
+              : fbDiag.okForPublish
+                ? "connected"
+                : acct?.status === "disconnected" || !acct
+                  ? "disconnected"
+                  : acct.status;
+
+      const health =
+        status === "connected"
+          ? "healthy"
+          : status === "pending_location"
+            ? "degraded"
+            : status === "error"
+              ? "error"
+              : "unknown";
+
       platforms.push({
         id: "facebook",
         label: entry.provider.displayName,
         available: entry.enabled,
-        connected: fbDiag.configured && fbDiag.okForPublish,
-        status: !fbDiag.configured
-          ? "disconnected"
-          : fbDiag.okForPublish
-            ? "connected"
-            : "error",
-        health: !fbDiag.configured ? "unknown" : fbDiag.okForPublish ? "healthy" : "error",
-        detail: fbDiag.hint,
-        lastSync: null,
-        lastPublishAt: null,
-        accountName: fbDiag.tokenSubjectName,
-        locationName: fbCfg ? `Page ${fbCfg.pageId.slice(0, 4)}…` : null,
+        connected:
+          Boolean(acct && (acct.status === "connected" || acct.status === "pending_location")) ||
+          fbDiag.okForPublish,
+        status,
+        health,
+        detail:
+          !entry.enabled
+            ? "Facebook is disabled by feature flag (MARKETING_PROVIDER_FACEBOOK)."
+            : acct?.lastError ||
+              fbDiag.hint ||
+              (!fbPublic.oauthConfigured
+                ? "Set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI."
+                : null),
+        lastSync: acct?.lastSync ?? null,
+        lastPublishAt: acct?.lastPublishAt ?? null,
+        accountName: acct?.accountName ?? fbDiag.tokenSubjectName,
+        locationName: acct?.pageIdMasked
+          ? `Page ${acct.pageIdMasked}`
+          : fbDiag.pageId
+            ? `Page ${fbDiag.pageId.slice(0, 4)}…`
+            : null,
+        pages: acct?.pages ?? [],
+        lastError: acct?.lastError ?? null,
+        oauthConfigured: fbPublic.oauthConfigured,
+        envFallbackAllowed: fbPublic.envFallbackAllowed,
+        tokenSource: fbDiag.source,
+        lastVerifiedAt: acct?.lastVerifiedAt ?? null,
         ...baseMeta,
       });
       continue;
@@ -183,7 +230,6 @@ export async function GET(request: Request) {
       continue;
     }
 
-    // Remaining stubs — never claim available publish.
     platforms.push({
       id: key,
       label: entry.provider.displayName,
@@ -209,9 +255,14 @@ export async function GET(request: Request) {
       okForPublish: fbDiag.okForPublish,
       hint: fbDiag.hint,
       tokenKind: fbDiag.tokenKind,
+      source: fbDiag.source,
+      oauthConfigured: isFacebookOAuthConfigured(),
+      envFallbackAllowed: isFacebookEnvTokenFallbackAllowed(),
+      account: fbPublic.account,
     },
     oauth: {
       googleConfigured: isGoogleOAuthConfigured(),
+      facebookConfigured: isFacebookOAuthConfigured(),
     },
     history,
     ops: {
@@ -221,7 +272,7 @@ export async function GET(request: Request) {
 }
 
 /**
- * POST — Google Business actions: select_location | refresh | disconnect
+ * POST — Google Business + Facebook Connected Accounts actions
  */
 export async function POST(request: Request) {
   const auth = await requireAdminApi(request);
@@ -231,6 +282,8 @@ export async function POST(request: Request) {
     action?: string;
     locationId?: string;
     accountId?: string;
+    pageId?: string;
+    confirmReplace?: boolean;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -253,6 +306,34 @@ export async function POST(request: Request) {
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({ ok: true, account: sanitizeSocialAccount(result.account) });
+  }
+
+  if (action === "select_facebook_page") {
+    if (!body.pageId?.trim()) {
+      return NextResponse.json({ error: "pageId is required." }, { status: 400 });
+    }
+    const result = await selectFacebookPage({
+      pageId: body.pageId.trim(),
+      actor: auth.email,
+      confirmReplace: Boolean(body.confirmReplace),
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({
+      ok: true,
+      account: {
+        status: result.account.status,
+        accountName: result.account.account_name,
+        pageIdMasked: result.account.account_id
+          ? `${String(result.account.account_id).slice(0, 4)}…`
+          : null,
+      },
+    });
+  }
+
+  if (action === "disconnect_facebook") {
+    const result = await disconnectFacebookConnection({ actor: auth.email });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ ok: true });
   }
 
   if (action === "refresh") {

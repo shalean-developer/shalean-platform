@@ -1,8 +1,9 @@
 /**
- * MKT-001C — Facebook Page SocialProvider adapter.
+ * MKT-001C / MKT-001H — Facebook Page SocialProvider adapter.
  *
- * Wraps existing facebookPublish.ts; does not change Graph API behavior,
- * encryption, SSRF, or idempotency (owned by the publishing service).
+ * Publishing resolves tokens via Connected Accounts (encrypted) with optional
+ * env fallback. OAuth connect/disconnect are handled by /api/oauth/facebook
+ * and the social-accounts admin actions.
  */
 
 import "server-only";
@@ -11,11 +12,16 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { recordPromotionEvent } from "@/lib/promotions/server";
 import {
   diagnoseFacebookPagePublishConfig,
-  getFacebookPagePublishConfig,
   publishFacebookPageFeed,
   publishFacebookPagePhoto,
   publishFacebookPagePhotoFromUrl,
 } from "@/lib/promotions/facebookPublish";
+import {
+  disconnectFacebookConnection,
+  getFacebookConnectionPublic,
+  resolveFacebookPublishConfig,
+} from "@/lib/promotions/facebookConnectedAccount";
+import { isFacebookOAuthConfigured } from "@/lib/oauth/metaFacebookOAuth";
 import { classifyPublishFailure } from "@/lib/promotions/publishProviderErrors";
 import type {
   ConnectionResult,
@@ -30,7 +36,7 @@ import type {
   TokenRefreshResult,
 } from "@/lib/promotions/providers/types";
 
-export const FACEBOOK_PROVIDER_VERSION = "1.0.0";
+export const FACEBOOK_PROVIDER_VERSION = "1.1.0";
 
 function facebookCapabilities(): ProviderCapabilities {
   return {
@@ -54,59 +60,74 @@ export function createFacebookProvider(): SocialProvider {
     displayName: "Facebook Page",
 
     async connect(): Promise<ConnectionResult> {
-      const status = await provider.validateConnection();
-      if (!status.configured) {
+      const oauthConfigured = isFacebookOAuthConfigured();
+      if (!oauthConfigured) {
         return {
           ok: false,
           error:
-            status.hint ??
-            "Set FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN (env-based; no OAuth connect).",
-          status,
+            "Facebook OAuth is not configured. Set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI.",
+          status: await provider.validateConnection(),
         };
       }
-      return { ok: true, authorizationUrl: null, status };
+      return {
+        ok: true,
+        authorizationUrl: "/api/oauth/facebook",
+        status: await provider.validateConnection(),
+      };
     },
 
     async disconnect(): Promise<DisconnectResult> {
-      return {
-        ok: false,
-        error:
-          "Facebook Page publishing uses environment tokens. Unset FACEBOOK_PAGE_ACCESS_TOKEN to disable.",
-      };
+      const result = await disconnectFacebookConnection({ actor: "provider" });
+      if (!result.ok) return { ok: false, error: result.error };
+      return { ok: true };
     },
 
     async refreshAccessToken(): Promise<TokenRefreshResult> {
       return {
         ok: false,
         unsupported: true,
-        error: "Facebook Page tokens are managed via environment variables; refresh is unsupported.",
+        error:
+          "Facebook Page tokens are long-lived; use Reconnect Facebook when Meta returns an expired token.",
       };
     },
 
     async validateConnection(): Promise<ConnectionStatus> {
+      const fb = await getFacebookConnectionPublic();
       const diagnosis = await diagnoseFacebookPagePublishConfig();
-      const cfg = getFacebookPagePublishConfig();
+
+      let health: ConnectionStatus["health"] = "disconnected";
+      let statusLabel = "disconnected";
+      if (fb.account?.status === "pending_location") {
+        health = "degraded";
+        statusLabel = "pending_location";
+      } else if (fb.account?.status === "error" || diagnosis.configured && !diagnosis.okForPublish) {
+        health = "error";
+        statusLabel = "error";
+      } else if (diagnosis.okForPublish) {
+        health = "healthy";
+        statusLabel = "connected";
+      } else if (fb.account?.status === "disconnected") {
+        health = "disconnected";
+        statusLabel = "disconnected";
+      }
+
       return {
         provider: "facebook",
-        connected: diagnosis.okForPublish,
-        configured: diagnosis.configured,
-        health: !diagnosis.configured
-          ? "disconnected"
-          : diagnosis.okForPublish
-            ? "healthy"
-            : "error",
-        statusLabel: diagnosis.okForPublish
-          ? "connected"
-          : diagnosis.configured
-            ? "misconfigured"
-            : "disconnected",
-        targetRef: cfg?.pageId ?? null,
-        displayName: diagnosis.tokenSubjectName,
-        hint: diagnosis.hint,
+        connected: diagnosis.okForPublish || fb.account?.status === "pending_location",
+        configured: diagnosis.configured || Boolean(fb.account && fb.account.status !== "disconnected"),
+        health,
+        statusLabel,
+        targetRef: diagnosis.pageId ?? fb.account?.pageId ?? null,
+        displayName: diagnosis.tokenSubjectName ?? fb.account?.accountName ?? null,
+        hint: diagnosis.hint ?? fb.account?.lastError ?? null,
         details: {
           tokenKind: diagnosis.tokenKind,
-          pageIdMasked: cfg ? `${cfg.pageId.slice(0, 4)}…` : null,
+          pageIdMasked: fb.account?.pageIdMasked ?? null,
           okForPublish: diagnosis.okForPublish,
+          oauthConfigured: fb.oauthConfigured,
+          tokenSource: diagnosis.source,
+          envFallbackAllowed: fb.envFallbackAllowed,
+          lastVerifiedAt: fb.account?.lastVerifiedAt ?? null,
         },
       };
     },
@@ -181,7 +202,8 @@ export function createFacebookProvider(): SocialProvider {
     },
 
     async resolveTargetRef(): Promise<string | null> {
-      return getFacebookPagePublishConfig()?.pageId ?? null;
+      const resolved = await resolveFacebookPublishConfig();
+      return resolved.ok ? resolved.config.pageId : null;
     },
 
     async afterPublishSuccess(ctx) {
@@ -209,6 +231,16 @@ export function createFacebookProvider(): SocialProvider {
             correlationId: ctx.correlationId,
           },
         });
+        await admin
+          .from("social_accounts")
+          .update({
+            last_publish_at: new Date().toISOString(),
+            last_sync: new Date().toISOString(),
+            health: "healthy",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("provider", "facebook")
+          .eq("status", "connected");
       } catch {
         // best-effort
       }

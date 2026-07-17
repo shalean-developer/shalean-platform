@@ -55,7 +55,7 @@ const EMPTY_STATE_COPY: Record<EmptyStateKey, EmptyStateCopy> = {
   no_connected_providers: {
     title: "No providers ready to publish",
     description:
-      "Connect Google Business Profile or configure Facebook Page env tokens so Social Posts can publish. Stub channels stay copy/download-only until their adapters ship.",
+      "Connect Facebook via Meta OAuth or Google Business Profile so Social Posts can publish. Stub channels stay copy/download-only until their adapters ship.",
     actionLabel: "Open Connected Accounts",
     actionHref: "/office/marketing/connected-accounts",
   },
