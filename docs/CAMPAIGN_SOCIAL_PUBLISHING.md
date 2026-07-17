@@ -115,3 +115,42 @@ Local example redirect URI: `http://localhost:3000/api/oauth/google/callback`
 2. Download PNG from Social or Assets
 3. Facebook → Create post → paste + upload image → Publish  
    or Google Business Profile → Create post → paste + upload image → Publish
+
+## Provider architecture (MKT-001C / MKT-001D)
+
+Publishing is orchestrated by `runPublish()` through a `SocialProvider` registry:
+
+- Live adapters: `facebook`, `google_business`
+- Registered stubs (copy/download only until adapters ship): `instagram`, `linkedin`, `pinterest`, `x`
+
+### Feature flags
+
+```
+# Defaults: facebook + google_business ON; stubs OFF
+MARKETING_PROVIDER_FACEBOOK=1
+MARKETING_PROVIDER_GOOGLE_BUSINESS=1
+MARKETING_PROVIDER_INSTAGRAM=0
+MARKETING_PROVIDER_LINKEDIN=0
+MARKETING_PROVIDER_PINTEREST=0
+MARKETING_PROVIDER_X=0
+```
+
+Enabling a stub flag alone does **not** implement API publishing — it only surfaces registry metadata. Do not enable stub flags in production without a real adapter + ledger migration.
+
+### Failure responses
+
+Publish APIs return structured fields (surfaced in Social Posts toasts):
+
+- `error`, `classification`, `retryable`, `retryAfterMs`, `recoveryGuidance`, `correlationId`
+
+### Operator surfaces
+
+| Surface | Purpose |
+|---------|---------|
+| Growth → Social Posts | Edit caption, validate limits, publish FB/GBP, copy/download other channels |
+| Growth → Connected Accounts | Registry-aligned platform cards, GBP OAuth, publish history filters |
+| `GET /api/admin/promotions/providers` | Capability / flag snapshot (no secrets) |
+
+### Governance
+
+MKT-001A–D may land on **staging** only while **MKT-001A-PROD** (Google Business Profile API approval) remains open. Do not merge to `main` or deploy production until that gate closes.

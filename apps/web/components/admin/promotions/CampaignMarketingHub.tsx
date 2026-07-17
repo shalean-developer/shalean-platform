@@ -41,6 +41,11 @@ import {
 import { SocialImageCard } from "@/components/admin/promotions/SocialImageCard";
 import type { SocialTrustItem } from "@/components/admin/promotions/social-design";
 import { canonicalizePublicSiteUrl } from "@/lib/promotions/offerCopy";
+import { validatePublishPayloadClient } from "@/lib/promotions/providerLimits";
+import {
+  formatPublishFailureToast,
+  type PublishFailureFields,
+} from "@/lib/promotions/publishFailureUi";
 import type { PromotionRow, PromotionStatus, PromotionType } from "@/lib/promotions/types";
 
 function socialCardPropsFromPayload(
@@ -207,6 +212,13 @@ const STATUS_BADGE: Record<string, string> = {
   ended: "bg-red-100 text-red-700",
 };
 
+const CONTENT_STATUS_BADGE: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-600",
+  ready: "bg-blue-100 text-blue-700",
+  published: "bg-emerald-100 text-emerald-700",
+  archived: "bg-gray-100 text-gray-600",
+};
+
 function formatZar(n: number) {
   return `R${Math.round(n).toLocaleString("en-ZA")}`;
 }
@@ -227,7 +239,8 @@ const VIEW_META: Record<HubView, { title: string; blurb: string }> = {
   },
   social: {
     title: "Social Posts",
-    blurb: "Facebook, Instagram, LinkedIn, X, WhatsApp, Google Business, and Pinterest copy.",
+    blurb:
+      "One-click publish for Facebook Page and Google Business Profile. Other channels support copy and download until their adapters ship.",
   },
   email: {
     title: "Email Campaigns",
@@ -1566,18 +1579,22 @@ function SocialContentCard({
   facebookConfigured,
   googleConfigured,
   onAssetUpdated,
+  onContentStatusChange,
 }: {
   content: ContentRow;
   asset: AssetRow | null;
   facebookConfigured: boolean;
   googleConfigured: boolean;
   onAssetUpdated?: (asset: AssetRow) => void;
+  onContentStatusChange?: (contentId: string, status: string) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [localAsset, setLocalAsset] = useState<AssetRow | null>(asset);
-  const text = content.html_body || content.body;
+  const [localStatus, setLocalStatus] = useState(content.status);
+  const [caption, setCaption] = useState(content.body);
+  const text = content.html_body || caption;
   const activeAsset = localAsset ?? asset;
   const payload = activeAsset?.template_payload ?? {};
   const width = activeAsset?.width ?? 1200;
@@ -1586,10 +1603,34 @@ function SocialContentCard({
   const customImage = isCustomCampaignAssetImage(activeAsset?.image_url);
   const previewMax = 280;
   const previewScale = Math.min(1, previewMax / width);
+  const isPublishChannel =
+    content.channel === "facebook" || content.channel === "google_business";
+  const publishConfigured =
+    content.channel === "facebook" ? facebookConfigured : googleConfigured;
+  const charLimit =
+    content.channel === "facebook"
+      ? 63_206
+      : content.channel === "google_business"
+        ? 1500
+        : null;
+  const overLimit = charLimit != null && caption.trim().length > charLimit;
 
   useEffect(() => {
     setLocalAsset(asset);
   }, [asset]);
+
+  useEffect(() => {
+    setLocalStatus(content.status);
+    setCaption(content.body);
+  }, [content.id, content.status, content.body]);
+
+  function toastPublishFailure(res: { error?: string; data?: unknown }) {
+    const fields = {
+      error: res.error,
+      ...(typeof res.data === "object" && res.data ? (res.data as PublishFailureFields) : {}),
+    };
+    emitAdminToast(formatPublishFailureToast(fields), "error");
+  }
 
   async function copy() {
     const ok = await copyTextToClipboard(text);
@@ -1624,6 +1665,15 @@ function SocialContentCard({
   }
 
   async function publishFacebook() {
+    const precheck = validatePublishPayloadClient({
+      channel: "facebook",
+      message: caption,
+      hasImage: Boolean(customImage || cardRef.current),
+    });
+    if (!precheck.ok) {
+      emitAdminToast(precheck.error, "error");
+      return;
+    }
     setBusy("fb");
     try {
       let imageDataUrl: string | null = null;
@@ -1640,21 +1690,31 @@ function SocialContentCard({
             ? `https://shalean.co.za/campaigns/${content.promotion.slug}`
             : "https://shalean.co.za/book",
       );
-      const res = await adminFetch<{ postId: string }>("/api/admin/promotions/publish-facebook", {
-        method: "POST",
-        body: JSON.stringify({
-          message: content.body,
-          imageDataUrl,
-          imageUrl,
-          link,
-          promotionId: content.promotion_id ?? null,
-        }),
-      });
+      const res = await adminFetch<{ postId: string; correlationId?: string }>(
+        "/api/admin/promotions/publish-facebook",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            message: caption,
+            imageDataUrl,
+            imageUrl,
+            link,
+            promotionId: content.promotion_id ?? null,
+          }),
+        },
+      );
       if (res.error) {
-        emitAdminToast(res.error, "error");
+        toastPublishFailure(res);
         return;
       }
-      emitAdminToast(`Posted to Facebook (id ${res.data?.postId ?? "ok"}).`, "success");
+      setLocalStatus("published");
+      onContentStatusChange?.(content.id, "published");
+      emitAdminToast(
+        `Posted to Facebook (id ${res.data?.postId ?? "ok"})${
+          res.data?.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+        }.`,
+        "success",
+      );
     } catch (e) {
       emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
     } finally {
@@ -1663,6 +1723,15 @@ function SocialContentCard({
   }
 
   async function publishGoogleBusiness() {
+    const precheck = validatePublishPayloadClient({
+      channel: "google_business",
+      message: caption,
+      hasImage: Boolean(customImage || cardRef.current),
+    });
+    if (!precheck.ok) {
+      emitAdminToast(precheck.error, "error");
+      return;
+    }
     setBusy("gbp");
     try {
       let imageDataUrl: string | null = null;
@@ -1679,12 +1748,12 @@ function SocialContentCard({
             ? `https://shalean.co.za/campaigns/${content.promotion.slug}`
             : "https://shalean.co.za/book",
       );
-      const res = await adminFetch<{ postName: string }>(
+      const res = await adminFetch<{ postName: string; correlationId?: string }>(
         "/api/admin/promotions/publish-google-business",
         {
           method: "POST",
           body: JSON.stringify({
-            message: content.body,
+            message: caption,
             imageDataUrl,
             imageUrl,
             link,
@@ -1694,10 +1763,17 @@ function SocialContentCard({
         },
       );
       if (res.error) {
-        emitAdminToast(res.error, "error");
+        toastPublishFailure(res);
         return;
       }
-      emitAdminToast(`Posted to Google Business (${res.data?.postName ?? "ok"}).`, "success");
+      setLocalStatus("published");
+      onContentStatusChange?.(content.id, "published");
+      emitAdminToast(
+        `Posted to Google Business (${res.data?.postName ?? "ok"})${
+          res.data?.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+        }.`,
+        "success",
+      );
     } catch (e) {
       emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
     } finally {
@@ -1751,17 +1827,58 @@ function SocialContentCard({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4" aria-busy={busy != null}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           {CHANNEL_LABELS[content.channel] ?? content.channel}
         </p>
-        <p className="text-xs text-slate-400">{content.promotion?.name}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            role="status"
+            aria-label={`Content status ${localStatus}`}
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              CONTENT_STATUS_BADGE[localStatus] ?? "bg-slate-100 text-slate-600",
+            )}
+          >
+            {localStatus}
+          </span>
+          <p className="text-xs text-slate-400">{content.promotion?.name}</p>
+        </div>
       </div>
       {content.title ? <p className="mt-1 font-medium">{content.title}</p> : null}
-      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-slate-700">
-        {text.slice(0, 1200)}
-      </pre>
+      {isPublishChannel ? (
+        <div className="mt-2">
+          <Label htmlFor={`caption-${content.id}`} className="text-xs text-slate-500">
+            Caption (editable before publish)
+          </Label>
+          <textarea
+            id={`caption-${content.id}`}
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            rows={5}
+            className={cn(
+              "mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700",
+              overLimit && "border-rose-300 bg-rose-50",
+            )}
+            aria-invalid={overLimit}
+          />
+          {charLimit != null ? (
+            <p className={cn("mt-1 text-[11px]", overLimit ? "text-rose-700" : "text-slate-400")}>
+              {caption.trim().length.toLocaleString()} / {charLimit.toLocaleString()} characters
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-slate-700">
+            {text.slice(0, 1200)}
+          </pre>
+          <p className="mt-2 text-[11px] text-slate-500">
+            Copy / download only — one-click publish is not enabled for this channel.
+          </p>
+        </>
+      )}
 
       {showImage ? (
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-3">
@@ -1799,17 +1916,18 @@ function SocialContentCard({
         </div>
       ) : null}
 
-      <input
+                      <input
         ref={fileInputRef}
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         className="hidden"
+        aria-label="Upload campaign image"
         onChange={(e) => void onFileSelected(e.target.files?.[0])}
       />
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={() => void copy()}>
-          <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy text
+        <Button size="sm" variant="outline" onClick={() => void copy()} aria-label="Copy caption text">
+          <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Copy text
         </Button>
         {showImage ? (
           <>
@@ -1818,11 +1936,12 @@ function SocialContentCard({
               variant="outline"
               disabled={busy === "png"}
               onClick={() => void downloadPng()}
+              aria-label="Download PNG creative"
             >
               {busy === "png" ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
               ) : (
-                <Download className="mr-1.5 h-3.5 w-3.5" />
+                <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               )}
               Download PNG
             </Button>
@@ -1832,11 +1951,12 @@ function SocialContentCard({
               disabled={busy === "upload" || (!content.promotion_id && !activeAsset?.id)}
               onClick={() => fileInputRef.current?.click()}
               title="Replace with an image from your computer"
+              aria-label="Upload custom image"
             >
               {busy === "upload" ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
               ) : (
-                <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
+                <ImagePlus className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               )}
               Upload image
             </Button>
@@ -1846,11 +1966,12 @@ function SocialContentCard({
                 variant="outline"
                 disabled={busy === "reset" || !activeAsset?.id}
                 onClick={() => void restoreTemplate()}
+                aria-label="Restore generated template image"
               >
                 {busy === "reset" ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
                 ) : (
-                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" aria-hidden />
                 )}
                 Use template
               </Button>
@@ -1860,18 +1981,19 @@ function SocialContentCard({
         {content.channel === "facebook" ? (
           <Button
             size="sm"
-            disabled={!facebookConfigured || busy === "fb"}
+            disabled={!facebookConfigured || busy === "fb" || overLimit || !caption.trim()}
             onClick={() => void publishFacebook()}
             title={
               facebookConfigured
                 ? "Post image + caption to your Facebook Page"
                 : "Configure FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN"
             }
+            aria-label="Post to Facebook Page"
           >
             {busy === "fb" ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
             ) : (
-              <Share2 className="mr-1.5 h-3.5 w-3.5" />
+              <Share2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
             )}
             Post to Facebook
           </Button>
@@ -1879,23 +2001,33 @@ function SocialContentCard({
         {content.channel === "google_business" ? (
           <Button
             size="sm"
-            disabled={!googleConfigured || busy === "gbp"}
+            disabled={!googleConfigured || busy === "gbp" || overLimit || !caption.trim()}
             onClick={() => void publishGoogleBusiness()}
             title={
               googleConfigured
                 ? "Upload image and create a Google Business local post"
                 : "Connect Google Business Profile in Connected Accounts"
             }
+            aria-label="Upload to Google Business Profile"
           >
             {busy === "gbp" ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
             ) : (
-              <Share2 className="mr-1.5 h-3.5 w-3.5" />
+              <Share2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
             )}
             Upload to Google Business
           </Button>
         ) : null}
       </div>
+      {isPublishChannel && !publishConfigured ? (
+        <p className="mt-2 text-[11px] text-amber-800">
+          Publishing is disabled until this provider is connected or configured. Open{" "}
+          <Link href="/office/marketing/connected-accounts" className="underline">
+            Connected Accounts
+          </Link>
+          .
+        </p>
+      ) : null}
     </div>
   );
 }
