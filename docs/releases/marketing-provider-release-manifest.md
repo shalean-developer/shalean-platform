@@ -27,7 +27,7 @@
 | Status | **NOT YET RELEASED** — marketing platform not on production |
 | Fail-closed / manifest controls | **PASS** (2026-07-17) — see assessment §1c |
 | Assessment | MKT-001 Meta Production Release Assessment |
-| Next engineering | MKT-001G — Instagram / Meta Provider Readiness |
+| Next engineering | MKT-001G — in progress (`feature/mkt-001g-meta-provider-readiness`) |
 | Staging baseline (assessment) | `bf31401423b94e0d301800bb4be2a1613fa8ef85` |
 | Staging Facebook testing | Requires explicit `MARKETING_PROVIDER_FACEBOOK=1` |
 | Staging GBP | Unset or disabled unless deliberate test |

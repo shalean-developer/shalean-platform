@@ -38,6 +38,10 @@ export {
 export { bootstrapProviderRegistry } from "@/lib/promotions/providers/bootstrap";
 export { createFacebookProvider } from "@/lib/promotions/providers/facebookProvider";
 export { createGoogleBusinessProvider } from "@/lib/promotions/providers/googleBusinessProvider";
+export {
+  connectInstagramForAdmin,
+  createInstagramProvider,
+} from "@/lib/promotions/providers/instagramProvider";
 export { createStubProvider } from "@/lib/promotions/providers/stubProvider";
 export {
   publishOutcomeToHttp,

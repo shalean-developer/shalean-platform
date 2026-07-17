@@ -226,6 +226,50 @@ export function ConnectedAccountsPanel() {
     }
   }
 
+  async function connectInstagram() {
+    setBusy("ig_connect");
+    try {
+      const res = await adminFetch<{ ok: boolean; displayName?: string | null }>(
+        "/api/admin/promotions/publish-instagram",
+        {
+          method: "POST",
+          body: JSON.stringify({ action: "connect" }),
+        },
+      );
+      if (res.error) {
+        emitAdminToast(res.error, "error");
+        return;
+      }
+      emitAdminToast(
+        res.data?.displayName
+          ? `Instagram connected (${res.data.displayName}).`
+          : "Instagram connected.",
+        "success",
+      );
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function disconnectInstagram() {
+    setBusy("ig_disconnect");
+    try {
+      const res = await adminFetch<{ ok: boolean }>("/api/admin/promotions/publish-instagram", {
+        method: "POST",
+        body: JSON.stringify({ action: "disconnect" }),
+      });
+      if (res.error) {
+        emitAdminToast(res.error, "error");
+        return;
+      }
+      emitAdminToast("Instagram disconnected.", "success");
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
   async function runAction(action: string, extra?: Record<string, string>) {
     setBusy(action);
     try {
@@ -487,6 +531,51 @@ export function ConnectedAccountsPanel() {
                   </Link>
                   . Last successful sync/publish timestamps above show verification health.
                 </p>
+              </div>
+            ) : p.id === "instagram" ? (
+              <div className="mt-4 space-y-3">
+                <p className="text-xs text-slate-500">
+                  Instagram uses the <strong>Facebook Login</strong> path: a Professional (Business
+                  or Creator) account must be linked to the configured Facebook Page. Personal
+                  accounts are rejected. Enable{" "}
+                  <code className="font-mono">MARKETING_PROVIDER_INSTAGRAM=1</code> only after
+                  staging verification.
+                </p>
+                {p.providerEnabled ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      disabled={busy === "ig_connect"}
+                      onClick={() => void connectInstagram()}
+                    >
+                      {busy === "ig_connect" ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      {p.connected ? "Reconnect" : "Connect Instagram"}
+                    </Button>
+                    {p.connected ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === "ig_disconnect"}
+                        onClick={() => void disconnectInstagram()}
+                      >
+                        {busy === "ig_disconnect" ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        Disconnect
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Provider flag is off — intentionally disabled, not failed.
+                  </p>
+                )}
               </div>
             ) : !p.publishEnabled ? (
               <p className="mt-4 text-xs text-slate-500">

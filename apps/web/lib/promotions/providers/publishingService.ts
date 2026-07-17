@@ -95,7 +95,7 @@ export async function runPublish(args: RunPublishArgs): Promise<PublishServiceOu
         error: e.message,
         classification: "validation",
         retryable: false,
-        recoveryGuidance: "Use a supported provider key (facebook | google_business).",
+        recoveryGuidance: "Use a supported provider key (facebook | google_business | instagram).",
       });
     }
     if (e instanceof ProviderDisabledError) {

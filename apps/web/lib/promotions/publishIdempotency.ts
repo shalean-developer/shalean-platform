@@ -17,7 +17,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
  * - `attempts` is incremented on every reclaim / failed→retry.
  */
 
-export type PublishProvider = "facebook" | "google_business";
+export type PublishProvider = "facebook" | "google_business" | "instagram";
 
 const UNIQUE_VIOLATION = "23505";
 
