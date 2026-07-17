@@ -5,6 +5,7 @@ import { isAdmin } from "@/lib/auth/admin";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { isProviderFeatureEnabled } from "@/lib/promotions/providers/registry";
 import {
+  FACEBOOK_OAUTH_PURPOSE_COOKIE,
   FACEBOOK_OAUTH_STATE_COOKIE,
   FACEBOOK_OAUTH_STATE_MAX_AGE_SEC,
   buildFacebookAuthUrl,
@@ -14,6 +15,7 @@ import {
   hashOAuthState,
   logFacebookOAuthEvent,
   marketingConnectedAccountsUrl,
+  parseFacebookLoginPurpose,
 } from "@/lib/oauth/metaFacebookOAuth";
 
 export const runtime = "nodejs";
@@ -22,12 +24,15 @@ export const dynamic = "force-dynamic";
 /**
  * GET /api/oauth/facebook
  *
- * Starts Meta Facebook Login OAuth for Connected Accounts (MKT-001H).
+ * Starts Meta Facebook Login OAuth for Connected Accounts (MKT-001H / MKT-001H.2).
+ * Optional `?purpose=instagram` uses INSTAGRAM_LOGIN_CONFIG_ID (Instagram Graph API
+ * Login for Business variation) when configured.
  * - Browser navigation: cookie session (admin only) → redirect to Meta.
  * - Bearer adminFetch: returns `{ url }` so the UI can navigate.
  */
 export async function GET(request: Request) {
-  const cfg = getFacebookOAuthConfig();
+  const purpose = parseFacebookLoginPurpose(new URL(request.url).searchParams.get("purpose"));
+  const cfg = getFacebookOAuthConfig(purpose);
   const origin = new URL(request.url).origin;
   const correlationId = createFacebookOAuthCorrelationId();
 
@@ -47,6 +52,19 @@ export async function GET(request: Request) {
   if (!isProviderFeatureEnabled("facebook")) {
     const msg =
       "Facebook is disabled by feature flag (MARKETING_PROVIDER_FACEBOOK). Enable it before connecting.";
+    const wantsJson =
+      request.headers.get("authorization") || request.headers.get("accept")?.includes("application/json");
+    if (wantsJson) {
+      return NextResponse.json({ error: msg, configured: true, providerEnabled: false }, { status: 403 });
+    }
+    return NextResponse.redirect(
+      marketingConnectedAccountsUrl({ error: "provider_disabled" }, origin),
+    );
+  }
+
+  if (purpose === "instagram" && !isProviderFeatureEnabled("instagram")) {
+    const msg =
+      "Instagram is disabled by feature flag (MARKETING_PROVIDER_INSTAGRAM). Enable it before connecting.";
     const wantsJson =
       request.headers.get("authorization") || request.headers.get("accept")?.includes("application/json");
     if (wantsJson) {
@@ -80,8 +98,14 @@ export async function GET(request: Request) {
     path: "/",
     maxAge: FACEBOOK_OAUTH_STATE_MAX_AGE_SEC,
   });
-  // Bind correlation id to the same cookie jar for callback logs (non-secret).
   cookieStore.set("fb_oauth_cid", correlationId, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    path: "/",
+    maxAge: FACEBOOK_OAUTH_STATE_MAX_AGE_SEC,
+  });
+  cookieStore.set(FACEBOOK_OAUTH_PURPOSE_COOKIE, purpose, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
@@ -92,9 +116,10 @@ export async function GET(request: Request) {
   const url = buildFacebookAuthUrl(cfg, state);
   logFacebookOAuthEvent("oauth_started", {
     correlationId,
-    provider: "facebook",
+    provider: purpose === "instagram" ? "instagram" : "facebook",
     actor,
     redirectUri: cfg.redirectUri,
+    loginPurpose: purpose,
     usingLoginConfigId: Boolean(cfg.loginConfigId),
     loginConfigIdMasked: cfg.loginConfigId
       ? `${cfg.loginConfigId.slice(0, 4)}…`
@@ -102,7 +127,13 @@ export async function GET(request: Request) {
   });
 
   if (authHeader) {
-    return NextResponse.json({ url, configured: true, correlationId });
+    return NextResponse.json({
+      url,
+      configured: true,
+      correlationId,
+      loginPurpose: purpose,
+      usingLoginConfigId: Boolean(cfg.loginConfigId),
+    });
   }
   return NextResponse.redirect(url);
 }

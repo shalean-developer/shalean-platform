@@ -47,9 +47,16 @@ export type FacebookOAuthConfig = {
   appSecret: string;
   redirectUri: string;
   graphVersion: string;
-  /** Facebook Login for Business configuration id (preferred for Instagram scopes). */
+  /** Facebook Login for Business configuration id for this OAuth purpose. */
   loginConfigId: string | null;
+  /** Which Login for Business config was selected. */
+  loginPurpose: FacebookLoginPurpose;
 };
+
+/** Facebook Page connect vs Instagram Graph API Login for Business configs. */
+export type FacebookLoginPurpose = "facebook" | "instagram";
+
+export const FACEBOOK_OAUTH_PURPOSE_COOKIE = "fb_oauth_purpose";
 
 export function getFacebookGraphApiVersion(): string {
   return (
@@ -59,7 +66,32 @@ export function getFacebookGraphApiVersion(): string {
   );
 }
 
-export function getFacebookOAuthConfig(): FacebookOAuthConfig | null {
+function resolveLoginConfigId(purpose: FacebookLoginPurpose): string | null {
+  const facebookConfigId =
+    process.env.FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
+    process.env.META_FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
+    "";
+  const instagramConfigId =
+    process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim() ||
+    process.env.META_INSTAGRAM_LOGIN_CONFIG_ID?.trim() ||
+    "";
+
+  if (purpose === "instagram") {
+    // Prefer dedicated Instagram Graph API Login for Business config.
+    return instagramConfigId || facebookConfigId || null;
+  }
+  return facebookConfigId || null;
+}
+
+export function parseFacebookLoginPurpose(
+  raw: string | null | undefined,
+): FacebookLoginPurpose {
+  return raw?.trim().toLowerCase() === "instagram" ? "instagram" : "facebook";
+}
+
+export function getFacebookOAuthConfig(
+  purpose: FacebookLoginPurpose = "facebook",
+): FacebookOAuthConfig | null {
   const appId =
     process.env.FACEBOOK_APP_ID?.trim() || process.env.META_APP_ID?.trim() || "";
   const appSecret =
@@ -71,17 +103,22 @@ export function getFacebookOAuthConfig(): FacebookOAuthConfig | null {
       ? `${process.env.NEXT_PUBLIC_SITE_URL.replace(/\/+$/, "")}/api/oauth/facebook/callback`
       : "");
   if (!appId || !appSecret || !redirectUri) return null;
-  const loginConfigId =
-    process.env.FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
-    process.env.META_FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
-    null;
   return {
     appId,
     appSecret,
     redirectUri,
     graphVersion: getFacebookGraphApiVersion(),
-    loginConfigId,
+    loginConfigId: resolveLoginConfigId(purpose),
+    loginPurpose: purpose,
   };
+}
+
+/** True when a dedicated Instagram Login for Business config id is configured. */
+export function isInstagramLoginConfigConfigured(): boolean {
+  return Boolean(
+    process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim() ||
+      process.env.META_INSTAGRAM_LOGIN_CONFIG_ID?.trim(),
+  );
 }
 
 export function isFacebookOAuthConfigured(): boolean {

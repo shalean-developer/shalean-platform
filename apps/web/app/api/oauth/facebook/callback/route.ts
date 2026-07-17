@@ -5,6 +5,7 @@ import { isAdmin } from "@/lib/auth/admin";
 import { isProviderFeatureEnabled } from "@/lib/promotions/providers/registry";
 import { classifyFacebookSaveError } from "@/lib/oauth/metaFacebookSaveError";
 import {
+  FACEBOOK_OAUTH_PURPOSE_COOKIE,
   FACEBOOK_OAUTH_STATE_COOKIE,
   discoverFacebookPages,
   exchangeFacebookAuthorizationCode,
@@ -13,8 +14,10 @@ import {
   hashOAuthState,
   logFacebookOAuthEvent,
   marketingConnectedAccountsUrl,
+  parseFacebookLoginPurpose,
 } from "@/lib/oauth/metaFacebookOAuth";
 import { saveFacebookOAuthConnection } from "@/lib/promotions/facebookConnectedAccount";
+import { saveInstagramConnection } from "@/lib/promotions/instagramPublish";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,10 +27,10 @@ export const dynamic = "force-dynamic";
  *
  * Validates CSRF state, exchanges the authorization code server-side,
  * discovers Pages, persists encrypted tokens, redirects to Connected Accounts.
+ * When OAuth purpose was Instagram, also discovers/saves the Page-linked IG account.
  * Never returns raw Meta payloads or access tokens to the browser.
  */
 export async function GET(request: Request) {
-  const cfg = getFacebookOAuthConfig();
   const url = new URL(request.url);
   const origin = url.origin;
   const code = url.searchParams.get("code");
@@ -38,10 +41,13 @@ export async function GET(request: Request) {
     const cookieStore = await cookies();
     cookieStore.delete(FACEBOOK_OAUTH_STATE_COOKIE);
     cookieStore.delete("fb_oauth_cid");
+    cookieStore.delete(FACEBOOK_OAUTH_PURPOSE_COOKIE);
   };
 
   const cookieStore = await cookies();
   const correlationId = cookieStore.get("fb_oauth_cid")?.value ?? "fb-oauth-unknown";
+  const purpose = parseFacebookLoginPurpose(cookieStore.get(FACEBOOK_OAUTH_PURPOSE_COOKIE)?.value);
+  const cfg = getFacebookOAuthConfig(purpose);
 
   if (!cfg) {
     await clearStateCookies();
@@ -60,7 +66,8 @@ export async function GET(request: Request) {
   if (oauthError) {
     logFacebookOAuthEvent("callback_failed", {
       correlationId,
-      provider: "facebook",
+      provider: purpose === "instagram" ? "instagram" : "facebook",
+      loginPurpose: purpose,
       errorCategory: oauthError === "access_denied" ? "oauth_denied" : "oauth_failed",
     });
     await clearStateCookies();
@@ -83,7 +90,8 @@ export async function GET(request: Request) {
   if (!expectedHash || expectedHash !== hashOAuthState(state)) {
     logFacebookOAuthEvent("callback_failed", {
       correlationId,
-      provider: "facebook",
+      provider: purpose === "instagram" ? "instagram" : "facebook",
+      loginPurpose: purpose,
       errorCategory: "invalid_state",
     });
     await clearStateCookies();
@@ -108,6 +116,7 @@ export async function GET(request: Request) {
       logFacebookOAuthEvent("page_discovery_failed", {
         correlationId,
         provider: "facebook",
+        loginPurpose: purpose,
         errorCategory: reason,
         actor: user.email,
       });
@@ -129,6 +138,7 @@ export async function GET(request: Request) {
       logFacebookOAuthEvent("callback_failed", {
         correlationId,
         provider: "facebook",
+        loginPurpose: purpose,
         errorCategory: reason,
         actor: user.email,
       });
@@ -137,20 +147,41 @@ export async function GET(request: Request) {
       );
     }
 
+    let instagramConnected = false;
+    let instagramError: string | null = null;
+    if (purpose === "instagram" && isProviderFeatureEnabled("instagram") && !saved.needsPagePick) {
+      const ig = await saveInstagramConnection({ connectedBy: user.email });
+      if (ig.ok) {
+        instagramConnected = true;
+      } else {
+        instagramError = ig.code ?? "ig_unavailable";
+        logFacebookOAuthEvent("ig_discovery_after_oauth_failed", {
+          correlationId,
+          provider: "instagram",
+          loginPurpose: purpose,
+          errorCategory: ig.code ?? "ig_unavailable",
+          actor: user.email,
+        });
+      }
+    }
+
     logFacebookOAuthEvent("callback_succeeded", {
       correlationId,
-      provider: "facebook",
+      provider: purpose === "instagram" ? "instagram" : "facebook",
+      loginPurpose: purpose,
       actor: user.email,
       needsPagePick: saved.needsPagePick,
       eligibleCount: saved.eligibleCount,
+      instagramConnected,
     });
 
     return NextResponse.redirect(
       marketingConnectedAccountsUrl(
         {
-          connected: "facebook",
+          connected: instagramConnected ? "instagram" : "facebook",
           pick: saved.needsPagePick ? "1" : "0",
           cid: correlationId,
+          ...(instagramError ? { ig_error: instagramError } : {}),
         },
         origin,
       ),
@@ -160,7 +191,8 @@ export async function GET(request: Request) {
     const { reason } = classifyFacebookSaveError(message);
     logFacebookOAuthEvent("callback_failed", {
       correlationId,
-      provider: "facebook",
+      provider: purpose === "instagram" ? "instagram" : "facebook",
+      loginPurpose: purpose,
       errorCategory: reason,
       actor: user.email,
     });
