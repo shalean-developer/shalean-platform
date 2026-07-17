@@ -95,6 +95,10 @@ export async function GET(request: Request) {
     provider: "facebook",
     actor,
     redirectUri: cfg.redirectUri,
+    usingLoginConfigId: Boolean(cfg.loginConfigId),
+    loginConfigIdMasked: cfg.loginConfigId
+      ? `${cfg.loginConfigId.slice(0, 4)}…`
+      : null,
   });
 
   if (authHeader) {

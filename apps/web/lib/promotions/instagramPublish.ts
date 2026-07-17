@@ -18,6 +18,7 @@ import { encryptSecret, decryptSecret } from "@/lib/security/tokenEncryption";
 import { getFacebookPagePublishConfig } from "@/lib/promotions/facebookPublish";
 import { resolveFacebookPublishConfig } from "@/lib/promotions/facebookConnectedAccount";
 import { canonicalizePublicSiteUrl } from "@/lib/promotions/offerCopy";
+import { logFacebookOAuthEvent, maskFacebookPageId } from "@/lib/oauth/metaFacebookOAuth";
 
 const IG_CAPTION_LIMIT = 2200;
 const CONTAINER_POLL_MS = 2_000;
@@ -178,7 +179,12 @@ export async function discoverInstagramProfessionalAccount(
   try {
     const res = await fetch(
       graphUrl(pid, {
-        fields: "id,name,instagram_business_account{id,username,name}",
+        // Request both IG linkage fields. Meta docs distinguish:
+        // - instagram_business_account (business conversion link)
+        // - connected_instagram_account (Page settings link)
+        // Log redacted presence of each; prefer business account, fall back to connected.
+        fields:
+          "id,name,instagram_business_account{id,username,name},connected_instagram_account{id,username,name}",
         access_token: token,
       }),
       { method: "GET" },
@@ -187,8 +193,29 @@ export async function discoverInstagramProfessionalAccount(
       id?: string;
       name?: string;
       instagram_business_account?: { id?: string; username?: string; name?: string };
+      connected_instagram_account?: { id?: string; username?: string; name?: string };
       error?: GraphErrorBody;
     };
+
+    const igBusiness = json.instagram_business_account;
+    const igConnected = json.connected_instagram_account;
+    logFacebookOAuthEvent("ig_page_lookup", {
+      provider: "instagram",
+      httpStatus: res.status,
+      pageIdMasked: maskFacebookPageId(String(json.id ?? pid)),
+      hasError: Boolean(json.error),
+      graphErrorCode: json.error?.code ?? null,
+      graphErrorType: json.error?.type ?? null,
+      hasInstagramBusinessAccount: Boolean(igBusiness?.id),
+      hasConnectedInstagramAccount: Boolean(igConnected?.id),
+      igBusinessIdMasked: igBusiness?.id ? `${String(igBusiness.id).slice(0, 4)}…` : null,
+      igConnectedIdMasked: igConnected?.id ? `${String(igConnected.id).slice(0, 4)}…` : null,
+      pageNamePresent: Boolean(json.name),
+      loginConfigIdConfigured: Boolean(
+        process.env.FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
+          process.env.META_FACEBOOK_LOGIN_CONFIG_ID?.trim(),
+      ),
+    });
 
     if (!res.ok || json.error) {
       const status = res.status;
@@ -204,9 +231,9 @@ export async function discoverInstagramProfessionalAccount(
       };
     }
 
-    const ig = json.instagram_business_account;
+    const ig = igBusiness?.id ? igBusiness : igConnected?.id ? igConnected : null;
     if (!ig?.id) {
-      // Graph often omits this field when instagram_basic is missing, which is
+      // Graph often omits these fields when Instagram permissions are missing, which is
       // indistinguishable from a truly unlinked Page without further probing.
       return {
         ok: false,
@@ -215,8 +242,8 @@ export async function discoverInstagramProfessionalAccount(
       };
     }
 
-    // Content Publishing API only supports professional accounts. The Page-linked
-    // instagram_business_account field already excludes ordinary personal accounts.
+    // Content Publishing API only supports professional accounts. Page-linked
+    // IG User fields already exclude ordinary personal accounts.
     return {
       ok: true,
       pageId: String(json.id ?? pid),
