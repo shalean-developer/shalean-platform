@@ -14,7 +14,15 @@ import {
   markPublishFailed,
   markPublishSucceeded,
 } from "@/lib/promotions/publishIdempotency";
-import { logSystemEvent } from "@/lib/logging/systemLog";
+import {
+  classifyPublishFailure,
+  publishFailureResponseBody,
+} from "@/lib/promotions/publishProviderErrors";
+import {
+  createPublishCorrelationId,
+  fingerprintPublishPayload,
+  logPublishEvent,
+} from "@/lib/promotions/publishObservability";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -70,6 +78,9 @@ export async function POST(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
+  const correlationId = createPublishCorrelationId();
+  const startedAt = Date.now();
+
   let body: {
     message?: string;
     imageDataUrl?: string | null;
@@ -90,51 +101,149 @@ export async function POST(request: Request) {
 
   // Server-side idempotency: block double-clicks / retries / concurrent races
   // from creating duplicate Facebook posts (MKT-001A / WS4).
+  // MKT-001B: fail closed when the ledger is unavailable (no silent duplicate path).
   const admin = getSupabaseAdmin();
+  if (!admin) {
+    await logPublishEvent({
+      level: "error",
+      provider: "facebook",
+      phase: "rejected",
+      correlationId,
+      outcome: "admin_unavailable",
+      detail: "Supabase admin client unavailable; refusing publish.",
+    });
+    return NextResponse.json(
+      {
+        error: "Publishing temporarily unavailable (idempotency ledger offline). Retry shortly.",
+        classification: "provider_unavailable",
+        retryable: true,
+        correlationId,
+      },
+      { status: 503 },
+    );
+  }
+
   const cfg = getFacebookPagePublishConfig();
   const explicitKey = request.headers.get("idempotency-key");
   let claimId: string | null = null;
+  let attempts = 1;
+  const payloadFp = fingerprintPublishPayload({
+    message,
+    link: body.link,
+    promotionId: body.promotionId,
+  });
 
-  if (admin) {
-    const claim = await claimPublish(
-      admin,
-      {
-        provider: "facebook",
-        targetRef: cfg?.pageId ?? null,
-        promotionId: body.promotionId ?? null,
-        message,
-        link: body.link ?? null,
-        explicitKey,
-      },
-      auth.email,
-    );
-    if (claim.outcome === "duplicate_succeeded") {
-      return NextResponse.json({ ok: true, postId: claim.externalPostId, idempotentReplay: true });
-    }
-    if (claim.outcome === "in_progress") {
-      return NextResponse.json(
-        { error: "A publish for this content is already in progress." },
-        { status: 409 },
-      );
-    }
-    if (claim.outcome === "conflict") {
-      return NextResponse.json(
-        { error: "This idempotency key was already used with different content." },
-        { status: 409 },
-      );
-    }
-    if (claim.outcome === "claimed" || claim.outcome === "retry") {
-      claimId = claim.id;
-    } else {
-      // Ledger error: log and proceed (do not block the business action).
-      await logSystemEvent({
-        level: "warn",
-        source: "publish_facebook",
-        message: "idempotency_claim_error",
-        context: { detail: claim.error },
-      });
-    }
+  const claim = await claimPublish(
+    admin,
+    {
+      provider: "facebook",
+      targetRef: cfg?.pageId ?? null,
+      promotionId: body.promotionId ?? null,
+      message,
+      link: body.link ?? null,
+      explicitKey,
+    },
+    auth.email,
+  );
+
+  if (claim.outcome === "duplicate_succeeded") {
+    await logPublishEvent({
+      provider: "facebook",
+      phase: "idempotent_replay",
+      correlationId,
+      outcome: "duplicate_succeeded",
+      providerResponseId: claim.externalPostId,
+      latencyMs: Date.now() - startedAt,
+    });
+    return NextResponse.json({
+      ok: true,
+      postId: claim.externalPostId,
+      idempotentReplay: true,
+      correlationId,
+    });
   }
+  if (claim.outcome === "in_progress") {
+    await logPublishEvent({
+      level: "warn",
+      provider: "facebook",
+      phase: "rejected",
+      correlationId,
+      outcome: "in_progress",
+    });
+    return NextResponse.json(
+      {
+        error: "A publish for this content is already in progress.",
+        classification: "conflict",
+        retryable: true,
+        retryAfterMs: 15_000,
+        recoveryGuidance:
+          "Wait for the in-progress publish to finish. If it stays stuck longer than 10 minutes, retry — the ledger will reclaim abandoned claims.",
+        correlationId,
+      },
+      { status: 409 },
+    );
+  }
+  if (claim.outcome === "conflict") {
+    await logPublishEvent({
+      level: "warn",
+      provider: "facebook",
+      phase: "rejected",
+      correlationId,
+      outcome: "conflict",
+    });
+    return NextResponse.json(
+      {
+        error: "This idempotency key was already used with different content.",
+        classification: "conflict",
+        retryable: false,
+        recoveryGuidance:
+          "Use a new Idempotency-Key header for a deliberate repost, or change the message/link.",
+        correlationId,
+      },
+      { status: 409 },
+    );
+  }
+  if (claim.outcome === "claimed" || claim.outcome === "retry") {
+    claimId = claim.id;
+    attempts = claim.attempts;
+    await logPublishEvent({
+      provider: "facebook",
+      phase: "claim",
+      correlationId,
+      publishId: claimId,
+      idempotencyKeyFingerprint: payloadFp,
+      outcome: claim.outcome,
+      attempts,
+    });
+  } else {
+    // Ledger error: fail closed (MKT-001B) — do not publish without a claim.
+    await logPublishEvent({
+      level: "error",
+      provider: "facebook",
+      phase: "rejected",
+      correlationId,
+      outcome: "claim_error",
+      detail: claim.error,
+    });
+    return NextResponse.json(
+      {
+        error: "Could not claim publish idempotency. Retry shortly.",
+        classification: "provider_unavailable",
+        retryable: true,
+        correlationId,
+      },
+      { status: 503 },
+    );
+  }
+
+  const providerStarted = Date.now();
+  await logPublishEvent({
+    provider: "facebook",
+    phase: "provider_call",
+    correlationId,
+    publishId: claimId,
+    attempts,
+  });
 
   const result = body.imageDataUrl?.startsWith("data:image/")
     ? await publishFacebookPagePhoto({
@@ -151,26 +260,74 @@ export async function POST(request: Request) {
       : await publishFacebookPageFeed({ message, link: body.link });
 
   if (!result.ok) {
-    if (admin && claimId) await markPublishFailed(admin, claimId, result.error);
+    const failure = classifyPublishFailure({
+      provider: "facebook",
+      httpStatus: result.status,
+      rawMessage: result.error,
+    });
+    await markPublishFailed(admin, claimId, result.error);
     await recordFacebookPublishHistory({
       status: "failed",
       error: result.error,
       promotionId: body.promotionId,
       publishedBy: auth.email,
     });
-    const status = result.status && result.status >= 400 && result.status < 600 ? result.status : 400;
-    return NextResponse.json({ error: result.error }, { status });
+    await logPublishEvent({
+      level: "error",
+      provider: "facebook",
+      phase: "provider_result",
+      correlationId,
+      publishId: claimId,
+      outcome: "failed",
+      classification: failure.classification,
+      retryable: failure.retryable,
+      httpStatus: failure.httpStatus,
+      latencyMs: Date.now() - providerStarted,
+      attempts,
+      detail: failure.userMessage,
+    });
+    await logPublishEvent({
+      level: "warn",
+      provider: "facebook",
+      phase: "ledger_failed",
+      correlationId,
+      publishId: claimId,
+      attempts,
+    });
+    return NextResponse.json(
+      { ...publishFailureResponseBody(failure), correlationId },
+      { status: failure.httpStatus },
+    );
   }
 
-  if (admin && claimId) await markPublishSucceeded(admin, claimId, result.postId ?? null);
+  await markPublishSucceeded(admin, claimId, result.postId ?? null);
   await recordFacebookPublishHistory({
     status: "published",
     responseId: result.postId,
     promotionId: body.promotionId,
     publishedBy: auth.email,
   });
+  await logPublishEvent({
+    provider: "facebook",
+    phase: "provider_result",
+    correlationId,
+    publishId: claimId,
+    outcome: "succeeded",
+    providerResponseId: result.postId,
+    latencyMs: Date.now() - providerStarted,
+    attempts,
+  });
+  await logPublishEvent({
+    provider: "facebook",
+    phase: "ledger_success",
+    correlationId,
+    publishId: claimId,
+    providerResponseId: result.postId,
+    latencyMs: Date.now() - startedAt,
+    attempts,
+  });
 
-  if (body.promotionId && admin) {
+  if (body.promotionId) {
     try {
       await recordPromotionEvent(admin, {
         promotionId: body.promotionId,
@@ -180,13 +337,18 @@ export async function POST(request: Request) {
           action: "published",
           postId: result.postId,
           actor: auth.email,
+          correlationId,
         },
       });
       await admin.from("promotion_audit_log").insert({
         promotion_id: body.promotionId,
         action: "publish_facebook",
         actor: auth.email,
-        after_state: { postId: result.postId, photoId: result.photoId ?? null },
+        after_state: {
+          postId: result.postId,
+          photoId: result.photoId ?? null,
+          correlationId,
+        },
       });
     } catch {
       // best-effort
@@ -197,5 +359,6 @@ export async function POST(request: Request) {
     ok: true,
     postId: result.postId,
     photoId: result.photoId ?? null,
+    correlationId,
   });
 }

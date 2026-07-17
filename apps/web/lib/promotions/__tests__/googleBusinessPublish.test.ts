@@ -61,6 +61,12 @@ describe("formatGoogleBusinessError", () => {
     const msg = formatGoogleBusinessError({ message: "Quota exceeded", status: "RESOURCE_EXHAUSTED" }, 429);
     expect(msg.toLowerCase()).toContain("rate");
   });
+
+  it("maps provider outages", () => {
+    const msg = formatGoogleBusinessError({ message: "backend unavailable", status: "UNAVAILABLE" }, 503);
+    expect(msg.toLowerCase()).toContain("unavailable");
+    expect(msg.toLowerCase()).toContain("retry");
+  });
 });
 
 describe("googleBusinessOAuth helpers", () => {

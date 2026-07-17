@@ -53,11 +53,39 @@ export function formatFacebookGraphError(err: GraphErrorBody | undefined, httpSt
     ].join(" ");
   }
 
-  if (lower.includes("pages_manage_posts") || lower.includes("(#200)")) {
+  if (
+    httpStatus === 401 ||
+    err?.code === 190 ||
+    lower.includes("invalid oauth") ||
+    lower.includes("session has expired") ||
+    lower.includes("error validating access token")
+  ) {
+    return (
+      (raw || "Facebook access token is invalid or expired.") +
+      " Update FACEBOOK_PAGE_ACCESS_TOKEN with a valid Page token from Graph API Explorer (/me/accounts)."
+    );
+  }
+
+  if (lower.includes("pages_manage_posts") || lower.includes("(#200)") || httpStatus === 403) {
     return (
       (raw || "Facebook permission error (#200).") +
       " Ensure FACEBOOK_PAGE_ACCESS_TOKEN is a Page token with pages_manage_posts (from /me/accounts), not a User token."
     );
+  }
+
+  if (httpStatus === 429 || err?.code === 4 || err?.code === 17 || lower.includes("rate limit")) {
+    return (raw || "Facebook rate limit reached.") + " Wait a minute and try again.";
+  }
+
+  if (httpStatus === 404) {
+    return (
+      (raw || "Facebook Page was not found.") +
+      " Verify FACEBOOK_PAGE_ID matches the Page for this access token."
+    );
+  }
+
+  if (httpStatus === 500 || httpStatus === 502 || httpStatus === 503) {
+    return (raw || `Facebook is temporarily unavailable (${httpStatus}).`) + " Retry shortly.";
   }
 
   if (raw) return raw;

@@ -16,9 +16,20 @@ describe("formatFacebookGraphError", () => {
     expect(msg).toContain("/me/accounts");
   });
 
-  it("passes through other Graph messages", () => {
-    expect(formatFacebookGraphError({ message: "Invalid OAuth access token." }, 401)).toBe(
-      "Invalid OAuth access token.",
-    );
+  it("passes through other Graph messages with auth guidance on 401", () => {
+    const msg = formatFacebookGraphError({ message: "Invalid OAuth access token." }, 401);
+    expect(msg).toContain("Invalid OAuth access token.");
+    expect(msg.toLowerCase()).toContain("facebook_page_access_token");
+  });
+
+  it("maps rate limits", () => {
+    const msg = formatFacebookGraphError({ message: "Application request limit reached", code: 4 }, 429);
+    expect(msg.toLowerCase()).toContain("wait a minute");
+  });
+
+  it("maps provider outages", () => {
+    const msg = formatFacebookGraphError(undefined, 503);
+    expect(msg).toContain("503");
+    expect(msg.toLowerCase()).toContain("retry");
   });
 });
