@@ -1,7 +1,11 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { decryptSecret, encryptSecret } from "@/lib/security/tokenEncryption";
+import {
+  TokenEncryptionConfigError,
+  decryptSecret,
+  encryptSecret,
+} from "@/lib/security/tokenEncryption";
 import {
   FACEBOOK_OAUTH_SCOPES,
   discoverFacebookPages,
@@ -12,6 +16,7 @@ import {
   maskFacebookPageId,
   type FacebookDiscoveredPage,
 } from "@/lib/oauth/metaFacebookOAuth";
+import type { FacebookCallbackFailureStage } from "@/lib/oauth/metaFacebookSaveError";
 import type { FacebookPublishConfig } from "@/lib/promotions/facebookPublish";
 
 export const FACEBOOK_AUTH_MODEL = "facebook_login_oauth" as const;
@@ -121,10 +126,22 @@ export async function saveFacebookOAuthConnection(args: {
       eligibleCount: number;
       account: FacebookSocialAccountRow;
     }
-  | { ok: false; error: string }
+  | {
+      ok: false;
+      error: string;
+      failureStage?: FacebookCallbackFailureStage;
+      dbErrorCode?: string | null;
+    }
 > {
   const admin = getSupabaseAdmin();
-  if (!admin) return { ok: false, error: "Server configuration error." };
+  if (!admin) {
+    return {
+      ok: false,
+      error: "Server configuration error.",
+      failureStage: "upsert",
+      dbErrorCode: "supabase_admin_unavailable",
+    };
+  }
 
   const eligible = args.pages.filter((p) => p.eligible);
   if (args.pages.length === 0) {
@@ -146,8 +163,25 @@ export async function saveFacebookOAuthConnection(args: {
       : null;
 
   const publicPages = toPublicPages(args.pages);
-  const encryptedUserToken = encryptSecret(args.userAccessToken);
-  const encryptedPageToken = single ? encryptSecret(single.accessToken) : null;
+  let encryptedUserToken: string;
+  let encryptedPageToken: string | null;
+  try {
+    encryptedUserToken = encryptSecret(args.userAccessToken);
+    encryptedPageToken = single ? encryptSecret(single.accessToken) : null;
+  } catch (e) {
+    const message =
+      e instanceof TokenEncryptionConfigError
+        ? e.message
+        : e instanceof Error
+          ? e.message
+          : "Token encryption failed.";
+    logFacebookOAuthEvent("save_connection_failed", {
+      correlationId: args.correlationId,
+      failureStage: "encrypt",
+      errorName: e instanceof Error ? e.name : "Error",
+    });
+    return { ok: false, error: message, failureStage: "encrypt" };
+  }
 
   const row = {
     provider: "facebook",
@@ -181,6 +215,7 @@ export async function saveFacebookOAuthConnection(args: {
     updated_at: now,
   };
 
+  // Unique(provider): reconnect replaces the soft-disconnected Hub-era row in place.
   const { data, error } = await admin
     .from("social_accounts")
     .upsert(row, { onConflict: "provider" })
@@ -192,9 +227,17 @@ export async function saveFacebookOAuthConnection(args: {
   if (error) {
     logFacebookOAuthEvent("save_connection_failed", {
       correlationId: args.correlationId,
+      failureStage: "upsert",
+      dbErrorCode: error.code ?? null,
+      // Message is PostgREST/Postgres text only — never tokens.
       error: error.message,
     });
-    return { ok: false, error: error.message };
+    return {
+      ok: false,
+      error: error.message,
+      failureStage: "upsert",
+      dbErrorCode: error.code ?? null,
+    };
   }
 
   logFacebookOAuthEvent("page_discovery_succeeded", {

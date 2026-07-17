@@ -18,6 +18,7 @@ import {
 } from "@/lib/oauth/metaFacebookOAuth";
 import {
   classifyFacebookSaveError,
+  extractFacebookGraphErrorCode,
   isFacebookSaveErrorReason,
 } from "@/lib/oauth/metaFacebookSaveError";
 
@@ -178,8 +179,30 @@ describe("MKT-001H facebook save error classification", () => {
     ).toBe("no_eligible_pages");
   });
 
+  it("maps encryption / credential / redirect persistence failures", () => {
+    expect(
+      classifyFacebookSaveError(
+        "Missing MARKETING_OAUTH_ENCRYPTION_KEY. Configure a dedicated 64-char hex encryption key.",
+      ).reason,
+    ).toBe("encryption_not_configured");
+    expect(classifyFacebookSaveError("Error validating client secret.").reason).toBe(
+      "credential_mismatch",
+    );
+    expect(
+      classifyFacebookSaveError("Error validating verification code. Redirect URI mismatch.").reason,
+    ).toBe("redirect_mismatch");
+  });
+
+  it("extracts Graph error codes without returning message text", () => {
+    expect(extractFacebookGraphErrorCode("OAuthException (#190) Invalid token")).toBe(190);
+    expect(extractFacebookGraphErrorCode('{"code": 100, "message": "x"}')).toBe(100);
+    expect(extractFacebookGraphErrorCode(null)).toBeNull();
+  });
+
   it("validates reason tokens for redirect query safety", () => {
     expect(isFacebookSaveErrorReason("no_pages")).toBe(true);
+    expect(isFacebookSaveErrorReason("credential_mismatch")).toBe(true);
+    expect(isFacebookSaveErrorReason("encryption_not_configured")).toBe(true);
     expect(isFacebookSaveErrorReason("totally_fake")).toBe(false);
   });
 });

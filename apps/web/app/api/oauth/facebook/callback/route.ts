@@ -3,7 +3,11 @@ import { cookies } from "next/headers";
 import { getCookieUser } from "@/lib/auth/getCookieUser";
 import { isAdmin } from "@/lib/auth/admin";
 import { isProviderFeatureEnabled } from "@/lib/promotions/providers/registry";
-import { classifyFacebookSaveError } from "@/lib/oauth/metaFacebookSaveError";
+import {
+  classifyFacebookSaveError,
+  extractFacebookGraphErrorCode,
+  type FacebookCallbackFailureStage,
+} from "@/lib/oauth/metaFacebookSaveError";
 import {
   FACEBOOK_OAUTH_PURPOSE_COOKIE,
   FACEBOOK_OAUTH_STATE_COOKIE,
@@ -18,6 +22,7 @@ import {
 } from "@/lib/oauth/metaFacebookOAuth";
 import { saveFacebookOAuthConnection } from "@/lib/promotions/facebookConnectedAccount";
 import { saveInstagramConnection } from "@/lib/promotions/instagramPublish";
+import { TokenEncryptionConfigError } from "@/lib/security/tokenEncryption";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -69,6 +74,7 @@ export async function GET(request: Request) {
       provider: purpose === "instagram" ? "instagram" : "facebook",
       loginPurpose: purpose,
       errorCategory: oauthError === "access_denied" ? "oauth_denied" : "oauth_failed",
+      failureStage: "unknown",
     });
     await clearStateCookies();
     return NextResponse.redirect(
@@ -93,6 +99,7 @@ export async function GET(request: Request) {
       provider: purpose === "instagram" ? "instagram" : "facebook",
       loginPurpose: purpose,
       errorCategory: "invalid_state",
+      failureStage: "unknown",
     });
     await clearStateCookies();
     return NextResponse.redirect(marketingConnectedAccountsUrl({ error: "invalid_state" }, origin));
@@ -106,10 +113,16 @@ export async function GET(request: Request) {
     return NextResponse.redirect(marketingConnectedAccountsUrl({ error: "forbidden" }, origin));
   }
 
+  let failureStage: FacebookCallbackFailureStage = "unknown";
+
   try {
+    failureStage = "code_exchange";
     const shortLived = await exchangeFacebookAuthorizationCode(cfg, code);
+
+    failureStage = "long_lived_exchange";
     const longLived = await exchangeFacebookLongLivedUserToken(cfg, shortLived.access_token);
 
+    failureStage = "page_discovery";
     const discovered = await discoverFacebookPages(cfg, longLived.access_token);
     if (!discovered.ok) {
       const { reason } = classifyFacebookSaveError(discovered.error, discovered.status);
@@ -118,6 +131,9 @@ export async function GET(request: Request) {
         provider: "facebook",
         loginPurpose: purpose,
         errorCategory: reason,
+        failureStage: "page_discovery",
+        graphErrorCode: extractFacebookGraphErrorCode(discovered.error),
+        httpStatus: discovered.status ?? null,
         actor: user.email,
       });
       return NextResponse.redirect(
@@ -125,6 +141,7 @@ export async function GET(request: Request) {
       );
     }
 
+    failureStage = "upsert";
     const saved = await saveFacebookOAuthConnection({
       userAccessToken: longLived.access_token,
       expiresIn: longLived.expires_in ?? null,
@@ -135,11 +152,17 @@ export async function GET(request: Request) {
 
     if (!saved.ok) {
       const { reason } = classifyFacebookSaveError(saved.error);
+      const stage: FacebookCallbackFailureStage =
+        saved.failureStage ??
+        (reason === "encryption_not_configured" ? "encrypt" : "upsert");
       logFacebookOAuthEvent("callback_failed", {
         correlationId,
         provider: "facebook",
         loginPurpose: purpose,
         errorCategory: reason,
+        failureStage: stage,
+        graphErrorCode: extractFacebookGraphErrorCode(saved.error),
+        dbErrorCode: saved.dbErrorCode ?? null,
         actor: user.email,
       });
       return NextResponse.redirect(
@@ -188,12 +211,19 @@ export async function GET(request: Request) {
     );
   } catch (e) {
     const message = e instanceof Error ? e.message : "OAuth callback failed.";
+    const errorName = e instanceof Error ? e.name : "Error";
+    if (e instanceof TokenEncryptionConfigError) {
+      failureStage = "encrypt";
+    }
     const { reason } = classifyFacebookSaveError(message);
     logFacebookOAuthEvent("callback_failed", {
       correlationId,
       provider: purpose === "instagram" ? "instagram" : "facebook",
       loginPurpose: purpose,
       errorCategory: reason,
+      failureStage,
+      errorName,
+      graphErrorCode: extractFacebookGraphErrorCode(message),
       actor: user.email,
     });
     return NextResponse.redirect(
