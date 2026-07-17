@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdmin: vi.fn(),
@@ -114,9 +114,17 @@ function makeFacebookLikeProvider(overrides?: Partial<SocialProvider>): SocialPr
 }
 
 describe("MKT-001C runPublish publishing service", () => {
+  const prevFacebookFlag = process.env.MARKETING_PROVIDER_FACEBOOK;
+
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(getSupabaseAdmin).mockReturnValue({ from: vi.fn() } as never);
+    process.env.MARKETING_PROVIDER_FACEBOOK = "1";
+  });
+
+  afterEach(() => {
+    if (prevFacebookFlag === undefined) delete process.env.MARKETING_PROVIDER_FACEBOOK;
+    else process.env.MARKETING_PROVIDER_FACEBOOK = prevFacebookFlag;
   });
 
   it("fails closed when admin/ledger client is unavailable", async () => {

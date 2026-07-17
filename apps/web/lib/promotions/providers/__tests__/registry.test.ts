@@ -33,6 +33,8 @@ describe("MKT-001C ProviderRegistry", () => {
   });
 
   it("registers and selects providers without engine conditionals", () => {
+    process.env.MARKETING_PROVIDER_FACEBOOK = "1";
+    process.env.MARKETING_PROVIDER_GOOGLE_BUSINESS = "1";
     const registry = createEmptyProviderRegistry();
     registry.register(createFacebookProvider());
     registry.register(createGoogleBusinessProvider());
@@ -53,6 +55,18 @@ describe("MKT-001C ProviderRegistry", () => {
     expect(() => registry.get("instagram")).toThrow(ProviderNotFoundError);
   });
 
+  it("fail-closed: unset flags leave all providers disabled", () => {
+    expect(isProviderFeatureEnabled("facebook")).toBe(false);
+    expect(isProviderFeatureEnabled("google_business")).toBe(false);
+    expect(isProviderFeatureEnabled("instagram")).toBe(false);
+
+    const registry = createEmptyProviderRegistry();
+    registry.register(createFacebookProvider());
+    registry.register(createGoogleBusinessProvider());
+    expect(() => registry.requireEnabled("facebook")).toThrow(ProviderDisabledError);
+    expect(() => registry.requireEnabled("google_business")).toThrow(ProviderDisabledError);
+  });
+
   it("respects feature flags for disabled providers", () => {
     process.env.MARKETING_PROVIDER_INSTAGRAM = "0";
     const registry = createEmptyProviderRegistry();
@@ -69,6 +83,8 @@ describe("MKT-001C ProviderRegistry", () => {
   });
 
   it("lists capabilities from registered providers", () => {
+    process.env.MARKETING_PROVIDER_FACEBOOK = "1";
+    process.env.MARKETING_PROVIDER_GOOGLE_BUSINESS = "1";
     const registry = createEmptyProviderRegistry();
     registry.register(createFacebookProvider());
     registry.register(createGoogleBusinessProvider());

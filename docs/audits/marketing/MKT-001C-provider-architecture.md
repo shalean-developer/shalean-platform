@@ -122,7 +122,7 @@ apps/web/app/api/admin/promotions/
 ## 5. Provider Lifecycle
 
 1. **Register** — `bootstrapProviderRegistry()` registers adapters at process start.
-2. **Feature flag** — `MARKETING_PROVIDER_<KEY>` (default: FB + GBP on; stubs off).
+2. **Feature flag** — `MARKETING_PROVIDER_<KEY>` (**fail-closed**: all providers off unless explicitly enabled).
 3. **Resolve** — `registry.requireEnabled(key)`.
 4. **Validate content** — `provider.validateContent(request)`.
 5. **Claim** — `claimPublish` (fail-closed if ledger down) — **before** provider I/O / GBP media upload.
