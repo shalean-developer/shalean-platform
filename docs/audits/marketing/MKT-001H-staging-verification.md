@@ -1,10 +1,12 @@
 # MKT-001H — Staging Verification
 
 **Feature:** Facebook Connected Accounts OAuth  
-**Branch:** `feature/mkt-001h-facebook-connected-accounts-oauth`  
+**Branch:** `feature/mkt-001h-facebook-connected-accounts-oauth` (+ **MKT-001H.1** Instagram scope remediation)  
 **Target environment:** staging only  
-**Status:** Ready for merge → exact-SHA deploy → matrix below  
+**Status:** CONDITIONAL PASS — Instagram discovery blocked until H.1 reconnect  
 **Date opened:** 2026-07-17
+
+> **Governance (MKT-001H.1):** Facebook OAuth **PASS**. Instagram discovery **BLOCKED** until staging deploy of Instagram OAuth scopes + admin disconnect/reconnect with Instagram permissions approved. Production / `main` **NO-GO**. See `MKT-001H.1-instagram-oauth-scope-remediation.md`.
 
 ---
 
@@ -43,7 +45,8 @@
 | Env fallback disabled | No silent fallback | | |
 | Env fallback enabled (optional) | Audited `environment_fallback` source only | | |
 | Facebook regression | Queue, ledger, retry, DLQ still work | | |
-| Instagram regression | MKT-001G connect/publish behavior preserved | | |
+| Instagram regression | MKT-001G connect/publish after Facebook reconnect with Instagram scopes | | |
+| Instagram discovery (MKT-001H.1) | `instagram_business_account` resolved after reconnect + approve IG permissions | | |
 
 ---
 

@@ -45,7 +45,8 @@ Admin (Connected Accounts)
       • require MARKETING_PROVIDER_FACEBOOK
       • CSRF state (httpOnly hashed cookie, 10m TTL, single-use)
       • redirect Meta dialog
-  → Meta consent (pages_show_list, pages_read_engagement, pages_manage_posts)
+  → Meta consent (pages_show_list, pages_read_engagement, pages_manage_posts,
+      instagram_basic, instagram_content_publish)
   → GET /api/oauth/facebook/callback
       • validate state (reject missing/expired/mismatched/replay)
       • exchange code → short-lived user token
@@ -80,17 +81,21 @@ Key modules:
 
 ## Permission Model
 
-Requested scopes (documented minimum):
+Requested scopes (documented minimum — MKT-001H.1):
 
 | Permission | Purpose |
 |---|---|
 | `pages_show_list` | List Pages via `/me/accounts` |
 | `pages_read_engagement` | Read Page engagement needed for healthy publish surface |
 | `pages_manage_posts` | Publish feed/photo as the Page |
+| `instagram_basic` | Read Page-linked `instagram_business_account` for IG discovery |
+| `instagram_content_publish` | Instagram Content Publishing API |
 
 **Page eligibility:** tasks must include `CREATE_CONTENT` or `MANAGE`. Ineligible Pages are shown with reason and cannot be saved.
 
-**Instagram permissions:** intentionally **not** requested on Facebook OAuth start. MKT-001G continues to discover IG via the Page-linked Professional account using the connected Page token.
+**Instagram:** discovered via the Page-linked Professional account using the connected Page token after Facebook OAuth grants the Instagram scopes above. See `MKT-001H.1-instagram-oauth-scope-remediation.md`.
+
+Reconnect uses `auth_type=rerequest` so operators can approve newly added Instagram permissions.
 
 ---
 

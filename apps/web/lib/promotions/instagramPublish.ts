@@ -41,6 +41,10 @@ export type InstagramPublishConfig = {
   username?: string | null;
 };
 
+/** Safer copy when Graph omits IG details (permissions miss vs truly unlinked). */
+export const INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE =
+  "Instagram account details could not be retrieved. Confirm the Instagram Business account is linked to this Page, then reconnect Facebook and approve Instagram permissions.";
+
 export type InstagramDiscoverResult =
   | {
       ok: true;
@@ -56,6 +60,7 @@ export type InstagramDiscoverResult =
       code?:
         | "missing_page_token"
         | "no_ig_linked"
+        | "ig_unavailable"
         | "personal_rejected"
         | "graph_error"
         | "permission";
@@ -112,11 +117,12 @@ export function formatInstagramGraphError(
     err?.code === 10 ||
     err?.code === 200 ||
     lower.includes("permission") ||
-    lower.includes("instagram_content_publish")
+    lower.includes("instagram_content_publish") ||
+    lower.includes("instagram_basic")
   ) {
     return (
-      (raw || "Instagram permission error.") +
-      " Ensure the Page token includes instagram_basic and instagram_content_publish, and a Professional account is linked to the Page."
+      (raw || "Instagram Graph API permission failure.") +
+      " Reconnect Facebook from Connected Accounts and approve instagram_basic and instagram_content_publish."
     );
   }
 
@@ -200,11 +206,12 @@ export async function discoverInstagramProfessionalAccount(
 
     const ig = json.instagram_business_account;
     if (!ig?.id) {
+      // Graph often omits this field when instagram_basic is missing, which is
+      // indistinguishable from a truly unlinked Page without further probing.
       return {
         ok: false,
-        code: "no_ig_linked",
-        error:
-          "No Instagram professional account is linked to this Facebook Page. Link a Business or Creator account in Meta Business Suite, then reconnect.",
+        code: "ig_unavailable",
+        error: INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE,
       };
     }
 
@@ -244,6 +251,7 @@ export async function saveInstagramConnection(args: {
       code?:
         | "missing_page_token"
         | "no_ig_linked"
+        | "ig_unavailable"
         | "personal_rejected"
         | "graph_error"
         | "permission";

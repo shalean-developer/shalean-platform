@@ -94,7 +94,7 @@ function recoveryFor(
         return "Confirm the Google account manages the selected location and Business Profile APIs are enabled.";
       }
       if (provider === "instagram") {
-        return "Ensure the Page token has instagram_basic, instagram_content_publish, pages_show_list, and pages_read_engagement, and that a Professional Instagram account is linked to the Page.";
+        return "Reconnect Facebook from Connected Accounts and approve instagram_basic and instagram_content_publish. Confirm the Instagram Business account is linked to the selected Page.";
       }
       return "Reconnect Facebook and grant pages_manage_posts + pages_read_engagement, or select a Page with CREATE_CONTENT/MANAGE.";
     case "not_found":

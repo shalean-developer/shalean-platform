@@ -10,6 +10,7 @@ import {
   hashOAuthState,
   isFacebookEnvTokenFallbackAllowed,
   isFacebookPageEligibleForPublish,
+  logFacebookOAuthEvent,
   maskFacebookPageId,
 } from "@/lib/oauth/metaFacebookOAuth";
 import {
@@ -37,7 +38,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(hash).not.toBe(hashOAuthState(state + "x"));
   });
 
-  it("builds Meta auth URL with required Page permissions only", () => {
+  it("builds Meta auth URL with Page + Instagram permissions and rerequest", () => {
     const url = buildFacebookAuthUrl(
       {
         appId: "app123",
@@ -51,11 +52,42 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(parsed.origin).toBe("https://www.facebook.com");
     expect(parsed.searchParams.get("client_id")).toBe("app123");
     expect(parsed.searchParams.get("state")).toBe("state-abc");
+    expect(parsed.searchParams.get("auth_type")).toBe("rerequest");
     expect(parsed.searchParams.get("scope")).toBe(FACEBOOK_OAUTH_SCOPES.join(","));
+    expect(FACEBOOK_OAUTH_SCOPES).toEqual([
+      "pages_show_list",
+      "pages_read_engagement",
+      "pages_manage_posts",
+      "instagram_basic",
+      "instagram_content_publish",
+    ]);
     expect(parsed.searchParams.get("scope")).toContain("pages_show_list");
     expect(parsed.searchParams.get("scope")).toContain("pages_read_engagement");
     expect(parsed.searchParams.get("scope")).toContain("pages_manage_posts");
-    expect(parsed.searchParams.get("scope")).not.toContain("instagram_");
+    expect(parsed.searchParams.get("scope")).toContain("instagram_basic");
+    expect(parsed.searchParams.get("scope")).toContain("instagram_content_publish");
+  });
+
+  it("redacts token-like fields from OAuth log payloads", () => {
+    const spy = vi.spyOn(console, "info").mockImplementation(() => {});
+    logFacebookOAuthEvent("token_resolved", {
+      provider: "facebook",
+      accessToken: "EAABsupersecret",
+      pageAccessToken: "page-secret",
+      pageIdMasked: "1234…",
+    });
+    expect(spy).toHaveBeenCalledWith(
+      "[facebook] token_resolved",
+      expect.objectContaining({
+        provider: "facebook",
+        pageIdMasked: "1234…",
+      }),
+    );
+    const logged = spy.mock.calls[0]?.[1] as Record<string, unknown>;
+    expect(logged).not.toHaveProperty("accessToken");
+    expect(logged).not.toHaveProperty("pageAccessToken");
+    expect(JSON.stringify(logged)).not.toContain("secret");
+    spy.mockRestore();
   });
 
   it("classifies Page eligibility from tasks", () => {
