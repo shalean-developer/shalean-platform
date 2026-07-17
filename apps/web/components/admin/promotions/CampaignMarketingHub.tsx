@@ -47,6 +47,18 @@ import {
   type PublishFailureFields,
 } from "@/lib/promotions/publishFailureUi";
 import type { PromotionRow, PromotionStatus, PromotionType } from "@/lib/promotions/types";
+import {
+  canInvokePublish,
+  formatSafeRoi,
+  isCampaignFormDirty,
+  registryAllowsPublish,
+  type RegistryProviderSnapshot,
+} from "@/lib/promotions/marketingUx";
+import {
+  MarketingEmptyState,
+  MarketingSectionSkeleton,
+} from "@/components/admin/promotions/MarketingEmptyState";
+import { MarketingSubNav } from "@/components/admin/promotions/MarketingSubNav";
 
 function socialCardPropsFromPayload(
   payload: Record<string, unknown>,
@@ -325,6 +337,11 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
   const [facebookHint, setFacebookHint] = useState<string | null>(null);
   const [googleConfigured, setGoogleConfigured] = useState(false);
   const [googleHint, setGoogleHint] = useState<string | null>(null);
+  const [providerRegistry, setProviderRegistry] = useState<RegistryProviderSnapshot[] | null>(
+    null,
+  );
+  const createBaselineRef = useRef(emptyForm);
+  const editBaselineRef = useRef(emptyForm);
 
   const loadAnalytics = useCallback(async () => {
     const res = await adminFetch<AnalyticsPayload>("/api/admin/promotions/analytics");
@@ -378,6 +395,18 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     setGoogleHint(res.data?.hint ?? null);
   }, []);
 
+  const loadProviderRegistry = useCallback(async () => {
+    const res = await adminFetch<{ providers: RegistryProviderSnapshot[] }>(
+      "/api/admin/promotions/providers",
+    );
+    if (res.data?.providers) setProviderRegistry(res.data.providers);
+  }, []);
+
+  const facebookPublishable =
+    facebookConfigured && registryAllowsPublish(providerRegistry, "facebook");
+  const googlePublishable =
+    googleConfigured && registryAllowsPublish(providerRegistry, "google_business");
+
   const loadContentHub = useCallback(async () => {
     if (view === "assets" || view === "social") {
       const assetsRes = await adminFetch<{ assets: AssetRow[] }>(
@@ -423,6 +452,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     void loadContentHub();
     void loadFacebookStatus();
     void loadGoogleStatus();
+    void loadProviderRegistry();
   }, [
     loadAnalytics,
     loadMemberships,
@@ -431,7 +461,34 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     loadContentHub,
     loadFacebookStatus,
     loadGoogleStatus,
+    loadProviderRegistry,
   ]);
+
+  const formDirty = useMemo(() => {
+    if (showCreate) {
+      return isCampaignFormDirty(
+        createForm as unknown as Record<string, unknown>,
+        createBaselineRef.current as unknown as Record<string, unknown>,
+      );
+    }
+    if (editingId) {
+      return isCampaignFormDirty(
+        editForm as unknown as Record<string, unknown>,
+        editBaselineRef.current as unknown as Record<string, unknown>,
+      );
+    }
+    return false;
+  }, [showCreate, editingId, createForm, editForm]);
+
+  useEffect(() => {
+    if (!formDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [formDirty]);
 
   async function loadDetail(id: string) {
     setSelectedId(id);
@@ -501,7 +558,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     setShowCreate(false);
     setSelectedId(null);
     setEditingId(p.id);
-    setEditForm({
+    const next = {
       name: p.name,
       description: p.description ?? "",
       promotion_type: p.promotion_type,
@@ -518,7 +575,9 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
       show_popup: Boolean(p.show_popup),
       show_announcement_bar: p.show_announcement_bar,
       generate: false,
-    });
+    };
+    editBaselineRef.current = next;
+    setEditForm(next);
   }
 
   useEffect(() => {
@@ -691,32 +750,14 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{meta.title}</h1>
           <p className="mt-1 text-sm text-slate-500">{meta.blurb}</p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            {(
-              [
-                ["campaigns", "Campaigns"],
-                ["social", "Social"],
-                ["email", "Email"],
-                ["landing", "Landing"],
-                ["analytics", "Analytics"],
-                ["templates", "Templates"],
-                ["assets", "Assets"],
-              ] as const
-            ).map(([href, label]) => (
-              <Link
-                key={href}
-                href={`/office/marketing/${href === "landing" ? "landing-pages" : href}`}
-                className={cn(
-                  "rounded-full border px-3 py-1",
-                  view === href
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
-                )}
-              >
-                {label}
-              </Link>
-            ))}
+          <div className="mt-3">
+            <MarketingSubNav active={view} />
           </div>
+          {formDirty ? (
+            <p role="status" className="mt-2 text-xs text-amber-800">
+              You have unsaved campaign changes. Save or cancel before leaving this page.
+            </p>
+          ) : null}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => void refetch()}>
@@ -727,6 +768,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
               size="sm"
               onClick={() => {
                 setEditingId(null);
+                createBaselineRef.current = emptyForm;
                 setCreateForm(emptyForm);
                 setShowCreate(true);
               }}
@@ -757,11 +799,12 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
         <ContentList
           content={allContent}
           assets={allAssets}
-          facebookConfigured={facebookConfigured}
+          facebookConfigured={facebookPublishable}
           facebookHint={facebookHint}
-          googleConfigured={googleConfigured}
+          googleConfigured={googlePublishable}
           googleHint={googleHint}
           emptyLabel={`No ${meta.title.toLowerCase()} yet. Generate a campaign first.`}
+          emptyStateKey={view === "social" ? "no_draft_posts" : undefined}
           onAssetUpdated={(asset) => {
             setAllAssets((prev) => {
               const idx = prev.findIndex((a) => a.id === asset.id);
@@ -794,24 +837,28 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
       ) : null}
 
       {view === "templates" ? (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {templates.map((t) => (
-            <div key={t.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="font-semibold text-slate-900">{t.name}</p>
-              <p className="mt-1 text-sm text-slate-500">{t.description}</p>
-              <p className="mt-2 text-xs uppercase tracking-wide text-slate-400">{t.category}</p>
-              <Button
-                className="mt-4"
-                size="sm"
-                disabled={busy === `tpl:${t.key}`}
-                onClick={() => void launchTemplate(t.key)}
-              >
-                {busy === `tpl:${t.key}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Launch & generate
-              </Button>
-            </div>
-          ))}
-        </div>
+        templates.length === 0 ? (
+          <MarketingEmptyState stateKey="no_templates" />
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {templates.map((t) => (
+              <div key={t.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="font-semibold text-slate-900">{t.name}</p>
+                <p className="mt-1 text-sm text-slate-500">{t.description}</p>
+                <p className="mt-2 text-xs uppercase tracking-wide text-slate-400">{t.category}</p>
+                <Button
+                  className="mt-4 min-h-9"
+                  size="sm"
+                  disabled={busy === `tpl:${t.key}`}
+                  onClick={() => void launchTemplate(t.key)}
+                >
+                  {busy === `tpl:${t.key}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Launch & generate
+                </Button>
+              </div>
+            ))}
+          </div>
+        )
       ) : null}
 
       {(view === "campaigns" || view === "analytics") && (
@@ -854,14 +901,19 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
             </div>
 
             {loading ? (
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-              </div>
+              <MarketingSectionSkeleton label="Loading campaigns…" rows={4} />
             ) : error ? (
-              <p className="text-sm text-red-600">{error}</p>
+              <div className="space-y-2">
+                <p className="text-sm text-red-600" role="alert">
+                  {error}
+                </p>
+                <Button size="sm" variant="outline" onClick={() => void refetch()}>
+                  Retry
+                </Button>
+              </div>
             ) : (
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                <table className="w-full text-left text-sm">
+              <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                <table className="min-w-[720px] w-full text-left text-sm">
                   <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
                       <th className="px-4 py-3">Campaign</th>
@@ -876,8 +928,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                     {promotions.map((p) => (
                       <tr key={p.id} className="border-b last:border-0">
                         <td className="px-4 py-3">
-                          <p className="font-medium text-slate-900">{p.name}</p>
-                          <p className="text-xs text-slate-500">
+                          <p className="font-medium text-slate-900 break-words">{p.name}</p>
+                          <p className="text-xs text-slate-500 break-words">
                             {p.slug}
                             {p.promo_code ? ` · ${p.promo_code}` : ""}
                             {p.content_generated_at ? " · content ready" : ""}
@@ -908,48 +960,53 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                               size="sm"
                               variant="outline"
                               title="Edit campaign"
+                              aria-label={`Edit campaign ${p.name}`}
                               onClick={() => openEdit(p)}
                             >
-                              <Pencil className="h-3.5 w-3.5" />
+                              <Pencil className="h-3.5 w-3.5" aria-hidden />
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
                               title="Generate campaign"
+                              aria-label={`Generate content for ${p.name}`}
                               disabled={busy === `${p.id}:generate`}
                               onClick={() => void generateCampaign(p.id)}
                             >
                               {busy === `${p.id}:generate` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                               ) : (
-                                <Sparkles className="h-3.5 w-3.5" />
+                                <Sparkles className="h-3.5 w-3.5" aria-hidden />
                               )}
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
                               title="Preview content"
+                              aria-label={`Preview content for ${p.name}`}
                               onClick={() => void loadDetail(p.id)}
                             >
-                              <Eye className="h-3.5 w-3.5" />
+                              <Eye className="h-3.5 w-3.5" aria-hidden />
                             </Button>
                             <Link
                               href={p.landing_page_path || `/campaigns/${p.slug}`}
                               target="_blank"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200"
                               title="Open landing page"
+                              aria-label={`Open landing page for ${p.name}`}
                             >
-                              <ExternalLink className="h-3.5 w-3.5" />
+                              <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                             </Link>
                             {p.status === "active" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 title="Pause campaign"
+                                aria-label={`Pause campaign ${p.name}`}
                                 disabled={busy === `${p.id}:pause`}
                                 onClick={() => void runAction(p.id, "pause")}
                               >
-                                <Pause className="h-3.5 w-3.5" />
+                                <Pause className="h-3.5 w-3.5" aria-hidden />
                               </Button>
                             ) : p.status === "paused" ||
                               p.status === "draft" ||
@@ -965,6 +1022,11 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                                     : p.status === "paused"
                                       ? "Resume campaign"
                                       : "Activate campaign"
+                                }
+                                aria-label={
+                                  p.status === "draft" || p.status === "scheduled"
+                                    ? `Activate campaign ${p.name}`
+                                    : `Resume campaign ${p.name}`
                                 }
                                 disabled={busy === `${p.id}:resume` || busy === `${p.id}:activate`}
                                 onClick={() => {
@@ -983,40 +1045,43 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                                   });
                                 }}
                               >
-                                <Play className="h-3.5 w-3.5" />
+                                <Play className="h-3.5 w-3.5" aria-hidden />
                               </Button>
                             ) : null}
                             <Button
                               size="sm"
                               variant="outline"
+                              aria-label={`Duplicate campaign ${p.name}`}
                               disabled={busy === `${p.id}:duplicate`}
                               onClick={() => void runAction(p.id, "duplicate")}
                             >
-                              <Copy className="h-3.5 w-3.5" />
+                              <Copy className="h-3.5 w-3.5" aria-hidden />
                             </Button>
                             {p.status !== "ended" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 title="End campaign"
+                                aria-label={`End campaign ${p.name}`}
                                 disabled={busy === `${p.id}:end`}
                                 onClick={() => void runAction(p.id, "end")}
                               >
-                                <Square className="h-3.5 w-3.5" />
+                                <Square className="h-3.5 w-3.5" aria-hidden />
                               </Button>
                             ) : null}
                             <Button
                               size="sm"
                               variant="outline"
                               title="Delete campaign"
+                              aria-label={`Delete campaign ${p.name}`}
                               className="text-red-600 hover:bg-red-50 hover:text-red-700"
                               disabled={busy === `${p.id}:delete`}
                               onClick={() => void deleteCampaign(p)}
                             >
                               {busy === `${p.id}:delete` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                               ) : (
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Trash2 className="h-3.5 w-3.5" aria-hidden />
                               )}
                             </Button>
                           </div>
@@ -1025,8 +1090,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                     ))}
                     {promotions.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                          No campaigns yet. Create one or launch a template.
+                        <td colSpan={6} className="px-4 py-4">
+                          <MarketingEmptyState stateKey="no_campaigns" className="border-0 bg-transparent" />
                         </td>
                       </tr>
                     ) : null}
@@ -1418,8 +1483,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                 Export CSV
               </Button>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+              <table className="min-w-[640px] w-full text-left text-sm">
                 <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Campaign</th>
@@ -1433,16 +1498,24 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                 <tbody>
                   {(analytics?.summaries ?? []).map((s) => (
                     <tr key={s.promotionId} className="border-b last:border-0">
-                      <td className="px-4 py-3 font-medium">{s.name}</td>
+                      <td className="px-4 py-3 font-medium break-words">{s.name}</td>
                       <td className="px-4 py-3">{s.views}</td>
                       <td className="px-4 py-3">{s.clicks}</td>
                       <td className="px-4 py-3">{s.redemptions}</td>
                       <td className="px-4 py-3">{formatZar(s.revenueGeneratedZar)}</td>
-                      <td className="px-4 py-3">
-                        {s.roi == null ? "—" : `${(s.roi * 100).toFixed(0)}%`}
-                      </td>
+                      <td className="px-4 py-3">{formatSafeRoi(s.roi, s.views)}</td>
                     </tr>
                   ))}
+                  {(analytics?.summaries ?? []).length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-4">
+                        <MarketingEmptyState
+                          stateKey="insufficient_analytics"
+                          className="border-0 bg-transparent"
+                        />
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
@@ -1495,6 +1568,7 @@ function ContentList({
   googleConfigured,
   googleHint,
   emptyLabel,
+  emptyStateKey,
   onAssetUpdated,
 }: {
   content: ContentRow[];
@@ -1504,13 +1578,14 @@ function ContentList({
   googleConfigured: boolean;
   googleHint: string | null;
   emptyLabel: string;
+  emptyStateKey?: "no_draft_posts";
   onAssetUpdated?: (asset: AssetRow) => void;
 }) {
   if (!content.length) {
-    return (
-      <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-500">
-        {emptyLabel}
-      </p>
+    return emptyStateKey ? (
+      <MarketingEmptyState stateKey={emptyStateKey} description={emptyLabel} />
+    ) : (
+      <MarketingEmptyState title={emptyLabel.split(".")[0]} description={emptyLabel} />
     );
   }
   return (
@@ -1665,6 +1740,16 @@ function SocialContentCard({
   }
 
   async function publishFacebook() {
+    if (
+      !canInvokePublish({
+        busy: busy != null,
+        configured: facebookConfigured,
+        overLimit,
+        caption,
+      })
+    ) {
+      return;
+    }
     const precheck = validatePublishPayloadClient({
       channel: "facebook",
       message: caption,
@@ -1723,6 +1808,16 @@ function SocialContentCard({
   }
 
   async function publishGoogleBusiness() {
+    if (
+      !canInvokePublish({
+        busy: busy != null,
+        configured: googleConfigured,
+        overLimit,
+        caption,
+      })
+    ) {
+      return;
+    }
     const precheck = validatePublishPayloadClient({
       channel: "google_business",
       message: caption,
@@ -1862,10 +1957,18 @@ function SocialContentCard({
               overLimit && "border-rose-300 bg-rose-50",
             )}
             aria-invalid={overLimit}
+            aria-describedby={
+              charLimit != null ? `caption-count-${content.id}` : undefined
+            }
           />
           {charLimit != null ? (
-            <p className={cn("mt-1 text-[11px]", overLimit ? "text-rose-700" : "text-slate-400")}>
+            <p
+              id={`caption-count-${content.id}`}
+              className={cn("mt-1 text-[11px]", overLimit ? "text-rose-700" : "text-slate-400")}
+              role={overLimit ? "alert" : undefined}
+            >
               {caption.trim().length.toLocaleString()} / {charLimit.toLocaleString()} characters
+              {overLimit ? " — over limit; shorten before publish." : ""}
             </p>
           ) : null}
         </div>
@@ -1981,7 +2084,15 @@ function SocialContentCard({
         {content.channel === "facebook" ? (
           <Button
             size="sm"
-            disabled={!facebookConfigured || busy === "fb" || overLimit || !caption.trim()}
+            className="min-h-9"
+            disabled={
+              !canInvokePublish({
+                busy: busy != null,
+                configured: facebookConfigured,
+                overLimit,
+                caption,
+              })
+            }
             onClick={() => void publishFacebook()}
             title={
               facebookConfigured
@@ -1989,6 +2100,7 @@ function SocialContentCard({
                 : "Configure FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN"
             }
             aria-label="Post to Facebook Page"
+            aria-busy={busy === "fb"}
           >
             {busy === "fb" ? (
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -2001,7 +2113,15 @@ function SocialContentCard({
         {content.channel === "google_business" ? (
           <Button
             size="sm"
-            disabled={!googleConfigured || busy === "gbp" || overLimit || !caption.trim()}
+            className="min-h-9"
+            disabled={
+              !canInvokePublish({
+                busy: busy != null,
+                configured: googleConfigured,
+                overLimit,
+                caption,
+              })
+            }
             onClick={() => void publishGoogleBusiness()}
             title={
               googleConfigured
@@ -2009,6 +2129,7 @@ function SocialContentCard({
                 : "Connect Google Business Profile in Connected Accounts"
             }
             aria-label="Upload to Google Business Profile"
+            aria-busy={busy === "gbp"}
           >
             {busy === "gbp" ? (
               <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
@@ -2040,11 +2161,7 @@ function AssetsList({
   onAssetUpdated?: (asset: AssetRow) => void;
 }) {
   if (!assets.length) {
-    return (
-      <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-500">
-        No assets yet. Generate a campaign to create social templates and QR codes.
-      </p>
-    );
+    return <MarketingEmptyState stateKey="no_assets" />;
   }
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
