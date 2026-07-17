@@ -3,6 +3,7 @@ import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { logCronRun, logSystemEvent } from "@/lib/logging/systemLog";
+import { bootstrapProviderRegistry } from "@/lib/promotions/providers";
 import {
   claimDuePublishJobs,
   executePublishJob,
@@ -22,6 +23,8 @@ export const dynamic = "force-dynamic";
  * Backup: Vercel daily cron (Hobby-safe) also registered in vercel.json.
  */
 export async function POST(request: Request) {
+  bootstrapProviderRegistry();
+
   const auth = verifyCronSecret(request);
   if (!auth.ok) {
     return NextResponse.json(auth.body, { status: auth.status });
