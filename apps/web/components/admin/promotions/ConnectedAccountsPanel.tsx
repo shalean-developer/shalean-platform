@@ -15,6 +15,10 @@ import {
 import { adminFetch } from "@/hooks/useAdminData";
 import { Button } from "@/components/ui/button";
 import { emitAdminToast } from "@/lib/admin/toastBus";
+import {
+  GOOGLE_BUSINESS_SAVE_ERROR_MESSAGES,
+  isGoogleBusinessSaveErrorReason,
+} from "@/lib/oauth/googleBusinessSaveError";
 import { cn } from "@/lib/utils";
 
 type PlatformCard = {
@@ -140,7 +144,13 @@ export function ConnectedAccountsPanel() {
   useEffect(() => {
     const err = searchParams.get("error");
     if (err) {
-      emitAdminToast(ERROR_MESSAGES[err] ?? `Connection error: ${err}`, "error");
+      // Prefer the sanitized, actionable reason the callback attached (e.g. the
+      // Business Profile API is disabled) over the generic per-error copy.
+      const reason = searchParams.get("reason");
+      const message = isGoogleBusinessSaveErrorReason(reason)
+        ? GOOGLE_BUSINESS_SAVE_ERROR_MESSAGES[reason]
+        : (ERROR_MESSAGES[err] ?? `Connection error: ${err}`);
+      emitAdminToast(message, "error");
     }
     if (searchParams.get("connected") === "google_business") {
       emitAdminToast(

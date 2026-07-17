@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { getCookieUser } from "@/lib/auth/getCookieUser";
 import { isAdmin } from "@/lib/auth/admin";
 import { decryptSecret } from "@/lib/security/tokenEncryption";
+import { classifyGoogleBusinessSaveError } from "@/lib/oauth/googleBusinessSaveError";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   GOOGLE_OAUTH_STATE_COOKIE,
@@ -113,12 +114,14 @@ export async function GET(request: Request) {
     await clearStateCookie();
 
     if (!saved.ok) {
-      console.error("[gbp] oauth_save_failed", { error: saved.error });
+      // Full provider text stays server-side; the browser only receives a short,
+      // sanitized reason token (never IDs/URLs/tokens). Discovery failures
+      // (API disabled / rate-limited / permission / no Business Profile) are no longer
+      // indistinguishable from an actual DB/encryption save failure.
+      const { reason } = classifyGoogleBusinessSaveError(saved.error);
+      console.error("[gbp] oauth_save_failed", { reason, error: saved.error });
       return NextResponse.redirect(
-        marketingConnectedAccountsUrl(
-          { error: "save_failed", detail: saved.error.slice(0, 120) },
-          origin,
-        ),
+        marketingConnectedAccountsUrl({ error: "save_failed", reason }, origin),
       );
     }
 
@@ -133,13 +136,11 @@ export async function GET(request: Request) {
     );
   } catch (e) {
     const message = e instanceof Error ? e.message : "OAuth callback failed.";
-    console.error("[gbp] oauth_callback_failed", { error: message });
+    const { reason } = classifyGoogleBusinessSaveError(message);
+    console.error("[gbp] oauth_callback_failed", { reason, error: message });
     await clearStateCookie();
     return NextResponse.redirect(
-      marketingConnectedAccountsUrl(
-        { error: "oauth_failed", detail: message.slice(0, 120) },
-        origin,
-      ),
+      marketingConnectedAccountsUrl({ error: "oauth_failed", reason }, origin),
     );
   }
 }
