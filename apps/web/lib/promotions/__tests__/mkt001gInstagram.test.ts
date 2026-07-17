@@ -230,4 +230,34 @@ describe("MKT-001H.1 Instagram discovery messaging", () => {
       accountTypeHint: "professional",
     });
   });
+
+  it("falls back to connected_instagram_account when business field is omitted", async () => {
+    const { discoverInstagramProfessionalAccount } = await import(
+      "@/lib/promotions/instagramPublish"
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        Response.json({
+          id: "page-1",
+          name: "Shalean",
+          connected_instagram_account: {
+            id: "17841400000000099",
+            username: "shalean_connected",
+            name: "Shalean Connected",
+          },
+        }),
+      ),
+    );
+
+    const result = await discoverInstagramProfessionalAccount("page-token", "page-1");
+    expect(result).toEqual({
+      ok: true,
+      pageId: "page-1",
+      igUserId: "17841400000000099",
+      username: "shalean_connected",
+      name: "Shalean Connected",
+      accountTypeHint: "professional",
+    });
+  });
 });
