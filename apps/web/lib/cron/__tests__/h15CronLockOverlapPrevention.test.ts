@@ -331,6 +331,7 @@ describe("H-15 cron lock — per-route guards", () => {
       "referral-credit-reminders",
       "referral-credit-expiry",
       "promotions",
+      "recover-stuck-publish",
     ];
 
     for (const r of routesAlwaysOk) {
@@ -406,6 +407,7 @@ describe("H-15 cron lock — coverage manifest", () => {
     "referral-credit-reminders",
     "referral-credit-expiry",
     "promotions",
+    "recover-stuck-publish",
   ]);
 
   it("all cron route directories are accounted for", () => {

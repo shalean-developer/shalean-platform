@@ -1,0 +1,13 @@
+﻿
+ RUN  v3.2.6 C:/Users/info/shalean-platform/apps/web
+
+ Γ£ô lib/promotions/__tests__/publishProviderErrors.test.ts (6 tests) 5ms
+ Γ£ô lib/promotions/__tests__/publishIdempotency.test.ts (13 tests) 9ms
+ Γ£ô lib/promotions/__tests__/facebookPublish.test.ts (4 tests) 4ms
+ Γ£ô lib/promotions/__tests__/googleBusinessPublish.test.ts (7 tests) 7ms
+
+ Test Files  4 passed (4)
+      Tests  30 passed (30)
+   Start at  09:55:03
+   Duration  1.01s (transform 217ms, setup 0ms, collect 375ms, tests 25ms, environment 1ms, prepare 628ms)
+

@@ -84,37 +84,41 @@ function StatusBadge({ status, health }: { status: string; health: string }) {
   const connected = status === "connected";
   const pending = status === "pending_location";
   const error = status === "error" || health === "error";
+  const degraded = !error && health === "degraded";
   const soon = status === "coming_soon";
 
   return (
     <span
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
-        connected && "bg-emerald-50 text-emerald-800",
+        connected && !degraded && !error && "bg-emerald-50 text-emerald-800",
         pending && "bg-amber-50 text-amber-900",
+        degraded && "bg-amber-50 text-amber-900",
         error && "bg-rose-50 text-rose-800",
         soon && "bg-slate-100 text-slate-500",
-        !connected && !pending && !error && !soon && "bg-slate-100 text-slate-600",
+        !connected && !pending && !error && !soon && !degraded && "bg-slate-100 text-slate-600",
       )}
     >
-      {connected ? (
+      {connected && !degraded && !error ? (
         <CheckCircle2 className="h-3.5 w-3.5" />
       ) : soon ? (
         <Circle className="h-3.5 w-3.5" />
-      ) : error || pending ? (
+      ) : error || pending || degraded ? (
         <AlertTriangle className="h-3.5 w-3.5" />
       ) : (
         <Circle className="h-3.5 w-3.5" />
       )}
       {soon
         ? "Coming soon"
-        : connected
-          ? "Connected"
-          : pending
-            ? "Select location"
-            : error
-              ? "Needs attention"
-              : "Disconnected"}
+        : error
+          ? "Needs attention"
+          : degraded
+            ? "Token / provider issue"
+            : connected
+              ? "Connected"
+              : pending
+                ? "Select location"
+                : "Disconnected"}
     </span>
   );
 }
@@ -280,6 +284,16 @@ export function ConnectedAccountsPanel() {
               </p>
             ) : null}
 
+            {p.health === "degraded" || p.status === "error" || p.lastError ? (
+              <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
+                {p.lastError
+                  ? p.lastError
+                  : p.health === "degraded"
+                    ? "Provider health is degraded — refresh or reconnect before publishing."
+                    : "Account needs attention before publishing will succeed."}
+              </p>
+            ) : null}
+
             {p.id === "google_business" ? (
               <div className="mt-4 space-y-3">
                 {(p.locations?.length ?? 0) > 0 &&
@@ -385,7 +399,11 @@ export function ConnectedAccountsPanel() {
 
       <div>
         <h2 className="text-lg font-semibold text-slate-900">Publishing history</h2>
-        <p className="mt-1 text-sm text-slate-600">Recent one-click publishes across platforms.</p>
+        <p className="mt-1 text-sm text-slate-600">
+          Recent one-click publishes across platforms. Failed rows can be retried from Social Posts —
+          identical content reclaims the ledger after a failure (or after a stuck claim older than 10
+          minutes).
+        </p>
         {(data?.history?.length ?? 0) === 0 ? (
           <p className="mt-3 rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
             No publishes yet.

@@ -123,6 +123,28 @@ export function formatGoogleBusinessError(
     );
   }
 
+  if (httpStatus === 409 || status === "ABORTED" || status === "ALREADY_EXISTS") {
+    return (
+      raw ||
+      "Google reported a conflict for this publish. Wait a moment, then retry or change the content."
+    );
+  }
+
+  if (httpStatus === 422 || status === "INVALID_ARGUMENT" || status === "FAILED_PRECONDITION") {
+    return (
+      (raw || "Google rejected this post content.") +
+      " Check the message, image URL, and call-to-action link, then try again."
+    );
+  }
+
+  if (httpStatus === 408 || httpStatus === 504 || lower.includes("timeout") || lower.includes("deadline")) {
+    return (raw || "Google Business request timed out.") + " Retry shortly.";
+  }
+
+  if (httpStatus === 500 || httpStatus === 502 || httpStatus === 503 || status === "UNAVAILABLE") {
+    return (raw || `Google Business is temporarily unavailable (${httpStatus}).`) + " Retry shortly.";
+  }
+
   if (raw) return raw;
   return `Google Business API error (${httpStatus}).`;
 }

@@ -7,7 +7,15 @@ import {
   markPublishFailed,
   markPublishSucceeded,
 } from "@/lib/promotions/publishIdempotency";
-import { logSystemEvent } from "@/lib/logging/systemLog";
+import {
+  classifyPublishFailure,
+  publishFailureResponseBody,
+} from "@/lib/promotions/publishProviderErrors";
+import {
+  createPublishCorrelationId,
+  fingerprintPublishPayload,
+  logPublishEvent,
+} from "@/lib/promotions/publishObservability";
 import {
   createGoogleBusinessLocalPost,
   ensurePublicImageUrlForGooglePost,
@@ -50,6 +58,9 @@ export async function POST(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
+  const correlationId = createPublishCorrelationId();
+  const startedAt = Date.now();
+
   let body: {
     message?: string;
     imageDataUrl?: string | null;
@@ -72,48 +83,137 @@ export async function POST(request: Request) {
   // Server-side idempotency (claim BEFORE media upload / provider call) so
   // double-clicks / retries / races cannot create duplicate posts or orphan
   // uploads (MKT-001A / WS4).
+  // MKT-001B: fail closed when the ledger is unavailable.
   const admin = getSupabaseAdmin();
+  if (!admin) {
+    await logPublishEvent({
+      level: "error",
+      provider: "google_business",
+      phase: "rejected",
+      correlationId,
+      outcome: "admin_unavailable",
+      detail: "Supabase admin client unavailable; refusing publish.",
+    });
+    return NextResponse.json(
+      {
+        error: "Publishing temporarily unavailable (idempotency ledger offline). Retry shortly.",
+        classification: "provider_unavailable",
+        retryable: true,
+        correlationId,
+      },
+      { status: 503 },
+    );
+  }
+
   const explicitKey = request.headers.get("idempotency-key");
   let claimId: string | null = null;
+  let attempts = 1;
+  const payloadFp = fingerprintPublishPayload({
+    message,
+    link: body.link,
+    promotionId: body.promotionId,
+  });
 
-  if (admin) {
-    const claim = await claimPublish(
-      admin,
+  const claim = await claimPublish(
+    admin,
+    {
+      provider: "google_business",
+      targetRef: "google_business",
+      promotionId: body.promotionId ?? null,
+      message,
+      link: body.link ?? null,
+      explicitKey,
+    },
+    auth.email,
+  );
+
+  if (claim.outcome === "duplicate_succeeded") {
+    await logPublishEvent({
+      provider: "google_business",
+      phase: "idempotent_replay",
+      correlationId,
+      outcome: "duplicate_succeeded",
+      providerResponseId: claim.externalPostId,
+      latencyMs: Date.now() - startedAt,
+    });
+    return NextResponse.json({
+      ok: true,
+      postName: claim.externalPostId,
+      idempotentReplay: true,
+      correlationId,
+    });
+  }
+  if (claim.outcome === "in_progress") {
+    await logPublishEvent({
+      level: "warn",
+      provider: "google_business",
+      phase: "rejected",
+      correlationId,
+      outcome: "in_progress",
+    });
+    return NextResponse.json(
       {
-        provider: "google_business",
-        targetRef: "google_business",
-        promotionId: body.promotionId ?? null,
-        message,
-        link: body.link ?? null,
-        explicitKey,
+        error: "A publish for this content is already in progress.",
+        classification: "conflict",
+        retryable: true,
+        retryAfterMs: 15_000,
+        recoveryGuidance:
+          "Wait for the in-progress publish to finish. If it stays stuck longer than 10 minutes, retry — the ledger will reclaim abandoned claims.",
+        correlationId,
       },
-      auth.email,
+      { status: 409 },
     );
-    if (claim.outcome === "duplicate_succeeded") {
-      return NextResponse.json({ ok: true, postName: claim.externalPostId, idempotentReplay: true });
-    }
-    if (claim.outcome === "in_progress") {
-      return NextResponse.json(
-        { error: "A publish for this content is already in progress." },
-        { status: 409 },
-      );
-    }
-    if (claim.outcome === "conflict") {
-      return NextResponse.json(
-        { error: "This idempotency key was already used with different content." },
-        { status: 409 },
-      );
-    }
-    if (claim.outcome === "claimed" || claim.outcome === "retry") {
-      claimId = claim.id;
-    } else {
-      await logSystemEvent({
-        level: "warn",
-        source: "publish_google_business",
-        message: "idempotency_claim_error",
-        context: { detail: claim.error },
-      });
-    }
+  }
+  if (claim.outcome === "conflict") {
+    await logPublishEvent({
+      level: "warn",
+      provider: "google_business",
+      phase: "rejected",
+      correlationId,
+      outcome: "conflict",
+    });
+    return NextResponse.json(
+      {
+        error: "This idempotency key was already used with different content.",
+        classification: "conflict",
+        retryable: false,
+        recoveryGuidance:
+          "Use a new Idempotency-Key header for a deliberate repost, or change the message/link.",
+        correlationId,
+      },
+      { status: 409 },
+    );
+  }
+  if (claim.outcome === "claimed" || claim.outcome === "retry") {
+    claimId = claim.id;
+    attempts = claim.attempts;
+    await logPublishEvent({
+      provider: "google_business",
+      phase: "claim",
+      correlationId,
+      publishId: claimId,
+      idempotencyKeyFingerprint: payloadFp,
+      outcome: claim.outcome,
+      attempts,
+    });
+  } else {
+    await logPublishEvent({
+      level: "error",
+      provider: "google_business",
+      phase: "rejected",
+      correlationId,
+      outcome: "claim_error",
+      detail: claim.error,
+    });
+    return NextResponse.json(
+      {
+        error: "Could not claim publish idempotency. Retry shortly.",
+        classification: "provider_unavailable",
+        retryable: true,
+        correlationId,
+      },
+      { status: 503 },
+    );
   }
 
   const media = await ensurePublicImageUrlForGooglePost({
@@ -122,7 +222,12 @@ export async function POST(request: Request) {
     promotionId: body.promotionId,
   });
   if (!media.ok) {
-    if (admin && claimId) await markPublishFailed(admin, claimId, media.error);
+    const failure = classifyPublishFailure({
+      provider: "google_business",
+      httpStatus: 400,
+      rawMessage: media.error,
+    });
+    await markPublishFailed(admin, claimId, media.error);
     await recordPublishHistory({
       status: "failed",
       error: media.error,
@@ -130,8 +235,33 @@ export async function POST(request: Request) {
       campaignName: body.campaignName,
       publishedBy: auth.email,
     });
-    return NextResponse.json({ error: media.error }, { status: 400 });
+    await logPublishEvent({
+      level: "error",
+      provider: "google_business",
+      phase: "provider_result",
+      correlationId,
+      publishId: claimId,
+      outcome: "media_failed",
+      classification: failure.classification,
+      retryable: failure.retryable,
+      httpStatus: 400,
+      attempts,
+      detail: media.error,
+    });
+    return NextResponse.json(
+      { ...publishFailureResponseBody(failure), correlationId },
+      { status: 400 },
+    );
   }
+
+  const providerStarted = Date.now();
+  await logPublishEvent({
+    provider: "google_business",
+    phase: "provider_call",
+    correlationId,
+    publishId: claimId,
+    attempts,
+  });
 
   const result = await createGoogleBusinessLocalPost({
     summary: message,
@@ -140,7 +270,12 @@ export async function POST(request: Request) {
   });
 
   if (!result.ok) {
-    if (admin && claimId) await markPublishFailed(admin, claimId, result.error);
+    const failure = classifyPublishFailure({
+      provider: "google_business",
+      httpStatus: result.status,
+      rawMessage: result.error,
+    });
+    await markPublishFailed(admin, claimId, result.error);
     await recordPublishHistory({
       status: "failed",
       error: result.error,
@@ -149,11 +284,27 @@ export async function POST(request: Request) {
       campaignName: body.campaignName,
       publishedBy: auth.email,
     });
-    const status = result.status && result.status >= 400 && result.status < 600 ? result.status : 400;
-    return NextResponse.json({ error: result.error }, { status });
+    await logPublishEvent({
+      level: "error",
+      provider: "google_business",
+      phase: "provider_result",
+      correlationId,
+      publishId: claimId,
+      outcome: "failed",
+      classification: failure.classification,
+      retryable: failure.retryable,
+      httpStatus: failure.httpStatus,
+      latencyMs: Date.now() - providerStarted,
+      attempts,
+      detail: failure.userMessage,
+    });
+    return NextResponse.json(
+      { ...publishFailureResponseBody(failure), correlationId },
+      { status: failure.httpStatus },
+    );
   }
 
-  if (admin && claimId) await markPublishSucceeded(admin, claimId, result.postName ?? null);
+  await markPublishSucceeded(admin, claimId, result.postName ?? null);
   await recordPublishHistory({
     status: "published",
     responseId: result.postName,
@@ -162,8 +313,27 @@ export async function POST(request: Request) {
     campaignName: body.campaignName,
     publishedBy: auth.email,
   });
+  await logPublishEvent({
+    provider: "google_business",
+    phase: "provider_result",
+    correlationId,
+    publishId: claimId,
+    outcome: "succeeded",
+    providerResponseId: result.postName,
+    latencyMs: Date.now() - providerStarted,
+    attempts,
+  });
+  await logPublishEvent({
+    provider: "google_business",
+    phase: "ledger_success",
+    correlationId,
+    publishId: claimId,
+    providerResponseId: result.postName,
+    latencyMs: Date.now() - startedAt,
+    attempts,
+  });
 
-  if (body.promotionId && admin) {
+  if (body.promotionId) {
     try {
       await recordPromotionEvent(admin, {
         promotionId: body.promotionId,
@@ -173,6 +343,7 @@ export async function POST(request: Request) {
           action: "published",
           postId: result.postName,
           actor: auth.email,
+          correlationId,
         },
       });
       await admin.from("promotion_audit_log").insert({
@@ -182,6 +353,7 @@ export async function POST(request: Request) {
         after_state: {
           postName: result.postName,
           searchUrl: result.searchUrl ?? null,
+          correlationId,
         },
       });
       await admin
@@ -198,6 +370,7 @@ export async function POST(request: Request) {
     ok: true,
     postName: result.postName,
     searchUrl: result.searchUrl ?? null,
+    correlationId,
   });
 }
 
