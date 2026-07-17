@@ -23,7 +23,7 @@
     },
     {
       "path": "/api/cron/recover-stuck-publish",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 4 * * *"
     }
   ]
 }

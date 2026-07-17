@@ -38,7 +38,7 @@ Social publishing today is a **synchronous, admin-triggered, two-provider** pipe
 3. **Attempt counters** — `attempts` incremented on every reclaim / failed→retry.
 4. **Provider failure taxonomy** — HTTP 4xx/5xx + transport failures classified with `retryable`, `retryAfterMs`, recovery guidance.
 5. **Structured observability** — correlation IDs, publish phases, latency, classification in `system_logs` (no tokens / secrets).
-6. **Recovery cron** — `/api/cron/recover-stuck-publish` every 15 minutes.
+6. **Recovery cron** — `/api/cron/recover-stuck-publish` (daily Vercel schedule; Hobby rejects `*/15`). Hot-path reclaim remains on admin retry (10m TTL); staging can invoke the route manually with `CRON_SECRET`.
 7. **Stronger Facebook / GBP error copy** for auth, rate limit, and provider outages.
 8. **Connected Accounts UX** — degraded/error health messaging + retry guidance on publish history.
 
@@ -288,7 +288,7 @@ Evidence file: `docs/audits/marketing/evidence/mkt-001b-publishing-reliability-t
 | `apps/web/lib/promotions/facebookPublish.ts` | Richer Graph error mapping |
 | `apps/web/lib/google-business.ts` | Richer GBP error mapping |
 | `apps/web/app/api/cron/recover-stuck-publish/route.ts` | **New** recovery cron |
-| `apps/web/vercel.json` | Register cron `*/15` |
+| `apps/web/vercel.json` | Register cron `0 4 * * *` (Hobby-safe; sub-daily deferred to Pro) |
 | `apps/web/components/admin/promotions/ConnectedAccountsPanel.tsx` | Degraded/error UX |
 | `apps/web/lib/promotions/__tests__/*` | Expanded coverage |
 | `docs/audits/marketing/MKT-001B-publishing-reliability.md` | This audit |

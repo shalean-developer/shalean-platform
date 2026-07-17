@@ -14,7 +14,9 @@ export const dynamic = "force-dynamic";
  * - the next admin retry reclaim path works cleanly
  *
  * Auth: `Authorization: Bearer CRON_SECRET`
- * Suggested schedule: every 15 minutes — POST /api/cron/recover-stuck-publish
+ * Schedule: daily in vercel.json (`0 4 * * *`) — Hobby plans reject sub-daily
+ * expressions. Hot-path reclaim still happens on admin retry (10m TTL).
+ * Staging verification: POST with CRON_SECRET any time.
  */
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
