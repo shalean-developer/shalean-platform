@@ -1,0 +1,36 @@
+{
+  "artifact": "MKT-001A-PROD-R1 — OAuth re-encryption RE-TEST (verification of operator GO claim)",
+  "mode": "read-only; staging runtime logs + staging DB + Vercel env ls (names/scopes only)",
+  "capturedAt": "2026-07-17T00:11Z",
+  "operatorClaim": "OAuth Re-encryption PASS; Production Key Scope PASS; Production Gate GO",
+  "independentVerdict": "NOT SUBSTANTIATED — remains NO-GO",
+  "oauthReEncryption": {
+    "redirectUriMismatch": "RESOLVED — token exchange now succeeds (oauth_token_exchange_ok, hasRefresh:true)",
+    "stagingCallbackLogs": [
+      { "time": "2026-07-16T23:48:52Z", "exchange": "ok", "listAccounts": "403 My Business Account Management API not enabled/used on project 525459256770", "save": "oauth_save_failed" },
+      { "time": "2026-07-16T23:49:18Z", "exchange": "ok", "listAccounts": "403 API not enabled", "save": "oauth_save_failed" },
+      { "time": "2026-07-16T23:49:46Z", "exchange": "ok", "listAccounts": "403 API not enabled", "save": "oauth_save_failed" },
+      { "time": "2026-07-17T00:03:13Z", "exchange": "ok", "listAccounts": "429 rate limit", "save": "oauth_save_failed" },
+      { "time": "2026-07-17T00:04:28Z", "exchange": "ok", "listAccounts": "429 rate limit", "save": "oauth_save_failed" },
+      { "time": "2026-07-17T00:07:06Z", "exchange": "ok", "listAccounts": "429 rate limit", "save": "oauth_save_failed" }
+    ],
+    "stagingSocialAccountsRowCount": 0,
+    "v2EnvelopePersisted": false,
+    "interpretation": "saveGoogleBusinessConnection() lists Business locations BEFORE encrypting/persisting; the 403/429 aborts the save, so no v2:<keyId> token is ever written. The re-encryption objective is therefore NOT verified.",
+    "deployment": "dpl_2vR3R1aHYmc2a1xCMAbGwaPKRgRy (branch staging @ d6a1bcad)"
+  },
+  "newRootCause": "Google Cloud project 525459256770 does not have the Business Profile APIs enabled (My Business Account Management API 403). Most recent attempts return 429 (rate limit) — consistent with an API just enabled and still propagating, or repeated rapid retries. Environment/provider configuration, not app code.",
+  "productionKeyScope": {
+    "record": "MARKETING_OAUTH_ENCRYPTION_KEY = Preview, Production (updated ~1h ago)",
+    "scopedOnlyToProduction": false,
+    "claimPass": false
+  },
+  "productionUntouched": "No staging->main merge, no production migration, no production deploy performed. Production still main@ad5b4ccb with 0 MKT-001A migrations.",
+  "remediationDirection": [
+    "Enable the Business Profile APIs on Google Cloud project 525459256770: My Business Account Management API, My Business Business Information API, and the My Business API (v4, used for Local Posts publishing).",
+    "Wait ~5 min for enablement to propagate; avoid rapid repeated connect attempts (they cause 429).",
+    "Re-run the Connect flow ONCE on staging; confirm callback logs oauth_token_exchange_ok -> save_connection_ok and a google_business row exists with access_token/refresh_token stored as v2:<currentKeyId>.",
+    "Re-scope the production MARKETING_OAUTH_ENCRYPTION_KEY to Production-only (remove Preview target)."
+  ],
+  "gateDecision": "NO-GO (held). Do not merge staging->main, apply production migrations, deploy, or approve until both items above are verified green."
+}

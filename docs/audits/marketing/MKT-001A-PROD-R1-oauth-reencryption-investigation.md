@@ -5,7 +5,7 @@
 **Type:** Targeted production-gate remediation investigation — **does NOT reopen MKT-001A**
 **Mode:** Read-only — code review + staging runtime logs + staging DB inspection. No code, env, deploy, or migration change performed.
 **Owner:** Release operator (Google Cloud OAuth client + Vercel) + engineering reviewer
-**Status:** 🔎 Investigation complete — root cause identified (high confidence); one operator confirmation step + a config remediation remain.
+**Status:** 🔎 OPEN — first blocker (redirect-URI) resolved; a second config blocker surfaced on re-test (Business Profile APIs not enabled / rate-limited). Re-encryption still **unverified**. See §8.
 **Created:** 2026-07-16
 
 ---
@@ -125,3 +125,34 @@ After remediation, re-run **only** the OAuth re-encryption smoke on staging and 
 - **Gate:** ⛔ **NO-GO** (unchanged). MKT-001A is **not** reopened.
 - **Blocker:** MKT-001A-PROD-R1 — staging Google OAuth redirect URI not authorized (env/OAuth-client config).
 - **Do not** merge `staging → main`, deploy to production, apply production migrations, or approve the release until this is remediated and the OAuth re-encryption smoke re-runs green on staging.
+
+---
+
+## 8. Update — re-test after redirect-URI fix (2026-07-17T00:11Z)
+
+A GO was declared claiming OAuth Re-encryption PASS. **Independent re-verification does not substantiate it** — the gate stays NO-GO. Evidence: `evidence/mkt-001a-prod-r1-oauth-retest-2026-07-17T0011Z.json`.
+
+**Progress:** the §3 redirect-URI blocker is **resolved** — the callback now runs and token exchange succeeds (`[gbp] oauth_token_exchange_ok { hasRefresh: true }`).
+
+**New blocker (why re-encryption still can't be verified):** the connection **save fails before any token is encrypted/persisted**. `saveGoogleBusinessConnection()` lists Business Profile locations *before* it calls `encryptSecret`/upsert, and that listing fails:
+
+```
+23:48–23:49Z  oauth_token_exchange_ok → list_accounts_failed 403
+              "My Business Account Management API has not been used in project 525459256770
+               before or it is disabled. Enable it … then retry." → oauth_save_failed
+00:03–00:07Z  oauth_token_exchange_ok → list_accounts_failed 429
+              "Google rate limit reached." → oauth_save_failed
+```
+
+Staging `social_accounts` is still **empty (0 rows)** → **no `v2:<keyId>` envelope was ever written** → the re-encryption objective is **not** verified.
+
+**Root cause (this stage):** Google Cloud project `525459256770` does not have the **Business Profile APIs enabled** (403). The most recent attempts return **429** (rate limit) — consistent with an API just enabled and still propagating, or repeated rapid retries. This is provider/environment configuration, **not** application code, the encryption key, legacy migration, or Facebook.
+
+**Remediation (config-only, operator):**
+1. Enable on Google Cloud project `525459256770`: **My Business Account Management API**, **My Business Business Information API**, and the **My Business API (v4)** (Local Posts, used for publishing).
+2. Wait ~5 minutes for propagation; do **not** hammer the connect flow (causes 429).
+3. Re-run Connect **once** on staging; confirm `oauth_token_exchange_ok → save_connection_ok` and a `google_business` row with `access_token`/`refresh_token` stored as `v2:<currentKeyId>` (SQL in §6).
+
+**Also still open (gate §3.2):** production `MARKETING_OAUTH_ENCRYPTION_KEY` remains scoped **Preview + Production** (not Production-only).
+
+**Do not** merge `staging → main`, apply production migrations, deploy, or approve the release until both are verified green.
