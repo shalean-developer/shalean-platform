@@ -1,0 +1,22 @@
+MKT-001C provider architecture — targeted Vitest
+Date: 2026-07-17
+Branch: feature/mkt-001c-provider-architecture
+
+Command:
+npx vitest run lib/promotions/providers/__tests__ \
+  lib/promotions/__tests__/publishProviderErrors.test.ts \
+  lib/promotions/__tests__/publishIdempotency.test.ts \
+  lib/promotions/__tests__/facebookPublish.test.ts \
+  lib/promotions/__tests__/googleBusinessPublish.test.ts
+
+Result:
+Test Files  6 passed (6)
+Tests       48 passed (48)
+
+Files:
+- providers/__tests__/registry.test.ts (13)
+- providers/__tests__/publishingService.test.ts (5)
+- publishProviderErrors.test.ts (6)
+- publishIdempotency.test.ts (13)
+- facebookPublish.test.ts (4)
+- googleBusinessPublish.test.ts (7)
