@@ -104,6 +104,10 @@ function makeStores() {
       this.lteFilters.push([col, val]);
       return this;
     }
+    is(col: string, val: null) {
+      this.filters.push([col, val]);
+      return this;
+    }
     order(_col: string, opts?: { ascending?: boolean }) {
       this.orderAsc = opts?.ascending !== false;
       return this;
@@ -592,6 +596,55 @@ describe("MKT-001B.2 durable queue safety gates", () => {
       random: () => 0.5,
     });
     expect(result.job.status).toBe("dead_letter");
+  });
+
+  it("expired worker cannot overwrite replacement worker result", async () => {
+    const admin = makeStores();
+    const publishCalls = { count: 0 };
+    const registry = new ProviderRegistry();
+    registry.register(mockProvider({ publishCalls }));
+    setProviderRegistryForTests(registry);
+
+    const enq = await enqueuePublishJob({
+      admin,
+      provider: "facebook",
+      request: { message: "Lease steal" },
+      publishedBy: "admin@test",
+      targetRef: "page-1",
+    });
+    if (enq.outcome !== "enqueued") throw new Error("enqueue failed");
+
+    const stale = await leaseSpecificPublishJob(admin, enq.job.id, "stale-worker");
+    expect(stale?.lease_holder).toBe("stale-worker");
+
+    // Simulate reclaim + re-lease by a replacement worker
+    admin._jobs[0].status = "queued";
+    admin._jobs[0].lease_holder = null;
+    admin._jobs[0].lease_expires_at = null;
+    const fresh = await leaseSpecificPublishJob(admin, enq.job.id, "fresh-worker");
+    expect(fresh?.lease_holder).toBe("fresh-worker");
+    expect(fresh?.attempts).toBe(2);
+
+    // Stale worker tries to complete — must not change holder/status away from fresh
+    const staleResult = await executePublishJob({
+      admin,
+      job: { ...stale!, status: "leased", lease_holder: "stale-worker" },
+      registry,
+    });
+    // Provider may have been called by stale path before lease check on terminal write,
+    // but terminal status update requires matching lease_holder.
+    expect(admin._jobs[0].lease_holder).toBe("fresh-worker");
+    expect(admin._jobs[0].status).toBe("leased");
+
+    const freshResult = await executePublishJob({
+      admin,
+      job: { ...admin._jobs[0] },
+      registry,
+    });
+    expect(freshResult.job.status).toBe("succeeded");
+    // At most one successful external id; second execute uses ack-only if first persisted id
+    expect(publishCalls.count).toBeLessThanOrEqual(2);
+    expect(staleResult.providerCalled || freshResult.providerCalled).toBe(true);
   });
 
   it("DLQ replay is explicit, authorized path, and idempotent", async () => {

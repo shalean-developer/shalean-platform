@@ -473,6 +473,8 @@ async function updateJob(
   id: string,
   patch: Record<string, unknown>,
   expectedStatus?: SocialPublishJobStatus | SocialPublishJobStatus[],
+  /** When completing/failing a leased job, require this holder so expired workers cannot overwrite. */
+  leaseHolder?: string | null,
 ): Promise<SocialPublishJobRow | null> {
   let q = admin
     .from("social_publish_jobs")
@@ -485,9 +487,38 @@ async function updateJob(
       q = q.eq("status", expectedStatus);
     }
   }
+  if (leaseHolder) {
+    q = q.eq("lease_holder", leaseHolder);
+  }
   const res = await q.select("*").maybeSingle();
   if (res.error || !res.data) return null;
   return asJobRow(res.data as Record<string, unknown>);
+}
+
+/**
+ * Persist provider success id without requiring lease ownership.
+ * First non-null writer wins — prevents double-post even if the original lease expired.
+ */
+async function persistExternalPostId(
+  admin: SupabaseClient,
+  id: string,
+  externalPostId: string,
+): Promise<SocialPublishJobRow | null> {
+  const res = await admin
+    .from("social_publish_jobs")
+    .update({
+      external_post_id: externalPostId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .is("external_post_id", null)
+    .select("*")
+    .maybeSingle();
+  if (!res.error && res.data) {
+    return asJobRow(res.data as Record<string, unknown>);
+  }
+  // Already set (possibly by us or a racing ack) — reload.
+  return loadJob(admin, id);
 }
 
 /**
@@ -496,9 +527,13 @@ async function updateJob(
 export async function executePublishJob(args: ExecutePublishJobArgs): Promise<ExecutePublishJobResult> {
   const registry = args.registry ?? getProviderRegistry();
   let job = args.job;
+  const leaseHolder = job.lease_holder;
   const correlationId = job.correlation_id || createPublishCorrelationId();
   const startedAt = Date.now();
   let providerCalled = false;
+
+  const updateLeased = (patch: Record<string, unknown>) =>
+    updateJob(args.admin, job.id, patch, "leased", leaseHolder);
 
   const reject = async (
     httpStatus: number,
@@ -518,21 +553,16 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
     provider = registry.requireEnabled(job.provider);
   } catch (e) {
     if (e instanceof ProviderNotFoundError || e instanceof ProviderDisabledError) {
-      const updated = await updateJob(
-        args.admin,
-        job.id,
-        {
-          status: "dead_letter",
-          last_error: e.message,
-          failure_class: "permission",
-          retryable: false,
-          dead_lettered_at: new Date().toISOString(),
-          processed_at: new Date().toISOString(),
-          lease_holder: null,
-          lease_expires_at: null,
-        },
-        "leased",
-      );
+      const updated = await updateLeased({
+        status: "dead_letter",
+        last_error: e.message,
+        failure_class: "permission",
+        retryable: false,
+        dead_lettered_at: new Date().toISOString(),
+        processed_at: new Date().toISOString(),
+        lease_holder: null,
+        lease_expires_at: null,
+      });
       if (updated) job = updated;
       return reject(403, { error: e.message, classification: "permission", retryable: false }, "rejected");
     }
@@ -559,18 +589,13 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
         await markPublishSucceeded(args.admin, claim.id, job.external_post_id);
       }
     }
-    const updated = await updateJob(
-      args.admin,
-      job.id,
-      {
-        status: "succeeded",
-        processed_at: new Date().toISOString(),
-        lease_holder: null,
-        lease_expires_at: null,
-        last_error: null,
-      },
-      "leased",
-    );
+    const updated = await updateLeased({
+      status: "succeeded",
+      processed_at: new Date().toISOString(),
+      lease_holder: null,
+      lease_expires_at: null,
+      last_error: null,
+    });
     if (updated) job = updated;
     await logPublishEvent({
       provider: job.provider,
@@ -610,21 +635,16 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
   const request = payloadToPublishRequest(job.payload, args.ephemeralRequest);
   const content = provider.validateContent(request);
   if (!content.ok) {
-    const updated = await updateJob(
-      args.admin,
-      job.id,
-      {
-        status: "dead_letter",
-        last_error: content.error,
-        failure_class: "validation",
-        retryable: false,
-        dead_lettered_at: new Date().toISOString(),
-        processed_at: new Date().toISOString(),
-        lease_holder: null,
-        lease_expires_at: null,
-      },
-      "leased",
-    );
+    const updated = await updateLeased({
+      status: "dead_letter",
+      last_error: content.error,
+      failure_class: "validation",
+      retryable: false,
+      dead_lettered_at: new Date().toISOString(),
+      processed_at: new Date().toISOString(),
+      lease_holder: null,
+      lease_expires_at: null,
+    });
     if (updated) job = updated;
     return reject(
       400,
@@ -652,18 +672,13 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
   );
 
   if (claim.outcome === "duplicate_succeeded") {
-    const updated = await updateJob(
-      args.admin,
-      job.id,
-      {
-        status: "succeeded",
-        external_post_id: claim.externalPostId,
-        processed_at: new Date().toISOString(),
-        lease_holder: null,
-        lease_expires_at: null,
-      },
-      "leased",
-    );
+    const updated = await updateLeased({
+      status: "succeeded",
+      external_post_id: claim.externalPostId,
+      processed_at: new Date().toISOString(),
+      lease_holder: null,
+      lease_expires_at: null,
+    });
     if (updated) job = updated;
     const result: Extract<PublishResult, { ok: true }> = {
       ok: true,
@@ -695,20 +710,15 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
       retryAfterMs: 15_000,
       random: args.random ?? (() => 0.5),
     });
-    const updated = await updateJob(
-      args.admin,
-      job.id,
-      {
-        status: "retryable",
-        next_attempt_at: nextAttemptAtIso(delay),
-        last_error: "Ledger publish already in progress.",
-        failure_class: "conflict",
-        retryable: true,
-        lease_holder: null,
-        lease_expires_at: null,
-      },
-      "leased",
-    );
+    const updated = await updateLeased({
+      status: "retryable",
+      next_attempt_at: nextAttemptAtIso(delay),
+      last_error: "Ledger publish already in progress.",
+      failure_class: "conflict",
+      retryable: true,
+      lease_holder: null,
+      lease_expires_at: null,
+    });
     if (updated) job = updated;
     return reject(
       409,
@@ -723,21 +733,16 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
   }
 
   if (claim.outcome === "conflict") {
-    const updated = await updateJob(
-      args.admin,
-      job.id,
-      {
-        status: "dead_letter",
-        last_error: "Idempotency key reused with different content.",
-        failure_class: "conflict",
-        retryable: false,
-        dead_lettered_at: new Date().toISOString(),
-        processed_at: new Date().toISOString(),
-        lease_holder: null,
-        lease_expires_at: null,
-      },
-      "leased",
-    );
+    const updated = await updateLeased({
+      status: "dead_letter",
+      last_error: "Idempotency key reused with different content.",
+      failure_class: "conflict",
+      retryable: false,
+      dead_lettered_at: new Date().toISOString(),
+      processed_at: new Date().toISOString(),
+      lease_holder: null,
+      lease_expires_at: null,
+    });
     if (updated) job = updated;
     return reject(
       409,
@@ -756,20 +761,15 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
       retryAfterMs: 15_000,
       random: args.random ?? (() => 0.5),
     });
-    const updated = await updateJob(
-      args.admin,
-      job.id,
-      {
-        status: "retryable",
-        next_attempt_at: nextAttemptAtIso(delay),
-        last_error: claim.error.slice(0, 2000),
-        failure_class: "provider_unavailable",
-        retryable: true,
-        lease_holder: null,
-        lease_expires_at: null,
-      },
-      "leased",
-    );
+    const updated = await updateLeased({
+      status: "retryable",
+      next_attempt_at: nextAttemptAtIso(delay),
+      last_error: claim.error.slice(0, 2000),
+      failure_class: "provider_unavailable",
+      retryable: true,
+      lease_holder: null,
+      lease_expires_at: null,
+    });
     if (updated) job = updated;
     return reject(
       503,
@@ -783,7 +783,7 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
   }
 
   const claimId = claim.id;
-  await updateJob(args.admin, job.id, { ledger_id: claimId }, "leased");
+  await updateLeased({ ledger_id: claimId });
 
   await logPublishEvent({
     provider: job.provider,
@@ -821,9 +821,7 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
       random: args.random ?? (() => 0.5),
     });
 
-    const updated = await updateJob(
-      args.admin,
-      job.id,
+    const updated = await updateLeased(
       toDead
         ? {
             status: "dead_letter",
@@ -844,7 +842,6 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
             lease_holder: null,
             lease_expires_at: null,
           },
-      "leased",
     );
     if (updated) job = updated;
 
@@ -876,13 +873,11 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
     };
   }
 
-  const withExt = await updateJob(
-    args.admin,
-    job.id,
-    { external_post_id: result.externalPostId ?? null },
-    "leased",
-  );
-  if (withExt) job = withExt;
+  // Persist external id without lease ownership — first writer wins (replay-safe).
+  if (result.externalPostId) {
+    const withExt = await persistExternalPostId(args.admin, job.id, result.externalPostId);
+    if (withExt) job = withExt;
+  }
 
   await markPublishSucceeded(args.admin, claimId, result.externalPostId ?? null);
   await recordPublishHistory({
@@ -895,19 +890,15 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
     publishedBy: job.published_by,
   });
 
-  const succeeded = await updateJob(
-    args.admin,
-    job.id,
-    {
-      status: "succeeded",
-      processed_at: new Date().toISOString(),
-      lease_holder: null,
-      lease_expires_at: null,
-      last_error: null,
-    },
-    "leased",
-  );
+  const succeeded = await updateLeased({
+    status: "succeeded",
+    processed_at: new Date().toISOString(),
+    lease_holder: null,
+    lease_expires_at: null,
+    last_error: null,
+  });
   if (succeeded) job = succeeded;
+  // If lease was lost, external_post_id is still persisted; replacement worker ack-only path applies.
 
   await logPublishEvent({
     provider: job.provider,
