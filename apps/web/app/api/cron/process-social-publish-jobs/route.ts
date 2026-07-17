@@ -1,0 +1,114 @@
+import { NextResponse } from "next/server";
+import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
+import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
+import { logCronRun, logSystemEvent } from "@/lib/logging/systemLog";
+import {
+  claimDuePublishJobs,
+  executePublishJob,
+  newPublishJobHolderId,
+  recoverExpiredPublishJobLeases,
+} from "@/lib/promotions/publishJobs";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/**
+ * MKT-001B.2 — Process durable social publish jobs.
+ *
+ * Auth: Bearer CRON_SECRET or x-cron-secret (pg_cron / pg_net).
+ * Primary schedule: Supabase pg_cron every 5 minutes (migration).
+ * Backup: Vercel daily cron (Hobby-safe) also registered in vercel.json.
+ */
+export async function POST(request: Request) {
+  const auth = verifyCronSecret(request);
+  if (!auth.ok) {
+    return NextResponse.json(auth.body, { status: auth.status });
+  }
+
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
+  }
+
+  const lockAcq = await acquireCronLock(admin, {
+    jobName: CRON_LOCK_KEYS.processSocialPublishJobs,
+    leaseSeconds: 300,
+  });
+  if (!lockAcq.ok) {
+    return NextResponse.json({ ok: true, skipped: lockAcq.reason });
+  }
+
+  const holder = newPublishJobHolderId();
+  let processed = 0;
+  let succeeded = 0;
+  let retryable = 0;
+  let deadLetter = 0;
+  let providerCalls = 0;
+  const errors: string[] = [];
+
+  try {
+    const recovered = await recoverExpiredPublishJobLeases(admin, { limit: 100 });
+    const claimed = await claimDuePublishJobs(admin, {
+      limit: 10,
+      holder,
+      leaseSeconds: 120,
+    });
+
+    for (const job of claimed.jobs) {
+      try {
+        const result = await executePublishJob({ admin, job });
+        processed += 1;
+        if (result.providerCalled) providerCalls += 1;
+        if (result.job.status === "succeeded") succeeded += 1;
+        else if (result.job.status === "retryable") retryable += 1;
+        else if (result.job.status === "dead_letter") deadLetter += 1;
+      } catch (e) {
+        errors.push(`${job.id}: ${e instanceof Error ? e.message : String(e)}`);
+      }
+    }
+
+    await logSystemEvent({
+      level: errors.length > 0 ? "warn" : "info",
+      source: "cron/process-social-publish-jobs",
+      message: "process_social_publish_jobs",
+      context: {
+        claimVia: claimed.via,
+        recoveredLeases: recovered.recovered,
+        claimed: claimed.jobs.length,
+        processed,
+        succeeded,
+        retryable,
+        deadLetter,
+        providerCalls,
+        errorCount: errors.length,
+        errors: errors.slice(0, 10),
+      },
+    });
+
+    await logCronRun({
+      jobName: "process-social-publish-jobs",
+      status: errors.length > 0 && processed === 0 ? "error" : "success",
+      message: `processed=${processed} succeeded=${succeeded} dlq=${deadLetter}`,
+      context: { processed, succeeded, retryable, deadLetter, providerCalls },
+    });
+
+    return NextResponse.json({
+      ok: true,
+      recoveredLeases: recovered.recovered,
+      claimed: claimed.jobs.length,
+      claimVia: claimed.via,
+      processed,
+      succeeded,
+      retryable,
+      deadLetter,
+      providerCalls,
+      errors,
+    });
+  } finally {
+    if (!lockAcq.degraded) {
+      await releaseCronLock(admin, lockAcq.jobName, lockAcq.holderId);
+    }
+  }
+}
