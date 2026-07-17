@@ -19,7 +19,10 @@ Operators can **Connect / Reconnect / Disconnect** Facebook from the UI. Page to
 
 Env vars `FACEBOOK_PAGE_ID` / `FACEBOOK_PAGE_ACCESS_TOKEN` remain as a **documented emergency/local fallback only**, disabled by default.
 
-**Verdict (pre-staging):** **CONDITIONAL GO** for staging verification. **NO-GO** for production until exact-SHA staging OAuth + controlled publish smoke pass.
+**Verdict (post-merge close-out 2026-07-17):** **CONDITIONAL PASS** for staging identity/deploy.  
+Exact merge SHA `2af18dc3` is **READY** on staging with healthy identity.  
+Meta OAuth env, Meta redirect allowlist, and operator OAuth/publish smoke remain **PENDING**.  
+**NO-GO** for production until those complete and this sheet is upgraded to **PASS — staging complete**.
 
 ---
 
@@ -209,9 +212,10 @@ Remaining before production: exact-SHA staging OAuth + controlled publish smoke.
 
 | Gate | Decision |
 |---|---|
-| Code complete on feature branch | **CONDITIONAL GO** |
-| Staging exact-SHA OAuth + publish smoke | Pending → see `MKT-001H-staging-verification.md` |
-| Production authorization | **NO-GO** until staging passes |
+| Code complete + merged to `staging` | **PASS** (PR #57 → `2af18dc3`) |
+| Exact-SHA staging deploy + health identity | **PASS** (`dpl_92Ph3z6`, `issues=[]`) |
+| Staging OAuth + publish smoke | **PENDING** (operator Meta env + allowlist + smoke) |
+| Production authorization | **NO-GO** until staging smoke PASS |
 | GBP | Independently disabled / NO-GO |
 | Instagram I1–I9 | Remains conditional if sharing Meta operator connection |
 

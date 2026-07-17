@@ -1,92 +1,171 @@
 # MKT-001H — Staging Verification
 
 **Feature:** Facebook Connected Accounts OAuth  
-**Branch:** `feature/mkt-001h-facebook-connected-accounts-oauth`  
-**Target environment:** staging only  
-**Status:** Ready for merge → exact-SHA deploy → matrix below  
-**Date opened:** 2026-07-17
+**PR:** https://github.com/shalean-developer/shalean-platform/pull/57  
+**Base:** `staging`  
+**Date:** 2026-07-17  
 
 ---
 
-## Prerequisites
+## Executive decision
 
-- [ ] PR merged to `staging` (not `main`)
-- [ ] Exact SHA deployed to staging
-- [ ] Meta App configured with staging redirect URI
-- [ ] `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET` / `FACEBOOK_REDIRECT_URI` set on staging
-- [ ] `MARKETING_PROVIDER_FACEBOOK=1`
-- [ ] `FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK=0` (unless testing fallback row)
-- [ ] `MARKETING_OAUTH_ENCRYPTION_KEY` present
-- [ ] Admin allowlisted operator available
+| Gate | Status |
+| --- | --- |
+| Pre-merge gates | **PASS** (recorded on PR #57) |
+| Merge to `staging` | **DONE** |
+| Exact-SHA staging deploy | **PASS** |
+| Deployment health identity | **PASS** |
+| Meta OAuth env + Meta app allowlist | **OPERATOR PENDING** |
+| Operator OAuth / publish smoke matrix | **OPERATOR PENDING** |
+| Production authorization | **NO-GO** |
 
----
+### Authoritative statement
 
-## Verification matrix
-
-| Scenario | Expected | Pass? | Evidence |
-| --- | --- | --- | --- |
-| Provider disabled (`MARKETING_PROVIDER_FACEBOOK=0`) | Connect unavailable; publish blocked | | |
-| Disconnected account | **Connect Facebook** shown | | |
-| OAuth cancel | Safe return; clear cancelled/denied toast | | |
-| Invalid / replayed state | Request rejected (`invalid_state`) | | |
-| Valid OAuth | Page discovery succeeds | | |
-| Multiple Pages | Explicit selection required (`pick=1`) | | |
-| Page selected | Token saved encrypted; card shows Page name + masked ID | | |
-| Connected card | Correct Page + health (Connected / Healthy) | | |
-| Text post | Publish succeeds | | |
-| Image post | Publish succeeds | | |
-| Duplicate click | One logical publish (idempotency) | | |
-| Expired token | Reconnect guidance; publish blocked | | |
-| Reconnect | Existing `social_accounts` row updated | | |
-| Disconnect | Future publishing blocked; history retained | | |
-| Token inspection | No plaintext token in browser / logs / DB views | | |
-| Env fallback disabled | No silent fallback | | |
-| Env fallback enabled (optional) | Audited `environment_fallback` source only | | |
-| Facebook regression | Queue, ledger, retry, DLQ still work | | |
-| Instagram regression | MKT-001G connect/publish behavior preserved | | |
+> **CONDITIONAL PASS — named operator items remain.**  
+> Code is merged and the exact merge SHA is live on staging with healthy identity.  
+> Staging OAuth + controlled publish smoke are **not** complete until Meta app credentials, redirect allowlist, and the operator smoke matrix are executed and recorded.  
+> **Production remains NO-GO.** Do not merge to `main`.
 
 ---
 
-## Controlled publish smoke
-
-Record:
+## 1. Exact merge SHA
 
 | Item | Value |
 | --- | --- |
-| Staging deployment SHA | |
-| Correlation ID | |
-| Text post external ID | |
-| Image post external ID | |
-| Token source observed | `connected_account` / `environment_fallback` |
+| PR | #57 |
+| Merged at | `2026-07-17T17:09:02Z` |
+| **Merge SHA** | `2af18dc307d745918cbf6cab3d7f6184204633ef` |
+| Feature tip included | `eae16ee14eaaed4050eab6524d78106e625bf7cf` |
+| Local `staging` HEAD | `2af18dc307d745918cbf6cab3d7f6184204633ef` (matches `origin/staging`) |
+| Working tree | Clean for MKT-001H (unrelated untracked `docs/governance/` only) |
+
+CI note at merge: `web-test` / Live internal link crawl **RED** for pre-existing production `/locations/*` 404s (**OPS-CI-001** / issue #49). Same classification as prior MKT merges. Check was **not** weakened.
 
 ---
 
-## Exit criteria checklist
+## 2. Exact-SHA deployment
 
-- [ ] Facebook connectable from UI
-- [ ] Admin can select the correct Page
-- [ ] Page tokens encrypted + DB-backed
-- [ ] Publishing uses Connected Accounts record
-- [ ] Expired tokens trigger reconnect workflow
-- [ ] Normal operation no longer requires Vercel token updates
-- [ ] Disconnect controlled + auditable
-- [ ] Env tokens fallback-only
-- [ ] Focused + regression tests pass
-- [ ] Exact-SHA staging verification passes
-- [ ] Facebook controlled publish smoke passes
+| Item | Value |
+| --- | --- |
+| Deployment ID | `dpl_92Ph3z6DucAV8kEa6gDM5vM67Xwj` |
+| Ready state | **READY** |
+| Git branch | `staging` |
+| Git SHA | `2af18dc307d745918cbf6cab3d7f6184204633ef` |
+| Branch alias | `https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app` |
+| Deployment URL | `https://shalean-platform-jocja0yn0-shalean-cleaning-services.vercel.app` |
+| Inspector | https://vercel.com/shalean-cleaning-services/shalean-platform/92Ph3z6DucAV8kEa6gDM5vM67Xwj |
 
 ---
 
-## Release decision (until this sheet is green)
+## 3. Health / identity verification
 
-- Facebook is **not** approved for normal production operation.
-- Env-token flow may be used only for controlled staging smoke when fallback is explicitly enabled.
-- Instagram I1–I9 remains conditional if it depends on the same Meta operator connection.
-- GBP remains independently disabled / NO-GO.
-- **No production release is authorized.**
+Fetched via Vercel-authenticated fetch of branch-alias health:
+
+`GET /api/health/environment`
+
+| Field | Observed |
+| --- | --- |
+| `status` | `ok` |
+| `deployment` | `staging` |
+| `gitBranch` | `staging` |
+| `vercelEnv` | `preview` |
+| `shaleanAppEnv` | `staging` |
+| `issues` | `[]` |
+| Timestamp | `2026-07-17T17:16:36.670Z` |
 
 ---
 
-## Notes / findings
+## 4. Staging env configuration (operator)
 
-_Fill during staging run._
+Required Preview / staging vars (branch `staging`):
+
+```text
+FACEBOOK_APP_ID=<staging Meta app ID>
+FACEBOOK_APP_SECRET=<staging Meta app secret>
+FACEBOOK_REDIRECT_URI=https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app/api/oauth/facebook/callback
+MARKETING_PROVIDER_FACEBOOK=1
+FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK=0
+MARKETING_OAUTH_ENCRYPTION_KEY=<existing staging marketing OAuth encryption key>
+```
+
+Also confirm `NEXT_PUBLIC_SITE_URL` (if used for redirect derivation) matches the staging host used in Meta allowlisting.
+
+| Control | Status |
+| --- | --- |
+| Exact callback URL documented | **YES** (above) |
+| Vars applied on Vercel Preview for `staging` | **OPERATOR PENDING** — this agent session cannot write team `shalean-cleaning-services` env (CLI scoped to personal projects only; MCP has deploy/read, not env mutate) |
+| Meta app Valid OAuth Redirect URIs includes exact callback | **OPERATOR PENDING** |
+| `FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK=0` confirmed | **OPERATOR PENDING** |
+| Provider flag `MARKETING_PROVIDER_FACEBOOK=1` confirmed | **OPERATOR PENDING** |
+
+---
+
+## 5. Operator smoke matrix (pending)
+
+| Scenario | Expected | Result |
+| --- | --- | --- |
+| Provider disabled | Connect unavailable; publish blocked | PENDING |
+| Disconnected account | **Connect Facebook** shown | PENDING |
+| OAuth cancel | Safe return; clear message | PENDING |
+| Invalid / replayed state | `invalid_state` rejection | PENDING |
+| Valid OAuth | Page discovery succeeds | PENDING |
+| Multiple Pages | Explicit selection required | PENDING |
+| Page selected | Token encrypted in `social_accounts` | PENDING |
+| Connected card | Correct Page + health | PENDING |
+| Text post | Publish succeeds | PENDING |
+| Image post | Publish succeeds | PENDING |
+| Duplicate click | One logical publish | PENDING |
+| Expired token | Reconnect guidance | PENDING |
+| Reconnect | Existing row updated | PENDING |
+| Disconnect | Future publish blocked; history retained | PENDING |
+| Token inspection | No plaintext in browser/logs/DB views | PENDING |
+| Env fallback disabled | No silent fallback | PENDING |
+| Facebook queue / retry / DLQ | Regression PASS | PENDING |
+| Instagram regression | MKT-001G behavior preserved | PENDING |
+
+---
+
+## 6. What this close-out completed without operator Meta secrets
+
+1. Merged PR #57 → `staging`.  
+2. Recorded exact merge SHA `2af18dc3…`.  
+3. Confirmed local/remote `staging` contains the merge.  
+4. Observed auto-deploy of exact SHA to **READY**.  
+5. Verified staging health identity (`deployment=staging`, `gitBranch=staging`, `issues=[]`).  
+6. Documented exact callback URI for Meta allowlisting.  
+7. Confirmed production remains unauthorized.
+
+---
+
+## 7. Named operator items to reach **PASS — staging complete**
+
+1. Set the six env controls on Vercel Preview for staging (section 4).  
+2. Allowlist the exact `FACEBOOK_REDIRECT_URI` in the Meta app.  
+3. Redeploy / wait for env to attach to the exact SHA if vars were added after build.  
+4. As an allowlisted admin, run the full smoke matrix (section 5).  
+5. Attach evidence (correlation IDs, masked Page ID, publish history IDs — **no tokens**).  
+6. Flip this document’s decision to **PASS — staging complete** only with that evidence.
+
+---
+
+## 8. Release posture
+
+| Scope | Decision |
+| --- | --- |
+| Merge to `staging` | **Authorized / Done** |
+| Staging OAuth + publish verification | **Incomplete** |
+| Merge to `main` | **Forbidden** |
+| Facebook production readiness | **NO-GO** |
+| Overall production release | **NO-GO** |
+
+---
+
+## Evidence index
+
+| Artifact | Location / ID |
+| --- | --- |
+| PR | https://github.com/shalean-developer/shalean-platform/pull/57 |
+| Merge SHA | `2af18dc307d745918cbf6cab3d7f6184204633ef` |
+| Deployment | `dpl_92Ph3z6DucAV8kEa6gDM5vM67Xwj` |
+| Health probe | branch-alias `/api/health/environment` @ `2026-07-17T17:16:36.670Z` |
+| Architecture audit | `docs/audits/marketing/MKT-001H-facebook-connected-accounts-oauth.md` |
