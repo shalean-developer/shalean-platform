@@ -170,16 +170,18 @@ function windowStartIso(hours: IntelligenceWindowHours, now = Date.now()): strin
   return new Date(now - hours * 60 * 60 * 1000).toISOString();
 }
 
+type HeadCountQuery = {
+  eq: (column: string, value: string) => HeadCountQuery;
+  gte: (column: string, value: string) => HeadCountQuery;
+};
+
 async function headCount(
   admin: SupabaseClient,
   table: string,
-  apply: (q: {
-    eq: (column: string, value: string) => unknown;
-    gte: (column: string, value: string) => unknown;
-  }) => unknown,
+  apply: (q: HeadCountQuery) => HeadCountQuery,
 ): Promise<number> {
   const base = admin.from(table).select("*", { count: "exact", head: true });
-  const q = apply(base as never) as PromiseLike<{
+  const q = apply(base as unknown as HeadCountQuery) as unknown as PromiseLike<{
     count: number | null;
     error: { message: string } | null;
   }>;
