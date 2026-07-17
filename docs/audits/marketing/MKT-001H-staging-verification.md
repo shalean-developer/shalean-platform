@@ -2,6 +2,7 @@
 
 **Feature:** Facebook Connected Accounts OAuth  
 **PR:** https://github.com/shalean-developer/shalean-platform/pull/57  
+**Docs close-out PR:** https://github.com/shalean-developer/shalean-platform/pull/58  
 **Base:** `staging`  
 **Date:** 2026-07-17  
 
@@ -13,18 +14,17 @@
 | --- | --- |
 | Pre-merge gates | **PASS** (recorded on PR #57) |
 | Merge to `staging` | **DONE** |
-| Exact-SHA staging deploy | **PASS** |
-| Deployment health identity | **PASS** |
-| Meta OAuth env + Meta app allowlist | **OPERATOR PENDING** |
-| Operator OAuth / publish smoke matrix | **OPERATOR PENDING** |
+| Staging Meta env + Meta app allowlist | **PASS** (operator configuration checkpoint complete) |
+| Post-config exact-SHA staging redeploy | **PASS** |
+| Deployment health identity (post-config) | **PASS** |
+| Operator OAuth / publish smoke matrix | **PENDING** (admin interactive session required) |
 | Production authorization | **NO-GO** |
 
 ### Authoritative statement
 
-> **CONDITIONAL PASS — named operator items remain.**  
-> Code is merged and the exact merge SHA is live on staging with healthy identity.  
-> Staging OAuth + controlled publish smoke are **not** complete until Meta app credentials, redirect allowlist, and the operator smoke matrix are executed and recorded.  
-> **Production remains NO-GO.** Do not merge to `main`.
+> **MKT-001H: CONDITIONAL PASS — live staging OAuth and publishing smoke still pending. Production and `main` remain NO-GO.**
+
+Configuration items are **PASS**. Live Connected Accounts OAuth + controlled publish smoke remain incomplete until an allowlisted admin completes the matrix and redacted evidence is attached.
 
 ---
 
@@ -36,32 +36,37 @@
 | Merged at | `2026-07-17T17:09:02Z` |
 | **Merge SHA** | `2af18dc307d745918cbf6cab3d7f6184204633ef` |
 | Feature tip included | `eae16ee14eaaed4050eab6524d78106e625bf7cf` |
-| Local `staging` HEAD | `2af18dc307d745918cbf6cab3d7f6184204633ef` (matches `origin/staging`) |
-| Working tree | Clean for MKT-001H (unrelated untracked `docs/governance/` only) |
-
-CI note at merge: `web-test` / Live internal link crawl **RED** for pre-existing production `/locations/*` 404s (**OPS-CI-001** / issue #49). Same classification as prior MKT merges. Check was **not** weakened.
 
 ---
 
-## 2. Exact-SHA deployment
+## 2. Post-config exact-SHA deployment (authoritative)
+
+Env-var changes do not apply to already-running deployments. After the Meta configuration checkpoint, Preview redeploy of the exact merge SHA produced a **new** deployment. Do **not** cite the pre-config ID as evidence for the newly configured environment.
+
+| Item | Value |
+| --- | --- |
+| **Deployment ID** | `dpl_BPebLMddKtAxcyGaY3bVcyWBjy4v` |
+| Ready state | **READY** |
+| Git branch | `staging` |
+| Git SHA | `2af18dc307d745918cbf6cab3d7f6184204633ef` |
+| Source | `redeploy` (original: `dpl_92Ph3z6DucAV8kEa6gDM5vM67Xwj`) |
+| Target | Preview (not Production) |
+| Branch alias | `https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app` |
+| Deployment URL | `https://shalean-platform-fhur97qfd-shalean-cleaning-services.vercel.app` |
+| Inspector | https://vercel.com/shalean-cleaning-services/shalean-platform/BPebLMddKtAxcyGaY3bVcyWBjy4v |
+
+### Historical pre-config deploy (superseded for env evidence)
 
 | Item | Value |
 | --- | --- |
 | Deployment ID | `dpl_92Ph3z6DucAV8kEa6gDM5vM67Xwj` |
-| Ready state | **READY** |
-| Git branch | `staging` |
-| Git SHA | `2af18dc307d745918cbf6cab3d7f6184204633ef` |
-| Branch alias | `https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app` |
-| Deployment URL | `https://shalean-platform-jocja0yn0-shalean-cleaning-services.vercel.app` |
-| Inspector | https://vercel.com/shalean-cleaning-services/shalean-platform/92Ph3z6DucAV8kEa6gDM5vM67Xwj |
+| Note | Pre-Meta-config; **not** valid evidence for post-config runtime |
 
 ---
 
-## 3. Health / identity verification
+## 3. Health / identity verification (post-config)
 
-Fetched via Vercel-authenticated fetch of branch-alias health:
-
-`GET /api/health/environment`
+`GET /api/health/environment` on both the exact deployment host and the staging branch alias (share-authenticated browser fetch):
 
 | Field | Observed |
 | --- | --- |
@@ -71,11 +76,14 @@ Fetched via Vercel-authenticated fetch of branch-alias health:
 | `vercelEnv` | `preview` |
 | `shaleanAppEnv` | `staging` |
 | `issues` | `[]` |
-| Timestamp | `2026-07-17T17:16:36.670Z` |
+| Exact-deploy timestamp | `2026-07-17T18:31:46.666Z` |
+| Branch-alias timestamp | `2026-07-17T18:32:34.740Z` |
+
+Redacted evidence: `docs/audits/marketing/evidence/mkt-001h-postconfig-redeploy-2026-07-17T1831Z.json`
 
 ---
 
-## 4. Staging env configuration (operator)
+## 4. Staging env configuration
 
 Required Preview / staging vars (branch `staging`):
 
@@ -88,19 +96,22 @@ FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK=0
 MARKETING_OAUTH_ENCRYPTION_KEY=<existing staging marketing OAuth encryption key>
 ```
 
-Also confirm `NEXT_PUBLIC_SITE_URL` (if used for redirect derivation) matches the staging host used in Meta allowlisting.
-
 | Control | Status |
 | --- | --- |
-| Exact callback URL documented | **YES** (above) |
-| Vars applied on Vercel Preview for `staging` | **OPERATOR PENDING** — this agent session cannot write team `shalean-cleaning-services` env (CLI scoped to personal projects only; MCP has deploy/read, not env mutate) |
-| Meta app Valid OAuth Redirect URIs includes exact callback | **OPERATOR PENDING** |
-| `FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK=0` confirmed | **OPERATOR PENDING** |
-| Provider flag `MARKETING_PROVIDER_FACEBOOK=1` confirmed | **OPERATOR PENDING** |
+| Exact callback URL documented | **YES** |
+| Vars applied on Vercel Preview for `staging` | **PASS** (operator checkpoint complete) |
+| Meta app Valid OAuth Redirect URIs includes exact callback | **PASS** (operator checkpoint complete) |
+| `FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK=0` | **PASS** (operator checkpoint) |
+| Provider flag `MARKETING_PROVIDER_FACEBOOK=1` | **PASS** (operator checkpoint) |
+| Fresh redeploy after env change | **PASS** (`dpl_BPebLMdd…`) |
+
+Secrets / tokens are not recorded in this document.
 
 ---
 
-## 5. Operator smoke matrix (pending)
+## 5. Operator smoke matrix
+
+Attempted after post-config READY deploy. Navigation reached staging admin sign-in (`/auth/login?redirect=/office/marketing/connected-accounts`). **Blocked:** no allowlisted admin credentials in this agent session; Meta OAuth also requires interactive operator login.
 
 | Scenario | Expected | Result |
 | --- | --- | --- |
@@ -123,28 +134,38 @@ Also confirm `NEXT_PUBLIC_SITE_URL` (if used for redirect derivation) matches th
 | Facebook queue / retry / DLQ | Regression PASS | PENDING |
 | Instagram regression | MKT-001G behavior preserved | PENDING |
 
+### Controlled publish smoke (blank until run)
+
+| Item | Value |
+| --- | --- |
+| Staging deployment SHA | `2af18dc307d745918cbf6cab3d7f6184204633ef` |
+| Post-config deployment ID | `dpl_BPebLMddKtAxcyGaY3bVcyWBjy4v` |
+| Correlation ID | |
+| Text post external ID | |
+| Image post external ID | |
+| Token source observed | |
+
+Evidence rules: masked Page ID, connection status, publish/ledger IDs, correlation IDs only — **no** app secret, encryption key, access tokens, OAuth code, or raw Meta responses.
+
 ---
 
-## 6. What this close-out completed without operator Meta secrets
+## 6. Completed this pass
 
-1. Merged PR #57 → `staging`.  
-2. Recorded exact merge SHA `2af18dc3…`.  
-3. Confirmed local/remote `staging` contains the merge.  
-4. Observed auto-deploy of exact SHA to **READY**.  
-5. Verified staging health identity (`deployment=staging`, `gitBranch=staging`, `issues=[]`).  
-6. Documented exact callback URI for Meta allowlisting.  
-7. Confirmed production remains unauthorized.
+1. Operator Meta configuration checkpoint accepted as **PASS**.  
+2. Triggered Preview redeploy of exact SHA `2af18dc3…` (not Production).  
+3. Recorded new deployment ID `dpl_BPebLMddKtAxcyGaY3bVcyWBjy4v` (**READY**).  
+4. Verified health: `deployment=staging`, `gitBranch=staging`, `issues=[]`.  
+5. Confirmed pre-config `dpl_92Ph3z6…` is superseded for env evidence.  
+6. Confirmed production / `main` remain unauthorized.
 
 ---
 
-## 7. Named operator items to reach **PASS — staging complete**
+## 7. Remaining to reach **PASS — staging complete**
 
-1. Set the six env controls on Vercel Preview for staging (section 4).  
-2. Allowlist the exact `FACEBOOK_REDIRECT_URI` in the Meta app.  
-3. Redeploy / wait for env to attach to the exact SHA if vars were added after build.  
-4. As an allowlisted admin, run the full smoke matrix (section 5).  
-5. Attach evidence (correlation IDs, masked Page ID, publish history IDs — **no tokens**).  
-6. Flip this document’s decision to **PASS — staging complete** only with that evidence.
+1. Sign in as allowlisted staging admin.  
+2. Run Office → Marketing → Connected Accounts → Connect Facebook through the full matrix (section 5).  
+3. Attach redacted smoke evidence.  
+4. Flip this document’s decision to **PASS — staging complete** only with that evidence.
 
 ---
 
@@ -153,7 +174,9 @@ Also confirm `NEXT_PUBLIC_SITE_URL` (if used for redirect derivation) matches th
 | Scope | Decision |
 | --- | --- |
 | Merge to `staging` | **Authorized / Done** |
-| Staging OAuth + publish verification | **Incomplete** |
+| Staging Meta configuration | **PASS** |
+| Post-config exact-SHA deploy + health | **PASS** |
+| Staging OAuth + publish smoke | **Incomplete** |
 | Merge to `main` | **Forbidden** |
 | Facebook production readiness | **NO-GO** |
 | Overall production release | **NO-GO** |
@@ -164,8 +187,12 @@ Also confirm `NEXT_PUBLIC_SITE_URL` (if used for redirect derivation) matches th
 
 | Artifact | Location / ID |
 | --- | --- |
-| PR | https://github.com/shalean-developer/shalean-platform/pull/57 |
+| Feature PR | https://github.com/shalean-developer/shalean-platform/pull/57 |
+| Docs PR | https://github.com/shalean-developer/shalean-platform/pull/58 |
 | Merge SHA | `2af18dc307d745918cbf6cab3d7f6184204633ef` |
-| Deployment | `dpl_92Ph3z6DucAV8kEa6gDM5vM67Xwj` |
-| Health probe | branch-alias `/api/health/environment` @ `2026-07-17T17:16:36.670Z` |
+| **Post-config deployment** | `dpl_BPebLMddKtAxcyGaY3bVcyWBjy4v` |
+| Pre-config deployment (superseded) | `dpl_92Ph3z6DucAV8kEa6gDM5vM67Xwj` |
+| Health probe (exact deploy) | `/api/health/environment` @ `2026-07-17T18:31:46.666Z` |
+| Health probe (branch alias) | `/api/health/environment` @ `2026-07-17T18:32:34.740Z` |
+| Redeploy evidence JSON | `docs/audits/marketing/evidence/mkt-001h-postconfig-redeploy-2026-07-17T1831Z.json` |
 | Architecture audit | `docs/audits/marketing/MKT-001H-facebook-connected-accounts-oauth.md` |
