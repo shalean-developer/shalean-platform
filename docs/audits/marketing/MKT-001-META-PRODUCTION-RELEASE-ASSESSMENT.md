@@ -47,7 +47,7 @@ This supersedes the earlier blanket rule that production remained NO-GO for the 
 | MKT-001F | ✅ Complete |
 | Fail-closed provider defaults | ✅ Implemented (`DEFAULT_ENABLED` all `false`) |
 | Provider-release manifest | ✅ `docs/releases/marketing-provider-release-manifest.md` |
-| MKT-001G — Instagram / Meta Provider Readiness | ▶️ **Next** |
+| MKT-001G — Instagram / Meta Provider Readiness | ▶️ **In progress** on `feature/mkt-001g-meta-provider-readiness` |
 
 Then: complete MKT-001G → verify Facebook production readiness → verify Instagram production readiness → keep GBP disabled → update assessment + manifest → controlled production SHA with approved providers only → GBP later after Google approval.
 

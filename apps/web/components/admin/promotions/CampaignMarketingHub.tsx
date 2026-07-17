@@ -337,6 +337,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
   const [facebookHint, setFacebookHint] = useState<string | null>(null);
   const [googleConfigured, setGoogleConfigured] = useState(false);
   const [googleHint, setGoogleHint] = useState<string | null>(null);
+  const [instagramConfigured, setInstagramConfigured] = useState(false);
+  const [instagramHint, setInstagramHint] = useState<string | null>(null);
   const [providerRegistry, setProviderRegistry] = useState<RegistryProviderSnapshot[] | null>(
     null,
   );
@@ -395,6 +397,18 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     setGoogleHint(res.data?.hint ?? null);
   }, []);
 
+  const loadInstagramStatus = useCallback(async () => {
+    const res = await adminFetch<{
+      configured: boolean;
+      connected?: boolean;
+      okForPublish?: boolean;
+      hint?: string | null;
+    }>("/api/admin/promotions/publish-instagram");
+    // 403 when flag off is expected — treat as not configured/publishable.
+    setInstagramConfigured(Boolean(res.data?.configured && res.data?.okForPublish));
+    setInstagramHint(res.data?.hint ?? null);
+  }, []);
+
   const loadProviderRegistry = useCallback(async () => {
     const res = await adminFetch<{ providers: RegistryProviderSnapshot[] }>(
       "/api/admin/promotions/providers",
@@ -406,6 +420,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     facebookConfigured && registryAllowsPublish(providerRegistry, "facebook");
   const googlePublishable =
     googleConfigured && registryAllowsPublish(providerRegistry, "google_business");
+  const instagramPublishable =
+    instagramConfigured && registryAllowsPublish(providerRegistry, "instagram");
 
   const loadContentHub = useCallback(async () => {
     if (view === "assets" || view === "social") {
@@ -452,6 +468,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     void loadContentHub();
     void loadFacebookStatus();
     void loadGoogleStatus();
+    void loadInstagramStatus();
     void loadProviderRegistry();
   }, [
     loadAnalytics,
@@ -461,6 +478,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     loadContentHub,
     loadFacebookStatus,
     loadGoogleStatus,
+    loadInstagramStatus,
     loadProviderRegistry,
   ]);
 
@@ -803,6 +821,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
           facebookHint={facebookHint}
           googleConfigured={googlePublishable}
           googleHint={googleHint}
+          instagramConfigured={instagramPublishable}
+          instagramHint={instagramHint}
           emptyLabel={`No ${meta.title.toLowerCase()} yet. Generate a campaign first.`}
           emptyStateKey={view === "social" ? "no_draft_posts" : undefined}
           onAssetUpdated={(asset) => {
@@ -1567,6 +1587,8 @@ function ContentList({
   facebookHint,
   googleConfigured,
   googleHint,
+  instagramConfigured,
+  instagramHint,
   emptyLabel,
   emptyStateKey,
   onAssetUpdated,
@@ -1577,6 +1599,8 @@ function ContentList({
   facebookHint: string | null;
   googleConfigured: boolean;
   googleHint: string | null;
+  instagramConfigured: boolean;
+  instagramHint: string | null;
   emptyLabel: string;
   emptyStateKey?: "no_draft_posts";
   onAssetUpdated?: (asset: AssetRow) => void;
@@ -1618,6 +1642,21 @@ function ContentList({
           )}
         </p>
       ) : null}
+      {!instagramConfigured ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {instagramHint ?? (
+            <>
+              Instagram one-click publish needs{" "}
+              <code className="font-mono text-xs">MARKETING_PROVIDER_INSTAGRAM=1</code>, a Page-linked
+              Professional account, and Connect from{" "}
+              <Link href="/office/marketing/connected-accounts" className="font-medium underline">
+                Connected Accounts
+              </Link>
+              . Public image URLs only (no data URLs).
+            </>
+          )}
+        </p>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-2">
         {content.map((c) => (
           <SocialContentCard
@@ -1640,6 +1679,7 @@ function ContentList({
             }
             facebookConfigured={facebookConfigured}
             googleConfigured={googleConfigured}
+            instagramConfigured={instagramConfigured}
             onAssetUpdated={onAssetUpdated}
           />
         ))}
@@ -1653,6 +1693,7 @@ function SocialContentCard({
   asset,
   facebookConfigured,
   googleConfigured,
+  instagramConfigured,
   onAssetUpdated,
   onContentStatusChange,
 }: {
@@ -1660,6 +1701,7 @@ function SocialContentCard({
   asset: AssetRow | null;
   facebookConfigured: boolean;
   googleConfigured: boolean;
+  instagramConfigured: boolean;
   onAssetUpdated?: (asset: AssetRow) => void;
   onContentStatusChange?: (contentId: string, status: string) => void;
 }) {
@@ -1679,15 +1721,25 @@ function SocialContentCard({
   const previewMax = 280;
   const previewScale = Math.min(1, previewMax / width);
   const isPublishChannel =
-    content.channel === "facebook" || content.channel === "google_business";
+    content.channel === "facebook" ||
+    content.channel === "google_business" ||
+    content.channel === "instagram";
   const publishConfigured =
-    content.channel === "facebook" ? facebookConfigured : googleConfigured;
+    content.channel === "facebook"
+      ? facebookConfigured
+      : content.channel === "google_business"
+        ? googleConfigured
+        : content.channel === "instagram"
+          ? instagramConfigured
+          : false;
   const charLimit =
     content.channel === "facebook"
       ? 63_206
       : content.channel === "google_business"
         ? 1500
-        : null;
+        : content.channel === "instagram"
+          ? 2200
+          : null;
   const overLimit = charLimit != null && caption.trim().length > charLimit;
 
   useEffect(() => {
@@ -1865,6 +1917,68 @@ function SocialContentCard({
       onContentStatusChange?.(content.id, "published");
       emitAdminToast(
         `Posted to Google Business (${res.data?.postName ?? "ok"})${
+          res.data?.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+        }.`,
+        "success",
+      );
+    } catch (e) {
+      emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function publishInstagram() {
+    if (
+      !canInvokePublish({
+        busy: busy != null,
+        configured: instagramConfigured,
+        overLimit,
+        caption,
+      })
+    ) {
+      return;
+    }
+    const publicUrl = customImage && activeAsset?.image_url ? activeAsset.image_url : null;
+    const precheck = validatePublishPayloadClient({
+      channel: "instagram",
+      message: caption,
+      hasImage: Boolean(publicUrl),
+      hasPublicImageUrl: Boolean(publicUrl),
+    });
+    if (!precheck.ok) {
+      emitAdminToast(precheck.error, "error");
+      return;
+    }
+    setBusy("ig");
+    try {
+      const link = canonicalizePublicSiteUrl(
+        typeof payload.landing === "string"
+          ? payload.landing
+          : content.promotion?.slug
+            ? `https://shalean.co.za/campaigns/${content.promotion.slug}`
+            : "https://shalean.co.za/book",
+      );
+      const res = await adminFetch<{ mediaId: string; permalink?: string | null; correlationId?: string }>(
+        "/api/admin/promotions/publish-instagram",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            message: caption,
+            imageUrl: publicUrl,
+            link,
+            promotionId: content.promotion_id ?? null,
+          }),
+        },
+      );
+      if (res.error) {
+        toastPublishFailure(res);
+        return;
+      }
+      setLocalStatus("published");
+      onContentStatusChange?.(content.id, "published");
+      emitAdminToast(
+        `Posted to Instagram (id ${res.data?.mediaId ?? "ok"})${
           res.data?.correlationId ? ` · Ref ${res.data.correlationId}` : ""
         }.`,
         "success",
@@ -2137,6 +2251,35 @@ function SocialContentCard({
               <Share2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
             )}
             Upload to Google Business
+          </Button>
+        ) : null}
+        {content.channel === "instagram" ? (
+          <Button
+            size="sm"
+            className="min-h-9"
+            disabled={
+              !canInvokePublish({
+                busy: busy != null,
+                configured: instagramConfigured,
+                overLimit,
+                caption,
+              })
+            }
+            onClick={() => void publishInstagram()}
+            title={
+              instagramConfigured
+                ? "Post image + caption to Instagram (public asset URL required)"
+                : "Enable Instagram flag and connect a Page-linked Professional account"
+            }
+            aria-label="Post to Instagram"
+            aria-busy={busy === "ig"}
+          >
+            {busy === "ig" ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Share2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            )}
+            Post to Instagram
           </Button>
         ) : null}
       </div>

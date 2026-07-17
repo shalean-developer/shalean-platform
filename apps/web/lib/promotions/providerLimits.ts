@@ -14,6 +14,12 @@ export const PROVIDER_PUBLISH_LIMITS = {
     requiresImage: true,
     label: "Google Business",
   },
+  instagram: {
+    characterLimit: 2200,
+    requiresImage: true,
+    requiresPublicImageUrl: true,
+    label: "Instagram",
+  },
 } as const;
 
 export type PublishableChannel = keyof typeof PROVIDER_PUBLISH_LIMITS;
@@ -22,13 +28,18 @@ export function validatePublishPayloadClient(args: {
   channel: string;
   message: string;
   hasImage: boolean;
+  hasPublicImageUrl?: boolean;
 }): { ok: true } | { ok: false; error: string } {
   const message = args.message?.trim() ?? "";
   if (!message) {
     return { ok: false, error: "Caption is empty." };
   }
 
-  if (args.channel !== "facebook" && args.channel !== "google_business") {
+  if (
+    args.channel !== "facebook" &&
+    args.channel !== "google_business" &&
+    args.channel !== "instagram"
+  ) {
     return { ok: false, error: "One-click publish is not available for this channel." };
   }
 
@@ -43,6 +54,17 @@ export function validatePublishPayloadClient(args: {
     return {
       ok: false,
       error: `An image is required to publish to ${limits.label}.`,
+    };
+  }
+  if (
+    "requiresPublicImageUrl" in limits &&
+    limits.requiresPublicImageUrl &&
+    !args.hasPublicImageUrl
+  ) {
+    return {
+      ok: false,
+      error:
+        "Instagram requires a public campaign asset image URL (data URLs are not supported).",
     };
   }
   return { ok: true };

@@ -120,8 +120,8 @@ Local example redirect URI: `http://localhost:3000/api/oauth/google/callback`
 
 Publishing is orchestrated by `runPublish()` through a `SocialProvider` registry:
 
-- Live adapters: `facebook`, `google_business`
-- Registered stubs (copy/download only until adapters ship): `instagram`, `linkedin`, `pinterest`, `x`
+- Live adapters: `facebook`, `google_business`, `instagram` (MKT-001G; flag default off)
+- Registered stubs (copy/download only until adapters ship): `linkedin`, `pinterest`, `x`
 
 ### Feature flags
 

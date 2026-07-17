@@ -19,6 +19,7 @@ describe("MKT-001C ProviderRegistry", () => {
       "MARKETING_PROVIDER_FACEBOOK",
       "MARKETING_PROVIDER_GOOGLE_BUSINESS",
       "MARKETING_PROVIDER_INSTAGRAM",
+      "MARKETING_PROVIDER_LINKEDIN",
     ]) {
       prevFlags[key] = process.env[key];
       delete process.env[key];
@@ -68,18 +69,18 @@ describe("MKT-001C ProviderRegistry", () => {
   });
 
   it("respects feature flags for disabled providers", () => {
-    process.env.MARKETING_PROVIDER_INSTAGRAM = "0";
+    process.env.MARKETING_PROVIDER_LINKEDIN = "0";
     const registry = createEmptyProviderRegistry();
-    registry.register(createStubProvider({ key: "instagram", displayName: "Instagram" }));
-    expect(isProviderFeatureEnabled("instagram")).toBe(false);
-    expect(() => registry.requireEnabled("instagram")).toThrow(ProviderDisabledError);
+    registry.register(createStubProvider({ key: "linkedin", displayName: "LinkedIn" }));
+    expect(isProviderFeatureEnabled("linkedin")).toBe(false);
+    expect(() => registry.requireEnabled("linkedin")).toThrow(ProviderDisabledError);
   });
 
   it("enables stubs when feature flag is on", () => {
-    process.env.MARKETING_PROVIDER_INSTAGRAM = "1";
+    process.env.MARKETING_PROVIDER_LINKEDIN = "1";
     const registry = createEmptyProviderRegistry();
-    registry.register(createStubProvider({ key: "instagram", displayName: "Instagram" }));
-    expect(registry.requireEnabled("instagram").key).toBe("instagram");
+    registry.register(createStubProvider({ key: "linkedin", displayName: "LinkedIn" }));
+    expect(registry.requireEnabled("linkedin").key).toBe("linkedin");
   });
 
   it("lists capabilities from registered providers", () => {

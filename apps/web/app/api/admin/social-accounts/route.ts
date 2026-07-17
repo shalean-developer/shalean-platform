@@ -132,7 +132,58 @@ export async function GET(request: Request) {
       continue;
     }
 
-    // Stubs / non-live providers — never claim available publish.
+    if (key === "instagram") {
+      if (!entry.enabled) {
+        platforms.push({
+          id: "instagram",
+          label: entry.provider.displayName,
+          available: false,
+          connected: false,
+          status: "disabled",
+          health: "unknown",
+          detail:
+            "Instagram is disabled by feature flag (MARKETING_PROVIDER_INSTAGRAM). Enable only after MKT-001G staging verification.",
+          lastSync: null,
+          lastPublishAt: null,
+          ...baseMeta,
+          publishEnabled: false,
+        });
+        continue;
+      }
+
+      const status = await entry.provider.validateConnection();
+      let lastSync: string | null = null;
+      let lastPublishAt: string | null = null;
+      if (admin) {
+        const { data: igRow } = await admin
+          .from("social_accounts")
+          .select("last_sync, last_publish_at")
+          .eq("provider", "instagram")
+          .maybeSingle();
+        lastSync = (igRow?.last_sync as string) ?? null;
+        lastPublishAt = (igRow?.last_publish_at as string) ?? null;
+      }
+
+      platforms.push({
+        id: "instagram",
+        label: entry.provider.displayName,
+        available: entry.enabled,
+        connected: status.connected,
+        status: status.statusLabel,
+        health: status.health,
+        detail: status.hint,
+        lastSync,
+        lastPublishAt,
+        accountName: status.displayName,
+        locationName: status.targetRef
+          ? `IG ${String(status.targetRef).slice(0, 4)}…`
+          : null,
+        ...baseMeta,
+      });
+      continue;
+    }
+
+    // Remaining stubs — never claim available publish.
     platforms.push({
       id: key,
       label: entry.provider.displayName,

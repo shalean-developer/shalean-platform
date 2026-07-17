@@ -62,7 +62,7 @@ function stubClassify(raw: ProviderRawError) {
 }
 
 export function createStubProvider(args: {
-  key: Exclude<ProviderKey, "facebook" | "google_business">;
+  key: Exclude<ProviderKey, "facebook" | "google_business" | "instagram">;
   displayName: string;
   version?: string;
 }): SocialProvider {

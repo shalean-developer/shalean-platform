@@ -42,7 +42,7 @@ import type {
 } from "@/lib/promotions/providers/types";
 
 const UNIQUE_VIOLATION = "23505";
-const LEDGER_PROVIDERS = new Set<ProviderKey>(["facebook", "google_business"]);
+const LEDGER_PROVIDERS = new Set<ProviderKey>(["facebook", "google_business", "instagram"]);
 const ACTIVE_STATUSES = new Set(["queued", "leased", "retryable"]);
 
 export type SocialPublishJobStatus =

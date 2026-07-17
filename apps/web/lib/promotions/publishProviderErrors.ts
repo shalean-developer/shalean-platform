@@ -2,8 +2,10 @@
  * MKT-001B — Provider failure taxonomy for social publish.
  *
  * Classifies HTTP / transport failures into retry policy, user-facing copy,
- * and operator recovery guidance. Keeps Facebook and Google responses aligned.
+ * and operator recovery guidance. Keeps Facebook, Instagram, and Google responses aligned.
  */
+
+import type { PublishProvider } from "@/lib/promotions/publishIdempotency";
 
 export type PublishFailureClass =
   | "auth"
@@ -75,22 +77,34 @@ function baseFromStatus(httpStatus: number): Pick<
 }
 
 function recoveryFor(
-  provider: "facebook" | "google_business",
+  provider: PublishProvider,
   classification: PublishFailureClass,
 ): string {
   switch (classification) {
     case "auth":
-      return provider === "google_business"
-        ? "Reconnect Google Business Profile from Connected Accounts."
-        : "Replace FACEBOOK_PAGE_ACCESS_TOKEN with a valid Page token (pages_manage_posts).";
+      if (provider === "google_business") {
+        return "Reconnect Google Business Profile from Connected Accounts.";
+      }
+      if (provider === "instagram") {
+        return "Reconnect Instagram from Connected Accounts (Page-linked professional account + valid Page token).";
+      }
+      return "Replace FACEBOOK_PAGE_ACCESS_TOKEN with a valid Page token (pages_manage_posts).";
     case "permission":
-      return provider === "google_business"
-        ? "Confirm the Google account manages the selected location and Business Profile APIs are enabled."
-        : "Ensure the Page token has pages_manage_posts and pages_read_engagement.";
+      if (provider === "google_business") {
+        return "Confirm the Google account manages the selected location and Business Profile APIs are enabled.";
+      }
+      if (provider === "instagram") {
+        return "Ensure the Page token has instagram_basic, instagram_content_publish, pages_show_list, and pages_read_engagement, and that a Professional Instagram account is linked to the Page.";
+      }
+      return "Ensure the Page token has pages_manage_posts and pages_read_engagement.";
     case "not_found":
-      return provider === "google_business"
-        ? "Re-select the Business location from Connected Accounts."
-        : "Verify FACEBOOK_PAGE_ID matches the Page for this token.";
+      if (provider === "google_business") {
+        return "Re-select the Business location from Connected Accounts.";
+      }
+      if (provider === "instagram") {
+        return "Verify the Instagram professional account is still linked to the selected Facebook Page.";
+      }
+      return "Verify FACEBOOK_PAGE_ID matches the Page for this token.";
     case "conflict":
       return "Wait for the in-progress publish to finish, or change the content / use a new Idempotency-Key for a deliberate repost.";
     case "validation":
@@ -111,7 +125,7 @@ function recoveryFor(
  * `rawMessage` should already be the user-facing provider formatter output.
  */
 export function classifyPublishFailure(args: {
-  provider: "facebook" | "google_business";
+  provider: PublishProvider;
   httpStatus?: number | null;
   rawMessage: string;
   transportHint?: "timeout" | "connection_reset" | "network" | null;
