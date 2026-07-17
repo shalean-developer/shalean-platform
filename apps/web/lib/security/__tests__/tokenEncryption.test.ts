@@ -3,7 +3,9 @@ import { createCipheriv, createHash, randomBytes } from "crypto";
 import {
   decryptSecret,
   encryptSecret,
+  getMarketingOAuthEncryptionHealth,
   isEncryptedSecret,
+  isMarketingOAuthEncryptionConfigured,
   needsReEncryption,
   TokenDecryptionError,
   TokenEncryptionConfigError,
@@ -81,6 +83,23 @@ describe("tokenEncryption keyring (MKT-001A / WS3)", () => {
   it("throws a config error when no key is set", () => {
     delete process.env.MARKETING_OAUTH_ENCRYPTION_KEY;
     expect(() => encryptSecret("x")).toThrow(TokenEncryptionConfigError);
+    expect(isMarketingOAuthEncryptionConfigured()).toBe(false);
+    expect(getMarketingOAuthEncryptionHealth()).toEqual({
+      configured: false,
+      preferredKeyPresent: false,
+      preferredKeyLooksHex64: false,
+    });
+  });
+
+  it("reports encryption health without exposing key material", () => {
+    process.env.MARKETING_OAUTH_ENCRYPTION_KEY = KEY_A;
+    const health = getMarketingOAuthEncryptionHealth();
+    expect(health).toEqual({
+      configured: true,
+      preferredKeyPresent: true,
+      preferredKeyLooksHex64: true,
+    });
+    expect(JSON.stringify(health)).not.toContain(KEY_A);
   });
 
   it("decrypts a record written by the PREVIOUS key during rotation", () => {

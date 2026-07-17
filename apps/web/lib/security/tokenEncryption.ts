@@ -61,6 +61,31 @@ function readEnvKey(name: string): string | null {
   return raw ? raw : null;
 }
 
+/** True when a dedicated OAuth token encryption key is configured (never returns material). */
+export function isMarketingOAuthEncryptionConfigured(): boolean {
+  return Boolean(
+    readEnvKey("MARKETING_OAUTH_ENCRYPTION_KEY") ?? readEnvKey("SOCIAL_TOKEN_ENCRYPTION_KEY"),
+  );
+}
+
+/**
+ * Non-secret summary of encryption key shape for health checks.
+ * Never returns key material — only presence + whether the preferred key looks like 64-char hex.
+ */
+export function getMarketingOAuthEncryptionHealth(): {
+  configured: boolean;
+  preferredKeyPresent: boolean;
+  preferredKeyLooksHex64: boolean;
+} {
+  const preferred = readEnvKey("MARKETING_OAUTH_ENCRYPTION_KEY");
+  const legacy = readEnvKey("SOCIAL_TOKEN_ENCRYPTION_KEY");
+  return {
+    configured: Boolean(preferred || legacy),
+    preferredKeyPresent: Boolean(preferred),
+    preferredKeyLooksHex64: Boolean(preferred && /^[0-9a-fA-F]{64}$/.test(preferred)),
+  };
+}
+
 /** The key used for all NEW encryption. Throws a config error if none is set. */
 export function getCurrentEncryptionKey(): EncryptionKey {
   const material =

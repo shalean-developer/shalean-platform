@@ -9,6 +9,8 @@ import {
   resolveDeploymentEnvironment,
   supabaseRefFromUrl,
 } from "@/lib/env/deploymentEnvironment";
+import { isFacebookOAuthConfigured } from "@/lib/oauth/metaFacebookOAuth";
+import { getMarketingOAuthEncryptionHealth } from "@/lib/security/tokenEncryption";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,6 +25,7 @@ export function GET(): Response {
   const expectedRef = expectedSupabaseRefForDeployment(deployment);
   const issues = collectEnvironmentSafetyIssues();
   const ok = issues.length === 0;
+  const oauthEncryption = getMarketingOAuthEncryptionHealth();
 
   const body = {
     status: ok ? "ok" : "misconfigured",
@@ -42,6 +45,7 @@ export function GET(): Response {
           return null;
         }
       })(),
+      serviceRoleConfigured: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()),
     },
     paystack: {
       secretMode: classifyPaystackSecretMode(),
@@ -54,6 +58,20 @@ export function GET(): Response {
       emailAllowlistConfigured: Boolean(process.env.OUTBOUND_EMAIL_ALLOWLIST?.trim()),
       phoneAllowlistConfigured: Boolean(process.env.OUTBOUND_PHONE_ALLOWLIST?.trim()),
       smsOutboundEnabled: process.env.SMS_OUTBOUND_ENABLED === "true",
+    },
+    marketingOAuth: {
+      facebookConfigured: isFacebookOAuthConfigured(),
+      facebookLoginConfigConfigured: Boolean(
+        process.env.FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
+          process.env.META_FACEBOOK_LOGIN_CONFIG_ID?.trim(),
+      ),
+      instagramLoginConfigConfigured: Boolean(
+        process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim() ||
+          process.env.META_INSTAGRAM_LOGIN_CONFIG_ID?.trim(),
+      ),
+      encryptionConfigured: oauthEncryption.configured,
+      encryptionPreferredKeyPresent: oauthEncryption.preferredKeyPresent,
+      encryptionPreferredKeyLooksHex64: oauthEncryption.preferredKeyLooksHex64,
     },
     issues,
   };
