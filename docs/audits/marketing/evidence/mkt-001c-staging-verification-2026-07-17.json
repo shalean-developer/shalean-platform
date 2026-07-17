@@ -1,0 +1,57 @@
+{
+  "phase": "MKT-001C",
+  "type": "staging-verification",
+  "recordedAt": "2026-07-17T08:50:00Z",
+  "decision": "PASS_STAGING",
+  "production": "NO-GO",
+  "pr": {
+    "number": 43,
+    "url": "https://github.com/shalean-developer/shalean-platform/pull/43",
+    "state": "MERGED",
+    "mergedAt": "2026-07-17T08:39:31Z",
+    "mergeCommit": "375d291403c50960176385ce2872d4a03ecae9d3"
+  },
+  "deployment": {
+    "id": "dpl_2hHRFuHyrvbMSwdtAHotS21JFkBL",
+    "readyState": "READY",
+    "githubCommitRef": "staging",
+    "githubCommitSha": "375d291403c50960176385ce2872d4a03ecae9d3",
+    "branchAlias": "shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+    "deploymentUrl": "shalean-platform-4ql1oe4fj-shalean-cleaning-services.vercel.app"
+  },
+  "mainUntouched": {
+    "originMain": "ad5b4ccb242f2e1a3c4a98edf421820324a8e18e",
+    "mergeShaIsAncestorOfMain": false
+  },
+  "tests": {
+    "command": "npx vitest run lib/promotions/providers/__tests__ lib/promotions/__tests__/publishProviderErrors.test.ts lib/promotions/__tests__/publishIdempotency.test.ts lib/promotions/__tests__/facebookPublish.test.ts lib/promotions/__tests__/googleBusinessPublish.test.ts",
+    "testFiles": 6,
+    "testsPassed": 48,
+    "testsFailed": 0
+  },
+  "stagingDatabase": {
+    "ref": "gbgnemlpyykyhpqqbgru",
+    "ledgerTable": "marketing_publish_idempotency",
+    "ledgerRowCount": 0,
+    "historyRowCount": 0,
+    "providerCheck": ["facebook", "google_business"],
+    "statusCheck": ["processing", "succeeded", "failed"]
+  },
+  "runtime": {
+    "errorFatalOnMergeDeploy": "none_observed",
+    "sampleHealthyRoutes": [
+      "/office/marketing",
+      "/office/marketing/campaigns",
+      "/office/marketing/social",
+      "/office/promotions"
+    ]
+  },
+  "operatorGated": [
+    "admin Facebook diagnose GET",
+    "admin GBP ready GET",
+    "admin publish + idempotent replay"
+  ],
+  "ciNotes": {
+    "liveInternalLinkCrawl": "RED_UNRELATED_PROD_LOCATIONS_404"
+  }
+}
