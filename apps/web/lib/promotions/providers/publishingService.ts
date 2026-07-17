@@ -1,8 +1,8 @@
 /**
- * MKT-001C — Provider-agnostic publishing service.
+ * MKT-001C + MKT-001B.2 — Provider-agnostic publishing service.
  *
- * Owns: correlation, fail-closed idempotency claim, observability, history,
- * ledger success/failure. Providers only perform provider I/O.
+ * Slice 1 path: durable enqueue → inline drain via shared executePublishJob.
+ * Keeps backward-compatible PublishServiceOutcome / HTTP shapes for Hub clients.
  *
  * Does not weaken MKT-001A encryption/SSRF or MKT-001B reliability controls.
  */
@@ -11,17 +11,17 @@ import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
-  claimPublish,
-  markPublishFailed,
-  markPublishSucceeded,
-  type PublishProvider,
-} from "@/lib/promotions/publishIdempotency";
-import { publishFailureResponseBody } from "@/lib/promotions/publishProviderErrors";
-import {
   createPublishCorrelationId,
   fingerprintPublishPayload,
   logPublishEvent,
 } from "@/lib/promotions/publishObservability";
+import {
+  enqueuePublishJob,
+  executePublishJob,
+  isLedgerProvider,
+  leaseSpecificPublishJob,
+  newPublishJobHolderId,
+} from "@/lib/promotions/publishJobs";
 import {
   getProviderRegistry,
   ProviderDisabledError,
@@ -34,12 +34,6 @@ import type {
   PublishState,
   SocialProvider,
 } from "@/lib/promotions/providers/types";
-
-const LEDGER_PROVIDERS = new Set<ProviderKey>(["facebook", "google_business"]);
-
-function isLedgerProvider(key: ProviderKey): key is PublishProvider {
-  return LEDGER_PROVIDERS.has(key);
-}
 
 export type PublishServiceSuccess = {
   ok: true;
@@ -70,34 +64,6 @@ export type RunPublishArgs = {
   registry?: ReturnType<typeof getProviderRegistry>;
 };
 
-async function recordPublishHistory(args: {
-  provider: PublishProvider;
-  status: "published" | "failed";
-  responseId?: string | null;
-  error?: string | null;
-  apiResponse?: Record<string, unknown>;
-  promotionId?: string | null;
-  campaignName?: string | null;
-  publishedBy: string;
-}) {
-  const admin = getSupabaseAdmin();
-  if (!admin) return;
-  try {
-    await admin.from("social_publish_history").insert({
-      provider: args.provider,
-      promotion_id: args.promotionId ?? null,
-      campaign_name: args.campaignName ?? null,
-      status: args.status,
-      response_id: args.responseId ?? null,
-      api_response: args.apiResponse ?? {},
-      error_message: args.error ?? null,
-      published_by: args.publishedBy,
-    });
-  } catch {
-    // best-effort audit trail
-  }
-}
-
 function jsonFailure(
   correlationId: string,
   httpStatus: number,
@@ -114,11 +80,10 @@ function jsonFailure(
 }
 
 /**
- * Execute a publish through the provider registry with MKT-001A/B controls.
+ * Execute a publish: durable enqueue + inline drain (Hub-responsive Slice 1 path).
  */
 export async function runPublish(args: RunPublishArgs): Promise<PublishServiceOutcome> {
   const correlationId = args.correlationId ?? createPublishCorrelationId();
-  const startedAt = Date.now();
   const registry = args.registry ?? getProviderRegistry();
 
   let provider: SocialProvider;
@@ -153,7 +118,6 @@ export async function runPublish(args: RunPublishArgs): Promise<PublishServiceOu
     });
   }
 
-  const ledgerProvider: PublishProvider = provider.key;
   const content = provider.validateContent(args.request);
   if (!content.ok) {
     return jsonFailure(correlationId, 400, {
@@ -164,12 +128,11 @@ export async function runPublish(args: RunPublishArgs): Promise<PublishServiceOu
     });
   }
 
-  const message = args.request.message.trim();
   const admin = getSupabaseAdmin();
   if (!admin) {
     await logPublishEvent({
       level: "error",
-      provider: ledgerProvider,
+      provider: provider.key,
       phase: "rejected",
       correlationId,
       outcome: "admin_unavailable",
@@ -183,77 +146,43 @@ export async function runPublish(args: RunPublishArgs): Promise<PublishServiceOu
   }
 
   const targetRef = await provider.resolveTargetRef();
+  const message = args.request.message.trim();
   const payloadFp = fingerprintPublishPayload({
     message,
     link: args.request.link,
     promotionId: args.request.promotionId,
   });
 
-  const claim = await claimPublish(
+  const enqueued = await enqueuePublishJob({
     admin,
-    {
-      provider: ledgerProvider,
-      targetRef,
-      promotionId: args.request.promotionId ?? null,
-      message,
-      link: args.request.link ?? null,
-      explicitKey: args.explicitIdempotencyKey,
-    },
-    args.publishedBy,
-  );
+    provider: provider.key,
+    request: { ...args.request, message },
+    publishedBy: args.publishedBy,
+    targetRef,
+    explicitIdempotencyKey: args.explicitIdempotencyKey,
+    correlationId,
+  });
 
-  if (claim.outcome === "duplicate_succeeded") {
+  if (enqueued.outcome === "error") {
     await logPublishEvent({
-      provider: ledgerProvider,
-      phase: "idempotent_replay",
-      correlationId,
-      outcome: "duplicate_succeeded",
-      providerResponseId: claim.externalPostId,
-      latencyMs: Date.now() - startedAt,
-    });
-    const result: Extract<PublishResult, { ok: true }> = {
-      ok: true,
-      externalPostId: claim.externalPostId ?? "",
-      postId: claim.externalPostId ?? undefined,
-      postName: claim.externalPostId ?? undefined,
-    };
-    return {
-      ok: true,
-      state: "idempotent_replay",
-      correlationId,
-      idempotentReplay: true,
-      result,
-    };
-  }
-
-  if (claim.outcome === "in_progress") {
-    await logPublishEvent({
-      level: "warn",
-      provider: ledgerProvider,
+      level: "error",
+      provider: provider.key,
       phase: "rejected",
       correlationId,
-      outcome: "in_progress",
+      outcome: "enqueue_error",
+      detail: enqueued.error,
+      idempotencyKeyFingerprint: payloadFp,
     });
-    return jsonFailure(correlationId, 409, {
-      error: "A publish for this content is already in progress.",
-      classification: "conflict",
+    return jsonFailure(correlationId, 503, {
+      error: "Could not enqueue publish job. Retry shortly.",
+      classification: "provider_unavailable",
       retryable: true,
-      retryAfterMs: 15_000,
-      recoveryGuidance:
-        "Wait for the in-progress publish to finish. If it stays stuck longer than 10 minutes, retry — the ledger will reclaim abandoned claims.",
     });
   }
 
-  if (claim.outcome === "conflict") {
-    await logPublishEvent({
-      level: "warn",
-      provider: ledgerProvider,
-      phase: "rejected",
-      correlationId,
-      outcome: "conflict",
-    });
+  if (enqueued.outcome === "conflict") {
     return jsonFailure(correlationId, 409, {
-      error: "This idempotency key was already used with different content.",
+      error: enqueued.error,
       classification: "conflict",
       retryable: false,
       recoveryGuidance:
@@ -261,138 +190,86 @@ export async function runPublish(args: RunPublishArgs): Promise<PublishServiceOu
     });
   }
 
-  let claimId: string;
-  let attempts: number;
-  if (claim.outcome === "claimed" || claim.outcome === "retry") {
-    claimId = claim.id;
-    attempts = claim.attempts;
-    await logPublishEvent({
-      provider: ledgerProvider,
-      phase: "claim",
-      correlationId,
-      publishId: claimId,
-      idempotencyKeyFingerprint: payloadFp,
-      outcome: claim.outcome,
-      attempts,
-    });
-  } else {
-    await logPublishEvent({
-      level: "error",
-      provider: ledgerProvider,
-      phase: "rejected",
-      correlationId,
-      outcome: "claim_error",
-      detail: claim.error,
-    });
-    return jsonFailure(correlationId, 503, {
-      error: "Could not claim publish idempotency. Retry shortly.",
-      classification: "provider_unavailable",
-      retryable: true,
-    });
-  }
+  let job = enqueued.job;
 
-  const providerStarted = Date.now();
-  await logPublishEvent({
-    provider: ledgerProvider,
-    phase: "provider_call",
-    correlationId,
-    publishId: claimId,
-    attempts,
-  });
-
-  const result = await provider.publish({ ...args.request, message });
-
-  if (!result.ok) {
-    const failure = provider.classifyError({
-      httpStatus: result.status,
-      rawMessage: result.error,
-    });
-    await markPublishFailed(admin, claimId, result.error);
-    await recordPublishHistory({
-      provider: ledgerProvider,
-      status: "failed",
-      error: result.error,
-      apiResponse: result.providerResponse,
-      promotionId: args.request.promotionId,
-      campaignName: args.request.campaignName,
-      publishedBy: args.publishedBy,
-    });
-    await logPublishEvent({
-      level: "error",
-      provider: ledgerProvider,
-      phase: "provider_result",
-      correlationId,
-      publishId: claimId,
-      outcome: "failed",
-      classification: failure.classification,
-      retryable: failure.retryable,
-      httpStatus: failure.httpStatus,
-      latencyMs: Date.now() - providerStarted,
-      attempts,
-      detail: failure.userMessage,
-    });
-    await logPublishEvent({
-      level: "warn",
-      provider: ledgerProvider,
-      phase: "ledger_failed",
-      correlationId,
-      publishId: claimId,
-      attempts,
-    });
-    return jsonFailure(
-      correlationId,
-      failure.httpStatus,
-      publishFailureResponseBody(failure) as unknown as Record<string, unknown>,
-      "failed",
-    );
-  }
-
-  await markPublishSucceeded(admin, claimId, result.externalPostId ?? null);
-  await recordPublishHistory({
-    provider: ledgerProvider,
-    status: "published",
-    responseId: result.externalPostId,
-    apiResponse: result.providerResponse,
-    promotionId: args.request.promotionId,
-    campaignName: args.request.campaignName,
-    publishedBy: args.publishedBy,
-  });
-  await logPublishEvent({
-    provider: ledgerProvider,
-    phase: "provider_result",
-    correlationId,
-    publishId: claimId,
-    outcome: "succeeded",
-    providerResponseId: result.externalPostId,
-    latencyMs: Date.now() - providerStarted,
-    attempts,
-  });
-  await logPublishEvent({
-    provider: ledgerProvider,
-    phase: "ledger_success",
-    correlationId,
-    publishId: claimId,
-    providerResponseId: result.externalPostId,
-    latencyMs: Date.now() - startedAt,
-    attempts,
-  });
-
-  if (provider.afterPublishSuccess) {
-    await provider.afterPublishSuccess({
-      request: args.request,
+  // If the existing active job already succeeded terminal path returned as existing,
+  // or is already leased by another worker — still try inline lease when queued/retryable.
+  if (job.status === "succeeded") {
+    const result: Extract<PublishResult, { ok: true }> = {
+      ok: true,
+      externalPostId: job.external_post_id ?? "",
+      postId: job.external_post_id ?? undefined,
+      postName: job.external_post_id ?? undefined,
+    };
+    return {
+      ok: true,
+      state: "idempotent_replay",
+      correlationId: job.correlation_id || correlationId,
+      idempotentReplay: true,
       result,
-      publishedBy: args.publishedBy,
-      correlationId,
+      attempts: job.attempts,
+    };
+  }
+
+  const holder = newPublishJobHolderId();
+  const leased =
+    job.status === "leased" && job.lease_holder
+      ? null
+      : await leaseSpecificPublishJob(admin, job.id, holder);
+
+  if (!leased) {
+    // Another worker holds it, or not claimable — surface in-progress for Hub compatibility.
+    if (job.status === "leased") {
+      return jsonFailure(correlationId, 409, {
+        error: "A publish for this content is already in progress.",
+        classification: "conflict",
+        retryable: true,
+        retryAfterMs: 15_000,
+        recoveryGuidance:
+          "Wait for the in-progress publish to finish. The durable worker will retry automatically.",
+      });
+    }
+    // Fall through: try execute if somehow already leased by us (shouldn't happen)
+    return jsonFailure(correlationId, 409, {
+      error: "A publish for this content is already in progress.",
+      classification: "conflict",
+      retryable: true,
+      retryAfterMs: 15_000,
+      recoveryGuidance:
+        "Wait for the in-progress publish to finish. The durable worker will retry automatically.",
     });
   }
 
-  return {
-    ok: true,
-    state: "succeeded",
-    correlationId,
-    attempts,
-    result,
-  };
+  job = leased;
+
+  const executed = await executePublishJob({
+    admin,
+    job,
+    ephemeralRequest: {
+      imageDataUrl: args.request.imageDataUrl,
+      imageUrl: args.request.imageUrl,
+      providerPayload: args.request.providerPayload,
+    },
+    registry,
+  });
+
+  if (executed.serviceState === "succeeded" || executed.serviceState === "idempotent_replay") {
+    return {
+      ok: true,
+      state: executed.serviceState,
+      correlationId: executed.correlationId,
+      idempotentReplay: executed.idempotentReplay,
+      attempts: executed.job.attempts,
+      result: executed.result!,
+    };
+  }
+
+  return jsonFailure(
+    executed.correlationId,
+    executed.httpStatus,
+    executed.body,
+    executed.serviceState === "failed" ? "failed" : "rejected",
+  );
 }
 
 /** Map service outcome to a stable HTTP JSON body for route handlers. */
