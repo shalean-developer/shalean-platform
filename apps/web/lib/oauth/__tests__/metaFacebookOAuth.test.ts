@@ -8,9 +8,11 @@ import {
   buildFacebookAuthUrl,
   classifyFacebookPageEligibility,
   createOAuthState,
+  getFacebookOAuthConfig,
   hashOAuthState,
   isFacebookEnvTokenFallbackAllowed,
   isFacebookPageEligibleForPublish,
+  isInstagramLoginConfigConfigured,
   logFacebookOAuthEvent,
   maskFacebookPageId,
 } from "@/lib/oauth/metaFacebookOAuth";
@@ -47,6 +49,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
         redirectUri: "https://example.com/api/oauth/facebook/callback",
         graphVersion: "v22.0",
         loginConfigId: null,
+        loginPurpose: "facebook",
       },
       "state-abc",
     );
@@ -78,6 +81,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
         redirectUri: "https://example.com/api/oauth/facebook/callback",
         graphVersion: "v22.0",
         loginConfigId: "cfg-instagram-pages",
+        loginPurpose: "instagram",
       },
       "state-abc",
     );
@@ -85,6 +89,31 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(parsed.searchParams.get("config_id")).toBe("cfg-instagram-pages");
     expect(parsed.searchParams.get("scope")).toBeNull();
     expect(parsed.searchParams.get("auth_type")).toBe("rerequest");
+  });
+
+  it("resolves separate Facebook vs Instagram Login for Business config ids", () => {
+    process.env.FACEBOOK_APP_ID = "app1";
+    process.env.FACEBOOK_APP_SECRET = "secret1";
+    process.env.FACEBOOK_REDIRECT_URI = "https://example.com/api/oauth/facebook/callback";
+    process.env.FACEBOOK_LOGIN_CONFIG_ID = "cfg-general";
+    process.env.INSTAGRAM_LOGIN_CONFIG_ID = "cfg-instagram";
+
+    const fb = getFacebookOAuthConfig("facebook");
+    const ig = getFacebookOAuthConfig("instagram");
+    expect(fb?.loginConfigId).toBe("cfg-general");
+    expect(fb?.loginPurpose).toBe("facebook");
+    expect(ig?.loginConfigId).toBe("cfg-instagram");
+    expect(ig?.loginPurpose).toBe("instagram");
+    expect(isInstagramLoginConfigConfigured()).toBe(true);
+
+    delete process.env.INSTAGRAM_LOGIN_CONFIG_ID;
+    expect(getFacebookOAuthConfig("instagram")?.loginConfigId).toBe("cfg-general");
+    expect(isInstagramLoginConfigConfigured()).toBe(false);
+
+    delete process.env.FACEBOOK_APP_ID;
+    delete process.env.FACEBOOK_APP_SECRET;
+    delete process.env.FACEBOOK_REDIRECT_URI;
+    delete process.env.FACEBOOK_LOGIN_CONFIG_ID;
   });
 
   it("redacts token-like fields from OAuth log payloads", () => {

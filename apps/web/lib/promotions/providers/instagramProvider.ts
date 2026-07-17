@@ -19,6 +19,7 @@ import {
 import { getFacebookPagePublishConfig } from "@/lib/promotions/facebookPublish";
 import { resolveFacebookPublishConfig } from "@/lib/promotions/facebookConnectedAccount";
 import { classifyPublishFailure } from "@/lib/promotions/publishProviderErrors";
+import { isInstagramLoginConfigConfigured } from "@/lib/oauth/metaFacebookOAuth";
 import type {
   ConnectionResult,
   ConnectionStatus,
@@ -270,14 +271,25 @@ export function createInstagramProvider(): SocialProvider {
 /** Connect with an explicit admin actor (API route). */
 export async function connectInstagramForAdmin(connectedBy: string): Promise<ConnectionResult> {
   const provider = createInstagramProvider();
-  const fb = getFacebookPagePublishConfig();
-  if (!fb) {
+
+  // Dedicated Instagram Graph API Login for Business config → OAuth with that config_id.
+  if (isInstagramLoginConfigConfigured()) {
+    return {
+      ok: true,
+      authorizationUrl: "/api/oauth/facebook?purpose=instagram",
+      status: await provider.validateConnection(),
+    };
+  }
+
+  const fbResolved = await resolveFacebookPublishConfig();
+  if (!fbResolved.ok && !getFacebookPagePublishConfig()) {
     return {
       ok: false,
       error:
-        "Configure FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN first (Facebook Login auth model).",
+        "Connect Facebook from Connected Accounts first (Facebook Login auth model for Instagram).",
     };
   }
+
   const saved = await saveInstagramConnection({ connectedBy });
   const status = await provider.validateConnection();
   if (!saved.ok) {

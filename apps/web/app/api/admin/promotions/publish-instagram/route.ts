@@ -99,6 +99,15 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    if (result.authorizationUrl) {
+      return NextResponse.json({
+        ok: true,
+        authorizationUrl: result.authorizationUrl,
+        connected: false,
+        displayName: result.status?.displayName ?? null,
+        targetRef: result.status?.targetRef ?? null,
+      });
+    }
     return NextResponse.json({
       ok: true,
       connected: true,

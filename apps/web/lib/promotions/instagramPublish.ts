@@ -215,6 +215,10 @@ export async function discoverInstagramProfessionalAccount(
         process.env.FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
           process.env.META_FACEBOOK_LOGIN_CONFIG_ID?.trim(),
       ),
+      instagramLoginConfigIdConfigured: Boolean(
+        process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim() ||
+          process.env.META_INSTAGRAM_LOGIN_CONFIG_ID?.trim(),
+      ),
     });
 
     if (!res.ok || json.error) {

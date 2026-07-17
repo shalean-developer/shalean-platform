@@ -318,15 +318,26 @@ export function ConnectedAccountsPanel() {
   async function connectInstagram() {
     setBusy("ig_connect");
     try {
-      const res = await adminFetch<{ ok: boolean; displayName?: string | null }>(
-        "/api/admin/promotions/publish-instagram",
-        {
-          method: "POST",
-          body: JSON.stringify({ action: "connect" }),
-        },
-      );
+      const res = await adminFetch<{
+        ok: boolean;
+        displayName?: string | null;
+        authorizationUrl?: string | null;
+      }>("/api/admin/promotions/publish-instagram", {
+        method: "POST",
+        body: JSON.stringify({ action: "connect" }),
+      });
       if (res.error) {
         emitAdminToast(res.error, "error");
+        return;
+      }
+      if (res.data?.authorizationUrl) {
+        // Instagram Graph API Login for Business OAuth (separate config id).
+        const oauth = await adminFetch<{ url: string }>(res.data.authorizationUrl);
+        if (oauth.error || !oauth.data?.url) {
+          emitAdminToast(oauth.error ?? "Could not start Instagram OAuth.", "error");
+          return;
+        }
+        window.location.href = oauth.data.url;
         return;
       }
       emitAdminToast(
