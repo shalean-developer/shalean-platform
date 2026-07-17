@@ -42,6 +42,12 @@ type PlatformCard = {
   }>;
   lastError?: string | null;
   oauthConfigured?: boolean;
+  featureFlag?: string;
+  providerEnabled?: boolean;
+  publishEnabled?: boolean;
+  version?: string;
+  characterLimit?: number | null;
+  requiresImage?: boolean;
 };
 
 type HistoryRow = {
@@ -59,6 +65,7 @@ type Payload = {
   platforms: PlatformCard[];
   history: HistoryRow[];
   oauth: { googleConfigured: boolean };
+  ops?: { failedLast24h?: number };
 };
 
 const ERROR_MESSAGES: Record<string, string> = {
@@ -85,10 +92,26 @@ function StatusBadge({ status, health }: { status: string; health: string }) {
   const pending = status === "pending_location";
   const error = status === "error" || health === "error";
   const degraded = !error && health === "degraded";
-  const soon = status === "coming_soon";
+  const soon = status === "coming_soon" || status === "disabled";
+
+  const label = soon
+    ? status === "disabled"
+      ? "Flagged — adapter pending"
+      : "Coming soon"
+    : error
+      ? "Needs attention"
+      : degraded
+        ? "Token / provider issue"
+        : connected
+          ? "Connected"
+          : pending
+            ? "Select location"
+            : "Disconnected";
 
   return (
     <span
+      role="status"
+      aria-label={label}
       className={cn(
         "inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium",
         connected && !degraded && !error && "bg-emerald-50 text-emerald-800",
@@ -100,25 +123,15 @@ function StatusBadge({ status, health }: { status: string; health: string }) {
       )}
     >
       {connected && !degraded && !error ? (
-        <CheckCircle2 className="h-3.5 w-3.5" />
+        <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
       ) : soon ? (
-        <Circle className="h-3.5 w-3.5" />
+        <Circle className="h-3.5 w-3.5" aria-hidden />
       ) : error || pending || degraded ? (
-        <AlertTriangle className="h-3.5 w-3.5" />
+        <AlertTriangle className="h-3.5 w-3.5" aria-hidden />
       ) : (
-        <Circle className="h-3.5 w-3.5" />
+        <Circle className="h-3.5 w-3.5" aria-hidden />
       )}
-      {soon
-        ? "Coming soon"
-        : error
-          ? "Needs attention"
-          : degraded
-            ? "Token / provider issue"
-            : connected
-              ? "Connected"
-              : pending
-                ? "Select location"
-                : "Disconnected"}
+      {label}
     </span>
   );
 }
@@ -128,6 +141,8 @@ export function ConnectedAccountsPanel() {
   const [data, setData] = useState<Payload | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [historyFilter, setHistoryFilter] = useState<"all" | "published" | "failed">("all");
+  const [expandedHistoryId, setExpandedHistoryId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -171,6 +186,14 @@ export function ConnectedAccountsPanel() {
     () => data?.platforms.find((p) => p.id === "google_business") ?? null,
     [data],
   );
+
+  const filteredHistory = useMemo(() => {
+    const rows = data?.history ?? [];
+    if (historyFilter === "all") return rows;
+    return rows.filter((h) => h.status === historyFilter);
+  }, [data?.history, historyFilter]);
+
+  const failedLast24h = data?.ops?.failedLast24h ?? 0;
 
   async function connectGoogle() {
     setBusy("connect");
@@ -225,13 +248,26 @@ export function ConnectedAccountsPanel() {
         <h1 className="text-2xl font-semibold text-slate-900">Connected Accounts</h1>
         <p className="mt-1 text-sm text-slate-600">
           Connect publishing destinations for Growth → Social Posts. Facebook uses env Page tokens;
-          Google Business Profile uses OAuth.
+          Google Business Profile uses OAuth. Other channels are registered as stubs until adapters
+          ship (feature flags <code className="font-mono text-xs">MARKETING_PROVIDER_*</code>).
         </p>
         <p className="mt-2 text-sm">
           <Link href="/office/marketing/social" className="text-blue-700 hover:underline">
             Back to Social Posts
           </Link>
         </p>
+        {failedLast24h > 0 ? (
+          <p
+            role="status"
+            className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
+          >
+            {failedLast24h} failed publish{failedLast24h === 1 ? "" : "es"} in the last 24 hours.{" "}
+            <Link href="/office/marketing/social" className="font-medium underline">
+              Retry from Social Posts
+            </Link>
+            .
+          </p>
+        ) : null}
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -246,14 +282,23 @@ export function ConnectedAccountsPanel() {
               </div>
               {p.available ? (
                 <span className="text-xs font-medium uppercase tracking-wide text-emerald-700">
-                  Available
+                  {p.publishEnabled ? "Publish ready" : "Available"}
                 </span>
               ) : (
                 <span className="text-xs font-medium uppercase tracking-wide text-slate-400">
-                  Planned
+                  Copy / download only
                 </span>
               )}
             </div>
+
+            {p.featureFlag ? (
+              <p className="mt-2 text-[11px] text-slate-400">
+                Flag <code className="font-mono">{p.featureFlag}</code>
+                {p.characterLimit != null ? ` · ${p.characterLimit.toLocaleString()} char limit` : ""}
+                {p.requiresImage ? " · image required" : ""}
+                {p.version ? ` · v${p.version}` : ""}
+              </p>
+            ) : null}
 
             <dl className="mt-4 space-y-1.5 text-sm text-slate-600">
               {p.accountName ? (
@@ -308,6 +353,7 @@ export function ConnectedAccountsPanel() {
                           key={`${loc.accountId}-${loc.locationId}`}
                           type="button"
                           disabled={busy === "select_location"}
+                          aria-label={`Select Google Business location ${loc.title}`}
                           onClick={() =>
                             void runAction("select_location", {
                               locationId: loc.locationId,
@@ -404,47 +450,109 @@ export function ConnectedAccountsPanel() {
           identical content reclaims the ledger after a failure (or after a stuck claim older than 10
           minutes).
         </p>
-        {(data?.history?.length ?? 0) === 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="History filters">
+          {(
+            [
+              ["all", "All"],
+              ["published", "Published"],
+              ["failed", "Failed"],
+            ] as const
+          ).map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              aria-pressed={historyFilter === id}
+              onClick={() => setHistoryFilter(id)}
+              className={cn(
+                "rounded-full px-3 py-1 text-xs font-medium",
+                historyFilter === id
+                  ? "bg-slate-900 text-white"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200",
+              )}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        {(filteredHistory.length ?? 0) === 0 ? (
           <p className="mt-3 rounded-2xl border border-dashed border-slate-200 p-6 text-center text-sm text-slate-500">
-            No publishes yet.
+            {historyFilter === "all" ? "No publishes yet." : `No ${historyFilter} rows.`}
           </p>
         ) : (
           <div className="mt-3 overflow-hidden rounded-2xl border border-slate-200">
             <table className="min-w-full text-left text-sm">
+              <caption className="sr-only">
+                Social publish history filtered by {historyFilter}
+              </caption>
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-2">When</th>
                   <th className="px-4 py-2">Platform</th>
                   <th className="px-4 py-2">Campaign</th>
                   <th className="px-4 py-2">Status</th>
+                  <th className="px-4 py-2">By</th>
                   <th className="px-4 py-2">Response / error</th>
                 </tr>
               </thead>
               <tbody>
-                {data!.history.map((h) => (
-                  <tr key={h.id} className="border-t border-slate-100">
-                    <td className="px-4 py-2 whitespace-nowrap text-slate-600">
-                      {formatWhen(h.created_at)}
-                    </td>
-                    <td className="px-4 py-2">{h.provider}</td>
-                    <td className="px-4 py-2">{h.campaign_name ?? "—"}</td>
-                    <td className="px-4 py-2">
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-0.5 text-xs font-medium",
-                          h.status === "published"
-                            ? "bg-emerald-50 text-emerald-800"
-                            : "bg-rose-50 text-rose-800",
+                {filteredHistory.map((h) => {
+                  const expanded = expandedHistoryId === h.id;
+                  const detail =
+                    h.status === "published" ? h.response_id : h.error_message;
+                  return (
+                    <tr key={h.id} className="border-t border-slate-100 align-top">
+                      <td className="px-4 py-2 whitespace-nowrap text-slate-600">
+                        {formatWhen(h.created_at)}
+                      </td>
+                      <td className="px-4 py-2">{h.provider === "twitter" ? "x" : h.provider}</td>
+                      <td className="px-4 py-2">{h.campaign_name ?? "—"}</td>
+                      <td className="px-4 py-2">
+                        <span
+                          className={cn(
+                            "rounded-full px-2 py-0.5 text-xs font-medium",
+                            h.status === "published"
+                              ? "bg-emerald-50 text-emerald-800"
+                              : "bg-rose-50 text-rose-800",
+                          )}
+                        >
+                          {h.status}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-xs text-slate-500">
+                        {h.published_by ?? "—"}
+                      </td>
+                      <td className="max-w-md px-4 py-2 text-xs text-slate-600">
+                        {detail ? (
+                          <button
+                            type="button"
+                            className={cn(
+                              "text-left hover:text-slate-900",
+                              !expanded && "line-clamp-2",
+                            )}
+                            onClick={() =>
+                              setExpandedHistoryId(expanded ? null : h.id)
+                            }
+                            aria-expanded={expanded}
+                          >
+                            {detail}
+                          </button>
+                        ) : (
+                          "—"
                         )}
-                      >
-                        {h.status}
-                      </span>
-                    </td>
-                    <td className="max-w-xs truncate px-4 py-2 text-xs text-slate-600">
-                      {h.status === "published" ? h.response_id : h.error_message}
-                    </td>
-                  </tr>
-                ))}
+                        {h.status === "failed" ? (
+                          <div className="mt-1">
+                            <Link
+                              href="/office/marketing/social"
+                              className="text-blue-700 hover:underline"
+                            >
+                              Retry on Social Posts
+                            </Link>
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

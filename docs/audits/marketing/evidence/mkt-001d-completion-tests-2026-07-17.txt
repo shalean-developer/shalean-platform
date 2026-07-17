@@ -1,0 +1,18 @@
+MKT-001D marketing completion — targeted Vitest
+Date: 2026-07-17
+Branch: feature/mkt-001d-marketing-completion
+
+Command:
+npx vitest run lib/promotions/__tests__/mkt001dCompletion.test.ts \
+  lib/promotions/providers/__tests__ \
+  lib/promotions/__tests__/publishProviderErrors.test.ts \
+  lib/promotions/__tests__/publishIdempotency.test.ts
+
+Result:
+Test Files  5 passed (5)
+Tests       43 passed (43)
+
+Includes:
+- mkt001dCompletion.test.ts (6) — failure toast formatting + client limits
+- registry + publishingService (18)
+- publishProviderErrors + publishIdempotency (19)
