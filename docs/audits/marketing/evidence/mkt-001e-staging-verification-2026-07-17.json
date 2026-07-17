@@ -1,0 +1,49 @@
+{
+  "phase": "MKT-001E",
+  "verifiedAt": "2026-07-17T11:44:11Z",
+  "pr": 50,
+  "mergeCommit": "db3f16b6ce78dbbab5a929ba57c7e37f508016cb",
+  "featureCommits": [
+    "d2e9e11b5ae2f7410222df2c2226c7bf7b07ec41",
+    "bb2a4159778e9dd2ea9ec63fdecb0fcb32e4d0ae"
+  ],
+  "deployment": {
+    "id": "dpl_BsDyp9V5g6YATdSZv4KkQzauWake",
+    "url": "https://shalean-platform-62cc5u2j5-shalean-cleaning-services.vercel.app",
+    "branchAlias": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+    "readyState": "READY",
+    "githubCommitSha": "db3f16b6ce78dbbab5a929ba57c7e37f508016cb",
+    "githubCommitRef": "staging",
+    "shaExactMatch": true
+  },
+  "health": {
+    "path": "/api/health/environment",
+    "status": 200,
+    "deployment": "staging",
+    "gitBranch": "staging",
+    "shaleanAppEnv": "staging",
+    "issues": []
+  },
+  "runtimeErrors": {
+    "window": "2h",
+    "routes": [
+      "/office/marketing/intelligence",
+      "/api/admin/promotions/publish-intelligence",
+      "/api/admin/promotions/publish-jobs"
+    ],
+    "count": 0
+  },
+  "tests": {
+    "command": "npx vitest run lib/promotions/__tests__/publishIntelligence.mkt001e.test.ts lib/promotions/__tests__/mkt001dCompletion.test.ts lib/promotions/__tests__/publishJobs.mkt001b2.test.ts",
+    "testFiles": 3,
+    "testsPassed": 33,
+    "evidence": "docs/audits/marketing/evidence/mkt-001e-staging-verification-tests-2026-07-17.txt"
+  },
+  "mainUntouched": {
+    "originMain": "ad5b4ccb",
+    "mergeShaAncestorOfMain": false
+  },
+  "productionNoGo": true,
+  "mkt001aProd": "OPEN",
+  "operatorSmoke": "REQUIRED — Vercel Deployment Protection + admin session for /office/marketing/intelligence"
+}
