@@ -19,6 +19,7 @@ import {
   logFacebookOAuthEvent,
   marketingConnectedAccountsUrl,
   parseFacebookLoginPurpose,
+  redactFacebookCallbackQuery,
 } from "@/lib/oauth/metaFacebookOAuth";
 import { saveFacebookOAuthConnection } from "@/lib/promotions/facebookConnectedAccount";
 import { saveInstagramConnection } from "@/lib/promotions/instagramPublish";
@@ -41,6 +42,7 @@ export async function GET(request: Request) {
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   const oauthError = url.searchParams.get("error");
+  const callbackQuery = redactFacebookCallbackQuery(url.searchParams);
 
   const clearStateCookies = async () => {
     const cookieStore = await cookies();
@@ -52,7 +54,30 @@ export async function GET(request: Request) {
   const cookieStore = await cookies();
   const correlationId = cookieStore.get("fb_oauth_cid")?.value ?? "fb-oauth-unknown";
   const purpose = parseFacebookLoginPurpose(cookieStore.get(FACEBOOK_OAUTH_PURPOSE_COOKIE)?.value);
+  const hasStateCookie = Boolean(cookieStore.get(FACEBOOK_OAUTH_STATE_COOKIE)?.value);
   const cfg = getFacebookOAuthConfig(purpose);
+
+  logFacebookOAuthEvent("callback_received", {
+    correlationId,
+    provider: purpose === "instagram" ? "instagram" : "facebook",
+    loginPurpose: purpose,
+    redirectHost: url.host,
+    redirectPath: url.pathname,
+    hasStateCookie,
+    paramKeys: callbackQuery.paramKeys.join(",") || null,
+    hasCode: callbackQuery.hasCode,
+    codeLength: callbackQuery.codeLength,
+    hasState: callbackQuery.hasState,
+    stateLength: callbackQuery.stateLength,
+    hasError: callbackQuery.hasError,
+    error: callbackQuery.error,
+    errorReason: callbackQuery.errorReason,
+    errorDescriptionPresent: callbackQuery.errorDescriptionPresent,
+    errorDescriptionLength: callbackQuery.errorDescriptionLength,
+    hasErrorCode: callbackQuery.hasErrorCode,
+    errorCode: callbackQuery.errorCode,
+    gitSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? null,
+  });
 
   if (!cfg) {
     await clearStateCookies();
@@ -75,6 +100,11 @@ export async function GET(request: Request) {
       loginPurpose: purpose,
       errorCategory: oauthError === "access_denied" ? "oauth_denied" : "oauth_failed",
       failureStage: "unknown",
+      error: callbackQuery.error,
+      errorReason: callbackQuery.errorReason,
+      errorDescriptionPresent: callbackQuery.errorDescriptionPresent,
+      hasCode: callbackQuery.hasCode,
+      hasState: callbackQuery.hasState,
     });
     await clearStateCookies();
     return NextResponse.redirect(
@@ -88,6 +118,19 @@ export async function GET(request: Request) {
   }
 
   if (!code || !state) {
+    logFacebookOAuthEvent("callback_failed", {
+      correlationId,
+      provider: purpose === "instagram" ? "instagram" : "facebook",
+      loginPurpose: purpose,
+      errorCategory: "missing_code",
+      failureStage: "unknown",
+      hasStateCookie,
+      hasCode: callbackQuery.hasCode,
+      hasState: callbackQuery.hasState,
+      paramKeys: callbackQuery.paramKeys.join(",") || null,
+      error: callbackQuery.error,
+      errorReason: callbackQuery.errorReason,
+    });
     await clearStateCookies();
     return NextResponse.redirect(marketingConnectedAccountsUrl({ error: "missing_code" }, origin));
   }
@@ -100,6 +143,9 @@ export async function GET(request: Request) {
       loginPurpose: purpose,
       errorCategory: "invalid_state",
       failureStage: "unknown",
+      hasStateCookie,
+      hasCode: callbackQuery.hasCode,
+      hasState: callbackQuery.hasState,
     });
     await clearStateCookies();
     return NextResponse.redirect(marketingConnectedAccountsUrl({ error: "invalid_state" }, origin));
