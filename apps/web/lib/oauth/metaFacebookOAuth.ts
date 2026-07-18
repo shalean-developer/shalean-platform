@@ -413,6 +413,47 @@ export function redactFacebookAuthUrl(url: string): {
   };
 }
 
+/**
+ * Redact Meta OAuth callback query keys for diagnostics.
+ * Never logs code/state/token values — only presence, lengths, and safe error fields.
+ */
+export function redactFacebookCallbackQuery(searchParams: URLSearchParams): {
+  paramKeys: string[];
+  hasCode: boolean;
+  codeLength: number | null;
+  hasState: boolean;
+  stateLength: number | null;
+  hasError: boolean;
+  error: string | null;
+  errorReason: string | null;
+  errorDescriptionPresent: boolean;
+  errorDescriptionLength: number | null;
+  hasErrorCode: boolean;
+  errorCode: string | null;
+} {
+  const keys = [...new Set(searchParams.keys())].sort();
+  const code = searchParams.get("code");
+  const state = searchParams.get("state");
+  const error = searchParams.get("error");
+  const errorReason = searchParams.get("error_reason");
+  const errorDescription = searchParams.get("error_description");
+  const errorCode = searchParams.get("error_code");
+  return {
+    paramKeys: keys,
+    hasCode: Boolean(code),
+    codeLength: code != null ? code.length : null,
+    hasState: Boolean(state),
+    stateLength: state != null ? state.length : null,
+    hasError: Boolean(error),
+    error: error?.trim() || null,
+    errorReason: errorReason?.trim() || null,
+    errorDescriptionPresent: Boolean(errorDescription),
+    errorDescriptionLength: errorDescription != null ? errorDescription.length : null,
+    hasErrorCode: Boolean(errorCode),
+    errorCode: errorCode?.trim() || null,
+  };
+}
+
 /** Redacted identity of the Meta app/config pair resolved for a purpose. */
 export function getFacebookOAuthIdentity(
   purpose: FacebookLoginPurpose = "facebook",

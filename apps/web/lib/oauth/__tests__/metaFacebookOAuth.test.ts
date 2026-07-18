@@ -18,6 +18,7 @@ import {
   maskFacebookPageId,
   maskMetaNumericId,
   redactFacebookAuthUrl,
+  redactFacebookCallbackQuery,
 } from "@/lib/oauth/metaFacebookOAuth";
 import {
   classifyFacebookSaveError,
@@ -215,6 +216,26 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(JSON.stringify(redacted)).not.toContain("1645123456789012");
     expect(redacted.clientIdMasked).toBe("…4444");
     expect(redacted.configIdMasked).toBe("…9012");
+  });
+
+  it("redacts callback query inventory without leaking code or state values", () => {
+    const params = new URLSearchParams({
+      code: "AQBsupersecretauthorizationcodevalue",
+      state: "deadbeefcafestatevalue",
+      error: "access_denied",
+      error_reason: "user_denied",
+      error_description: "The+user+denied+your+request",
+    });
+    const redacted = redactFacebookCallbackQuery(params);
+    expect(redacted.hasCode).toBe(true);
+    expect(redacted.codeLength).toBe("AQBsupersecretauthorizationcodevalue".length);
+    expect(redacted.hasState).toBe(true);
+    expect(redacted.error).toBe("access_denied");
+    expect(redacted.errorReason).toBe("user_denied");
+    expect(redacted.errorDescriptionPresent).toBe(true);
+    expect(JSON.stringify(redacted)).not.toContain("AQBsupersecret");
+    expect(JSON.stringify(redacted)).not.toContain("deadbeef");
+    expect(JSON.stringify(redacted)).not.toContain("The+user+denied");
   });
 
   it("redacts token-like fields from OAuth log payloads", () => {
