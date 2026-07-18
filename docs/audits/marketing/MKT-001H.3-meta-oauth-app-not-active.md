@@ -20,10 +20,12 @@ Graph API Explorer checks on **Shalean Social Publishing** succeed (`/me/permiss
 | --- | --- |
 | Staging deploy (pre-fix) | `dpl_J5pYtZwVoFjqSw4UTjfK2MvBmriJ` @ `345595ca` |
 | OAuth start (2026-07-18T02:45:06Z) | `loginPurpose=facebook`, `usingLoginConfigId=true` |
-| Config id in runtime log | masked `1645…` (same suffix as prior **Shalean Marketing** General config) |
-| Redirect | `…/api/oauth/facebook/callback` on staging host (correct) |
-| Vercel env | Duplicate `FACEBOOK_APP_ID` / `FACEBOOK_APP_SECRET` / `FACEBOOK_LOGIN_CONFIG_ID`: **Preview (staging)** *and* **Production, Preview** |
+| Config id in runtime log (old mask = prefix) | `1645…` — matches prior **Shalean Marketing** General config prefix from MKT-001H.2 |
+| Redirect | staging host + `/api/oauth/facebook/callback` (correct) |
+| Vercel env | Duplicate `FACEBOOK_*`: **Preview (staging)** *and* **Production, Preview** (mixed scoping risk) |
 | Operator target app | **Shalean Social Publishing** (Instagram Graph API Login for Business) |
+| Post-fix staging deploy | `dpl_5uKfY9R7VAv6DNhd6nDeATGtpeKF` @ `4140797b` |
+| Health redacted identity (post-deploy) | App `…5561`, FB config `…1207`, IG config `…4849`, dual purpose OK |
 
 Code correctly uses Login for Business `config_id` **without** classic `scope` when a config id is set. The authorize URL therefore embeds whatever `FACEBOOK_APP_ID` + purpose-selected `*_LOGIN_CONFIG_ID` the Preview runtime has. If those still point at an inactive / retired app (or a config from a different app than `client_id`), Meta shows **App not active** before any Shalean callback runs.
 
