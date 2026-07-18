@@ -41,6 +41,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
     delete process.env.FACEBOOK_REDIRECT_URI;
     delete process.env.FACEBOOK_LOGIN_CONFIG_ID;
     delete process.env.INSTAGRAM_LOGIN_CONFIG_ID;
+    delete process.env.FACEBOOK_LOGIN_TOKEN_TYPE;
     delete process.env.META_APP_ID;
     delete process.env.META_APP_SECRET;
     delete process.env.META_FACEBOOK_REDIRECT_URI;
@@ -73,6 +74,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
         graphVersion: "v22.0",
         loginConfigId: null,
         loginPurpose: "facebook",
+        loginTokenType: "user",
       },
       "state-abc",
     );
@@ -97,7 +99,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
     ]);
   });
 
-  it("uses Facebook Login for Business config_id when configured", () => {
+  it("uses Facebook Login for Business config_id when configured (User token — no override)", () => {
     const url = buildFacebookAuthUrl(
       {
         appId: "app123",
@@ -106,6 +108,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
         graphVersion: "v22.0",
         loginConfigId: "cfg-instagram-pages",
         loginPurpose: "instagram",
+        loginTokenType: "user",
       },
       "state-abc",
     );
@@ -113,10 +116,27 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(parsed.searchParams.get("config_id")).toBe("cfg-instagram-pages");
     expect(parsed.searchParams.get("scope")).toBeNull();
     expect(parsed.searchParams.get("auth_type")).toBeNull();
-    expect(parsed.searchParams.get("override_default_response_type")).toBe("true");
+    expect(parsed.searchParams.get("override_default_response_type")).toBeNull();
     expect(parsed.searchParams.get("response_type")).toBe("code");
     expect(parsed.searchParams.has("business_id")).toBe(false);
     expect(parsed.searchParams.has("extras")).toBe(false);
+  });
+
+  it("sets override_default_response_type only for System User Login for Business configs", () => {
+    const suat = buildFacebookAuthUrl(
+      {
+        appId: "app123",
+        appSecret: "secret",
+        redirectUri: STAGING_REDIRECT,
+        graphVersion: "v22.0",
+        loginConfigId: "cfg-system-user",
+        loginPurpose: "facebook",
+        loginTokenType: "system_user",
+      },
+      "state-abc",
+    );
+    expect(new URL(suat).searchParams.get("override_default_response_type")).toBe("true");
+    expect(new URL(suat).searchParams.get("config_id")).toBe("cfg-system-user");
   });
 
   it("never combines classic scope or auth_type with Login for Business config_id", () => {
@@ -128,16 +148,19 @@ describe("MKT-001H metaFacebookOAuth", () => {
         graphVersion: "v22.0",
         loginConfigId: "1645123456789012",
         loginPurpose: "facebook",
+        loginTokenType: "user",
       },
       "state-abc",
     );
     const parsed = new URL(withConfig);
     expect(parsed.searchParams.get("auth_type")).toBeNull();
     expect(parsed.searchParams.get("scope")).toBeNull();
+    expect(parsed.searchParams.get("override_default_response_type")).toBeNull();
     const redacted = redactFacebookAuthUrl(withConfig);
     expect(redacted.hasConfigId).toBe(true);
     expect(redacted.hasScope).toBe(false);
     expect(redacted.authType).toBeNull();
+    expect(redacted.hasOverrideDefaultResponseType).toBe(false);
     expect(redacted.incompatibleLoginForBusinessCombo).toBe(false);
     expect(redacted.scopeNames).toEqual([]);
     expect(redacted.clientIdMasked).toBe("…4444");
@@ -198,6 +221,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
         graphVersion: "v22.0",
         loginConfigId: null,
         loginPurpose: "facebook",
+        loginTokenType: "user",
       },
       "state",
     );
@@ -258,6 +282,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
         graphVersion: "v22.0",
         loginConfigId: "1645123456789012",
         loginPurpose: "facebook",
+        loginTokenType: "user",
       },
       "state-with-secret-looking-value",
     );

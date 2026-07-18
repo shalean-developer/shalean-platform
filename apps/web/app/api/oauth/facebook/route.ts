@@ -170,6 +170,7 @@ export async function GET(request: Request) {
     hasScope: redacted.hasScope,
     hasConfigId: redacted.hasConfigId,
     hasOverrideDefaultResponseType: redacted.hasOverrideDefaultResponseType,
+    loginTokenType: identity.loginTokenType,
     scopeNames: redacted.scopeNames.join(",") || null,
     incompatibleLoginForBusinessCombo: redacted.incompatibleLoginForBusinessCombo,
     gitSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? null,
