@@ -90,24 +90,27 @@ export async function GET(request: Request) {
   }
 
   const state = createOAuthState();
+  // Preview/production on Vercel always serve HTTPS — never leave Secure unset there.
+  const secureCookie =
+    process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
   const cookieStore = await cookies();
   cookieStore.set(FACEBOOK_OAUTH_STATE_COOKIE, hashOAuthState(state), {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookie,
     sameSite: "lax",
     path: "/",
     maxAge: FACEBOOK_OAUTH_STATE_MAX_AGE_SEC,
   });
   cookieStore.set("fb_oauth_cid", correlationId, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookie,
     sameSite: "lax",
     path: "/",
     maxAge: FACEBOOK_OAUTH_STATE_MAX_AGE_SEC,
   });
   cookieStore.set(FACEBOOK_OAUTH_PURPOSE_COOKIE, purpose, {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure: secureCookie,
     sameSite: "lax",
     path: "/",
     maxAge: FACEBOOK_OAUTH_STATE_MAX_AGE_SEC,

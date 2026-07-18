@@ -299,11 +299,16 @@ export async function discoverFacebookPages(
     };
   }
 
+  const rows = json.data ?? [];
   const pages: FacebookDiscoveredPage[] = [];
-  for (const row of json.data ?? []) {
+  let skippedMissingToken = 0;
+  for (const row of rows) {
     const pageId = row.id?.trim();
     const accessToken = row.access_token?.trim();
-    if (!pageId || !accessToken) continue;
+    if (!pageId || !accessToken) {
+      if (pageId && !accessToken) skippedMissingToken += 1;
+      continue;
+    }
     const tasks = Array.isArray(row.tasks) ? row.tasks.map(String) : [];
     const eligibility = classifyFacebookPageEligibility(tasks);
     pages.push({
@@ -315,6 +320,17 @@ export async function discoverFacebookPages(
       ineligibleReason: eligibility.ineligibleReason,
     });
   }
+
+  // Redacted discovery shape — never log Page names/tokens.
+  logFacebookOAuthEvent("page_discovery_result", {
+    provider: "facebook",
+    loginPurpose: cfg.loginPurpose,
+    usingLoginConfigId: Boolean(cfg.loginConfigId),
+    rawAccountCount: rows.length,
+    pagesWithTokenCount: pages.length,
+    skippedMissingTokenCount: skippedMissingToken,
+    eligibleCount: pages.filter((p) => p.eligible).length,
+  });
 
   return { ok: true, pages };
 }

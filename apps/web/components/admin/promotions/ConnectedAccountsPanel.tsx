@@ -255,17 +255,10 @@ export function ConnectedAccountsPanel() {
   }
 
   async function connectFacebook() {
+    // Full document navigation (not fetch→Meta) so OAuth state cookies are set on
+    // the redirect response. Fetch+assign can lose cookies and surface invalid_state.
     setBusy("fb_connect");
-    try {
-      const res = await adminFetch<{ url: string }>("/api/oauth/facebook");
-      if (res.error || !res.data?.url) {
-        emitAdminToast(res.error ?? "Could not start Facebook OAuth.", "error");
-        return;
-      }
-      window.location.href = res.data.url;
-    } finally {
-      setBusy(null);
-    }
+    window.location.assign("/api/oauth/facebook");
   }
 
   async function selectFacebookPage(pageId: string, confirmReplace = false) {
@@ -331,13 +324,8 @@ export function ConnectedAccountsPanel() {
         return;
       }
       if (res.data?.authorizationUrl) {
-        // Instagram Graph API Login for Business OAuth (separate config id).
-        const oauth = await adminFetch<{ url: string }>(res.data.authorizationUrl);
-        if (oauth.error || !oauth.data?.url) {
-          emitAdminToast(oauth.error ?? "Could not start Instagram OAuth.", "error");
-          return;
-        }
-        window.location.href = oauth.data.url;
+        // Full document navigation so purpose + state cookies stick (see connectFacebook).
+        window.location.assign(res.data.authorizationUrl);
         return;
       }
       emitAdminToast(
