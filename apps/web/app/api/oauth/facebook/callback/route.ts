@@ -16,6 +16,7 @@ import {
   exchangeFacebookLongLivedUserToken,
   getFacebookOAuthConfig,
   hashOAuthState,
+  classifyFacebookOAuthProviderError,
   logFacebookOAuthEvent,
   marketingConnectedAccountsUrl,
   parseFacebookLoginPurpose,
@@ -94,26 +95,31 @@ export async function GET(request: Request) {
   }
 
   if (oauthError) {
+    // Meta Login for Business often returns access_denied + error_code=200 +
+    // error_description=Permissions error (len 17) when the app is not Live or
+    // the Login config permissions/assets cannot be granted — not a true cancel.
+    const errorCategory = classifyFacebookOAuthProviderError({
+      oauthError,
+      errorCode: callbackQuery.errorCode,
+      errorDescriptionLength: callbackQuery.errorDescriptionLength,
+    });
     logFacebookOAuthEvent("callback_failed", {
       correlationId,
       provider: purpose === "instagram" ? "instagram" : "facebook",
       loginPurpose: purpose,
-      errorCategory: oauthError === "access_denied" ? "oauth_denied" : "oauth_failed",
+      errorCategory,
       failureStage: "unknown",
       error: callbackQuery.error,
       errorReason: callbackQuery.errorReason,
+      errorCode: callbackQuery.errorCode,
       errorDescriptionPresent: callbackQuery.errorDescriptionPresent,
+      errorDescriptionLength: callbackQuery.errorDescriptionLength,
       hasCode: callbackQuery.hasCode,
       hasState: callbackQuery.hasState,
     });
     await clearStateCookies();
     return NextResponse.redirect(
-      marketingConnectedAccountsUrl(
-        {
-          error: oauthError === "access_denied" ? "oauth_denied" : "oauth_failed",
-        },
-        origin,
-      ),
+      marketingConnectedAccountsUrl({ error: errorCategory }, origin),
     );
   }
 

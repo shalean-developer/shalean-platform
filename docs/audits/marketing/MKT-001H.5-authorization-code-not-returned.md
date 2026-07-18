@@ -11,27 +11,29 @@ UI toast: **“The provider did not return an authorization code.”**
 
 Preceded by Meta Business Extension: **“Sorry, something went wrong.”** after Facebook login + Instagram asset selection.
 
-## Verdict (evidence to date)
+## Verdict (post–diagnostics deploy)
 
 | Question | Answer |
 | --- | --- |
-| Did Meta redirect to our callback? | **Yes** — staging logs show `GET /api/oauth/facebook/callback` 307 at 03:56:16Z and 03:56:37Z |
-| Did Meta send `error=`? | **No evidence of `error` branch** — that path logs `callback_failed`; those attempts did not |
-| Did Meta send `code=`? | **Almost certainly no** — UI reached `missing_code` (`!code \|\| !state`) |
-| Is the callback handler wrong? | **No** — it correctly rejects missing `code`/`state`; it previously **did not log** this path, so we could not see Meta’s query keys |
-| Where does failure start? | **Inside Meta Business Extension** after consent UI, before a successful OAuth redirect with `code` (or with a broken redirect omitting `code`) |
+| Did Meta redirect to our callback? | **Yes** |
+| Did Meta send `code=`? | **No** on the failing completes |
+| Did Meta send error params? | **Yes** on the clean failure (04:15:54Z) |
+| Exact Meta error | `error=access_denied`, `error_reason=user_denied`, `error_code=200`, `error_description` length **17** (= **`Permissions error`**) |
+| Is the callback handler wrong? | **No** — it correctly maps Meta’s denial; Shalean never received a grantable `code` |
+| Root cause class | **Meta Login for Business permissions / app mode** — not CSRF, not redirect URI mismatch, not missing `code` parsing |
 
-Earlier operator screenshot showed a `code=` on Meta’s own URL  
-`facebook.com/facebook_business_extension/oauth/?code=…` — that is **not** a redirect to Shalean. Meta can mint a code on its extension host and still fail before forwarding it to `redirect_uri`.
+Known Meta behavior: Login for Business in **Development** mode often completes the UI then redirects with  
+`access_denied` + `error_code=200` + `Permissions error` + `user_denied` (looks like cancel). Fix: set app to **Live**, ensure Login config permissions/assets are grantable.
 
 ## Runtime evidence (redacted)
 
 | Time (UTC) | Event | Deploy / SHA | Notes |
 | --- | --- | --- | --- |
-| 03:53:05 | `oauth_started` | `dpl_9K2WBmvp…` @ `4140797b` | Still logged `authType: rerequest` (pre–PR #66 code path) |
-| 03:56:16 | `GET …/callback` 307 | `dpl_9K2WBmvp…` | No `callback_failed` / no `callback_received` log (silent `missing_code`) |
-| 03:56:37 | `GET …/callback` 307 | `dpl_9K2WBmvp…` | Same |
-| Alias check | staging alias | `dpl_CWTcJu6…` @ `ca5586d8` | PR #66 (omit `auth_type`) is aliased, but recent OAuth starts still attributed to older deploy in logs — operator must hard-refresh / use git-staging URL only |
+| 04:15:43 | `oauth_started` | `dpl_2PTFLybk…` @ `4ed806e4` | `authType: null`, config `…1207`, purpose `facebook` |
+| 04:15:54 | `callback_received` | same | `hasCode: false`, `hasState: true`, params `action,error,error_code,error_description,error_reason,state` |
+| 04:15:54 | `callback_failed` | same | `error=access_denied`, `errorReason=user_denied`, `errorCode=200`, description length 17 |
+| 04:11:38 | `callback_received` | same | **Empty query** (`paramKeys: null`) → `missing_code` (stray / aborted navigation after Meta error page) |
+| 03:53–03:56 | older | `4140797b` | Pre-diagnostics; silent `missing_code` before query logging existed |
 
 Authorize URL intent after PR #66 (`ca5586d8`):
 
@@ -78,11 +80,19 @@ After selecting Instagram and clicking Continue, does the browser address bar br
 
 (1) matches current evidence (code on Meta host only). (3) would mean a different bug (cookie/state or exchange).
 
+## Operator next steps
+
+1. Meta App Dashboard → **Shalean Social Publishing** (`…5561`) → switch app to **Live** (Login for Business often fails in Development with Permissions error).
+2. Confirm Login configs `…1207` / `…4849` include grantable Page (+ IG) permissions/assets and token type **User**.
+3. Retest Connect Facebook on git-staging; expect either `code` success or a clear `oauth_permissions_error` toast (not opaque `missing_code`).
+4. For Instagram-specific config, use **Connect Instagram** (`purpose=instagram`, config `…4849`).
+
 ## Governance
 
 | Action | Decision |
 | --- | --- |
-| Callback query diagnostics | **GO** |
-| Blame callback exchange logic | **NO-GO** until redacted `callback_received` proves a `code` arrived |
+| Callback query diagnostics | **GO** (landed) |
+| Surface Meta Permissions error distinctly | **GO** |
+| Blame callback exchange logic | **NO-GO** — Meta never returned `code` |
 | Production / `main` | **NO-GO** |
-| Staging PASS | **NO-GO** without post-fix `oauth_started` (`authType: null`) + successful callback with `code` |
+| Staging PASS | **NO-GO** until Live app + successful `code` callback |

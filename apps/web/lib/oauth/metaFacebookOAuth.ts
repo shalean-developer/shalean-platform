@@ -414,6 +414,22 @@ export function redactFacebookAuthUrl(url: string): {
 }
 
 /**
+ * Classify Meta authorize redirect errors (no secrets).
+ * Login for Business often masquerades permission/app-mode failures as user_denied
+ * with error_code=200 and description "Permissions error" (length 17).
+ */
+export function classifyFacebookOAuthProviderError(input: {
+  oauthError: string;
+  errorCode?: string | null;
+  errorDescriptionLength?: number | null;
+}): "oauth_denied" | "oauth_permissions_error" | "oauth_failed" {
+  if (input.oauthError !== "access_denied") return "oauth_failed";
+  const permissionsError =
+    input.errorCode === "200" || input.errorDescriptionLength === 17;
+  return permissionsError ? "oauth_permissions_error" : "oauth_denied";
+}
+
+/**
  * Redact Meta OAuth callback query keys for diagnostics.
  * Never logs code/state/token values — only presence, lengths, and safe error fields.
  */

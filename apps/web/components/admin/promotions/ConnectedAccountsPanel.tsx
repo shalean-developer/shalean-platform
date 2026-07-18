@@ -99,6 +99,8 @@ const ERROR_MESSAGES: Record<string, string> = {
   oauth_not_configured:
     "OAuth env vars are missing. For Google set GOOGLE_CLIENT_*; for Facebook set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI.",
   oauth_denied: "Connection was cancelled or denied.",
+  oauth_permissions_error:
+    "Meta denied permissions (Login for Business). Confirm the app is Live, the Login configuration includes the required Page/Instagram permissions and assets, then try Connect again.",
   oauth_failed: "OAuth failed. Try again or check provider credentials.",
   invalid_state: "OAuth state validation failed. Please start Connect again.",
   missing_code: "The provider did not return an authorization code.",
