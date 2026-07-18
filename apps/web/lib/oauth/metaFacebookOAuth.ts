@@ -51,10 +51,18 @@ export type FacebookOAuthConfig = {
   loginConfigId: string | null;
   /** Which Login for Business config was selected. */
   loginPurpose: FacebookLoginPurpose;
+  /**
+   * Must match the Login for Business configuration token type in Meta App Dashboard.
+   * Defaults to `user` (operator configs …1207 / …4849 are User access token).
+   */
+  loginTokenType: FacebookLoginTokenType;
 };
 
 /** Facebook Page connect vs Instagram Graph API Login for Business configs. */
 export type FacebookLoginPurpose = "facebook" | "instagram";
+
+/** Meta Login for Business configuration token type. */
+export type FacebookLoginTokenType = "user" | "system_user";
 
 export const FACEBOOK_OAUTH_PURPOSE_COOKIE = "fb_oauth_purpose";
 
@@ -64,6 +72,18 @@ export function getFacebookGraphApiVersion(): string {
     process.env.WHATSAPP_GRAPH_API_VERSION?.trim() ||
     "v22.0"
   );
+}
+
+/**
+ * Resolve Login for Business token type from env.
+ * Default `user` — Meta docs reserve `override_default_response_type` for System User configs.
+ */
+export function resolveFacebookLoginTokenType(): FacebookLoginTokenType {
+  const raw = process.env.FACEBOOK_LOGIN_TOKEN_TYPE?.trim().toLowerCase() ?? "";
+  if (raw === "system_user" || raw === "system-user" || raw === "suat") {
+    return "system_user";
+  }
+  return "user";
 }
 
 function resolveLoginConfigId(purpose: FacebookLoginPurpose): string | null {
@@ -77,10 +97,69 @@ function resolveLoginConfigId(purpose: FacebookLoginPurpose): string | null {
     "";
 
   if (purpose === "instagram") {
-    // Prefer dedicated Instagram Graph API Login for Business config.
-    return instagramConfigId || facebookConfigId || null;
+    // Instagram Graph API Login for Business must use its own config_id.
+    // Do not fall back to the Facebook General config — that mixes purposes and
+    // can surface Meta "config_id is required" / wrong-asset dialogs.
+    return instagramConfigId || null;
   }
   return facebookConfigId || null;
+}
+
+/**
+ * Login for Business is mandatory for Connect flows. Missing config_id must fail
+ * closed before redirect so Meta never receives a classic scope-only authorize URL.
+ */
+export function isFacebookLoginConfigReady(purpose: FacebookLoginPurpose): boolean {
+  return Boolean(resolveLoginConfigId(purpose));
+}
+
+/** Redacted inventory of which Meta env aliases are present (values never returned). */
+export function getFacebookEnvAliasPresence(): {
+  FACEBOOK_APP_ID: boolean;
+  META_APP_ID: boolean;
+  FACEBOOK_APP_SECRET: boolean;
+  META_APP_SECRET: boolean;
+  FACEBOOK_REDIRECT_URI: boolean;
+  META_FACEBOOK_REDIRECT_URI: boolean;
+  FACEBOOK_LOGIN_CONFIG_ID: boolean;
+  META_FACEBOOK_LOGIN_CONFIG_ID: boolean;
+  INSTAGRAM_LOGIN_CONFIG_ID: boolean;
+  META_INSTAGRAM_LOGIN_CONFIG_ID: boolean;
+  duplicateAppIdAliasRisk: boolean;
+  duplicateFacebookConfigAliasRisk: boolean;
+  duplicateInstagramConfigAliasRisk: boolean;
+} {
+  const FACEBOOK_APP_ID = Boolean(process.env.FACEBOOK_APP_ID?.trim());
+  const META_APP_ID = Boolean(process.env.META_APP_ID?.trim());
+  const FACEBOOK_APP_SECRET = Boolean(process.env.FACEBOOK_APP_SECRET?.trim());
+  const META_APP_SECRET = Boolean(process.env.META_APP_SECRET?.trim());
+  const FACEBOOK_REDIRECT_URI = Boolean(process.env.FACEBOOK_REDIRECT_URI?.trim());
+  const META_FACEBOOK_REDIRECT_URI = Boolean(process.env.META_FACEBOOK_REDIRECT_URI?.trim());
+  const FACEBOOK_LOGIN_CONFIG_ID = Boolean(process.env.FACEBOOK_LOGIN_CONFIG_ID?.trim());
+  const META_FACEBOOK_LOGIN_CONFIG_ID = Boolean(
+    process.env.META_FACEBOOK_LOGIN_CONFIG_ID?.trim(),
+  );
+  const INSTAGRAM_LOGIN_CONFIG_ID = Boolean(process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim());
+  const META_INSTAGRAM_LOGIN_CONFIG_ID = Boolean(
+    process.env.META_INSTAGRAM_LOGIN_CONFIG_ID?.trim(),
+  );
+  return {
+    FACEBOOK_APP_ID,
+    META_APP_ID,
+    FACEBOOK_APP_SECRET,
+    META_APP_SECRET,
+    FACEBOOK_REDIRECT_URI,
+    META_FACEBOOK_REDIRECT_URI,
+    FACEBOOK_LOGIN_CONFIG_ID,
+    META_FACEBOOK_LOGIN_CONFIG_ID,
+    INSTAGRAM_LOGIN_CONFIG_ID,
+    META_INSTAGRAM_LOGIN_CONFIG_ID,
+    // Both primary + legacy aliases present → Preview precedence risk (values may differ).
+    duplicateAppIdAliasRisk: FACEBOOK_APP_ID && META_APP_ID,
+    duplicateFacebookConfigAliasRisk: FACEBOOK_LOGIN_CONFIG_ID && META_FACEBOOK_LOGIN_CONFIG_ID,
+    duplicateInstagramConfigAliasRisk:
+      INSTAGRAM_LOGIN_CONFIG_ID && META_INSTAGRAM_LOGIN_CONFIG_ID,
+  };
 }
 
 export function parseFacebookLoginPurpose(
@@ -110,6 +189,7 @@ export function getFacebookOAuthConfig(
     graphVersion: getFacebookGraphApiVersion(),
     loginConfigId: resolveLoginConfigId(purpose),
     loginPurpose: purpose,
+    loginTokenType: resolveFacebookLoginTokenType(),
   };
 }
 
@@ -160,8 +240,14 @@ export function buildFacebookAuthUrl(cfg: FacebookOAuthConfig, state: string): s
   // "Sorry, something went wrong" when those are combined with config_id.
   if (cfg.loginConfigId) {
     url.searchParams.set("config_id", cfg.loginConfigId);
-    // Required when response_type=code for Login for Business code grant.
-    url.searchParams.set("override_default_response_type", "true");
+    // Meta docs (Login for Business):
+    // - User access token configs: config_id only (optional response_type=code for server exchange)
+    // - System User configs: response_type=code + override_default_response_type=true
+    // Sending override with User configs strands Meta Business Extension on an
+    // intermediate code URL and never redirects to our callback (post-Live evidence).
+    if (cfg.loginTokenType === "system_user") {
+      url.searchParams.set("override_default_response_type", "true");
+    }
     return url.toString();
   }
 
@@ -485,6 +571,7 @@ export function getFacebookOAuthIdentity(
   graphVersion: string;
   usingLoginConfigId: boolean;
   hasAppSecret: boolean;
+  loginTokenType: FacebookLoginTokenType;
 } {
   const cfg = getFacebookOAuthConfig(purpose);
   const facebookConfigId =
@@ -519,6 +606,7 @@ export function getFacebookOAuthIdentity(
     graphVersion: cfg?.graphVersion ?? getFacebookGraphApiVersion(),
     usingLoginConfigId: Boolean(cfg?.loginConfigId),
     hasAppSecret: Boolean(cfg?.appSecret),
+    loginTokenType: cfg?.loginTokenType ?? resolveFacebookLoginTokenType(),
   };
 }
 
@@ -530,13 +618,17 @@ export function logFacebookOAuthEvent(
   for (const [k, v] of Object.entries(fields)) {
     if (v === undefined) continue;
     const key = k.toLowerCase();
+    // Allow non-secret enum fields that contain "token" (e.g. loginTokenType=user).
+    const allowlistedMetaEnum =
+      key === "logintokentype" || key === "loginaccesstype" || key === "usinglogintoken";
     if (
-      key.includes("token") ||
-      key.includes("secret") ||
-      key.includes("authorization") ||
-      key === "code" ||
-      key.includes("client_secret") ||
-      (key.endsWith("url") && key.includes("oauth"))
+      !allowlistedMetaEnum &&
+      (key.includes("token") ||
+        key.includes("secret") ||
+        key.includes("authorization") ||
+        key === "code" ||
+        key.includes("client_secret") ||
+        (key.endsWith("url") && key.includes("oauth")))
     ) {
       continue;
     }

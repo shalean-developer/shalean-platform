@@ -13,11 +13,14 @@ import {
   hashOAuthState,
   isFacebookEnvTokenFallbackAllowed,
   isFacebookPageEligibleForPublish,
+  isFacebookLoginConfigReady,
   isInstagramLoginConfigConfigured,
+  getFacebookEnvAliasPresence,
   logFacebookOAuthEvent,
   maskFacebookPageId,
   maskMetaNumericId,
   classifyFacebookOAuthProviderError,
+  parseFacebookLoginPurpose,
   redactFacebookAuthUrl,
   redactFacebookCallbackQuery,
 } from "@/lib/oauth/metaFacebookOAuth";
@@ -38,6 +41,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
     delete process.env.FACEBOOK_REDIRECT_URI;
     delete process.env.FACEBOOK_LOGIN_CONFIG_ID;
     delete process.env.INSTAGRAM_LOGIN_CONFIG_ID;
+    delete process.env.FACEBOOK_LOGIN_TOKEN_TYPE;
     delete process.env.META_APP_ID;
     delete process.env.META_APP_SECRET;
     delete process.env.META_FACEBOOK_REDIRECT_URI;
@@ -70,6 +74,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
         graphVersion: "v22.0",
         loginConfigId: null,
         loginPurpose: "facebook",
+        loginTokenType: "user",
       },
       "state-abc",
     );
@@ -94,7 +99,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
     ]);
   });
 
-  it("uses Facebook Login for Business config_id when configured", () => {
+  it("uses Facebook Login for Business config_id when configured (User token — no override)", () => {
     const url = buildFacebookAuthUrl(
       {
         appId: "app123",
@@ -103,6 +108,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
         graphVersion: "v22.0",
         loginConfigId: "cfg-instagram-pages",
         loginPurpose: "instagram",
+        loginTokenType: "user",
       },
       "state-abc",
     );
@@ -110,10 +116,27 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(parsed.searchParams.get("config_id")).toBe("cfg-instagram-pages");
     expect(parsed.searchParams.get("scope")).toBeNull();
     expect(parsed.searchParams.get("auth_type")).toBeNull();
-    expect(parsed.searchParams.get("override_default_response_type")).toBe("true");
+    expect(parsed.searchParams.get("override_default_response_type")).toBeNull();
     expect(parsed.searchParams.get("response_type")).toBe("code");
     expect(parsed.searchParams.has("business_id")).toBe(false);
     expect(parsed.searchParams.has("extras")).toBe(false);
+  });
+
+  it("sets override_default_response_type only for System User Login for Business configs", () => {
+    const suat = buildFacebookAuthUrl(
+      {
+        appId: "app123",
+        appSecret: "secret",
+        redirectUri: STAGING_REDIRECT,
+        graphVersion: "v22.0",
+        loginConfigId: "cfg-system-user",
+        loginPurpose: "facebook",
+        loginTokenType: "system_user",
+      },
+      "state-abc",
+    );
+    expect(new URL(suat).searchParams.get("override_default_response_type")).toBe("true");
+    expect(new URL(suat).searchParams.get("config_id")).toBe("cfg-system-user");
   });
 
   it("never combines classic scope or auth_type with Login for Business config_id", () => {
@@ -125,16 +148,19 @@ describe("MKT-001H metaFacebookOAuth", () => {
         graphVersion: "v22.0",
         loginConfigId: "1645123456789012",
         loginPurpose: "facebook",
+        loginTokenType: "user",
       },
       "state-abc",
     );
     const parsed = new URL(withConfig);
     expect(parsed.searchParams.get("auth_type")).toBeNull();
     expect(parsed.searchParams.get("scope")).toBeNull();
+    expect(parsed.searchParams.get("override_default_response_type")).toBeNull();
     const redacted = redactFacebookAuthUrl(withConfig);
     expect(redacted.hasConfigId).toBe(true);
     expect(redacted.hasScope).toBe(false);
     expect(redacted.authType).toBeNull();
+    expect(redacted.hasOverrideDefaultResponseType).toBe(false);
     expect(redacted.incompatibleLoginForBusinessCombo).toBe(false);
     expect(redacted.scopeNames).toEqual([]);
     expect(redacted.clientIdMasked).toBe("…4444");
@@ -172,8 +198,56 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(JSON.stringify(fbIdentity)).not.toContain("1111222233334444");
 
     delete process.env.INSTAGRAM_LOGIN_CONFIG_ID;
-    expect(getFacebookOAuthConfig("instagram")?.loginConfigId).toBe("1000000000000001");
+    // Instagram must not fall back to the Facebook General config (purpose mixing).
+    expect(getFacebookOAuthConfig("instagram")?.loginConfigId).toBeNull();
     expect(isInstagramLoginConfigConfigured()).toBe(false);
+    expect(isFacebookLoginConfigReady("instagram")).toBe(false);
+    expect(isFacebookLoginConfigReady("facebook")).toBe(true);
+  });
+
+  it("fails closed when Login for Business config id is absent", () => {
+    process.env.FACEBOOK_APP_ID = "1111222233334444";
+    process.env.FACEBOOK_APP_SECRET = "secret1";
+    process.env.FACEBOOK_REDIRECT_URI = STAGING_REDIRECT;
+    expect(getFacebookOAuthConfig("facebook")?.loginConfigId).toBeNull();
+    expect(isFacebookLoginConfigReady("facebook")).toBe(false);
+    expect(isFacebookLoginConfigReady("instagram")).toBe(false);
+    // Classic authorize shape still builds for unit coverage — start route must refuse it.
+    const classic = buildFacebookAuthUrl(
+      {
+        appId: "1111222233334444",
+        appSecret: "secret1",
+        redirectUri: STAGING_REDIRECT,
+        graphVersion: "v22.0",
+        loginConfigId: null,
+        loginPurpose: "facebook",
+        loginTokenType: "user",
+      },
+      "state",
+    );
+    const redacted = redactFacebookAuthUrl(classic);
+    expect(redacted.hasConfigId).toBe(false);
+    expect(redacted.hasScope).toBe(true);
+  });
+
+  it("preserves purpose through parse and surfaces duplicate env alias risk", () => {
+    expect(parseFacebookLoginPurpose(null)).toBe("facebook");
+    expect(parseFacebookLoginPurpose("instagram")).toBe("instagram");
+    expect(parseFacebookLoginPurpose("Instagram")).toBe("instagram");
+    expect(parseFacebookLoginPurpose("facebook")).toBe("facebook");
+
+    process.env.FACEBOOK_APP_ID = "1111222233334444";
+    process.env.META_APP_ID = "9999888877776666";
+    process.env.FACEBOOK_LOGIN_CONFIG_ID = "1000000000000001";
+    process.env.META_FACEBOOK_LOGIN_CONFIG_ID = "stale-config";
+    process.env.INSTAGRAM_LOGIN_CONFIG_ID = "2000000000000002";
+    process.env.META_INSTAGRAM_LOGIN_CONFIG_ID = "stale-ig";
+    const aliases = getFacebookEnvAliasPresence();
+    expect(aliases.duplicateAppIdAliasRisk).toBe(true);
+    expect(aliases.duplicateFacebookConfigAliasRisk).toBe(true);
+    expect(aliases.duplicateInstagramConfigAliasRisk).toBe(true);
+    expect(JSON.stringify(aliases)).not.toContain("1111222233334444");
+    expect(JSON.stringify(aliases)).not.toContain("stale");
   });
 
   it("does not fall back to stale META_* app id when FACEBOOK_APP_ID is set", () => {
@@ -208,6 +282,7 @@ describe("MKT-001H metaFacebookOAuth", () => {
         graphVersion: "v22.0",
         loginConfigId: "1645123456789012",
         loginPurpose: "facebook",
+        loginTokenType: "user",
       },
       "state-with-secret-looking-value",
     );
