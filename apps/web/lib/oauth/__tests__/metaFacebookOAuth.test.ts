@@ -17,6 +17,7 @@ import {
   logFacebookOAuthEvent,
   maskFacebookPageId,
   maskMetaNumericId,
+  classifyFacebookOAuthProviderError,
   redactFacebookAuthUrl,
   redactFacebookCallbackQuery,
 } from "@/lib/oauth/metaFacebookOAuth";
@@ -216,6 +217,30 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(JSON.stringify(redacted)).not.toContain("1645123456789012");
     expect(redacted.clientIdMasked).toBe("…4444");
     expect(redacted.configIdMasked).toBe("…9012");
+  });
+
+  it("classifies Meta Permissions error separately from true user cancel", () => {
+    expect(
+      classifyFacebookOAuthProviderError({
+        oauthError: "access_denied",
+        errorCode: "200",
+        errorDescriptionLength: 17,
+      }),
+    ).toBe("oauth_permissions_error");
+    expect(
+      classifyFacebookOAuthProviderError({
+        oauthError: "access_denied",
+        errorCode: null,
+        errorDescriptionLength: "The user denied your request".length,
+      }),
+    ).toBe("oauth_denied");
+    expect(
+      classifyFacebookOAuthProviderError({
+        oauthError: "server_error",
+        errorCode: "1",
+        errorDescriptionLength: 10,
+      }),
+    ).toBe("oauth_failed");
   });
 
   it("redacts callback query inventory without leaking code or state values", () => {
