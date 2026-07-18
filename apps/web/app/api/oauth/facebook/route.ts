@@ -12,10 +12,12 @@ import {
   createFacebookOAuthCorrelationId,
   createOAuthState,
   getFacebookOAuthConfig,
+  getFacebookOAuthIdentity,
   hashOAuthState,
   logFacebookOAuthEvent,
   marketingConnectedAccountsUrl,
   parseFacebookLoginPurpose,
+  redactFacebookAuthUrl,
 } from "@/lib/oauth/metaFacebookOAuth";
 
 export const runtime = "nodejs";
@@ -117,25 +119,41 @@ export async function GET(request: Request) {
   });
 
   const url = buildFacebookAuthUrl(cfg, state);
+  const redacted = redactFacebookAuthUrl(url);
+  const identity = getFacebookOAuthIdentity(purpose);
   logFacebookOAuthEvent("oauth_started", {
     correlationId,
     provider: purpose === "instagram" ? "instagram" : "facebook",
     actor,
-    redirectUri: cfg.redirectUri,
     loginPurpose: purpose,
-    usingLoginConfigId: Boolean(cfg.loginConfigId),
-    loginConfigIdMasked: cfg.loginConfigId
-      ? `${cfg.loginConfigId.slice(0, 4)}…`
-      : null,
+    usingLoginConfigId: identity.usingLoginConfigId,
+    appIdMasked: identity.appIdMasked,
+    loginConfigIdMasked: identity.loginConfigIdMasked,
+    facebookLoginConfigIdMasked: identity.facebookLoginConfigIdMasked,
+    instagramLoginConfigIdMasked: identity.instagramLoginConfigIdMasked,
+    redirectHost: redacted.redirectHost,
+    redirectPath: redacted.redirectPath,
+    graphVersion: redacted.graphVersion,
+    responseType: redacted.responseType,
+    authType: redacted.authType,
+    hasScope: redacted.hasScope,
+    hasConfigId: redacted.hasConfigId,
+    hasOverrideDefaultResponseType: redacted.hasOverrideDefaultResponseType,
+    scopeNames: redacted.scopeNames.join(",") || null,
+    incompatibleLoginForBusinessCombo: redacted.incompatibleLoginForBusinessCombo,
+    gitSha: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 12) ?? null,
   });
 
   if (authHeader) {
     return NextResponse.json({
+      // Full Meta authorize URL is intentional for adminFetch navigation only.
       url,
       configured: true,
       correlationId,
       loginPurpose: purpose,
       usingLoginConfigId: Boolean(cfg.loginConfigId),
+      appIdMasked: identity.appIdMasked,
+      loginConfigIdMasked: identity.loginConfigIdMasked,
     });
   }
   return NextResponse.redirect(url);

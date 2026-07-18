@@ -159,8 +159,11 @@ export function buildFacebookAuthUrl(cfg: FacebookOAuthConfig, state: string): s
   // Facebook Login for Business: permissions live on the dashboard configuration.
   // Do not also pass raw Instagram scopes here — that triggers "Invalid Scopes"
   // when those permissions are not enabled on the Meta app.
+  // Never combine config_id + scope — Meta rejects / misroutes that hybrid.
   if (cfg.loginConfigId) {
     url.searchParams.set("config_id", cfg.loginConfigId);
+    // Required when response_type=code for Login for Business (esp. code grant).
+    url.searchParams.set("override_default_response_type", "true");
   } else {
     url.searchParams.set("scope", FACEBOOK_OAUTH_SCOPE);
   }
@@ -341,6 +344,126 @@ export function maskFacebookPageId(pageId: string | null | undefined): string | 
   return `${pageId.slice(0, 4)}…`;
 }
 
+/** Mask Meta numeric IDs for logs/health — keep suffix for operator cross-check. */
+export function maskMetaNumericId(id: string | null | undefined): string | null {
+  const trimmed = id?.trim() ?? "";
+  if (!trimmed) return null;
+  if (trimmed.length <= 4) return `…${trimmed}`;
+  return `…${trimmed.slice(-4)}`;
+}
+
+export function redactFacebookAuthUrl(url: string): {
+  host: string;
+  pathname: string;
+  graphVersion: string | null;
+  clientIdMasked: string | null;
+  configIdMasked: string | null;
+  redirectHost: string | null;
+  redirectPath: string | null;
+  responseType: string | null;
+  authType: string | null;
+  hasScope: boolean;
+  hasConfigId: boolean;
+  hasOverrideDefaultResponseType: boolean;
+  scopeNames: string[];
+  incompatibleLoginForBusinessCombo: boolean;
+} {
+  const parsed = new URL(url);
+  const scopeRaw = parsed.searchParams.get("scope");
+  const configId = parsed.searchParams.get("config_id");
+  const clientId = parsed.searchParams.get("client_id");
+  const redirectUri = parsed.searchParams.get("redirect_uri");
+  let redirectHost: string | null = null;
+  let redirectPath: string | null = null;
+  if (redirectUri) {
+    try {
+      const redirect = new URL(redirectUri);
+      redirectHost = redirect.host;
+      redirectPath = redirect.pathname;
+    } catch {
+      redirectHost = null;
+      redirectPath = null;
+    }
+  }
+  const versionMatch = parsed.pathname.match(/^\/(v\d+\.\d+)\//);
+  const hasScope = Boolean(scopeRaw);
+  const hasConfigId = Boolean(configId);
+  return {
+    host: parsed.host,
+    pathname: parsed.pathname,
+    graphVersion: versionMatch?.[1] ?? null,
+    clientIdMasked: maskMetaNumericId(clientId),
+    configIdMasked: maskMetaNumericId(configId),
+    redirectHost,
+    redirectPath,
+    responseType: parsed.searchParams.get("response_type"),
+    authType: parsed.searchParams.get("auth_type"),
+    hasScope,
+    hasConfigId,
+    hasOverrideDefaultResponseType: parsed.searchParams.get("override_default_response_type") === "true",
+    scopeNames: scopeRaw
+      ? scopeRaw
+          .split(",")
+          .map((s) => s.trim())
+          .filter(Boolean)
+      : [],
+    // Meta Login for Business: permissions live on config_id; do not also send scope.
+    incompatibleLoginForBusinessCombo: hasScope && hasConfigId,
+  };
+}
+
+/** Redacted identity of the Meta app/config pair resolved for a purpose. */
+export function getFacebookOAuthIdentity(
+  purpose: FacebookLoginPurpose = "facebook",
+): {
+  configured: boolean;
+  loginPurpose: FacebookLoginPurpose;
+  appIdMasked: string | null;
+  loginConfigIdMasked: string | null;
+  facebookLoginConfigIdMasked: string | null;
+  instagramLoginConfigIdMasked: string | null;
+  redirectHost: string | null;
+  redirectPath: string | null;
+  graphVersion: string;
+  usingLoginConfigId: boolean;
+  hasAppSecret: boolean;
+} {
+  const cfg = getFacebookOAuthConfig(purpose);
+  const facebookConfigId =
+    process.env.FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
+    process.env.META_FACEBOOK_LOGIN_CONFIG_ID?.trim() ||
+    "";
+  const instagramConfigId =
+    process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim() ||
+    process.env.META_INSTAGRAM_LOGIN_CONFIG_ID?.trim() ||
+    "";
+  let redirectHost: string | null = null;
+  let redirectPath: string | null = null;
+  if (cfg?.redirectUri) {
+    try {
+      const redirect = new URL(cfg.redirectUri);
+      redirectHost = redirect.host;
+      redirectPath = redirect.pathname;
+    } catch {
+      redirectHost = null;
+      redirectPath = null;
+    }
+  }
+  return {
+    configured: cfg != null,
+    loginPurpose: purpose,
+    appIdMasked: maskMetaNumericId(cfg?.appId),
+    loginConfigIdMasked: maskMetaNumericId(cfg?.loginConfigId),
+    facebookLoginConfigIdMasked: maskMetaNumericId(facebookConfigId || null),
+    instagramLoginConfigIdMasked: maskMetaNumericId(instagramConfigId || null),
+    redirectHost,
+    redirectPath,
+    graphVersion: cfg?.graphVersion ?? getFacebookGraphApiVersion(),
+    usingLoginConfigId: Boolean(cfg?.loginConfigId),
+    hasAppSecret: Boolean(cfg?.appSecret),
+  };
+}
+
 export function logFacebookOAuthEvent(
   event: string,
   fields: Record<string, string | number | boolean | null | undefined>,
@@ -353,7 +476,9 @@ export function logFacebookOAuthEvent(
       key.includes("token") ||
       key.includes("secret") ||
       key.includes("authorization") ||
-      key === "code"
+      key === "code" ||
+      key.includes("client_secret") ||
+      (key.endsWith("url") && key.includes("oauth"))
     ) {
       continue;
     }
