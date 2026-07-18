@@ -89,70 +89,120 @@ export function createInstagramProvider(): SocialProvider {
     },
 
     async validateConnection(): Promise<ConnectionStatus> {
-      const fb = getFacebookPagePublishConfig();
-      const resolved = await resolveInstagramPublishConfig();
-      if (resolved.ok) {
-        return {
-          provider: "instagram",
-          connected: true,
-          configured: true,
-          health: "healthy",
-          statusLabel: "connected",
-          targetRef: resolved.config.igUserId,
-          displayName: resolved.config.username
-            ? `@${resolved.config.username}`
-            : resolved.config.igUserId,
-          hint: null,
-          details: {
-            authModel: INSTAGRAM_AUTH_MODEL,
-            pageIdMasked: resolved.config.pageId
-              ? `${resolved.config.pageId.slice(0, 4)}…`
-              : null,
-            igUserIdMasked: `${resolved.config.igUserId.slice(0, 4)}…`,
-            okForPublish: true,
-          },
-        };
+      const fbResolved = await resolveFacebookPublishConfig();
+      const fbConfigured = fbResolved.ok || Boolean(getFacebookPagePublishConfig());
+
+      // Connected requires a persisted Instagram social_accounts row — not ephemeral Graph rediscovery.
+      const admin = getSupabaseAdmin();
+      if (admin) {
+        const { data: igRow } = await admin
+          .from("social_accounts")
+          .select("account_id, account_name, status, health, metadata, access_token")
+          .eq("provider", "instagram")
+          .maybeSingle();
+        if (
+          igRow?.account_id &&
+          igRow.access_token &&
+          String(igRow.access_token).startsWith("v") &&
+          igRow.status === "connected"
+        ) {
+          const meta = (igRow.metadata ?? {}) as Record<string, unknown>;
+          const username =
+            typeof meta.username === "string"
+              ? meta.username
+              : igRow.account_name?.replace(/^@/, "") ?? null;
+          const pageId =
+            typeof meta.pageId === "string"
+              ? meta.pageId
+              : fbResolved.ok
+                ? fbResolved.config.pageId
+                : null;
+          return {
+            provider: "instagram",
+            connected: true,
+            configured: true,
+            health: "healthy",
+            statusLabel: "connected",
+            targetRef: String(igRow.account_id),
+            displayName: username ? `@${username}` : String(igRow.account_id),
+            hint: null,
+            details: {
+              authModel: INSTAGRAM_AUTH_MODEL,
+              pageIdMasked: pageId ? `${pageId.slice(0, 4)}…` : null,
+              igUserIdMasked: `${String(igRow.account_id).slice(0, 4)}…`,
+              okForPublish: true,
+            },
+          };
+        }
       }
 
-      const discovered = fb
-        ? await discoverInstagramProfessionalAccount(fb.accessToken, fb.pageId)
-        : null;
+      const discovered = fbResolved.ok
+        ? await discoverInstagramProfessionalAccount(
+            fbResolved.config.accessToken,
+            fbResolved.config.pageId,
+          )
+        : getFacebookPagePublishConfig()
+          ? await discoverInstagramProfessionalAccount()
+          : null;
 
       if (
         discovered &&
         !discovered.ok &&
-        (discovered.code === "no_ig_linked" || discovered.code === "ig_unavailable")
+        (discovered.code === "no_ig_linked" ||
+          discovered.code === "ig_unavailable" ||
+          discovered.code === "permission")
       ) {
         return {
           provider: "instagram",
           connected: false,
-          configured: Boolean(fb),
-          health: "disconnected",
+          configured: fbConfigured,
+          health: discovered.code === "permission" ? "error" : "disconnected",
           statusLabel: discovered.code,
           targetRef: null,
           displayName: null,
           hint: discovered.error,
-          details: { authModel: INSTAGRAM_AUTH_MODEL, okForPublish: false },
+          details: {
+            authModel: INSTAGRAM_AUTH_MODEL,
+            okForPublish: false,
+            discoveryCode: discovered.code,
+          },
+        };
+      }
+
+      if (discovered?.ok) {
+        return {
+          provider: "instagram",
+          connected: false,
+          configured: true,
+          health: "degraded",
+          statusLabel: "action_required",
+          targetRef: discovered.igUserId,
+          displayName: discovered.username ? `@${discovered.username}` : null,
+          hint:
+            "Instagram Professional account is discoverable on the connected Facebook Page. Click Connect Instagram to persist the connection.",
+          details: {
+            authModel: INSTAGRAM_AUTH_MODEL,
+            okForPublish: false,
+            pageIdMasked: `${discovered.pageId.slice(0, 4)}…`,
+            igUserIdMasked: `${discovered.igUserId.slice(0, 4)}…`,
+            discoveryReady: true,
+          },
         };
       }
 
       return {
         provider: "instagram",
         connected: false,
-        configured: Boolean(fb),
-        health: fb ? "error" : "disconnected",
-        statusLabel: fb ? "error" : "disconnected",
+        configured: fbConfigured,
+        health: fbConfigured ? "error" : "disconnected",
+        statusLabel: fbConfigured ? "error" : "disconnected",
         targetRef: null,
         displayName: null,
-        hint:
-          resolved.ok === false
-            ? resolved.error
-            : "Connect Instagram from Connected Accounts after configuring the Facebook Page token.",
+        hint: "Connect Instagram from Connected Accounts after Facebook Page is connected.",
         details: {
           authModel: INSTAGRAM_AUTH_MODEL,
           okForPublish: false,
-          discoveryCode:
-            discovered && !discovered.ok ? discovered.code : null,
+          discoveryCode: discovered && !discovered.ok ? discovered.code : null,
         },
       };
     },
@@ -268,11 +318,45 @@ export function createInstagramProvider(): SocialProvider {
   return provider;
 }
 
-/** Connect with an explicit admin actor (API route). */
+/**
+ * Connect with an explicit admin actor (API route).
+ *
+ * Prefer Page-linked discovery via the existing Facebook Connected Account
+ * (same architecture as Graph API Explorer on the Page token). Only fall back
+ * to Instagram Login for Business OAuth when the Page token cannot discover IG
+ * (missing Instagram permissions / no linkage readable).
+ */
 export async function connectInstagramForAdmin(connectedBy: string): Promise<ConnectionResult> {
   const provider = createInstagramProvider();
 
-  // Dedicated Instagram Graph API Login for Business config → OAuth with that config_id.
+  const fbResolved = await resolveFacebookPublishConfig();
+  if (fbResolved.ok) {
+    const saved = await saveInstagramConnection({
+      connectedBy,
+      accessToken: fbResolved.config.accessToken,
+      pageId: fbResolved.config.pageId,
+    });
+    const status = await provider.validateConnection();
+    if (saved.ok) {
+      return { ok: true, authorizationUrl: null, status };
+    }
+
+    // Page token present but Graph omitted IG fields or denied permissions →
+    // upgrade scopes via Instagram Graph Login for Business when configured.
+    if (
+      (saved.code === "permission" || saved.code === "ig_unavailable") &&
+      isInstagramLoginConfigConfigured()
+    ) {
+      return {
+        ok: true,
+        authorizationUrl: "/api/oauth/facebook?purpose=instagram",
+        status,
+      };
+    }
+
+    return { ok: false, error: saved.error, status };
+  }
+
   if (isInstagramLoginConfigConfigured()) {
     return {
       ok: true,
@@ -281,8 +365,7 @@ export async function connectInstagramForAdmin(connectedBy: string): Promise<Con
     };
   }
 
-  const fbResolved = await resolveFacebookPublishConfig();
-  if (!fbResolved.ok && !getFacebookPagePublishConfig()) {
+  if (!getFacebookPagePublishConfig()) {
     return {
       ok: false,
       error:

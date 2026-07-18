@@ -22,7 +22,10 @@ import {
   parseFacebookLoginPurpose,
   redactFacebookCallbackQuery,
 } from "@/lib/oauth/metaFacebookOAuth";
-import { saveFacebookOAuthConnection } from "@/lib/promotions/facebookConnectedAccount";
+import {
+  resolveFacebookPublishConfig,
+  saveFacebookOAuthConnection,
+} from "@/lib/promotions/facebookConnectedAccount";
 import { saveInstagramConnection } from "@/lib/promotions/instagramPublish";
 import { TokenEncryptionConfigError } from "@/lib/security/tokenEncryption";
 
@@ -228,11 +231,30 @@ export async function GET(request: Request) {
 
     let instagramConnected = false;
     let instagramError: string | null = null;
-    if (purpose === "instagram" && isProviderFeatureEnabled("instagram") && !saved.needsPagePick) {
-      const ig = await saveInstagramConnection({ connectedBy: user.email });
+    // After Facebook Page persist (any purpose), try Page-linked IG discovery when
+    // Instagram is enabled and a single Page was selected — pass the Page token
+    // explicitly so we do not depend on a second DB round-trip.
+    if (isProviderFeatureEnabled("instagram") && !saved.needsPagePick) {
+      const pageCfg = await resolveFacebookPublishConfig();
+      const ig = await saveInstagramConnection({
+        connectedBy: user.email,
+        accessToken: pageCfg.ok ? pageCfg.config.accessToken : undefined,
+        pageId: pageCfg.ok ? pageCfg.config.pageId : undefined,
+      });
       if (ig.ok) {
         instagramConnected = true;
-      } else {
+        logFacebookOAuthEvent("ig_discovery_after_oauth_ok", {
+          correlationId,
+          provider: "instagram",
+          loginPurpose: purpose,
+          pageIdMasked: pageCfg.ok
+            ? `${pageCfg.config.pageId.slice(0, 4)}…`
+            : null,
+          igUserIdMasked: `${ig.igUserId.slice(0, 4)}…`,
+          usernamePresent: Boolean(ig.username),
+          actor: user.email,
+        });
+      } else if (purpose === "instagram") {
         instagramError = ig.code ?? "ig_unavailable";
         logFacebookOAuthEvent("ig_discovery_after_oauth_failed", {
           correlationId,

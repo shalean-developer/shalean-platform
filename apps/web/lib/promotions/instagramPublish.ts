@@ -44,7 +44,11 @@ export type InstagramPublishConfig = {
 
 /** Safer copy when Graph omits IG details (permissions miss vs truly unlinked). */
 export const INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE =
-  "Instagram account details could not be retrieved. Confirm the Instagram Business account is linked to this Page, then reconnect Facebook and approve Instagram permissions.";
+  "Instagram account details could not be retrieved from this Page token. Confirm the Instagram Professional account is linked to the Facebook Page, then use Connect Instagram (Page-token discovery) or reconnect Facebook with Instagram permissions approved.";
+
+/** When Graph omits IG fields on HTTP 200, the Page token often lacks Instagram scopes. */
+export const INSTAGRAM_DISCOVERY_PERMISSION_MESSAGE =
+  "The Facebook Page token could not read Instagram linkage fields. Reconnect Instagram (or Facebook) and approve instagram_basic and instagram_content_publish, then try again.";
 
 export type InstagramDiscoverResult =
   | {
@@ -83,6 +87,24 @@ function graphVersion(): string {
     process.env.WHATSAPP_GRAPH_API_VERSION?.trim() ||
     "v22.0"
   );
+}
+
+/** True when stored Facebook OAuth grant metadata omits Instagram scopes. */
+async function facebookConnectionLacksInstagramScopes(): Promise<boolean> {
+  const admin = getSupabaseAdmin();
+  if (!admin) return false;
+  const { data } = await admin
+    .from("social_accounts")
+    .select("metadata")
+    .eq("provider", "facebook")
+    .maybeSingle();
+  const meta = (data?.metadata ?? {}) as Record<string, unknown>;
+  const granted = meta.grantedPermissions;
+  if (!Array.isArray(granted) || granted.length === 0) return false;
+  const scopes = granted.map((s) => String(s).toLowerCase());
+  const hasBasic = scopes.some((s) => s.includes("instagram_basic"));
+  const hasPublish = scopes.some((s) => s.includes("instagram_content_publish"));
+  return !(hasBasic && hasPublish);
 }
 
 function graphUrl(path: string, query?: Record<string, string>): string {
@@ -237,14 +259,36 @@ export async function discoverInstagramProfessionalAccount(
 
     const ig = igBusiness?.id ? igBusiness : igConnected?.id ? igConnected : null;
     if (!ig?.id) {
-      // Graph often omits these fields when Instagram permissions are missing, which is
-      // indistinguishable from a truly unlinked Page without further probing.
+      // Graph often omits these fields when Instagram permissions are missing.
+      // Prefer a permission-oriented code when the stored Facebook grant lacks IG scopes.
+      const missingIgScopes = await facebookConnectionLacksInstagramScopes();
+      logFacebookOAuthEvent("ig_page_lookup_empty_fields", {
+        provider: "instagram",
+        pageIdMasked: maskFacebookPageId(String(json.id ?? pid)),
+        missingIgScopesInStoredGrant: missingIgScopes,
+      });
+      if (missingIgScopes) {
+        return {
+          ok: false,
+          code: "permission",
+          error: INSTAGRAM_DISCOVERY_PERMISSION_MESSAGE,
+        };
+      }
       return {
         ok: false,
         code: "ig_unavailable",
         error: INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE,
       };
     }
+
+    logFacebookOAuthEvent("ig_page_lookup_ok", {
+      provider: "instagram",
+      pageIdMasked: maskFacebookPageId(String(json.id ?? pid)),
+      igUserIdMasked: `${String(ig.id).slice(0, 4)}…`,
+      usernamePresent: Boolean(ig.username),
+      namePresent: Boolean(ig.name),
+      usedBusinessField: Boolean(igBusiness?.id),
+    });
 
     // Content Publishing API only supports professional accounts. Page-linked
     // IG User fields already exclude ordinary personal accounts.

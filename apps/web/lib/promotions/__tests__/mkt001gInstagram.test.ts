@@ -4,6 +4,7 @@ import {
   formatInstagramGraphError,
   validateInstagramImageUrl,
   INSTAGRAM_CAPTION_LIMIT,
+  INSTAGRAM_DISCOVERY_PERMISSION_MESSAGE,
   INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE,
 } from "@/lib/promotions/instagramPublish";
 import { createInstagramProvider } from "@/lib/promotions/providers/instagramProvider";
@@ -28,11 +29,12 @@ describe("MKT-001G Instagram publish helpers", () => {
 
   it("exposes safer discovery-unavailable copy for missing IG field", () => {
     expect(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE).toMatch(/could not be retrieved/i);
-    expect(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE).toMatch(/reconnect facebook/i);
-    expect(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE).toMatch(/instagram permissions/i);
+    expect(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE).toMatch(/page token/i);
+    expect(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE).toMatch(/instagram permissions|connect instagram/i);
     expect(INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE).not.toMatch(
       /no instagram professional account is linked/i,
     );
+    expect(INSTAGRAM_DISCOVERY_PERMISSION_MESSAGE).toMatch(/instagram_basic/i);
   });
 
   it("classifies Instagram failures with provider-specific recovery", () => {
@@ -259,5 +261,135 @@ describe("MKT-001H.1 Instagram discovery messaging", () => {
       name: "Shalean Connected",
       accountTypeHint: "professional",
     });
+  });
+});
+
+describe("MKT-001I Instagram connect prefers Page-token discovery", () => {
+  const prev = {
+    MARKETING_PROVIDER_INSTAGRAM: process.env.MARKETING_PROVIDER_INSTAGRAM,
+    INSTAGRAM_LOGIN_CONFIG_ID: process.env.INSTAGRAM_LOGIN_CONFIG_ID,
+    META_INSTAGRAM_LOGIN_CONFIG_ID: process.env.META_INSTAGRAM_LOGIN_CONFIG_ID,
+  };
+
+  beforeEach(() => {
+    process.env.MARKETING_PROVIDER_INSTAGRAM = "1";
+    process.env.INSTAGRAM_LOGIN_CONFIG_ID = "1951379258911441";
+    delete process.env.META_INSTAGRAM_LOGIN_CONFIG_ID;
+    vi.resetModules();
+  });
+
+  afterEach(() => {
+    for (const [k, v] of Object.entries(prev)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+    vi.doUnmock("@/lib/promotions/facebookConnectedAccount");
+    vi.doUnmock("@/lib/promotions/instagramPublish");
+    vi.resetModules();
+  });
+
+  it("persists via Facebook Page token even when Instagram LfB config is set", async () => {
+    vi.doMock("@/lib/promotions/facebookConnectedAccount", () => ({
+      resolveFacebookPublishConfig: vi.fn(async () => ({
+        ok: true,
+        source: "connected_account",
+        config: {
+          pageId: "102815532315418",
+          accessToken: "page-token",
+          graphVersion: "v22.0",
+        },
+      })),
+    }));
+    vi.doMock("@/lib/promotions/instagramPublish", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/promotions/instagramPublish")>(
+        "@/lib/promotions/instagramPublish",
+      );
+      return {
+        ...actual,
+        saveInstagramConnection: vi.fn(async (args: { pageId?: string; accessToken?: string }) => {
+          expect(args.pageId).toBe("102815532315418");
+          expect(args.accessToken).toBe("page-token");
+          return {
+            ok: true,
+            igUserId: "17841451641117006",
+            username: "shalean_cleaning_services",
+            pageId: "102815532315418",
+          };
+        }),
+        resolveInstagramPublishConfig: vi.fn(async () => ({
+          ok: true,
+          config: {
+            pageId: "102815532315418",
+            igUserId: "17841451641117006",
+            accessToken: "page-token",
+            graphVersion: "v22.0",
+            username: "shalean_cleaning_services",
+          },
+        })),
+        discoverInstagramProfessionalAccount: vi.fn(),
+        disconnectInstagramConnection: vi.fn(),
+        publishInstagramSingleImage: vi.fn(),
+        validateInstagramImageUrl: actual.validateInstagramImageUrl,
+        INSTAGRAM_AUTH_MODEL: actual.INSTAGRAM_AUTH_MODEL,
+        INSTAGRAM_CAPTION_LIMIT: actual.INSTAGRAM_CAPTION_LIMIT,
+      };
+    });
+
+    const { connectInstagramForAdmin: connect } = await import(
+      "@/lib/promotions/providers/instagramProvider"
+    );
+    const result = await connect("farai@shalean.com");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.authorizationUrl).toBeNull();
+  });
+
+  it("falls back to Instagram LfB OAuth when Page-token discovery is unavailable", async () => {
+    vi.doMock("@/lib/promotions/facebookConnectedAccount", () => ({
+      resolveFacebookPublishConfig: vi.fn(async () => ({
+        ok: true,
+        source: "connected_account",
+        config: {
+          pageId: "102815532315418",
+          accessToken: "page-token",
+          graphVersion: "v22.0",
+        },
+      })),
+    }));
+    vi.doMock("@/lib/promotions/instagramPublish", async () => {
+      const actual = await vi.importActual<typeof import("@/lib/promotions/instagramPublish")>(
+        "@/lib/promotions/instagramPublish",
+      );
+      return {
+        ...actual,
+        saveInstagramConnection: vi.fn(async () => ({
+          ok: false,
+          code: "ig_unavailable",
+          error: actual.INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE,
+        })),
+        resolveInstagramPublishConfig: vi.fn(async () => ({
+          ok: false,
+          error: actual.INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE,
+        })),
+        discoverInstagramProfessionalAccount: vi.fn(async () => ({
+          ok: false,
+          code: "ig_unavailable",
+          error: actual.INSTAGRAM_DISCOVERY_UNAVAILABLE_MESSAGE,
+        })),
+        disconnectInstagramConnection: vi.fn(),
+        publishInstagramSingleImage: vi.fn(),
+        validateInstagramImageUrl: actual.validateInstagramImageUrl,
+        INSTAGRAM_AUTH_MODEL: actual.INSTAGRAM_AUTH_MODEL,
+        INSTAGRAM_CAPTION_LIMIT: actual.INSTAGRAM_CAPTION_LIMIT,
+      };
+    });
+
+    const { connectInstagramForAdmin: connect } = await import(
+      "@/lib/promotions/providers/instagramProvider"
+    );
+    const result = await connect("farai@shalean.com");
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.authorizationUrl).toBe("/api/oauth/facebook?purpose=instagram");
   });
 });

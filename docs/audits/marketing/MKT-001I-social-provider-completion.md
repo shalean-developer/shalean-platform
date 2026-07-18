@@ -14,7 +14,7 @@
 | Provider | Connect | Persist | Publish | Final |
 | --- | --- | --- | --- | --- |
 | Facebook | **PASS** | **PASS** | **PASS** | **PASS** |
-| Instagram | BLOCKED | BLOCKED | BLOCKED | **NO-GO** |
+| Instagram | Meta PASS / Shalean remediated* | Pending retest | Pending | **NO-GO** (await staging Connect + publish) |
 | X | CODE READY | CODE READY | CODE READY | **NO-GO** (no staging credentials / dashboard session) |
 | Google Business Profile | PRIOR PARTIAL | BLOCKED | BLOCKED | **NO-GO** |
 
@@ -49,20 +49,60 @@ Page ID matches intended Page `102815532315418`. Runtime log pull for the latest
 
 ## 3. Instagram account / linkage state
 
-| Check | Result |
+### 3a. Meta gate (operator-verified) — **PASS**
+
+| Gate | Result |
 | --- | --- |
-| Architecture preference | **Reuse Facebook Page token** (`authModel=facebook_login`); dedicated LfB config `…1441` only when Connect Instagram starts purpose OAuth |
-| Staging LfB config | Instagram Graph API / User token / masked ID **`…1441`** (from H.6.3) |
-| Business Instagram assets | Meta Business Suite → Instagram accounts: **“No Instagram accounts added”** |
-| Page linked IG | Not confirmable — Business Suite **“Verification needed” → Verify account** modal blocks Connect assets / asset inspection (operator 2FA / identity) |
-| `social_accounts` Instagram row | **Absent** |
-| Code correction needed | **None** for discovery architecture; existing Page-linked discovery path is correct |
+| Instagram Professional account | PASS — `@shalean_cleaning_services` / IG ID `17841451641117006` |
+| Facebook Page linkage | PASS — Page `102815532315418` |
+| Business Portfolio ownership | PASS |
+| Meta permissions (Graph Explorer) | PASS |
+| `/me/accounts` + Page IG fields | PASS |
+
+Do **not** continue changing Meta Business settings for this defect.
+
+### 3b. Staging vs Graph Explorer comparison (redacted)
+
+| Field | Graph Explorer (verified) | Staging (runtime logs / DB) |
+| --- | --- | --- |
+| Meta App ID | (operator session) | Masked **`…5561`** (Shalean Social Publishing) |
+| OAuth scopes requested | N/A (Explorer token) | Facebook connect used LfB **`…7795`** (no classic `scope`); stored grant: `pages_show_list`, `pages_read_engagement`, `pages_manage_posts` only |
+| Graph API version | (Explorer) | **`v22.0`** |
+| Facebook Page ID | `102815532315418` | `102815532315418` (matched) |
+| Selected Page ID | same | same |
+| `instagram_business_account` | Present | **11:19Z:** omitted on HTTP 200; **11:48Z:** present (`1784…`) |
+| Instagram Business Account ID | `17841451641117006` | Masked `1784…` at 11:48Z (match prefix) |
+| Username | `shalean_cleaning_services` | Not persisted (no IG row) |
+| Detail endpoint status | PASS | Page lookup HTTP 200 when linkage readable |
+| Persistence result | N/A | **FAIL** — no `social_accounts` Instagram row |
+| Final provider classification | N/A | UI showed recovery / “could not be retrieved” before Meta linkage; after 11:48 discovery worked but Connect forced a second OAuth |
+
+### 3c. Root cause (Shalean) — proven
+
+1. **Misleading empty-fields path:** Early staging discovery used the Connected Accounts Page token; Graph returned HTTP **200** with Page name but **omitted** IG fields (pre-linkage / grant gap) → generic `ig_unavailable` copy.
+2. **Connect always forced Instagram LfB OAuth** whenever `INSTAGRAM_LOGIN_CONFIG_ID` (`…1441`) was set, **even when Page-token discovery already succeeded** at 11:48Z. That skipped `saveInstagramConnection` persistence and redirected to Meta (`oauth_started` purpose=instagram) instead of writing the IG row.
+3. **Callback** called `saveInstagramConnection({ connectedBy })` without passing the Page token/pageId (DB round-trip only).
+4. **`validateConnection`** could treat ephemeral rediscovery as “connected” without a persisted row; env-only rediscovery also produced a secondary Graph **190** when fallback tokens were stale.
+
+### 3d. Remediation (this branch)
+
+- Prefer **Page-token discovery + encrypt/persist** on Connect Instagram; fall back to Instagram LfB OAuth only on `permission` / `ig_unavailable`.
+- OAuth callback passes Page token/pageId into `saveInstagramConnection`; also attempts IG persist after Facebook connect when a single Page is selected.
+- Connected status requires a **persisted** Instagram row (`v2:` token); discoverable-but-not-saved → `action_required`.
+- Clearer permission vs unavailable messaging + redacted `ig_page_lookup_ok` / empty-fields diagnostics.
 
 ---
 
 ## 4. Instagram publishing result
 
-**Not run.** No Instagram Professional account is present as a Business asset, and Meta account verification blocks further asset linking. One discovery/publish attempt was intentionally deferred until linkage is proven (avoids useless Graph retries).
+**Pending staging retest** after this remediation deploys:
+
+1. Ensure `MARKETING_PROVIDER_INSTAGRAM=1` on Preview.
+2. Click **Connect Instagram** once (should persist without a second Meta dialog when Page discovery works).
+3. Expect row: Page `102815532315418`, IG `17841451641117006`, `@shalean_cleaning_services`.
+4. One controlled staging image post; record provider media ID.
+
+Until that publish succeeds, Instagram Final remains **NO-GO**.
 
 ---
 
