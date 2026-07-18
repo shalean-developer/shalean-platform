@@ -10,7 +10,9 @@ import {
   supabaseRefFromUrl,
 } from "@/lib/env/deploymentEnvironment";
 import {
+  getFacebookEnvAliasPresence,
   getFacebookOAuthIdentity,
+  isFacebookLoginConfigReady,
   isFacebookOAuthConfigured,
 } from "@/lib/oauth/metaFacebookOAuth";
 import { getMarketingOAuthEncryptionHealth } from "@/lib/security/tokenEncryption";
@@ -72,9 +74,13 @@ export function GET(): Response {
         process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim() ||
           process.env.META_INSTAGRAM_LOGIN_CONFIG_ID?.trim(),
       ),
+      // Fail-closed readiness for Login for Business (no classic scope fallback).
+      facebookLoginConfigReady: isFacebookLoginConfigReady("facebook"),
+      instagramLoginConfigReady: isFacebookLoginConfigReady("instagram"),
       // Redacted Meta identity for staging env/app mismatch diagnosis (no secrets).
       facebook: getFacebookOAuthIdentity("facebook"),
       instagram: getFacebookOAuthIdentity("instagram"),
+      envAliasPresence: getFacebookEnvAliasPresence(),
       gitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
       encryptionConfigured: oauthEncryption.configured,
       encryptionPreferredKeyPresent: oauthEncryption.preferredKeyPresent,

@@ -98,6 +98,8 @@ type Payload = {
 const ERROR_MESSAGES: Record<string, string> = {
   oauth_not_configured:
     "OAuth env vars are missing. For Google set GOOGLE_CLIENT_*; for Facebook set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI.",
+  login_config_missing:
+    "Login for Business configuration ID is missing. Set FACEBOOK_LOGIN_CONFIG_ID (Facebook) or INSTAGRAM_LOGIN_CONFIG_ID (Instagram) on staging Preview and redeploy. Classic scope-only OAuth is blocked.",
   oauth_denied: "Connection was cancelled or denied.",
   oauth_permissions_error:
     "Meta denied permissions (Login for Business). Confirm the app is Live, the Login configuration includes the required Page/Instagram permissions and assets, then try Connect again.",

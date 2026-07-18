@@ -13,11 +13,14 @@ import {
   hashOAuthState,
   isFacebookEnvTokenFallbackAllowed,
   isFacebookPageEligibleForPublish,
+  isFacebookLoginConfigReady,
   isInstagramLoginConfigConfigured,
+  getFacebookEnvAliasPresence,
   logFacebookOAuthEvent,
   maskFacebookPageId,
   maskMetaNumericId,
   classifyFacebookOAuthProviderError,
+  parseFacebookLoginPurpose,
   redactFacebookAuthUrl,
   redactFacebookCallbackQuery,
 } from "@/lib/oauth/metaFacebookOAuth";
@@ -172,8 +175,55 @@ describe("MKT-001H metaFacebookOAuth", () => {
     expect(JSON.stringify(fbIdentity)).not.toContain("1111222233334444");
 
     delete process.env.INSTAGRAM_LOGIN_CONFIG_ID;
-    expect(getFacebookOAuthConfig("instagram")?.loginConfigId).toBe("1000000000000001");
+    // Instagram must not fall back to the Facebook General config (purpose mixing).
+    expect(getFacebookOAuthConfig("instagram")?.loginConfigId).toBeNull();
     expect(isInstagramLoginConfigConfigured()).toBe(false);
+    expect(isFacebookLoginConfigReady("instagram")).toBe(false);
+    expect(isFacebookLoginConfigReady("facebook")).toBe(true);
+  });
+
+  it("fails closed when Login for Business config id is absent", () => {
+    process.env.FACEBOOK_APP_ID = "1111222233334444";
+    process.env.FACEBOOK_APP_SECRET = "secret1";
+    process.env.FACEBOOK_REDIRECT_URI = STAGING_REDIRECT;
+    expect(getFacebookOAuthConfig("facebook")?.loginConfigId).toBeNull();
+    expect(isFacebookLoginConfigReady("facebook")).toBe(false);
+    expect(isFacebookLoginConfigReady("instagram")).toBe(false);
+    // Classic authorize shape still builds for unit coverage — start route must refuse it.
+    const classic = buildFacebookAuthUrl(
+      {
+        appId: "1111222233334444",
+        appSecret: "secret1",
+        redirectUri: STAGING_REDIRECT,
+        graphVersion: "v22.0",
+        loginConfigId: null,
+        loginPurpose: "facebook",
+      },
+      "state",
+    );
+    const redacted = redactFacebookAuthUrl(classic);
+    expect(redacted.hasConfigId).toBe(false);
+    expect(redacted.hasScope).toBe(true);
+  });
+
+  it("preserves purpose through parse and surfaces duplicate env alias risk", () => {
+    expect(parseFacebookLoginPurpose(null)).toBe("facebook");
+    expect(parseFacebookLoginPurpose("instagram")).toBe("instagram");
+    expect(parseFacebookLoginPurpose("Instagram")).toBe("instagram");
+    expect(parseFacebookLoginPurpose("facebook")).toBe("facebook");
+
+    process.env.FACEBOOK_APP_ID = "1111222233334444";
+    process.env.META_APP_ID = "9999888877776666";
+    process.env.FACEBOOK_LOGIN_CONFIG_ID = "1000000000000001";
+    process.env.META_FACEBOOK_LOGIN_CONFIG_ID = "stale-config";
+    process.env.INSTAGRAM_LOGIN_CONFIG_ID = "2000000000000002";
+    process.env.META_INSTAGRAM_LOGIN_CONFIG_ID = "stale-ig";
+    const aliases = getFacebookEnvAliasPresence();
+    expect(aliases.duplicateAppIdAliasRisk).toBe(true);
+    expect(aliases.duplicateFacebookConfigAliasRisk).toBe(true);
+    expect(aliases.duplicateInstagramConfigAliasRisk).toBe(true);
+    expect(JSON.stringify(aliases)).not.toContain("1111222233334444");
+    expect(JSON.stringify(aliases)).not.toContain("stale");
   });
 
   it("does not fall back to stale META_* app id when FACEBOOK_APP_ID is set", () => {
