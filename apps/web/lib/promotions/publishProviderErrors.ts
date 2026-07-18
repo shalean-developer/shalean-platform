@@ -88,6 +88,9 @@ function recoveryFor(
       if (provider === "instagram") {
         return "Reconnect Instagram from Connected Accounts (Page-linked professional account + valid Page token).";
       }
+      if (provider === "x") {
+        return "Reconnect X from Connected Accounts (OAuth 2.0 PKCE).";
+      }
       return "Reconnect Facebook from Connected Accounts (OAuth). Env Page tokens are emergency/local fallback only.";
     case "permission":
       if (provider === "google_business") {
@@ -96,6 +99,9 @@ function recoveryFor(
       if (provider === "instagram") {
         return "Reconnect Facebook from Connected Accounts and approve instagram_basic and instagram_content_publish. Confirm the Instagram Business account is linked to the selected Page.";
       }
+      if (provider === "x") {
+        return "Reconnect X and approve tweet.write, or confirm the X developer app has write / suitable API product access.";
+      }
       return "Reconnect Facebook and grant pages_manage_posts + pages_read_engagement, or select a Page with CREATE_CONTENT/MANAGE.";
     case "not_found":
       if (provider === "google_business") {
@@ -103,6 +109,9 @@ function recoveryFor(
       }
       if (provider === "instagram") {
         return "Verify the Instagram professional account is still linked to the selected Facebook Page.";
+      }
+      if (provider === "x") {
+        return "Verify the connected X account still exists, or reconnect.";
       }
       return "Verify the connected Facebook Page still exists, or reconnect and select the correct Page.";
     case "conflict":

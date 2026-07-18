@@ -16,6 +16,8 @@ import {
 } from "@/lib/google-business";
 import { isGoogleOAuthConfigured } from "@/lib/oauth/googleBusinessOAuth";
 import { isFacebookOAuthConfigured, isFacebookEnvTokenFallbackAllowed } from "@/lib/oauth/metaFacebookOAuth";
+import { isXOAuthConfigured } from "@/lib/oauth/xOAuth";
+import { disconnectXConnection, getXConnectionPublic } from "@/lib/promotions/xPublish";
 import { getProviderRegistry } from "@/lib/promotions/providers";
 import type { ProviderKey } from "@/lib/promotions/providers/types";
 
@@ -60,6 +62,7 @@ export async function GET(request: Request) {
   const fbPublic = await getFacebookConnectionPublic();
   const fbDiag = await diagnoseFacebookPagePublishConfig();
   const gbp = await getGoogleBusinessConnectionPublic();
+  const xPublic = await getXConnectionPublic();
   const registry = getProviderRegistry();
 
   const admin = getSupabaseAdmin();
@@ -230,6 +233,46 @@ export async function GET(request: Request) {
       continue;
     }
 
+    if (key === "x") {
+      if (!entry.enabled) {
+        platforms.push({
+          id: "x",
+          label: entry.provider.displayName,
+          available: false,
+          connected: false,
+          status: "disabled",
+          health: "unknown",
+          detail:
+            "X is disabled by feature flag (MARKETING_PROVIDER_X). Enable only after staging OAuth + publish verification.",
+          lastSync: null,
+          lastPublishAt: null,
+          oauthConfigured: isXOAuthConfigured(),
+          ...baseMeta,
+          publishEnabled: false,
+        });
+        continue;
+      }
+
+      const status = await entry.provider.validateConnection();
+      platforms.push({
+        id: "x",
+        label: entry.provider.displayName,
+        available: entry.enabled,
+        connected: status.connected && xPublic.connected,
+        status: status.statusLabel,
+        health: status.health,
+        detail: status.hint ?? xPublic.lastError,
+        lastSync: xPublic.lastSync,
+        lastPublishAt: xPublic.lastPublishAt,
+        accountName: status.displayName ?? xPublic.accountName,
+        locationName: xPublic.username ? `@${xPublic.username}` : xPublic.userIdMasked,
+        lastError: xPublic.lastError,
+        oauthConfigured: isXOAuthConfigured(),
+        ...baseMeta,
+      });
+      continue;
+    }
+
     platforms.push({
       id: key,
       label: entry.provider.displayName,
@@ -263,6 +306,7 @@ export async function GET(request: Request) {
     oauth: {
       googleConfigured: isGoogleOAuthConfigured(),
       facebookConfigured: isFacebookOAuthConfigured(),
+      xConfigured: isXOAuthConfigured(),
     },
     history,
     ops: {
@@ -332,6 +376,12 @@ export async function POST(request: Request) {
 
   if (action === "disconnect_facebook") {
     const result = await disconnectFacebookConnection({ actor: auth.email });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "disconnect_x") {
+    const result = await disconnectXConnection({ actor: auth.email });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({ ok: true });
   }

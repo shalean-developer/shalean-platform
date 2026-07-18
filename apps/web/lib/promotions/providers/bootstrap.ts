@@ -7,6 +7,7 @@ import "server-only";
 import { createFacebookProvider } from "@/lib/promotions/providers/facebookProvider";
 import { createGoogleBusinessProvider } from "@/lib/promotions/providers/googleBusinessProvider";
 import { createInstagramProvider } from "@/lib/promotions/providers/instagramProvider";
+import { createXProvider } from "@/lib/promotions/providers/xProvider";
 import { createStubProvider } from "@/lib/promotions/providers/stubProvider";
 import {
   createEmptyProviderRegistry,
@@ -23,9 +24,9 @@ export function bootstrapProviderRegistry(): ProviderRegistry {
   registry.register(createFacebookProvider());
   registry.register(createGoogleBusinessProvider());
   registry.register(createInstagramProvider());
+  registry.register(createXProvider());
   registry.register(createStubProvider({ key: "linkedin", displayName: "LinkedIn" }));
   registry.register(createStubProvider({ key: "pinterest", displayName: "Pinterest" }));
-  registry.register(createStubProvider({ key: "x", displayName: "X" }));
 
   bootstrapped = registry;
   setProviderRegistryForTests(registry);

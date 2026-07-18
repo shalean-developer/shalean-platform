@@ -97,7 +97,7 @@ type Payload = {
 
 const ERROR_MESSAGES: Record<string, string> = {
   oauth_not_configured:
-    "OAuth env vars are missing. For Google set GOOGLE_CLIENT_*; for Facebook set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI.",
+    "OAuth env vars are missing. For Google set GOOGLE_CLIENT_*; for Facebook set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI; for X set X_CLIENT_ID, X_CLIENT_SECRET, and X_REDIRECT_URI.",
   login_config_missing:
     "Login for Business configuration ID is missing. Set FACEBOOK_LOGIN_CONFIG_ID (Facebook) or INSTAGRAM_LOGIN_CONFIG_ID (Instagram) on staging Preview and redeploy. Classic scope-only OAuth is blocked.",
   oauth_denied: "Connection was cancelled or denied.",
@@ -106,9 +106,12 @@ const ERROR_MESSAGES: Record<string, string> = {
   oauth_failed: "OAuth failed. Try again or check provider credentials.",
   invalid_state: "OAuth state validation failed. Please start Connect again.",
   missing_code: "The provider did not return an authorization code.",
+  missing_verifier: "OAuth PKCE verifier was missing. Start Connect X again from Connected Accounts.",
   forbidden: "You must be signed in as an admin to connect this account.",
   save_failed: "Connected but saving the account failed.",
   provider_disabled: "This provider is disabled by feature flag.",
+  encryption_config:
+    "Token encryption is not configured. Set MARKETING_OAUTH_ENCRYPTION_KEY on staging.",
 };
 
 function formatWhen(iso: string | null | undefined): string {
@@ -338,6 +341,37 @@ export function ConnectedAccountsPanel() {
           : "Instagram connected.",
         "success",
       );
+      await load();
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function connectX() {
+    // Full document navigation so PKCE verifier + state cookies stick on the redirect.
+    setBusy("x_connect");
+    window.location.assign("/api/oauth/x");
+  }
+
+  async function disconnectX() {
+    if (
+      !window.confirm(
+        "Disconnect X? Future posting will be blocked until you reconnect. Publish history is retained.",
+      )
+    ) {
+      return;
+    }
+    setBusy("x_disconnect");
+    try {
+      const res = await adminFetch<{ ok: boolean }>("/api/admin/social-accounts", {
+        method: "POST",
+        body: JSON.stringify({ action: "disconnect_x" }),
+      });
+      if (res.error) {
+        emitAdminToast(res.error, "error");
+        return;
+      }
+      emitAdminToast("X disconnected.", "success");
       await load();
     } finally {
       setBusy(null);
@@ -790,6 +824,50 @@ export function ConnectedAccountsPanel() {
                 ) : (
                   <p className="text-xs text-slate-500">
                     Provider flag is off — intentionally disabled, not failed.
+                  </p>
+                )}
+              </div>
+            ) : p.id === "x" ? (
+              <div className="mt-4 space-y-3">
+                <p className="text-xs text-slate-500">
+                  X uses <strong>OAuth 2.0 Authorization Code with PKCE</strong> (user context). Text
+                  posts only in this release. Enable{" "}
+                  <code className="font-mono">MARKETING_PROVIDER_X=1</code> after staging credentials
+                  and API product access are verified.
+                </p>
+                {p.providerEnabled ? (
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      disabled={busy === "x_connect"}
+                      onClick={() => void connectX()}
+                    >
+                      {busy === "x_connect" ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Link2 className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      {p.connected ? "Reconnect X" : "Connect X"}
+                    </Button>
+                    {p.connected ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={busy === "x_disconnect"}
+                        onClick={() => void disconnectX()}
+                      >
+                        {busy === "x_disconnect" ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Unplug className="mr-1.5 h-3.5 w-3.5" />
+                        )}
+                        Disconnect
+                      </Button>
+                    ) : null}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    Provider flag is off — Connect is unavailable and publish stays blocked.
                   </p>
                 )}
               </div>
