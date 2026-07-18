@@ -9,7 +9,10 @@ import {
   resolveDeploymentEnvironment,
   supabaseRefFromUrl,
 } from "@/lib/env/deploymentEnvironment";
-import { isFacebookOAuthConfigured } from "@/lib/oauth/metaFacebookOAuth";
+import {
+  getFacebookOAuthIdentity,
+  isFacebookOAuthConfigured,
+} from "@/lib/oauth/metaFacebookOAuth";
 import { getMarketingOAuthEncryptionHealth } from "@/lib/security/tokenEncryption";
 
 export const runtime = "nodejs";
@@ -69,6 +72,10 @@ export function GET(): Response {
         process.env.INSTAGRAM_LOGIN_CONFIG_ID?.trim() ||
           process.env.META_INSTAGRAM_LOGIN_CONFIG_ID?.trim(),
       ),
+      // Redacted Meta identity for staging env/app mismatch diagnosis (no secrets).
+      facebook: getFacebookOAuthIdentity("facebook"),
+      instagram: getFacebookOAuthIdentity("instagram"),
+      gitSha: process.env.VERCEL_GIT_COMMIT_SHA ?? null,
       encryptionConfigured: oauthEncryption.configured,
       encryptionPreferredKeyPresent: oauthEncryption.preferredKeyPresent,
       encryptionPreferredKeyLooksHex64: oauthEncryption.preferredKeyLooksHex64,
