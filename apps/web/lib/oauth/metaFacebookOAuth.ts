@@ -153,20 +153,21 @@ export function buildFacebookAuthUrl(cfg: FacebookOAuthConfig, state: string): s
   url.searchParams.set("redirect_uri", cfg.redirectUri);
   url.searchParams.set("state", state);
   url.searchParams.set("response_type", "code");
-  // Re-prompt so reconnect can grant missing permissions.
-  url.searchParams.set("auth_type", "rerequest");
 
-  // Facebook Login for Business: permissions live on the dashboard configuration.
-  // Do not also pass raw Instagram scopes here — that triggers "Invalid Scopes"
-  // when those permissions are not enabled on the Meta app.
-  // Never combine config_id + scope — Meta rejects / misroutes that hybrid.
+  // Facebook Login for Business: permissions / token type live on the dashboard
+  // configuration. config_id replaces scope. Do not also send classic scope or
+  // auth_type — Meta's business-extension dialog fails with a generic
+  // "Sorry, something went wrong" when those are combined with config_id.
   if (cfg.loginConfigId) {
     url.searchParams.set("config_id", cfg.loginConfigId);
-    // Required when response_type=code for Login for Business (esp. code grant).
+    // Required when response_type=code for Login for Business code grant.
     url.searchParams.set("override_default_response_type", "true");
-  } else {
-    url.searchParams.set("scope", FACEBOOK_OAUTH_SCOPE);
+    return url.toString();
   }
+
+  // Classic Facebook Login: Page scopes + rerequest so reconnect can grant missing perms.
+  url.searchParams.set("scope", FACEBOOK_OAUTH_SCOPE);
+  url.searchParams.set("auth_type", "rerequest");
   return url.toString();
 }
 

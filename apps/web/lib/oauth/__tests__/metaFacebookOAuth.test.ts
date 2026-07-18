@@ -107,14 +107,14 @@ describe("MKT-001H metaFacebookOAuth", () => {
     const parsed = new URL(url);
     expect(parsed.searchParams.get("config_id")).toBe("cfg-instagram-pages");
     expect(parsed.searchParams.get("scope")).toBeNull();
-    expect(parsed.searchParams.get("auth_type")).toBe("rerequest");
+    expect(parsed.searchParams.get("auth_type")).toBeNull();
     expect(parsed.searchParams.get("override_default_response_type")).toBe("true");
     expect(parsed.searchParams.get("response_type")).toBe("code");
     expect(parsed.searchParams.has("business_id")).toBe(false);
     expect(parsed.searchParams.has("extras")).toBe(false);
   });
 
-  it("never combines classic scope with Login for Business config_id", () => {
+  it("never combines classic scope or auth_type with Login for Business config_id", () => {
     const withConfig = buildFacebookAuthUrl(
       {
         appId: "1111222233334444",
@@ -126,9 +126,13 @@ describe("MKT-001H metaFacebookOAuth", () => {
       },
       "state-abc",
     );
+    const parsed = new URL(withConfig);
+    expect(parsed.searchParams.get("auth_type")).toBeNull();
+    expect(parsed.searchParams.get("scope")).toBeNull();
     const redacted = redactFacebookAuthUrl(withConfig);
     expect(redacted.hasConfigId).toBe(true);
     expect(redacted.hasScope).toBe(false);
+    expect(redacted.authType).toBeNull();
     expect(redacted.incompatibleLoginForBusinessCombo).toBe(false);
     expect(redacted.scopeNames).toEqual([]);
     expect(redacted.clientIdMasked).toBe("…4444");
