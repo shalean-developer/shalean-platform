@@ -3,10 +3,11 @@
 **Feature:** Facebook Connected Accounts OAuth  
 **Branch:** `feature/mkt-001h-facebook-connected-accounts-oauth` (+ **MKT-001H.1** Instagram scope remediation)  
 **Target environment:** staging only  
-**Status:** CONDITIONAL PASS — Instagram discovery blocked until H.1 reconnect  
-**Date opened:** 2026-07-17
+**Status:** Facebook **PASS** (staging). Instagram **pending** (MKT-001I).  
+**Date opened:** 2026-07-17  
+**Updated:** 2026-07-18 (MKT-001I)
 
-> **Governance (MKT-001H.1):** Facebook OAuth **PASS**. Instagram discovery **BLOCKED** until staging deploy of Instagram OAuth scopes + admin disconnect/reconnect with Instagram permissions approved. Production / `main` **NO-GO**. See `MKT-001H.1-instagram-oauth-scope-remediation.md`.
+> **Governance (MKT-001I):** Facebook Connected Accounts OAuth + encrypted persist + Page publish **PASS** on staging (`response_id=102815532315418_1074436751809475`). Instagram remains **BLOCKED** until Professional account is linked in Meta Business Suite. Production / `main` **NO-GO**. See `MKT-001I-social-provider-completion.md`.
 
 ---
 
