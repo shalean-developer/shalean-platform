@@ -154,7 +154,11 @@ export async function GET(request: Request) {
       const { reason } = classifyFacebookSaveError(saved.error);
       const stage: FacebookCallbackFailureStage =
         saved.failureStage ??
-        (reason === "encryption_not_configured" ? "encrypt" : "upsert");
+        (reason === "encryption_not_configured"
+          ? "encrypt"
+          : reason === "no_pages" || reason === "no_eligible_pages"
+            ? "page_discovery"
+            : "upsert");
       logFacebookOAuthEvent("callback_failed", {
         correlationId,
         provider: "facebook",
