@@ -47,4 +47,17 @@ No application source changes.
 
 ## GitHub CI
 
-Record run URL / conclusions after draft PR checks complete.
+| Check | Result | URL |
+|-------|--------|-----|
+| `web-test` / vitest | **SUCCESS** (5m13s) | https://github.com/shalean-developer/shalean-platform/actions/runs/29781856938 |
+| Production dependency audit (high+) | **PASS** (step within vitest) | same run |
+| migration-governance | **PASS** | https://github.com/shalean-developer/shalean-platform/actions/runs/29781856969 |
+| Vercel preview | **PASS** | https://vercel.com/shalean-cleaning-services/shalean-platform/AB59KSESDGLDegeHvyzH1ENNEoi4 |
+| GitGuardian | **PASS** | dashboard |
+
+**Draft PR:** https://github.com/shalean-developer/shalean-platform/pull/77  
+**Commit:** `213f3b0d`
+
+### Decision
+
+Dependency-audit CI restoration is **complete**. Moderate `postcss` (Next nested) remains by design. Ready for human review / merge authorization (separate from PAYOUT-E2E-001 PR #76).
