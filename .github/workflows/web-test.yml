@@ -15,6 +15,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # Build/crawl the exact PR head (not the ephemeral merge ref).
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
 
       - name: Detect whether web / package paths changed
         id: filter
@@ -52,6 +54,17 @@ jobs:
           echo "web-test: no-op success (documentation or unrelated paths only)."
           echo "Required check context 'vitest' reports terminal success without running expensive steps."
 
+      - name: Confirm checkout SHA equals PR head
+        if: github.event_name == 'pull_request' && steps.filter.outputs.run_suite == 'true'
+        working-directory: .
+        run: |
+          set -euo pipefail
+          GOT="$(git rev-parse HEAD)"
+          WANT="${{ github.event.pull_request.head.sha }}"
+          echo "checkout=$GOT"
+          echo "pr_head=$WANT"
+          test "$GOT" = "$WANT"
+
       - uses: actions/setup-node@v4
         if: steps.filter.outputs.run_suite == 'true'
         with:
@@ -82,6 +95,18 @@ jobs:
           lib/cron/__tests__/h15CronLockOverlapPrevention.test.ts
           lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts
 
+      - name: Focused marketing / Meta compliance unit tests
+        if: steps.filter.outputs.run_suite == 'true'
+        run: >-
+          npm run test --
+          lib/marketing/__tests__/marketingAreaLinks.test.ts
+          lib/meta/__tests__/dataDeletion.test.ts
+          lib/meta/__tests__/complianceRoutes.contract.test.ts
+          lib/seo/__tests__/locationsShortSlugProxyRedirect.test.ts
+          app/api/meta/data-deletion/__tests__/route.test.ts
+          lib/oauth/__tests__/metaFacebookOAuth.test.ts
+          lib/promotions/providers/__tests__/registry.test.ts
+
       - name: Blog route governance
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run validate:blog-routes && npm run audit:internal-links && npm run validate:cms-blog-links
@@ -102,22 +127,76 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run report:canonical-purity
 
-      - name: Live SEO validation
+      - name: Live SEO validation (production site health)
         if: steps.filter.outputs.run_suite == 'true'
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
           LIVE_SEO_EXTENDED: ${{ vars.LIVE_SEO_EXTENDED || '1' }}
         run: npm run validate:live-seo
 
-      - name: Live internal link crawl
-        if: steps.filter.outputs.run_suite == 'true'
-        env:
-          AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
-        run: npm run validate:live-internal-links
-
-      - name: Search Console readiness
+      - name: Search Console readiness (production site health)
         if: steps.filter.outputs.run_suite == 'true'
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
           REQUIRE_GSC_VERIFICATION: ${{ vars.REQUIRE_GSC_VERIFICATION || '0' }}
         run: npm run validate:search-console-readiness
+
+      # --- PR-only: crawl the proposed build on localhost (breaks prod↔CI circular gate) ---
+      - name: Write CI build SHA for PR crawl proof
+        if: github.event_name == 'pull_request' && steps.filter.outputs.run_suite == 'true'
+        run: |
+          set -euo pipefail
+          echo -n "${{ github.event.pull_request.head.sha }}" > public/ci-build-sha.txt
+          echo "Wrote public/ci-build-sha.txt=$(cat public/ci-build-sha.txt)"
+
+      - name: Production Next.js build (PR crawl target)
+        if: github.event_name == 'pull_request' && steps.filter.outputs.run_suite == 'true'
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          FACEBOOK_APP_ID: ci-test-app-id
+          FACEBOOK_APP_SECRET: ci-meta-data-deletion-test-secret
+        run: node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build
+
+      - name: Start production Next.js server
+        if: github.event_name == 'pull_request' && steps.filter.outputs.run_suite == 'true'
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          FACEBOOK_APP_ID: ci-test-app-id
+          FACEBOOK_APP_SECRET: ci-meta-data-deletion-test-secret
+        run: |
+          set -euo pipefail
+          nohup npm run start -- -H 127.0.0.1 -p 3000 > /tmp/next-start.log 2>&1 &
+          echo $! > /tmp/next.pid
+          for i in $(seq 1 90); do
+            if curl -sf "http://127.0.0.1:3000/api/health" >/dev/null; then
+              echo "Server ready after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Server failed to become ready"
+          cat /tmp/next-start.log || true
+          exit 1
+
+      - name: PR-build live internal link crawl
+        if: github.event_name == 'pull_request' && steps.filter.outputs.run_suite == 'true'
+        env:
+          AUDIT_BASE_URL: http://127.0.0.1:3000
+        run: |
+          set -euo pipefail
+          echo "Crawling proposed PR build (not production)"
+          echo "PR head: ${{ github.event.pull_request.head.sha }}"
+          npm run validate:live-internal-links
+
+      - name: PR-build location + compliance route matrix
+        if: github.event_name == 'pull_request' && steps.filter.outputs.run_suite == 'true'
+        env:
+          AUDIT_BASE_URL: http://127.0.0.1:3000
+          EXPECTED_GIT_SHA: ${{ github.event.pull_request.head.sha }}
+          FACEBOOK_APP_SECRET: ci-meta-data-deletion-test-secret
+        run: npm run validate:pr-build-routes
+
+      - name: Stop production Next.js server
+        if: always() && github.event_name == 'pull_request' && steps.filter.outputs.run_suite == 'true'
+        run: |
+          if [ -f /tmp/next.pid ]; then kill "$(cat /tmp/next.pid)" || true; fi

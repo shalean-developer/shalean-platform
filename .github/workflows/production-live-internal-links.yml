@@ -1,0 +1,46 @@
+name: production-live-internal-links
+
+# Post-deployment production smoke — crawls live https://shalean.co.za.
+# Not used as the sole PR gate for unreleased code (see web-test PR localhost crawl).
+on:
+  workflow_dispatch:
+    inputs:
+      audit_base_url:
+        description: "Origin to crawl (default production)"
+        required: false
+        default: "https://shalean.co.za"
+  # After merges land on main; run once Vercel Production for this SHA is live.
+  # Re-run via workflow_dispatch if the first attempt races the deploy.
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/**"
+      - "packages/**"
+      - ".github/workflows/production-live-internal-links.yml"
+      - ".github/workflows/web-test.yml"
+
+jobs:
+  production-live-links:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Live internal link crawl (production)
+        env:
+          AUDIT_BASE_URL: ${{ github.event_name == 'workflow_dispatch' && inputs.audit_base_url || vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
+        run: |
+          echo "Production live-link smoke against ${AUDIT_BASE_URL}"
+          echo "Commit under test: ${{ github.sha }}"
+          npm run validate:live-internal-links

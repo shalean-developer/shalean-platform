@@ -51,6 +51,10 @@ https://github.com/shalean-developer/shalean-platform/pull/71 (draft, head = rem
 
 Local verification on this commit: focused marketing/meta/provider tests PASS; `npm run typecheck` PASS.
 
+### CI architecture fix (circular gate break)
+
+PR `#71` follow-up moves **pull-request** live-link validation to a **localhost production Next.js build** of the exact PR head (`validate:live-internal-links` + `validate:pr-build-routes`). Production crawling remains in `production-live-internal-links.yml` (workflow_dispatch / push to `main`) and is no longer the sole PR gate for unreleased redirects.
+
 ---
 
 ## 2. Live-link defects and fixes

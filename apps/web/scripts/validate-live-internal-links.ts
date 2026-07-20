@@ -2,6 +2,9 @@
  * Live internal-link audit — crawls rendered HTML on key indexable pages.
  *
  * Requires AUDIT_BASE_URL (defaults to https://shalean.co.za).
+ * For pull requests, CI sets AUDIT_BASE_URL to the local production build
+ * (http://127.0.0.1:3000). Production origin crawling is
+ * `.github/workflows/production-live-internal-links.yml`.
  *
  * `npm run validate:live-internal-links`
  *
