@@ -209,8 +209,10 @@ COMMIT;
 -- ---------------------------------------------------------------------------
 -- Primary sub-daily worker via Supabase pg_cron (Vercel Hobby is daily-only).
 -- Safe if pg_cron / invoke_nextjs_cron are absent (notice + skip).
+-- Distinct dollar-quote tags required: nested $$ reuse is invalid Postgres.
+-- Historical reproducibility correction (MKT-001M.1) — behaviour unchanged.
 -- ---------------------------------------------------------------------------
-DO $$
+DO $do$
 DECLARE
   r record;
 BEGIN
@@ -235,7 +237,7 @@ BEGIN
   PERFORM cron.schedule(
     'social-publish-jobs',
     '*/5 * * * *',
-    $$select public.invoke_nextjs_cron('/api/cron/process-social-publish-jobs');$$
+    $cron$select public.invoke_nextjs_cron('/api/cron/process-social-publish-jobs');$cron$
   );
 END
-$$;
+$do$;
