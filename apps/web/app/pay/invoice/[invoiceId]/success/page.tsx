@@ -6,10 +6,11 @@ import { useParams, useSearchParams } from "next/navigation";
 
 import { GuestDocumentFooter } from "@/components/public/GuestDocumentFooter";
 
-type Phase = "missing" | "finalizing" | "paid" | "failed";
+type Phase = "missing" | "finalizing" | "paid" | "partial" | "quarantined" | "failed";
 
 async function verifyMonthlyInvoicePayment(reference: string): Promise<{
   ok: boolean;
+  outcome?: "paid" | "partial" | "quarantined";
   error?: string;
 }> {
   const res = await fetch("/api/paystack/verify", {
@@ -24,12 +25,20 @@ async function verifyMonthlyInvoicePayment(reference: string): Promise<{
     state?: string;
     error?: string;
   };
+  const state = typeof data.state === "string" ? data.state : "";
+  if (res.ok && state === "monthly_invoice_amount_mismatch_quarantined") {
+    return { ok: false, outcome: "quarantined" };
+  }
+  if (res.ok && (data.success || data.ok) && state === "monthly_invoice_partial") {
+    return { ok: true, outcome: "partial" };
+  }
   const paid =
     res.ok &&
     (data.success || data.ok) &&
     (Boolean(data.monthlyInvoiceId) ||
-      (typeof data.state === "string" && data.state.startsWith("monthly_invoice")));
-  if (paid) return { ok: true };
+      state === "monthly_invoice_settled" ||
+      state === "monthly_invoice_already_processed");
+  if (paid) return { ok: true, outcome: "paid" };
   return { ok: false, error: data.error ?? (res.ok ? undefined : `Error ${res.status}`) };
 }
 
@@ -60,8 +69,12 @@ function MonthlyInvoicePaymentSuccessContent() {
       try {
         const result = await verifyMonthlyInvoicePayment(reference);
         if (!mountedRef.current) return;
+        if (result.outcome === "quarantined") {
+          setPhase("quarantined");
+          return;
+        }
         if (result.ok) {
-          setPhase("paid");
+          setPhase(result.outcome === "partial" ? "partial" : "paid");
           return;
         }
         if (result.error) setMessage(result.error);
@@ -113,6 +126,40 @@ function MonthlyInvoicePaymentSuccessContent() {
             View invoice
           </Link>
         ) : null}
+        <GuestDocumentFooter redirectPath="/account/invoices" />
+      </main>
+    );
+  }
+
+  if (phase === "partial") {
+    return (
+      <main className="mx-auto max-w-lg px-4 py-12 text-center">
+        <h1 className="text-2xl font-semibold text-neutral-900">Partial payment received</h1>
+        <p className="mt-2 text-sm text-neutral-600">
+          We recorded this payment. A balance may still be due — check your invoice for the remaining amount.
+        </p>
+        {invoiceId ? (
+          <Link
+            href={`/account/invoices/${invoiceId}`}
+            className="mt-8 inline-flex rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white hover:bg-blue-700"
+          >
+            View invoice
+          </Link>
+        ) : null}
+        <GuestDocumentFooter redirectPath="/account/invoices" />
+      </main>
+    );
+  }
+
+  if (phase === "quarantined") {
+    return (
+      <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col justify-center gap-4 px-4 py-16 text-center">
+        <h1 className="text-xl font-semibold text-neutral-900">Payment needs review</h1>
+        <p className="text-sm text-neutral-600">
+          Your card may have been charged, but the amount does not match the current invoice balance. No automatic
+          settlement was applied. Please contact Shalean support with your payment reference so we can reconcile
+          safely.
+        </p>
         <GuestDocumentFooter redirectPath="/account/invoices" />
       </main>
     );

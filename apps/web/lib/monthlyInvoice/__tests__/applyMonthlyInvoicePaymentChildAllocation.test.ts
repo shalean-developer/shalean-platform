@@ -10,6 +10,7 @@ vi.mock("@/lib/monthlyInvoice/invoiceSnapshotEvents", () => ({
 
 vi.mock("@/lib/logging/systemLog", () => ({
   logSystemEvent: vi.fn().mockResolvedValue(undefined),
+  reportOperationalIssue: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/cleaner/resolveCleanerEarnings", () => ({
@@ -367,5 +368,32 @@ describe("applyMonthlyInvoicePayment per-child amount_paid_cents allocation (H-1
       payout_status: "eligible",
       payout_frozen_cents: 24500,
     });
+  });
+
+  it("quarantines when charged amount does not equal remaining balance (BILL-INV-002 C01)", async () => {
+    const { admin, captured } = buildFakeAdmin({
+      invoice: {
+        id: "00000000-0000-4000-8000-000000000070",
+        status: "sent",
+        total_amount_cents: 200000,
+        amount_paid_cents: 0,
+        balance_cents: 200000,
+      },
+      children: [],
+    });
+
+    const result = await applyMonthlyInvoicePayment(admin as never, {
+      reference: "tx_stale_underpay",
+      amountCents: 150000,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      skipped: true,
+      reason: "amount_mismatch_quarantined",
+    });
+    expect(captured.dedupInserts).toEqual([]);
+    expect(captured.bookingUpdates).toEqual([]);
+    expect(captured.invoiceUpdates.some((u) => u.payment_link === null)).toBe(true);
   });
 });

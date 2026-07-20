@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { formatZarFromCents } from "@/lib/dashboard/formatZar";
 import { customerMonthlyInvoiceStatusLabel } from "@/lib/dashboard/monthlyInvoiceUi";
 import type { CustomerMonthlyInvoiceRow } from "@/lib/dashboard/monthlyInvoiceTypes";
+import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 import { cn } from "@/lib/utils";
 
 function monthLabel(ym: string): string {
@@ -46,7 +47,11 @@ interface InvoiceCardProps {
 
 export function InvoiceCard({ invoice: inv }: InvoiceCardProps) {
   const balance = balanceFor(inv);
-  const payHref = typeof inv.payment_link === "string" ? inv.payment_link.trim() : "";
+  const paystackRef = typeof inv.paystack_reference === "string" ? inv.paystack_reference.trim() : "";
+  // BILL-INV-002 Phase A (H03): branded /pay/invoice URL only — never raw Paystack.
+  const payHref = paystackRef
+    ? trustMonthlyInvoicePayPageUrl(inv.id, paystackRef, inv.payment_link?.trim() || "")
+    : "";
   const canPay = balance > 0 && inv.status !== "paid" && Boolean(payHref);
   const pdfHref = `/api/account/invoices/monthly/${inv.id}/pdf`;
   const hasZoho = Boolean(inv.zoho_invoice_id?.trim());

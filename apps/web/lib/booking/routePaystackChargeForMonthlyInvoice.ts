@@ -56,7 +56,7 @@ export type PaystackChargeMonthlyRouting =
     }
   | {
       kind: "monthly_already_processed";
-      reason: "already_paid" | "duplicate_charge";
+      reason: "already_paid" | "duplicate_charge" | "amount_mismatch_quarantined";
     }
   | { kind: "monthly_error"; error: string };
 
@@ -83,7 +83,11 @@ export function interpretMonthlyInvoiceOutcome(
     if (outcome.reason === "not_found") {
       return { kind: "not_monthly" };
     }
-    if (outcome.reason === "already_paid" || outcome.reason === "duplicate_charge") {
+    if (
+      outcome.reason === "already_paid" ||
+      outcome.reason === "duplicate_charge" ||
+      outcome.reason === "amount_mismatch_quarantined"
+    ) {
       return { kind: "monthly_already_processed", reason: outcome.reason };
     }
   }

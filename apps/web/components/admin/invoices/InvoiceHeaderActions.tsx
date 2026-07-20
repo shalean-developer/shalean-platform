@@ -25,6 +25,7 @@ import {
   parseAdjustmentCategory,
   type AdjustmentCategory,
 } from "@/lib/monthlyInvoice/adjustmentCategory";
+import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
 
 const ADJ_PRESETS: { label: string; category: AdjustmentCategory }[] = [
   { label: "Missed visit", category: "missed_visit" },
@@ -134,7 +135,7 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   const st = props.status.toLowerCase();
   const canAdjust = !props.isClosed && ["draft", "sent", "partially_paid", "overdue"].includes(st);
   const canEditDates = !props.isClosed;
-  const hasLink = Boolean(props.paymentLink?.trim());
+  const hasLink = Boolean(props.paystackReference?.trim());
   const canResendEmail = hasLink && ["sent", "partially_paid", "overdue"].includes(st);
   const canMarkPaid = !props.isClosed && ["sent", "partially_paid", "overdue"].includes(st);
   const canSyncPayment =
@@ -176,10 +177,16 @@ export function InvoiceHeaderActions(props: InvoiceHeaderActionsProps) {
   })();
 
   async function copyLink() {
-    const url = props.paymentLink?.trim();
-    if (!url) return;
+    const ref = props.paystackReference?.trim();
+    if (!ref) return;
+    // BILL-INV-002 Phase A (H03): copy branded Shalean URL only — never raw Paystack.
+    const url = trustMonthlyInvoicePayPageUrl(
+      props.invoiceId,
+      ref,
+      props.paymentLink?.trim() || "",
+    );
     await navigator.clipboard.writeText(url);
-    setToast({ text: "Payment link copied." });
+    setToast({ text: "Branded payment link copied." });
   }
 
   async function sendInvoiceSubmit() {

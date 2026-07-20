@@ -22,10 +22,10 @@ describe("monthlyInvoiceStablePaystackReference", () => {
         balance_cents: 152000,
         paystack_reference: rotated,
       }),
-    ).toBe(rotated);
+    ).toBe(`${rotated}_b152000`);
   });
 
-  it("uses base stable ref for first-time drafts", () => {
+  it("uses base stable ref with balance suffix for first-time drafts", () => {
     expect(
       monthlyInvoicePaystackReferenceForInitialize({
         id: invoiceId,
@@ -34,6 +34,6 @@ describe("monthlyInvoiceStablePaystackReference", () => {
         balance_cents: 152000,
         paystack_reference: null,
       }),
-    ).toBe(stableMonthlyInvoicePaystackReference(invoiceId, "2026-07"));
+    ).toBe(`${stableMonthlyInvoicePaystackReference(invoiceId, "2026-07")}_b152000`);
   });
 });

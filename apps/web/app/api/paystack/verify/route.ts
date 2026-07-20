@@ -69,6 +69,9 @@ function monthlyInvoiceVerifyState(routing: PaystackChargeMonthlyRouting): strin
     return routing.settled === "full" ? "monthly_invoice_settled" : "monthly_invoice_partial";
   }
   if (routing.kind === "monthly_already_processed") {
+    if (routing.reason === "amount_mismatch_quarantined") {
+      return "monthly_invoice_amount_mismatch_quarantined";
+    }
     return "monthly_invoice_already_processed";
   }
   return "paid";
@@ -190,11 +193,14 @@ export async function GET(request: Request) {
         },
       });
       if (monthlyRoutingGet.kind === "monthly_settled" || monthlyRoutingGet.kind === "monthly_already_processed") {
+        const skipLedger =
+          monthlyRoutingGet.kind === "monthly_already_processed" &&
+          monthlyRoutingGet.reason === "amount_mismatch_quarantined";
         const invoiceId =
           monthlyRoutingGet.kind === "monthly_settled"
             ? monthlyRoutingGet.invoiceId
             : monthlyInvoiceIdHintGet;
-        if (invoiceId) {
+        if (invoiceId && !skipLedger) {
           await recordPaystackMonthlyInvoicePayment(adminGet, {
             reference: ref,
             amountCents: monthlyAmountGet,
@@ -591,13 +597,16 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
         },
       });
       if (monthlyRoutingPost.kind === "monthly_settled" || monthlyRoutingPost.kind === "monthly_already_processed") {
+        const skipLedger =
+          monthlyRoutingPost.kind === "monthly_already_processed" &&
+          monthlyRoutingPost.reason === "amount_mismatch_quarantined";
         const invoiceId =
           monthlyRoutingPost.kind === "monthly_settled"
             ? monthlyRoutingPost.invoiceId
             : monthlyInvoiceIdFromPaystackMetadata(
                 normalizePaystackMetadata(tx.metadata) as unknown as Record<string, unknown>,
               );
-        if (invoiceId) {
+        if (invoiceId && !skipLedger) {
           await recordPaystackMonthlyInvoicePayment(adminPost, {
             reference: ref,
             amountCents: txAmount,

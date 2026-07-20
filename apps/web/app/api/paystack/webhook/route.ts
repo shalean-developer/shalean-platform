@@ -330,13 +330,25 @@ export async function POST(request: Request) {
       const invoiceIdHint = monthlyInvoiceIdFromPaystackMetadata(
         normalizePaystackMetadata(data.metadata) as unknown as Record<string, unknown>,
       );
-      if (invoiceIdHint) {
+      // Do not write ledger for amount-mismatch quarantine — charge was not applied to the invoice.
+      if (invoiceIdHint && monthlyRouting.reason !== "amount_mismatch_quarantined") {
         await recordPaystackMonthlyInvoicePayment(supabase, {
           reference,
           amountCents: typeof data.amount === "number" ? data.amount : 0,
           invoiceId: invoiceIdHint,
           paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
           chargeData: paystackChargeDataFromRecord(data),
+        });
+      }
+      if (monthlyRouting.reason === "amount_mismatch_quarantined") {
+        await logSystemEvent({
+          level: "error",
+          source: "paystack/webhook",
+          message: "monthly_invoice.charge.amount_mismatch_quarantined",
+          context: {
+            reference_masked: maskPaystackReference(reference),
+            invoiceId: invoiceIdHint,
+          },
         });
       }
       return new Response("Already processed", {

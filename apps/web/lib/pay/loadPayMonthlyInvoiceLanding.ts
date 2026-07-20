@@ -1,6 +1,8 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { paystackReferenceMatchesCurrentBalance } from "@/lib/monthlyInvoice/monthlyInvoiceAmountIntegrity";
+import { clearMonthlyInvoicePaymentLink } from "@/lib/monthlyInvoice/clearMonthlyInvoicePaymentLink";
 
 function refsMatch(a: string, b: string): boolean {
   return a.trim().toLowerCase() === b.trim().toLowerCase();
@@ -28,6 +30,39 @@ function formatMonthLabel(ym: string): string {
     year: "numeric",
     timeZone: "UTC",
   });
+}
+
+async function initializeFreshPaymentLink(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  invoiceId: string,
+  customerId: string,
+): Promise<{ ok: true; authorizationUrl: string } | PayMonthlyInvoiceLandingErr> {
+  const { resolveMonthlyInvoiceCustomerEmail } = await import(
+    "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail"
+  );
+  const { initializePaystackForMonthlyInvoice } = await import(
+    "@/lib/monthlyInvoice/initializePaystackForMonthlyInvoice"
+  );
+  const email = await resolveMonthlyInvoiceCustomerEmail(admin, {
+    customerId,
+    invoiceId,
+  });
+  if (!email) {
+    return { ok: false, httpStatus: 410, error: "Payment link is not available." };
+  }
+  const init = await initializePaystackForMonthlyInvoice(admin, {
+    invoiceId,
+    customerEmail: email,
+  });
+  if (!init.ok || !init.authorizationUrl?.trim()) {
+    return {
+      ok: false,
+      httpStatus: 503,
+      error:
+        "We could not start the secure payment checkout. Your invoice is safe and no payment was taken. Please try again.",
+    };
+  }
+  return { ok: true, authorizationUrl: init.authorizationUrl.trim() };
 }
 
 export async function loadPayMonthlyInvoiceLanding(
@@ -74,38 +109,22 @@ export async function loadPayMonthlyInvoiceLanding(
     return { ok: false, httpStatus: 410, error: "Nothing is due on this invoice." };
   }
 
+  const customerId = typeof r.customer_id === "string" ? r.customer_id : "";
+  const month = typeof r.month === "string" ? r.month : "";
   let paymentLink = typeof r.payment_link === "string" ? r.payment_link.trim() : "";
-  if (!paymentLink) {
-    const { resolveMonthlyInvoiceCustomerEmail } = await import(
-      "@/lib/monthlyInvoice/resolveMonthlyInvoiceCustomerEmail"
-    );
-    const { initializePaystackForMonthlyInvoice } = await import(
-      "@/lib/monthlyInvoice/initializePaystackForMonthlyInvoice"
-    );
-    const customerId = typeof r.customer_id === "string" ? r.customer_id : "";
-    const email = await resolveMonthlyInvoiceCustomerEmail(admin, {
-      customerId,
-      invoiceId: id,
-    });
-    if (!email) {
-      return { ok: false, httpStatus: 410, error: "Payment link is not available." };
-    }
-    const init = await initializePaystackForMonthlyInvoice(admin, {
-      invoiceId: id,
-      customerEmail: email,
-    });
-    if (!init.ok || !init.authorizationUrl?.trim()) {
-      return {
-        ok: false,
-        httpStatus: 503,
-        error:
-          "We could not start the secure payment checkout. Your invoice is safe and no payment was taken. Please try again.",
-      };
-    }
-    paymentLink = init.authorizationUrl.trim();
+
+  // BILL-INV-002 Phase A: never open a Paystack session whose ref is not bound to current balance.
+  const refFresh = paystackReferenceMatchesCurrentBalance(paystackRef, balance);
+  if (paymentLink && !refFresh) {
+    await clearMonthlyInvoicePaymentLink(admin, id);
+    paymentLink = "";
   }
 
-  const month = typeof r.month === "string" ? r.month : "";
+  if (!paymentLink) {
+    const fresh = await initializeFreshPaymentLink(admin, id, customerId);
+    if (!fresh.ok) return fresh;
+    paymentLink = fresh.authorizationUrl;
+  }
 
   return {
     ok: true,
