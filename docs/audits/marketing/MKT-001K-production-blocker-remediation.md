@@ -55,6 +55,8 @@ Local verification on this commit: focused marketing/meta/provider tests PASS; `
 
 PR `#71` follow-up moves **pull-request** live-link validation to a **localhost production Next.js build** of the exact PR head (`validate:live-internal-links` + `validate:pr-build-routes`). Production crawling remains in `production-live-internal-links.yml` (workflow_dispatch / push to `main`) and is no longer the sole PR gate for unreleased redirects.
 
+**Verified on head `97e07649…` (CI run 29757221167):** vitest **PASS** including PR-build crawl + route matrix; `/ci-build-sha.txt` matched PR head; ten short location URLs **308 → /locations → 200**; compliance routes + Meta callback exercised against localhost.
+
 ---
 
 ## 2. Live-link defects and fixes
@@ -199,8 +201,6 @@ PR `#71` follow-up moves **pull-request** live-link validation to a **localhost 
 
 ## 8. Recommendation
 
-**NO-GO**
+**READY FOR LEGAL/META CONFIGURATION** (Development-mode Meta prep + Legal review of data-deletion copy).
 
-Production promotion, Meta Live, migrations, and production env changes remain blocked. Mandatory draft-PR live-link check still fails because CI probes production, which does not yet run this commit.
-
-Code + staging remediation for links and Meta compliance endpoints is complete on `a16526f4…`. Operators may **prepare** Development-mode Meta settings (privacy URL, deletion callback after production HTTPS has this SHA, OAuth redirect URI) only with release-owner confirmation — still **not** Live, and not a production GO.
+Not a production GO: migrations, prod env, Meta Live, and post-deploy production live-link smoke remain. Circular PR live-link gate is resolved on `97e07649…`.
