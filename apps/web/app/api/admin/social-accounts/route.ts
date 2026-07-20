@@ -1,7 +1,12 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { diagnoseFacebookPagePublishConfig, getFacebookPagePublishConfig } from "@/lib/promotions/facebookPublish";
+import { diagnoseFacebookPagePublishConfig } from "@/lib/promotions/facebookPublish";
+import {
+  disconnectFacebookConnection,
+  getFacebookConnectionPublic,
+  selectFacebookPage,
+} from "@/lib/promotions/facebookConnectedAccount";
 import {
   disconnectGoogleBusiness,
   getGoogleBusinessConnectionPublic,
@@ -10,6 +15,11 @@ import {
   selectGoogleBusinessLocation,
 } from "@/lib/google-business";
 import { isGoogleOAuthConfigured } from "@/lib/oauth/googleBusinessOAuth";
+import { isFacebookOAuthConfigured, isFacebookEnvTokenFallbackAllowed } from "@/lib/oauth/metaFacebookOAuth";
+import { isXOAuthConfigured } from "@/lib/oauth/xOAuth";
+import { disconnectXConnection, getXConnectionPublic } from "@/lib/promotions/xPublish";
+import { getProviderRegistry } from "@/lib/promotions/providers";
+import type { ProviderKey } from "@/lib/promotions/providers/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,21 +37,33 @@ type PlatformCard = {
   accountName?: string | null;
   locationName?: string | null;
   locations?: unknown[];
+  pages?: unknown[];
   lastError?: string | null;
   oauthConfigured?: boolean;
+  envFallbackAllowed?: boolean;
+  tokenSource?: string | null;
+  lastVerifiedAt?: string | null;
+  featureFlag?: string;
+  providerEnabled?: boolean;
+  publishEnabled?: boolean;
+  version?: string;
+  characterLimit?: number | null;
+  requiresImage?: boolean;
 };
 
 /**
  * GET — Connected Accounts overview for Marketing Hub.
- * Facebook uses env Page tokens; Google Business uses OAuth + social_accounts.
+ * Live FB/GBP/IG diagnostics + registry-aligned stubs (MKT-001D / MKT-001H).
  */
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
+  const fbPublic = await getFacebookConnectionPublic();
   const fbDiag = await diagnoseFacebookPagePublishConfig();
-  const fbCfg = getFacebookPagePublishConfig();
   const gbp = await getGoogleBusinessConnectionPublic();
+  const xPublic = await getXConnectionPublic();
+  const registry = getProviderRegistry();
 
   const admin = getSupabaseAdmin();
   let history: unknown[] = [];
@@ -50,94 +72,223 @@ export async function GET(request: Request) {
       .from("social_publish_history")
       .select("id, provider, promotion_id, campaign_name, status, response_id, error_message, published_by, created_at")
       .order("created_at", { ascending: false })
-      .limit(25);
+      .limit(50);
     history = data ?? [];
   }
 
-  const platforms: PlatformCard[] = [
-    {
-      id: "facebook",
-      label: "Facebook",
-      available: true,
-      connected: fbDiag.configured && fbDiag.okForPublish,
-      status: !fbDiag.configured
-        ? "disconnected"
-        : fbDiag.okForPublish
-          ? "connected"
-          : "error",
-      health: !fbDiag.configured ? "unknown" : fbDiag.okForPublish ? "healthy" : "error",
-      detail: fbDiag.hint,
-      lastSync: null,
-      lastPublishAt: null,
-      accountName: fbDiag.tokenSubjectName,
-      locationName: fbCfg ? `Page ${fbCfg.pageId.slice(0, 4)}…` : null,
-    },
-    {
-      id: "instagram",
-      label: "Instagram",
-      available: true,
-      connected: false,
-      status: "disconnected",
-      health: "unknown",
-      detail: "Publish via Facebook Page / Meta Business Suite for now.",
-      lastSync: null,
-      lastPublishAt: null,
-    },
-    {
-      id: "google_business",
-      label: "Google Business Profile",
-      available: true,
-      connected: Boolean(gbp.connected),
-      status: (gbp.account?.status as string) ?? (gbp.connected ? "connected" : "disconnected"),
-      health: (gbp.account?.health as string) ?? "unknown",
-      detail:
-        typeof gbp.account?.lastError === "string"
-          ? gbp.account.lastError
-          : gbp.oauthConfigured
-            ? null
-            : "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.",
-      lastSync: (gbp.account?.lastSync as string) ?? null,
-      lastPublishAt: (gbp.account?.lastPublishAt as string) ?? null,
-      accountName: (gbp.account?.accountName as string) ?? null,
-      locationName: (gbp.account?.locationName as string) ?? null,
-      locations: (gbp.account?.locations as unknown[]) ?? [],
-      lastError: (gbp.account?.lastError as string) ?? null,
-      oauthConfigured: gbp.oauthConfigured,
-    },
-    {
-      id: "linkedin",
-      label: "LinkedIn",
+  const failedRecent = (history as Array<{ status: string; created_at: string }>).filter((h) => {
+    if (h.status !== "failed") return false;
+    const t = Date.parse(h.created_at);
+    return !Number.isNaN(t) && Date.now() - t < 24 * 60 * 60 * 1000;
+  }).length;
+
+  const platforms: PlatformCard[] = [];
+
+  for (const entry of registry.listEntries()) {
+    const key = entry.provider.key as ProviderKey;
+    const caps = entry.provider.getCapabilities();
+    const baseMeta = {
+      featureFlag: entry.featureFlag,
+      providerEnabled: entry.enabled,
+      publishEnabled: caps.publishEnabled && entry.enabled,
+      version: entry.provider.version,
+      characterLimit: caps.characterLimit,
+      requiresImage: caps.requiresImage,
+    };
+
+    if (key === "facebook") {
+      const acct = fbPublic.account;
+      const status =
+        !entry.enabled
+          ? "disabled"
+          : acct?.status === "pending_location"
+            ? "pending_location"
+            : acct?.status === "error" || (fbDiag.configured && !fbDiag.okForPublish)
+              ? "error"
+              : fbDiag.okForPublish
+                ? "connected"
+                : acct?.status === "disconnected" || !acct
+                  ? "disconnected"
+                  : acct.status;
+
+      const health =
+        status === "connected"
+          ? "healthy"
+          : status === "pending_location"
+            ? "degraded"
+            : status === "error"
+              ? "error"
+              : "unknown";
+
+      platforms.push({
+        id: "facebook",
+        label: entry.provider.displayName,
+        available: entry.enabled,
+        connected:
+          Boolean(acct && (acct.status === "connected" || acct.status === "pending_location")) ||
+          fbDiag.okForPublish,
+        status,
+        health,
+        detail:
+          !entry.enabled
+            ? "Facebook is disabled by feature flag (MARKETING_PROVIDER_FACEBOOK)."
+            : acct?.lastError ||
+              fbDiag.hint ||
+              (!fbPublic.oauthConfigured
+                ? "Set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI."
+                : null),
+        lastSync: acct?.lastSync ?? null,
+        lastPublishAt: acct?.lastPublishAt ?? null,
+        accountName: acct?.accountName ?? fbDiag.tokenSubjectName,
+        locationName: acct?.pageIdMasked
+          ? `Page ${acct.pageIdMasked}`
+          : fbDiag.pageId
+            ? `Page ${fbDiag.pageId.slice(0, 4)}…`
+            : null,
+        pages: acct?.pages ?? [],
+        lastError: acct?.lastError ?? null,
+        oauthConfigured: fbPublic.oauthConfigured,
+        envFallbackAllowed: fbPublic.envFallbackAllowed,
+        tokenSource: fbDiag.source,
+        lastVerifiedAt: acct?.lastVerifiedAt ?? null,
+        ...baseMeta,
+      });
+      continue;
+    }
+
+    if (key === "google_business") {
+      platforms.push({
+        id: "google_business",
+        label: entry.provider.displayName,
+        available: entry.enabled,
+        connected: Boolean(gbp.connected),
+        status: (gbp.account?.status as string) ?? (gbp.connected ? "connected" : "disconnected"),
+        health: (gbp.account?.health as string) ?? "unknown",
+        detail:
+          typeof gbp.account?.lastError === "string"
+            ? gbp.account.lastError
+            : gbp.oauthConfigured
+              ? null
+              : "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.",
+        lastSync: (gbp.account?.lastSync as string) ?? null,
+        lastPublishAt: (gbp.account?.lastPublishAt as string) ?? null,
+        accountName: (gbp.account?.accountName as string) ?? null,
+        locationName: (gbp.account?.locationName as string) ?? null,
+        locations: (gbp.account?.locations as unknown[]) ?? [],
+        lastError: (gbp.account?.lastError as string) ?? null,
+        oauthConfigured: gbp.oauthConfigured,
+        ...baseMeta,
+      });
+      continue;
+    }
+
+    if (key === "instagram") {
+      if (!entry.enabled) {
+        platforms.push({
+          id: "instagram",
+          label: entry.provider.displayName,
+          available: false,
+          connected: false,
+          status: "disabled",
+          health: "unknown",
+          detail:
+            "Instagram is disabled by feature flag (MARKETING_PROVIDER_INSTAGRAM). Enable only after MKT-001G staging verification.",
+          lastSync: null,
+          lastPublishAt: null,
+          ...baseMeta,
+          publishEnabled: false,
+        });
+        continue;
+      }
+
+      const status = await entry.provider.validateConnection();
+      let lastSync: string | null = null;
+      let lastPublishAt: string | null = null;
+      if (admin) {
+        const { data: igRow } = await admin
+          .from("social_accounts")
+          .select("last_sync, last_publish_at")
+          .eq("provider", "instagram")
+          .maybeSingle();
+        lastSync = (igRow?.last_sync as string) ?? null;
+        lastPublishAt = (igRow?.last_publish_at as string) ?? null;
+      }
+
+      platforms.push({
+        id: "instagram",
+        label: entry.provider.displayName,
+        available: entry.enabled,
+        connected: status.connected,
+        status: status.statusLabel,
+        health: status.health,
+        detail: status.hint,
+        lastSync,
+        lastPublishAt,
+        accountName: status.displayName,
+        locationName: status.targetRef
+          ? `IG ${String(status.targetRef).slice(0, 4)}…`
+          : null,
+        ...baseMeta,
+      });
+      continue;
+    }
+
+    if (key === "x") {
+      if (!entry.enabled) {
+        platforms.push({
+          id: "x",
+          label: entry.provider.displayName,
+          available: false,
+          connected: false,
+          status: "disabled",
+          health: "unknown",
+          detail:
+            "X is disabled by feature flag (MARKETING_PROVIDER_X). Enable only after staging OAuth + publish verification.",
+          lastSync: null,
+          lastPublishAt: null,
+          oauthConfigured: isXOAuthConfigured(),
+          ...baseMeta,
+          publishEnabled: false,
+        });
+        continue;
+      }
+
+      const status = await entry.provider.validateConnection();
+      platforms.push({
+        id: "x",
+        label: entry.provider.displayName,
+        available: entry.enabled,
+        connected: status.connected && xPublic.connected,
+        status: status.statusLabel,
+        health: status.health,
+        detail: status.hint ?? xPublic.lastError,
+        lastSync: xPublic.lastSync,
+        lastPublishAt: xPublic.lastPublishAt,
+        accountName: status.displayName ?? xPublic.accountName,
+        locationName: xPublic.username ? `@${xPublic.username}` : xPublic.userIdMasked,
+        lastError: xPublic.lastError,
+        oauthConfigured: isXOAuthConfigured(),
+        ...baseMeta,
+      });
+      continue;
+    }
+
+    platforms.push({
+      id: key,
+      label: entry.provider.displayName,
       available: false,
       connected: false,
-      status: "coming_soon",
+      status: entry.enabled ? "disabled" : "coming_soon",
       health: "unknown",
-      detail: null,
+      detail: entry.enabled
+        ? `${entry.provider.displayName} is flagged on but no live adapter is implemented yet.`
+        : `${entry.provider.displayName} publishing is not enabled. Copy / download workflows still work from Social Posts.`,
       lastSync: null,
       lastPublishAt: null,
-    },
-    {
-      id: "pinterest",
-      label: "Pinterest",
-      available: false,
-      connected: false,
-      status: "coming_soon",
-      health: "unknown",
-      detail: null,
-      lastSync: null,
-      lastPublishAt: null,
-    },
-    {
-      id: "twitter",
-      label: "X",
-      available: false,
-      connected: false,
-      status: "coming_soon",
-      health: "unknown",
-      detail: null,
-      lastSync: null,
-      lastPublishAt: null,
-    },
-  ];
+      ...baseMeta,
+      publishEnabled: false,
+    });
+  }
 
   return NextResponse.json({
     platforms,
@@ -147,16 +298,25 @@ export async function GET(request: Request) {
       okForPublish: fbDiag.okForPublish,
       hint: fbDiag.hint,
       tokenKind: fbDiag.tokenKind,
+      source: fbDiag.source,
+      oauthConfigured: isFacebookOAuthConfigured(),
+      envFallbackAllowed: isFacebookEnvTokenFallbackAllowed(),
+      account: fbPublic.account,
     },
     oauth: {
       googleConfigured: isGoogleOAuthConfigured(),
+      facebookConfigured: isFacebookOAuthConfigured(),
+      xConfigured: isXOAuthConfigured(),
     },
     history,
+    ops: {
+      failedLast24h: failedRecent,
+    },
   });
 }
 
 /**
- * POST — Google Business actions: select_location | refresh | disconnect
+ * POST — Google Business + Facebook Connected Accounts actions
  */
 export async function POST(request: Request) {
   const auth = await requireAdminApi(request);
@@ -166,6 +326,8 @@ export async function POST(request: Request) {
     action?: string;
     locationId?: string;
     accountId?: string;
+    pageId?: string;
+    confirmReplace?: boolean;
   };
   try {
     body = (await request.json()) as typeof body;
@@ -188,6 +350,40 @@ export async function POST(request: Request) {
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json({ ok: true, account: sanitizeSocialAccount(result.account) });
+  }
+
+  if (action === "select_facebook_page") {
+    if (!body.pageId?.trim()) {
+      return NextResponse.json({ error: "pageId is required." }, { status: 400 });
+    }
+    const result = await selectFacebookPage({
+      pageId: body.pageId.trim(),
+      actor: auth.email,
+      confirmReplace: Boolean(body.confirmReplace),
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({
+      ok: true,
+      account: {
+        status: result.account.status,
+        accountName: result.account.account_name,
+        pageIdMasked: result.account.account_id
+          ? `${String(result.account.account_id).slice(0, 4)}…`
+          : null,
+      },
+    });
+  }
+
+  if (action === "disconnect_facebook") {
+    const result = await disconnectFacebookConnection({ actor: auth.email });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ ok: true });
+  }
+
+  if (action === "disconnect_x") {
+    const result = await disconnectXConnection({ actor: auth.email });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ ok: true });
   }
 
   if (action === "refresh") {

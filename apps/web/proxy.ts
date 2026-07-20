@@ -4,7 +4,7 @@ import { remapAdminPathToOffice } from "@/lib/admin/remapAdminPathToOffice";
 import { getLocation } from "@/lib/locations";
 import { resolveLegacyGrowthLocal, resolveLegacySingularLocation } from "@/lib/seo/legacyPhase1EdgeRedirects";
 import { isSeoRebuildGonePath } from "@/lib/seo/seoRebuildPhase1";
-import { locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
+import { CAPE_TOWN_LOCATIONS, locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 import { updateSession } from "@/lib/supabase/supabaseMiddleware";
 
 /** Aligns HTML `meta name="robots"` on transactional pages; `noimageindex` avoids Google Images surfacing page assets. */
@@ -131,6 +131,25 @@ async function runProxy(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = locationHubPathFromAreaInput(segment);
     return NextResponse.redirect(url, 308);
+  }
+
+  /**
+   * Short `/locations/{slug}` that is not an exact catalogue hub slug (e.g. DB suburb
+   * `beacon-hill`) — permanently redirect to the hub path or `/locations` overview.
+   * Prevents live-link 404s without inventing fake hub pages.
+   */
+  const locationsSegment = pathname.match(/^\/locations\/([^/]+)\/?$/);
+  if (locationsSegment?.[1]) {
+    const segment = decodeURIComponent(locationsSegment[1]).trim().toLowerCase();
+    const isExactHub = CAPE_TOWN_LOCATIONS.some((l) => l.slug === segment);
+    if (!isExactHub) {
+      const dest = locationHubPathFromAreaInput(segment);
+      if (dest !== pathname.replace(/\/+$/, "") && dest !== `/locations/${segment}`) {
+        const url = request.nextUrl.clone();
+        url.pathname = dest;
+        return NextResponse.redirect(url, 308);
+      }
+    }
   }
 
   /** Admin console cutover — all `/admin/*` pages live under `/office/*`. */

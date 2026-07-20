@@ -6,7 +6,8 @@ import {
   refreshGoogleAccessToken,
   type GoogleOAuthConfig,
 } from "@/lib/oauth/googleBusinessOAuth";
-import { decryptSecret, encryptSecret } from "@/lib/security/tokenEncryption";
+import { decryptSecret, encryptSecret, needsReEncryption } from "@/lib/security/tokenEncryption";
+import { assertSafeHttpUrl, SafeMediaUrlError } from "@/lib/security/safeRemoteMedia";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   CAMPAIGN_MEDIA_BUCKET,
@@ -120,6 +121,28 @@ export function formatGoogleBusinessError(
       raw ||
       "Google Business location was not found. Pick a location again from Connected Accounts."
     );
+  }
+
+  if (httpStatus === 409 || status === "ABORTED" || status === "ALREADY_EXISTS") {
+    return (
+      raw ||
+      "Google reported a conflict for this publish. Wait a moment, then retry or change the content."
+    );
+  }
+
+  if (httpStatus === 422 || status === "INVALID_ARGUMENT" || status === "FAILED_PRECONDITION") {
+    return (
+      (raw || "Google rejected this post content.") +
+      " Check the message, image URL, and call-to-action link, then try again."
+    );
+  }
+
+  if (httpStatus === 408 || httpStatus === 504 || lower.includes("timeout") || lower.includes("deadline")) {
+    return (raw || "Google Business request timed out.") + " Retry shortly.";
+  }
+
+  if (httpStatus === 500 || httpStatus === 502 || httpStatus === 503 || status === "UNAVAILABLE") {
+    return (raw || `Google Business is temporarily unavailable (${httpStatus}).`) + " Retry shortly.";
   }
 
   if (raw) return raw;
@@ -333,6 +356,30 @@ async function persistTokens(args: {
 }
 
 /**
+ * Best-effort migration of stored tokens to the current encryption key.
+ * Runs when a valid token is read; never logs token values or throws.
+ */
+async function maybeReEncryptStoredTokens(account: SocialAccountRow): Promise<void> {
+  try {
+    const patch: Record<string, unknown> = {};
+    if (account.access_token && needsReEncryption(account.access_token)) {
+      patch.access_token = encryptSecret(decryptSecret(account.access_token));
+    }
+    if (account.refresh_token && needsReEncryption(account.refresh_token)) {
+      patch.refresh_token = encryptSecret(decryptSecret(account.refresh_token));
+    }
+    if (Object.keys(patch).length === 0) return;
+    const admin = getSupabaseAdmin();
+    if (!admin) return;
+    patch.updated_at = new Date().toISOString();
+    await admin.from("social_accounts").update(patch).eq("id", account.id);
+    logGbp("tokens_reencrypted", { accountId: account.id, fields: Object.keys(patch) });
+  } catch (e) {
+    logGbp("tokens_reencrypt_failed", { error: e instanceof Error ? e.message : String(e) });
+  }
+}
+
+/**
  * Ensure a valid access token for the stored Google Business connection.
  * Refreshes automatically when expired (or within 60s of expiry).
  */
@@ -372,9 +419,12 @@ export async function getValidGoogleBusinessAccessToken(): Promise<
 
   if (stillValid && account.access_token) {
     try {
+      const accessToken = decryptSecret(account.access_token);
+      // Opportunistically migrate legacy/previous-key ciphertext to the current key.
+      await maybeReEncryptStoredTokens(account);
       return {
         ok: true,
-        accessToken: decryptSecret(account.access_token),
+        accessToken,
         account,
       };
     } catch {
@@ -644,6 +694,17 @@ export async function ensurePublicImageUrlForGooglePost(args: {
   promotionId?: string | null;
 }): Promise<{ ok: true; imageUrl: string } | { ok: false; error: string }> {
   if (args.imageUrl?.startsWith("https://")) {
+    // Google fetches this sourceUrl server-side; validate it is a safe public
+    // https host (blocks loopback/private/link-local/metadata) before forwarding.
+    try {
+      assertSafeHttpUrl(args.imageUrl);
+    } catch (e) {
+      const message =
+        e instanceof SafeMediaUrlError
+          ? e.message
+          : "The image URL is not allowed for Google Business.";
+      return { ok: false, error: message };
+    }
     return { ok: true, imageUrl: args.imageUrl };
   }
 

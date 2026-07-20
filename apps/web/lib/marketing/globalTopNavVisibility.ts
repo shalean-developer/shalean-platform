@@ -18,6 +18,8 @@ const MARKETING_HOME_HEADER_PATHS = new Set([
   "/cleaning-prices-cape-town",
   "/privacy-policy",
   "/terms-of-service",
+  "/data-deletion",
+  "/data-deletion/status",
 ]);
 
 export function usesMarketingHomeHeader(pathname: string): boolean {

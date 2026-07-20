@@ -20,6 +20,14 @@
     {
       "path": "/api/cron/promotions",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/recover-stuck-publish",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/process-social-publish-jobs",
+      "schedule": "0 4 * * *"
     }
   ]
 }

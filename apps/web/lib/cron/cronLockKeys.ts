@@ -53,6 +53,9 @@ export const CRON_LOCK_KEYS = {
 
   // Read-only observability
   opsHealthMetrics: "cron:ops-health-metrics",
+
+  // Marketing — durable social publish queue (MKT-001B.2)
+  processSocialPublishJobs: "cron:process-social-publish-jobs",
 } as const;
 
 export type CronLockKey = (typeof CRON_LOCK_KEYS)[keyof typeof CRON_LOCK_KEYS];

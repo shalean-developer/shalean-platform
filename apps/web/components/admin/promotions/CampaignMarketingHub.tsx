@@ -41,7 +41,24 @@ import {
 import { SocialImageCard } from "@/components/admin/promotions/SocialImageCard";
 import type { SocialTrustItem } from "@/components/admin/promotions/social-design";
 import { canonicalizePublicSiteUrl } from "@/lib/promotions/offerCopy";
+import { validatePublishPayloadClient, resolveInstagramPublishImageUrl } from "@/lib/promotions/providerLimits";
+import {
+  formatPublishFailureToast,
+  type PublishFailureFields,
+} from "@/lib/promotions/publishFailureUi";
 import type { PromotionRow, PromotionStatus, PromotionType } from "@/lib/promotions/types";
+import {
+  canInvokePublish,
+  formatSafeRoi,
+  isCampaignFormDirty,
+  registryAllowsPublish,
+  type RegistryProviderSnapshot,
+} from "@/lib/promotions/marketingUx";
+import {
+  MarketingEmptyState,
+  MarketingSectionSkeleton,
+} from "@/components/admin/promotions/MarketingEmptyState";
+import { MarketingSubNav } from "@/components/admin/promotions/MarketingSubNav";
 
 function socialCardPropsFromPayload(
   payload: Record<string, unknown>,
@@ -207,6 +224,13 @@ const STATUS_BADGE: Record<string, string> = {
   ended: "bg-red-100 text-red-700",
 };
 
+const CONTENT_STATUS_BADGE: Record<string, string> = {
+  draft: "bg-slate-100 text-slate-600",
+  ready: "bg-blue-100 text-blue-700",
+  published: "bg-emerald-100 text-emerald-700",
+  archived: "bg-gray-100 text-gray-600",
+};
+
 function formatZar(n: number) {
   return `R${Math.round(n).toLocaleString("en-ZA")}`;
 }
@@ -227,7 +251,8 @@ const VIEW_META: Record<HubView, { title: string; blurb: string }> = {
   },
   social: {
     title: "Social Posts",
-    blurb: "Facebook, Instagram, LinkedIn, X, WhatsApp, Google Business, and Pinterest copy.",
+    blurb:
+      "One-click publish for Facebook Page and Google Business Profile. Other channels support copy and download until their adapters ship.",
   },
   email: {
     title: "Email Campaigns",
@@ -312,6 +337,15 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
   const [facebookHint, setFacebookHint] = useState<string | null>(null);
   const [googleConfigured, setGoogleConfigured] = useState(false);
   const [googleHint, setGoogleHint] = useState<string | null>(null);
+  const [instagramConfigured, setInstagramConfigured] = useState(false);
+  const [instagramHint, setInstagramHint] = useState<string | null>(null);
+  const [xConfigured, setXConfigured] = useState(false);
+  const [xHint, setXHint] = useState<string | null>(null);
+  const [providerRegistry, setProviderRegistry] = useState<RegistryProviderSnapshot[] | null>(
+    null,
+  );
+  const createBaselineRef = useRef(emptyForm);
+  const editBaselineRef = useRef(emptyForm);
 
   const loadAnalytics = useCallback(async () => {
     const res = await adminFetch<AnalyticsPayload>("/api/admin/promotions/analytics");
@@ -365,6 +399,45 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     setGoogleHint(res.data?.hint ?? null);
   }, []);
 
+  const loadInstagramStatus = useCallback(async () => {
+    const res = await adminFetch<{
+      configured: boolean;
+      connected?: boolean;
+      okForPublish?: boolean;
+      hint?: string | null;
+    }>("/api/admin/promotions/publish-instagram");
+    // 403 when flag off is expected — treat as not configured/publishable.
+    setInstagramConfigured(Boolean(res.data?.configured && res.data?.okForPublish));
+    setInstagramHint(res.data?.hint ?? null);
+  }, []);
+
+  const loadXStatus = useCallback(async () => {
+    const res = await adminFetch<{
+      configured: boolean;
+      connected?: boolean;
+      okForPublish?: boolean;
+      hint?: string | null;
+      username?: string | null;
+    }>("/api/admin/promotions/publish-x");
+    setXConfigured(Boolean(res.data?.configured && res.data?.okForPublish));
+    setXHint(res.data?.hint ?? null);
+  }, []);
+
+  const loadProviderRegistry = useCallback(async () => {
+    const res = await adminFetch<{ providers: RegistryProviderSnapshot[] }>(
+      "/api/admin/promotions/providers",
+    );
+    if (res.data?.providers) setProviderRegistry(res.data.providers);
+  }, []);
+
+  const facebookPublishable =
+    facebookConfigured && registryAllowsPublish(providerRegistry, "facebook");
+  const googlePublishable =
+    googleConfigured && registryAllowsPublish(providerRegistry, "google_business");
+  const instagramPublishable =
+    instagramConfigured && registryAllowsPublish(providerRegistry, "instagram");
+  const xPublishable = xConfigured && registryAllowsPublish(providerRegistry, "x");
+
   const loadContentHub = useCallback(async () => {
     if (view === "assets" || view === "social") {
       const assetsRes = await adminFetch<{ assets: AssetRow[] }>(
@@ -410,6 +483,9 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     void loadContentHub();
     void loadFacebookStatus();
     void loadGoogleStatus();
+    void loadInstagramStatus();
+    void loadXStatus();
+    void loadProviderRegistry();
   }, [
     loadAnalytics,
     loadMemberships,
@@ -418,7 +494,36 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     loadContentHub,
     loadFacebookStatus,
     loadGoogleStatus,
+    loadInstagramStatus,
+    loadXStatus,
+    loadProviderRegistry,
   ]);
+
+  const formDirty = useMemo(() => {
+    if (showCreate) {
+      return isCampaignFormDirty(
+        createForm as unknown as Record<string, unknown>,
+        createBaselineRef.current as unknown as Record<string, unknown>,
+      );
+    }
+    if (editingId) {
+      return isCampaignFormDirty(
+        editForm as unknown as Record<string, unknown>,
+        editBaselineRef.current as unknown as Record<string, unknown>,
+      );
+    }
+    return false;
+  }, [showCreate, editingId, createForm, editForm]);
+
+  useEffect(() => {
+    if (!formDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [formDirty]);
 
   async function loadDetail(id: string) {
     setSelectedId(id);
@@ -488,7 +593,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     setShowCreate(false);
     setSelectedId(null);
     setEditingId(p.id);
-    setEditForm({
+    const next = {
       name: p.name,
       description: p.description ?? "",
       promotion_type: p.promotion_type,
@@ -505,7 +610,9 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
       show_popup: Boolean(p.show_popup),
       show_announcement_bar: p.show_announcement_bar,
       generate: false,
-    });
+    };
+    editBaselineRef.current = next;
+    setEditForm(next);
   }
 
   useEffect(() => {
@@ -678,32 +785,14 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
         <div>
           <h1 className="text-2xl font-bold text-slate-900">{meta.title}</h1>
           <p className="mt-1 text-sm text-slate-500">{meta.blurb}</p>
-          <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            {(
-              [
-                ["campaigns", "Campaigns"],
-                ["social", "Social"],
-                ["email", "Email"],
-                ["landing", "Landing"],
-                ["analytics", "Analytics"],
-                ["templates", "Templates"],
-                ["assets", "Assets"],
-              ] as const
-            ).map(([href, label]) => (
-              <Link
-                key={href}
-                href={`/office/marketing/${href === "landing" ? "landing-pages" : href}`}
-                className={cn(
-                  "rounded-full border px-3 py-1",
-                  view === href
-                    ? "border-slate-900 bg-slate-900 text-white"
-                    : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50",
-                )}
-              >
-                {label}
-              </Link>
-            ))}
+          <div className="mt-3">
+            <MarketingSubNav active={view} />
           </div>
+          {formDirty ? (
+            <p role="status" className="mt-2 text-xs text-amber-800">
+              You have unsaved campaign changes. Save or cancel before leaving this page.
+            </p>
+          ) : null}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => void refetch()}>
@@ -714,6 +803,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
               size="sm"
               onClick={() => {
                 setEditingId(null);
+                createBaselineRef.current = emptyForm;
                 setCreateForm(emptyForm);
                 setShowCreate(true);
               }}
@@ -744,11 +834,16 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
         <ContentList
           content={allContent}
           assets={allAssets}
-          facebookConfigured={facebookConfigured}
+          facebookConfigured={facebookPublishable}
           facebookHint={facebookHint}
-          googleConfigured={googleConfigured}
+          googleConfigured={googlePublishable}
           googleHint={googleHint}
+          instagramConfigured={instagramPublishable}
+          instagramHint={instagramHint}
+          xConfigured={xPublishable}
+          xHint={xHint}
           emptyLabel={`No ${meta.title.toLowerCase()} yet. Generate a campaign first.`}
+          emptyStateKey={view === "social" ? "no_draft_posts" : undefined}
           onAssetUpdated={(asset) => {
             setAllAssets((prev) => {
               const idx = prev.findIndex((a) => a.id === asset.id);
@@ -781,24 +876,28 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
       ) : null}
 
       {view === "templates" ? (
-        <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
-          {templates.map((t) => (
-            <div key={t.id} className="rounded-2xl border border-slate-200 bg-white p-4">
-              <p className="font-semibold text-slate-900">{t.name}</p>
-              <p className="mt-1 text-sm text-slate-500">{t.description}</p>
-              <p className="mt-2 text-xs uppercase tracking-wide text-slate-400">{t.category}</p>
-              <Button
-                className="mt-4"
-                size="sm"
-                disabled={busy === `tpl:${t.key}`}
-                onClick={() => void launchTemplate(t.key)}
-              >
-                {busy === `tpl:${t.key}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                Launch & generate
-              </Button>
-            </div>
-          ))}
-        </div>
+        templates.length === 0 ? (
+          <MarketingEmptyState stateKey="no_templates" />
+        ) : (
+          <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+            {templates.map((t) => (
+              <div key={t.id} className="rounded-2xl border border-slate-200 bg-white p-4">
+                <p className="font-semibold text-slate-900">{t.name}</p>
+                <p className="mt-1 text-sm text-slate-500">{t.description}</p>
+                <p className="mt-2 text-xs uppercase tracking-wide text-slate-400">{t.category}</p>
+                <Button
+                  className="mt-4 min-h-9"
+                  size="sm"
+                  disabled={busy === `tpl:${t.key}`}
+                  onClick={() => void launchTemplate(t.key)}
+                >
+                  {busy === `tpl:${t.key}` ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                  Launch & generate
+                </Button>
+              </div>
+            ))}
+          </div>
+        )
       ) : null}
 
       {(view === "campaigns" || view === "analytics") && (
@@ -841,14 +940,19 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
             </div>
 
             {loading ? (
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <Loader2 className="h-4 w-4 animate-spin" /> Loading…
-              </div>
+              <MarketingSectionSkeleton label="Loading campaigns…" rows={4} />
             ) : error ? (
-              <p className="text-sm text-red-600">{error}</p>
+              <div className="space-y-2">
+                <p className="text-sm text-red-600" role="alert">
+                  {error}
+                </p>
+                <Button size="sm" variant="outline" onClick={() => void refetch()}>
+                  Retry
+                </Button>
+              </div>
             ) : (
-              <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-                <table className="w-full text-left text-sm">
+              <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                <table className="min-w-[720px] w-full text-left text-sm">
                   <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500">
                     <tr>
                       <th className="px-4 py-3">Campaign</th>
@@ -863,8 +967,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                     {promotions.map((p) => (
                       <tr key={p.id} className="border-b last:border-0">
                         <td className="px-4 py-3">
-                          <p className="font-medium text-slate-900">{p.name}</p>
-                          <p className="text-xs text-slate-500">
+                          <p className="font-medium text-slate-900 break-words">{p.name}</p>
+                          <p className="text-xs text-slate-500 break-words">
                             {p.slug}
                             {p.promo_code ? ` · ${p.promo_code}` : ""}
                             {p.content_generated_at ? " · content ready" : ""}
@@ -895,48 +999,53 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                               size="sm"
                               variant="outline"
                               title="Edit campaign"
+                              aria-label={`Edit campaign ${p.name}`}
                               onClick={() => openEdit(p)}
                             >
-                              <Pencil className="h-3.5 w-3.5" />
+                              <Pencil className="h-3.5 w-3.5" aria-hidden />
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
                               title="Generate campaign"
+                              aria-label={`Generate content for ${p.name}`}
                               disabled={busy === `${p.id}:generate`}
                               onClick={() => void generateCampaign(p.id)}
                             >
                               {busy === `${p.id}:generate` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                               ) : (
-                                <Sparkles className="h-3.5 w-3.5" />
+                                <Sparkles className="h-3.5 w-3.5" aria-hidden />
                               )}
                             </Button>
                             <Button
                               size="sm"
                               variant="outline"
                               title="Preview content"
+                              aria-label={`Preview content for ${p.name}`}
                               onClick={() => void loadDetail(p.id)}
                             >
-                              <Eye className="h-3.5 w-3.5" />
+                              <Eye className="h-3.5 w-3.5" aria-hidden />
                             </Button>
                             <Link
                               href={p.landing_page_path || `/campaigns/${p.slug}`}
                               target="_blank"
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200"
+                              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-slate-200"
                               title="Open landing page"
+                              aria-label={`Open landing page for ${p.name}`}
                             >
-                              <ExternalLink className="h-3.5 w-3.5" />
+                              <ExternalLink className="h-3.5 w-3.5" aria-hidden />
                             </Link>
                             {p.status === "active" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 title="Pause campaign"
+                                aria-label={`Pause campaign ${p.name}`}
                                 disabled={busy === `${p.id}:pause`}
                                 onClick={() => void runAction(p.id, "pause")}
                               >
-                                <Pause className="h-3.5 w-3.5" />
+                                <Pause className="h-3.5 w-3.5" aria-hidden />
                               </Button>
                             ) : p.status === "paused" ||
                               p.status === "draft" ||
@@ -952,6 +1061,11 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                                     : p.status === "paused"
                                       ? "Resume campaign"
                                       : "Activate campaign"
+                                }
+                                aria-label={
+                                  p.status === "draft" || p.status === "scheduled"
+                                    ? `Activate campaign ${p.name}`
+                                    : `Resume campaign ${p.name}`
                                 }
                                 disabled={busy === `${p.id}:resume` || busy === `${p.id}:activate`}
                                 onClick={() => {
@@ -970,40 +1084,43 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                                   });
                                 }}
                               >
-                                <Play className="h-3.5 w-3.5" />
+                                <Play className="h-3.5 w-3.5" aria-hidden />
                               </Button>
                             ) : null}
                             <Button
                               size="sm"
                               variant="outline"
+                              aria-label={`Duplicate campaign ${p.name}`}
                               disabled={busy === `${p.id}:duplicate`}
                               onClick={() => void runAction(p.id, "duplicate")}
                             >
-                              <Copy className="h-3.5 w-3.5" />
+                              <Copy className="h-3.5 w-3.5" aria-hidden />
                             </Button>
                             {p.status !== "ended" ? (
                               <Button
                                 size="sm"
                                 variant="outline"
                                 title="End campaign"
+                                aria-label={`End campaign ${p.name}`}
                                 disabled={busy === `${p.id}:end`}
                                 onClick={() => void runAction(p.id, "end")}
                               >
-                                <Square className="h-3.5 w-3.5" />
+                                <Square className="h-3.5 w-3.5" aria-hidden />
                               </Button>
                             ) : null}
                             <Button
                               size="sm"
                               variant="outline"
                               title="Delete campaign"
+                              aria-label={`Delete campaign ${p.name}`}
                               className="text-red-600 hover:bg-red-50 hover:text-red-700"
                               disabled={busy === `${p.id}:delete`}
                               onClick={() => void deleteCampaign(p)}
                             >
                               {busy === `${p.id}:delete` ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden />
                               ) : (
-                                <Trash2 className="h-3.5 w-3.5" />
+                                <Trash2 className="h-3.5 w-3.5" aria-hidden />
                               )}
                             </Button>
                           </div>
@@ -1012,8 +1129,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                     ))}
                     {promotions.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="px-4 py-8 text-center text-slate-500">
-                          No campaigns yet. Create one or launch a template.
+                        <td colSpan={6} className="px-4 py-4">
+                          <MarketingEmptyState stateKey="no_campaigns" className="border-0 bg-transparent" />
                         </td>
                       </tr>
                     ) : null}
@@ -1405,8 +1522,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                 Export CSV
               </Button>
             </div>
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-              <table className="w-full text-left text-sm">
+            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+              <table className="min-w-[640px] w-full text-left text-sm">
                 <thead className="border-b bg-slate-50 text-xs uppercase text-slate-500">
                   <tr>
                     <th className="px-4 py-3">Campaign</th>
@@ -1420,16 +1537,24 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
                 <tbody>
                   {(analytics?.summaries ?? []).map((s) => (
                     <tr key={s.promotionId} className="border-b last:border-0">
-                      <td className="px-4 py-3 font-medium">{s.name}</td>
+                      <td className="px-4 py-3 font-medium break-words">{s.name}</td>
                       <td className="px-4 py-3">{s.views}</td>
                       <td className="px-4 py-3">{s.clicks}</td>
                       <td className="px-4 py-3">{s.redemptions}</td>
                       <td className="px-4 py-3">{formatZar(s.revenueGeneratedZar)}</td>
-                      <td className="px-4 py-3">
-                        {s.roi == null ? "—" : `${(s.roi * 100).toFixed(0)}%`}
-                      </td>
+                      <td className="px-4 py-3">{formatSafeRoi(s.roi, s.views)}</td>
                     </tr>
                   ))}
+                  {(analytics?.summaries ?? []).length === 0 ? (
+                    <tr>
+                      <td colSpan={6} className="px-4 py-4">
+                        <MarketingEmptyState
+                          stateKey="insufficient_analytics"
+                          className="border-0 bg-transparent"
+                        />
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
@@ -1481,7 +1606,12 @@ function ContentList({
   facebookHint,
   googleConfigured,
   googleHint,
+  instagramConfigured,
+  instagramHint,
+  xConfigured,
+  xHint,
   emptyLabel,
+  emptyStateKey,
   onAssetUpdated,
 }: {
   content: ContentRow[];
@@ -1490,14 +1620,19 @@ function ContentList({
   facebookHint: string | null;
   googleConfigured: boolean;
   googleHint: string | null;
+  instagramConfigured: boolean;
+  instagramHint: string | null;
+  xConfigured: boolean;
+  xHint: string | null;
   emptyLabel: string;
+  emptyStateKey?: "no_draft_posts";
   onAssetUpdated?: (asset: AssetRow) => void;
 }) {
   if (!content.length) {
-    return (
-      <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-500">
-        {emptyLabel}
-      </p>
+    return emptyStateKey ? (
+      <MarketingEmptyState stateKey={emptyStateKey} description={emptyLabel} />
+    ) : (
+      <MarketingEmptyState title={emptyLabel.split(".")[0]} description={emptyLabel} />
     );
   }
   return (
@@ -1530,6 +1665,36 @@ function ContentList({
           )}
         </p>
       ) : null}
+      {!instagramConfigured ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {instagramHint ?? (
+            <>
+              Instagram one-click publish needs{" "}
+              <code className="font-mono text-xs">MARKETING_PROVIDER_INSTAGRAM=1</code>, a Page-linked
+              Professional account, and Connect from{" "}
+              <Link href="/office/marketing/connected-accounts" className="font-medium underline">
+                Connected Accounts
+              </Link>
+              . Public image URLs only (no data URLs).
+            </>
+          )}
+        </p>
+      ) : null}
+      {!xConfigured ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {xHint ?? (
+            <>
+              X one-click publish needs{" "}
+              <code className="font-mono text-xs">MARKETING_PROVIDER_X=1</code> and a connected account
+              from{" "}
+              <Link href="/office/marketing/connected-accounts" className="font-medium underline">
+                Connected Accounts
+              </Link>
+              .
+            </>
+          )}
+        </p>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-2">
         {content.map((c) => (
           <SocialContentCard
@@ -1552,6 +1717,8 @@ function ContentList({
             }
             facebookConfigured={facebookConfigured}
             googleConfigured={googleConfigured}
+            instagramConfigured={instagramConfigured}
+            xConfigured={xConfigured}
             onAssetUpdated={onAssetUpdated}
           />
         ))}
@@ -1565,19 +1732,27 @@ function SocialContentCard({
   asset,
   facebookConfigured,
   googleConfigured,
+  instagramConfigured,
+  xConfigured,
   onAssetUpdated,
+  onContentStatusChange,
 }: {
   content: ContentRow;
   asset: AssetRow | null;
   facebookConfigured: boolean;
   googleConfigured: boolean;
+  instagramConfigured: boolean;
+  xConfigured: boolean;
   onAssetUpdated?: (asset: AssetRow) => void;
+  onContentStatusChange?: (contentId: string, status: string) => void;
 }) {
   const cardRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [localAsset, setLocalAsset] = useState<AssetRow | null>(asset);
-  const text = content.html_body || content.body;
+  const [localStatus, setLocalStatus] = useState(content.status);
+  const [caption, setCaption] = useState(content.body);
+  const text = content.html_body || caption;
   const activeAsset = localAsset ?? asset;
   const payload = activeAsset?.template_payload ?? {};
   const width = activeAsset?.width ?? 1200;
@@ -1586,10 +1761,49 @@ function SocialContentCard({
   const customImage = isCustomCampaignAssetImage(activeAsset?.image_url);
   const previewMax = 280;
   const previewScale = Math.min(1, previewMax / width);
+  const isPublishChannel =
+    content.channel === "facebook" ||
+    content.channel === "google_business" ||
+    content.channel === "instagram" ||
+    content.channel === "twitter";
+  const publishConfigured =
+    content.channel === "facebook"
+      ? facebookConfigured
+      : content.channel === "google_business"
+        ? googleConfigured
+        : content.channel === "instagram"
+          ? instagramConfigured
+          : content.channel === "twitter"
+            ? xConfigured
+            : false;
+  const charLimit =
+    content.channel === "facebook"
+      ? 63_206
+      : content.channel === "google_business"
+        ? 1500
+        : content.channel === "instagram"
+          ? 2200
+          : content.channel === "twitter"
+            ? 280
+            : null;
+  const overLimit = charLimit != null && caption.trim().length > charLimit;
 
   useEffect(() => {
     setLocalAsset(asset);
   }, [asset]);
+
+  useEffect(() => {
+    setLocalStatus(content.status);
+    setCaption(content.body);
+  }, [content.id, content.status, content.body]);
+
+  function toastPublishFailure(res: { error?: string; data?: unknown }) {
+    const fields = {
+      error: res.error,
+      ...(typeof res.data === "object" && res.data ? (res.data as PublishFailureFields) : {}),
+    };
+    emitAdminToast(formatPublishFailureToast(fields), "error");
+  }
 
   async function copy() {
     const ok = await copyTextToClipboard(text);
@@ -1624,6 +1838,25 @@ function SocialContentCard({
   }
 
   async function publishFacebook() {
+    if (
+      !canInvokePublish({
+        busy: busy != null,
+        configured: facebookConfigured,
+        overLimit,
+        caption,
+      })
+    ) {
+      return;
+    }
+    const precheck = validatePublishPayloadClient({
+      channel: "facebook",
+      message: caption,
+      hasImage: Boolean(customImage || cardRef.current),
+    });
+    if (!precheck.ok) {
+      emitAdminToast(precheck.error, "error");
+      return;
+    }
     setBusy("fb");
     try {
       let imageDataUrl: string | null = null;
@@ -1640,21 +1873,51 @@ function SocialContentCard({
             ? `https://shalean.co.za/campaigns/${content.promotion.slug}`
             : "https://shalean.co.za/book",
       );
-      const res = await adminFetch<{ postId: string }>("/api/admin/promotions/publish-facebook", {
-        method: "POST",
-        body: JSON.stringify({
-          message: content.body,
-          imageDataUrl,
-          imageUrl,
-          link,
-          promotionId: content.promotion_id ?? null,
-        }),
-      });
+      const res = await adminFetch<{
+        postId: string;
+        correlationId?: string;
+        idempotentReplay?: boolean;
+      }>(
+        "/api/admin/promotions/publish-facebook",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            message: caption,
+            imageDataUrl,
+            imageUrl,
+            link,
+            promotionId: content.promotion_id ?? null,
+          }),
+        },
+      );
       if (res.error) {
-        emitAdminToast(res.error, "error");
+        toastPublishFailure(res);
         return;
       }
-      emitAdminToast(`Posted to Facebook (id ${res.data?.postId ?? "ok"}).`, "success");
+      if (res.data?.idempotentReplay) {
+        emitAdminToast(
+          `Duplicate publish skipped — an earlier post already exists (id ${res.data.postId})${
+            res.data.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+          }. Use different caption/link or send a new Idempotency-Key to repost.`,
+          "success",
+        );
+        return;
+      }
+      if (!res.data?.postId || res.data.postId === "unknown") {
+        emitAdminToast(
+          "Facebook did not return a confirmed post id. Check Connected Accounts and Platform Intelligence before retrying.",
+          "error",
+        );
+        return;
+      }
+      setLocalStatus("published");
+      onContentStatusChange?.(content.id, "published");
+      emitAdminToast(
+        `Posted to Facebook (id ${res.data.postId})${
+          res.data.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+        }.`,
+        "success",
+      );
     } catch (e) {
       emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
     } finally {
@@ -1663,6 +1926,25 @@ function SocialContentCard({
   }
 
   async function publishGoogleBusiness() {
+    if (
+      !canInvokePublish({
+        busy: busy != null,
+        configured: googleConfigured,
+        overLimit,
+        caption,
+      })
+    ) {
+      return;
+    }
+    const precheck = validatePublishPayloadClient({
+      channel: "google_business",
+      message: caption,
+      hasImage: Boolean(customImage || cardRef.current),
+    });
+    if (!precheck.ok) {
+      emitAdminToast(precheck.error, "error");
+      return;
+    }
     setBusy("gbp");
     try {
       let imageDataUrl: string | null = null;
@@ -1679,12 +1961,12 @@ function SocialContentCard({
             ? `https://shalean.co.za/campaigns/${content.promotion.slug}`
             : "https://shalean.co.za/book",
       );
-      const res = await adminFetch<{ postName: string }>(
+      const res = await adminFetch<{ postName: string; correlationId?: string }>(
         "/api/admin/promotions/publish-google-business",
         {
           method: "POST",
           body: JSON.stringify({
-            message: content.body,
+            message: caption,
             imageDataUrl,
             imageUrl,
             link,
@@ -1694,10 +1976,149 @@ function SocialContentCard({
         },
       );
       if (res.error) {
-        emitAdminToast(res.error, "error");
+        toastPublishFailure(res);
         return;
       }
-      emitAdminToast(`Posted to Google Business (${res.data?.postName ?? "ok"}).`, "success");
+      setLocalStatus("published");
+      onContentStatusChange?.(content.id, "published");
+      emitAdminToast(
+        `Posted to Google Business (${res.data?.postName ?? "ok"})${
+          res.data?.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+        }.`,
+        "success",
+      );
+    } catch (e) {
+      emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function publishInstagram() {
+    if (
+      !canInvokePublish({
+        busy: busy != null,
+        configured: instagramConfigured,
+        overLimit,
+        caption,
+      })
+    ) {
+      return;
+    }
+    const publicUrl = resolveInstagramPublishImageUrl(activeAsset?.image_url);
+    const precheck = validatePublishPayloadClient({
+      channel: "instagram",
+      message: caption,
+      hasImage: Boolean(publicUrl),
+      hasPublicImageUrl: Boolean(publicUrl),
+    });
+    if (!precheck.ok) {
+      emitAdminToast(precheck.error, "error");
+      return;
+    }
+    setBusy("ig");
+    try {
+      const link = canonicalizePublicSiteUrl(
+        typeof payload.landing === "string"
+          ? payload.landing
+          : content.promotion?.slug
+            ? `https://shalean.co.za/campaigns/${content.promotion.slug}`
+            : "https://shalean.co.za/book",
+      );
+      const res = await adminFetch<{ mediaId: string; permalink?: string | null; correlationId?: string }>(
+        "/api/admin/promotions/publish-instagram",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            message: caption,
+            imageUrl: publicUrl,
+            link,
+            promotionId: content.promotion_id ?? null,
+          }),
+        },
+      );
+      if (res.error) {
+        toastPublishFailure(res);
+        return;
+      }
+      setLocalStatus("published");
+      onContentStatusChange?.(content.id, "published");
+      emitAdminToast(
+        `Posted to Instagram (id ${res.data?.mediaId ?? "ok"})${
+          res.data?.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+        }.`,
+        "success",
+      );
+    } catch (e) {
+      emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function publishX() {
+    if (
+      !canInvokePublish({
+        busy: busy != null,
+        configured: xConfigured,
+        overLimit,
+        caption,
+      })
+    ) {
+      return;
+    }
+    const precheck = validatePublishPayloadClient({
+      channel: "twitter",
+      message: caption,
+      hasImage: false,
+    });
+    if (!precheck.ok) {
+      emitAdminToast(precheck.error, "error");
+      return;
+    }
+    setBusy("x");
+    try {
+      const res = await adminFetch<{
+        tweetId?: string;
+        postId?: string;
+        correlationId?: string;
+        idempotentReplay?: boolean;
+      }>("/api/admin/promotions/publish-x", {
+        method: "POST",
+        body: JSON.stringify({
+          message: caption,
+          promotionId: content.promotion_id ?? null,
+        }),
+      });
+      if (res.error) {
+        toastPublishFailure(res);
+        return;
+      }
+      const tweetId = res.data?.tweetId ?? res.data?.postId;
+      if (res.data?.idempotentReplay) {
+        emitAdminToast(
+          `Duplicate X post skipped — an earlier tweet already exists (id ${tweetId ?? "unknown"})${
+            res.data.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+          }. Change the text or send a new Idempotency-Key to repost.`,
+          "success",
+        );
+        return;
+      }
+      if (!tweetId) {
+        emitAdminToast(
+          "X did not return a confirmed tweet id. Check Connected Accounts before retrying.",
+          "error",
+        );
+        return;
+      }
+      setLocalStatus("published");
+      onContentStatusChange?.(content.id, "published");
+      emitAdminToast(
+        `Posted to X (id ${tweetId})${
+          res.data?.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+        }.`,
+        "success",
+      );
     } catch (e) {
       emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
     } finally {
@@ -1751,17 +2172,66 @@ function SocialContentCard({
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="rounded-2xl border border-slate-200 bg-white p-4" aria-busy={busy != null}>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
           {CHANNEL_LABELS[content.channel] ?? content.channel}
         </p>
-        <p className="text-xs text-slate-400">{content.promotion?.name}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            role="status"
+            aria-label={`Content status ${localStatus}`}
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+              CONTENT_STATUS_BADGE[localStatus] ?? "bg-slate-100 text-slate-600",
+            )}
+          >
+            {localStatus}
+          </span>
+          <p className="text-xs text-slate-400">{content.promotion?.name}</p>
+        </div>
       </div>
       {content.title ? <p className="mt-1 font-medium">{content.title}</p> : null}
-      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-slate-700">
-        {text.slice(0, 1200)}
-      </pre>
+      {isPublishChannel ? (
+        <div className="mt-2">
+          <Label htmlFor={`caption-${content.id}`} className="text-xs text-slate-500">
+            Caption (editable before publish)
+          </Label>
+          <textarea
+            id={`caption-${content.id}`}
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            rows={5}
+            className={cn(
+              "mt-1 w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700",
+              overLimit && "border-rose-300 bg-rose-50",
+            )}
+            aria-invalid={overLimit}
+            aria-describedby={
+              charLimit != null ? `caption-count-${content.id}` : undefined
+            }
+          />
+          {charLimit != null ? (
+            <p
+              id={`caption-count-${content.id}`}
+              className={cn("mt-1 text-[11px]", overLimit ? "text-rose-700" : "text-slate-400")}
+              role={overLimit ? "alert" : undefined}
+            >
+              {caption.trim().length.toLocaleString()} / {charLimit.toLocaleString()} characters
+              {overLimit ? " — over limit; shorten before publish." : ""}
+            </p>
+          ) : null}
+        </div>
+      ) : (
+        <>
+          <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-xs text-slate-700">
+            {text.slice(0, 1200)}
+          </pre>
+          <p className="mt-2 text-[11px] text-slate-500">
+            Copy / download only — one-click publish is not enabled for this channel.
+          </p>
+        </>
+      )}
 
       {showImage ? (
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-100 bg-slate-50 p-3">
@@ -1799,17 +2269,18 @@ function SocialContentCard({
         </div>
       ) : null}
 
-      <input
+                      <input
         ref={fileInputRef}
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         className="hidden"
+        aria-label="Upload campaign image"
         onChange={(e) => void onFileSelected(e.target.files?.[0])}
       />
 
       <div className="mt-3 flex flex-wrap gap-2">
-        <Button size="sm" variant="outline" onClick={() => void copy()}>
-          <Copy className="mr-1.5 h-3.5 w-3.5" /> Copy text
+        <Button size="sm" variant="outline" onClick={() => void copy()} aria-label="Copy caption text">
+          <Copy className="mr-1.5 h-3.5 w-3.5" aria-hidden /> Copy text
         </Button>
         {showImage ? (
           <>
@@ -1818,11 +2289,12 @@ function SocialContentCard({
               variant="outline"
               disabled={busy === "png"}
               onClick={() => void downloadPng()}
+              aria-label="Download PNG creative"
             >
               {busy === "png" ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
               ) : (
-                <Download className="mr-1.5 h-3.5 w-3.5" />
+                <Download className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               )}
               Download PNG
             </Button>
@@ -1832,11 +2304,12 @@ function SocialContentCard({
               disabled={busy === "upload" || (!content.promotion_id && !activeAsset?.id)}
               onClick={() => fileInputRef.current?.click()}
               title="Replace with an image from your computer"
+              aria-label="Upload custom image"
             >
               {busy === "upload" ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
               ) : (
-                <ImagePlus className="mr-1.5 h-3.5 w-3.5" />
+                <ImagePlus className="mr-1.5 h-3.5 w-3.5" aria-hidden />
               )}
               Upload image
             </Button>
@@ -1846,11 +2319,12 @@ function SocialContentCard({
                 variant="outline"
                 disabled={busy === "reset" || !activeAsset?.id}
                 onClick={() => void restoreTemplate()}
+                aria-label="Restore generated template image"
               >
                 {busy === "reset" ? (
-                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                  <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
                 ) : (
-                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" />
+                  <RotateCcw className="mr-1.5 h-3.5 w-3.5" aria-hidden />
                 )}
                 Use template
               </Button>
@@ -1860,18 +2334,28 @@ function SocialContentCard({
         {content.channel === "facebook" ? (
           <Button
             size="sm"
-            disabled={!facebookConfigured || busy === "fb"}
+            className="min-h-9"
+            disabled={
+              !canInvokePublish({
+                busy: busy != null,
+                configured: facebookConfigured,
+                overLimit,
+                caption,
+              })
+            }
             onClick={() => void publishFacebook()}
             title={
               facebookConfigured
                 ? "Post image + caption to your Facebook Page"
                 : "Configure FACEBOOK_PAGE_ID and FACEBOOK_PAGE_ACCESS_TOKEN"
             }
+            aria-label="Post to Facebook Page"
+            aria-busy={busy === "fb"}
           >
             {busy === "fb" ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
             ) : (
-              <Share2 className="mr-1.5 h-3.5 w-3.5" />
+              <Share2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
             )}
             Post to Facebook
           </Button>
@@ -1879,23 +2363,100 @@ function SocialContentCard({
         {content.channel === "google_business" ? (
           <Button
             size="sm"
-            disabled={!googleConfigured || busy === "gbp"}
+            className="min-h-9"
+            disabled={
+              !canInvokePublish({
+                busy: busy != null,
+                configured: googleConfigured,
+                overLimit,
+                caption,
+              })
+            }
             onClick={() => void publishGoogleBusiness()}
             title={
               googleConfigured
                 ? "Upload image and create a Google Business local post"
                 : "Connect Google Business Profile in Connected Accounts"
             }
+            aria-label="Upload to Google Business Profile"
+            aria-busy={busy === "gbp"}
           >
             {busy === "gbp" ? (
-              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
             ) : (
-              <Share2 className="mr-1.5 h-3.5 w-3.5" />
+              <Share2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
             )}
             Upload to Google Business
           </Button>
         ) : null}
+        {content.channel === "instagram" ? (
+          <Button
+            size="sm"
+            className="min-h-9"
+            disabled={
+              !canInvokePublish({
+                busy: busy != null,
+                configured: instagramConfigured,
+                overLimit,
+                caption,
+              })
+            }
+            onClick={() => void publishInstagram()}
+            title={
+              instagramConfigured
+                ? "Post image + caption to Instagram (public asset URL required)"
+                : "Enable Instagram flag and connect a Page-linked Professional account"
+            }
+            aria-label="Post to Instagram"
+            aria-busy={busy === "ig"}
+          >
+            {busy === "ig" ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Share2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            )}
+            Post to Instagram
+          </Button>
+        ) : null}
+        {content.channel === "twitter" ? (
+          <Button
+            size="sm"
+            className="min-h-9"
+            disabled={
+              !canInvokePublish({
+                busy: busy != null,
+                configured: xConfigured,
+                overLimit,
+                caption,
+              })
+            }
+            onClick={() => void publishX()}
+            title={
+              xConfigured
+                ? "Post text to your connected X account"
+                : "Connect X from Connected Accounts and enable MARKETING_PROVIDER_X"
+            }
+            aria-label="Post to X"
+            aria-busy={busy === "x"}
+          >
+            {busy === "x" ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Share2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            )}
+            Post to X
+          </Button>
+        ) : null}
       </div>
+      {isPublishChannel && !publishConfigured ? (
+        <p className="mt-2 text-[11px] text-amber-800">
+          Publishing is disabled until this provider is connected or configured. Open{" "}
+          <Link href="/office/marketing/connected-accounts" className="underline">
+            Connected Accounts
+          </Link>
+          .
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -1908,11 +2469,7 @@ function AssetsList({
   onAssetUpdated?: (asset: AssetRow) => void;
 }) {
   if (!assets.length) {
-    return (
-      <p className="rounded-2xl border border-dashed border-slate-200 p-8 text-center text-slate-500">
-        No assets yet. Generate a campaign to create social templates and QR codes.
-      </p>
-    );
+    return <MarketingEmptyState stateKey="no_assets" />;
   }
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

@@ -1,0 +1,29 @@
+﻿{
+    "stagingAlias":  "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+    "stagingIsAncestorOfMain":  false,
+    "deploymentUrl":  "https://shalean-platform-ynl0irfc5-shalean-cleaning-services.vercel.app",
+    "decision":  "PASS_staging",
+    "productGates":  "PASS",
+    "exactShaMatch":  true,
+    "featureSha":  "327c9f76b449a1fd7ae42daf137f078905e33dd8",
+    "health":  {
+                   "service":  "shalean-environment",
+                   "vercelEnv":  "preview",
+                   "shaleanAppEnv":  "staging",
+                   "timestamp":  "2026-07-17T12:32:10.195Z",
+                   "deployment":  "staging",
+                   "status":  "ok",
+                   "issues":  [
+
+                              ],
+                   "gitBranch":  "staging"
+               },
+    "readyState":  "READY",
+    "mergeSha":  "9c1f0d3be07c805239ebfce2c2a5c4bfe7a7ebb7",
+    "ciVitest":  "FAIL_OPS_CI_001_locations_crawl_only",
+    "deploymentId":  "dpl_C5ARRsNDU5k4oGndcksXiopsAvbq",
+    "runtimeErrorsMarketing2h":  0,
+    "production":  "NO-GO",
+    "pr":  "https://github.com/shalean-developer/shalean-platform/pull/52",
+    "mainSha":  "ad5b4ccb242f2e1a3c4a98edf421820324a8e18e"
+}

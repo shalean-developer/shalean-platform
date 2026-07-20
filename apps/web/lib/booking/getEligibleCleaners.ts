@@ -71,9 +71,12 @@ export type GetEligibleCleanersParams = {
   enforcePublicDailyWorkloadLimit?: boolean;
 };
 
-/** Shared select for day occupancy — keep in sync with {@link getEligibleCleaners} bookings query. */
+/**
+ * Shared select for day occupancy — keep in sync with {@link getEligibleCleaners} bookings query.
+ * The authoritative calendar column is `bookings.date`; the table has no `booking_date` column.
+ */
 export const OCCUPYING_BOOKINGS_SELECT =
-  "id, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, booking_date, time, start_time, end_time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot";
+  "id, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, start_time, end_time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot";
 
 /** One day of slot-occupying bookings (used by the time-slot grid preload). */
 export async function fetchOccupyingBookingsForDate(
@@ -84,7 +87,7 @@ export async function fetchOccupyingBookingsForDate(
     .from("bookings")
     .select(OCCUPYING_BOOKINGS_SELECT)
     .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
-    .or(`date.eq.${dateYmd},booking_date.eq.${dateYmd}`);
+    .eq("date", dateYmd);
   if (error) {
     console.error("[getEligibleCleaners] occupying bookings query failed:", error.message);
     return [];
@@ -298,7 +301,7 @@ export async function getEligibleCleaners(
           .from("bookings")
           .select(OCCUPYING_BOOKINGS_SELECT)
           .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
-          .or(`date.eq.${params.date},booking_date.eq.${params.date}`)
+          .eq("date", params.date)
       : Promise.resolve({ data: null as OccupyingBookingRow[] | null, error: null }),
     needPrefs
       ? admin

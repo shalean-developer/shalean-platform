@@ -303,7 +303,7 @@ export async function scanDailyCleanerWorkloadShadow(
   const statuses = params.statuses ?? [...BOOKING_SLOT_OCCUPYING_STATUSES];
   const { data, error } = await admin
     .from("bookings")
-    .select("id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, date, booking_date, status, duration_minutes")
+    .select("id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, date, status, duration_minutes")
     .in("status", [...statuses])
     .gte("date", params.dateFromYmd)
     .lte("date", params.dateToYmd);

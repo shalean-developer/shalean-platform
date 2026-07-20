@@ -288,6 +288,7 @@ describe("H-15 cron lock — per-route guards", () => {
     { dir: "backfill-paystack-payments", key: "backfillPaystackPayments" },
     { dir: "accounting-sync", key: "accountingSync" },
     { dir: "ops-health", key: "opsHealthMetrics" },
+    { dir: "process-social-publish-jobs", key: "processSocialPublishJobs" },
   ];
 
   for (const route of protectedRoutes) {
@@ -331,6 +332,7 @@ describe("H-15 cron lock — per-route guards", () => {
       "referral-credit-reminders",
       "referral-credit-expiry",
       "promotions",
+      "recover-stuck-publish",
     ];
 
     for (const r of routesAlwaysOk) {
@@ -386,6 +388,7 @@ describe("H-15 cron lock — coverage manifest", () => {
     "backfill-paystack-payments",
     "accounting-sync",
     "ops-health",
+    "process-social-publish-jobs",
   ]);
 
   const expectedUnblocked = new Set([
@@ -406,6 +409,7 @@ describe("H-15 cron lock — coverage manifest", () => {
     "referral-credit-reminders",
     "referral-credit-expiry",
     "promotions",
+    "recover-stuck-publish",
   ]);
 
   it("all cron route directories are accounted for", () => {

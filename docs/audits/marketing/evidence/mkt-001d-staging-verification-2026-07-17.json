@@ -1,0 +1,48 @@
+{
+  "phase": "MKT-001D",
+  "type": "staging-verification",
+  "recordedAt": "2026-07-17T09:17:00Z",
+  "decision": "PASS_STAGING",
+  "production": "NO-GO",
+  "pr": {
+    "number": 45,
+    "url": "https://github.com/shalean-developer/shalean-platform/pull/45",
+    "state": "MERGED",
+    "mergedAt": "2026-07-17T09:08:03Z",
+    "mergeCommit": "2e293547fc5dbcf5086a0fe004935d99203b16d8"
+  },
+  "deployment": {
+    "id": "dpl_XHV7YTHtV4kBcsYsNTe51p8USAQH",
+    "readyState": "READY",
+    "githubCommitRef": "staging",
+    "githubCommitSha": "2e293547fc5dbcf5086a0fe004935d99203b16d8",
+    "branchAlias": "shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+    "deploymentUrl": "shalean-platform-4bg4nrymk-shalean-cleaning-services.vercel.app"
+  },
+  "mainUntouched": {
+    "originMain": "ad5b4ccb242f2e1a3c4a98edf421820324a8e18e",
+    "mergeShaIsAncestorOfMain": false
+  },
+  "tests": {
+    "testsPassed": 43,
+    "testsFailed": 0
+  },
+  "stagingDatabase": {
+    "ref": "gbgnemlpyykyhpqqbgru",
+    "ledgerTable": "marketing_publish_idempotency",
+    "ledgerRowCount": 0,
+    "historyRowCount": 0
+  },
+  "runtime": {
+    "errorFatalOnMergeDeploy": "none_observed"
+  },
+  "reviewChecklist": "PASS",
+  "operatorGated": [
+    "admin publish success/failure UX",
+    "history filters",
+    "connected accounts registry cards"
+  ],
+  "ciNotes": {
+    "liveInternalLinkCrawl": "RED_UNRELATED_PROD_LOCATIONS_404"
+  }
+}

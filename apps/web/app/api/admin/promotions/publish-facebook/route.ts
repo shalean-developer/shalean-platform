@@ -1,14 +1,10 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
-  diagnoseFacebookPagePublishConfig,
-  getFacebookPagePublishConfig,
-  publishFacebookPageFeed,
-  publishFacebookPagePhoto,
-  publishFacebookPagePhotoFromUrl,
-} from "@/lib/promotions/facebookPublish";
-import { recordPromotionEvent } from "@/lib/promotions/server";
+  getProviderRegistry,
+  publishOutcomeToHttp,
+  runPublish,
+} from "@/lib/promotions/providers";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -18,21 +14,25 @@ export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  const diagnosis = await diagnoseFacebookPagePublishConfig();
-  const cfg = getFacebookPagePublishConfig();
+  const provider = getProviderRegistry().requireEnabled("facebook");
+  const status = await provider.validateConnection();
+  const details = status.details ?? {};
+
   return NextResponse.json({
-    configured: diagnosis.configured,
-    pageId: cfg ? `${cfg.pageId.slice(0, 4)}…` : null,
-    tokenKind: diagnosis.tokenKind,
-    tokenSubjectName: diagnosis.tokenSubjectName,
-    okForPublish: diagnosis.okForPublish,
-    hint: diagnosis.hint,
+    configured: status.configured,
+    pageId: details.pageIdMasked ?? null,
+    tokenKind: details.tokenKind ?? null,
+    tokenSubjectName: status.displayName,
+    okForPublish: Boolean(details.okForPublish ?? status.connected),
+    hint: status.hint,
   });
 }
 
 /**
  * POST — publish campaign copy to the Facebook Page.
  * Body: { message, imageDataUrl?, link?, promotionId? }
+ *
+ * Orchestration (idempotency, observability, history) lives in runPublish (MKT-001C).
  */
 export async function POST(request: Request) {
   const auth = await requireAdminApi(request);
@@ -51,59 +51,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid body." }, { status: 400 });
   }
 
-  const message = body.message?.trim() ?? "";
-  if (!message) {
-    return NextResponse.json({ error: "message is required." }, { status: 400 });
-  }
-
-  const result = body.imageDataUrl?.startsWith("data:image/")
-    ? await publishFacebookPagePhoto({
-        message,
-        imageDataUrl: body.imageDataUrl,
-        link: body.link,
-      })
-    : body.imageUrl?.trim()
-      ? await publishFacebookPagePhotoFromUrl({
-          message,
-          imageUrl: body.imageUrl.trim(),
-          link: body.link,
-        })
-      : await publishFacebookPageFeed({ message, link: body.link });
-
-  if (!result.ok) {
-    const status = result.status && result.status >= 400 && result.status < 600 ? result.status : 400;
-    return NextResponse.json({ error: result.error }, { status });
-  }
-
-  if (body.promotionId) {
-    const admin = getSupabaseAdmin();
-    if (admin) {
-      try {
-        await recordPromotionEvent(admin, {
-          promotionId: body.promotionId,
-          eventType: "click",
-          metadata: {
-            channel: "facebook",
-            action: "published",
-            postId: result.postId,
-            actor: auth.email,
-          },
-        });
-        await admin.from("promotion_audit_log").insert({
-          promotion_id: body.promotionId,
-          action: "publish_facebook",
-          actor: auth.email,
-          after_state: { postId: result.postId, photoId: result.photoId ?? null },
-        });
-      } catch {
-        // best-effort
-      }
-    }
-  }
-
-  return NextResponse.json({
-    ok: true,
-    postId: result.postId,
-    photoId: result.photoId ?? null,
+  const outcome = await runPublish({
+    providerKey: "facebook",
+    publishedBy: auth.email,
+    explicitIdempotencyKey: request.headers.get("idempotency-key"),
+    request: {
+      message: body.message?.trim() ?? "",
+      imageDataUrl: body.imageDataUrl,
+      imageUrl: body.imageUrl,
+      link: body.link,
+      promotionId: body.promotionId,
+    },
   });
+
+  const http = publishOutcomeToHttp(outcome);
+  // Preserve prior Facebook success shape (omit GBP-only fields when unused).
+  if (outcome.ok && !outcome.idempotentReplay) {
+    return NextResponse.json(
+      {
+        ok: true,
+        postId: outcome.result.postId ?? outcome.result.externalPostId,
+        photoId: outcome.result.photoId ?? null,
+        correlationId: outcome.correlationId,
+      },
+      { status: 200 },
+    );
+  }
+  if (outcome.ok && outcome.idempotentReplay) {
+    return NextResponse.json(
+      {
+        ok: true,
+        postId: outcome.result.postId ?? outcome.result.externalPostId,
+        idempotentReplay: true,
+        correlationId: outcome.correlationId,
+      },
+      { status: 200 },
+    );
+  }
+  return NextResponse.json(http.body, { status: http.status });
 }

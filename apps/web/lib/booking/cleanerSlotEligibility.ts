@@ -74,7 +74,7 @@ export function cleanerAccountEligibleForOpsAssignment(row: {
 }
 
 export function bookingCalendarDateYmd(row: OccupyingBookingRow): string | null {
-  const d = row.booking_date ?? row.date ?? null;
+  const d = row.date ?? row.booking_date ?? null;
   if (typeof d !== "string") return null;
   const t = d.trim();
   return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : null;
@@ -194,10 +194,10 @@ export async function findCleanerSlotOccupancyConflict(
 
   const { data, error } = await admin
     .from("bookings")
-    .select("id, cleaner_id, selected_cleaner_id, date, booking_date, time, start_time, end_time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot")
+    .select("id, cleaner_id, selected_cleaner_id, date, time, start_time, end_time, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot")
     .in("status", [...BOOKING_SLOT_OCCUPYING_STATUSES])
     .or(`cleaner_id.eq.${cleanerId},selected_cleaner_id.eq.${cleanerId}`)
-    .or(`date.eq.${dateYmd},booking_date.eq.${dateYmd}`);
+    .eq("date", dateYmd);
 
   if (error || !Array.isArray(data)) return null;
 

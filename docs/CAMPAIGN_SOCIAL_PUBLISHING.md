@@ -9,9 +9,27 @@
    - **Post to Facebook** (Facebook cards only) — publishes image + caption to your Page when configured
    - **Upload to Google Business** (Google Business cards only) — creates a local post with image when OAuth is connected
 
-Also open **Growth → Connected Accounts** to connect Google Business Profile, pick a location, and review publish history.
+Also open **Growth → Connected Accounts** to connect Facebook (Meta OAuth) or Google Business Profile, pick a Page/location, and review publish history.
 
-## Facebook one-click env
+## Facebook Connected Accounts (OAuth — preferred)
+
+1. Set Meta app credentials:
+
+```
+FACEBOOK_APP_ID=...
+FACEBOOK_APP_SECRET=...
+FACEBOOK_REDIRECT_URI=https://your-host/api/oauth/facebook/callback
+MARKETING_PROVIDER_FACEBOOK=1
+MARKETING_OAUTH_ENCRYPTION_KEY=...   # same key used for GBP/IG token encryption
+FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK=0  # keep disabled for normal operation
+```
+
+2. In **Connected Accounts**, click **Connect Facebook**, approve Meta permissions (`pages_show_list`, `pages_read_engagement`, `pages_manage_posts`), and select the Shalean Page if more than one is returned.
+3. Page tokens are encrypted in `social_accounts`. Publishing prefers the connected account; expired tokens show **Reconnect Facebook**.
+
+### Emergency / local env fallback only
+
+Only when `FACEBOOK_ALLOW_ENV_TOKEN_FALLBACK=1` (disabled by default):
 
 ```
 FACEBOOK_PAGE_ID=your_numeric_page_id
@@ -19,6 +37,8 @@ FACEBOOK_PAGE_ACCESS_TOKEN=page_token_with_pages_manage_posts
 ```
 
 Optional: `FACEBOOK_GRAPH_API_VERSION=v22.0` (default `v22.0`)
+
+Do **not** use env tokens as the normal recovery path — reconnect via OAuth first.
 
 ### Required token type (important)
 
@@ -30,7 +50,7 @@ You need a **Page access token** with:
 - `pages_read_engagement`
 - (usually also) `pages_show_list` when generating the token
 
-### How to get a Page token (Graph API Explorer)
+### How to get a Page token for emergency fallback (Graph API Explorer)
 
 1. Open [Graph API Explorer](https://developers.facebook.com/tools/explorer/)
 2. Select your Meta app
@@ -41,9 +61,9 @@ You need a **Page access token** with:
 7. Copy that row’s **`id`** → `FACEBOOK_PAGE_ID`
 8. For production, exchange for a long-lived Page token (or use a System User token from Meta Business Suite)
 
-If you see `(#200) The permission(s) publish_actions are not available`, the env token is almost certainly a **User** token. Replace it with the Page token from step 6.
+If you see `(#200) The permission(s) publish_actions are not available`, the env token is almost certainly a **User** token. Replace it with the Page token from step 6 — or reconnect via OAuth.
 
-Without these env vars, Copy + Download PNG still work for manual posting in Meta Business Suite / Creator Studio.
+Without a connected account (and with env fallback disabled), Copy + Download PNG still work for manual posting in Meta Business Suite / Creator Studio.
 
 ## Google Business Profile (OAuth)
 
@@ -55,9 +75,20 @@ Google publishing uses the official OAuth 2.0 authorization-code flow with offli
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=https://shalean.co.za/api/oauth/google/callback
-# Optional dedicated 64-char hex key (otherwise derived from GOOGLE_CLIENT_SECRET):
-# SOCIAL_TOKEN_ENCRYPTION_KEY=
+# REQUIRED once connected — dedicated AES-256-GCM key, independent of GOOGLE_CLIENT_SECRET:
+MARKETING_OAUTH_ENCRYPTION_KEY=
+# Optional during rotation (old key, kept until re-encryption completes):
+# MARKETING_OAUTH_ENCRYPTION_KEY_PREVIOUS=
 ```
+
+> **Security (MKT-001A):** Token encryption is decoupled from `GOOGLE_CLIENT_SECRET`.
+> Set `MARKETING_OAUTH_ENCRYPTION_KEY` to a random 64-char hex value
+> (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`).
+> Ciphertext is versioned (`v2:<keyId>:…`) so keys can be rotated without
+> disconnecting accounts — see
+> [`docs/runbooks/social-token-encryption-key-rotation.md`](./runbooks/social-token-encryption-key-rotation.md).
+> The legacy `SOCIAL_TOKEN_ENCRYPTION_KEY` is still accepted as a key source; the
+> old `GOOGLE_CLIENT_SECRET` fallback has been removed.
 
 Local example redirect URI: `http://localhost:3000/api/oauth/google/callback`
 
@@ -104,3 +135,47 @@ Local example redirect URI: `http://localhost:3000/api/oauth/google/callback`
 2. Download PNG from Social or Assets
 3. Facebook → Create post → paste + upload image → Publish  
    or Google Business Profile → Create post → paste + upload image → Publish
+
+## Provider architecture (MKT-001C / MKT-001D)
+
+Publishing is orchestrated by `runPublish()` through a `SocialProvider` registry:
+
+- Live adapters: `facebook`, `google_business`, `instagram` (MKT-001G; flag default off)
+- Registered stubs (copy/download only until adapters ship): `linkedin`, `pinterest`, `x`
+
+### Feature flags
+
+```
+# Fail-closed: all providers DISABLED unless explicitly enabled (1|true|on|enabled).
+# Unset must never expose an unfinished provider.
+MARKETING_PROVIDER_FACEBOOK=1
+MARKETING_PROVIDER_GOOGLE_BUSINESS=0
+MARKETING_PROVIDER_INSTAGRAM=0
+MARKETING_PROVIDER_LINKEDIN=0
+MARKETING_PROVIDER_PINTEREST=0
+MARKETING_PROVIDER_X=0
+```
+
+Enabling a stub flag alone does **not** implement API publishing — it only surfaces registry metadata. Do not enable stub flags in production without a real adapter + ledger migration.
+
+Production releases must record the enabled set in `docs/releases/marketing-provider-release-manifest.md`.
+
+### Failure responses
+
+Publish APIs return structured fields (surfaced in Social Posts toasts):
+
+- `error`, `classification`, `retryable`, `retryAfterMs`, `recoveryGuidance`, `correlationId`
+
+### Operator surfaces
+
+| Surface | Purpose |
+|---------|---------|
+| Growth → Social Posts | Edit caption, validate limits, publish FB/GBP, copy/download other channels |
+| Growth → Connected Accounts | Registry-aligned platform cards, GBP OAuth, publish history filters |
+| Growth → Platform Intelligence | Ops health, queue/DLQ, provider & campaign insights, rule-based recommendations |
+| `GET /api/admin/promotions/providers` | Capability / flag snapshot (no secrets) |
+| `GET /api/admin/promotions/publish-intelligence` | Aggregated intelligence snapshot (admin-only) |
+
+### Governance
+
+Provider-scoped production: GBP remains NO-GO under MKT-001A-PROD and stays disabled by flag. Facebook (then Instagram via MKT-001G) may proceed through independent gates. See `docs/audits/marketing/MKT-001-META-PRODUCTION-RELEASE-ASSESSMENT.md` and `docs/releases/marketing-provider-release-manifest.md`. Do not blind-promote the whole staging branch.

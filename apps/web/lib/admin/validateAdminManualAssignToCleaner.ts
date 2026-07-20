@@ -56,7 +56,7 @@ async function loadAdminDailyWorkloadWarning(
 ): Promise<DailyWorkloadWarning | null> {
   const { data } = await admin
     .from("bookings")
-    .select("id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, date, booking_date, status, duration_minutes")
+    .select("id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, date, status, duration_minutes")
     .eq("date", params.dateYmd)
     .eq("cleaner_id", params.cleanerId)
     .neq("id", params.bookingId);

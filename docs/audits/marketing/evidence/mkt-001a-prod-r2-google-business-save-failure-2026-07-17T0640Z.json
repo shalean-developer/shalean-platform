@@ -1,0 +1,127 @@
+{
+  "investigation": "MKT-001A-PROD-R2",
+  "title": "Google Business Profile save failure — deep scan",
+  "captured_at": "2026-07-17T06:40:00Z",
+  "release_status": "NO-GO (production untouched)",
+  "branch": "fix/mkt-001a-google-business-save-failure",
+  "base_branch": "staging",
+  "environment": {
+    "target": "staging (persistent Vercel deployment)",
+    "supabase_project_ref": "gbgnemlpyykyhpqqbgru",
+    "oauth_scope": "https://www.googleapis.com/auth/business.manage",
+    "oauth_access_type": "offline",
+    "oauth_prompt": "consent",
+    "redirect_uri_source": "GOOGLE_REDIRECT_URI or NEXT_PUBLIC_SITE_URL + /api/oauth/google/callback",
+    "google_cloud_project_number": "525459256770 (from provider 403 body; shared OAuth client)"
+  },
+  "symptom": "UI toast: 'Connected to Google but saving the account failed.'",
+  "reproduction_timeline": [
+    {
+      "stage": "oauth_start",
+      "log": "[gbp] oauth_start",
+      "result": "ok — redirect to Google authorization"
+    },
+    {
+      "stage": "oauth_callback",
+      "log": "[gbp] oauth_callback (state validated)",
+      "result": "ok — CSRF state matched"
+    },
+    {
+      "stage": "token_exchange",
+      "log": "[gbp] oauth_token_exchange_ok",
+      "result": "ok — access_token + refresh_token received (v2 envelope path available)"
+    },
+    {
+      "stage": "list_accounts",
+      "log": "[gbp] list_accounts_failed { status: 403 } then { status: 429 }",
+      "result": "FAIL — first 403 'My Business Account Management API has not been used in project 525459256770 ... is disabled', subsequently 429 rate limit on rapid retries"
+    },
+    {
+      "stage": "list_locations",
+      "log": "(not reached)",
+      "result": "not reached — account discovery failed first"
+    },
+    {
+      "stage": "encrypt",
+      "log": "(not reached)",
+      "result": "not reached — saveGoogleBusinessConnection returns before encryptSecret()"
+    },
+    {
+      "stage": "social_accounts_upsert",
+      "log": "(not reached)",
+      "result": "not reached — no DB write attempted"
+    },
+    {
+      "stage": "oauth_save_failed",
+      "log": "[gbp] oauth_save_failed",
+      "result": "callback redirects to Connected Accounts with error=save_failed"
+    },
+    {
+      "stage": "ui_render",
+      "log": "ERROR_MESSAGES.save_failed",
+      "result": "generic 'saving the account failed' shown; provider detail discarded (diagnosability defect)"
+    }
+  ],
+  "staging_db_state": {
+    "query": "select provider, status, health, left(access_token,3) as access_prefix, ... from public.social_accounts;",
+    "rows": [],
+    "note": "social_accounts empty — no google_business row; v2 token persistence NOT proven"
+  },
+  "code_path": {
+    "entry": "components/admin/promotions/ConnectedAccountsPanel.tsx -> connectGoogle()",
+    "start": "app/api/oauth/google/route.ts (buildGoogleBusinessAuthUrl, sets CSRF cookie)",
+    "callback": "app/api/oauth/google/callback/route.ts (exchangeGoogleAuthorizationCode -> saveGoogleBusinessConnection)",
+    "save": "lib/google-business.ts saveGoogleBusinessConnection() L480",
+    "discovery": "lib/google-business.ts listAllGoogleBusinessLocations() L260 -> listGoogleBusinessAccounts() L181 -> googleFetch() L144",
+    "failure_point": "listGoogleBusinessAccounts googleFetch 403 -> formatGoogleBusinessError() L85 -> returned to saveGoogleBusinessConnection L498-499 (returns before encrypt L522/upsert L540)"
+  },
+  "root_cause": {
+    "primary": {
+      "candidate": "Disabled Google Business Profile APIs on the OAuth client's GCP project",
+      "evidence_for": "403 body 'API has not been used in project 525459256770 ... is disabled'; token exchange succeeds so OAuth client/redirect are valid",
+      "evidence_against": "none",
+      "decision": "CONFIRMED — configuration-only (operator action in Google Cloud)"
+    },
+    "secondary": [
+      {
+        "candidate": "Rate limit (429)",
+        "decision": "Contributing — rapid reconnect retries produced 429 that can mask the underlying 403; respect backoff"
+      },
+      {
+        "candidate": "UI hides provider error (diagnosability)",
+        "decision": "CONFIRMED code defect — callback collapsed all post-exchange failures into generic save_failed and UI discarded detail"
+      }
+    ]
+  },
+  "candidates_ruled_out": {
+    "wrong_oauth_scopes": "business.manage is sufficient for account/location/local posts",
+    "redirect_mismatch": "token exchange succeeded => redirect_uri matched the client config",
+    "encryption_failure": "not reached (discovery failed first)",
+    "db_rls_constraint": "not reached (no upsert attempted)",
+    "no_business_profile_account": "cannot confirm ownership until APIs enabled; save path for zero-accounts would persist pending_location, not save_failed"
+  },
+  "remediation": {
+    "code": [
+      "lib/oauth/googleBusinessSaveError.ts — pure classifier + sanitized reason->message map",
+      "app/api/oauth/google/callback/route.ts — attach sanitized reason token (drop raw detail from browser redirect; keep full error server-side)",
+      "components/admin/promotions/ConnectedAccountsPanel.tsx — render actionable message from reason",
+      "lib/oauth/__tests__/googleBusinessSaveError.test.ts — 9 tests incl. malicious/unexpected inputs"
+    ],
+    "operator_config_required": [
+      "Enable mybusinessaccountmanagement.googleapis.com in GCP project 525459256770",
+      "Enable mybusinessbusinessinformation.googleapis.com",
+      "Enable mybusiness.googleapis.com (Google My Business API v4, used for Local Posts)",
+      "Confirm Business Profile API access approval + quota; allow propagation; avoid rapid reconnect (429)"
+    ]
+  },
+  "gates": {
+    "typecheck": "PASS",
+    "lint_changed_files": "PASS (0 errors; 2 pre-existing warnings unrelated to change)",
+    "test_critical": "PASS (134/134)",
+    "test_full": "PASS (3445/3445, 539 files)",
+    "db_migrations_validate": "PASS (14 files; both MKT-001A migrations present, untouched)",
+    "build_webpack": "PASS (243/243 pages)",
+    "build_turbopack": "FAIL locally — Windows junction resolution of @shalean/* workspace packages (environmental, not code; CI/Linux uses same resolution as passing typecheck)"
+  },
+  "production_gate_impact": "NO-GO until operator enables Business Profile APIs and staging OAuth reaches save_connection_ok with a v2 google_business row; MARKETING_OAUTH_ENCRYPTION_KEY re-scope to Production-only also still outstanding (per R1)."
+}
