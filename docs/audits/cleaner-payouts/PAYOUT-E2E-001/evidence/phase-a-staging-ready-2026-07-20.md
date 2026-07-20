@@ -4,9 +4,39 @@
 |-------|-------|
 | **Date** | 2026-07-20 |
 | **Branch** | `fix/payout-e2e-001-phase-a-earnings-source-integrity` |
+| **Commit** | `6d5778bb58b800f8bf3ea4c01d85da9e01161870` |
+| **Draft PR** | https://github.com/shalean-developer/shalean-platform/pull/76 |
 | **Base** | `origin/main` @ `ad667d7d…` (docs) / payout code from `main` |
 | **Scope** | Phase A earnings-source integrity (+ batch sync TJ inclusion) |
 | **Not done** | Production deploy, migrations, payout generation, transfers, data repair, accounting-sync activation |
+
+## Gate status (2026-07-20 late)
+
+| Gate | Status | Evidence |
+|------|--------|----------|
+| Local implementation | **Complete** | Commit `6d5778bb` on dedicated branch |
+| Draft PR | **Open** | PR #76 (draft) |
+| Migration governance | **Passed** | `validate-migration-filenames` SUCCESS on run `29780902866` |
+| GitHub CI (`web-test` / vitest) | **Blocked** | Failed at `Production dependency audit (high+)` — `npm audit --omit=dev --audit-level=high` reports high `brace-expansion` (via `glob`) and moderate `postcss`/`next`/`geist`. Not a Phase A test failure; suite did not reach payout unit steps. |
+| Vercel preview | **Failed** | Deployment `dpl_CAzedbV93r85fqR8xjxkS18UWFDA` failed (inspect separately; may be env/build, not payout logic) |
+| Staging behavioral verification | **Not completed** | Manual matrix in § Staging verification still required |
+
+### CI blocker detail (not Phase A regression)
+
+Workflow: [web-test run 29780902866](https://github.com/shalean-developer/shalean-platform/actions/runs/29780902866)
+
+```text
+npm run audit:production
+→ npm audit --omit=dev --audit-level=high
+→ exit 1
+
+high:     brace-expansion (glob) — GHSA-3jxr-9vmj-r5cp
+moderate: postcss <8.5.10 (via next) — GHSA-qx2v-qp2m-jg93
+```
+
+Downstream CI steps (critical tests, typecheck, PR build crawl) were **skipped** after this gate. Local Phase A unit suite remains green; GitHub did not execute those payout tests in this run.
+
+**Recommendation:** treat dependency audit as a separate hardening track (or waive/bump on main) — do not conflate with Phase A earnings integrity. Staging behavioral verification can proceed on a Vercel preview once preview deploy is healthy, independently of the audit gate if ops accepts that risk for draft-only staging.
 
 ## Implemented
 
