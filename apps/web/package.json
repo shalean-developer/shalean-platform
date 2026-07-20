@@ -116,6 +116,9 @@
     "zod": "^3.24.2",
     "zustand": "^5.0.12"
   },
+  "overrides": {
+    "brace-expansion@2": "2.1.2"
+  },
   "devDependencies": {
     "@next/bundle-analyzer": "^16.2.6",
     "@playwright/test": "^1.58.0",
