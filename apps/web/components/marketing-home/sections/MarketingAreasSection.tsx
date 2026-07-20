@@ -4,7 +4,7 @@ import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import type { HomeLocation } from "@/lib/home/data";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { marketingPrimaryCtaClassName, marketingPrimaryCtaIconClassName } from "@/lib/marketing/marketingHomeCtaClasses";
-import { PROGRAMMATIC_LOCATIONS } from "@/lib/seo/locations";
+import { mergeSuburbAreaLinks, suburbHrefByDisplayName } from "@/lib/marketing/marketingAreaLinks";
 import { linkInParagraphClassName } from "@/lib/ui/linkClassNames";
 import { cn } from "@/lib/utils";
 
@@ -14,41 +14,13 @@ type Props = {
   locations: HomeLocation[];
 };
 
-type AreaLink = { name: string; href: string | null };
-
-function locationHrefByName(name: string): string | null {
-  const match = PROGRAMMATIC_LOCATIONS.find(
-    (loc) => loc.name.toLowerCase() === name.trim().toLowerCase(),
-  );
-  return match ? `/locations/${match.slug}` : null;
-}
-
-function mergeSuburbLinks(locations: HomeLocation[]): AreaLink[] {
-  const seen = new Set<string>();
-  const links: AreaLink[] = [];
-  for (const loc of PROGRAMMATIC_LOCATIONS) {
-    if (seen.has(loc.name)) continue;
-    seen.add(loc.name);
-    links.push({ name: loc.name, href: `/locations/${loc.slug}` });
-  }
-  for (const loc of locations) {
-    if (seen.has(loc.name)) continue;
-    seen.add(loc.name);
-    links.push({
-      name: loc.name,
-      href: loc.slug ? `/locations/${loc.slug}` : locationHrefByName(loc.name),
-    });
-  }
-  return links.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-}
-
 /**
  * Unified areas section — layout aligned with marketing homepage reference:
  * eyebrow + headline / intro column, suburb pill cloud, booking CTA pair.
  */
 export function MarketingAreasSection({ locations }: Props) {
   const bookHref = marketingHomeBookingHref();
-  const allSuburbs = mergeSuburbLinks(locations);
+  const allSuburbs = mergeSuburbAreaLinks(locations);
 
   const chipClass = cn(
     "inline-flex w-full min-w-0 justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-normal leading-snug text-slate-700 shadow-none transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 sm:px-4 sm:py-2.5 sm:text-sm lg:justify-start lg:px-3 lg:py-2 lg:text-xs xl:px-4 xl:text-sm",
@@ -92,7 +64,7 @@ export function MarketingAreasSection({ locations }: Props) {
           <h3 className="text-sm font-bold text-slate-900 md:text-base">Popular cleaning areas</h3>
           <div className="mt-2 flex flex-wrap gap-2 text-sm md:text-base" aria-label="Popular cleaning areas">
             {POPULAR_AREA_NAMES.map((name) => {
-              const href = locationHrefByName(name);
+              const href = suburbHrefByDisplayName(name);
               const className =
                 "inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800";
               return href ? (

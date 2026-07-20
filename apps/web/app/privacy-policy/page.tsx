@@ -85,6 +85,11 @@ export default function PrivacyPolicyPage() {
         <Link href="/terms-of-service" className="text-blue-600 hover:underline">
           Terms of Service
         </Link>
+        {" "}
+        and{" "}
+        <Link href="/data-deletion" className="text-blue-600 hover:underline">
+          data deletion instructions
+        </Link>
         .
       </p>
     </LegalPageShell>

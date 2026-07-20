@@ -17,6 +17,8 @@ describe("globalTopNavVisibility", () => {
       "/cleaning-prices-cape-town",
       "/privacy-policy",
       "/terms-of-service",
+      "/data-deletion",
+      "/data-deletion/status",
     ]) {
       expect(usesMarketingHomeHeader(path)).toBe(true);
       expect(shouldHideGlobalTopNav(path)).toBe(true);
