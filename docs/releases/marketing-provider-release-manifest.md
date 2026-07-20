@@ -20,30 +20,26 @@
 
 ---
 
-## Current production posture (pre-first Meta release)
+## Current production posture
 
 | Field | Value |
 |---|---|
-| Status | **NOT YET RELEASED** — marketing platform not on production |
-| Fail-closed / manifest controls | **PASS** (2026-07-17) — see assessment §1c |
-| Assessment | MKT-001 Meta Production Release Assessment |
-| Next engineering | MKT-001G — in progress (`feature/mkt-001g-meta-provider-readiness`) |
-| Staging baseline (assessment) | `bf31401423b94e0d301800bb4be2a1613fa8ef85` |
-| Staging Facebook testing | Requires explicit `MARKETING_PROVIDER_FACEBOOK=1` |
-| Staging GBP | Unset or disabled unless deliberate test |
+| Status | **FOUNDATION RELEASED** (2026-07-20) — application + DB foundations on production; **all providers disabled** |
+| Deployed merge SHA | `0e958bbd596402e07f838509c941ad53b220da1e` (contains approved tree `c052c315b8cfcb61fb1e397a3e4d0888728ef4e6`) |
+| Fail-closed / manifest controls | **PASS** — providers remain off unless explicit `=1` |
+| Assessment / closure | MKT-001L legal CONDITIONAL PASS; MKT-001M foundation closure |
+| Meta Live / provider enablement | **NOT AUTHORIZED** |
 
-Until the first production entry is filled, treat production as:
-
-| Provider | Intended production state |
+| Provider | Production state |
 |---|---|
-| Facebook | Disabled until Facebook production gate PASS + explicit `MARKETING_PROVIDER_FACEBOOK=1` |
-| Instagram | Disabled until MKT-001G + Instagram gate PASS |
-| Google Business Profile | Disabled until MKT-001A-PROD closes |
+| Facebook | Disabled |
+| Instagram | Disabled |
+| Google Business Profile | Disabled |
 | LinkedIn | Disabled |
 | Pinterest | Disabled |
 | X | Disabled |
 
-**Full production authorization:** not yet granted. Authorized sequence: MKT-001G → Facebook controlled-post gate → manifest entry → verify Production flags → controlled SHA → enable only approved providers → GBP remains disabled.
+**Next authorization required (separate phrase):** provider enablement / Meta Live — not covered by foundation approval.
 
 ---
 
@@ -118,7 +114,48 @@ Until the first production entry is filled, treat production as:
 
 ## Release history
 
-_No production marketing-provider releases yet. Entries will be prepended here._
+### Release 2026-07-20 — foundation-providers-disabled (MKT-001M)
+
+| Field | Value |
+|---|---|
+| Release SHA (approved tree) | `c052c315b8cfcb61fb1e397a3e4d0888728ef4e6` |
+| Merge commit | `0e958bbd596402e07f838509c941ad53b220da1e` |
+| Deployed at (UTC) | 2026-07-20T16:58:21Z |
+| Vercel deployment | `HPtJGciRzRUA8WdQrUa6Dg4QpdhZ` / GitHub deploy `5525573947` |
+| Rollback SHA | `ad5b4ccb242f2e1a3c4a98edf421820324a8e18e` |
+| Evidence | `docs/audits/marketing/MKT-001M-foundation-production-release-closure.md` |
+
+#### Provider matrix
+
+| Provider | Enabled | Gate |
+|---|---|---|
+| facebook | **no** | Foundation only |
+| google_business | **no** | Foundation only |
+| instagram | **no** | Foundation only |
+| linkedin | **no** | Foundation only |
+| pinterest | **no** | Foundation only |
+| x | **no** | Foundation only |
+
+#### Environment (Production) — required record
+
+| Variable | Required value |
+|---|---|
+| `MARKETING_PROVIDER_FACEBOOK` | `0` (preferred) or unset |
+| `MARKETING_PROVIDER_INSTAGRAM` | `0` or unset |
+| `MARKETING_PROVIDER_GOOGLE_BUSINESS` | `0` or unset |
+| `MARKETING_PROVIDER_LINKEDIN` | `0` or unset |
+| `MARKETING_PROVIDER_PINTEREST` | `0` or unset |
+| `MARKETING_PROVIDER_X` | `0` or unset |
+
+#### Decision
+
+| Scope | GO / NO-GO |
+|---|---|
+| Shared platform foundation | **GO** |
+| Facebook | **NO-GO** (disabled) |
+| Instagram | **NO-GO** (disabled) |
+| GBP | **NO-GO** (disabled) |
+| Overall provider promote | **NO-GO** |
 
 <!--
 ### Release YYYY-MM-DD — facebook-only-r1
