@@ -9,7 +9,9 @@
 
 ## 1. Remediated commit
 
-Recorded after push (see §3). Scope:
+**Exact SHA:** `a16526f448d7e372604bc22aea3fcbd902a39512`  
+**Branch:** `staging` (pushed; draft PR #71 updated)  
+**Message:** `fix(marketing): remediate MKT-001K staging blockers (links + Meta compliance)`
 
 | Area | Change |
 |---|---|
@@ -17,6 +19,37 @@ Recorded after push (see §3). Scope:
 | Privacy | Canonical remains `/privacy-policy`; `/privacy` already permanent-redirects in `next.config.ts` |
 | Data deletion | Public `/data-deletion` + `/data-deletion/status`; Meta callback `POST /api/meta/data-deletion` |
 | Docs | Meta plan, production Vercel manifest, backup/migration runbook (prepare only) |
+
+### Staging deployment
+
+| Item | Value |
+|---|---|
+| Vercel check | **PASS** (Deployment has completed) on `a16526f4…` |
+| GitHub deployment | Preview env created `2026-07-20T15:35:33Z` for `a16526f4…` |
+| Staging alias | `https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app` |
+| Unauthenticated smoke | **Blocked** by Vercel Deployment Protection (SSO 302) — operator share-bypass / SSO required for HTTP proof |
+
+### Draft PR
+
+https://github.com/shalean-developer/shalean-platform/pull/71 (draft, head = remediating SHA)
+
+### Exact CI / check matrix (head `a16526f4…`)
+
+| Check | Result | Notes |
+|---|---|---|
+| vitest (web-test) | **FAIL** | Live internal link crawl only — production still 404s (expected until prod deploy of this SHA) |
+| Typecheck (within vitest job) | PASS | Before live-link step |
+| Critical / revenue tests | PASS | |
+| Live SEO validation | PASS | |
+| validate-migration-filenames | PASS | |
+| GitGuardian Security Checks | PASS | |
+| Vercel | PASS | Staging/preview deploy of this SHA |
+| Vercel Preview Comments | PASS | |
+| Supabase Preview | SKIPPED | Expected |
+
+**Mandatory gate status:** incomplete — live-link remains RED against production until this commit is on production (out of scope for this task).
+
+Local verification on this commit: focused marketing/meta/provider tests PASS; `npm run typecheck` PASS.
 
 ---
 
@@ -162,6 +195,8 @@ Recorded after push (see §3). Scope:
 
 ## 8. Recommendation
 
-**NO-GO** for production promotion / Meta Live / migrations.
+**NO-GO**
 
-**READY FOR META CONFIGURATION** only in the narrow sense of: staging+code remediation is ready for operators to **prepare** Development-mode Meta settings (privacy URL, deletion callback URL after prod HTTPS deploy, OAuth redirect URI) **without** switching to Live — subject to release-owner confirmation and after staging verification of this commit.
+Production promotion, Meta Live, migrations, and production env changes remain blocked. Mandatory draft-PR live-link check still fails because CI probes production, which does not yet run this commit.
+
+Code + staging remediation for links and Meta compliance endpoints is complete on `a16526f4…`. Operators may **prepare** Development-mode Meta settings (privacy URL, deletion callback after production HTTPS has this SHA, OAuth redirect URI) only with release-owner confirmation — still **not** Live, and not a production GO.
