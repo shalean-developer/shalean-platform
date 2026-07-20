@@ -3,6 +3,7 @@
 **Date:** 2026-07-20  
 **PR:** [#71](https://github.com/shalean-developer/shalean-platform/pull/71)  
 **Reviewed head (pre-remediation):** `b22eb7a05e67bda74cd824c8a699d5dbcfaedac5`  
+**Remediation head (post-fix, CI green):** `622305d717de46903de144fb53224d68e041758a`  
 **Remediation branch:** `staging`  
 **Constraint:** No Meta dashboard, production Vercel vars, Supabase production, or provider-flag changes.  
 **Nature:** Preliminary Legal & Compliance Engineering review — **not** a substitute for qualified South African legal counsel.
