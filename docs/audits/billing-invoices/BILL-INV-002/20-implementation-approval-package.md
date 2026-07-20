@@ -1,6 +1,6 @@
 # BILL-INV-002 — Implementation Approval Package
 
-**Status:** Awaiting explicit authorization. **Do not implement until approved.**
+**Status:** Phase A **shipped to production** (`f5319b77`, PR #74). See `evidence/phase-a-production-release-2026-07-20.md`. Ledger backfill / accounting-sync still require separate authorization.
 
 ## Exact files to change (proposed)
 

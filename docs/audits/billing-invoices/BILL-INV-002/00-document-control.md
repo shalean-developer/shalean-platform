@@ -40,7 +40,7 @@
 | 17 | `17-recommended-implementation-plan.md` |
 | 18 | `18-verification-matrix.md` |
 | 19 | `19-final-gate-decision.md` |
-| 20 | `20-implementation-approval-package.md` (awaiting authorization) |
+| 20 | `20-implementation-approval-package.md` |
 
 ## Evidence
 
@@ -49,6 +49,9 @@
 | Masked production probes | `evidence/masked-prod-probes-2026-07-20.json` |
 | Probe SQL | `evidence/q01-status.sql` … `evidence/q10-zero.sql` |
 | Health endpoint | `GET https://shalean.co.za/api/health/environment` (2026-07-20) |
+| Phase A staging-ready | `evidence/phase-a-staging-ready-2026-07-20.md` |
+| Phase A staging verification | `evidence/phase-a-staging-verification-2026-07-20.md` |
+| Phase A production release | `evidence/phase-a-production-release-2026-07-20.md` |
 
 ## Evidence classification key
 
