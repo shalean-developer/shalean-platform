@@ -74,7 +74,13 @@ jobs:
 
       - name: Install
         if: steps.filter.outputs.run_suite == 'true'
-        run: npm ci
+        run: |
+          set -euo pipefail
+          npm ci
+          echo "Linked @shalean packages:"
+          ls -la node_modules/@shalean
+          test -f node_modules/@shalean/utils/package.json
+          test -d ../../packages/utils/src
 
       - name: Production dependency audit (high+)
         if: steps.filter.outputs.run_suite == 'true'
@@ -155,7 +161,9 @@ jobs:
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
           FACEBOOK_APP_ID: ci-test-app-id
           FACEBOOK_APP_SECRET: ci-meta-data-deletion-test-secret
-        run: node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build
+        # Webpack matches Vercel production resolution for file: ../../packages/*;
+        # default Turbopack root (apps/web) cannot see monorepo packages outside that root.
+        run: node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
 
       - name: Start production Next.js server
         if: github.event_name == 'pull_request' && steps.filter.outputs.run_suite == 'true'
