@@ -3,6 +3,7 @@ import "server-only";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { paystackReferenceMatchesCurrentBalance } from "@/lib/monthlyInvoice/monthlyInvoiceAmountIntegrity";
 import { monthlyInvoicePaystackReferenceForInitialize } from "@/lib/monthlyInvoice/monthlyInvoiceStablePaystackReference";
+import { decidePersistMonthlyInvoicePaystackReference } from "@/lib/monthlyInvoice/persistMonthlyInvoicePaystackReferenceDecision";
 import { ensureMonthlyInvoiceLateFeeApplied } from "@/lib/monthlyInvoice/ensureMonthlyInvoiceLateFeeApplied";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -68,28 +69,36 @@ async function persistMonthlyInvoicePaystackReferenceBeforeInit(
   row: InvoiceRow,
   reference: string,
 ): Promise<PersistRefResult> {
-  const statusNorm = String(row.status ?? "").toLowerCase();
-  const pref = String(row.paystack_reference ?? "").trim();
-  const link = String(row.payment_link ?? "").trim();
+  const decision = decidePersistMonthlyInvoicePaystackReference({
+    status: row.status,
+    existingReference: row.paystack_reference,
+    nextReference: reference,
+    paymentLink: row.payment_link,
+  });
 
-  if (pref === reference) return { ok: true };
+  if (decision.action === "noop") return { ok: true };
+  if (decision.action === "conflict_active_link") {
+    return { ok: false, error: "invoice_paystack_reference_conflict" };
+  }
+  if (decision.action === "conflict_status") {
+    return { ok: false, error: "invoice_paystack_reference_conflict_non_draft" };
+  }
+  if (decision.action === "unsupported") {
+    return { ok: false, error: "invoice_paystack_reference_persist_unsupported_status" };
+  }
 
-  if (pref && pref !== reference) {
-    if (link) return { ok: false, error: "invoice_paystack_reference_conflict" };
-    if (statusNorm !== "draft") {
-      return { ok: false, error: "invoice_paystack_reference_conflict_non_draft" };
-    }
+  if (decision.action === "rotate_cleared_link") {
     const { error } = await admin
       .from("monthly_invoices")
       .update({ paystack_reference: reference })
       .eq("id", row.id)
-      .eq("status", "draft")
+      .in("status", [...decision.statuses])
       .is("payment_link", null);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   }
 
-  if (statusNorm === "draft") {
+  if (decision.action === "claim_null_draft") {
     const { data, error } = await admin
       .from("monthly_invoices")
       .update({ paystack_reference: reference })
@@ -102,12 +111,12 @@ async function persistMonthlyInvoicePaystackReferenceBeforeInit(
     return { ok: true };
   }
 
-  if (statusNorm === "sent" || statusNorm === "partially_paid" || statusNorm === "overdue") {
+  if (decision.action === "set_open_status") {
     const { error } = await admin
       .from("monthly_invoices")
       .update({ paystack_reference: reference })
       .eq("id", row.id)
-      .in("status", ["sent", "partially_paid", "overdue"]);
+      .in("status", [...decision.statuses]);
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   }

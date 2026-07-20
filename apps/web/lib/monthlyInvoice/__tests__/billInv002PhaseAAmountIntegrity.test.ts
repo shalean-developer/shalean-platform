@@ -13,6 +13,7 @@ import {
 } from "@/lib/monthlyInvoice/monthlyInvoiceStablePaystackReference";
 import { interpretMonthlyInvoiceOutcome } from "@/lib/booking/routePaystackChargeForMonthlyInvoice";
 import { trustMonthlyInvoicePayPageUrl } from "@/lib/pay/trustPayPageUrl";
+import { decidePersistMonthlyInvoicePaystackReference } from "@/lib/monthlyInvoice/persistMonthlyInvoicePaystackReferenceDecision";
 
 describe("monthlyInvoiceAmountIntegrity (BILL-INV-002 Phase A)", () => {
   it("parses _b{cents} suffix", () => {
@@ -83,5 +84,32 @@ describe("monthlyInvoiceAmountIntegrity (BILL-INV-002 Phase A)", () => {
     expect(url).toContain("ref=mi_inv_");
     expect(url).not.toContain("checkout.paystack.com");
     process.env.NEXT_PUBLIC_APP_URL = prev;
+  });
+});
+
+describe("decidePersistMonthlyInvoicePaystackReference (BILL-INV-002 Phase A)", () => {
+  it("rotates cleared-link refs for sent invoices after balance change", () => {
+    expect(
+      decidePersistMonthlyInvoicePaystackReference({
+        status: "sent",
+        existingReference: "mi_inv_x_202607_b100000",
+        nextReference: "mi_inv_x_202607_b120000",
+        paymentLink: null,
+      }),
+    ).toEqual({
+      action: "rotate_cleared_link",
+      statuses: ["draft", "sent", "partially_paid", "overdue"],
+    });
+  });
+
+  it("blocks rotation while an active payment_link remains", () => {
+    expect(
+      decidePersistMonthlyInvoicePaystackReference({
+        status: "sent",
+        existingReference: "mi_inv_x_202607_b100000",
+        nextReference: "mi_inv_x_202607_b120000",
+        paymentLink: "https://checkout.paystack.com/abc",
+      }),
+    ).toEqual({ action: "conflict_active_link" });
   });
 });
