@@ -33,12 +33,17 @@ export function monthlyInvoicePaystackReferenceForInitialize(row: {
   paystack_reference?: string | null;
 }): string {
   const base = stableMonthlyInvoicePaystackReference(row.id, row.month);
+  const balance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));
   const st = String(row.status ?? "").toLowerCase();
+  // BILL-INV-002 Phase A: every initialize ref encodes remaining balance (`_b{cents}`) so
+  // reuse / landing / apply can detect stale sessions after adjustments.
   if (st === "draft") {
     const existing = String(row.paystack_reference ?? "").trim();
-    if (existing.startsWith(`${base}_r`)) return existing;
-    return base;
+    if (existing.startsWith(`${base}_r`)) {
+      const withoutBal = existing.replace(/_b\d+$/i, "");
+      return `${withoutBal}_b${balance}`;
+    }
+    return `${base}_b${balance}`;
   }
-  const balance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));
   return `${base}_b${balance}`;
 }

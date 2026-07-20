@@ -66,11 +66,11 @@ export default function AccountInvoiceDetailPage() {
 
   const paymentLink = typeof invoice.payment_link === "string" ? invoice.payment_link.trim() : "";
   const paystackRef = typeof invoice.paystack_reference === "string" ? invoice.paystack_reference.trim() : "";
-  const payHref =
-    paymentLink && paystackRef
-      ? trustMonthlyInvoicePayPageUrl(invoice.id, paystackRef, paymentLink)
-      : paymentLink;
-  const canOfferPay = balance > 0 && invoice.status !== "paid";
+  // BILL-INV-002 Phase A: branded URL only when ref is present.
+  const payHref = paystackRef
+    ? trustMonthlyInvoicePayPageUrl(invoice.id, paystackRef, paymentLink || "")
+    : "";
+  const canOfferPay = balance > 0 && invoice.status !== "paid" && Boolean(payHref);
 
   return (
     <div className="space-y-6">

@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { paystackReferenceMatchesCurrentBalance } from "@/lib/monthlyInvoice/monthlyInvoiceAmountIntegrity";
 import { monthlyInvoicePaystackReferenceForInitialize } from "@/lib/monthlyInvoice/monthlyInvoiceStablePaystackReference";
 import { ensureMonthlyInvoiceLateFeeApplied } from "@/lib/monthlyInvoice/ensureMonthlyInvoiceLateFeeApplied";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
@@ -41,7 +42,6 @@ async function loadInvoiceRow(admin: SupabaseClient, invoiceId: string) {
 }
 
 function tryReuseExistingInitialize(row: InvoiceRow & { reference: string }): InitializeMonthlyInvoicePaystackResult | null {
-  const statusNorm = String(row.status ?? "").toLowerCase();
   const balance = Math.max(0, Math.round(Number(row.balance_cents ?? 0)));
   if (balance <= 0) return null;
 
@@ -49,9 +49,8 @@ function tryReuseExistingInitialize(row: InvoiceRow & { reference: string }): In
   const pref = String(row.paystack_reference ?? "").trim();
   if (!link || !pref) return null;
 
-  if (statusNorm !== "draft") return null;
-
-  if (pref === row.reference || pref.startsWith("mi_inv_")) {
+  // Only reuse when the stored ref is bound to the current remaining balance (Phase A).
+  if (pref === row.reference && paystackReferenceMatchesCurrentBalance(pref, balance)) {
     return { ok: true, authorizationUrl: link, reference: pref, reused: true };
   }
 
