@@ -131,3 +131,18 @@ Valid Meta deletion callback **not** submitted (per approval).
 1. Force all `MARKETING_PROVIDER_*=0`  
 2. Redeploy `ad5b4ccb242f2e1a3c4a98edf421820324a8e18e` if app rollback required  
 3. DB: prefer leave forward migrations; restore from encrypted logical dumps only if authorized (PITR unavailable)
+
+---
+
+## Migration apply runbook (dollar-quote / atomic SQL)
+
+**Root cause (MKT-001M migration 3):** Invalid nested dollar-quoting in committed SQL — `DO $$ … PERFORM cron.schedule(…, $$…$$); … $$;` uses the same `$$` tag for outer and inner quotes. PostgreSQL closes the outer string at the first inner `$$`, so a correct Postgres parser rejects the file as a whole. This is not a PowerShell/quoting artifact and not primarily a statement-splitter bug; Supabase SQL editor / any naive splitter can surface the same failure earlier.
+
+**Production disposition:** File `20260717120000_mkt_001b2_social_publish_jobs.sql` checksum `d11c1250…` matches git blob `6714de34…` and is recorded applied. Cron was repaired in-place with `$cron$…$cron$`. Schema/cron state is correct — **no forward repair migration required**. Preserve the applied migration; do not rewrite history.
+
+**Future apply rules:**
+
+1. Apply each migration file as **one atomic SQL unit** (`psql -v ON_ERROR_STOP=1 -f file.sql` or equivalent). Do not split on `;` inside dollar-quoted bodies.  
+2. Never nest identical dollar tags; use distinct tags (e.g. `DO $migrate$ … $cmd$…$cmd$ … $migrate$;`).  
+3. After apply, verify `cron.job` / expected objects even when `schema_migrations` records success (post-COMMIT sections can fail separately).  
+4. Tooling/runbook fix preferred over meaningless forward migrations when production already matches intended state.
