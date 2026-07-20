@@ -873,6 +873,46 @@ export async function executePublishJob(args: ExecutePublishJobArgs): Promise<Ex
     };
   }
 
+  const externalId = result.externalPostId?.trim() ?? "";
+  if (!externalId || externalId === "unknown") {
+    const err =
+      "Provider reported success without a confirmed external post id — publish was not finalized.";
+    await markPublishFailed(args.admin, claimId, err);
+    await recordPublishHistory({
+      admin: args.admin,
+      provider: job.provider,
+      status: "failed",
+      error: err,
+      promotionId: job.promotion_id,
+      campaignName: job.campaign_name,
+      publishedBy: job.published_by,
+    });
+    const updated = await updateLeased({
+      status: "dead_letter",
+      last_error: err.slice(0, 2000),
+      failure_class: "validation",
+      retryable: false,
+      dead_lettered_at: new Date().toISOString(),
+      processed_at: new Date().toISOString(),
+      lease_holder: null,
+      lease_expires_at: null,
+    });
+    if (updated) job = updated;
+    return {
+      job,
+      serviceState: "failed",
+      correlationId,
+      httpStatus: 502,
+      body: {
+        error: err,
+        classification: "validation",
+        retryable: false,
+        correlationId,
+      },
+      providerCalled,
+    };
+  }
+
   // Persist external id without lease ownership — first writer wins (replay-safe).
   if (result.externalPostId) {
     const withExt = await persistExternalPostId(args.admin, job.id, result.externalPostId);

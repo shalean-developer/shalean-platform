@@ -62,10 +62,30 @@ describe("MKT-001D providerLimits", () => {
   it("blocks non-publish channels", () => {
     expect(
       validatePublishPayloadClient({
+        channel: "linkedin",
+        message: "Hello",
+        hasImage: false,
+      }),
+    ).toMatchObject({ ok: false });
+  });
+
+  it("allows Instagram with branded public fallback image", () => {
+    expect(
+      validatePublishPayloadClient({
         channel: "instagram",
         message: "Hello",
         hasImage: true,
       }),
-    ).toMatchObject({ ok: false });
+    ).toMatchObject({ ok: true });
+  });
+
+  it("allows X text-only publish", () => {
+    expect(
+      validatePublishPayloadClient({
+        channel: "twitter",
+        message: "Hello from Shalean",
+        hasImage: false,
+      }),
+    ).toMatchObject({ ok: true });
   });
 });

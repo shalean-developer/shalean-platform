@@ -41,7 +41,7 @@ import {
 import { SocialImageCard } from "@/components/admin/promotions/SocialImageCard";
 import type { SocialTrustItem } from "@/components/admin/promotions/social-design";
 import { canonicalizePublicSiteUrl } from "@/lib/promotions/offerCopy";
-import { validatePublishPayloadClient } from "@/lib/promotions/providerLimits";
+import { validatePublishPayloadClient, resolveInstagramPublishImageUrl } from "@/lib/promotions/providerLimits";
 import {
   formatPublishFailureToast,
   type PublishFailureFields,
@@ -339,6 +339,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
   const [googleHint, setGoogleHint] = useState<string | null>(null);
   const [instagramConfigured, setInstagramConfigured] = useState(false);
   const [instagramHint, setInstagramHint] = useState<string | null>(null);
+  const [xConfigured, setXConfigured] = useState(false);
+  const [xHint, setXHint] = useState<string | null>(null);
   const [providerRegistry, setProviderRegistry] = useState<RegistryProviderSnapshot[] | null>(
     null,
   );
@@ -409,6 +411,18 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     setInstagramHint(res.data?.hint ?? null);
   }, []);
 
+  const loadXStatus = useCallback(async () => {
+    const res = await adminFetch<{
+      configured: boolean;
+      connected?: boolean;
+      okForPublish?: boolean;
+      hint?: string | null;
+      username?: string | null;
+    }>("/api/admin/promotions/publish-x");
+    setXConfigured(Boolean(res.data?.configured && res.data?.okForPublish));
+    setXHint(res.data?.hint ?? null);
+  }, []);
+
   const loadProviderRegistry = useCallback(async () => {
     const res = await adminFetch<{ providers: RegistryProviderSnapshot[] }>(
       "/api/admin/promotions/providers",
@@ -422,6 +436,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     googleConfigured && registryAllowsPublish(providerRegistry, "google_business");
   const instagramPublishable =
     instagramConfigured && registryAllowsPublish(providerRegistry, "instagram");
+  const xPublishable = xConfigured && registryAllowsPublish(providerRegistry, "x");
 
   const loadContentHub = useCallback(async () => {
     if (view === "assets" || view === "social") {
@@ -469,6 +484,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     void loadFacebookStatus();
     void loadGoogleStatus();
     void loadInstagramStatus();
+    void loadXStatus();
     void loadProviderRegistry();
   }, [
     loadAnalytics,
@@ -479,6 +495,7 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
     loadFacebookStatus,
     loadGoogleStatus,
     loadInstagramStatus,
+    loadXStatus,
     loadProviderRegistry,
   ]);
 
@@ -823,6 +840,8 @@ export function CampaignMarketingHub({ view = "campaigns" }: { view?: HubView })
           googleHint={googleHint}
           instagramConfigured={instagramPublishable}
           instagramHint={instagramHint}
+          xConfigured={xPublishable}
+          xHint={xHint}
           emptyLabel={`No ${meta.title.toLowerCase()} yet. Generate a campaign first.`}
           emptyStateKey={view === "social" ? "no_draft_posts" : undefined}
           onAssetUpdated={(asset) => {
@@ -1589,6 +1608,8 @@ function ContentList({
   googleHint,
   instagramConfigured,
   instagramHint,
+  xConfigured,
+  xHint,
   emptyLabel,
   emptyStateKey,
   onAssetUpdated,
@@ -1601,6 +1622,8 @@ function ContentList({
   googleHint: string | null;
   instagramConfigured: boolean;
   instagramHint: string | null;
+  xConfigured: boolean;
+  xHint: string | null;
   emptyLabel: string;
   emptyStateKey?: "no_draft_posts";
   onAssetUpdated?: (asset: AssetRow) => void;
@@ -1657,6 +1680,21 @@ function ContentList({
           )}
         </p>
       ) : null}
+      {!xConfigured ? (
+        <p className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          {xHint ?? (
+            <>
+              X one-click publish needs{" "}
+              <code className="font-mono text-xs">MARKETING_PROVIDER_X=1</code> and a connected account
+              from{" "}
+              <Link href="/office/marketing/connected-accounts" className="font-medium underline">
+                Connected Accounts
+              </Link>
+              .
+            </>
+          )}
+        </p>
+      ) : null}
       <div className="grid gap-4 lg:grid-cols-2">
         {content.map((c) => (
           <SocialContentCard
@@ -1680,6 +1718,7 @@ function ContentList({
             facebookConfigured={facebookConfigured}
             googleConfigured={googleConfigured}
             instagramConfigured={instagramConfigured}
+            xConfigured={xConfigured}
             onAssetUpdated={onAssetUpdated}
           />
         ))}
@@ -1694,6 +1733,7 @@ function SocialContentCard({
   facebookConfigured,
   googleConfigured,
   instagramConfigured,
+  xConfigured,
   onAssetUpdated,
   onContentStatusChange,
 }: {
@@ -1702,6 +1742,7 @@ function SocialContentCard({
   facebookConfigured: boolean;
   googleConfigured: boolean;
   instagramConfigured: boolean;
+  xConfigured: boolean;
   onAssetUpdated?: (asset: AssetRow) => void;
   onContentStatusChange?: (contentId: string, status: string) => void;
 }) {
@@ -1723,7 +1764,8 @@ function SocialContentCard({
   const isPublishChannel =
     content.channel === "facebook" ||
     content.channel === "google_business" ||
-    content.channel === "instagram";
+    content.channel === "instagram" ||
+    content.channel === "twitter";
   const publishConfigured =
     content.channel === "facebook"
       ? facebookConfigured
@@ -1731,7 +1773,9 @@ function SocialContentCard({
         ? googleConfigured
         : content.channel === "instagram"
           ? instagramConfigured
-          : false;
+          : content.channel === "twitter"
+            ? xConfigured
+            : false;
   const charLimit =
     content.channel === "facebook"
       ? 63_206
@@ -1739,7 +1783,9 @@ function SocialContentCard({
         ? 1500
         : content.channel === "instagram"
           ? 2200
-          : null;
+          : content.channel === "twitter"
+            ? 280
+            : null;
   const overLimit = charLimit != null && caption.trim().length > charLimit;
 
   useEffect(() => {
@@ -1827,7 +1873,11 @@ function SocialContentCard({
             ? `https://shalean.co.za/campaigns/${content.promotion.slug}`
             : "https://shalean.co.za/book",
       );
-      const res = await adminFetch<{ postId: string; correlationId?: string }>(
+      const res = await adminFetch<{
+        postId: string;
+        correlationId?: string;
+        idempotentReplay?: boolean;
+      }>(
         "/api/admin/promotions/publish-facebook",
         {
           method: "POST",
@@ -1844,11 +1894,27 @@ function SocialContentCard({
         toastPublishFailure(res);
         return;
       }
+      if (res.data?.idempotentReplay) {
+        emitAdminToast(
+          `Duplicate publish skipped — an earlier post already exists (id ${res.data.postId})${
+            res.data.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+          }. Use different caption/link or send a new Idempotency-Key to repost.`,
+          "success",
+        );
+        return;
+      }
+      if (!res.data?.postId || res.data.postId === "unknown") {
+        emitAdminToast(
+          "Facebook did not return a confirmed post id. Check Connected Accounts and Platform Intelligence before retrying.",
+          "error",
+        );
+        return;
+      }
       setLocalStatus("published");
       onContentStatusChange?.(content.id, "published");
       emitAdminToast(
-        `Posted to Facebook (id ${res.data?.postId ?? "ok"})${
-          res.data?.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+        `Posted to Facebook (id ${res.data.postId})${
+          res.data.correlationId ? ` · Ref ${res.data.correlationId}` : ""
         }.`,
         "success",
       );
@@ -1939,7 +2005,7 @@ function SocialContentCard({
     ) {
       return;
     }
-    const publicUrl = customImage && activeAsset?.image_url ? activeAsset.image_url : null;
+    const publicUrl = resolveInstagramPublishImageUrl(activeAsset?.image_url);
     const precheck = validatePublishPayloadClient({
       channel: "instagram",
       message: caption,
@@ -1979,6 +2045,76 @@ function SocialContentCard({
       onContentStatusChange?.(content.id, "published");
       emitAdminToast(
         `Posted to Instagram (id ${res.data?.mediaId ?? "ok"})${
+          res.data?.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+        }.`,
+        "success",
+      );
+    } catch (e) {
+      emitAdminToast(e instanceof Error ? e.message : "Publish failed.", "error");
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function publishX() {
+    if (
+      !canInvokePublish({
+        busy: busy != null,
+        configured: xConfigured,
+        overLimit,
+        caption,
+      })
+    ) {
+      return;
+    }
+    const precheck = validatePublishPayloadClient({
+      channel: "twitter",
+      message: caption,
+      hasImage: false,
+    });
+    if (!precheck.ok) {
+      emitAdminToast(precheck.error, "error");
+      return;
+    }
+    setBusy("x");
+    try {
+      const res = await adminFetch<{
+        tweetId?: string;
+        postId?: string;
+        correlationId?: string;
+        idempotentReplay?: boolean;
+      }>("/api/admin/promotions/publish-x", {
+        method: "POST",
+        body: JSON.stringify({
+          message: caption,
+          promotionId: content.promotion_id ?? null,
+        }),
+      });
+      if (res.error) {
+        toastPublishFailure(res);
+        return;
+      }
+      const tweetId = res.data?.tweetId ?? res.data?.postId;
+      if (res.data?.idempotentReplay) {
+        emitAdminToast(
+          `Duplicate X post skipped — an earlier tweet already exists (id ${tweetId ?? "unknown"})${
+            res.data.correlationId ? ` · Ref ${res.data.correlationId}` : ""
+          }. Change the text or send a new Idempotency-Key to repost.`,
+          "success",
+        );
+        return;
+      }
+      if (!tweetId) {
+        emitAdminToast(
+          "X did not return a confirmed tweet id. Check Connected Accounts before retrying.",
+          "error",
+        );
+        return;
+      }
+      setLocalStatus("published");
+      onContentStatusChange?.(content.id, "published");
+      emitAdminToast(
+        `Posted to X (id ${tweetId})${
           res.data?.correlationId ? ` · Ref ${res.data.correlationId}` : ""
         }.`,
         "success",
@@ -2280,6 +2416,35 @@ function SocialContentCard({
               <Share2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
             )}
             Post to Instagram
+          </Button>
+        ) : null}
+        {content.channel === "twitter" ? (
+          <Button
+            size="sm"
+            className="min-h-9"
+            disabled={
+              !canInvokePublish({
+                busy: busy != null,
+                configured: xConfigured,
+                overLimit,
+                caption,
+              })
+            }
+            onClick={() => void publishX()}
+            title={
+              xConfigured
+                ? "Post text to your connected X account"
+                : "Connect X from Connected Accounts and enable MARKETING_PROVIDER_X"
+            }
+            aria-label="Post to X"
+            aria-busy={busy === "x"}
+          >
+            {busy === "x" ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" aria-hidden />
+            ) : (
+              <Share2 className="mr-1.5 h-3.5 w-3.5" aria-hidden />
+            )}
+            Post to X
           </Button>
         ) : null}
       </div>

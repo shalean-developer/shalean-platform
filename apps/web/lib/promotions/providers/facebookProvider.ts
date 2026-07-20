@@ -187,6 +187,13 @@ export function createFacebookProvider(): SocialProvider {
         status?: number;
       };
       if (r && r.ok === true && r.postId) {
+        if (r.postId === "unknown" || !/^[\d_]+$/.test(r.postId.trim())) {
+          return {
+            ok: false,
+            error: "Facebook publish returned an invalid post id.",
+            status: 502,
+          };
+        }
         return {
           ok: true,
           externalPostId: r.postId,

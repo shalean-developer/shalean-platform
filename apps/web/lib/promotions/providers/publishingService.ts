@@ -195,11 +195,22 @@ export async function runPublish(args: RunPublishArgs): Promise<PublishServiceOu
   // If the existing active job already succeeded terminal path returned as existing,
   // or is already leased by another worker — still try inline lease when queued/retryable.
   if (job.status === "succeeded") {
+    const replayId = job.external_post_id?.trim() ?? "";
+    if (!replayId || replayId === "unknown") {
+      return jsonFailure(correlationId, 502, {
+        error:
+          "A prior publish was marked succeeded without a valid provider post id. Use a new Idempotency-Key and retry.",
+        classification: "validation",
+        retryable: false,
+        recoveryGuidance:
+          "Open Platform Intelligence to inspect the stuck ledger row, then publish again with distinct content or an explicit Idempotency-Key.",
+      });
+    }
     const result: Extract<PublishResult, { ok: true }> = {
       ok: true,
-      externalPostId: job.external_post_id ?? "",
-      postId: job.external_post_id ?? undefined,
-      postName: job.external_post_id ?? undefined,
+      externalPostId: replayId,
+      postId: replayId,
+      postName: replayId,
     };
     return {
       ok: true,

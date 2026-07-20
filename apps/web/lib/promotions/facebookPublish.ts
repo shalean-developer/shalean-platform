@@ -36,8 +36,121 @@ export function getFacebookPagePublishConfig(): FacebookPublishConfig | null {
 export { resolveFacebookPublishConfig };
 
 export type FacebookPublishResult =
-  | { ok: true; postId: string; photoId?: string }
+  | { ok: true; postId: string; photoId?: string; permalinkUrl?: string | null }
   | { ok: false; error: string; status?: number };
+
+/** Reject placeholder / malformed ids before ledger success or UI toast. */
+export function isValidFacebookExternalPostId(
+  postId: string | null | undefined,
+  pageId: string,
+): boolean {
+  const id = postId?.trim() ?? "";
+  if (!id || id === "unknown") return false;
+  if (id.includes("_")) {
+    const [pagePart] = id.split("_");
+    return pagePart === String(pageId);
+  }
+  return /^\d+$/.test(id);
+}
+
+/**
+ * Confirm Graph accepted the post and it is published on the expected Page.
+ * Uses the existing Page access token — never returned to callers.
+ */
+export async function verifyFacebookPostOnPage(
+  cfg: FacebookPublishConfig,
+  postId: string,
+): Promise<
+  | { ok: true; postId: string; permalinkUrl: string | null; isPublished: boolean }
+  | { ok: false; error: string; status?: number }
+> {
+  if (!isValidFacebookExternalPostId(postId, cfg.pageId)) {
+    return {
+      ok: false,
+      status: 400,
+      error: "Facebook returned an invalid post id — publish was not confirmed.",
+    };
+  }
+
+  try {
+    const res = await fetch(
+      graphUrl(cfg, postId, {
+        fields: "id,is_published,permalink_url,status_type",
+        access_token: cfg.accessToken,
+      }),
+      { method: "GET" },
+    );
+    const json = (await res.json().catch(() => ({}))) as {
+      id?: string;
+      is_published?: boolean;
+      permalink_url?: string;
+      status_type?: string;
+      error?: GraphErrorBody;
+    };
+
+    if (!res.ok || json.error) {
+      return {
+        ok: false,
+        status: res.status,
+        error:
+          formatFacebookGraphError(json.error, res.status) ||
+          "Facebook post could not be verified after publish.",
+      };
+    }
+
+    if (!json.id) {
+      return {
+        ok: false,
+        status: 502,
+        error: "Facebook post verification returned no id — treating publish as failed.",
+      };
+    }
+
+    const resolvedId = String(json.id);
+    if (!isValidFacebookExternalPostId(resolvedId, cfg.pageId)) {
+      return {
+        ok: false,
+        status: 400,
+        error: "Verified Facebook post does not belong to the connected Page.",
+      };
+    }
+
+    if (json.is_published === false) {
+      return {
+        ok: false,
+        status: 400,
+        error:
+          "Facebook created the post in an unpublished state. Check Page publishing permissions and try again.",
+      };
+    }
+
+    return {
+      ok: true,
+      postId: resolvedId,
+      permalinkUrl: json.permalink_url ?? null,
+      isPublished: json.is_published ?? true,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Failed to verify Facebook post on Page.",
+    };
+  }
+}
+
+async function finalizeFacebookPublishResult(
+  cfg: FacebookPublishConfig,
+  candidate: { postId: string; photoId?: string },
+): Promise<FacebookPublishResult> {
+  const verified = await verifyFacebookPostOnPage(cfg, candidate.postId);
+  if (!verified.ok) return verified;
+  return {
+    ok: true,
+    postId: verified.postId,
+    photoId: candidate.photoId,
+    permalinkUrl: verified.permalinkUrl,
+  };
+}
 
 type GraphErrorBody = {
   message?: string;
@@ -345,11 +458,21 @@ export async function publishFacebookPagePhoto(args: {
       }
       return { ok: false, status: res.status, error };
     }
-    return {
-      ok: true,
+
+    const postId = json.post_id ?? json.id;
+    if (!postId || !isValidFacebookExternalPostId(postId, cfg.pageId)) {
+      return {
+        ok: false,
+        status: 502,
+        error:
+          "Facebook photo publish returned no usable post id. The post was not confirmed on your Page.",
+      };
+    }
+
+    return finalizeFacebookPublishResult(cfg, {
+      postId,
       photoId: json.id,
-      postId: json.post_id ?? json.id ?? "unknown",
-    };
+    });
   } catch (e) {
     return {
       ok: false,
@@ -437,7 +560,17 @@ export async function publishFacebookPageFeed(args: {
       }
       return { ok: false, status: res.status, error };
     }
-    return { ok: true, postId: json.id ?? "unknown" };
+
+    if (!json.id || !isValidFacebookExternalPostId(json.id, cfg.pageId)) {
+      return {
+        ok: false,
+        status: 502,
+        error:
+          "Facebook feed publish returned no usable post id. The post was not confirmed on your Page.",
+      };
+    }
+
+    return finalizeFacebookPublishResult(cfg, { postId: json.id });
   } catch (e) {
     return {
       ok: false,
