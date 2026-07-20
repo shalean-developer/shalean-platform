@@ -1,0 +1,64 @@
+﻿{
+  "auditId": "BILL-INV-002",
+  "queriedAt": "2026-07-20T19:00:00Z",
+  "projectRef": "tchayecuvzssixyxlvfu",
+  "productionGitSha": "c2c04d42acff0e60e7b09cc604a7d042b56a2b10",
+  "paystackMode": "live",
+  "browserAuth": "office_pages_redirect_to_login",
+  "invoices": {
+    "count": 63,
+    "byStatus": { "draft": 19, "sent": 2, "paid": 42 },
+    "sumsZarRounded": { "total": 179476, "paid": 114319, "balance": 65157 }
+  },
+  "financialProbes": {
+    "neg_balance": 0,
+    "overpay": 0,
+    "bal_mismatch": 0,
+    "closed_unpaid": 0,
+    "missing_link_open": 0,
+    "missing_ref_sentish": 2,
+    "missing_zoho_sentish": 3,
+    "overdue_flag_open": 0,
+    "zero_non_draft": 3,
+    "duplicate_paystack_ref_groups": 0
+  },
+  "ledger": {
+    "payment_transactions_monthly": 33,
+    "charge_dedup": 4,
+    "invoices_with_multiple_charges": 0,
+    "paid_without_ledger": 9,
+    "paid_without_ledger_with_paystack_ref": 7,
+    "paid_without_ledger_no_paystack_ref": 2
+  },
+  "settlementProbes": {
+    "paid_invoice_pending_monthly": 0,
+    "eligible_without_full_settlement": 0
+  },
+  "cron": {
+    "pg_cron_active": [
+      { "jobname": "charge-monthly-invoices", "schedule": "55 21 * * *", "active": true },
+      { "jobname": "generate-recurring-bookings", "schedule": "*/10 * * * *", "active": true },
+      { "jobname": "mark-monthly-invoices-overdue", "schedule": "0 10 * * *", "active": true },
+      { "jobname": "payment-recovery", "schedule": "*/15 * * * *", "active": true },
+      { "jobname": "repair-monthly-payment-state-drift", "schedule": "30 4 * * *", "active": true },
+      { "jobname": "send-invoice-reminders", "schedule": "0 9 * * *", "active": true }
+    ],
+    "accounting_sync_pg_cron": "absent",
+    "cron_http_targets_app_host": "shalean.co.za",
+    "cron_runs_evidence": {
+      "charge-monthly-invoices": { "n": 66, "last_at": "2026-07-19T21:55:09Z", "status": "success" },
+      "generate-recurring-bookings": { "observed": true, "last_at": "2026-07-20T18:50:17Z" },
+      "send-invoice-reminders": { "n": 0 },
+      "mark-monthly-invoices-overdue": { "n": 0 },
+      "repair-monthly-payment-state-drift": { "n": 0 },
+      "accounting-sync": { "n": 0 }
+    }
+  },
+  "accountingSyncRecords": {
+    "expense:pending": 14,
+    "payment_transaction:pending": 6,
+    "vendor:pending": 1,
+    "synced": 0
+  },
+  "vercelJsonBillingCrons": "none_scheduled_in_apps_web_vercel_json"
+}

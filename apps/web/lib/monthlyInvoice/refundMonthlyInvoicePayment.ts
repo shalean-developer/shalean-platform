@@ -28,12 +28,21 @@ async function resolveChargeReference(
   admin: SupabaseClient,
   invoiceId: string,
   paystackReference: string | null,
-): Promise<{ chargeRef: string | null; chargeAmount: number }> {
-  const { data: chargeRows } = await admin
+): Promise<
+  | { ok: true; chargeRef: string | null; chargeAmount: number }
+  | { ok: false; error: string }
+> {
+  const { data: chargeRows, error, count } = await admin
     .from("monthly_invoice_paystack_charge_dedup")
-    .select("charge_reference, amount_cents")
-    .eq("invoice_id", invoiceId)
-    .limit(1);
+    .select("charge_reference, amount_cents", { count: "exact" })
+    .eq("invoice_id", invoiceId);
+
+  if (error) return { ok: false, error: error.message };
+
+  // BILL-INV-002 Phase A (H02 stopgap): multi-charge refunds are unsafe until all rows are walked.
+  if ((count ?? chargeRows?.length ?? 0) > 1) {
+    return { ok: false, error: "multi_charge_refund_unsupported" };
+  }
 
   const dedup = (chargeRows?.[0] ?? null) as {
     charge_reference?: string;
@@ -46,7 +55,7 @@ async function resolveChargeReference(
 
   const chargeAmount = Math.max(0, Math.round(Number(dedup?.amount_cents ?? 0)));
 
-  return { chargeRef, chargeAmount };
+  return { ok: true, chargeRef, chargeAmount };
 }
 
 async function reverseMonthlyInvoiceChildBookings(
@@ -115,7 +124,9 @@ export async function refundMonthlyInvoicePayment(
   if (paid <= 0 && total <= 0) return { ok: false, error: "nothing_to_refund" };
 
   const amountCents = paid > 0 ? paid : total;
-  const { chargeRef, chargeAmount } = await resolveChargeReference(admin, row.id, row.paystack_reference);
+  const resolved = await resolveChargeReference(admin, row.id, row.paystack_reference);
+  if (!resolved.ok) return { ok: false, error: resolved.error };
+  const { chargeRef, chargeAmount } = resolved;
   const refundAmount = chargeAmount > 0 ? chargeAmount : amountCents;
   const pastedRefundRef = params.refundReference?.trim() || null;
   const nowIso = new Date().toISOString();

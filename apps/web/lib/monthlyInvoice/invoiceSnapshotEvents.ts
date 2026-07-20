@@ -123,6 +123,17 @@ export type InvoiceSnapshotEvent =
       zoho_voided: boolean;
       previous_zoho_invoice_id: string | null;
       paystack_reference: string;
+    }
+  | {
+      /** BILL-INV-002 Phase A: Paystack charge amount ≠ remaining balance — not applied. */
+      kind: "payment_amount_quarantined";
+      at: string;
+      paystack_charge_reference: string;
+      amount_cents: number;
+      expected_balance_cents: number;
+      balance_cents_after: number;
+      actor: "system";
+      reference: string;
     };
 
 /** Narrow unknown JSON from DB into a typed event when possible. */
@@ -272,6 +283,20 @@ export function parseInvoiceSnapshotEvent(raw: unknown): InvoiceSnapshotEvent | 
       paystack_reference: String(o.paystack_reference ?? ""),
     };
   }
+  if (kind === "payment_amount_quarantined") {
+    const ref = String(o.paystack_charge_reference ?? o.reference ?? "");
+    const expected = Math.max(0, Math.round(Number(o.expected_balance_cents ?? o.balance_cents_after ?? 0)));
+    return {
+      kind: "payment_amount_quarantined",
+      at: String(o.at ?? ""),
+      paystack_charge_reference: ref,
+      amount_cents: Math.round(Number(o.amount_cents ?? 0)),
+      expected_balance_cents: expected,
+      balance_cents_after: Math.max(0, Math.round(Number(o.balance_cents_after ?? expected))),
+      actor: "system",
+      reference: ref || "paystack",
+    };
+  }
   return null;
 }
 
@@ -302,6 +327,8 @@ export function invoiceSnapshotEventToRpcPayload(ev: InvoiceSnapshotEvent): Reco
       return { ...ev, kind: "payment_refunded" };
     case "invoice_reopened_to_draft":
       return { ...ev, kind: "invoice_reopened_to_draft" };
+    case "payment_amount_quarantined":
+      return { ...ev, kind: "payment_amount_quarantined" };
     default: {
       const _x: never = ev;
       return _x as Record<string, unknown>;

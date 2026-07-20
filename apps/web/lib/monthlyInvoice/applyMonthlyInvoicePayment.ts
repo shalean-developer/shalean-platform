@@ -2,8 +2,14 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { clearMonthlyInvoicePaymentLink } from "@/lib/monthlyInvoice/clearMonthlyInvoicePaymentLink";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
-import { logSystemEvent } from "@/lib/logging/systemLog";
+import {
+  MONTHLY_INVOICE_AMOUNT_MISMATCH_QUARANTINE,
+  monthlyInvoiceChargeMatchesRemainingBalance,
+  normalizeCents,
+} from "@/lib/monthlyInvoice/monthlyInvoiceAmountIntegrity";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { monthlyInvoicePaystackReferencesMatch } from "@/lib/monthlyInvoice/monthlyInvoicePaystackReference";
 import { resolveMonthlyInvoiceForPaystackCharge } from "@/lib/monthlyInvoice/resolveMonthlyInvoiceForPaystackCharge";
 import { settleMonthlyInvoiceChildren } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildren";
@@ -11,7 +17,11 @@ import { markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
 import { resolveZohoCustomerContactForMonthlyInvoice } from "@/lib/zoho/resolveZohoCustomerContact";
 
 export type ApplyMonthlyInvoicePaymentResult =
-  | { ok: true; skipped: true; reason: "not_found" | "already_paid" | "duplicate_charge" }
+  | {
+      ok: true;
+      skipped: true;
+      reason: "not_found" | "already_paid" | "duplicate_charge" | typeof MONTHLY_INVOICE_AMOUNT_MISMATCH_QUARANTINE;
+    }
   | { ok: true; settled: "full"; invoiceId: string }
   | { ok: true; settled: "partial"; invoiceId: string; amount_paid_cents: number; total_amount_cents: number }
   | { ok: false; error: string };
@@ -96,6 +106,50 @@ export async function applyMonthlyInvoicePayment(
     return { ok: false, error: `invoice_not_payable_status:${st || "unknown"}` };
   }
 
+  const remainingBalance = normalizeCents(row.balance_cents);
+  // BILL-INV-002 Phase A (C01): refuse to settle when Paystack amount ≠ current remaining balance.
+  // Stale checkout sessions after adjustments are quarantined (link cleared; no ledger apply).
+  if (!monthlyInvoiceChargeMatchesRemainingBalance(paidIn, remainingBalance)) {
+    await clearMonthlyInvoicePaymentLink(admin, row.id);
+    const nowIsoQuarantine = new Date().toISOString();
+    await appendMonthlyInvoiceSnapshotEvent(
+      admin,
+      row.id,
+      {
+        kind: "payment_amount_quarantined",
+        at: nowIsoQuarantine,
+        paystack_charge_reference: ref,
+        amount_cents: paidIn,
+        balance_cents_after: remainingBalance,
+        expected_balance_cents: remainingBalance,
+        actor: "system",
+        reference: ref,
+      },
+      { source: "monthly_invoice/payment" },
+    );
+    await reportOperationalIssue(
+      "error",
+      "monthly_invoice/payment",
+      MONTHLY_INVOICE_AMOUNT_MISMATCH_QUARANTINE,
+      {
+        invoice_id: row.id,
+        charged_cents: paidIn,
+        remaining_balance_cents: remainingBalance,
+      },
+    );
+    await logSystemEvent({
+      level: "error",
+      source: "monthly_invoice/payment",
+      message: MONTHLY_INVOICE_AMOUNT_MISMATCH_QUARANTINE,
+      context: {
+        invoice_id: row.id,
+        charged_cents: paidIn,
+        remaining_balance_cents: remainingBalance,
+      },
+    });
+    return { ok: true, skipped: true, reason: MONTHLY_INVOICE_AMOUNT_MISMATCH_QUARANTINE };
+  }
+
   const { error: dedupErr } = await admin.from("monthly_invoice_paystack_charge_dedup").insert({
     charge_reference: ref,
     invoice_id: row.id,
@@ -114,6 +168,7 @@ export async function applyMonthlyInvoicePayment(
   const prevPaid = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
   const newPaid = prevPaid + paidIn;
   const capPaid = total > 0 ? Math.min(newPaid, total) : newPaid;
+  // With amount===remaining balance, settlement is always full for the open remainder.
   const fullySettled = total <= 0 ? newPaid >= 0 : capPaid >= total;
 
   const nowIso = new Date().toISOString();

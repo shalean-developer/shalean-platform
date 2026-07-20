@@ -81,6 +81,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ invoiceId:
 
   if (!ins.ok) return NextResponse.json({ error: ins.error }, { status: 400 });
 
+  // BILL-INV-002 Phase A (H06): invalidate Paystack checkout after any total change.
+  const { clearMonthlyInvoicePaymentLink } = await import(
+    "@/lib/monthlyInvoice/clearMonthlyInvoicePaymentLink"
+  );
+  await clearMonthlyInvoicePaymentLink(admin, invoiceId);
+
   const st = String(row.status ?? "").toLowerCase();
   if (st === "draft") {
     const { error: stampErr } = await admin
