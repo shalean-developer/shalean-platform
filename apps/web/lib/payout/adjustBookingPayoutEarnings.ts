@@ -1,13 +1,21 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logAdminEarningsAction } from "@/lib/admin/logAdminEarningsAction";
+import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { assertHybridPayoutWithinFinancialCap, bookingPayoutConstraintCapCents, type BookingRowForPayoutCap } from "@/lib/payout/bookingPayoutCapCents";
+import { assertVisitEarningsReadAfterWrite } from "@/lib/payout/assertVisitEarningsReadAfterWrite";
+import {
+  assertHybridPayoutWithinFinancialCap,
+  bookingPayoutConstraintCapCents,
+  type BookingRowForPayoutCap,
+} from "@/lib/payout/bookingPayoutCapCents";
 import { parseBookingEarningsSummary, patchEarningsSummaryForCleaner } from "@/lib/payout/bookingEarningsSummary";
-import { syncPayoutBatchFromBookings } from "@/lib/payout/syncPayoutBatchFromBookings";
+import { requireVisitEarningsAdjustAudit } from "@/lib/payout/requireVisitEarningsAdjustAudit";
+import { syncOpenPayoutBatchesForVisitEdit } from "@/lib/payout/syncPayoutBatchFromBookings";
 import { assertBookingVisitPayoutEditable } from "@/lib/payout/visitPayoutEditGuards";
 
 type BookingRow = BookingRowForPayoutCap & {
   id: string;
+  date: string | null;
   payout_id: string | null;
   payout_status: string | null;
   payout_paid_at?: string | null;
@@ -15,10 +23,18 @@ type BookingRow = BookingRowForPayoutCap & {
   status: string | null;
   cleaner_payout_cents: number | null;
   cleaner_bonus_cents: number | null;
+  display_earnings_cents: number | null;
+  cleaner_earnings_total_cents: number | null;
+  payout_frozen_cents: number | null;
   cleaner_id: string | null;
+  payout_owner_cleaner_id?: string | null;
   earnings_summary?: unknown;
 };
 
+/**
+ * Solo-owner visit earnings adjustment (single cleaner owns booking hybrid columns).
+ * Multi-cleaner / team / TJ / roster-member edits must use {@link adjustBookingTeamMemberPayoutEarnings}.
+ */
 export async function adjustBookingPayoutEarnings(
   admin: SupabaseClient,
   params: {
@@ -40,7 +56,7 @@ export async function adjustBookingPayoutEarnings(
   const { data: booking, error: loadErr } = await admin
     .from("bookings")
     .select(
-      "id, status, cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id, total_paid_cents, amount_paid_cents, total_paid_zar, cleaner_payout_cents, cleaner_bonus_cents, earnings_summary",
+      "id, date, status, cleaner_id, payout_owner_cleaner_id, payout_id, payout_status, payout_paid_at, is_team_job, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id, total_paid_cents, amount_paid_cents, total_paid_zar, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, payout_frozen_cents, earnings_summary",
     )
     .eq("id", params.bookingId)
     .maybeSingle();
@@ -60,6 +76,19 @@ export async function adjustBookingPayoutEarnings(
   if (!editable.ok) return editable;
 
   const payoutId = editable.payoutId;
+  const targetCleanerId =
+    String(params.cleanerId ?? "").trim() ||
+    String(row.cleaner_id ?? "").trim() ||
+    String(row.payout_owner_cleaner_id ?? "").trim() ||
+    "";
+
+  const previousTotalCents = targetCleanerId
+    ? resolveCleanerDashboardEarningsCents(row, targetCleanerId)
+    : Math.max(
+        0,
+        Math.round(Number(row.display_earnings_cents ?? 0)) ||
+          Math.round(Number(row.cleaner_payout_cents ?? 0) + Number(row.cleaner_bonus_cents ?? 0)),
+      );
 
   const capCheck = assertHybridPayoutWithinFinancialCap({ row, payoutCents, bonusCents });
   if (!capCheck.ok) {
@@ -83,10 +112,7 @@ export async function adjustBookingPayoutEarnings(
 
   const summary = parseBookingEarningsSummary(row.earnings_summary);
   const summaryCleanerId =
-    String(params.cleanerId ?? "").trim() ||
-    String(row.cleaner_id ?? "").trim() ||
-    summary?.per_cleaner_earnings[0]?.cleaner_id ||
-    "";
+    targetCleanerId || summary?.per_cleaner_earnings[0]?.cleaner_id || "";
   if (summary && summaryCleanerId) {
     const updatedSummary = patchEarningsSummaryForCleaner(summary, summaryCleanerId, payoutCents, bonusCents);
     if (updatedSummary) {
@@ -109,12 +135,37 @@ export async function adjustBookingPayoutEarnings(
   if (upErr) return { ok: false, error: upErr.message, code: "booking_update_failed" };
   if (!updated?.length) return { ok: false, error: "Booking could not be updated.", code: "booking_update_failed" };
 
-  let batchTotalCents: number | null = null;
-  if (payoutId) {
-    const synced = await syncPayoutBatchFromBookings(admin, payoutId);
-    if (!synced.ok) return { ok: false, error: synced.error, code: "batch_sync_failed" };
-    batchTotalCents = synced.totalCents;
+  const synced = await syncOpenPayoutBatchesForVisitEdit(admin, {
+    cleanerId: targetCleanerId,
+    bookingPayoutId: payoutId,
+    bookingDate: row.date,
+  });
+  if (!synced.ok) return { ok: false, error: synced.error, code: "batch_sync_failed" };
+  const batchTotalCents = synced.batchTotalCents;
+
+  if (targetCleanerId) {
+    const raw = await assertVisitEarningsReadAfterWrite(admin, {
+      bookingId: params.bookingId,
+      cleanerId: targetCleanerId,
+      expectedTotalCents: displayCents,
+    });
+    if (!raw.ok) return { ok: false, error: raw.error, code: raw.code };
   }
+
+  const audit = await requireVisitEarningsAdjustAudit(admin, {
+    bookingId: params.bookingId,
+    cleanerId: targetCleanerId || null,
+    payoutId,
+    adminUserId: params.adminUserId,
+    mode: "solo_owner",
+    previousTotalCents,
+    newPayoutCents: payoutCents,
+    newBonusCents: bonusCents,
+    newTotalCents: displayCents,
+    adjustmentNote: params.adjustmentNote,
+    batchTotalCents,
+  });
+  if (!audit.ok) return audit;
 
   await logAdminEarningsAction(admin, {
     bookingId: params.bookingId,
@@ -128,10 +179,12 @@ export async function adjustBookingPayoutEarnings(
     message: "Admin manually adjusted per-visit cleaner payout earnings",
     context: {
       bookingId: params.bookingId,
+      cleanerId: targetCleanerId || null,
       payoutId,
       adminUserId: params.adminUserId,
       previous_payout_cents: row.cleaner_payout_cents,
       previous_bonus_cents: row.cleaner_bonus_cents,
+      previous_total_cents: previousTotalCents,
       payout_cents: payoutCents,
       bonus_cents: bonusCents,
       adjustment_note: params.adjustmentNote?.trim() || null,
