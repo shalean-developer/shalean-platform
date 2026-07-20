@@ -40,6 +40,10 @@ describe("MKT-001B.2 social_publish_jobs migration contract", () => {
     expect(sql).toMatch(/recover_expired_social_publish_leases/i);
     expect(sql).toMatch(/invoke_nextjs_cron\('\/api\/cron\/process-social-publish-jobs'\)/i);
     expect(sql).toMatch(/\*\/5 \* \* \* \*/);
+    // MKT-001M.1: nested $$ is invalid; cron body must use a distinct tag.
+    expect(sql).toMatch(/DO\s+\$do\$/i);
+    expect(sql).toMatch(/\$cron\$select public\.invoke_nextjs_cron/i);
+    expect(sql).toMatch(/END\s+\$do\$\s*;/i);
   });
 
   it("documents that payload must not store secrets", () => {

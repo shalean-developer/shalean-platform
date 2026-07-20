@@ -81,6 +81,32 @@ CI: `.github/workflows/migration-governance.yml` runs the same script on PRs/pus
 - Does not repair remote `schema_migrations` history by itself.
 - Does not delete or rewrite `migrations-legacy`.
 
+## Dollar-quote nesting (CI enforced)
+
+`npm run db:migrations:validate` rejects `DO $tag$ … END $tag$` bodies that reuse `$tag$` inside the block. Nested identical tags are invalid PostgreSQL (the outer string closes at the first inner delimiter). Use distinct tags (e.g. outer `$do$`, inner `$cron$`).
+
+## Governance exception — historical syntax/reproducibility correction
+
+| Field | Value |
+|-------|-------|
+| **Exception ID** | `MIG-HIST-001` / MKT-001M.1 |
+| **File** | `supabase/migrations/20260717120000_mkt_001b2_social_publish_jobs.sql` |
+| **Class** | Syntax / clean-environment reproducibility only |
+| **Not** | A new production schema change, data migration, or cron behaviour change |
+
+**Allowed once** when all of the following hold:
+
+1. Production already applied the version and schema/cron match the intended end state (repaired if needed).
+2. The edit changes only dollar-quote delimiters (or equivalent pure syntax) — no DDL/DCL/DML semantics.
+3. Hashes before/after, reason, and production disposition are recorded in an audit note.
+4. Clean local `db reset` + migration contract tests pass.
+5. Production read-only check confirms the version stays applied and is **not** pending solely due to content change.
+6. **No** forward production repair migration is filed for the same fix when production is already correct.
+
+Rewriting applied migration SQL remains otherwise prohibited; prefer forward-only migrations for real schema changes.
+
+Evidence: `docs/audits/marketing/MKT-001M.1-historical-dollar-quote-correction.md`
+
 ## References
 
 - Baseline process: `docs/database-baseline/local-replay-verification.md`
