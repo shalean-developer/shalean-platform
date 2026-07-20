@@ -55,6 +55,18 @@ describe("POST /api/meta/data-deletion", () => {
     expect(res.status).toBe(400);
   });
 
+  it("rejects invalid signature fail-closed", async () => {
+    const signed = makeSignedRequest({ user_id: "99", algorithm: "HMAC-SHA256" }, "wrong-secret");
+    const res = await POST(
+      new Request("https://shalean.co.za/api/meta/data-deletion", {
+        method: "POST",
+        headers: { "content-type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({ signed_request: signed }),
+      }),
+    );
+    expect(res.status).toBe(400);
+  });
+
   it("rejects GET", async () => {
     const res = GET();
     expect(res.status).toBe(405);

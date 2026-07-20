@@ -119,6 +119,8 @@ export async function saveFacebookOAuthConnection(args: {
   connectedBy: string;
   correlationId: string;
   pages: FacebookDiscoveredPage[];
+  /** Meta app-scoped user id — stored only as a non-reversible hash for deletion correlation. */
+  metaUserIdHash?: string | null;
 }): Promise<
   | {
       ok: true;
@@ -209,6 +211,8 @@ export async function saveFacebookOAuthConnection(args: {
       lastError: null,
       lastErrorCategory: null,
       correlationId: args.correlationId,
+      /** SHA-256 prefix of Meta app-scoped user id — never store raw Meta user_id. */
+      metaUserIdHash: args.metaUserIdHash ?? null,
       disconnectedBy: null,
       disconnectedAt: null,
     },

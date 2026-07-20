@@ -176,13 +176,27 @@ async function main(): Promise<void> {
   if (statusEmpty.status === 200 && !/confirmation code|data deletion/i.test(statusEmpty.body)) {
     failures.push(`/data-deletion/status: missing expected instructional copy`);
   }
-  if (statusEmpty.status === 200 && /Legal review/i.test(statusEmpty.body) === false) {
-    // Legal review flag lives on /data-deletion instructions page
-  }
 
   const instructions = await fetchWithNoRedirect(`${baseEnv}/data-deletion`);
-  if (instructions.status === 200 && !/Legal review/i.test(instructions.body)) {
-    failures.push(`/data-deletion: missing Legal review flag in copy`);
+  if (instructions.status === 200 && !/acknowledg/i.test(instructions.body)) {
+    failures.push(`/data-deletion: missing acknowledgement-vs-completion distinction`);
+  }
+  if (instructions.status === 200 && !/publishing history/i.test(instructions.body)) {
+    failures.push(`/data-deletion: missing publishing-history scope clarification`);
+  }
+  if (
+    instructions.status === 200 &&
+    /automatically deleted all|auto-wipe customer/i.test(instructions.body)
+  ) {
+    failures.push(`/data-deletion: must not claim automatic customer wipe`);
+  }
+
+  const privacyPage = await fetchWithNoRedirect(`${baseEnv}/privacy-policy`);
+  if (privacyPage.status === 200 && !/Information Regulator/i.test(privacyPage.body)) {
+    failures.push(`/privacy-policy: missing Information Regulator reference`);
+  }
+  if (privacyPage.status === 200 && !/social/i.test(privacyPage.body)) {
+    failures.push(`/privacy-policy: missing social-integration disclosure`);
   }
 
   // --- Meta callback against running server ---

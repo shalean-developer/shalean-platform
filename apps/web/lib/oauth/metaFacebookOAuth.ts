@@ -355,6 +355,34 @@ export function classifyFacebookPageEligibility(tasks: string[]): {
 }
 
 /**
+ * Resolve the Meta app-scoped user id for the authorized user (GET /me).
+ * Used to correlate future data-deletion callbacks without logging the raw id.
+ */
+export async function fetchFacebookAppScopedUserId(
+  cfg: FacebookOAuthConfig,
+  userAccessToken: string,
+): Promise<{ ok: true; userId: string } | { ok: false; error: string; status?: number }> {
+  const url = new URL(`https://graph.facebook.com/${cfg.graphVersion}/me`);
+  url.searchParams.set("fields", "id");
+  url.searchParams.set("access_token", userAccessToken);
+
+  const res = await fetch(url.toString(), { method: "GET" });
+  const json = (await res.json().catch(() => ({}))) as {
+    id?: string;
+    error?: GraphErrorBody;
+  };
+
+  if (!res.ok || json.error || !json.id?.trim()) {
+    return {
+      ok: false,
+      status: res.status,
+      error: graphErrorMessage(json, res.status),
+    };
+  }
+  return { ok: true, userId: json.id.trim() };
+}
+
+/**
  * Discover Pages the user manages via GET /me/accounts.
  * Returns Page access tokens server-side only — never send these to the browser.
  */

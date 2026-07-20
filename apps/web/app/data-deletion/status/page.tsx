@@ -72,19 +72,22 @@ export default async function DataDeletionStatusPage({ searchParams }: Props) {
       ) : verified.ok ? (
         <div className="mt-4 space-y-3 text-base leading-relaxed text-slate-600">
           <p>
-            <strong className="text-slate-900">Status:</strong> Request acknowledged
+            <strong className="text-slate-900">Status:</strong> Request acknowledged — pending operator
+            completion
           </p>
           <p>
             Confirmation code <code className="rounded bg-slate-100 px-1.5 py-0.5 text-sm">{code}</code> is
             valid. Issued at approximately {issuedLabel} (UTC).
           </p>
           <p>
-            An authorized operator will review and remove applicable <em>social-platform connection</em> data
-            (encrypted tokens / connection rows) after verification. Booking, payment, and other customer or
+            This page confirms that Shalean <em>received</em> the Meta deletion request. It does{" "}
+            <strong>not</strong> mean social credentials or other records have already been deleted. An
+            authorized operator will verify and remove applicable <em>social-platform connection</em> data
+            (encrypted tokens / connection rows). Publishing history, booking, payment, and other customer or
             business records are not deleted by this callback alone.
           </p>
           <p>
-            Questions:{" "}
+            Questions or escalation:{" "}
             <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="font-medium text-blue-600 hover:underline">
               {CUSTOMER_SUPPORT_EMAIL}
             </a>

@@ -46,31 +46,46 @@ export default function DataDeletionPage() {
         example Page or Instagram access tokens stored for the Shalean Marketing Hub).
       </p>
 
-      <h2 className="mt-10 text-xl font-semibold text-slate-900">What this covers</h2>
+      <h2 className="mt-10 text-xl font-semibold text-slate-900">What is and is not covered</h2>
       <ul className="mt-3 list-disc space-y-2 pl-5 text-base leading-relaxed text-slate-600">
-        <li>OAuth connection records and encrypted access tokens for Facebook / Instagram publishing</li>
-        <li>Related Meta app-scoped identifiers used only for that social connection</li>
+        <li>
+          <strong>Covered (after verification):</strong> OAuth connection records and encrypted access tokens
+          for Facebook / Instagram publishing; related Meta app-scoped identifier hashes used only for that
+          social connection.
+        </li>
+        <li>
+          <strong>Not deleted automatically by Meta&apos;s callback:</strong> publishing history rows, durable
+          publish jobs, or provider post/media identifiers kept for audit and operational integrity.
+        </li>
+        <li>
+          <strong>Not covered by this Meta flow:</strong> booking history, invoices, cleaner profiles, and other
+          customer or business records. Those require a separate, authenticated request and operator review.
+        </li>
+        <li>
+          <strong>Legal or operational retention:</strong> some records may be retained where required for
+          security, dispute resolution, accounting, or law. We will state any refusal reason on the status
+          path or by email after review.
+        </li>
       </ul>
-      <p className="mt-3 text-base leading-relaxed text-slate-600">
-        Booking history, invoices, cleaner profiles, and other customer or business records are{" "}
-        <strong>not</strong> deleted automatically through this process. Those require a separate, authenticated
-        request and operator review.
-      </p>
 
       <h2 className="mt-10 text-xl font-semibold text-slate-900">How to request deletion</h2>
       <ol className="mt-3 list-decimal space-y-3 pl-5 text-base leading-relaxed text-slate-600">
         <li>
           Prefer Meta&apos;s built-in flow: Facebook → Settings &amp; privacy → Settings → Apps and websites →
-          remove Shalean Social Publishing, then use <em>Send Request</em> under Removed Apps and Websites if
-          offered. That triggers our secure callback and issues a confirmation code.
+          remove Shalean Social Publishing / Shalean Marketing, then use <em>Send Request</em> under Removed
+          Apps and Websites if offered. That triggers our secure callback and issues a confirmation code.
         </li>
         <li>
           Or email{" "}
-          <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}?subject=${encodeURIComponent("Social data deletion request")}`} className="font-medium text-blue-600 hover:underline">
+          <a
+            href={`mailto:${CUSTOMER_SUPPORT_EMAIL}?subject=${encodeURIComponent("Social data deletion request")}`}
+            className="font-medium text-blue-600 hover:underline"
+          >
             {CUSTOMER_SUPPORT_EMAIL}
           </a>{" "}
           with subject line <em>Social data deletion request</em>, and include the Facebook/Instagram Page name
-          you connected (do not send access tokens or passwords).
+          you connected and a reachable email for identity verification (do not send access tokens or
+          passwords).
         </li>
         <li>
           You may also use our{" "}
@@ -81,27 +96,33 @@ export default function DataDeletionPage() {
         </li>
       </ol>
 
-      <h2 className="mt-10 text-xl font-semibold text-slate-900">Confirmation and status</h2>
+      <h2 className="mt-10 text-xl font-semibold text-slate-900">Acknowledgement, status, and timelines</h2>
       <p className="mt-3 text-base leading-relaxed text-slate-600">
-        When Meta calls our deletion callback, we return a confirmation code and a status URL. Open{" "}
+        When Meta calls our deletion callback, we <strong>acknowledge</strong> the request and return a
+        confirmation code plus a status URL. That acknowledgement is <strong>not</strong> completion of
+        deletion. Open{" "}
         <Link href="/data-deletion/status" className="font-medium text-blue-600 hover:underline">
           /data-deletion/status
         </Link>{" "}
-        and enter the code to see whether the request was acknowledged. Actual removal of social connection
-        records is completed by an authorized operator after verification — we do not auto-wipe customer or
-        business data from an unauthenticated callback alone.
+        with your code to see whether the request was acknowledged. An authorized operator (privacy/support)
+        then verifies identity and removes applicable social connection credentials. We aim to complete
+        operator review as soon as practicable after verification; we do not promise an automatic wipe from
+        the unauthenticated callback alone. Completion status is confirmed only after verified operational
+        evidence (for example connection credentials removed).
       </p>
 
-      <h2 className="mt-10 text-xl font-semibold text-slate-900">Privacy policy</h2>
+      <h2 className="mt-10 text-xl font-semibold text-slate-900">Escalation</h2>
       <p className="mt-3 text-base leading-relaxed text-slate-600">
-        See our{" "}
+        If you cannot obtain a confirmation code or need progress on a pending request, email{" "}
+        <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="font-medium text-blue-600 hover:underline">
+          {CUSTOMER_SUPPORT_EMAIL}
+        </a>
+        . Privacy-policy and POPIA rights context:{" "}
         <Link href="/privacy-policy" className="font-medium text-blue-600 hover:underline">
           Privacy Policy
-        </Link>{" "}
-        for how booking and customer data are handled.{" "}
-        <span className="text-slate-500">
-          (Legal review recommended before treating this page as a complete statutory privacy notice.)
-        </span>
+        </Link>
+        . Complaints may also be directed to the Information Regulator after contacting us — see the Privacy
+        Policy.
       </p>
     </LegalPageShell>
   );

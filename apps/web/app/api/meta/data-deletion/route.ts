@@ -4,6 +4,10 @@ import {
   issueDataDeletionConfirmationCode,
   parseMetaSignedRequest,
 } from "@/lib/meta/dataDeletion";
+import {
+  allowMetaDataDeletionRequest,
+  metaDataDeletionRateLimitKey,
+} from "@/lib/rateLimit/metaDataDeletionIpLimit";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -12,12 +16,19 @@ export const dynamic = "force-dynamic";
  * Meta Data Deletion Request Callback.
  *
  * Acknowledges the request and returns a confirmation URL/code. Does **not**
- * automatically delete booking, customer, or business records — only logs a
- * hashed Meta user id for authorized operator follow-up (social connection data).
+ * automatically delete booking, customer, business, or social connection records —
+ * only logs a hashed Meta user id for authorized operator follow-up.
+ *
+ * Operator owner: privacy/support mailbox (CUSTOMER_SUPPORT_EMAIL / hello@shalean.co.za).
+ * Completion requires verified operational evidence (connection row removed / tokens wiped).
  *
  * @see https://developers.facebook.com/docs/development/create-an-app/app-dashboard/data-deletion-callback/
  */
 export async function POST(request: Request): Promise<Response> {
+  if (!allowMetaDataDeletionRequest(metaDataDeletionRateLimitKey(request))) {
+    return Response.json({ error: "rate_limited" }, { status: 429 });
+  }
+
   let signedRequest = "";
   const contentType = request.headers.get("content-type") ?? "";
   try {
@@ -43,11 +54,14 @@ export async function POST(request: Request): Promise<Response> {
     return Response.json({ error: "callback_not_configured" }, { status: 503 });
   }
 
-  // Structured audit only — no tokens, no PII, no automatic deletes.
+  // Structured audit only — no tokens, no raw Meta user ids, no automatic deletes.
+  // confirmationCode is logged so operators can correlate Meta's UI with status lookups.
   console.info("[meta-data-deletion] request_ack", {
     userHash: hashMetaUserIdForAudit(payload.user_id),
     confirmationCode,
     issuedAt: payload.issued_at ?? null,
+    status: "acknowledged_pending_operator",
+    owner: "privacy-support",
   });
 
   return Response.json(buildMetaDataDeletionAck(confirmationCode), { status: 200 });

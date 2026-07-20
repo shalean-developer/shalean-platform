@@ -53,6 +53,14 @@ export function parseMetaSignedRequest(
     const json = decodeMetaBase64Url(encodedPayload).toString("utf8");
     const parsed = JSON.parse(json) as MetaSignedRequestPayload;
     if (!parsed || typeof parsed !== "object") return null;
+    // Meta documents HMAC-SHA256; reject unexpected algorithms fail-closed.
+    if (
+      parsed.algorithm != null &&
+      String(parsed.algorithm).toUpperCase().replace(/_/g, "-") !== "HMAC-SHA256"
+    ) {
+      return null;
+    }
+    if (typeof parsed.user_id !== "string" || !parsed.user_id.trim()) return null;
     return parsed;
   } catch {
     return null;

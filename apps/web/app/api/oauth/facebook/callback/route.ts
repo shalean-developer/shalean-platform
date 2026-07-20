@@ -14,6 +14,7 @@ import {
   discoverFacebookPages,
   exchangeFacebookAuthorizationCode,
   exchangeFacebookLongLivedUserToken,
+  fetchFacebookAppScopedUserId,
   getFacebookOAuthConfig,
   hashOAuthState,
   classifyFacebookOAuthProviderError,
@@ -27,6 +28,7 @@ import {
   saveFacebookOAuthConnection,
 } from "@/lib/promotions/facebookConnectedAccount";
 import { saveInstagramConnection } from "@/lib/promotions/instagramPublish";
+import { hashMetaUserIdForAudit } from "@/lib/meta/dataDeletion";
 import { TokenEncryptionConfigError } from "@/lib/security/tokenEncryption";
 
 export const runtime = "nodejs";
@@ -196,6 +198,21 @@ export async function GET(request: Request) {
       );
     }
 
+    // Best-effort app-scoped user id for Meta data-deletion correlation (hash only).
+    let metaUserIdHash: string | null = null;
+    const me = await fetchFacebookAppScopedUserId(cfg, longLived.access_token);
+    if (me.ok) {
+      metaUserIdHash = hashMetaUserIdForAudit(me.userId);
+    } else {
+      logFacebookOAuthEvent("meta_user_id_lookup_failed", {
+        correlationId,
+        provider: "facebook",
+        loginPurpose: purpose,
+        httpStatus: me.status ?? null,
+        actor: user.email,
+      });
+    }
+
     failureStage = "upsert";
     const saved = await saveFacebookOAuthConnection({
       userAccessToken: longLived.access_token,
@@ -203,6 +220,7 @@ export async function GET(request: Request) {
       connectedBy: user.email,
       correlationId,
       pages: discovered.pages,
+      metaUserIdHash,
     });
 
     if (!saved.ok) {

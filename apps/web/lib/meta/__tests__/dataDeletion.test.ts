@@ -43,6 +43,15 @@ describe("meta dataDeletion", () => {
     expect(parseMetaSignedRequest(signed, "other-secret")).toBeNull();
   });
 
+  it("rejects unexpected signed_request algorithm", () => {
+    process.env.FACEBOOK_APP_SECRET = "test-secret";
+    const signed = makeSignedRequest(
+      { algorithm: "HMAC-SHA1", user_id: "12345" },
+      "test-secret",
+    );
+    expect(parseMetaSignedRequest(signed)).toBeNull();
+  });
+
   it("issues and verifies confirmation codes without storing PII", () => {
     process.env.FACEBOOK_APP_SECRET = "test-secret";
     const code = issueDataDeletionConfirmationCode();
