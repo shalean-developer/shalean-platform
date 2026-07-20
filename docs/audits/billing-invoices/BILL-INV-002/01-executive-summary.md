@@ -8,6 +8,8 @@
 
 Automated reminders, overdue marking, drift repair, and accounting-sync remain under **manual monitoring** until proven.
 
+**Phase A status (2026-07-20):** shipped to **production** at `f5319b77` (PR #74) under sponsor override accepting incomplete staging Paystack matrix. Ledger backfill / accounting-sync **not** authorized. See `evidence/phase-a-production-release-2026-07-20.md`.
+
 ## Scores (0–100)
 
 | Dimension | Score | Rationale |

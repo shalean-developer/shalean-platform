@@ -42,4 +42,4 @@
 5. Attempt refund with two dedup rows (fixture) → `multi_charge_refund_unsupported`
 6. Copy payment link in office → clipboard host is app origin, not `checkout.paystack.com`
 
-Stop after local validation + this evidence; await separate approval for staging deploy and later phases.
+Local validation complete. Staging deploy + verification report: `phase-a-staging-verification-2026-07-20.md` (live Paystack matrix still operator-gated).
