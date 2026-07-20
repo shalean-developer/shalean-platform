@@ -62,7 +62,6 @@ export function classifyVisitPayoutEdit(input: VisitPayoutEditClassificationInpu
     summaryIds.length > 1 ||
     input.hasTeamMemberPayoutRow === true ||
     input.hasRosterMemberPayoutRow === true ||
-    Boolean(String(input.team_id ?? "").trim() && input.is_team_job === true) ||
     summary?.payout_mode === "team";
 
   if (multiCleanerSignals) {
