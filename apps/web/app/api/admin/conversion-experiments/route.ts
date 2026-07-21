@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import {
   CONVERSION_ROLLOUT_MIN_CONV_DIFF,
   CONVERSION_ROLLOUT_MIN_PER_ARM,
@@ -30,8 +30,9 @@ export async function GET(request: Request) {
 
   const pub = createClient(url, anon);
   const { data: userData } = await pub.auth.getUser(token);
-  if (!userData.user?.email || !isAdmin(userData.user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(userData.user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   const admin = getSupabaseAdmin();

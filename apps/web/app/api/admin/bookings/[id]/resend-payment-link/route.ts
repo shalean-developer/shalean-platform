@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { persistPaymentLinkDelivery } from "@/lib/admin/persistPaymentLinkDelivery";
 import { paymentLinkSendAllowed } from "@/lib/admin/paymentLinkSendGate";
 import { deliverAdminPaymentLink } from "@/lib/admin/adminPaymentLinkDelivery";
@@ -77,8 +77,9 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
   }
 
-  if (!isAdmin(user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   let notificationMode: "chain" | "chain_plus_email" = "chain_plus_email";
@@ -174,7 +175,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     context: {
       type: "admin_checkout_resend",
       booking_id: r.id,
-      admin_id: user.id,
+      admin_id: adminAuth.userId,
       skip_sms: skipSms,
     },
   });

@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { teamRosterEditBlockedReason } from "@/lib/admin/adminBookingAssignmentDisplay";
 import { BOOKING_ROSTER_LOCKED_HINT } from "@/lib/admin/bookingRosterLockedMessage";
@@ -29,10 +29,9 @@ async function requireAdmin(request: Request): Promise<
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) {
-    return { ok: false, status: 403, error: "Forbidden." };
-  }
-  return { ok: true, email: user.email };
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) return { ok: false, status: adminAuth.status, error: adminAuth.error };
+  return { ok: true, email: adminAuth.email };
 }
 
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {

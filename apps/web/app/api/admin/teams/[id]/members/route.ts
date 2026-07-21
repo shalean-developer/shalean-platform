@@ -1,7 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { TEAM_MEMBER_ADD_CODE } from "@/lib/admin/teamMemberAddCodes";
 import {
   getCachedTeamMemberAddResponse,
@@ -31,8 +31,9 @@ async function ensureAdmin(request: Request): Promise<AdminAuth> {
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.id || !user.email || !isAdmin(user.email)) return { ok: false, status: 403, error: "Forbidden." };
-  return { ok: true, adminUserId: user.id, adminEmail: user.email ?? null };
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) return { ok: false, status: adminAuth.status, error: adminAuth.error };
+  return { ok: true, adminUserId: adminAuth.userId, adminEmail: adminAuth.email };
 }
 
 type CleanerJoin = {

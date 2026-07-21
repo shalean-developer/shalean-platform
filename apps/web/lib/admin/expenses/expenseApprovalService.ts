@@ -17,6 +17,7 @@ import {
 } from "@/lib/admin/expenses/sendFinanceApprovalEmails";
 
 export type FinanceUserRoles = {
+  isOfficeAdmin: boolean;
   financeAccess: boolean;
   financeManagerAccess: boolean;
   financeOwnerAccess: boolean;
@@ -29,15 +30,17 @@ export async function loadFinanceUserRoles(
 ): Promise<FinanceUserRoles> {
   const { data: profile } = await admin
     .from("user_profiles")
-    .select("finance_access, finance_manager_access, finance_owner_access")
+    .select("role, finance_access, finance_manager_access, finance_owner_access")
     .eq("id", userId)
     .maybeSingle();
 
-  const adminUser = isAdmin(email);
+  const isOfficeAdmin =
+    isAdmin(email) || String(profile?.role ?? "").trim().toLowerCase() === "admin";
   return {
-    financeAccess: adminUser || profile?.finance_access === true,
-    financeManagerAccess: adminUser || profile?.finance_manager_access === true,
-    financeOwnerAccess: adminUser || profile?.finance_owner_access === true,
+    isOfficeAdmin,
+    financeAccess: isOfficeAdmin || profile?.finance_access === true,
+    financeManagerAccess: isOfficeAdmin || profile?.finance_manager_access === true,
+    financeOwnerAccess: isOfficeAdmin || profile?.finance_owner_access === true,
   };
 }
 
@@ -72,8 +75,10 @@ export async function approveExpenseWorkflow(
 
   if (
     !canApproveAtStage(actingStage, {
-      isAdmin: isAdmin(email),
-      ...roles,
+      isAdmin: roles.isOfficeAdmin,
+      financeAccess: roles.financeAccess,
+      financeManagerAccess: roles.financeManagerAccess,
+      financeOwnerAccess: roles.financeOwnerAccess,
     })
   ) {
     return { ok: false, error: `Not authorized to approve at ${actingStage} stage.`, status: 403 };
@@ -155,8 +160,10 @@ export async function rejectExpenseWorkflow(
 
   if (
     !canApproveAtStage(actingStage, {
-      isAdmin: isAdmin(email),
-      ...roles,
+      isAdmin: roles.isOfficeAdmin,
+      financeAccess: roles.financeAccess,
+      financeManagerAccess: roles.financeManagerAccess,
+      financeOwnerAccess: roles.financeOwnerAccess,
     })
   ) {
     return { ok: false, error: `Not authorized to reject at ${actingStage} stage.`, status: 403 };
