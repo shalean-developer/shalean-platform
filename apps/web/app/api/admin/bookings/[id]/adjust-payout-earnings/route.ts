@@ -83,7 +83,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       applied: true,
       requires_approval: false,
       proposal_id: gate.proposalId ?? proposalId,
-      already_processed: gate.alreadyProcessed === true,
+      already_processed: gate.mode === "applied" && gate.alreadyProcessed === true,
       message:
         "Approved from stored proposal payload. Prefer POST /api/admin/money-action-proposals/:id/approve.",
     });
