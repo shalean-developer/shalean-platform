@@ -26,11 +26,11 @@
 | Implementation summary | `../implementation-summary.md` | Complete |
 | Changed-file inventory | `../changed-file-inventory.md` | Complete |
 | Migration assessment | `../migration-assessment.md` | Complete |
-| Automated tests | `./automated-test-results-2026-07-21.md` | Unit PASS |
-| Two-admin staging UI | Pending Preview + migration | **Open** |
+| Staging migration + concurrent claim | `./staging-verification-2026-07-21.md` | **PASS** (DB) |
+| Two-admin Office UI | Pending Preview | **Open** |
 | Screenshots | Pending | **Open** |
-| Concurrency live race | Pending | **Open** |
-| Audit-event live | Pending | **Open** |
+| Automated tests | `./automated-test-results-2026-07-21.md` | Unit PASS |
+| Security controls | `./security-control-evidence-2026-07-21.md` | Documented |
 
 ## External references
 
