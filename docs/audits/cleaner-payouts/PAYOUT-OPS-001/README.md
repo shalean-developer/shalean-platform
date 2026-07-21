@@ -5,26 +5,27 @@
 | **Work package** | PAYOUT-OPS-001 |
 | **Opened from** | PAYOUT-E2E-001 Phase A live review (2026-07-21) |
 | **Classification** | Operational completeness / control-gap (UX + ops) |
-| **Status** | **OPEN** — implementation on branch; Preview/staging verification incomplete |
+| **Status** | **PRODUCTION AUTHORIZED** — merge/deploy under change control (2026-07-21) |
 | **Design gate (2026-07-21)** | **CONDITIONAL PASS** (design) |
-| **Implementation gate (2026-07-21)** | **CONDITIONAL PASS — Additional staging evidence required** |
+| **Implementation gate (2026-07-21)** | **PASS** (implementation + staging verify + KI-OPS-003 remediation) |
+| **Verification gate (2026-07-21)** | **PASS** for production authorization (residuals accepted — see `known-issues.md`) |
 | **Distinct from** | PAYOUT-E2E-001 Phase A (earnings-source integrity + maker–checker **control**) |
-| **Production** | Not in scope until separately authorized |
+| **Production** | **Authorized** — PR #78 → `main` + production deploy controls |
 
 ## Authoritative governance baseline (2026-07-21)
 
 | Area | Status |
 |------|--------|
 | Phase A – Financial Control | **PASS** |
-| Operational Approval Workflow (design) | **CONDITIONAL PASS** (this package) |
-| Operational Approval Workflow (implementation) | **Not authorized** |
-| Production Readiness | **CONDITIONAL PASS** (unchanged parent gate) |
-| Production Deployment | **Not Authorized** |
+| Operational Approval Workflow (design) | **PASS** |
+| Operational Approval Workflow (implementation) | **PASS** |
+| Production Readiness | **PASS — Approved for production deployment** |
+| Production Deployment | **Authorized** (2026-07-21) — execute under change control |
 | Maker–Checker Control | **Enabled** (`PAYOUT_MAKER_CHECKER=true`) — must remain |
 
-**Interpretation:** Phase A delivered the financial control. This package designs the operational Office capability to use that control. Implementation may be authorized separately **only** if conditions in `decision-log.md` are accepted (immutable payload apply, atomic claim, reject API, flag unchanged).
+**Interpretation:** Phase A delivered the financial control. PAYOUT-OPS-001 completes the Office operational approval workflow. Production merge and deploy are authorized subject to migration apply, flag confirmation, post-deploy verification, and rollback readiness.
 
-**Implementation boundary:** Analysis and design completed 2026-07-21. Implementation, production deployment, feature-flag changes, and governance closure remain **not** authorized.
+**Implementation boundary:** Analysis, implementation, remediation, and non-production verification completed. Production cutover proceeds under approved change management.
 
 ## Governance framing
 

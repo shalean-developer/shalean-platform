@@ -22,6 +22,9 @@
 | 2026-07-21 | KI-OPS-003 remediated: gate audit on RPC `transition_applied` + unique `vea_rejected:<proposal_id>` index | Winner-only audit write; DB enforces exactly-one under concurrency | Accepted |
 | 2026-07-21 | KI-OPS-003 non-prod verify: sequential/concurrent/multi each **1** reject audit @ `599823fa` Preview | Staging migration applied; prior FAIL evidence preserved | **PASS — KI-OPS-003 remediated** |
 | 2026-07-21 | No production merge, production deploy, or flag weakening for KI-OPS-003 | Governance | Binding |
+| 2026-07-21 | **Production deployment authorized** for PAYOUT-OPS-001 (PR #78) | Design, implementation, KI-OPS-003 remediation, non-prod verification complete; residuals KI-OPS-001/002/005 accepted as non-blocking | Binding |
+| 2026-07-21 | Accept KI-OPS-001 residual (approve audit may omit proposal_id) at production gate | Proposal row retains maker/checker; financial controls proven | Accepted |
+| 2026-07-21 | Production flags must remain `PAYOUT_MAKER_CHECKER=true`, self-approve off | Segregation of duties | Binding |
 
 ---
 
