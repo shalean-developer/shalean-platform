@@ -72,4 +72,28 @@ describe("buildUnifiedInsertDurationPatch", () => {
       without.duration_minutes as number,
     );
   });
+
+  it("includes quoted extraRooms in workload derivation", () => {
+    const base = buildUnifiedInsertDurationPatch({
+      rowBase: {},
+      rooms: 2,
+      bathrooms: 1,
+      extras: [],
+      serviceSlugForFlat: "standard",
+      dateForFlat: null,
+      timeForFlat: null,
+      extraRooms: 0,
+    });
+    const withRooms = buildUnifiedInsertDurationPatch({
+      rowBase: {},
+      rooms: 2,
+      bathrooms: 1,
+      extras: [],
+      serviceSlugForFlat: "standard",
+      dateForFlat: null,
+      timeForFlat: null,
+      extraRooms: 3,
+    });
+    expect(withRooms.duration_minutes as number).toBeGreaterThan(base.duration_minutes as number);
+  });
 });

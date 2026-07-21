@@ -23,6 +23,8 @@ describe("booking duration persistence contracts", () => {
     expect(src).toContain("buildUnifiedInsertDurationPatch");
     expect(src).toContain("...durationPatch");
     expect(src).toContain("team_scaled_duration_minutes");
+    expect(src).toContain("durationExtraRooms");
+    expect(src).toContain("home_widget_catalog");
   });
 
   it("cleaner complete heals missing duration before evaluateCleanerJobCompletionGate", () => {

@@ -134,6 +134,8 @@ export function buildUnifiedInsertDurationPatch(params: {
   serviceSlugForFlat: string;
   dateForFlat: string | null;
   timeForFlat: string | null;
+  /** Quoted extra rooms (homepage widget / catalog). Defaults to 0. */
+  extraRooms?: number;
 }): Record<string, unknown> {
   const fromRow =
     validDurationMinutes(params.rowBase.duration_minutes) ??
@@ -153,12 +155,17 @@ export function buildUnifiedInsertDurationPatch(params: {
           : params.rowBase.is_team_job === true
             ? 2
             : 1;
+    const extraRoomsRaw = params.extraRooms;
+    const extraRooms =
+      typeof extraRoomsRaw === "number" && Number.isFinite(extraRoomsRaw) && extraRoomsRaw > 0
+        ? Math.min(50, Math.round(extraRoomsRaw))
+        : 0;
     const workload = resolveLegacyJobDurationWorkload(
       {
         service,
         rooms: params.rooms,
         bathrooms: params.bathrooms,
-        extraRooms: 0,
+        extraRooms,
         extras: params.extras.map((e) => e.slug),
       },
       teamCount,
@@ -274,6 +281,11 @@ export async function insertBookingRowUnified(
     bookingTime: timeHm,
   });
 
+  const durationExtraRooms =
+    args.lineItemsPricing?.mode === "home_widget_catalog"
+      ? Math.max(0, Math.round(Number(args.lineItemsPricing.extraRooms) || 0))
+      : 0;
+
   const durationPatch = buildUnifiedInsertDurationPatch({
     rowBase: args.rowBase,
     rooms,
@@ -282,6 +294,7 @@ export async function insertBookingRowUnified(
     serviceSlugForFlat: args.serviceSlugForFlat,
     dateForFlat: args.dateForFlat,
     timeForFlat: args.timeForFlat,
+    extraRooms: durationExtraRooms,
   });
 
   const insertRow = {
