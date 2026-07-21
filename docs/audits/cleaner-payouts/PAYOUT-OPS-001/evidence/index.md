@@ -4,7 +4,7 @@
 |-------|-------|
 | **Work package** | PAYOUT-OPS-001 |
 | **Updated** | 2026-07-21 |
-| **Verification gate** | **CONDITIONAL PASS — Specific evidence or remediation remains** |
+| **Verification gate** | **PASS — Production deployed** |
 
 ## Planning artefacts
 
@@ -47,8 +47,9 @@
 | KI-OPS-003 remediation | `./ki-ops-003-remediation-2026-07-21.md` | **PASS** @ `599823fa` |
 | KI-OPS-003 remediation raw | `./ki-ops-003-remediation-raw-2026-07-21.json` | Captured |
 | Regression results | `../regression-results.md` | Complete |
-| Known issues | `../known-issues.md` | KI-OPS-003 remediated |
-| Production readiness | `../production-readiness.md` | Conditional (003 cleared) |
+| Known issues | `../known-issues.md` | KI-OPS-003 remediated; residuals accepted |
+| Production readiness | `../production-readiness.md` | **PASS — Production deployed** |
+| Production deploy evidence | `./production-deploy-2026-07-21.md` | **PASS** @ `f628bf0b` / `dpl_J1bxVbjX…` |
 
 ## External references
 
@@ -57,4 +58,4 @@
 | Phase A staging verification | `../../PAYOUT-E2E-001/evidence/phase-a-staging-verification-2026-07-21.md` |
 | PR | https://github.com/shalean-developer/shalean-platform/pull/78 |
 
-**This verification session:** non-production only. No production merge/deploy. No `PAYOUT_MAKER_CHECKER` / `PAYOUT_ALLOW_SELF_APPROVE` weakening.
+**Production cutover (2026-07-21):** PR #78 merged; migrations applied to `tchayecuvzssixyxlvfu`; production app @ `f628bf0b`. Flags: `PAYOUT_MAKER_CHECKER=true`; self-approve remains off. See `production-deploy-2026-07-21.md`.
