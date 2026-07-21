@@ -3,10 +3,12 @@
 | Field | Value |
 |-------|-------|
 | **Date** | 2026-07-21 |
-| **Package gate** | **PASS — Approved for production deployment** |
+| **Package gate** | **PASS — Production deployed** |
 | **Production authorization** | **GRANTED** (operator approval 2026-07-21) |
-| **Production merge** | Authorized — PR #78 → `main` |
-| **Production deploy** | Authorized under normal change-management controls |
+| **Production merge** | **Done** — PR #78 → `main` (`f628bf0b`) |
+| **Production deploy** | **Done** — `dpl_J1bxVbjXKtUPw2cb3E6sZySezjcH` @ `shalean.co.za` |
+| **Post-deploy evidence** | `evidence/production-deploy-2026-07-21.md` |
+
 
 ## PASS checklist status
 

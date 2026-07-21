@@ -5,12 +5,12 @@
 | **Work package** | PAYOUT-OPS-001 |
 | **Opened from** | PAYOUT-E2E-001 Phase A live review (2026-07-21) |
 | **Classification** | Operational completeness / control-gap (UX + ops) |
-| **Status** | **PRODUCTION AUTHORIZED** — merge/deploy under change control (2026-07-21) |
+| **Status** | **PRODUCTION DEPLOYED** (2026-07-21) — see `evidence/production-deploy-2026-07-21.md` |
 | **Design gate (2026-07-21)** | **CONDITIONAL PASS** (design) |
 | **Implementation gate (2026-07-21)** | **PASS** (implementation + staging verify + KI-OPS-003 remediation) |
 | **Verification gate (2026-07-21)** | **PASS** for production authorization (residuals accepted — see `known-issues.md`) |
 | **Distinct from** | PAYOUT-E2E-001 Phase A (earnings-source integrity + maker–checker **control**) |
-| **Production** | **Authorized** — PR #78 → `main` + production deploy controls |
+| **Production** | **Deployed** — PR #78 merged; migrations applied; `shalean.co.za` @ `f628bf0b` |
 
 ## Authoritative governance baseline (2026-07-21)
 

@@ -25,6 +25,8 @@
 | 2026-07-21 | **Production deployment authorized** for PAYOUT-OPS-001 (PR #78) | Design, implementation, KI-OPS-003 remediation, non-prod verification complete; residuals KI-OPS-001/002/005 accepted as non-blocking | Binding |
 | 2026-07-21 | Accept KI-OPS-001 residual (approve audit may omit proposal_id) at production gate | Proposal row retains maker/checker; financial controls proven | Accepted |
 | 2026-07-21 | Production flags must remain `PAYOUT_MAKER_CHECKER=true`, self-approve off | Segregation of duties | Binding |
+| 2026-07-21 | PR #78 merged to `main`; production migrations applied; production app deployed @ `f628bf0b` | Change control + post-deploy health verify | **PASS — Production deployed** |
+| 2026-07-21 | Expired 13 duplicate open production proposals before `one_open_uidx` (newest kept; no earnings mutate) | Required for unique open-index migration safety | Accepted |
 
 ---
 
