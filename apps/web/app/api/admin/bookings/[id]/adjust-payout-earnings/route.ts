@@ -3,11 +3,17 @@ import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { adjustVisitPayoutEarnings } from "@/lib/payout/adjustVisitPayoutEarnings";
 import { classifyVisitPayoutEdit } from "@/lib/payout/classifyVisitPayoutEdit";
 import { withEarningsAdjustMakerChecker } from "@/lib/payout/earningsAdjustMakerChecker";
+import { buildEarningsAdjustProposePayload } from "@/lib/payout/moneyActionProposalPayload";
+import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+/**
+ * Propose (no proposal_id) or approve (proposal_id only for financial fields).
+ * When proposal_id is present, body financial fields are ignored — stored payload is applied.
+ */
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -28,6 +34,62 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Invalid JSON body." }, { status: 400 });
   }
 
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+
+  const proposalId = typeof body.proposal_id === "string" ? body.proposal_id.trim() : "";
+
+  // --- Approve via legacy path: proposal_id only; ignore financial body fields ---
+  if (proposalId) {
+    const gate = await withEarningsAdjustMakerChecker(admin, {
+      actionType: "adjust_payout_earnings",
+      bookingId,
+      payload: {},
+      adminUserId: auth.userId,
+      adminEmail: auth.email,
+      proposalId,
+      apply: async () => ({ ok: true as const }),
+    });
+
+    if (!gate.ok) {
+      const status =
+        gate.code === "maker_checker_self_approve" ||
+        gate.code === "proposal_not_pending" ||
+        gate.code === "proposal_expired" ||
+        gate.code === "proposal_already_rejected" ||
+        gate.code === "proposal_failed" ||
+        gate.code === "proposal_booking_mismatch" ||
+        gate.code === "proposal_duplicate_pending"
+          ? 409
+          : gate.code === "proposal_not_found"
+            ? 404
+            : gate.code === "read_after_write_mismatch" ||
+                gate.code === "audit_persist_failed" ||
+                gate.code === "proposal_terminal_update_failed"
+              ? 409
+              : 400;
+      return NextResponse.json(
+        {
+          error: gate.error,
+          code: gate.code,
+          existing_proposal_id: gate.existingProposalId ?? null,
+        },
+        { status },
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      applied: true,
+      requires_approval: false,
+      proposal_id: gate.proposalId ?? proposalId,
+      already_processed: gate.alreadyProcessed === true,
+      message:
+        "Approved from stored proposal payload. Prefer POST /api/admin/money-action-proposals/:id/approve.",
+    });
+  }
+
+  // --- Propose path ---
   const payoutCents = Number(body.payout_cents);
   if (!Number.isFinite(payoutCents) || payoutCents < 0) {
     return NextResponse.json({ error: "payout_cents must be a non-negative number." }, { status: 400 });
@@ -38,16 +100,14 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: "bonus_cents must be a non-negative number." }, { status: 400 });
   }
 
-  const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-
   const cleanerId = typeof body.cleaner_id === "string" ? body.cleaner_id.trim() : "";
-  const proposalId = typeof body.proposal_id === "string" ? body.proposal_id.trim() : "";
   const adjustmentNote = typeof body.adjustment_note === "string" ? body.adjustment_note : null;
 
   const { data: bookingMeta, error: metaErr } = await admin
     .from("bookings")
-    .select("is_team_job, cleaner_id, payout_owner_cleaner_id, team_id, earnings_summary")
+    .select(
+      "is_team_job, cleaner_id, payout_owner_cleaner_id, team_id, earnings_summary, cleaner_payout_cents, cleaner_bonus_cents, display_earnings_cents, cleaner_earnings_total_cents, payout_frozen_cents",
+    )
     .eq("id", bookingId)
     .maybeSingle();
   if (metaErr) return NextResponse.json({ error: metaErr.message }, { status: 400 });
@@ -59,6 +119,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     payout_owner_cleaner_id?: string | null;
     team_id?: string | null;
     earnings_summary?: unknown;
+    cleaner_payout_cents?: number | null;
+    cleaner_bonus_cents?: number | null;
+    display_earnings_cents?: number | null;
+    cleaner_earnings_total_cents?: number | null;
+    payout_frozen_cents?: number | null;
   };
 
   const { data: rosterRows } = await admin.from("booking_cleaners").select("cleaner_id").eq("booking_id", bookingId);
@@ -98,13 +163,34 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   });
 
   const actionType = editMode === "per_cleaner" ? "adjust_team_payout_earnings" : "adjust_payout_earnings";
-  const payload = {
-    payout_cents: Math.round(payoutCents),
-    bonus_cents: Math.round(bonusCents),
-    cleaner_id: cleanerId || null,
-    adjustment_note: adjustmentNote,
-    edit_mode: editMode,
-  };
+
+  const targetCleanerId =
+    cleanerId ||
+    String(meta.cleaner_id ?? "").trim() ||
+    String(meta.payout_owner_cleaner_id ?? "").trim() ||
+    "";
+
+  const originalTotalCents = targetCleanerId
+    ? resolveCleanerDashboardEarningsCents(meta, targetCleanerId)
+    : Math.max(
+        0,
+        Math.round(Number(meta.display_earnings_cents ?? 0)) ||
+          Math.round(Number(meta.cleaner_payout_cents ?? 0) + Number(meta.cleaner_bonus_cents ?? 0)),
+      );
+
+  const originalPayoutCents = Math.round(Number(meta.cleaner_payout_cents ?? originalTotalCents));
+  const originalBonusCents = Math.round(Number(meta.cleaner_bonus_cents ?? 0));
+
+  const payload = buildEarningsAdjustProposePayload({
+    payoutCents: Math.round(payoutCents),
+    bonusCents: Math.round(bonusCents),
+    cleanerId: cleanerId || null,
+    adjustmentNote,
+    editMode,
+    originalPayoutCents,
+    originalBonusCents,
+    originalTotalCents,
+  });
 
   const applyState: {
     payoutId: string | null;
@@ -117,7 +203,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     bookingId,
     payload,
     adminUserId: auth.userId,
-    proposalId: proposalId || null,
+    adminEmail: auth.email,
+    proposalId: null,
     apply: async () => {
       const result = await adjustVisitPayoutEarnings(admin, {
         bookingId,
@@ -139,14 +226,23 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     const status =
       gate.code === "maker_checker_self_approve" ||
       gate.code === "proposal_not_pending" ||
-      gate.code === "proposal_expired"
+      gate.code === "proposal_expired" ||
+      gate.code === "proposal_duplicate_pending"
         ? 409
         : gate.code === "proposal_not_found"
           ? 404
           : gate.code === "read_after_write_mismatch" || gate.code === "audit_persist_failed"
             ? 409
             : 400;
-    return NextResponse.json({ error: gate.error, code: gate.code }, { status });
+    return NextResponse.json(
+      {
+        error: gate.error,
+        code: gate.code,
+        existing_proposal_id: gate.existingProposalId ?? null,
+        approvals_path: "/office/payouts/approvals",
+      },
+      { status },
+    );
   }
 
   if (gate.mode === "proposed") {
@@ -156,7 +252,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       applied: false,
       proposal_id: gate.proposalId,
       edit_mode: editMode,
-      message: "Earnings adjustment proposed. A second admin must approve with proposal_id.",
+      approvals_path: `/office/payouts/approvals?highlight=${encodeURIComponent(gate.proposalId)}`,
+      message: "Earnings adjustment proposed. A second admin must approve in Office Approvals.",
     });
   }
 

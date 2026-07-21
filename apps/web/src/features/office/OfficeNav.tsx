@@ -110,6 +110,7 @@ export const OFFICE_NAV_MODULES: NavModule[] = [
       { label: "Referral reconciliation", href: "/office/referral-reconciliation", icon: Scale },
       { label: "Referral fraud", href: "/office/referral-fraud", icon: Shield },
       { label: "Payouts", href: "/office/payouts", icon: Wallet },
+      { label: "Payout approvals", href: "/office/payouts/approvals", icon: CheckCircle },
       { label: "Pricing", href: "/office/pricing", icon: Tag },
       { label: "Monthly invoices", href: "/office/invoices", icon: FileText },
       { label: "Zoho sync", href: "/office/billing", icon: Receipt },

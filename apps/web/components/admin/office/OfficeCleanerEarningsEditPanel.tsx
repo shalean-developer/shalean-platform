@@ -181,6 +181,8 @@ export function OfficeCleanerEarningsEditPanel({
     let pendingApproval = 0;
     let failed = 0;
     let lastError: string | null = null;
+    let lastProposalId: string | null = null;
+    let lastApprovalsPath: string | null = null;
     for (const v of changed) {
       const cents = zarInputToCents(visitEdits[v.id] ?? "");
       if (cents == null) {
@@ -192,6 +194,7 @@ export function OfficeCleanerEarningsEditPanel({
         applied?: boolean;
         requires_approval?: boolean;
         proposal_id?: string;
+        approvals_path?: string;
         message?: string;
         error?: string;
       }>(`/api/admin/bookings/${encodeURIComponent(v.id)}/adjust-payout-earnings`, {
@@ -206,11 +209,19 @@ export function OfficeCleanerEarningsEditPanel({
       const data = res.data;
       if (data?.requires_approval === true || data?.applied === false) {
         pendingApproval += 1;
+        lastProposalId = typeof data?.proposal_id === "string" ? data.proposal_id : lastProposalId;
+        lastApprovalsPath =
+          typeof data?.approvals_path === "string" ? data.approvals_path : lastApprovalsPath;
         continue;
       }
       saved += 1;
     }
     setBusy(null);
+    const approvalsHref =
+      lastApprovalsPath ??
+      (lastProposalId
+        ? `/office/payouts/approvals?highlight=${encodeURIComponent(lastProposalId)}`
+        : "/office/payouts/approvals");
     if (failed > 0) {
       onToast(
         lastError
@@ -220,12 +231,12 @@ export function OfficeCleanerEarningsEditPanel({
       );
     } else if (pendingApproval > 0 && saved === 0) {
       onToast(
-        `Proposed ${pendingApproval} visit${pendingApproval === 1 ? "" : "s"} for second-admin approval — amounts are unchanged until approved.`,
+        `Proposed ${pendingApproval} visit${pendingApproval === 1 ? "" : "s"} for second-admin approval — amounts unchanged until approved. Open Approvals: ${approvalsHref}`,
         true,
       );
     } else if (pendingApproval > 0) {
       onToast(
-        `Updated ${saved} visit${saved === 1 ? "" : "s"}; ${pendingApproval} proposed for approval.`,
+        `Updated ${saved} visit${saved === 1 ? "" : "s"}; ${pendingApproval} proposed for approval. Open Approvals: ${approvalsHref}`,
         true,
       );
       setVisitEditMode(false);
