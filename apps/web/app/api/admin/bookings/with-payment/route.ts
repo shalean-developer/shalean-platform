@@ -14,7 +14,7 @@ import {
   adminBookingServiceSlug,
 } from "@/lib/admin/adminBookingCreateFingerprint";
 import { paymentLinkSendAllowed } from "@/lib/admin/paymentLinkSendGate";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { deriveAdminClientPaymentStatus, isStoredPaymentLinkUsable } from "@/lib/booking/adminPaymentLinkState";
 import { parseLockedBookingFromUnknown } from "@/lib/booking/lockedBooking";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
@@ -96,12 +96,13 @@ export async function POST(request: Request) {
     error: userErr,
   } = await pub.auth.getUser(token);
 
-  if (userErr || !user?.email || !user.id) {
+  if (userErr || !user?.id) {
     return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
   }
 
-  if (!isAdmin(user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   let body: Record<string, unknown>;

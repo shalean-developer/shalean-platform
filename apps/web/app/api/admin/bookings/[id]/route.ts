@@ -6,7 +6,7 @@ import { applyAdminBookingLifecycleStatusOverride } from "@/lib/admin/adminBooki
 import { findCleanerSlotConflict } from "@/lib/admin/adminCleanerSlotConflict";
 import { normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { isTeamService } from "@/lib/dispatch/assignBooking";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
@@ -84,8 +84,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   const admin = getSupabaseAdmin();
@@ -354,7 +355,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
 
   type PatchBody = {
     status?: string;

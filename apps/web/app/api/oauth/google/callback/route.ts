@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getCookieUser } from "@/lib/auth/getCookieUser";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { decryptSecret } from "@/lib/security/tokenEncryption";
 import { classifyGoogleBusinessSaveError } from "@/lib/oauth/googleBusinessSaveError";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -71,7 +71,8 @@ export async function GET(request: Request) {
   }
 
   const user = await getCookieUser();
-  if (!user?.email || !isAdmin(user.email)) {
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
     await clearStateCookie();
     return NextResponse.redirect(marketingConnectedAccountsUrl({ error: "forbidden" }, origin));
   }

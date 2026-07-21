@@ -7,7 +7,7 @@ import {
 } from "@/lib/admin/bookingRosterLockedMessage";
 import { listTeamAssignCandidatesForBooking } from "@/lib/admin/performAdminAssignTeam";
 import { adminAssignTeamToBooking } from "@/lib/booking/bookingOperations";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { isTeamService } from "@/lib/dispatch/assignBooking";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -30,10 +30,11 @@ async function requireAdmin(request: Request): Promise<
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.id || !user.email || !isAdmin(user.email)) {
-    return { ok: false, status: 403, error: "Forbidden." };
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return { ok: false, status: adminAuth.status, error: adminAuth.error };
   }
-  return { ok: true, userId: user.id, email: user.email };
+  return { ok: true, userId: adminAuth.userId, email: adminAuth.email };
 }
 
 function earningsFinalizedAt(raw: unknown): boolean {

@@ -1,12 +1,14 @@
 import "server-only";
 
 /**
- * Admin dual-gate helpers.
+ * Admin access helpers.
  *
- * Gate A (UI / routing): `user_profiles.role === "admin"` via resolve-profile.
- * Gate B (Admin APIs): email ∈ `ADMIN_EMAILS` ∪ `ADMIN_EMAIL` via {@link isAdmin}.
+ * - UI / routing: `user_profiles.role === "admin"` via resolve-profile.
+ * - Admin APIs: {@link evaluateAdminAccess} — profile role **or** email on
+ *   `ADMIN_EMAILS` ∪ `ADMIN_EMAIL` (optional bootstrap allowlist).
  *
- * Both gates are intentional. Do not remove either without governance approval.
+ * New Office admins only need `user_profiles.role = 'admin'`. Env allowlist is
+ * optional and does not require a redeploy for each new account.
  */
 
 function adminEmailList(): string[] {
@@ -19,11 +21,12 @@ function adminEmailList(): string[] {
   return fromList;
 }
 
-/** True when at least one admin email is configured (Gate B). */
+/** True when at least one bootstrap admin email is configured. */
 export function isAdminAllowlistConfigured(): boolean {
   return adminEmailList().length > 0;
 }
 
+/** True when email is on the optional `ADMIN_EMAILS` / `ADMIN_EMAIL` bootstrap allowlist. */
 export function isAdmin(email?: string | null) {
   if (!email) return false;
   const admins = adminEmailList();
@@ -36,8 +39,9 @@ export type AdminAllowlistDecision =
   | { ok: false; status: 403 | 503; error: string };
 
 /**
- * Gate B evaluation after a valid session email is known.
- * Empty allowlist is an operational misconfiguration (503), not a soft allow.
+ * Email-allowlist-only decision (legacy / bootstrap). Prefer
+ * {@link evaluateAdminAccess} for Admin API authorization so profile-role
+ * admins are accepted without an env redeploy.
  */
 export function evaluateAdminAllowlist(email?: string | null): AdminAllowlistDecision {
   if (!isAdminAllowlistConfigured()) {

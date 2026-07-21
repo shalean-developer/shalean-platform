@@ -23,7 +23,7 @@ import { applyActiveAdminBookingSlotFilters } from "@/lib/booking/activeAdminBoo
 import { buildAdminPaystackLockedPayload } from "@/lib/admin/buildAdminPaystackLockedPayload";
 import { assertAdminBookingSlotAllowed, normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
 import { fetchSlaDispatchLastActions } from "@/lib/admin/slaDispatchLastAction";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import {
   computeOpsSnapshotFromRows,
@@ -417,12 +417,13 @@ export async function GET(request: Request) {
     error: userErr,
   } = await pub.auth.getUser(token);
 
-  if (userErr || !user?.email) {
+  if (userErr || !user?.id) {
     return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
   }
 
-  if (!isAdmin(user?.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   const admin = getSupabaseAdmin();

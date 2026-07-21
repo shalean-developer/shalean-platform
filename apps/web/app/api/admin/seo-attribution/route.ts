@@ -5,7 +5,7 @@ import {
   DIRECT_BOOKING_FLOW_LANDING,
   resolveSessionLanding,
 } from "@/lib/admin/landingPageAttribution";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -85,7 +85,8 @@ export async function GET(request: Request) {
   if (userErr || !user?.email) {
     return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
   }
-  if (!isAdmin(user.email)) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });

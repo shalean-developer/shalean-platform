@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { evaluateAdminAccess } from "@/lib/auth/evaluateAdminAccess";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,10 +19,14 @@ export async function GET(request: Request) {
     data: { user },
     error,
   } = await pub.auth.getUser(token);
-  if (error || !user?.email) return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
+  if (error || !user?.id || !user.email) {
+    return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
+  }
+
+  const access = await evaluateAdminAccess({ userId: user.id, email: user.email });
 
   return NextResponse.json({
     user: { id: user.id, email: user.email },
-    isAdmin: isAdmin(user.email),
+    isAdmin: access.ok,
   });
 }

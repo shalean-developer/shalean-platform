@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { clampTeamRosterCapacity, TEAM_MAX_ROSTER_MEMBERS } from "@/lib/dispatch/teamJobsPerDay";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -19,7 +19,8 @@ async function ensureAdmin(request: Request): Promise<{ ok: true } | { ok: false
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) return { ok: false, status: 403, error: "Forbidden." };
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) return { ok: false, status: adminAuth.status, error: adminAuth.error };
   return { ok: true };
 }
 

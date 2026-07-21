@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import type { OfficeScheduleDayBooking } from "@/lib/admin/officeScheduleDayPresentation";
 import { computeOfficeTodayScheduleStats } from "@/lib/admin/officeTodayScheduleStats";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
@@ -89,8 +89,9 @@ export async function GET(request: Request) {
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   const date = new URL(request.url).searchParams.get("date")?.trim() ?? "";

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { getCookieUser } from "@/lib/auth/getCookieUser";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { isProviderFeatureEnabled } from "@/lib/promotions/providers/registry";
 import {
   X_OAUTH_CID_COOKIE,
@@ -114,7 +114,8 @@ export async function GET(request: Request) {
   }
 
   const user = await getCookieUser();
-  if (!user?.email || !isAdmin(user.email)) {
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
     await clearCookies();
     return NextResponse.redirect(marketingConnectedAccountsUrl({ error: "forbidden" }, origin));
   }
