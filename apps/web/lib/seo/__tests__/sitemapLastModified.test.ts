@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   readMarketingSitemapLastModified,
   resolveProgrammaticBlogLastModified,
+  resolveStaticPathLastModified,
 } from "@/lib/seo/sitemapLastModified";
 
 describe("sitemapLastModified", () => {
@@ -17,5 +18,12 @@ describe("sitemapLastModified", () => {
     const d = resolveProgrammaticBlogLastModified("same-day-cleaning-cape-town");
     expect(d).toBeInstanceOf(Date);
     expect(Number.isNaN(d!.getTime())).toBe(false);
+  });
+
+  it("resolves static path lastmod from content registry (not hard-coded 2026-04-01)", () => {
+    const d = resolveStaticPathLastModified("/services");
+    expect(d).toBeInstanceOf(Date);
+    expect(Number.isNaN(d.getTime())).toBe(false);
+    expect(d.toISOString().startsWith("2026-04-01")).toBe(false);
   });
 });

@@ -1,8 +1,9 @@
 import { MARKETING_SERVICE_NAV_LINKS } from "@/lib/marketing/marketingServiceNavLinks";
+import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
 
 export const MARKETING_HEADER_NAV = {
   services: "/services",
-  pricing: "/cleaning-prices-cape-town",
+  pricing: CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF,
   about: "/about",
   help: "/faq",
   contact: "/contact",

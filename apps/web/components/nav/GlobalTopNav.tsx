@@ -21,9 +21,10 @@ import {
   marketingMobileHeaderActionsClass,
   marketingMobileMenuButtonClass,
 } from "@/lib/marketing/marketingMobileLayout";
+import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
 
 const bookingHref = "/book";
-const pricingHref = "/cleaning-prices-cape-town";
+const pricingHref = CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF;
 
 type NavLink = { label: string; href: string; dropdown?: boolean };
 
