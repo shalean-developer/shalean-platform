@@ -13,6 +13,15 @@
 | 2026-07-21 | Notifications to proposer are phase 5, not v1 blocker | Queue + toast sufficient for operational close | Accepted |
 | 2026-07-21 | Analysis-only authorization; no implementation in this session | Work package governance | Binding |
 | 2026-07-21 | Governance outcome: **CONDITIONAL PASS — Ready for implementation authorization subject to stated conditions** | Design complete; SEC-OPS-001/002 must ship with implementation | Recommended |
+| 2026-07-21 | Implementation landed on `feat/payout-ops-001-office-approvals` / PR #78 | Immutable payload approve, atomic claim RPCs, reject API, Approvals UI | Accepted |
+| 2026-07-21 | Staging Preview app-path + two-admin UI verification executed | Preview `a533794…` → staging Supabase; maker/checker distinct admins | Accepted |
+| 2026-07-21 | Verification gate: **CONDITIONAL PASS — Specific evidence or remediation remains** | Controls proven; KI-OPS-001 approve audit lacks `proposal_id`; KI-OPS-002 original snapshot UX; KI-OPS-003 duplicate reject audit | Binding until remediated or explicitly waived at production gate |
+| 2026-07-21 | No production merge, production deploy, or flag weakening | Governance | Binding |
+| 2026-07-21 | KI-OPS-002 verify-only: **PASS** on operator solo proposal `4db13e7e` (`original_total_cents=30000`) | Canonical pre-change matched approve audit; actual change was R300→R200 not R250 | Accepted |
+| 2026-07-21 | KI-OPS-003 verify-only: **FAIL** (sequential 2 audits, concurrent 2 audits) | `already_processed` reject path still inserts audit | Binding for remediation |
+| 2026-07-21 | KI-OPS-003 remediated: gate audit on RPC `transition_applied` + unique `vea_rejected:<proposal_id>` index | Winner-only audit write; DB enforces exactly-one under concurrency | Accepted |
+| 2026-07-21 | KI-OPS-003 non-prod verify: sequential/concurrent/multi each **1** reject audit @ `599823fa` Preview | Staging migration applied; prior FAIL evidence preserved | **PASS — KI-OPS-003 remediated** |
+| 2026-07-21 | No production merge, production deploy, or flag weakening for KI-OPS-003 | Governance | Binding |
 
 ---
 

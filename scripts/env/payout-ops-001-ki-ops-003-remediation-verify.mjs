@@ -135,12 +135,22 @@ async function seedFixture(admin) {
 async function main() {
   mkdirSync(evidenceDir, { recursive: true });
   const keys = loadEnvFile(resolve(secretsDir, "staging.keys.env"));
-  const url = (keys.NEXT_PUBLIC_SUPABASE_URL || keys.SUPABASE_URL || "").trim();
-  const anon = (keys.NEXT_PUBLIC_SUPABASE_ANON_KEY || keys.SUPABASE_ANON_KEY || "").trim();
+  const pw = loadEnvFile(resolve(secretsDir, "staging.synthetic-passwords.env"));
+  const url = (
+    keys.NEXT_PUBLIC_SUPABASE_URL ||
+    keys.SUPABASE_URL ||
+    `https://${STAGING_REF}.supabase.co`
+  ).trim();
+  const anon = (
+    keys.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    keys.SUPABASE_ANON_KEY ||
+    keys.SUPABASE_PUBLISHABLE_KEY ||
+    ""
+  ).trim();
   const service = (keys.SUPABASE_SERVICE_ROLE_KEY || "").trim();
-  const pw = loadEnvFile(resolve(secretsDir, "staging-admin.password.env"));
   if (!url.includes(STAGING_REF) || url.includes(PROD_REF)) throw new Error("refuse non-staging");
   if (!anon || !service) throw new Error("missing keys");
+  if (!pw[MAKER_EMAIL] || !pw[CHECKER_EMAIL]) throw new Error("missing maker/checker passwords");
   if (!PREVIEW) throw new Error("Set PREVIEW_BASE_URL to Preview deployment");
 
   const admin = createClient(url, service, { auth: { persistSession: false } });

@@ -1,0 +1,105 @@
+{
+  "package": "PAYOUT-OPS-001",
+  "issue": "KI-OPS-003",
+  "mode": "remediation-verify",
+  "startedAt": "2026-07-21T12:22:50.128Z",
+  "commitSha": "599823fae9a25144ac7b4ff73b6dbd60c54a1ee4",
+  "previewBaseUrl": "shalean-platform-mxqlvlgxs-shalean-cleaning-services",
+  "stagingRef": "gbgnemlpyykyhpqqbgru",
+  "sequential": {
+    "proposalId": "f0d3a069-2826-48f6-9451-05bcea3a4d38",
+    "reject1": {
+      "status": 200,
+      "already_processed": false
+    },
+    "reject2": {
+      "status": 200,
+      "already_processed": true
+    },
+    "proposalAfterFirst": {
+      "status": "rejected",
+      "reviewed_by": "e99ac17b-1a2f-4173-a44b-c94be39cd9e5",
+      "review_note": "KI-OPS-003 rem sequential note A",
+      "reviewed_at": "2026-07-21T12:23:00.28036+00:00"
+    },
+    "proposalAfterRetry": {
+      "status": "rejected",
+      "reviewed_by": "e99ac17b-1a2f-4173-a44b-c94be39cd9e5",
+      "review_note": "KI-OPS-003 rem sequential note A",
+      "reviewed_at": "2026-07-21T12:23:00.28036+00:00"
+    },
+    "checkerUnchanged": true,
+    "reviewNoteUnchanged": true,
+    "reviewedAtUnchanged": true,
+    "earningsUnchanged": true,
+    "rejectAuditCountAfterFirst": 1,
+    "rejectAuditCountAfterRetry": 1,
+    "rejectAuditIds": [
+      "a04b95cd-80fd-4263-a556-49b3b1b33382"
+    ],
+    "rejectAuditReferences": [
+      "vea_rejected:f0d3a069-2826-48f6-9451-05bcea3a4d38"
+    ],
+    "approveAfterReject": {
+      "status": 409,
+      "code": "proposal_already_rejected"
+    },
+    "approveAfterRejectBlocked": true,
+    "verdict": "PASS"
+  },
+  "concurrent": {
+    "proposalId": "42e53b76-3cea-4b2d-8c52-a442a5eef94a",
+    "responses": [
+      {
+        "status": 200,
+        "ok": true,
+        "already_processed": false
+      },
+      {
+        "status": 200,
+        "ok": true,
+        "already_processed": true
+      }
+    ],
+    "winners": 1,
+    "losers": 1,
+    "proposal": {
+      "status": "rejected",
+      "reviewed_by": "e99ac17b-1a2f-4173-a44b-c94be39cd9e5",
+      "review_note": "KI-OPS-003 rem concurrent A",
+      "reviewed_at": "2026-07-21T12:23:09.131124+00:00"
+    },
+    "earningsUnchanged": true,
+    "rejectAuditCount": 1,
+    "rejectAuditIds": [
+      "404e649c-e621-4f15-a1f5-618e75963afe"
+    ],
+    "rejectAuditReferences": [
+      "vea_rejected:42e53b76-3cea-4b2d-8c52-a442a5eef94a"
+    ],
+    "verdict": "PASS"
+  },
+  "multiConcurrent": {
+    "proposalId": "13071d79-f056-43bb-829d-68ceefa80e6b",
+    "responseCount": 4,
+    "winners": 1,
+    "losers": 3,
+    "proposalStatus": "rejected",
+    "earningsUnchanged": true,
+    "rejectAuditCount": 1,
+    "rejectAuditIds": [
+      "79e657c5-6d68-44ba-a89d-fcff04d8b2c4"
+    ],
+    "verdict": "PASS"
+  },
+  "health": {
+    "shaleanAppEnv": "staging",
+    "configuredRef": "gbgnemlpyykyhpqqbgru",
+    "gitSha": "599823fae9a25144ac7b4ff73b6dbd60c54a1ee4",
+    "gitBranch": "feat/payout-ops-001-office-approvals",
+    "vercelEnv": "preview"
+  },
+  "restoredAt": "2026-07-21T12:23:15.967Z",
+  "finishedAt": "2026-07-21T12:23:15.967Z",
+  "overallVerdict": "PASS"
+}
