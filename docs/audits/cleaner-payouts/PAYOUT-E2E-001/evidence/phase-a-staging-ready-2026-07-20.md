@@ -19,7 +19,7 @@
 | Migration governance | **Passed** | `validate-migration-filenames` SUCCESS on run `29780902866` |
 | GitHub CI (`web-test` / vitest) | **Blocked** | Failed at `Production dependency audit (high+)` — `npm audit --omit=dev --audit-level=high` reports high `brace-expansion` (via `glob`) and moderate `postcss`/`next`/`geist`. Not a Phase A test failure; suite did not reach payout unit steps. |
 | Vercel preview | **Failed** | Deployment `dpl_CAzedbV93r85fqR8xjxkS18UWFDA` failed (inspect separately; may be env/build, not payout logic) |
-| Staging behavioral verification | **Not completed** | Manual matrix in § Staging verification still required |
+| Staging behavioral verification | **CONDITIONAL PASS (2026-07-21)** | See `evidence/phase-a-staging-verification-2026-07-21.md` — financial writer matrix green on staging DB @ `c2baebc`; PR Preview lacks Supabase so live UI re-check still open |
 
 ### CI blocker detail (not Phase A regression)
 
