@@ -8,6 +8,8 @@ export type PayoutAuditEventType =
   | "payout_approved"
   | "payout_rejected"
   | "payout_amount_adjusted"
+  | "visit_earnings_adjusted"
+  | "visit_earnings_adjustment_rejected"
   | "payout_pay_requested"
   | "payout_transfer_enqueued"
   | "payout_transfer_submitted"

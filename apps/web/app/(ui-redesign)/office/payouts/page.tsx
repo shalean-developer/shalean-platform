@@ -591,6 +591,9 @@ export default function PayoutsPage() {
         live
         actions={
           <>
+            <Link href="/office/payouts/approvals">
+              <OfficeZohoSecondaryButton>Pending approvals</OfficeZohoSecondaryButton>
+            </Link>
             <OfficeZohoSecondaryButton
               disabled={actionLoading === "recalculate"}
               onClick={() => void handleRecalculateEarnings()}

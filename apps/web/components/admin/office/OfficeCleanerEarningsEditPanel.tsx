@@ -178,27 +178,69 @@ export function OfficeCleanerEarningsEditPanel({
 
     setBusy("save-visits");
     let saved = 0;
+    let pendingApproval = 0;
     let failed = 0;
     let lastError: string | null = null;
+    let lastProposalId: string | null = null;
+    let lastApprovalsPath: string | null = null;
     for (const v of changed) {
       const cents = zarInputToCents(visitEdits[v.id] ?? "");
       if (cents == null) {
         failed += 1;
         continue;
       }
-      const res = await adminFetch(`/api/admin/bookings/${encodeURIComponent(v.id)}/adjust-payout-earnings`, {
+      const res = await adminFetch<{
+        ok?: boolean;
+        applied?: boolean;
+        requires_approval?: boolean;
+        proposal_id?: string;
+        approvals_path?: string;
+        message?: string;
+        error?: string;
+      }>(`/api/admin/bookings/${encodeURIComponent(v.id)}/adjust-payout-earnings`, {
         method: "PATCH",
         body: JSON.stringify({ payout_cents: cents, bonus_cents: 0, cleaner_id: cleanerId }),
       });
-      if (res.ok) saved += 1;
-      else {
+      if (!res.ok) {
         failed += 1;
         lastError = res.error ?? "Save failed";
+        continue;
       }
+      const data = res.data;
+      if (data?.requires_approval === true || data?.applied === false) {
+        pendingApproval += 1;
+        lastProposalId = typeof data?.proposal_id === "string" ? data.proposal_id : lastProposalId;
+        lastApprovalsPath =
+          typeof data?.approvals_path === "string" ? data.approvals_path : lastApprovalsPath;
+        continue;
+      }
+      saved += 1;
     }
     setBusy(null);
+    const approvalsHref =
+      lastApprovalsPath ??
+      (lastProposalId
+        ? `/office/payouts/approvals?highlight=${encodeURIComponent(lastProposalId)}`
+        : "/office/payouts/approvals");
     if (failed > 0) {
-      onToast(lastError ? `${lastError} (${saved} saved, ${failed} failed)` : `Saved ${saved}; ${failed} failed.`, false);
+      onToast(
+        lastError
+          ? `${lastError} (${saved} saved, ${pendingApproval} pending approval, ${failed} failed)`
+          : `Saved ${saved}; ${pendingApproval} pending approval; ${failed} failed.`,
+        false,
+      );
+    } else if (pendingApproval > 0 && saved === 0) {
+      onToast(
+        `Proposed ${pendingApproval} visit${pendingApproval === 1 ? "" : "s"} for second-admin approval — amounts unchanged until approved. Open Approvals: ${approvalsHref}`,
+        true,
+      );
+    } else if (pendingApproval > 0) {
+      onToast(
+        `Updated ${saved} visit${saved === 1 ? "" : "s"}; ${pendingApproval} proposed for approval. Open Approvals: ${approvalsHref}`,
+        true,
+      );
+      setVisitEditMode(false);
+      setVisitEdits({});
     } else {
       onToast(
         `Updated ${saved} visit${saved === 1 ? "" : "s"} — cleaners will see the new amounts on their dashboard.`,

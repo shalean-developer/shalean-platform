@@ -152,6 +152,7 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
 
     setBusy("save-visits");
     let saved = 0;
+    let pendingApproval = 0;
     let failed = 0;
     let lastError: string | null = null;
     for (const b of changed) {
@@ -160,19 +161,48 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
         failed += 1;
         continue;
       }
-      const res = await adminFetch(`/api/admin/bookings/${encodeURIComponent(b.id)}/adjust-payout-earnings`, {
+      const res = await adminFetch<{
+        ok?: boolean;
+        applied?: boolean;
+        requires_approval?: boolean;
+        proposal_id?: string;
+        approvals_path?: string;
+        error?: string;
+      }>(`/api/admin/bookings/${encodeURIComponent(b.id)}/adjust-payout-earnings`, {
         method: "PATCH",
         body: JSON.stringify({ payout_cents: cents, bonus_cents: 0 }),
       });
-      if (res.ok) saved += 1;
-      else {
+      if (!res.ok) {
         failed += 1;
         lastError = res.error ?? "Save failed";
+        continue;
       }
+      if (res.data?.requires_approval === true || res.data?.applied === false) {
+        pendingApproval += 1;
+        continue;
+      }
+      saved += 1;
     }
     setBusy(null);
     if (failed > 0) {
-      onToast(lastError ? `${lastError} (${saved} saved, ${failed} failed)` : `Saved ${saved}; ${failed} failed.`, false);
+      onToast(
+        lastError
+          ? `${lastError} (${saved} saved, ${pendingApproval} pending approval, ${failed} failed)`
+          : `Saved ${saved}; ${pendingApproval} pending approval; ${failed} failed.`,
+        false,
+      );
+    } else if (pendingApproval > 0 && saved === 0) {
+      onToast(
+        `Proposed ${pendingApproval} visit${pendingApproval === 1 ? "" : "s"} for second-admin approval — open /office/payouts/approvals.`,
+        true,
+      );
+    } else if (pendingApproval > 0) {
+      onToast(
+        `Updated ${saved}; ${pendingApproval} proposed for approval.`,
+        true,
+      );
+      setVisitEditMode(false);
+      setVisitEdits({});
     } else {
       onToast(`Updated ${saved} visit${saved === 1 ? "" : "s"} — batch total recalculated.`, true);
       setVisitEditMode(false);
