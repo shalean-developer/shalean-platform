@@ -86,12 +86,24 @@ type RejectRpcResult = {
   code?: string;
   status?: string;
   already_processed?: boolean;
+  transition_applied?: boolean;
   proposal?: MoneyActionProposalRow;
 };
 
 export type RejectMoneyActionProposalRpcResult =
-  | { ok: true; proposal: MoneyActionProposalRow; alreadyProcessed?: boolean }
+  | {
+      ok: true;
+      proposal: MoneyActionProposalRow;
+      alreadyProcessed?: boolean;
+      /** True only when this call won the pending→rejected UPDATE. */
+      transitionApplied: boolean;
+    }
   | { ok: false; error: string; code: string };
+
+/** Deterministic audit reference for KI-OPS-003 unique reject audit key. */
+export function visitEarningsRejectAuditReference(proposalId: string): string {
+  return `vea_rejected:${proposalId}`;
+}
 
 export async function rejectMoneyActionProposalAtomic(
   admin: SupabaseClient,
@@ -110,10 +122,18 @@ export async function rejectMoneyActionProposalAtomic(
 
   const raw = (data ?? {}) as RejectRpcResult;
   if (raw.ok === true && raw.proposal) {
+    const alreadyProcessed =
+      raw.already_processed === true || raw.code === "already_rejected";
+    // Prefer explicit RPC flag; fall back so older RPCs without the column still
+    // gate audits on !alreadyProcessed (never audit solely because API returned ok).
+    const transitionApplied =
+      raw.transition_applied === true ||
+      (raw.transition_applied !== false && !alreadyProcessed && raw.code === "ok");
     return {
       ok: true,
       proposal: raw.proposal as MoneyActionProposalRow,
-      alreadyProcessed: raw.already_processed === true || raw.code === "already_rejected",
+      alreadyProcessed,
+      transitionApplied,
     };
   }
 

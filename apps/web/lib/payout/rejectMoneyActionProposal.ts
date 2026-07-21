@@ -1,7 +1,10 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { rejectMoneyActionProposalAtomic } from "@/lib/payout/claimMoneyActionProposal";
+import {
+  rejectMoneyActionProposalAtomic,
+  visitEarningsRejectAuditReference,
+} from "@/lib/payout/claimMoneyActionProposal";
 import { parseEarningsAdjustPayload } from "@/lib/payout/moneyActionProposalPayload";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 
@@ -12,11 +15,16 @@ export type RejectMoneyActionProposalResult =
       proposalId: string;
       applied: false;
       alreadyProcessed?: boolean;
+      transitionApplied?: boolean;
     }
   | { ok: false; error: string; code: string };
 
 /**
  * Reject a pending earnings proposal. Never mutates cleaner earnings.
+ *
+ * KI-OPS-003: write visit_earnings_adjustment_rejected only when this request
+ * wins the atomic pending→rejected transition (`transitionApplied === true`).
+ * Idempotent / concurrent losers return already_processed without a second audit.
  */
 export async function rejectMoneyActionProposal(
   admin: SupabaseClient,
@@ -49,18 +57,35 @@ export async function rejectMoneyActionProposal(
   }
 
   const proposal = rejected.proposal;
+  const transitionApplied = rejected.transitionApplied === true;
+
+  // Already-processed / concurrent loser: do not insert another reject audit,
+  // do not overwrite checker / note / reviewed_at (RPC already skipped UPDATE).
+  if (!transitionApplied) {
+    return {
+      ok: true,
+      status: "rejected",
+      proposalId: proposal.id,
+      applied: false,
+      alreadyProcessed: true,
+      transitionApplied: false,
+    };
+  }
+
   const parsed = parseEarningsAdjustPayload(proposal.payload);
   const amountCents = parsed.ok
     ? parsed.payload.payout_cents + parsed.payload.bonus_cents
     : null;
 
-  // Fail-closed audit for rejection (no earnings mutation).
+  // Fail-closed audit for the winning rejection only (no earnings mutation).
+  // Deterministic reference + DB unique index enforce exactly-one under races.
   const { error: auditErr } = await admin.from("payout_audit_events").insert({
     event_type: "visit_earnings_adjustment_rejected",
     actor_user_id: params.actorUserId,
     actor_email: params.actorEmail ?? null,
     booking_ids: [proposal.booking_id],
     amount_cents: amountCents,
+    reference: visitEarningsRejectAuditReference(proposal.id),
     old_values: {
       original_total_cents: parsed.ok ? parsed.payload.original_total_cents ?? null : null,
     },
@@ -71,26 +96,32 @@ export async function rejectMoneyActionProposal(
     context: {
       proposal_id: proposal.id,
       proposed_by: proposal.proposed_by,
-      review_note: note,
+      review_note: proposal.review_note ?? note,
       action_type: proposal.action_type,
+      transition_applied: true,
     },
   });
 
   if (auditErr) {
-    // Proposal already rejected atomically; log secondary warn but still report success
-    // with audit warning — rejection itself must not mutate earnings and is durable.
-    void logPayoutAuditEvent(admin, {
-      eventType: "payout_amount_adjusted",
-      actorUserId: params.actorUserId,
-      actorEmail: params.actorEmail ?? null,
-      bookingIds: [proposal.booking_id],
-      amountCents,
-      context: {
-        proposal_id: proposal.id,
-        reject_audit_failed: true,
-        error: auditErr.message,
-      },
-    });
+    // Unique violation (23505) means another winner path already wrote the audit —
+    // still a successful exactly-once outcome.
+    const isUnique =
+      auditErr.code === "23505" ||
+      /duplicate key|unique constraint/i.test(auditErr.message ?? "");
+    if (!isUnique) {
+      void logPayoutAuditEvent(admin, {
+        eventType: "payout_amount_adjusted",
+        actorUserId: params.actorUserId,
+        actorEmail: params.actorEmail ?? null,
+        bookingIds: [proposal.booking_id],
+        amountCents,
+        context: {
+          proposal_id: proposal.id,
+          reject_audit_failed: true,
+          error: auditErr.message,
+        },
+      });
+    }
   }
 
   return {
@@ -98,6 +129,7 @@ export async function rejectMoneyActionProposal(
     status: "rejected",
     proposalId: proposal.id,
     applied: false,
-    alreadyProcessed: rejected.alreadyProcessed,
+    alreadyProcessed: false,
+    transitionApplied: true,
   };
 }

@@ -217,7 +217,29 @@ describe("PAYOUT-OPS-001 approveMoneyActionProposal mocks", () => {
 describe("PAYOUT-OPS-001 rejectMoneyActionProposal mocks", () => {
   beforeEach(() => {
     vi.resetModules();
+    vi.doUnmock("@/lib/payout/claimMoneyActionProposal");
+    vi.doUnmock("@/lib/payout/payoutAudit");
   });
+
+  const rejectedProposal = {
+    id: "p1",
+    action_type: "adjust_payout_earnings",
+    booking_id: "b1",
+    payload: {
+      payout_cents: 20000,
+      bonus_cents: 0,
+      cleaner_id: null,
+      original_total_cents: 15000,
+    },
+    proposed_by: "admin-a",
+    proposed_by_email: null,
+    status: "rejected" as const,
+    reviewed_by: "admin-b",
+    reviewed_at: "2026-07-21T10:00:00.000Z",
+    review_note: "incorrect rate",
+    created_at: new Date().toISOString(),
+    expires_at: new Date(Date.now() + 60_000).toISOString(),
+  };
 
   it("T05/T07: reject requires note and does not call adjust", async () => {
     const { rejectMoneyActionProposal } = await import("@/lib/payout/rejectMoneyActionProposal");
@@ -230,29 +252,14 @@ describe("PAYOUT-OPS-001 rejectMoneyActionProposal mocks", () => {
     if (!res.ok) expect(res.code).toBe("review_note_required");
   });
 
-  it("T05: reject success path writes audit and skips earnings mutate", async () => {
+  it("KI-OPS-003: first rejection creates one reject audit (transitionApplied)", async () => {
     vi.doMock("@/lib/payout/claimMoneyActionProposal", () => ({
+      visitEarningsRejectAuditReference: (id: string) => `vea_rejected:${id}`,
       rejectMoneyActionProposalAtomic: vi.fn(async () => ({
         ok: true,
-        proposal: {
-          id: "p1",
-          action_type: "adjust_payout_earnings",
-          booking_id: "b1",
-          payload: {
-            payout_cents: 20000,
-            bonus_cents: 0,
-            cleaner_id: null,
-            original_total_cents: 15000,
-          },
-          proposed_by: "admin-a",
-          proposed_by_email: null,
-          status: "rejected",
-          reviewed_by: "admin-b",
-          reviewed_at: new Date().toISOString(),
-          review_note: "incorrect rate",
-          created_at: new Date().toISOString(),
-          expires_at: new Date(Date.now() + 60_000).toISOString(),
-        },
+        transitionApplied: true,
+        alreadyProcessed: false,
+        proposal: rejectedProposal,
       })),
     }));
 
@@ -274,8 +281,251 @@ describe("PAYOUT-OPS-001 rejectMoneyActionProposal mocks", () => {
     if (res.ok) {
       expect(res.applied).toBe(false);
       expect(res.status).toBe("rejected");
+      expect(res.transitionApplied).toBe(true);
+      expect(res.alreadyProcessed).toBe(false);
     }
-    expect(insert).toHaveBeenCalled();
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(insert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        event_type: "visit_earnings_adjustment_rejected",
+        reference: "vea_rejected:p1",
+        context: expect.objectContaining({ proposal_id: "p1", transition_applied: true }),
+      }),
+    );
+  });
+
+  it("KI-OPS-003: already_processed / sequential retry does not write audit", async () => {
+    vi.doMock("@/lib/payout/claimMoneyActionProposal", () => ({
+      visitEarningsRejectAuditReference: (id: string) => `vea_rejected:${id}`,
+      rejectMoneyActionProposalAtomic: vi.fn(async () => ({
+        ok: true,
+        transitionApplied: false,
+        alreadyProcessed: true,
+        proposal: {
+          ...rejectedProposal,
+          review_note: "original note kept",
+          reviewed_by: "admin-b",
+          reviewed_at: "2026-07-21T10:00:00.000Z",
+        },
+      })),
+    }));
+
+    const insert = vi.fn(async () => ({ error: null }));
+    const admin = {
+      from: (table: string) => {
+        if (table === "payout_audit_events") return { insert };
+        throw new Error(`unexpected table ${table}`);
+      },
+    };
+
+    const { rejectMoneyActionProposal } = await import("@/lib/payout/rejectMoneyActionProposal");
+    const res = await rejectMoneyActionProposal(admin as never, {
+      proposalId: "p1",
+      actorUserId: "admin-c",
+      reviewNote: "retry with different note",
+    });
+    expect(res.ok).toBe(true);
+    if (res.ok) {
+      expect(res.alreadyProcessed).toBe(true);
+      expect(res.transitionApplied).toBe(false);
+    }
+    expect(insert).not.toHaveBeenCalled();
+  });
+
+  it("KI-OPS-003: concurrent double reject — only winner writes audit", async () => {
+    let call = 0;
+    vi.doMock("@/lib/payout/claimMoneyActionProposal", () => ({
+      visitEarningsRejectAuditReference: (id: string) => `vea_rejected:${id}`,
+      rejectMoneyActionProposalAtomic: vi.fn(async () => {
+        call += 1;
+        if (call === 1) {
+          return {
+            ok: true,
+            transitionApplied: true,
+            alreadyProcessed: false,
+            proposal: rejectedProposal,
+          };
+        }
+        return {
+          ok: true,
+          transitionApplied: false,
+          alreadyProcessed: true,
+          proposal: rejectedProposal,
+        };
+      }),
+    }));
+
+    const insert = vi.fn(async () => ({ error: null }));
+    const admin = {
+      from: (table: string) => {
+        if (table === "payout_audit_events") return { insert };
+        throw new Error(table);
+      },
+    };
+
+    const { rejectMoneyActionProposal } = await import("@/lib/payout/rejectMoneyActionProposal");
+    const [a, b] = await Promise.all([
+      rejectMoneyActionProposal(admin as never, {
+        proposalId: "p1",
+        actorUserId: "admin-b",
+        reviewNote: "incorrect rate",
+      }),
+      rejectMoneyActionProposal(admin as never, {
+        proposalId: "p1",
+        actorUserId: "admin-b",
+        reviewNote: "race note",
+      }),
+    ]);
+    expect(a.ok && b.ok).toBe(true);
+    const applied = [a, b].filter((r) => r.ok && r.transitionApplied === true);
+    const idempotent = [a, b].filter((r) => r.ok && r.alreadyProcessed === true);
+    expect(applied).toHaveLength(1);
+    expect(idempotent).toHaveLength(1);
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  it("KI-OPS-003: concurrent multi-request reject — exactly one audit", async () => {
+    let winners = 0;
+    vi.doMock("@/lib/payout/claimMoneyActionProposal", () => ({
+      visitEarningsRejectAuditReference: (id: string) => `vea_rejected:${id}`,
+      rejectMoneyActionProposalAtomic: vi.fn(async () => {
+        if (winners === 0) {
+          winners = 1;
+          return {
+            ok: true,
+            transitionApplied: true,
+            alreadyProcessed: false,
+            proposal: rejectedProposal,
+          };
+        }
+        return {
+          ok: true,
+          transitionApplied: false,
+          alreadyProcessed: true,
+          proposal: rejectedProposal,
+        };
+      }),
+    }));
+
+    const insert = vi.fn(async () => ({ error: null }));
+    const admin = {
+      from: (table: string) => {
+        if (table === "payout_audit_events") return { insert };
+        throw new Error(table);
+      },
+    };
+
+    const { rejectMoneyActionProposal } = await import("@/lib/payout/rejectMoneyActionProposal");
+    const results = await Promise.all(
+      Array.from({ length: 5 }, (_, i) =>
+        rejectMoneyActionProposal(admin as never, {
+          proposalId: "p1",
+          actorUserId: "admin-b",
+          reviewNote: `race-${i}-note`,
+        }),
+      ),
+    );
+    expect(results.every((r) => r.ok)).toBe(true);
+    expect(results.filter((r) => r.ok && r.transitionApplied).length).toBe(1);
+    expect(results.filter((r) => r.ok && r.alreadyProcessed).length).toBe(4);
+    expect(insert).toHaveBeenCalledTimes(1);
+  });
+
+  it("KI-OPS-003: unique-violation on audit insert is treated as exactly-once success", async () => {
+    vi.doMock("@/lib/payout/claimMoneyActionProposal", () => ({
+      visitEarningsRejectAuditReference: (id: string) => `vea_rejected:${id}`,
+      rejectMoneyActionProposalAtomic: vi.fn(async () => ({
+        ok: true,
+        transitionApplied: true,
+        alreadyProcessed: false,
+        proposal: rejectedProposal,
+      })),
+    }));
+    vi.doMock("@/lib/payout/payoutAudit", () => ({
+      logPayoutAuditEvent: vi.fn(),
+    }));
+
+    const insert = vi.fn(async () => ({
+      error: { code: "23505", message: "duplicate key value violates unique constraint" },
+    }));
+    const { logPayoutAuditEvent } = await import("@/lib/payout/payoutAudit");
+    const admin = {
+      from: (table: string) => {
+        if (table === "payout_audit_events") return { insert };
+        throw new Error(table);
+      },
+    };
+
+    const { rejectMoneyActionProposal } = await import("@/lib/payout/rejectMoneyActionProposal");
+    const res = await rejectMoneyActionProposal(admin as never, {
+      proposalId: "p1",
+      actorUserId: "admin-b",
+      reviewNote: "incorrect rate",
+    });
+    expect(res.ok).toBe(true);
+    expect(logPayoutAuditEvent).not.toHaveBeenCalled();
+  });
+
+  it("maps reject RPC transition_applied for audit gating", async () => {
+    const rpc = vi.fn(async () => ({
+      data: {
+        ok: true,
+        code: "already_rejected",
+        already_processed: true,
+        transition_applied: false,
+        proposal: rejectedProposal,
+      },
+      error: null,
+    }));
+
+    const { rejectMoneyActionProposalAtomic } = await import("@/lib/payout/claimMoneyActionProposal");
+    const mapped = await rejectMoneyActionProposalAtomic(
+      { rpc } as never,
+      { proposalId: "p1", actorUserId: "admin-b", reviewNote: "incorrect rate" },
+    );
+    expect(mapped.ok).toBe(true);
+    if (mapped.ok) {
+      expect(mapped.transitionApplied).toBe(false);
+      expect(mapped.alreadyProcessed).toBe(true);
+    }
+
+    const rpcWin = vi.fn(async () => ({
+      data: {
+        ok: true,
+        code: "ok",
+        already_processed: false,
+        transition_applied: true,
+        proposal: rejectedProposal,
+      },
+      error: null,
+    }));
+    const win = await rejectMoneyActionProposalAtomic(
+      { rpc: rpcWin } as never,
+      { proposalId: "p1", actorUserId: "admin-b", reviewNote: "incorrect rate" },
+    );
+    expect(win.ok).toBe(true);
+    if (win.ok) {
+      expect(win.transitionApplied).toBe(true);
+      expect(win.alreadyProcessed).toBe(false);
+    }
+  });
+});
+
+describe("PAYOUT-OPS-001 KI-OPS-003 migration contract", () => {
+  it("migration returns transition_applied and unique reject audit index", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { resolve } = await import("node:path");
+    const sql = readFileSync(
+      resolve(
+        process.cwd(),
+        "../../supabase/migrations/20260721140000_payout_ops_001_reject_audit_idempotency.sql",
+      ),
+      "utf8",
+    );
+    expect(sql).toContain("transition_applied");
+    expect(sql).toContain("payout_audit_events_vea_rejected_ref_uidx");
+    expect(sql).toContain("vea_rejected:");
+    expect(sql).toContain("CREATE OR REPLACE FUNCTION public.reject_admin_money_action_proposal");
   });
 });
 
