@@ -23,6 +23,9 @@ export type HealableBookingDurationRow = BookingDurationRowLike & {
   service?: string | null;
   service_slug?: string | null;
   price_snapshot?: unknown;
+  is_team_job?: boolean | null;
+  team_member_count_snapshot?: number | null;
+  cleaner_count?: number | null;
 };
 
 function positiveRoomCount(v: unknown): number | null {
@@ -127,6 +130,18 @@ function serviceForWorkload(row: HealableBookingDurationRow): ReturnType<typeof 
   return slug ? parseBookingServiceId(slug) : null;
 }
 
+function teamMemberCountForDuration(row: HealableBookingDurationRow): number {
+  const snap = row.team_member_count_snapshot;
+  if (typeof snap === "number" && Number.isFinite(snap) && snap >= 1) {
+    return Math.min(20, Math.round(snap));
+  }
+  const cleanerCount = row.cleaner_count;
+  if (typeof cleanerCount === "number" && Number.isFinite(cleanerCount) && cleanerCount >= 1) {
+    return Math.min(20, Math.round(cleanerCount));
+  }
+  return row.is_team_job === true ? 2 : 1;
+}
+
 function minutesFromPriceSnapshot(row: HealableBookingDurationRow): number | null {
   const snap = row.price_snapshot;
   if (!snap || typeof snap !== "object") return null;
@@ -155,6 +170,7 @@ function computeHealedDurationMinutes(row: HealableBookingDurationRow): {
 
   const scope = roomsBathsFromRow(row);
   const service = serviceForWorkload(row);
+  const teamCount = teamMemberCountForDuration(row);
   const workload = resolveLegacyJobDurationWorkload(
     {
       service: service,
@@ -163,18 +179,32 @@ function computeHealedDurationMinutes(row: HealableBookingDurationRow): {
       extraRooms: scope.extraRooms,
       extras: extrasFromRow(row),
     },
-    1,
+    teamCount,
   );
+  // Wall-clock on-site time: prefer team-scaled minutes when a roster is present.
+  const candidate =
+    teamCount > 1 &&
+    typeof workload.team_scaled_duration_minutes === "number" &&
+    Number.isFinite(workload.team_scaled_duration_minutes)
+      ? workload.team_scaled_duration_minutes
+      : workload.duration_minutes;
   if (
-    typeof workload.duration_minutes !== "number" ||
-    !Number.isFinite(workload.duration_minutes) ||
-    workload.duration_minutes < MIN_REASONABLE_BOOKING_DURATION_MINUTES
+    typeof candidate !== "number" ||
+    !Number.isFinite(candidate) ||
+    candidate < MIN_REASONABLE_BOOKING_DURATION_MINUTES
   ) {
     return null;
   }
   return {
-    minutes: Math.round(workload.duration_minutes),
-    source: scope.usedDefaults ? "workload_room_defaults" : "workload_from_rooms",
+    minutes: Math.round(candidate),
+    source:
+      teamCount > 1
+        ? scope.usedDefaults
+          ? `workload_room_defaults_team_${teamCount}`
+          : `workload_from_rooms_team_${teamCount}`
+        : scope.usedDefaults
+          ? "workload_room_defaults"
+          : "workload_from_rooms",
     usedRoomDefaults: scope.usedDefaults,
   };
 }

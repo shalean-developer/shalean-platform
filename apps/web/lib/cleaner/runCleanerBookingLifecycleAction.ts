@@ -37,6 +37,7 @@ import {
 import { deriveBookingOperationalPhase } from "@/lib/booking/deriveBookingOperationalPhase";
 import { buildCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
 import { evaluateCleanerJobCompletionGate } from "@/lib/cleaner/cleanerJobCompletionGate";
+import { healBookingDurationForScheduling } from "@/lib/booking/quote/healBookingDurationForScheduling";
 import { isBookingCompletedRouterEnabled } from "@/lib/notifications/notificationRouter";
 import {
   buildViewerRosterContext,
@@ -151,6 +152,13 @@ type BookingLifecycleRow = {
   started_at?: string | null;
   duration_minutes?: number | null;
   estimated_duration_minutes?: number | null;
+  duration_hours?: number | null;
+  rooms?: number | null;
+  bathrooms?: number | null;
+  extras?: unknown;
+  service?: string | null;
+  service_slug?: string | null;
+  price_snapshot?: unknown;
   pricing_summary?: unknown;
   booking_snapshot?: unknown;
   display_earnings_cents?: number | null;
@@ -158,6 +166,8 @@ type BookingLifecycleRow = {
   billing_type?: string | null;
   is_recurring_generated?: boolean | null;
   monthly_invoice_id?: string | null;
+  team_member_count_snapshot?: number | null;
+  cleaner_count?: number | null;
 };
 
 async function handleRecurringPendingPaymentAccept(params: {
@@ -457,7 +467,7 @@ export async function runCleanerBookingLifecycleAction(params: {
   const { data: booking, error: bErr } = await admin
     .from("bookings")
     .select(
-      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, assignment_attempts, cleaner_response_status, accepted_at, dispatch_status, en_route_at, started_at, duration_minutes, estimated_duration_minutes, pricing_summary, booking_snapshot, display_earnings_cents, cleaner_earnings_total_cents, is_recurring_generated, billing_type, monthly_invoice_id",
+      "id, cleaner_id, payout_owner_cleaner_id, team_id, is_team_job, status, date, time, assignment_attempts, cleaner_response_status, accepted_at, dispatch_status, en_route_at, started_at, duration_minutes, estimated_duration_minutes, duration_hours, rooms, bathrooms, extras, service, service_slug, price_snapshot, pricing_summary, booking_snapshot, display_earnings_cents, cleaner_earnings_total_cents, is_recurring_generated, billing_type, monthly_invoice_id, team_member_count_snapshot, cleaner_count",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -1290,6 +1300,32 @@ export async function runCleanerBookingLifecycleAction(params: {
         cleaner_earnings_total_cents: bRow.cleaner_earnings_total_cents ?? null,
       },
     });
+
+    // Admin monthly / recurring_invoice rows sometimes land without duration columns.
+    // Heal from rooms/service before the completion gate so cleaners are not stuck.
+    const durationHeal = await healBookingDurationForScheduling(admin, {
+      id: bookingId,
+      duration_minutes: bRow.duration_minutes ?? null,
+      estimated_duration_minutes: bRow.estimated_duration_minutes ?? null,
+      duration_hours: bRow.duration_hours ?? null,
+      pricing_summary: bRow.pricing_summary,
+      booking_snapshot: bRow.booking_snapshot,
+      price_snapshot: bRow.price_snapshot,
+      rooms: bRow.rooms ?? null,
+      bathrooms: bRow.bathrooms ?? null,
+      extras: bRow.extras,
+      service: bRow.service ?? null,
+      service_slug: bRow.service_slug ?? null,
+      date: bRow.date ?? null,
+      time: bRow.time ?? null,
+      is_team_job: bRow.is_team_job ?? null,
+      team_member_count_snapshot: bRow.team_member_count_snapshot ?? null,
+      cleaner_count: bRow.cleaner_count ?? null,
+    });
+    if (durationHeal.healed && durationHeal.durationMinutes != null) {
+      bRow.duration_minutes = durationHeal.durationMinutes;
+      bRow.estimated_duration_minutes = durationHeal.durationMinutes;
+    }
 
     const completionGate = evaluateCleanerJobCompletionGate(bRow);
     if (!completionGate.ok) {

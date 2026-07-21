@@ -59,10 +59,34 @@ describe("healBookingDurationForScheduling", () => {
   it("reads duration from price_snapshot.duration_hours", () => {
     expect(
       resolveHealedBookingDurationMinutes({
-        id: "b5",
+        id: "b5-price",
         duration_minutes: null,
         price_snapshot: { duration_hours: 2.5 },
       }),
     ).toBe(150);
+  });
+
+  it("uses team-scaled wall-clock minutes for team jobs", () => {
+    const solo = resolveHealedBookingDurationMinutes({
+      id: "b5",
+      duration_minutes: null,
+      rooms: 4,
+      bathrooms: 3,
+      service_slug: "deep",
+      is_team_job: false,
+    });
+    const team = resolveHealedBookingDurationMinutes({
+      id: "b6",
+      duration_minutes: null,
+      rooms: 4,
+      bathrooms: 3,
+      service_slug: "deep",
+      is_team_job: true,
+      team_member_count_snapshot: 6,
+    });
+    expect(solo).toBeGreaterThanOrEqual(120);
+    expect(team).not.toBeNull();
+    expect(team!).toBeLessThan(solo!);
+    expect(team!).toBeGreaterThanOrEqual(60);
   });
 });
