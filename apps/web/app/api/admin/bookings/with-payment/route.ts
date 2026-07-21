@@ -172,7 +172,7 @@ export async function POST(request: Request) {
         context: {
           type: "admin_checkout_guard",
           booking_id: row.id,
-          admin_id: user.id,
+          admin_id: adminAuth.userId,
           booking_status: row.status,
           payment_status: paymentStatus,
         },
@@ -195,7 +195,7 @@ export async function POST(request: Request) {
         context: {
           type: "admin_checkout_idempotent",
           booking_id: row.id,
-          admin_id: user.id,
+          admin_id: adminAuth.userId,
           resend_notifications: resendNotifications,
         },
       });
@@ -292,7 +292,7 @@ export async function POST(request: Request) {
 
   const finalized = await finalizeAdminPaystackCheckout({
     admin,
-    adminUserId: user.id,
+    adminUserId: adminAuth.userId,
     result,
     locked: body.locked,
     notificationMode,

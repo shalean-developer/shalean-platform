@@ -192,7 +192,7 @@ export async function GET(request: Request) {
         failureStage: "page_discovery",
         graphErrorCode: extractFacebookGraphErrorCode(discovered.error),
         httpStatus: discovered.status ?? null,
-        actor: user.email,
+        actor: adminAuth.email,
       });
       return NextResponse.redirect(
         marketingConnectedAccountsUrl({ error: "save_failed", reason }, origin),
@@ -210,7 +210,7 @@ export async function GET(request: Request) {
         provider: "facebook",
         loginPurpose: purpose,
         httpStatus: me.status ?? null,
-        actor: user.email,
+        actor: adminAuth.email,
       });
     }
 
@@ -218,7 +218,7 @@ export async function GET(request: Request) {
     const saved = await saveFacebookOAuthConnection({
       userAccessToken: longLived.access_token,
       expiresIn: longLived.expires_in ?? null,
-      connectedBy: user.email,
+      connectedBy: adminAuth.email,
       correlationId,
       pages: discovered.pages,
       metaUserIdHash,
@@ -241,7 +241,7 @@ export async function GET(request: Request) {
         failureStage: stage,
         graphErrorCode: extractFacebookGraphErrorCode(saved.error),
         dbErrorCode: saved.dbErrorCode ?? null,
-        actor: user.email,
+        actor: adminAuth.email,
       });
       return NextResponse.redirect(
         marketingConnectedAccountsUrl({ error: "save_failed", reason }, origin),
@@ -256,7 +256,7 @@ export async function GET(request: Request) {
     if (isProviderFeatureEnabled("instagram") && !saved.needsPagePick) {
       const pageCfg = await resolveFacebookPublishConfig();
       const ig = await saveInstagramConnection({
-        connectedBy: user.email,
+        connectedBy: adminAuth.email,
         accessToken: pageCfg.ok ? pageCfg.config.accessToken : undefined,
         pageId: pageCfg.ok ? pageCfg.config.pageId : undefined,
       });
@@ -271,7 +271,7 @@ export async function GET(request: Request) {
             : null,
           igUserIdMasked: `${ig.igUserId.slice(0, 4)}…`,
           usernamePresent: Boolean(ig.username),
-          actor: user.email,
+          actor: adminAuth.email,
         });
       } else if (purpose === "instagram") {
         instagramError = ig.code ?? "ig_unavailable";
@@ -280,7 +280,7 @@ export async function GET(request: Request) {
           provider: "instagram",
           loginPurpose: purpose,
           errorCategory: ig.code ?? "ig_unavailable",
-          actor: user.email,
+          actor: adminAuth.email,
         });
       }
     }
@@ -289,7 +289,7 @@ export async function GET(request: Request) {
       correlationId,
       provider: purpose === "instagram" ? "instagram" : "facebook",
       loginPurpose: purpose,
-      actor: user.email,
+      actor: adminAuth.email,
       needsPagePick: saved.needsPagePick,
       eligibleCount: saved.eligibleCount,
       instagramConnected,
@@ -321,7 +321,7 @@ export async function GET(request: Request) {
       failureStage,
       errorName,
       graphErrorCode: extractFacebookGraphErrorCode(message),
-      actor: user.email,
+      actor: adminAuth.email,
     });
     return NextResponse.redirect(
       marketingConnectedAccountsUrl({ error: "oauth_failed", reason }, origin),

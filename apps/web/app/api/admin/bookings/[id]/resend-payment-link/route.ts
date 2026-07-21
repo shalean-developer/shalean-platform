@@ -175,7 +175,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     context: {
       type: "admin_checkout_resend",
       booking_id: r.id,
-      admin_id: user.id,
+      admin_id: adminAuth.userId,
       skip_sms: skipSms,
     },
   });

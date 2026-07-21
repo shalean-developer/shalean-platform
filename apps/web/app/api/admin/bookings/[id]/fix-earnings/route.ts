@@ -36,10 +36,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
-  const adminUserId = typeof user.id === "string" && user.id.trim() ? user.id.trim() : "";
-  if (!adminUserId) {
-    return NextResponse.json({ error: "Missing admin user id." }, { status: 401 });
-  }
+  const adminUserId = adminAuth.userId;
 
   const admin = getSupabaseAdmin();
   if (!admin) {

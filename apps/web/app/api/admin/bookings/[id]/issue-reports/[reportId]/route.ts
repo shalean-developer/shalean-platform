@@ -64,7 +64,7 @@ export async function PATCH(
     .from("cleaner_job_issue_reports")
     .update({
       resolved_at: new Date().toISOString(),
-      resolved_by: user.email.trim().slice(0, 320),
+      resolved_by: adminAuth.email.trim().slice(0, 320),
     })
     .eq("id", reportId);
 

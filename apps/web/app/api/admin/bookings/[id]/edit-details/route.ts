@@ -132,7 +132,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       confirm_collect_additional: body.confirm_collect_additional,
     },
     adminUserId,
-    adminEmail: user.email,
+    adminEmail: adminAuth.email,
     proposalId: proposalId || null,
     apply: async () => {
       const result = await adminRepriceBooking({

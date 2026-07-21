@@ -108,7 +108,7 @@ export async function GET(request: Request) {
       accessToken: tokens.access_token,
       refreshToken: tokens.refresh_token ?? null,
       expiresIn: tokens.expires_in,
-      connectedBy: user.email,
+      connectedBy: adminAuth.email,
       existingRefreshToken: existingRefresh,
     });
 

@@ -50,8 +50,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const op = await retryDispatchBooking({
     admin,
     bookingId,
-    actorUserId: user.id,
-    actorEmail: user.email ?? null,
+    actorUserId: adminAuth.userId,
+    actorEmail: adminAuth.email,
   });
 
   if (!op.ok) {
