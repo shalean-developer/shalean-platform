@@ -103,7 +103,7 @@ In `lib/seo/capeTownSeoPages.ts`:
 |------|-------|
 | PR | https://github.com/shalean-developer/shalean-platform/pull/89 |
 | Branch | `seo/fix-001-002-prod-ready` |
-| Tip SHA | `_PENDING_COMMIT_` |
+| Tip SHA | `6e6a1429225a0513e0bb58ba688247e367104ab5` |
 | Codex P2 (Window Cleaning homepage Book Now → unsupported booking-v2) | **Resolved** by removing the CTA entirely (informational card only); no quote/contact workaround; window not added to booking-v2 |
 
 ### 4.1 Baseline (pre-change, repository)
@@ -121,18 +121,21 @@ In `lib/seo/capeTownSeoPages.ts`:
 
 | Command | Result |
 |---------|--------|
-| `npx vitest run lib/seo/__tests__/seoFix001002ServiceRemediation.test.ts lib/seo/__tests__/hostnameConsolidation.test.ts lib/seo/__tests__/seoRebuildPhase1.test.ts lib/seo/__tests__/legacyPhase1EdgeRedirects.test.ts lib/seo/__tests__/legacyMarketingRedirectMatrix.test.ts lib/seo/__tests__/buildMarketingSitemapEntries.test.ts lib/seo/__tests__/schemaGraph.test.ts` | **Passed** — 7 files, 43 tests |
-| Full `apps/web` production build | **Not run** (time/env); recommend before merge |
+| `npx vitest run lib/seo/__tests__/seoFix001002ServiceRemediation.test.ts` | **Passed** — 12 tests (includes homepage Window Cleaning no-CTA guard) |
+| `npx vitest run lib/seo/__tests__ lib/site` | **Passed** — 17 files, 94 tests |
+| `NODE_OPTIONS=--max-old-space-size=8192 npm run typecheck` | **Passed** |
+| `npm run build` (Next.js production-equivalent) | **Passed** |
 | Live HTTP / GSC URL Inspection | **Not run** — unauthorised / out of scope |
 | Playwright SEO e2e | **Not run** — none dedicated |
 
 Classification:
 
-* **Passed:** narrow SEO Vitest suite above
+* **Passed:** FIX remediation Vitest + `lib/seo`/`lib/site` suite + typecheck + production build; homepage Window Cleaning card has no Book Now / `/book` / `/quote` / `/contact` CTA
 * **Failed because of this change:** none observed
 * **Pre-existing:** Supabase env warnings during sitemap tests (non-fatal; file-based union still builds)
-* **Not run:** full app build, live crawl, GSC
-* **Blocked:** production deploy, indexing requests
+* **Not run:** live crawl, GSC
+* **Blocked:** production merge/deploy, indexing requests
+* **Codex P2:** resolved by removing Window Cleaning booking CTA (informational card only)
 
 ---
 
@@ -145,10 +148,10 @@ Classification:
 | `docs/audits/seo/SEO-FIX-002-SERVICE-INDEXATION-REMEDIATION-2026-07-22.md` | Added (this file) |
 | `apps/web/lib/seo/capeTownSeoPages.ts` | Exclusions + content remediation |
 | `apps/web/components/seo/SeoCapeTownServicePage.tsx` | Exclusions UI |
-| `apps/web/components/seo/ServicePageCommercialIntentSection.tsx` | Cross-link copy |
+| `apps/web/components/seo/ServicePageCommercialIntentSection.tsx` | Cross-link copy; window slug omits `/book` CTA |
 | `apps/web/lib/marketing/marketingServiceNavLinks.ts` | Full service nav |
-| `apps/web/components/home/sections/ServicesSection.tsx` | Office + Window cards |
-| `apps/web/lib/seo/__tests__/seoFix001002ServiceRemediation.test.ts` | Added |
+| `apps/web/components/home/sections/ServicesSection.tsx` | Office + Window cards; Window `bookCta: false` (informational only) |
+| `apps/web/lib/seo/__tests__/seoFix001002ServiceRemediation.test.ts` | Added + Window Cleaning no-CTA guard |
 
 ---
 
@@ -199,7 +202,7 @@ Classification:
 
 ## 10. Proposed next authorization (exact)
 
-> **Authorize EO review of PR #89 tip `_PENDING_COMMIT_` on `seo/fix-001-002-prod-ready` (SEO-FIX-001/002 production package + Window Cleaning homepage CTA removal). Preview/CI verification against that exact SHA only. Do not authorize production merge, production deploy, GSC writes, sitemap submission, indexing requests, DNS/Plesk changes, or booking-v2 catalog expansion for window cleaning.**
+> **Authorize EO review of PR #89 tip `6e6a1429225a0513e0bb58ba688247e367104ab5` on `seo/fix-001-002-prod-ready` (SEO-FIX-001/002 production package + Window Cleaning homepage CTA removal). Preview/CI verification against that exact SHA only. Do not authorize production merge, production deploy, GSC writes, sitemap submission, indexing requests, DNS/Plesk changes, or booking-v2 catalog expansion for window cleaning.**
 
 Optional follow-on (separate):
 

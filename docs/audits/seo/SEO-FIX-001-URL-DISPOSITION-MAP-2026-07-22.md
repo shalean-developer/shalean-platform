@@ -97,4 +97,5 @@ Columns: `source_url`, `route_or_template`, `http_behavior`, `indexability`, `ca
 |-------|-------|
 | Nature | Provisional disposition map + CSV |
 | Code changes in this package | Documentation only for FIX-001 map; redirect behaviour already live — **no new redirect engineering** in this package |
+| Companion production package | SEO-FIX-002 + PR #89 branch `seo/fix-001-002-prod-ready` (tip SHA recorded in FIX-002 §4.0 after verification) |
 | Supersession | Does not supersede SEO-MIG-002 Deferred or SEO-P2 EO read-only auth |
