@@ -182,18 +182,56 @@ export function ServicePageCommercialIntentSection({ slug }: Props) {
     <section className="border-b border-blue-100 bg-blue-50/35 py-14" aria-labelledby="svc-commercial-default-heading">
       <div className="mx-auto max-w-4xl px-4">
         <h2 id="svc-commercial-default-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
-          Next steps across Cape Town services
+          {slug === "office-cleaning-cape-town"
+            ? "Office cleaning next to residential Cape Town services"
+            : slug === "window-cleaning-cape-town"
+              ? "Pair window cleaning with the right home service"
+              : slug === "airbnb-cleaning-cape-town"
+                ? "Turnovers beside deeper residential resets"
+                : "Next steps across Cape Town services"}
         </h2>
         <p className="mt-4 text-base leading-relaxed text-zinc-600">
           Compare core residential tiers on{" "}
           <Link href={CAPE_TOWN_PRICING_AUTHORITY_HREF} className={linkClass}>
             services and pricing
           </Link>
-          , then{" "}
-          <Link href="/book" className={linkClass}>
-            book online
-          </Link>{" "}
-          before you switch service type in the quote builder.
+          {slug === "window-cleaning-cape-town" ? (
+            <>
+              . Hosting guests? Compare{" "}
+              <Link href={CAPE_TOWN_SERVICE_SEO["airbnb-cleaning-cape-town"].path} className={linkClass}>
+                Airbnb turnover cleaning
+              </Link>{" "}
+              when interiors need a full guest-ready reset, not only glass.
+            </>
+          ) : (
+            <>
+              , then{" "}
+              <Link href="/book" className={linkClass}>
+                book online
+              </Link>{" "}
+              before you switch service type in the quote builder.
+              {slug === "office-cleaning-cape-town" ? (
+                <>
+                  {" "}
+                  For glass presentation in reception or street-facing panes, also see{" "}
+                  <Link href={CAPE_TOWN_SERVICE_SEO["window-cleaning-cape-town"].path} className={linkClass}>
+                    window cleaning in Cape Town
+                  </Link>
+                  .
+                </>
+              ) : null}
+              {slug === "airbnb-cleaning-cape-town" ? (
+                <>
+                  {" "}
+                  When ovens and grout lag behind turnover cycles, step up to{" "}
+                  <Link href={CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path} className={linkClass}>
+                    deep cleaning
+                  </Link>
+                  .
+                </>
+              ) : null}
+            </>
+          )}
         </p>
         <ul className="mt-6 space-y-2 text-base leading-relaxed text-zinc-700">
           {crossRows.map((row) => (

@@ -5,18 +5,32 @@ import Link from "next/link";
 import { BookCleaningLink } from "@/components/home/BookCleaningLink";
 import { calculateHomeWidgetBaseEstimateZar, type HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
 import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
-import { Building2, Home, Layers, Sparkles, Truck } from "lucide-react";
+import { AppWindow, Building2, Home, Layers, Sparkles, Truck } from "lucide-react";
 
-type ServiceCard = {
+type PricedServiceCard = {
   title: string;
   description: string;
   icon: typeof Home;
   service: HomeWidgetServiceKey;
   servicePage: string;
   source: string;
+  kind: "priced";
 };
 
-const services: ServiceCard[] = [
+type LinkOnlyServiceCard = {
+  title: string;
+  description: string;
+  icon: typeof Home;
+  servicePage: string;
+  source: string;
+  kind: "link";
+  /** When false, card stays informational (service-page link only; no booking CTA). */
+  bookCta: boolean;
+};
+
+type ServiceCard = PricedServiceCard | LinkOnlyServiceCard;
+
+const pricedServices: PricedServiceCard[] = [
   {
     title: "Standard Cleaning",
     description: "Regular upkeep for busy homes: dusting, floors, kitchens, bathrooms, and general refreshes.",
@@ -24,6 +38,7 @@ const services: ServiceCard[] = [
     service: "standard",
     servicePage: "/services/standard-cleaning-cape-town",
     source: "home_services_standard",
+    kind: "priced",
   },
   {
     title: "Deep Cleaning",
@@ -32,6 +47,7 @@ const services: ServiceCard[] = [
     service: "deep",
     servicePage: "/services/deep-cleaning-cape-town",
     source: "home_services_deep",
+    kind: "priced",
   },
   {
     title: "Airbnb Cleaning",
@@ -40,6 +56,7 @@ const services: ServiceCard[] = [
     service: "airbnb",
     servicePage: "/services/airbnb-cleaning-cape-town",
     source: "home_services_airbnb",
+    kind: "priced",
   },
   {
     title: "Move-in / Move-out",
@@ -48,6 +65,7 @@ const services: ServiceCard[] = [
     service: "move",
     servicePage: "/services/move-out-cleaning-cape-town",
     source: "home_services_move",
+    kind: "priced",
   },
   {
     title: "Carpet Cleaning",
@@ -56,6 +74,29 @@ const services: ServiceCard[] = [
     service: "carpet",
     servicePage: "/services/carpet-cleaning-cape-town",
     source: "home_services_carpet",
+    kind: "priced",
+  },
+];
+
+const linkOnlyServices: LinkOnlyServiceCard[] = [
+  {
+    title: "Office Cleaning",
+    description: "Compact offices, studios, and hybrid workspaces: kitchenettes, bathrooms, desks, and client-facing floors.",
+    icon: Building2,
+    servicePage: "/services/office-cleaning-cape-town",
+    source: "home_services_office",
+    kind: "link",
+    bookCta: true,
+  },
+  {
+    title: "Window Cleaning",
+    description: "Interior and safely reachable exterior glass for coastal apartments and Southern Suburb homes.",
+    icon: AppWindow,
+    servicePage: "/services/window-cleaning-cape-town",
+    // Informational only: window cleaning is not selectable in booking-v2.
+    source: "home_services_window",
+    kind: "link",
+    bookCta: false,
   },
 ];
 
@@ -63,9 +104,11 @@ export function ServicesSection() {
   const { snapshot: catalog } = usePricingCatalogSnapshot();
 
   const priced = useMemo(() => {
-    if (!catalog) return services.map((s) => ({ ...s, from: null as number | null }));
-    return services.map((s) => ({ ...s, from: calculateHomeWidgetBaseEstimateZar(s.service, catalog) }));
+    if (!catalog) return pricedServices.map((s) => ({ ...s, from: null as number | null }));
+    return pricedServices.map((s) => ({ ...s, from: calculateHomeWidgetBaseEstimateZar(s.service, catalog) }));
   }, [catalog]);
+
+  const cards: Array<(typeof priced)[number] | LinkOnlyServiceCard> = [...priced, ...linkOnlyServices];
 
   return (
     <section id="services" className="scroll-mt-28 border-b border-blue-100 bg-white py-16" aria-labelledby="services-heading">
@@ -80,8 +123,9 @@ export function ServicesSection() {
         </div>
 
         <ul className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-          {priced.map((s) => {
+          {cards.map((s) => {
             const Icon = s.icon;
+            const from = "from" in s ? s.from : null;
             return (
               <li
                 key={s.title}
@@ -97,12 +141,18 @@ export function ServicesSection() {
                 </h3>
                 <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">{s.description}</p>
                 <p className="mt-4 text-sm font-semibold text-blue-600">
-                  {s.from != null ? `From R ${s.from.toLocaleString("en-ZA")}` : "From —"}
+                  {s.kind === "priced"
+                    ? from != null
+                      ? `From R ${from.toLocaleString("en-ZA")}`
+                      : "From —"
+                    : s.kind === "link" && s.bookCta
+                      ? "See scope & quote"
+                      : "See service scope"}
                 </p>
                 <Link href={s.servicePage} className="mt-3 text-sm font-semibold text-blue-700 transition hover:text-blue-900">
                   Learn more about {s.title}
                 </Link>
-                {s.service === "airbnb" ? (
+                {s.kind === "priced" && s.service === "airbnb" ? (
                   <p className="mt-2 text-xs leading-relaxed text-gray-500">
                     <Link href={s.servicePage} className="font-semibold text-blue-600 transition hover:text-blue-800">
                       Airbnb cleaning Cape Town
@@ -113,16 +163,25 @@ export function ServicesSection() {
                     </Link>
                   </p>
                 ) : null}
-                <BookCleaningLink
-                  source={s.source}
-                  className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-blue-700"
-                >
-                  Book Now
-                </BookCleaningLink>
+                {s.kind === "priced" || (s.kind === "link" && s.bookCta) ? (
+                  <BookCleaningLink
+                    source={s.source}
+                    className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    Book Now
+                  </BookCleaningLink>
+                ) : null}
               </li>
             );
           })}
         </ul>
+        <p className="mt-8 text-center text-sm text-gray-600">
+          Prefer the full catalogue?{" "}
+          <Link href="/services" className="font-semibold text-blue-700 transition hover:text-blue-900">
+            Compare all Cape Town cleaning services
+          </Link>
+          .
+        </p>
       </div>
     </section>
   );
