@@ -1,0 +1,65 @@
+{
+  "verifiedAt": "2026-07-22T06:18:03.956Z",
+  "status": "LIVE_HTTP_VERIFIED",
+  "webspace": "shalean.com",
+  "wwwRoot": "/var/www/vhosts/shalean.com/public_html",
+  "artifact": "apps/web/ops/seo/shalean-com-plesk.htaccess",
+  "evidenceDoc": "docs/audits/seo/SHALEAN-COM-PLESK-HTTP-VERIFICATION-2026-07-22.md",
+  "remoteBackupName": ".htaccess.bak-before-com-migration-2026-07-22T06-18-03-956Z",
+  "cases": [
+    {
+      "url": "https://shalean.com/",
+      "status": 301,
+      "location": "https://shalean.co.za/",
+      "expect": "https://shalean.co.za/"
+    },
+    {
+      "url": "https://www.shalean.com/",
+      "status": 301,
+      "location": "https://shalean.co.za/",
+      "expect": "https://shalean.co.za/"
+    },
+    {
+      "url": "https://shalean.com/blog",
+      "status": 301,
+      "location": "https://shalean.co.za/blog",
+      "expect": "https://shalean.co.za/blog"
+    },
+    {
+      "url": "https://www.shalean.com/blog",
+      "status": 301,
+      "location": "https://shalean.co.za/blog",
+      "expect": "https://shalean.co.za/blog"
+    },
+    {
+      "url": "https://shalean.com/blog/how-much-does-cleaning-cost-cape-town-2026",
+      "status": 301,
+      "location": "https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026",
+      "expect": "https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026"
+    },
+    {
+      "url": "https://shalean.com/services",
+      "status": 301,
+      "location": "https://shalean.co.za/services",
+      "expect": "https://shalean.co.za/services"
+    },
+    {
+      "url": "https://shalean.com/contact",
+      "status": 301,
+      "location": "https://shalean.co.za/contact",
+      "expect": "https://shalean.co.za/contact"
+    },
+    {
+      "url": "https://shalean.com/quote",
+      "status": 301,
+      "location": "https://shalean.co.za/quote",
+      "expect": "https://shalean.co.za/quote"
+    },
+    {
+      "url": "https://shalean.com/locations/sea-point-cleaning-services",
+      "status": 301,
+      "location": "https://shalean.co.za/locations/sea-point-cleaning-services",
+      "expect": "https://shalean.co.za/locations/sea-point-cleaning-services"
+    }
+  ]
+}

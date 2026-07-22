@@ -1,9 +1,11 @@
 /**
  * One-to-one `shalean.com` → `https://shalean.co.za` migration map (repo source of truth).
  *
- * EXTERNAL APPLICATION STATUS: PENDING on Plesk/LiteSpeed for path-specific WordPress URLs.
- * Host-level path-preserving rules also exist in `next.config.ts` / `proxy.ts` for when `.com`
- * traffic reaches this Next app. Do not claim Plesk redirects are live without HTTP evidence.
+ * EXTERNAL APPLICATION STATUS: Plesk/LiteSpeed `.htaccess` applied and HTTP-verified
+ * (2026-07-22). Host-level path-preserving rules also exist in `next.config.ts` / `proxy.ts`
+ * for when `.com` traffic reaches this Next app.
+ *
+ * Evidence: `docs/audits/seo/SHALEAN-COM-PLESK-HTTP-VERIFICATION-2026-07-22.md`
  */
 
 import { CAPE_TOWN_LOCATIONS, HUB_SUFFIX } from "@/lib/seo/capeTownLocations";
@@ -11,7 +13,18 @@ import { ROUTED_HIGH_CONVERSION_POSTS } from "@/lib/blog/highConversionPosts";
 import { AIRBNB_HOST_GUIDE_POSTS } from "@/lib/blog/airbnbHostGuidePosts";
 import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
 
-export const SHALEAN_COM_MIGRATION_STATUS = "PENDING_EXTERNAL_PLESK" as const;
+/** Plesk apply pending — do not claim live redirects without HTTP proof. */
+export const SHALEAN_COM_MIGRATION_STATUS_PENDING = "PENDING_EXTERNAL_PLESK" as const;
+/** Plesk rules applied and representative URLs HTTP-verified one-hop to `.co.za`. */
+export const SHALEAN_COM_MIGRATION_STATUS_LIVE = "LIVE_HTTP_VERIFIED" as const;
+
+export type ShaleanComMigrationStatus =
+  | typeof SHALEAN_COM_MIGRATION_STATUS_PENDING
+  | typeof SHALEAN_COM_MIGRATION_STATUS_LIVE;
+
+/** Current external migration state (live/verified as of 2026-07-22). */
+export const SHALEAN_COM_MIGRATION_STATUS: ShaleanComMigrationStatus =
+  SHALEAN_COM_MIGRATION_STATUS_LIVE;
 
 export type ShaleanComMigrationRule = {
   readonly sourcePath: string;
@@ -122,14 +135,14 @@ export function absoluteShaleanCoZaUrl(pathname: string): string {
 
 /**
  * Apache/LiteSpeed RewriteRule lines for Plesk (exact one-to-one + path-preserve fallback).
- * Status marked {@link SHALEAN_COM_MIGRATION_STATUS} until applied externally.
+ * Status marked {@link SHALEAN_COM_MIGRATION_STATUS} (live after HTTP verification).
  */
 export function buildShaleanComHtaccessRules(): string {
   const hostCond = "RewriteCond %{HTTP_HOST} ^(www\\.)?shalean\\.com$ [NC]";
   const lines: string[] = [
     "# =============================================================================",
     "# shalean.com → https://shalean.co.za migration (Plesk / Apache / LiteSpeed)",
-    `# STATUS: ${SHALEAN_COM_MIGRATION_STATUS} — do not treat as live until HTTP-verified`,
+    `# STATUS: ${SHALEAN_COM_MIGRATION_STATUS} — HTTP-verified 2026-07-22 (see docs/audits/seo/)`,
     "# Generated from apps/web/lib/seo/shaleanComMigrationMap.ts",
     "# Apply on the shalean.com document root in Plesk, then verify with curl -sI.",
     "# =============================================================================",

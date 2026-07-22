@@ -1,21 +1,18 @@
 # =============================================================================
 # shalean.com → https://shalean.co.za migration (Plesk / Apache / LiteSpeed)
-# STATUS: PENDING_EXTERNAL_PLESK — do not treat as live until HTTP-verified
+# STATUS: LIVE_HTTP_VERIFIED — applied on Plesk and HTTP-verified 2026-07-22
 # Source of truth: apps/web/lib/seo/shaleanComMigrationMap.ts
+# Evidence: docs/audits/seo/SHALEAN-COM-PLESK-HTTP-VERIFICATION-2026-07-22.md
 # Regenerate: npx tsx -e "import { buildShaleanComHtaccessRules } from './lib/seo/shaleanComMigrationMap.ts'; console.log(buildShaleanComHtaccessRules())"
 # =============================================================================
 #
-# Evidence gap (2026-07-22):
-# - https://shalean.com/contact → 301 https://shalean.co.za/contact (LiteSpeed) — path-preserve OK
-# - https://shalean.com/blog → 301 https://www.shalean.com/blog then WordPress 200 — NOT migrated
-# - https://www.shalean.com/blog → 200 with wp-json — WordPress still serving
+# Verified (2026-07-22, curl -sI --max-redirs 0):
+# - https://shalean.com/ and www → 301 https://shalean.co.za/
+# - https://shalean.com/blog and www/blog → 301 https://shalean.co.za/blog (WordPress 200 closed)
+# - article, services, contact, quote, location hub → matching .co.za one-hop 301
 #
-# Apply this file on the shalean.com (and www) document root in Plesk, replacing any
-# rule that sends /blog to www WordPress. Then verify representative URLs with curl -sI.
-#
-# NOTE: The full generated rule list is large (locations + blog slugs). Prefer generating
-# from shaleanComMigrationMap.ts at apply-time. Minimal emergency rules below cover the
-# known high-value failures; keep the path-preserve fallback last.
+# Keep the path-preserve fallback last. Do not commit recoverable .htaccess backups
+# or hosting credentials into git.
 # =============================================================================
 
 RewriteEngine On
