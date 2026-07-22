@@ -395,9 +395,9 @@ export async function getPublishedBlogSitemapRows(): Promise<PublishedBlogSitema
   const nowIso = new Date().toISOString();
   const { data, error } = await supabase
     .from("blog_posts")
-    .select("slug, published_at, updated_at")
+    .select("slug, published_at, updated_at, noindex")
     .eq("status", "published")
-    .eq("indexed_for_search", true)
+    .eq("noindex", false)
     .lte("published_at", nowIso)
     .not("content_json", "is", null);
 

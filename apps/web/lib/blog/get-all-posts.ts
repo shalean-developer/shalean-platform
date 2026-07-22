@@ -10,7 +10,7 @@ import { safeParseBlogContentJson } from "./content-json-schema";
 import { excerptFromFirstIntroBlock } from "./excerpt-from-content-json";
 
 const LIST_SELECT =
-  "slug,title,h1,excerpt,featured_image_url,featured_image_alt,reading_time_minutes,published_at,content_json,source,category:blog_categories(slug,name)";
+  "slug,title,h1,excerpt,featured_image_url,featured_image_alt,reading_time_minutes,published_at,content_json,source,noindex,category:blog_categories(slug,name)";
 
 /** Mirrors `blog_post_source` for rows returned from Supabase. */
 export type BlogIndexPostSource = "editorial" | "programmatic" | "high_conversion";
@@ -23,6 +23,8 @@ export type BlogIndexPost = {
   readingTime: number;
   publishedAt: string;
   source: BlogIndexPostSource;
+  /** True when the CMS row is marked noindex (still may appear on the hub UI). */
+  noindex: boolean;
   /** Present when loaded from Supabase and category is set */
   categorySlug?: string | null;
   categoryName?: string | null;
@@ -86,6 +88,7 @@ function normalizeDbRow(row: Record<string, unknown>): BlogIndexPost | null {
     readingTime: rt,
     publishedAt,
     source,
+    noindex: Boolean(row.noindex),
     categorySlug,
     categoryName,
   };

@@ -1,9 +1,5 @@
 import type { MetadataRoute } from "next";
-import { AIRBNB_HOST_GUIDE_POSTS } from "@/lib/blog/airbnbHostGuidePosts";
-import { getPublishedBlogSitemapRows } from "@/lib/blog/get-post-by-slug";
-import { getAllHighConversionBlogPosts } from "@/lib/blog/highConversionPosts";
-import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
-import { isRedirectAliasBlogSlug, resolveBlogRedirectChain } from "@/lib/blog/validBlogRoutes";
+import { collectUnionBlogSitemapRows } from "@/lib/seo/blogSitemapUnion";
 import { LOCATION_SEO_PAGES, type LocationSeoSlug } from "@/lib/seo/capeTownSeoPages";
 import { legacyMarketingRedirectSourcePaths } from "@/lib/seo/legacyMarketingRedirectMatrix";
 import {
@@ -15,7 +11,6 @@ import {
 } from "@/lib/seo/seoRebuildPhase1";
 import {
   readLocationHubSitemapLastModified,
-  resolveProgrammaticBlogLastModified,
   resolveStaticPathLastModified,
 } from "@/lib/seo/sitemapLastModified";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
@@ -55,40 +50,7 @@ function collectLocationHubSitemapPaths(): string[] {
   return paths;
 }
 
-function isIndexableBlogSitemapSlug(slug: string): boolean {
-  const s = slug.trim().toLowerCase();
-  if (!s || isRedirectAliasBlogSlug(s)) return false;
-  const resolved = resolveBlogRedirectChain(`/blog/${s}`);
-  return resolved.startsWith("/blog/");
-}
-
 const REDIRECT_SOURCE_SET = new Set(legacyMarketingRedirectSourcePaths());
-
-function collectFileBasedBlogSitemapRows(): { slug: string; lastModified: Date }[] {
-  const bySlug = new Map<string, Date>();
-
-  function consider(slug: string, lastModified: Date | null): void {
-    if (!lastModified || !isIndexableBlogSitemapSlug(slug)) return;
-    const canonSlug = resolveBlogRedirectChain(`/blog/${slug}`).replace(/^\/blog\//, "");
-    if (!canonSlug || !isIndexableBlogSitemapSlug(canonSlug)) return;
-    const prev = bySlug.get(canonSlug);
-    if (!prev || lastModified.getTime() > prev.getTime()) {
-      bySlug.set(canonSlug, lastModified);
-    }
-  }
-
-  for (const post of getAllHighConversionBlogPosts()) {
-    consider(post.slug, resolveProgrammaticBlogLastModified(post.slug));
-  }
-  for (const post of ROUTED_PROGRAMMATIC_POSTS) {
-    consider(post.slug, resolveProgrammaticBlogLastModified(post.slug));
-  }
-  for (const post of AIRBNB_HOST_GUIDE_POSTS) {
-    consider(post.slug, resolveProgrammaticBlogLastModified(post.slug));
-  }
-
-  return [...bySlug.entries()].map(([slug, lastModified]) => ({ slug, lastModified }));
-}
 
 /** Dynamic sitemap entries for indexable marketing + published blog posts. */
 export async function buildMarketingSitemapEntries(): Promise<MetadataRoute.Sitemap> {
@@ -118,23 +80,8 @@ export async function buildMarketingSitemapEntries(): Promise<MetadataRoute.Site
     push(path, locationLastModified);
   }
 
-  /**
-   * CMS articles first — live `/blog/[slug]` prefers Supabase, so sitemap lastmod must follow CMS
-   * when both sources publish the same slug. File-based rows then fill gaps if CMS is unavailable.
-   */
-  try {
-    const blogRows = await getPublishedBlogSitemapRows();
-    for (const row of blogRows) {
-      if (!isIndexableBlogSitemapSlug(row.slug)) continue;
-      const canonSlug = resolveBlogRedirectChain(`/blog/${row.slug}`).replace(/^\/blog\//, "");
-      if (!canonSlug) continue;
-      push(`/blog/${canonSlug}`, row.lastModified);
-    }
-  } catch (err) {
-    console.error("[sitemap] getPublishedBlogSitemapRows failed — continuing with file-based posts", err);
-  }
-
-  for (const row of collectFileBasedBlogSitemapRows()) {
+  const blogRows = await collectUnionBlogSitemapRows();
+  for (const row of blogRows) {
     push(`/blog/${row.slug}`, row.lastModified);
   }
 
