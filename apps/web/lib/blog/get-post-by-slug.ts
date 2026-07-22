@@ -420,3 +420,30 @@ export async function getPublishedBlogSitemapRows(): Promise<PublishedBlogSitema
     })
     .filter((r): r is PublishedBlogSitemapRow => r != null);
 }
+
+/**
+ * Published CMS slugs marked `noindex` — used to suppress file-based sitemap fill
+ * so a CMS noindex page is never re-listed via a code-owned twin.
+ */
+export async function getPublishedBlogNoindexSitemapSlugs(): Promise<string[]> {
+  const supabase = getSupabaseServer();
+  if (!supabase) return [];
+
+  const nowIso = new Date().toISOString();
+  const { data, error } = await supabase
+    .from("blog_posts")
+    .select("slug")
+    .eq("status", "published")
+    .eq("noindex", true)
+    .lte("published_at", nowIso)
+    .not("content_json", "is", null);
+
+  if (error) {
+    console.error("[blog] getPublishedBlogNoindexSitemapSlugs", error.message);
+    return [];
+  }
+
+  return (data ?? [])
+    .map((row) => String((row as { slug: string }).slug).trim().toLowerCase())
+    .filter(Boolean);
+}

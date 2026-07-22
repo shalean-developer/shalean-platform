@@ -12,6 +12,9 @@ const getAllPublishedPosts = vi.hoisted(() => vi.fn(async (): Promise<BlogIndexP
 const getPublishedBlogSitemapRows = vi.hoisted(() =>
   vi.fn(async (): Promise<{ slug: string; lastModified: Date }[]> => []),
 );
+const getPublishedBlogNoindexSitemapSlugs = vi.hoisted(() =>
+  vi.fn(async (): Promise<string[]> => []),
+);
 
 vi.mock("@/lib/blog/get-all-posts", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/blog/get-all-posts")>();
@@ -26,6 +29,7 @@ vi.mock("@/lib/blog/get-post-by-slug", async (importOriginal) => {
   return {
     ...actual,
     getPublishedBlogSitemapRows: () => getPublishedBlogSitemapRows(),
+    getPublishedBlogNoindexSitemapSlugs: () => getPublishedBlogNoindexSitemapSlugs(),
   };
 });
 
@@ -46,8 +50,10 @@ describe("blogSitemapUnion", () => {
   beforeEach(() => {
     getAllPublishedPosts.mockReset();
     getPublishedBlogSitemapRows.mockReset();
+    getPublishedBlogNoindexSitemapSlugs.mockReset();
     getAllPublishedPosts.mockResolvedValue([]);
     getPublishedBlogSitemapRows.mockResolvedValue([]);
+    getPublishedBlogNoindexSitemapSlugs.mockResolvedValue([]);
   });
 
   it("dedupes canonical slugs and gives CMS lastmod precedence", () => {
@@ -67,6 +73,28 @@ describe("blogSitemapUnion", () => {
     });
     expect(bySlug.get("same-day-cleaning-cape-town")?.source).toBe("file");
     expect(rows.length).toBe(2);
+  });
+
+  it("does not re-add a CMS noindex slug via file-based fill", async () => {
+    getPublishedBlogSitemapRows.mockResolvedValue([]);
+    getPublishedBlogNoindexSitemapSlugs.mockResolvedValue([
+      "how-much-does-cleaning-cost-cape-town-2026",
+    ]);
+    getAllPublishedPosts.mockResolvedValue([
+      hubPost({ slug: "how-much-does-cleaning-cost-cape-town-2026", noindex: true }),
+    ]);
+
+    const fileDate = new Date("2026-01-01T00:00:00.000Z");
+    const pure = unionBlogSitemapRows(
+      [],
+      [{ slug: "how-much-does-cleaning-cost-cape-town-2026", lastModified: fileDate }],
+      { suppressCanonicalSlugs: ["how-much-does-cleaning-cost-cape-town-2026"] },
+    );
+    expect(pure.some((r) => r.slug === "how-much-does-cleaning-cost-cape-town-2026")).toBe(false);
+
+    const entries = await buildMarketingSitemapEntries();
+    const paths = entries.map((e) => new URL(e.url).pathname);
+    expect(paths).not.toContain("/blog/how-much-does-cleaning-cost-cape-town-2026");
   });
 
   it("excludes redirect-alias slugs from the union", () => {
