@@ -114,6 +114,8 @@ export type CapeTownServiceSeoBlock = {
   includedSectionHeading?: string;
   explanation: string[];
   included: string[];
+  /** Clear out-of-scope items — rendered as “What’s not included”. */
+  exclusions?: string[];
   benefits: { title: string; body: string }[];
   /** e.g. hosts & property managers */
   targetAudience?: { heading: string; paragraphs: string[] };
@@ -325,6 +327,13 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       "Vacuum and mop hard floors with extra passes where grit hides along walls",
       "Living areas and bedrooms worked to a reset checklist you confirm online",
     ],
+    exclusions: [
+      "Interior oven cavity, extractor filters, or appliance strip-downs unless selected as add-ons",
+      "Exterior high-rise facade work, roof access, or rope-and-cradle window systems",
+      "Mould remediation, biohazard clean-up, or specialised restoration after water damage",
+      "Packing, decluttering, or furniture relocation beyond light repositioning for access",
+      "Guaranteed same-day slots—availability is confirmed in the live booking calendar",
+    ],
     benefits: [
       {
         title: "Clear scope before the team arrives",
@@ -336,7 +345,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       },
       {
         title: "Built for busy Cape Town schedules",
-        body: "Pick a slot that fits work-from-home days, school runs, or Airbnb turnovers without endless phone tag.",
+        body: "Pick a slot that fits work-from-home days, school runs, or short-stay turnovers without endless phone tag.",
       },
     ],
     heroImage: {
@@ -473,9 +482,9 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     areasSectionIntro:
       "We serve Sea Point, Green Point, Claremont, Rondebosch, Observatory, Wynberg, the City Bowl, and surrounding areas—add your address at checkout for handover-ready scope.",
     explanation: [
-      "Moving out? Our professional move out cleaning in Cape Town ensures your home is spotless and ready for inspection. Whether you're a tenant, landlord, or property manager, we provide detailed end of tenancy cleaning that meets rental standards and helps secure your deposit.",
-      "We clean everything from kitchens and bathrooms to inside cupboards, appliances, and hard-to-reach areas — so you leave your property in perfect condition.",
-      "End-of-lease timelines stack fast: inventory checks, deposit deadlines, and keys due the same morning. A structured move-out scope concentrates on what inspectors notice first—grease, limescale, floor edges, and built-up dust—while you coordinate movers and access.",
+      "Moving out? End-of-tenancy cleaning in Cape Town focuses on empty or nearly empty homes so kitchens, bathrooms, cupboards, and floor edges are ready for agency or landlord inspection.",
+      "Whether you are a tenant, landlord, or property manager, the checklist concentrates on grease, limescale, cupboard interiors, and hard-to-reach dust—areas that commonly appear on Western Cape handover sheets.",
+      "End-of-lease timelines stack fast: inventory checks, deposit deadlines, and keys due the same morning. A structured move-out scope covers what inspectors photograph first while you coordinate movers and access.",
     ],
     included: [
       "Deep kitchen cleaning (oven, stove, cupboards)",
@@ -486,9 +495,16 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       "Window cleaning (interior)",
       "Dust removal (including high areas)",
     ],
+    exclusions: [
+      "Repairs, painting, or making good damage beyond cleaning",
+      "Rubbish removal of large dumps, builder waste, or garden refuse unless arranged separately",
+      "Exterior windows that require specialised height access",
+      "Occupied-home weekly upkeep—use standard or deep cleaning while you still live in the property",
+      "Guaranteed deposit return—lease terms and non-cleaning defects remain outside cleaning scope",
+    ],
     benefits: [
       {
-        title: "Deposit-friendly attention to detail",
+        title: "Inspection-oriented attention to detail",
         body: "Prioritise the areas that commonly appear on Western Cape rental inspection sheets.",
       },
       {
@@ -507,15 +523,15 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     faqs: [
       {
         q: "How much is move out cleaning in Cape Town?",
-        a: "Prices start from R980 depending on property size. Your live total reflects bedrooms, bathrooms, condition, and any add-ons—check instant pricing online before you confirm.",
+        a: "Indicative move-out lead pricing starts around R800 depending on property size and scope. Your live total reflects bedrooms, bathrooms, condition, and any add-ons—confirm the checkout price before you pay.",
       },
       {
         q: "Do you guarantee deposit return cleaning?",
-        a: "We follow agency-approved cleaning checklists to meet inspection standards. Deposit outcomes still depend on your lease, inventory, and any repairs or issues outside cleaning.",
+        a: "No. We follow structured end-of-tenancy checklists aimed at common inspection points. Deposit outcomes still depend on your lease, inventory condition, and any repairs or issues outside cleaning.",
       },
       {
         q: "How long does move out cleaning take?",
-        a: "Typically 3–6 hours depending on the size of the property and the tier you book. Larger homes or heavy build-up may need more time—your quote aligns hours with the scope you select.",
+        a: "Visit length depends on property size, emptiness, and the tier you book. Larger homes or heavy build-up need more time—your quote aligns hours with the scope you select.",
       },
       {
         q: "When should I schedule move-out cleaning around handover day?",
@@ -536,12 +552,29 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     ogImage: "/images/marketing/office-cleaning-cape-town-workspace.webp",
     h1: "Office cleaning services in Cape Town for productive, presentable workspaces",
     bookingLabel: "office cleaning",
+    neighbourhoodBlogGuide: {
+      areaName: "Claremont",
+      blogPath: "/locations/claremont-cleaning-services",
+      linkAnchorText: "office and home cleaning guide for Claremont",
+    },
+    extraNeighbourhoodBlogGuides: [
+      {
+        areaName: "Gardens",
+        blogPath: "/locations/gardens-cleaning-services",
+        linkAnchorText: "cleaning services near Gardens and the City Bowl",
+      },
+      {
+        areaName: "Green Point",
+        blogPath: "/locations/green-point-cleaning-services",
+        linkAnchorText: "workspace-friendly cleaning notes for Green Point",
+      },
+    ],
     areasSectionIntro:
       "Small offices across Claremont, the CBD fringe, Newlands, and the wider metro—share square metres, headcount, and access notes when you book so scope matches your workspace.",
     explanation: [
-      "Small offices, agency studios, and hybrid workspaces across Cape Town need the same fundamentals as homes—sanitised kitchens, presentable bathrooms, dust-free desks, and floors that look professional when clients visit.",
-      "Shalean treats office bookings with the same vetted cleaner model as residential work, with scope agreed up front so communal fridges, glass partitions, and high-traffic corridors get proportionate time.",
-      "Professional cleaning services for offices mirror house cleaning Cape Town customers expect at home: predictable standards, respectful access, and clear scope. Many teams pair occasional home cleaning services Cape Town bookings with a light office cadence under one account.",
+      "Small offices, agency studios, and hybrid workspaces across Cape Town need sanitised kitchenettes, presentable bathrooms, dust-free desks, and floors that look professional when clients visit.",
+      "Office bookings use the same vetted cleaner model as residential work, with scope agreed up front so communal fridges, glass partitions, and high-traffic corridors get proportionate time.",
+      "This page is for compact commercial spaces—not large campuses. Many teams keep a light office cadence and book a separate residential visit under the same account when home and work both need coverage.",
     ],
     included: [
       "Kitchenette and staff fridge exterior wipe-down",
@@ -549,6 +582,13 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       "Meeting room tidy, surface dust, and chair-line vacuum as scoped",
       "Reception and open-plan desk zones vacuumed and spot-cleaned",
       "Bin liner refresh and floor mopping for hard surfaces in scope",
+    ],
+    exclusions: [
+      "Large corporate campuses, industrial floors, or multi-floor facilities management contracts",
+      "Medical, dental, or other regulated clinical environments",
+      "After-hours security escort beyond what your building already provides",
+      "IT equipment deep cleans, server rooms, or specialist glass curtain walls",
+      "Same-day emergency call-outs unless a matching slot appears in the live calendar",
     ],
     benefits: [
       {
@@ -617,10 +657,9 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     areasSectionIntro:
       "Turnover pressure varies by street—tight lifts on the Atlantic Seaboard versus Southern Suburb gates and school traffic. Add your listing address at checkout for realistic routing and access notes.",
     explanation: [
-      "Between back-to-back guests, calendar gaps, and same-day check-outs, Airbnb hosts need a turnover partner that respects inventory photos, linen resets, and tight handover windows—not just a generic tidy.",
-      "Shalean focuses on short-stay and vacation rental realities across Cape Town: sand tracked in from the beach, coffee rings on dining tables, and bathrooms that must read “hotel fresh” before your next review arrives.",
-      "Hosts still compare house cleaning Cape Town providers on speed and trust; professional cleaning services built for turnovers layer staging, odour control, and high-touch wipes on top of standard home cleaning services Cape Town guests expect between stays.",
-      "Most negative turnover feedback is not “mystery dirt”—it is missed high-touch points, weak bathroom presentation, or kitchen surfaces that look fine in person but read tired in wide-angle photos. We structure time so those zones do not get squeezed when parking or lift access runs long.",
+      "Between back-to-back guests, calendar gaps, and check-out windows, Airbnb hosts need a turnover partner that respects inventory photos, linen resets, and tight handover windows—not just a generic tidy.",
+      "Shalean focuses on short-stay and vacation rental realities across Cape Town: sand tracked in from the beach, coffee rings on dining tables, and bathrooms that must read guest-ready before your next review arrives.",
+      "Turnover scope layers staging, high-touch wipes, and photo-ready floors on top of a residential checklist. Most negative turnover feedback is missed high-touch points, weak bathroom presentation, or kitchen surfaces that look tired in wide-angle photos.",
       "Property managers running multiple units benefit from the same online scope controls as individual hosts: bedrooms, bathrooms, and add-ons set the price before payment, and notes carry estate rules, remote access, and linen locations so every handover feels repeatable.",
     ],
     included: [
@@ -630,10 +669,17 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       "High-touch points (remotes, handles, switches) wiped down for guest confidence",
       "Turnover extras when selected: linen change staging, inside-fridge wipe, balcony sweep",
     ],
+    exclusions: [
+      "Guaranteed same-day turnovers when no matching slot exists in the live calendar",
+      "Laundry of guest linen unless linen staging is selected and stock is on site",
+      "Purchasing or inventoring missing guest amenities beyond restocking what you leave out",
+      "Deep renovation recovery, mould treatment, or biohazard work after severe guest damage",
+      "Management of guest messaging, lockbox logistics, or platform calendar changes",
+    ],
     benefits: [
       {
         title: "Speed that matches your calendar",
-        body: "Book tight slots around check-out and check-in so listings flip without losing a night’s revenue.",
+        body: "Book slots around check-out and check-in so listings can flip when cleaner availability aligns with your gap.",
       },
       {
         title: "Reliable vetted teams",
@@ -659,7 +705,7 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     faqs: [
       {
         q: "Can you handle same-day check-out and check-in in Cape Town?",
-        a: "Often yes, when the gap between guests and cleaner availability lines up. Tight Atlantic Seaboard or CBD turnovers work best when you share exact check-out and check-in times, remote access details, and linen expectations in your booking notes so the team can plan realistically.",
+        a: "Sometimes, when the gap between guests and cleaner availability line up in the live calendar. Tight Atlantic Seaboard or CBD turnovers work best when you share exact check-out and check-in times, remote access details, and linen expectations in your booking notes so the team can plan realistically—same-day is never guaranteed.",
       },
       {
         q: "What is included in a typical Airbnb turnover clean?",
@@ -762,6 +808,18 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     introSectionHeading: "Trusted window cleaning for Cape Town homes and workspaces",
     areasSectionIntro:
       "Atlantic Seaboard apartments and Southern Suburb homes wear salt spray and urban dust differently—browse hubs like Sea Point, Green Point, and Claremont for access cues, then align your window scope with the checklist on this Cape Town page.",
+    neighbourhoodBlogGuide: {
+      areaName: "Sea Point",
+      blogPath: "/locations/sea-point-cleaning-services",
+      linkAnchorText: "Sea Point cleaning services including coastal glass care",
+    },
+    extraNeighbourhoodBlogGuides: [
+      {
+        areaName: "Camps Bay",
+        blogPath: "/locations/camps-bay-cleaning-services",
+        linkAnchorText: "Camps Bay cleaning guide for oceanfront homes",
+      },
+    ],
     explanation: [
       "Window cleaning in Cape Town is one of the fastest ways to brighten a space after windy weeks, coastal salt mist, and pollen-heavy seasons. Shalean matches you with vetted window cleaners in Cape Town who work methodically on glass, frames, and tracks so views read clear—not smeared—in afternoon light.",
       "Most bookings focus on realistic reach: balconies and patios you can access, ladder-safe interiors, and estate rules that shape arrival—not improvised ladder stacks at home.",
@@ -773,6 +831,13 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       "Frames and sills wiped down on included openings",
       "Sliding door and window tracks cleared of loose grit where in scope",
       "High windows addressed only within safe reach—confirm heights and access in booking notes",
+    ],
+    exclusions: [
+      "Rope-access, cradle, or specialist high-rise facade window systems",
+      "Broken seals, cracked panes, or joinery repairs",
+      "Solar panel cleaning or exterior cladding beyond agreed glass openings",
+      "Interior-only homes that need exterior glass with no safe balcony or ground access",
+      "Guaranteed same-week slots during peak wind or storm windows without calendar confirmation",
     ],
     benefits: [
       {
@@ -804,6 +869,10 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       {
         q: "Do you bring equipment?",
         a: "Yes. Cleaners arrive with professional squeegees, scrubbers, microfibre, and safe glass solutions suited to typical Cape Town finishes. If your estate mandates specific products or you have coated glass, mention it in booking notes so we can adapt where possible.",
+      },
+      {
+        q: "Can window cleaning be booked with a home or office clean?",
+        a: "Yes. Many customers add agreed openings alongside a residential or small-office visit so interiors and glass are handled in one trip when access allows. Select window scope in the booking flow and note balcony or ground access so the quote matches what can be reached safely.",
       },
     ],
   },
