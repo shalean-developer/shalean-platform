@@ -58,3 +58,9 @@ next-env.d.ts
 # Local script/data scratch
 /tmp/gsc-rows.json
 /scripts/_tmp-*
+
+# Plesk recoverable .htaccess backups + local apply scratch (never commit secrets/backups)
+/ops/seo/backups/
+/ops/seo/apply-shalean-com-plesk-htaccess.mjs
+/ops/seo/*.tmp
+/ops/seo/*-pass*.txt
