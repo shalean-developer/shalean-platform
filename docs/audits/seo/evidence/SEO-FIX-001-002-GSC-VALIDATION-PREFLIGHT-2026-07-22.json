@@ -8,13 +8,13 @@
     "deployment": "production",
     "vercelEnv": "production",
     "gitBranch": "main",
-    "gitSha": "28aa82ca2da8680baf88673fac20cdb5b0af80e0"
+    "gitSha": "97bf26a72508b1ff72ac51b464cb9cdd5aa4d6fe"
   },
   "propertyExpected": "sc-domain:shalean.co.za",
   "confirmationPhrase": "SEO-FIX-001/002-GSC-ONLY",
   "preferredInvoke": "POST https://shalean.co.za/api/cron/gsc-seo-fix-001-002-validate with CRON_SECRET + confirm phrase",
-  "cronRouteOnProductionAtProbe": false,
-  "cronRouteProbeStatus": 404,
+  "cronRouteOnProductionAtProbe": true,
+  "cronRouteProbeStatus": 401,
   "gscSyncCronAuthConfigured": true,
   "gscSyncCronProbeStatus": 401,
   "agentHasGscClientEmail": false,
@@ -61,7 +61,7 @@
       "bytesSampled": 200
     }
   ],
-  "gscUrlInspection": "PENDING_PRODUCTION_CRON_OR_VERCEL_ENV_PULL",
+  "gscUrlInspection": "PENDING_CRON_SECRET_INVOKE",
   "sitemapSubmissionDecision": "PENDING_LIVE_GSC",
   "requestIndexingViaApi": "NOT_EXECUTED_NOT_CLAIMED",
   "requestIndexingUiRequired": true,
@@ -85,11 +85,19 @@
     "Implemented Production-gated validation cron + CLI",
     "Configured weekly inspect-only workflow (8 runs ending 2026-09-16)",
     "Confirmed production SHA/deploy time",
-    "Confirmed five URLs + sitemap HTTP reachability (not GSC Inspection)"
+    "Confirmed five URLs + sitemap HTTP reachability (not GSC Inspection)",
+    "Merged PR #91 to main",
+    "Confirmed Production deploy SHA 97bf26a7\u2026",
+    "Confirmed /api/cron/gsc-seo-fix-001-002-validate is live and CRON_SECRET-gated (401 without secret)",
+    "Registered weekly inspect-only workflow on main (8 runs ending 2026-09-16)"
   ],
   "actionsRequiringManualOrSecretAccess": [
-    "Merge/deploy PR so /api/cron/gsc-seo-fix-001-002-validate exists on Production",
-    "Invoke cron with CRON_SECRET + SEO-FIX-001/002-GSC-ONLY (or vercel env pull Production into gitignored .env.local and run npm script once)",
-    "Optional: GSC UI Request Indexing for the five URLs (API cannot claim this)"
-  ]
+    "Invoke Production cron once with CRON_SECRET + confirm SEO-FIX-001/002-GSC-ONLY (mode=validate)",
+    "Record URL Inspection verdict/coverage/robots/fetch/lastCrawl + sitemap decision from JSON response",
+    "Optional: GSC UI Request Indexing for the five URLs (not available via Search Console API for these pages)"
+  ],
+  "updatedAt": "2026-07-22T16:18:58.026031Z",
+  "validationCronMergedAt": "2026-07-22T16:10:08Z",
+  "validationCronMergeSha": "97bf26a72508b1ff72ac51b464cb9cdd5aa4d6fe",
+  "cronRouteAuthRequired": true
 }

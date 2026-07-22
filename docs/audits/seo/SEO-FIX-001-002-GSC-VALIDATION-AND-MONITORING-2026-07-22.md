@@ -85,7 +85,7 @@ Scope on JWT: `webmasters` (no Indexing API scope).
 | Production deploy time | `2026-07-22T15:15:16Z` (deployment `5557973699`) | GitHub Deployments API |
 | Safest invoke path | Production cron `/api/cron/gsc-seo-fix-001-002-validate` + `CRON_SECRET` + confirm phrase | This doc §2 |
 | Credentials in agent env | Not mounted (`GSC_*` / `VERCEL_TOKEN` / `CRON_SECRET` absent in cloud agent) | Names-only env audit |
-| Live URL Inspection ×5 | **Pending** Production cron deploy + `CRON_SECRET` invoke (or `npm run gsc:seo-fix-001-002-validate:from-vercel-production`) | Preflight `docs/audits/seo/evidence/SEO-FIX-001-002-GSC-VALIDATION-PREFLIGHT-2026-07-22.json`; §5 |
+| Live URL Inspection ×5 | **Pending `CRON_SECRET` invoke** — Production cron is live on SHA `97bf26a7…` (probe returns 401 without secret) | Preflight evidence JSON; §5 |
 | Sitemap decision | Pending live run (submit only if `lastSubmitted` &lt; deploy time) | §5 |
 | Request Indexing (API) | **Not executed** (not available / not authorized as API claim) | Manual UI if desired |
 | Secrets logged | `secretsLogged: false` enforced in evidence schema | Library |
