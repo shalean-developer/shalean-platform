@@ -1,11 +1,13 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { parseBookingServiceId } from "@/components/booking/serviceCategories";
 import {
   buildHomeWidgetCatalogLineItems,
   buildMonthlyBundledZarLineItems,
 } from "@/lib/booking/buildBookingLineItems";
 import type { BookingLineItemInsert } from "@/lib/booking/bookingLineItemTypes";
+import { MIN_REASONABLE_BOOKING_DURATION_MINUTES } from "@/lib/booking/durationMinutesIntegrity";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
 import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import {
@@ -13,9 +15,17 @@ import {
   extractDeclaredTotalCentsFromRowBase,
   sumLineItemsCents,
 } from "@/lib/booking/priceSnapshotBooking";
+import { estimatedFinishAtIso } from "@/lib/booking/quote/bookingQuotePersistence";
+import {
+  durationHoursFromMinutes,
+  resolveLegacyJobDurationWorkload,
+} from "@/lib/booking/quote/resolveBookingDurationWorkload";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { resolveTenureBasedCleanerShareForBookingRow } from "@/lib/payout/tenureBasedCleanerLineShare";
-import { sanitizeBookingExtrasForPersist } from "@/lib/booking/sanitizeBookingExtrasForPersist";
+import {
+  sanitizeBookingExtrasForPersist,
+  type BookingExtraPersistRow,
+} from "@/lib/booking/sanitizeBookingExtrasForPersist";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculateCatalogPrice";
 import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
 
@@ -98,6 +108,100 @@ function clampRoomCount(n: number): number {
   return Math.min(20, Math.max(1, Math.round(n)));
 }
 
+function validDurationMinutes(v: unknown): number | null {
+  if (typeof v === "string" && v.trim() !== "") {
+    const n = Number(v);
+    if (!Number.isFinite(n)) return null;
+    v = n;
+  }
+  if (typeof v !== "number" || !Number.isFinite(v)) return null;
+  const rounded = Math.round(v);
+  if (rounded < MIN_REASONABLE_BOOKING_DURATION_MINUTES) return null;
+  return rounded;
+}
+
+/**
+ * Persist scheduling duration on unified inserts (admin monthly / dashboard / widget).
+ * Prefer an explicit `duration_minutes` already on `rowBase`; otherwise derive from
+ * rooms + service + extras so completion / assign gates are never missing duration.
+ * Team jobs use wall-clock (team-scaled) minutes.
+ */
+export function buildUnifiedInsertDurationPatch(params: {
+  rowBase: Record<string, unknown>;
+  rooms: number;
+  bathrooms: number;
+  extras: BookingExtraPersistRow[];
+  serviceSlugForFlat: string;
+  dateForFlat: string | null;
+  timeForFlat: string | null;
+  /** Quoted extra rooms (homepage widget / catalog). Defaults to 0. */
+  extraRooms?: number;
+}): Record<string, unknown> {
+  const fromRow =
+    validDurationMinutes(params.rowBase.duration_minutes) ??
+    validDurationMinutes(params.rowBase.estimated_duration_minutes);
+  let minutes = fromRow;
+  if (minutes == null) {
+    const service =
+      parseBookingServiceId(String(params.serviceSlugForFlat ?? "").trim()) ??
+      parseBookingServiceId(String(params.rowBase.service_slug ?? params.rowBase.service ?? "").trim());
+    const snapCount = params.rowBase.team_member_count_snapshot;
+    const cleanerCount = params.rowBase.cleaner_count;
+    const teamCount =
+      typeof snapCount === "number" && Number.isFinite(snapCount) && snapCount >= 1
+        ? Math.min(20, Math.round(snapCount))
+        : typeof cleanerCount === "number" && Number.isFinite(cleanerCount) && cleanerCount >= 1
+          ? Math.min(20, Math.round(cleanerCount))
+          : params.rowBase.is_team_job === true
+            ? 2
+            : 1;
+    const extraRoomsRaw = params.extraRooms;
+    const extraRooms =
+      typeof extraRoomsRaw === "number" && Number.isFinite(extraRoomsRaw) && extraRoomsRaw > 0
+        ? Math.min(50, Math.round(extraRoomsRaw))
+        : 0;
+    const workload = resolveLegacyJobDurationWorkload(
+      {
+        service,
+        rooms: params.rooms,
+        bathrooms: params.bathrooms,
+        extraRooms,
+        extras: params.extras.map((e) => e.slug),
+      },
+      teamCount,
+    );
+    const candidate =
+      teamCount > 1 &&
+      typeof workload.team_scaled_duration_minutes === "number" &&
+      Number.isFinite(workload.team_scaled_duration_minutes)
+        ? workload.team_scaled_duration_minutes
+        : workload.duration_minutes;
+    minutes = validDurationMinutes(candidate);
+  }
+  if (minutes == null) return {};
+
+  const dateYmd =
+    String(params.rowBase.date ?? params.dateForFlat ?? "").trim() || null;
+  const timeHm =
+    String(params.rowBase.time ?? params.timeForFlat ?? "").trim() || null;
+  const patch: Record<string, unknown> = {
+    duration_minutes: minutes,
+    estimated_duration_minutes:
+      validDurationMinutes(params.rowBase.estimated_duration_minutes) ?? minutes,
+    duration_hours:
+      typeof params.rowBase.duration_hours === "number" &&
+      Number.isFinite(params.rowBase.duration_hours) &&
+      params.rowBase.duration_hours > 0
+        ? Math.round(params.rowBase.duration_hours * 10) / 10
+        : durationHoursFromMinutes(minutes),
+  };
+  const finishAt = estimatedFinishAtIso(dateYmd, timeHm, minutes);
+  if (finishAt && params.rowBase.estimated_finish_at == null) {
+    patch.estimated_finish_at = finishAt;
+  }
+  return patch;
+}
+
 /** Throws if scope is not a valid persisted contract. */
 export function assertBookingScope(rooms: number, bathrooms: number): void {
   if (!Number.isFinite(rooms) || !Number.isFinite(bathrooms)) {
@@ -177,12 +281,29 @@ export async function insertBookingRowUnified(
     bookingTime: timeHm,
   });
 
+  const durationExtraRooms =
+    args.lineItemsPricing?.mode === "home_widget_catalog"
+      ? Math.max(0, Math.round(Number(args.lineItemsPricing.extraRooms) || 0))
+      : 0;
+
+  const durationPatch = buildUnifiedInsertDurationPatch({
+    rowBase: args.rowBase,
+    rooms,
+    bathrooms,
+    extras: extrasPersist,
+    serviceSlugForFlat: args.serviceSlugForFlat,
+    dateForFlat: args.dateForFlat,
+    timeForFlat: args.timeForFlat,
+    extraRooms: durationExtraRooms,
+  });
+
   const insertRow = {
     ...args.rowBase,
     rooms,
     bathrooms,
     extras: extrasPersist,
     booking_snapshot,
+    ...durationPatch,
     ...(tenureShare != null ? { cleaner_share_percentage: tenureShare } : {}),
     ...(price_snapshot ? { price_snapshot } : {}),
   };

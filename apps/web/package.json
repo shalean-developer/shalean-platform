@@ -6,7 +6,7 @@
     "dev": "next dev --webpack",
     "dev:turbo": "next dev --turbopack",
     "dev:webpack": "next dev --webpack",
-    "build": "tsx scripts/validate-blog-routes.ts && npm run typecheck && node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build",
+    "build": "tsx scripts/validate-blog-routes.ts && npm run typecheck && node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack",
     "validate:blog-routes": "tsx scripts/validate-blog-routes.ts",
     "audit:internal-links": "tsx scripts/audit-internal-links.ts",
     "validate:live-seo": "tsx scripts/validate-live-seo.ts",
@@ -48,6 +48,7 @@
     "zoho:diagnose": "tsx --env-file=.env.local scripts/zohoDiagnose.ts",
     "repair:zero-earning-assigned": "tsx --env-file=.env.local --conditions=react-server scripts/repairZeroEarningAssignedBookings.ts",
     "repair:stuck-null-display-active": "tsx --env-file=.env.local --conditions=react-server scripts/repairStuckNullDisplayActiveBookings.ts",
+    "repair:missing-booking-duration": "tsx --env-file=.env.local --conditions=react-server scripts/repairMissingBookingDuration.ts",
     "repair:production-health-critical": "tsx --env-file=.env.local --conditions=react-server scripts/repairProductionHealthCritical.ts",
     "repair:dispatch-offer-earnings": "tsx --env-file=.env.local --conditions=react-server scripts/repairMissingDispatchOfferEarningsSnapshot.ts",
     "recalculate:cleaner-earnings-v3": "tsx --env-file=.env.local --conditions=react-server scripts/recalculateAllCleanerEarningsV3.ts",
@@ -110,11 +111,17 @@
     "resend": "^6.12.2",
     "sanitize-html": "^2.17.3",
     "server-only": "^0.0.1",
+    "sharp": "0.35.3",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "twilio": "^5.13.1",
     "zod": "^3.24.2",
     "zustand": "^5.0.12"
+  },
+  "overrides": {
+    "brace-expansion@2": "2.1.2",
+    "sharp": "0.35.3",
+    "postcss": "8.5.10"
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^16.2.6",

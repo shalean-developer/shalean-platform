@@ -28,7 +28,11 @@ const DEFINED_SLUGS = new Set<string>([
 
 const ALLOWED_LOCATION_PATHS = new Set(CAPE_TOWN_LOCATIONS.map((l) => `/locations/${l.slug}`));
 const ALLOWED_SERVICE_PATHS = new Set(Object.values(CAPE_TOWN_SERVICE_SEO).map((b) => b.path));
-const ALLOWED_STATIC_COMMERCIAL_PATHS = new Set<string>(["/cleaning-prices-cape-town"]);
+const ALLOWED_STATIC_COMMERCIAL_PATHS = new Set<string>([
+  "/cleaning-prices-cape-town",
+  "/blog/how-much-does-cleaning-cost-cape-town-2026",
+  "/services",
+]);
 
 function assertBlogTerminalOk(path: string, ctx: string): void {
   const n = normalizeBlogPathname(path);

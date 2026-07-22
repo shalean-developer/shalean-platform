@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { generateCleanerRecoveryLinkForAdmin } from "@/lib/cleaner/adminPassword";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -23,7 +23,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });

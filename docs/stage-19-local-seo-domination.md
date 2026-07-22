@@ -2,64 +2,77 @@
 
 | Field | Value |
 |--------|--------|
-| **Status** | In progress — registry + first programmatic routes shipped |
+| **Status** | **Legacy / redirected — NOT live-canonical** (SEO-P1A Option B provisional, 2026-07-22) |
+| **Proposed location spine** | `/locations/{suburb}-cleaning-services` only — see `docs/audits/seo/SEO-P1A-*` |
 | **Depends on** | Booking funnel + analytics maturity ([booking-flow-redesign-prd.md](./booking-flow-redesign-prd.md) Phases 1–10, esp. measurement & session continuity) |
-| **Primary funnel** | Google Search → local landing page → **pre-filled booking flow** |
+| **Primary funnel (live)** | Google Search → **location hub or metro service** → pre-filled booking flow |
+| **Implementation freeze** | IN FORCE — no Stage 19 re-enablement without separately approved `SEO-P1B-S19` |
+
+---
+
+## 0. Governance notice (P1A Option B)
+
+Under provisional SEO-P1A Option B:
+
+* **`/{intentSegment}/{bookingAreaSlug}` is not the canonical public URL class.**
+* Those paths exist in the registry/templates but are **edge-redirected** to location hubs or metro `/services/*` (`legacyPhase1EdgeRedirects.ts` / `proxy.ts`).
+* **`docs/master_seo_matrix.csv` is a historical / planning inventory**, not a live canonical sitemap.
+* Do **not** treat Stage 19 rows as approved for indexation or publication without a separate change authorization.
 
 ---
 
 ## 1. Goal
 
-**Own Cape Town cleaning search intent** by scaling **high-quality, differentiated** service × location pages—not thin doorway pages.
+**Own Cape Town cleaning search intent** with **high-quality, differentiated** local pages—not thin doorway pages.
 
-This stage is **distribution + content systems**, not a booking UX redesign. The booking flow should **inherit context** (service, area, source) via URL/query conventions and existing prefill helpers.
+Live proposed spine (P1A): **suburb hubs** + **metro service pages**. Stage 19 intent×suburb combos remain a **deferred architecture option**, not current canon.
 
 ---
 
-## 2. Page types to ship (inventory)
+## 2. Page types
 
-### 2.1 Service + metro (already partially built)
+### 2.1 Service + metro (live commercial)
 
 - **Pattern:** `/services/{service-slug}` with Cape Town–scoped slugs (e.g. `*-cape-town`).
 - **Reference:** `apps/web/app/services/[service]/page.tsx`, `components/seo/SeoCapeTownServicePage.tsx`, `lib/seo/capeTownSeoPages.ts`.
-- **Enhancement for Stage 19:** optional `?location=` for suburb pre-selection aligned with `initialLocationSlug`.
 
-### 2.2 Location hubs (programmatic “cleaning in {suburb}”)
+### 2.2 Location hubs (live proposed location spine)
 
-- **Patterns:** `apps/web/app/locations/[slug]/page.tsx` → `ProgrammaticLocationCleaningPage`; legacy/canonical growth routes under `apps/web/app/[city]/cleaning-services/[location]/page.tsx`.
-- **Reference:** `components/seo/ProgrammaticLocationCleaningPage.tsx`, `lib/seo/locations.ts`.
-- **Enhancement:** stronger **service-specific** modules (see §4) where intent is “deep clean Sea Point” vs generic home clean.
+- **Pattern:** `/locations/{suburb}-cleaning-services`.
+- **Reference:** `apps/web/app/locations/[slug]/page.tsx` → `ProgrammaticLocationCleaningPage`; catalogue `lib/seo/data/location-hubs.json`.
+- Legacy growth routes under `apps/web/app/[city]/cleaning-services/[location]/page.tsx` redirect Cape Town traffic to hubs.
 
-### 2.3 Intent combos (service × booking area)
+### 2.3 Intent combos (Stage 19 — NOT live-canonical)
 
-**Chosen canonical pattern:** `/{intentSegment}/{bookingAreaSlug}`  
-Examples: `/deep-cleaning/sea-point`, `/move-out-cleaning/claremont`, `/same-day-cleaning/cape-town`.
+**Historical / deferred pattern:** `/{intentSegment}/{bookingAreaSlug}`  
+Examples (redirected today): `/deep-cleaning/sea-point`, `/move-out-cleaning/claremont`, `/same-day-cleaning/cape-town`.
 
-**Repo wiring:**
+**Repo wiring (present but not public-canonical):**
 
-- Master matrix (editable): [`master_seo_matrix.csv`](./master_seo_matrix.csv)
-- Typed registry + prefill helpers: `apps/web/lib/seo/seoPageRegistry.ts`
-- Dynamic routes + metadata + JSON-LD: `apps/web/app/[city]/[suburb]/page.tsx` (Stage 19 only: `params.city` is the **intent segment** — required so Next.js does not collide with the existing `app/[city]/cleaning-services/...` tree)
-- Composable sections (hero, proof, pricing hint, related links, CTAs): `apps/web/components/seo/stage19/Stage19IntentLanding.tsx`
+- Planning matrix: [`master_seo_matrix.csv`](./master_seo_matrix.csv) (active vs retired/unresolved annotations)
+- Typed registry: `apps/web/lib/seo/seoPageRegistry.ts`
+- Dynamic routes: `apps/web/app/[city]/[suburb]/page.tsx`
+- Template: `apps/web/components/seo/stage19/Stage19IntentLanding.tsx`
+- **Public fate:** edge redirect → hub or `/services/*`
 
-**Airbnb exception (temporary):** Sea Point, Green Point, and Claremont keep **rich editorial** pages at `/services/airbnb-cleaning-{area}` (`AirbnbAreaServiceLanding`). They are **not** duplicated on `/airbnb-cleaning/…` until copy/schema migration is intentional. Century City and Camps Bay ship on the Stage 19 pattern first.
+**Airbnb area editorials** at `/services/airbnb-cleaning-{sea-point|green-point|claremont}` are **HTTP 410** — **not active landings**. Do not list them as live matrix destinations.
 
-**Rule:** One primary URL per intent × area; expand the registry before adding routes so cannibalization stays controlled.
+**Century City:** **unresolved** — no hub in `location-hubs.json`; not part of the proposed location spine until verified local evidence supports a hub (`SEO-P1B-HUB`).
 
 ---
 
-## 3. Required modules (every indexable landing)
+## 3. Required modules (if/when a landing class is re-authorized)
 
 | Module | Requirement |
 |--------|----------------|
-| **Unique intro** | First viewport copy varies by **service + suburb + hook** (pricing angle, property type, or urgency)—not synonym swapping alone. |
-| **Suburb-specific copy** | Transit times, property mix, Airbnb density, student vs family areas—**fact-grounded** where possible. |
-| **FAQs** | 4–8 questions; unique per page cluster; align with `FAQPage` JSON-LD where used (`buildDynamicLocationFaqs` pattern in location stack). |
-| **Testimonials / proof** | Reuse verified stats (`getPublicReviewBannerStats`) + optional localized snippets where credible. |
-| **Schema** | `LocalBusiness` / `Service` / `FAQPage` as appropriate; keep in sync with visible claims. |
-| **Pricing hints** | Honest bands or “from” pricing consistent with product rules—no bait-and-switch ([PRD non-goals](./booking-flow-redesign-prd.md)). |
-| **Embedded booking CTA** | Primary CTA → booking entry with **prefill** (§5). Secondary: “instant quote” variants tracked with `GrowthCtaLink` `source`. |
-| **Internal links** | Nearby suburbs, related services, hub guides (blog/programmatic)—avoid orphan clusters. |
+| **Unique intro** | First viewport copy varies by **service + suburb + hook**—not synonym swapping alone. |
+| **Suburb-specific copy** | Fact-grounded local evidence (P1A Condition 7 / claim register). |
+| **FAQs** | 4–8 questions; unique per page cluster; align with `FAQPage` JSON-LD where used. |
+| **Testimonials / proof** | Verified stats only — **no synthetic cleaner-network bands or simulated “recent booking” vignettes** (P1A Condition 4 publication freeze). |
+| **Schema** | Keep in sync with visible, substantiated claims only. |
+| **Pricing hints** | Must match transactional pricing source of truth after reconciliation (P1A Condition 5). |
+| **Embedded booking CTA** | `buildSeoBookingHref` + `source` attribution. |
+| **Internal links** | Prefer live hubs + metro services; do not promote redirected Stage 19 paths as destinations. |
 
 ---
 
@@ -67,64 +80,54 @@ Examples: `/deep-cleaning/sea-point`, `/move-out-cleaning/claremont`, `/same-day
 
 **Implementation reference:** `apps/web/lib/booking/seoBookingPrefill.ts`
 
-- **Service:** map landing intent → `BookingServiceId` (`inferBookingServiceFromSeoSlug` or explicit registry per template).
-- **Location:** `locationSlug` compatible with booking flow expectations (`locationSlugFromSeoLocationSlug` / hub row resolution).
-- **Extras:** `recommendedSeoExtras(service)` or template-specific overrides.
-- **Source:** set `source` (and preserve UTMs via existing acquisition merge on `trackGrowthEvent`) so `/admin/seo-attribution` and funnel reports stay truthful.
-
-**Target UX:** one primary CTA builds something like:
-
-`buildSeoBookingHref("details", { service, locationSlug, extras, source: "seo_deep_sea_point" })`
-
-All new landing CTAs should use this (or extend it in one place) rather than ad-hoc query strings.
+Still valid for **hub and metro** CTAs. Stage 19-specific CTA sources remain dormant while redirects hold.
 
 ---
 
-## 5. Measurement (must-have before scaling volume)
+## 5. Measurement
 
-- **Page:** `page_view` with stable `page_type` per template (avoid reusing one generic type for all combos).
-- **CTA:** `GrowthCtaLink` / growth events with **`source`** discriminant per block (hero vs mid-page vs sticky).
-- **Down-funnel:** existing booking events (`booking_service_selected`, …, `booking_completed`) with session + acquisition payloads.
-- **Admin:** `/admin/seo-attribution` for landing/source/service conversion; `/admin/funnel-intelligence` for operational narrative.
+- Prefer `page_type` values for **live** templates (hubs, metro services, blog).
+- Do not scale Stage 19 measurement as if those URLs were indexable owners.
 
 ---
 
-## 6. Execution phases (suggested)
+## 6. Execution posture
 
-1. **URL + content registry** — spreadsheet or typed config: `{ intentSlug, serviceId, locationSlug, primary_kw, canonical_path }`; ban duplicates.
-2. **Template matrix** — 2–3 React layouts (metro-wide, suburb hub, service×suburb combo) parameterized by registry rows.
-3. **Prefill + CTA audit** — every template uses `buildSeoBookingHref` (or successor) and passes `source`.
-4. **Internal link graph** — programmatic “nearby” + service cross-links (`RelatedLinks`, hub stacks).
-5. **Quality gate** — thin-page checklist (word count minimum, unique FAQ, unique intro score, Lighthouse sanity) before index toggle.
-6. **Rollout** — ship clusters suburb-by-suburb or intent-by-intent; monitor Search Console + `seo-attribution` + conversion anomalies.
+1. **Baseline hubs** as sole proposed location spine (P1A).  
+2. **Do not expand** Stage 19 public URLs without `SEO-P1B-S19`.  
+3. **Hub expansion** (e.g. Century City) requires verified local evidence (`SEO-P1B-HUB`).  
+4. **Claim / price reconciliation** before any schema or “from” price changes (`SEO-P1B-CLM`).  
+5. **Split scopes** — no bulk P1B implementation (P1A Condition 9).
 
 ---
 
-## 7. Non-goals (Stage 19)
+## 7. Non-goals
 
-- Claiming services Shalean does not operationalize (e.g. office cleaning) without ops sign-off.
-- Mass-indexing **near-duplicate** suburb pages with only `{suburb}` swapped in boilerplate.
+- Claiming services Shalean does not operationalize without ops sign-off.
+- Mass-indexing near-duplicate suburb pages.
+- Treating Stage 19 registry rows as live canonical owners.
 - Replacing Paystack or changing core booking steps (separate initiatives).
 
 ---
 
-## 8. Success metrics
+## 8. Success metrics (live spine)
 
 | Signal | Tooling |
 |--------|---------|
-| Landing → quote start rate | `seo-attribution` + funnel |
+| Hub / service → quote start | `seo-attribution` + funnel |
 | Landing → completed booking | Same + `booking_completed` |
-| Organic impressions/clicks | Search Console |
-| Cannibalization / duplicate URLs | GSC + canonical audits |
+| Organic impressions/clicks | Search Console analysis only under separately authorized read-only scope; no GSC access or writes are authorized by P1A |
+| Cannibalization | GSC + canonical audits when separately authorized |
 
 ---
 
-## 9. Open decisions
+## 9. Open decisions (require separate approval)
 
-1. **Canonical URL scheme** for service×suburb combos (path segment order, vs nested under `/locations/`).
-2. **Office / same-day** — product scope vs SEO scope (indexable vs supporting pages only).
-3. **Content sourcing** — who approves suburb-specific factual claims (ops vs generic safe copy).
+1. **SEO-P1B-S19** — keep redirect vs delete Stage 19 tree vs re-enable.  
+2. **SEO-P1B-HUB** — Century City (and others) hub evidence standard.  
+3. **SEO-P1B-CLM / SYN** — price reconciliation and synthetic-claim suppression in code.  
+4. Office / same-day product scope vs SEO scope.
 
 ---
 
-*Stage 19 spec — aligns programmatic SEO scale with [booking-flow-redesign-prd.md](./booking-flow-redesign-prd.md) measurement and honesty constraints.*
+*Amended 2026-07-22 for SEO-P1A Option B: Stage 19 is not live-canonical. Controlling package: `docs/audits/seo/SEO-P1A-DECISION-PACKAGE-2026-07-22.md`.*

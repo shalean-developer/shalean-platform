@@ -6,7 +6,7 @@ import { applyAdminBookingLifecycleStatusOverride } from "@/lib/admin/adminBooki
 import { findCleanerSlotConflict } from "@/lib/admin/adminCleanerSlotConflict";
 import { normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
 import { countActiveTeamMembersOnDate } from "@/lib/cleaner/teamMemberAvailability";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { isTeamService } from "@/lib/dispatch/assignBooking";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssigned";
@@ -84,8 +84,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   const admin = getSupabaseAdmin();
@@ -354,7 +355,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  if (!user?.id) return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
 
   type PatchBody = {
     status?: string;
@@ -573,7 +576,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   ) {
     (updates as Record<string, unknown>).admin_recurring_unpaid_completion_override_at = new Date().toISOString();
     (updates as Record<string, unknown>).admin_recurring_unpaid_completion_override_by =
-      (typeof user.email === "string" && user.email.trim()) || user.id;
+      adminAuth.email.trim() || adminAuth.userId;
   }
 
   if (updates.status === "completed" && before) {
@@ -582,8 +585,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       Object.assign(
         updates as Record<string, unknown>,
         buildAdminCompletionGateOverridePatch({
-          adminEmail: user.email,
-          adminUserId: user.id,
+          adminEmail: adminAuth.email,
+          adminUserId: adminAuth.userId,
           reason: "Admin PATCH status=completed",
           blockedCodes: gate.blockedCodes,
         }),
@@ -662,8 +665,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       message: "admin_marked_completed_recurring_unpaid_pending_payment",
       context: {
         booking_id: id,
-        admin_user_id: user.id,
-        admin_email: user.email ?? null,
+        admin_user_id: adminAuth.userId,
+        admin_email: adminAuth.email,
         prior_status: beforeStatus,
         override_type: "recurring_unpaid_completion",
       },
@@ -679,8 +682,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
         message: "admin_marked_completed_completion_gate_override",
         context: {
           booking_id: id,
-          admin_user_id: user.id,
-          admin_email: user.email ?? null,
+          admin_user_id: adminAuth.userId,
+          admin_email: adminAuth.email,
           prior_status: beforeStatus,
           override_type: "completion_gate",
           gate_codes: gate.blockedCodes,

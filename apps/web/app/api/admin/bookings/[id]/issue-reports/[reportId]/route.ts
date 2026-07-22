@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -27,8 +27,9 @@ export async function PATCH(
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   let body: { resolved?: unknown };
@@ -63,7 +64,7 @@ export async function PATCH(
     .from("cleaner_job_issue_reports")
     .update({
       resolved_at: new Date().toISOString(),
-      resolved_by: user.email.trim().slice(0, 320),
+      resolved_by: adminAuth.email.trim().slice(0, 320),
     })
     .eq("id", reportId);
 

@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { resetCleanerPasswordForAdmin } from "@/lib/cleaner/adminPassword";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -27,8 +27,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (sessionErr || !user?.email) {
     return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
   }
-  if (!isAdmin(user.email)) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   let body: { password?: string };

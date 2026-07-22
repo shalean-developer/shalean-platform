@@ -469,6 +469,27 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
               </li>
             ))}
           </ul>
+          {data.exclusions && data.exclusions.length > 0 ? (
+            <div className="mt-10">
+              <h3 className="text-xl font-bold tracking-tight text-zinc-900">What&apos;s not included</h3>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+                Clear exclusions help you choose the right service and avoid mismatched expectations at arrival.
+              </p>
+              <ul className="mt-6 grid gap-3 sm:grid-cols-2">
+                {data.exclusions.map((item) => (
+                  <li
+                    key={item}
+                    className="flex gap-3 rounded-2xl border border-zinc-200 bg-white p-4 text-sm font-medium text-zinc-700 shadow-sm"
+                  >
+                    <span className="mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-zinc-300 text-xs font-bold text-zinc-500" aria-hidden>
+                      –
+                    </span>
+                    {item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </section>
 

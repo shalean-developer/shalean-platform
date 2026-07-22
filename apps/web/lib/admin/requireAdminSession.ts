@@ -2,12 +2,13 @@ import "server-only";
 
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 
 export type AdminSessionUser = { id: string; email: string };
 
 /**
- * Validates `Authorization: Bearer <supabase access token>` and returns the user when email is allowlisted admin.
+ * Validates `Authorization: Bearer <supabase access token>` and returns the user when they are an
+ * Office admin (`user_profiles.role === "admin"` or email on `ADMIN_EMAILS`).
  */
 export async function requireAdminSession(request: Request): Promise<
   { ok: true; user: AdminSessionUser } | { ok: false; response: NextResponse }
@@ -30,13 +31,14 @@ export async function requireAdminSession(request: Request): Promise<
     error: userErr,
   } = await pub.auth.getUser(token);
 
-  if (userErr || !user?.email || !user.id) {
+  if (userErr || !user?.id) {
     return { ok: false, response: NextResponse.json({ error: "Invalid or expired session." }, { status: 401 }) };
   }
 
-  if (!isAdmin(user.email)) {
-    return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
+  const access = await requireAdminUser(user);
+  if (!access.ok) {
+    return { ok: false, response: NextResponse.json({ error: access.error }, { status: access.status }) };
   }
 
-  return { ok: true, user: { id: user.id, email: user.email } };
+  return { ok: true, user: { id: access.userId, email: access.email } };
 }

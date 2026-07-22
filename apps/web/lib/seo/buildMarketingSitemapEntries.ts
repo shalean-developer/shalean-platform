@@ -1,7 +1,7 @@
 import type { MetadataRoute } from "next";
-import { getPublishedBlogSitemapRows } from "@/lib/blog/get-post-by-slug";
-import { isRedirectAliasBlogSlug, resolveBlogRedirectChain } from "@/lib/blog/validBlogRoutes";
+import { collectUnionBlogSitemapRows } from "@/lib/seo/blogSitemapUnion";
 import { LOCATION_SEO_PAGES, type LocationSeoSlug } from "@/lib/seo/capeTownSeoPages";
+import { legacyMarketingRedirectSourcePaths } from "@/lib/seo/legacyMarketingRedirectMatrix";
 import {
   SEO_REBUILD_PHASE,
   SEO_REBUILD_SITEMAP_CONTENT_PATHS,
@@ -9,7 +9,10 @@ import {
   SEO_REBUILD_SITEMAP_LOCATIONS_INDEX,
   isSeoRebuildGonePath,
 } from "@/lib/seo/seoRebuildPhase1";
-import { readMarketingSitemapLastModified } from "@/lib/seo/sitemapLastModified";
+import {
+  readLocationHubSitemapLastModified,
+  resolveStaticPathLastModified,
+} from "@/lib/seo/sitemapLastModified";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
 
 function normalizeSitemapUrl(url: string): string {
@@ -47,44 +50,39 @@ function collectLocationHubSitemapPaths(): string[] {
   return paths;
 }
 
-function isIndexableBlogSitemapSlug(slug: string): boolean {
-  const s = slug.trim().toLowerCase();
-  if (!s || isRedirectAliasBlogSlug(s)) return false;
-  const resolved = resolveBlogRedirectChain(`/blog/${s}`);
-  return resolved.startsWith("/blog/");
-}
+const REDIRECT_SOURCE_SET = new Set(legacyMarketingRedirectSourcePaths());
 
 /** Dynamic sitemap entries for indexable marketing + published blog posts. */
 export async function buildMarketingSitemapEntries(): Promise<MetadataRoute.Sitemap> {
-  const marketingLastModified = readMarketingSitemapLastModified();
+  const locationLastModified = readLocationHubSitemapLastModified();
   const seen = new Set<string>();
   const entries: MetadataRoute.Sitemap = [];
 
   function push(path: string, lastModified: Date, priority?: number): void {
-    const url = normalizeSitemapUrl(`${SITE_ORIGIN}${path}`);
+    const normPath = path.replace(/\/+$/, "") || "/";
+    if (REDIRECT_SOURCE_SET.has(normPath)) return;
+    if (isSeoRebuildGonePath(normPath)) return;
+    const url = normalizeSitemapUrl(`${SITE_ORIGIN}${normPath}`);
     if (seen.has(url)) return;
     seen.add(url);
-    entries.push({ url, lastModified, priority: priority ?? priorityForMarketingPath(path) });
+    entries.push({ url, lastModified, priority: priority ?? priorityForMarketingPath(normPath) });
   }
 
   for (const path of SEO_REBUILD_SITEMAP_CORE_PATHS) {
-    push(path, marketingLastModified);
+    push(path, resolveStaticPathLastModified(path));
   }
 
   for (const path of SEO_REBUILD_SITEMAP_CONTENT_PATHS) {
-    push(path, marketingLastModified);
+    push(path, resolveStaticPathLastModified(path));
   }
 
   for (const path of collectLocationHubSitemapPaths()) {
-    push(path, marketingLastModified);
+    push(path, locationLastModified);
   }
 
-  const blogRows = await getPublishedBlogSitemapRows();
+  const blogRows = await collectUnionBlogSitemapRows();
   for (const row of blogRows) {
-    if (!isIndexableBlogSitemapSlug(row.slug)) continue;
-    const canonSlug = resolveBlogRedirectChain(`/blog/${row.slug}`).replace(/^\/blog\//, "");
-    if (!canonSlug) continue;
-    push(`/blog/${canonSlug}`, row.lastModified);
+    push(`/blog/${row.slug}`, row.lastModified);
   }
 
   return entries;

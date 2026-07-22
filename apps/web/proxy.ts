@@ -2,7 +2,12 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { remapAdminPathToOffice } from "@/lib/admin/remapAdminPathToOffice";
 import { getLocation } from "@/lib/locations";
-import { resolveLegacyGrowthLocal, resolveLegacySingularLocation } from "@/lib/seo/legacyPhase1EdgeRedirects";
+import {
+  resolveLegacyGrowthLocal,
+  resolveLegacySingularLocation,
+  resolveLegacyStage19IntentPath,
+} from "@/lib/seo/legacyPhase1EdgeRedirects";
+import { resolveLegacyMarketingExactRedirect } from "@/lib/seo/legacyMarketingRedirectMatrix";
 import { isSeoRebuildGonePath } from "@/lib/seo/seoRebuildPhase1";
 import { CAPE_TOWN_LOCATIONS, locationHubPathFromAreaInput } from "@/lib/seo/capeTownLocations";
 import { updateSession } from "@/lib/supabase/supabaseMiddleware";
@@ -14,6 +19,24 @@ function shouldNoIndexEntireDeployment(): boolean {
   if (process.env.NODE_ENV !== "production") return true;
   const v = process.env.VERCEL_ENV;
   return v === "preview" || v === "development";
+}
+
+function redirectPreservingSearch(request: NextRequest, destinationPath: string, status: 301 | 308) {
+  const url = request.nextUrl.clone();
+  if (destinationPath.startsWith("/#")) {
+    url.pathname = "/";
+    url.hash = destinationPath.slice(2);
+  } else {
+    const hashIdx = destinationPath.indexOf("#");
+    if (hashIdx >= 0) {
+      url.pathname = destinationPath.slice(0, hashIdx) || "/";
+      url.hash = destinationPath.slice(hashIdx + 1);
+    } else {
+      url.pathname = destinationPath;
+      url.hash = "";
+    }
+  }
+  return NextResponse.redirect(url, status);
 }
 
 /**
@@ -33,7 +56,7 @@ async function runProxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const host = request.headers.get("host")?.split(":")[0]?.toLowerCase() ?? "";
 
-  /** Apex .com / www currently 404 outside this app — force canonical .co.za for shared campaign links. */
+  /** Apex .com / www — force canonical .co.za when this app receives the request. */
   if (host === "shalean.com" || host === "www.shalean.com") {
     const url = request.nextUrl.clone();
     url.protocol = "https:";
@@ -55,26 +78,13 @@ async function runProxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  /** Phase-1 SEO rebuild — retired programmatic URLs (not blanket homepage redirects). */
-  /** User-facing commercial hubs: redirect to live replacements instead of bare 410. */
-  const commercialHubRedirects: Record<string, string> = {
-    "/cleaning-prices-cape-town": "/blog/how-much-does-cleaning-cost-cape-town-2026",
-    "/cleaning-services-cape-town": "/services",
-    "/maid-services-cape-town": "/services",
-    "/cleaning-services": "/services",
-  };
-  const hubDest = commercialHubRedirects[pathname.replace(/\/$/, "") || "/"];
-  if (hubDest) {
-    const url = request.nextUrl.clone();
-    url.pathname = hubDest;
-    return NextResponse.redirect(url, 308);
+  /** Exact-path legacy marketing migrations (one hop, permanent). */
+  const marketing = resolveLegacyMarketingExactRedirect(pathname);
+  if (marketing) {
+    return redirectPreservingSearch(request, marketing.destination, marketing.status);
   }
 
-  if (isSeoRebuildGonePath(pathname)) {
-    return new NextResponse(null, { status: 410 });
-  }
-
-  /** `/location/{city}/{suburb}` (singular) — hub, JHB growth page, or 410 (never `/` or weak catalogue). */
+  /** `/location/{city}/{suburb}` (singular) — hub or 410. */
   const legacySingularLocation = pathname.match(/^\/location\/([^/]+)\/([^/]+)\/?$/);
   if (legacySingularLocation) {
     const city = legacySingularLocation[1] ?? "";
@@ -83,26 +93,25 @@ async function runProxy(request: NextRequest) {
     if (resolved.type === "gone") {
       return new NextResponse(null, { status: 410 });
     }
-    const url = request.nextUrl.clone();
-    url.pathname = resolved.pathname;
-    return NextResponse.redirect(url, 308);
+    return redirectPreservingSearch(request, resolved.pathname, 308);
   }
 
-  /** `/growth/local/*` — Stage 19, else `/services/*-cape-town` by intent, else 410. */
+  /** `/growth/local/*` — hub/service or 410. */
   const growthLocal = resolveLegacyGrowthLocal(pathname);
   if (growthLocal !== null) {
     if (growthLocal.type === "gone") {
       return new NextResponse(null, { status: 410 });
     }
-    const url = request.nextUrl.clone();
-    url.pathname = growthLocal.pathname;
-    return NextResponse.redirect(url, 308);
+    return redirectPreservingSearch(request, growthLocal.pathname, 308);
   }
 
-  /** Thin “best cleaners in {area}” clones — permanently removed (410). */
-  const bestCleaningBlog = pathname.match(/^\/blog\/best-cleaning-services-(.+)-cape-town\/?$/);
-  if (bestCleaningBlog?.[1]) {
-    return new NextResponse(null, { status: 410 });
+  /** Stage-19 `/{intent}/{suburb}` — hub/service (never leave as competing landings). */
+  const stage19 = resolveLegacyStage19IntentPath(pathname);
+  if (stage19 !== null) {
+    if (stage19.type === "gone") {
+      return new NextResponse(null, { status: 410 });
+    }
+    return redirectPreservingSearch(request, stage19.pathname, 308);
   }
 
   const legacy = pathname.match(/^\/cape-town\/cleaning-services\/([^/]+)\/?$/);
@@ -110,13 +119,9 @@ async function runProxy(request: NextRequest) {
     const segment = legacy[1] ?? "";
     const svc = getLocation(segment);
     if (svc?.citySlug === "cape-town" && segment === "cape-town") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/services/standard-cleaning-cape-town";
-      return NextResponse.redirect(url, 308);
+      return redirectPreservingSearch(request, "/services/standard-cleaning-cape-town", 308);
     }
-    const url = request.nextUrl.clone();
-    url.pathname = locationHubPathFromAreaInput(segment);
-    return NextResponse.redirect(url, 308);
+    return redirectPreservingSearch(request, locationHubPathFromAreaInput(segment), 308);
   }
 
   const flatCleaning = pathname.match(/^\/cleaning-services\/([^/]+)\/?$/);
@@ -124,19 +129,14 @@ async function runProxy(request: NextRequest) {
     const segment = flatCleaning[1] ?? "";
     const svc = getLocation(segment);
     if (svc?.citySlug === "cape-town" && segment === "cape-town") {
-      const url = request.nextUrl.clone();
-      url.pathname = "/services/standard-cleaning-cape-town";
-      return NextResponse.redirect(url, 308);
+      return redirectPreservingSearch(request, "/services/standard-cleaning-cape-town", 308);
     }
-    const url = request.nextUrl.clone();
-    url.pathname = locationHubPathFromAreaInput(segment);
-    return NextResponse.redirect(url, 308);
+    return redirectPreservingSearch(request, locationHubPathFromAreaInput(segment), 308);
   }
 
   /**
    * Short `/locations/{slug}` that is not an exact catalogue hub slug (e.g. DB suburb
    * `beacon-hill`) — permanently redirect to the hub path or `/locations` overview.
-   * Prevents live-link 404s without inventing fake hub pages.
    */
   const locationsSegment = pathname.match(/^\/locations\/([^/]+)\/?$/);
   if (locationsSegment?.[1]) {
@@ -145,11 +145,19 @@ async function runProxy(request: NextRequest) {
     if (!isExactHub) {
       const dest = locationHubPathFromAreaInput(segment);
       if (dest !== pathname.replace(/\/+$/, "") && dest !== `/locations/${segment}`) {
-        const url = request.nextUrl.clone();
-        url.pathname = dest;
-        return NextResponse.redirect(url, 308);
+        return redirectPreservingSearch(request, dest, 308);
       }
     }
+  }
+
+  /** Thin “best cleaners in {area}” clones — permanently removed (410). */
+  const bestCleaningBlog = pathname.match(/^\/blog\/best-cleaning-services-(.+)-cape-town\/?$/);
+  if (bestCleaningBlog?.[1]) {
+    return new NextResponse(null, { status: 410 });
+  }
+
+  if (isSeoRebuildGonePath(pathname)) {
+    return new NextResponse(null, { status: 410 });
   }
 
   /** Admin console cutover — all `/admin/*` pages live under `/office/*`. */

@@ -1,0 +1,84 @@
+import "server-only";
+
+import { isAdmin, isAdminAllowlistConfigured } from "@/lib/auth/admin";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
+
+export type AdminAccessDecision =
+  | { ok: true; via: "allowlist" | "profile_role" }
+  | { ok: false; status: 403 | 503; error: string };
+
+/**
+ * Authorize Office admin API access.
+ *
+ * Source of truth for ongoing admin accounts: `user_profiles.role === "admin"`.
+ * `ADMIN_EMAILS` / `ADMIN_EMAIL` remain an optional bootstrap / ops allowlist so
+ * existing deployments keep working without a profile row update.
+ *
+ * Creating a new admin only requires setting `user_profiles.role = 'admin'`
+ * (no Vercel env redeploy).
+ */
+export async function evaluateAdminAccess(params: {
+  userId: string;
+  email?: string | null;
+}): Promise<AdminAccessDecision> {
+  const userId = params.userId.trim();
+  if (!userId) {
+    return { ok: false, status: 403, error: "Forbidden." };
+  }
+
+  const email = String(params.email ?? "").trim();
+  if (email && isAdmin(email)) {
+    return { ok: true, via: "allowlist" };
+  }
+
+  const admin = getSupabaseAdmin();
+  if (!admin) {
+    if (!isAdminAllowlistConfigured()) {
+      return {
+        ok: false,
+        status: 503,
+        error:
+          "Admin access cannot be verified (missing service role). Set SUPABASE_SERVICE_ROLE_KEY, or configure ADMIN_EMAILS as a temporary allowlist.",
+      };
+    }
+    return { ok: false, status: 403, error: "Forbidden." };
+  }
+
+  const { data: profile, error } = await admin
+    .from("user_profiles")
+    .select("role")
+    .eq("id", userId)
+    .maybeSingle();
+
+  if (error) {
+    return { ok: false, status: 503, error: "Unable to verify admin access." };
+  }
+
+  const role = String((profile as { role?: string | null } | null)?.role ?? "")
+    .trim()
+    .toLowerCase();
+  if (role === "admin") {
+    return { ok: true, via: "profile_role" };
+  }
+
+  return { ok: false, status: 403, error: "Forbidden." };
+}
+
+/**
+ * After `auth.getUser`, authorize an Office admin via profile role or email allowlist.
+ */
+export async function requireAdminUser(
+  user: { id: string; email?: string | null } | null | undefined,
+): Promise<
+  { ok: true; userId: string; email: string } | { ok: false; status: number; error: string }
+> {
+  if (!user?.id) {
+    return { ok: false, status: 401, error: "Invalid or expired session." };
+  }
+  if (!user.email) {
+    return { ok: false, status: 403, error: "Forbidden." };
+  }
+  const access = await evaluateAdminAccess({ userId: user.id, email: user.email });
+  if (!access.ok) return { ok: false, status: access.status, error: access.error };
+  return { ok: true, userId: user.id, email: user.email };
+}

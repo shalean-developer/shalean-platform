@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  PUBLIC_LEGACY_REDIRECT_ROBOTS_PATHS,
   isSeoRebuildCoreSitemapPath,
   isSeoRebuildGonePath,
   SEO_REBUILD_PHASE,
@@ -27,12 +28,15 @@ describe("seoRebuildPhase1", () => {
     expect(SEO_REBUILD_SITEMAP_CONTENT_PATHS).toContain("/reviews");
   });
 
-  it("marks permanently retired legacy URLs as gone", () => {
-    expect(isSeoRebuildGonePath("/growth/local/cleaning-services/sea-point")).toBe(true);
-    expect(isSeoRebuildGonePath("/location/cape-town/claremont")).toBe(true);
-    expect(isSeoRebuildGonePath("/deep-cleaning/sea-point")).toBe(true);
-    expect(isSeoRebuildGonePath("/cleaning-prices-cape-town")).toBe(true);
-    expect(isSeoRebuildGonePath("/maid-services-cape-town")).toBe(true);
+  it("marks only true gone leftovers (not public redirect sources)", () => {
+    expect(isSeoRebuildGonePath("/growth/local")).toBe(true);
+    expect(isSeoRebuildGonePath("/location")).toBe(true);
+    expect(isSeoRebuildGonePath("/johannesburg/cleaning-services/sandton")).toBe(true);
+    expect(isSeoRebuildGonePath("/cleaning-prices-cape-town")).toBe(false);
+    expect(isSeoRebuildGonePath("/cleaning-services-cape-town")).toBe(false);
+    expect(isSeoRebuildGonePath("/growth/local/deep-cleaning/sea-point")).toBe(false);
+    expect(isSeoRebuildGonePath("/location/cape-town/claremont")).toBe(false);
+    expect(isSeoRebuildGonePath("/deep-cleaning/sea-point")).toBe(false);
   });
 
   it("keeps phase-2 location hubs and window cleaning live", () => {
@@ -50,5 +54,17 @@ describe("seoRebuildPhase1", () => {
 
   it("allows location hubs in robots.txt during phase 2", () => {
     expect(seoRobotsDisallowPaths()).not.toContain("/locations/");
+  });
+
+  it("does not Disallow public legacy redirect paths", () => {
+    const disallow = seoRobotsDisallowPaths();
+    for (const path of PUBLIC_LEGACY_REDIRECT_ROBOTS_PATHS) {
+      expect(disallow).not.toContain(path);
+    }
+    expect(disallow).toContain("/admin");
+    expect(disallow).toContain("/office");
+    expect(disallow).toContain("/api");
+    expect(disallow).toContain("/account");
+    expect(disallow).toContain("/login");
   });
 });

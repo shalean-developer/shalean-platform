@@ -1,0 +1,201 @@
+{
+    "documentId":  "SEO-P2A-MIG-http-probes-2026-07-22",
+    "probedAt":  "2026-07-22T09:29:21Z",
+    "method":  "curl -sI --max-redirs 0",
+    "repoMap":  {
+                    "source":  "apps/web/lib/seo/shaleanComMigrationMap.ts",
+                    "statusConstant":  "LIVE_HTTP_VERIFIED",
+                    "explicitRules":  193,
+                    "unitTests":  "15/15 passed (vitest shaleanComMigrationMap.test.ts)"
+                },
+    "hostBaseline":  [
+                         {
+                             "status":  200,
+                             "url":  "https://shalean.co.za/robots.txt",
+                             "redirect":  null
+                         },
+                         {
+                             "status":  200,
+                             "url":  "https://shalean.co.za/sitemap.xml",
+                             "redirect":  null
+                         },
+                         {
+                             "status":  200,
+                             "url":  "https://shalean.co.za/",
+                             "redirect":  null
+                         },
+                         {
+                             "status":  308,
+                             "url":  "https://www.shalean.co.za/",
+                             "redirect":  "https://shalean.co.za/"
+                         },
+                         {
+                             "status":  301,
+                             "url":  "https://shalean.com/",
+                             "redirect":  "https://shalean.co.za/"
+                         },
+                         {
+                             "status":  301,
+                             "url":  "https://www.shalean.com/",
+                             "redirect":  "https://shalean.co.za/"
+                         }
+                     ],
+    "redirectProbes":  [
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/",
+                               "location":  "https://shalean.co.za/",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://www.shalean.com/",
+                               "location":  "https://shalean.co.za/",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/blog",
+                               "location":  "https://shalean.co.za/blog",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://www.shalean.com/blog/",
+                               "location":  "https://shalean.co.za/blog",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/services/standard-cleaning",
+                               "location":  "https://shalean.co.za/services/standard-cleaning-cape-town",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://www.shalean.com/services/standard-cleaning/",
+                               "location":  "https://shalean.co.za/services/standard-cleaning-cape-town",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/services/deep-cleaning",
+                               "location":  "https://shalean.co.za/services/deep-cleaning-cape-town",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/location/cape-town/sea-point",
+                               "location":  "https://shalean.co.za/locations/sea-point-cleaning-services",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://www.shalean.com/location/cape-town/camps-bay/",
+                               "location":  "https://shalean.co.za/locations/camps-bay-cleaning-services",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/cleaning-services/sea-point",
+                               "location":  "https://shalean.co.za/locations/sea-point-cleaning-services",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/how-it-works",
+                               "location":  "https://shalean.co.za/#how-it-works",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/testimonials",
+                               "location":  "https://shalean.co.za/reviews",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/some-unmapped-legacy-page",
+                               "location":  "https://shalean.co.za/some-unmapped-legacy-page",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/contact?utm_source=test",
+                               "location":  "https://shalean.co.za/contact?utm_source=test",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/blog/how-much-does-cleaning-cost-cape-town-2026",
+                               "location":  "https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/services",
+                               "location":  "https://shalean.co.za/services",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/book",
+                               "location":  "https://shalean.co.za/book",
+                               "result":  "PASS"
+                           },
+                           {
+                               "status":  301,
+                               "url":  "https://shalean.com/pricing",
+                               "location":  "https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026",
+                               "result":  "PASS"
+                           }
+                       ],
+    "destinationProbes":  [
+                              {
+                                  "url":  "https://shalean.co.za/",
+                                  "status":  200
+                              },
+                              {
+                                  "url":  "https://shalean.co.za/services",
+                                  "status":  200
+                              },
+                              {
+                                  "url":  "https://shalean.co.za/services/standard-cleaning-cape-town",
+                                  "status":  200
+                              },
+                              {
+                                  "url":  "https://shalean.co.za/locations/sea-point-cleaning-services",
+                                  "status":  200
+                              },
+                              {
+                                  "url":  "https://shalean.co.za/blog",
+                                  "status":  200
+                              },
+                              {
+                                  "url":  "https://shalean.co.za/book",
+                                  "status":  200
+                              },
+                              {
+                                  "url":  "https://shalean.co.za/contact",
+                                  "status":  200
+                              },
+                              {
+                                  "url":  "https://shalean.co.za/reviews",
+                                  "status":  200
+                              }
+                          ],
+    "publicWebSignals":  {
+                             "robotsTxt":  "Allow:/ with admin/api disallows; Sitemap: https://shalean.co.za/sitemap.xml",
+                             "sitemapLocCount":  102,
+                             "homepageCanonical":  "https://shalean.co.za",
+                             "homepageOgUrl":  "https://shalean.co.za",
+                             "homepageTitle":  "Cleaning Services Cape Town from R250 | Shalean",
+                             "homepageRobotsMeta":  "index, follow",
+                             "hasLocalBusinessJsonLd":  true,
+                             "hasWebSiteJsonLd":  true
+                         },
+    "verdict":  "PASS",
+    "redirectPassCount":  18,
+    "redirectFailCount":  0,
+    "destinationPassCount":  8
+}

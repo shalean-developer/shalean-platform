@@ -1,27 +1,27 @@
-Service,Suburb,Search Intent,Canonical URL,Priority,Search Volume,Competition,Existing Page?,Page Type,CTA Source
-Deep Cleaning,Sea Point,commercial,/deep-cleaning/sea-point,P0,TBD,Medium,Partial (locations + service hub),service-location,seo_deep_cleaning_sea_point
-Deep Cleaning,Green Point,commercial,/deep-cleaning/green-point,P0,TBD,Medium,Partial,service-location,seo_deep_cleaning_green_point
-Deep Cleaning,Claremont,commercial,/deep-cleaning/claremont,P0,TBD,Medium,Partial,service-location,seo_deep_cleaning_claremont
-Deep Cleaning,Century City,commercial,/deep-cleaning/century-city,P0,TBD,Medium,Partial,service-location,seo_deep_cleaning_century_city
-Deep Cleaning,Camps Bay,commercial,/deep-cleaning/camps-bay,P0,TBD,Medium,Partial,service-location,seo_deep_cleaning_camps_bay
-Move-out Cleaning,Sea Point,commercial,/move-out-cleaning/sea-point,P0,TBD,Medium,Partial,service-location,seo_move_out_cleaning_sea_point
-Move-out Cleaning,Green Point,commercial,/move-out-cleaning/green-point,P0,TBD,Medium,Partial,service-location,seo_move_out_cleaning_green_point
-Move-out Cleaning,Claremont,commercial,/move-out-cleaning/claremont,P0,TBD,Medium,Partial,service-location,seo_move_out_cleaning_claremont
-Move-out Cleaning,Century City,commercial,/move-out-cleaning/century-city,P0,TBD,Medium,Partial,service-location,seo_move_out_cleaning_century_city
-Move-out Cleaning,Camps Bay,commercial,/move-out-cleaning/camps-bay,P0,TBD,Medium,Partial,service-location,seo_move_out_cleaning_camps_bay
-Airbnb Cleaning,Sea Point,commercial,/services/airbnb-cleaning-sea-point,P0,TBD,Medium,Yes (editorial landing — migrate to /airbnb-cleaning/sea-point later),service-location,seo_airbnb_area_sea_point
-Airbnb Cleaning,Green Point,commercial,/services/airbnb-cleaning-green-point,P0,TBD,Medium,Yes (editorial — migrate later),service-location,seo_airbnb_area_green_point
-Airbnb Cleaning,Claremont,commercial,/services/airbnb-cleaning-claremont,P0,TBD,Medium,Yes (editorial — migrate later),service-location,seo_airbnb_area_claremont
-Airbnb Cleaning,Century City,commercial,/airbnb-cleaning/century-city,P0,TBD,Medium,No,service-location,seo_airbnb_cleaning_century_city
-Airbnb Cleaning,Camps Bay,commercial,/airbnb-cleaning/camps-bay,P0,TBD,Medium,No,service-location,seo_airbnb_cleaning_camps_bay
-Same-day Cleaning,Sea Point,commercial,/same-day-cleaning/sea-point,P0,TBD,High,Partial,service-location,seo_same_day_cleaning_sea_point
-Same-day Cleaning,Green Point,commercial,/same-day-cleaning/green-point,P0,TBD,High,Partial,service-location,seo_same_day_cleaning_green_point
-Same-day Cleaning,Claremont,commercial,/same-day-cleaning/claremont,P0,TBD,High,Partial,service-location,seo_same_day_cleaning_claremont
-Same-day Cleaning,Century City,commercial,/same-day-cleaning/century-city,P0,TBD,High,Partial,service-location,seo_same_day_cleaning_century_city
-Same-day Cleaning,Camps Bay,commercial,/same-day-cleaning/camps-bay,P0,TBD,High,Partial,service-location,seo_same_day_cleaning_camps_bay
-Office Cleaning,Sea Point,commercial,/office-cleaning/sea-point,P1,TBD,Medium,Partial (service hub only),service-location,seo_office_cleaning_sea_point
-Office Cleaning,Green Point,commercial,/office-cleaning/green-point,P1,TBD,Medium,Partial,service-location,seo_office_cleaning_green_point
-Office Cleaning,Claremont,commercial,/office-cleaning/claremont,P1,TBD,Medium,Partial,service-location,seo_office_cleaning_claremont
-Office Cleaning,Century City,commercial,/office-cleaning/century-city,P1,TBD,Medium,Partial,service-location,seo_office_cleaning_century_city
-Office Cleaning,Camps Bay,commercial,/office-cleaning/camps-bay,P1,TBD,Medium,Partial,service-location,seo_office_cleaning_camps_bay
-Same-day Cleaning,Cape Town (metro),commercial,/same-day-cleaning/cape-town,P0,TBD,High,Partial (city hub),service-location,seo_same_day_cleaning_cape_town_metro
+Status,Service,Suburb,Search Intent,URL,Priority,Search Volume,Competition,Matrix class,Page Type,CTA Source,Notes
+ACTIVE_METRO_REF,Deep Cleaning,Sea Point,commercial,/locations/sea-point-cleaning-services,P0,TBD,Medium,active_via_hub,location-hub,seo_hub_sea_point,P1A Option B: hubs are sole proposed location spine; Stage 19 path redirected
+ACTIVE_METRO_REF,Deep Cleaning,Green Point,commercial,/locations/green-point-cleaning-services,P0,TBD,Medium,active_via_hub,location-hub,seo_hub_green_point,Stage 19 /deep-cleaning/green-point is NOT canonical
+ACTIVE_METRO_REF,Deep Cleaning,Claremont,commercial,/locations/claremont-cleaning-services,P0,TBD,Medium,active_via_hub,location-hub,seo_hub_claremont,Stage 19 path redirected to hub
+ACTIVE_METRO_REF,Deep Cleaning,Camps Bay,commercial,/locations/camps-bay-cleaning-services,P0,TBD,Medium,active_via_hub,location-hub,seo_hub_camps_bay,Stage 19 path redirected to hub
+UNRESOLVED,Deep Cleaning,Century City,commercial,,P0,TBD,Medium,unresolved_no_hub,none,,P1A Condition 7: no hub evidence — removed from proposed architecture
+ACTIVE_METRO_REF,Move-out Cleaning,Sea Point,commercial,/locations/sea-point-cleaning-services,P0,TBD,Medium,active_via_hub,location-hub,seo_hub_sea_point,Intent×area Stage 19 URL not canonical
+ACTIVE_METRO_REF,Move-out Cleaning,Green Point,commercial,/locations/green-point-cleaning-services,P0,TBD,Medium,active_via_hub,location-hub,seo_hub_green_point,
+ACTIVE_METRO_REF,Move-out Cleaning,Claremont,commercial,/locations/claremont-cleaning-services,P0,TBD,Medium,active_via_hub,location-hub,seo_hub_claremont,
+ACTIVE_METRO_REF,Move-out Cleaning,Camps Bay,commercial,/locations/camps-bay-cleaning-services,P0,TBD,Medium,active_via_hub,location-hub,seo_hub_camps_bay,
+UNRESOLVED,Move-out Cleaning,Century City,commercial,,P0,TBD,Medium,unresolved_no_hub,none,,P1A Condition 7
+RETIRED_410,Airbnb Cleaning,Sea Point,commercial,/services/airbnb-cleaning-sea-point,P0,TBD,Medium,retired_410,none,,P1A Condition 6: removed from active landing matrices; HTTP 410
+RETIRED_410,Airbnb Cleaning,Green Point,commercial,/services/airbnb-cleaning-green-point,P0,TBD,Medium,retired_410,none,,P1A Condition 6; HTTP 410
+RETIRED_410,Airbnb Cleaning,Claremont,commercial,/services/airbnb-cleaning-claremont,P0,TBD,Medium,retired_410,none,,P1A Condition 6; HTTP 410
+UNRESOLVED,Airbnb Cleaning,Century City,commercial,,P0,TBD,Medium,unresolved_no_hub,none,,No hub; Stage 19 /airbnb-cleaning/century-city not proposed canon
+ACTIVE_METRO_REF,Airbnb Cleaning,Camps Bay,commercial,/locations/camps-bay-cleaning-services,P0,TBD,Medium,active_via_hub,location-hub,seo_hub_camps_bay,Prefer hub; metro /services/airbnb-cleaning-cape-town for service intent
+ACTIVE_METRO_REF,Same-day Cleaning,Sea Point,commercial,/locations/sea-point-cleaning-services,P0,TBD,High,active_via_hub,location-hub,seo_hub_sea_point,Stage 19 same-day paths redirected
+ACTIVE_METRO_REF,Same-day Cleaning,Green Point,commercial,/locations/green-point-cleaning-services,P0,TBD,High,active_via_hub,location-hub,seo_hub_green_point,
+ACTIVE_METRO_REF,Same-day Cleaning,Claremont,commercial,/locations/claremont-cleaning-services,P0,TBD,High,active_via_hub,location-hub,seo_hub_claremont,
+ACTIVE_METRO_REF,Same-day Cleaning,Camps Bay,commercial,/locations/camps-bay-cleaning-services,P0,TBD,High,active_via_hub,location-hub,seo_hub_camps_bay,
+UNRESOLVED,Same-day Cleaning,Century City,commercial,,P0,TBD,High,unresolved_no_hub,none,,P1A Condition 7
+ACTIVE_METRO_REF,Same-day Cleaning,Cape Town (metro),commercial,/services/standard-cleaning-cape-town,P0,TBD,High,active_via_metro,service-metro,seo_same_day_via_standard,City/metro same-day: use metro service not Stage 19 path; city phrase intent owner is /
+DEFERRED_P1,Office Cleaning,Sea Point,commercial,/services/office-cleaning-cape-town,P1,TBD,Medium,deferred_via_metro,service-metro,seo_office_metro,Office×suburb Stage 19 not canonical; product scope open
+DEFERRED_P1,Office Cleaning,Green Point,commercial,/services/office-cleaning-cape-town,P1,TBD,Medium,deferred_via_metro,service-metro,seo_office_metro,
+DEFERRED_P1,Office Cleaning,Claremont,commercial,/services/office-cleaning-cape-town,P1,TBD,Medium,deferred_via_metro,service-metro,seo_office_metro,
+DEFERRED_P1,Office Cleaning,Camps Bay,commercial,/services/office-cleaning-cape-town,P1,TBD,Medium,deferred_via_metro,service-metro,seo_office_metro,
+UNRESOLVED,Office Cleaning,Century City,commercial,,P1,TBD,Medium,unresolved_no_hub,none,,P1A Condition 7

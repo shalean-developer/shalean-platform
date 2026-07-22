@@ -18,6 +18,7 @@ function airbnbHostGuideToIndexPost(slug: string): BlogIndexPost | null {
     readingTime: p.readingTimeMinutes,
     publishedAt: p.publishedAt,
     source: "programmatic",
+    noindex: false,
   };
 }
 

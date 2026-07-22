@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { replaceCleanerAvailabilityFromWeekly } from "@/lib/admin/replaceCleanerAvailabilityFromWeekly";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { syncCleanerSummary } from "@/lib/cleaner/syncCleanerSummary";
@@ -41,8 +41,12 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     data: { user },
     error: sessionErr,
   } = await pub.auth.getUser(token);
-  if (sessionErr || !user?.email || !isAdmin(user.email)) {
-    return NextResponse.json({ error: "Admin access required." }, { status: 403 });
+  if (sessionErr || !user?.id) {
+    return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
+  }
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   let body: unknown;

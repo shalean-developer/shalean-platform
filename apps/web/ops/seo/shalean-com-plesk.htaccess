@@ -1,0 +1,499 @@
+# =============================================================================
+# shalean.com → https://shalean.co.za FULL migration map (Plesk / Apache / LiteSpeed)
+# STATUS: LIVE_HTTP_VERIFIED — full explicit map applied and HTTP-verified 2026-07-22
+# Source of truth: apps/web/lib/seo/shaleanComMigrationMap.ts
+# Map entries: 193 explicit + path-preserve fallback
+# Evidence: docs/audits/seo/SHALEAN-COM-PLESK-FULL-MAP-HTTP-VERIFICATION-2026-07-22.md
+# Regenerate migration block from buildShaleanComHtaccessRules(); preserve LSCACHE/WP/PHP below.
+# Do not commit recoverable .htaccess backups or hosting credentials.
+# =============================================================================
+
+# BEGIN LSCACHE
+## LITESPEED WP CACHE PLUGIN - Do not edit the contents of this block! ##
+<IfModule LiteSpeed>
+RewriteEngine on
+CacheLookup on
+RewriteRule .* - [E=Cache-Control:no-autoflush]
+RewriteRule litespeed/debug/.*\.log$ - [F,L]
+RewriteRule \.litespeed_conf\.dat - [F,L]
+
+### marker ASYNC start ###
+RewriteCond %{REQUEST_URI} /wp-admin/admin-ajax\.php
+RewriteCond %{QUERY_STRING} action=async_litespeed
+RewriteRule .* - [E=noabort:1]
+### marker ASYNC end ###
+
+### marker MOBILE start ###
+RewriteCond %{HTTP_USER_AGENT} Mobile|Android|Silk/|Kindle|BlackBerry|Opera\ Mini|Opera\ Mobi [NC]
+RewriteRule .* - [E=Cache-Control:vary=%{ENV:LSCACHE_VARY_VALUE}+ismobile]
+### marker MOBILE end ###
+
+### marker DROPQS start ###
+CacheKeyModify -qs:fbclid
+CacheKeyModify -qs:gclid
+CacheKeyModify -qs:utm*
+CacheKeyModify -qs:_ga
+### marker DROPQS end ###
+
+</IfModule>
+## LITESPEED WP CACHE PLUGIN - Do not edit the contents of this block! ##
+# END LSCACHE
+# BEGIN NON_LSCACHE
+## LITESPEED WP CACHE PLUGIN - Do not edit the contents of this block! ##
+## LITESPEED WP CACHE PLUGIN - Do not edit the contents of this block! ##
+# END NON_LSCACHE
+
+# BEGIN SHALEAN.COM FULL MIGRATION MAP (generated)
+# =============================================================================
+# shalean.com → https://shalean.co.za migration (Plesk / Apache / LiteSpeed)
+# STATUS: LIVE_HTTP_VERIFIED — full map HTTP-verified 2026-07-22 (see docs/audits/seo/)
+# Generated from apps/web/lib/seo/shaleanComMigrationMap.ts
+# Apply on the shalean.com document root in Plesk, then verify with curl -sI.
+# =============================================================================
+RewriteEngine On
+
+# Explicit one-to-one map (QSA preserves query strings)
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^/?$ https://shalean.co.za/ [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^contact/?$ https://shalean.co.za/contact [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^quote/?$ https://shalean.co.za/quote [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/?$ https://shalean.co.za/services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^about/?$ https://shalean.co.za/about [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^about-us-shalean-cleaning-services/?$ https://shalean.co.za/about [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/?$ https://shalean.co.za/blog [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^faq/?$ https://shalean.co.za/faq [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^reviews/?$ https://shalean.co.za/reviews [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^testimonials/?$ https://shalean.co.za/reviews [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^team/?$ https://shalean.co.za/about [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^how-it-works/?$ https://shalean.co.za/#how-it-works [R=301,L,QSA,NE]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^book/?$ https://shalean.co.za/book [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^privacy-policy/?$ https://shalean.co.za/privacy-policy [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^privacy/?$ https://shalean.co.za/privacy-policy [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^terms-of-service/?$ https://shalean.co.za/terms-of-service [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^terms/?$ https://shalean.co.za/terms-of-service [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^pricing/?$ https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026 [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-prices-cape-town/?$ https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026 [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services-cape-town/?$ https://shalean.co.za/services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^maid-services-cape-town/?$ https://shalean.co.za/services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^home-cleaning/?$ https://shalean.co.za/services/standard-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^deep-cleaning/?$ https://shalean.co.za/services/deep-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/standard-cleaning/?$ https://shalean.co.za/services/standard-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/deep-cleaning/?$ https://shalean.co.za/services/deep-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/move-in-out-cleaning/?$ https://shalean.co.za/services/move-out-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/office-cleaning/?$ https://shalean.co.za/services/office-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/standard-cleaning-cape-town/?$ https://shalean.co.za/services/standard-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/deep-cleaning-cape-town/?$ https://shalean.co.za/services/deep-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/airbnb-cleaning-cape-town/?$ https://shalean.co.za/services/airbnb-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/move-out-cleaning-cape-town/?$ https://shalean.co.za/services/move-out-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/office-cleaning-cape-town/?$ https://shalean.co.za/services/office-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/carpet-cleaning-cape-town/?$ https://shalean.co.za/services/carpet-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/window-cleaning-cape-town/?$ https://shalean.co.za/services/window-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/bantry-bay-cleaning-services/?$ https://shalean.co.za/locations/bantry-bay-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/bantry-bay/?$ https://shalean.co.za/locations/bantry-bay-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/bantry-bay/?$ https://shalean.co.za/locations/bantry-bay-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/bantry-bay/?$ https://shalean.co.za/locations/bantry-bay-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/bergvliet-cleaning-services/?$ https://shalean.co.za/locations/bergvliet-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/bergvliet/?$ https://shalean.co.za/locations/bergvliet-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/bergvliet/?$ https://shalean.co.za/locations/bergvliet-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/bergvliet/?$ https://shalean.co.za/locations/bergvliet-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/camps-bay-cleaning-services/?$ https://shalean.co.za/locations/camps-bay-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/camps-bay/?$ https://shalean.co.za/locations/camps-bay-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/camps-bay/?$ https://shalean.co.za/locations/camps-bay-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/camps-bay/?$ https://shalean.co.za/locations/camps-bay-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/claremont-cleaning-services/?$ https://shalean.co.za/locations/claremont-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/claremont/?$ https://shalean.co.za/locations/claremont-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/claremont/?$ https://shalean.co.za/locations/claremont-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/claremont/?$ https://shalean.co.za/locations/claremont-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/fresnaye-cleaning-services/?$ https://shalean.co.za/locations/fresnaye-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/fresnaye/?$ https://shalean.co.za/locations/fresnaye-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/fresnaye/?$ https://shalean.co.za/locations/fresnaye-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/fresnaye/?$ https://shalean.co.za/locations/fresnaye-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/gardens-cleaning-services/?$ https://shalean.co.za/locations/gardens-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/gardens/?$ https://shalean.co.za/locations/gardens-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/gardens/?$ https://shalean.co.za/locations/gardens-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/gardens/?$ https://shalean.co.za/locations/gardens-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/green-point-cleaning-services/?$ https://shalean.co.za/locations/green-point-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/green-point/?$ https://shalean.co.za/locations/green-point-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/green-point/?$ https://shalean.co.za/locations/green-point-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/green-point/?$ https://shalean.co.za/locations/green-point-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/kenilworth-cleaning-services/?$ https://shalean.co.za/locations/kenilworth-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/kenilworth/?$ https://shalean.co.za/locations/kenilworth-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/kenilworth/?$ https://shalean.co.za/locations/kenilworth-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/kenilworth/?$ https://shalean.co.za/locations/kenilworth-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/newlands-cleaning-services/?$ https://shalean.co.za/locations/newlands-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/newlands/?$ https://shalean.co.za/locations/newlands-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/newlands/?$ https://shalean.co.za/locations/newlands-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/newlands/?$ https://shalean.co.za/locations/newlands-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/observatory-cleaning-services/?$ https://shalean.co.za/locations/observatory-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/observatory/?$ https://shalean.co.za/locations/observatory-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/observatory/?$ https://shalean.co.za/locations/observatory-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/observatory/?$ https://shalean.co.za/locations/observatory-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/plumstead-cleaning-services/?$ https://shalean.co.za/locations/plumstead-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/plumstead/?$ https://shalean.co.za/locations/plumstead-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/plumstead/?$ https://shalean.co.za/locations/plumstead-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/plumstead/?$ https://shalean.co.za/locations/plumstead-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/rondebosch-cleaning-services/?$ https://shalean.co.za/locations/rondebosch-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/rondebosch/?$ https://shalean.co.za/locations/rondebosch-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/rondebosch/?$ https://shalean.co.za/locations/rondebosch-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/rondebosch/?$ https://shalean.co.za/locations/rondebosch-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/rosebank-cleaning-services/?$ https://shalean.co.za/locations/rosebank-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/rosebank/?$ https://shalean.co.za/locations/rosebank-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/rosebank/?$ https://shalean.co.za/locations/rosebank-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/rosebank/?$ https://shalean.co.za/locations/rosebank-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/sea-point-cleaning-services/?$ https://shalean.co.za/locations/sea-point-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/sea-point/?$ https://shalean.co.za/locations/sea-point-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/sea-point/?$ https://shalean.co.za/locations/sea-point-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/sea-point/?$ https://shalean.co.za/locations/sea-point-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/tamboerskloof-cleaning-services/?$ https://shalean.co.za/locations/tamboerskloof-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/tamboerskloof/?$ https://shalean.co.za/locations/tamboerskloof-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/tamboerskloof/?$ https://shalean.co.za/locations/tamboerskloof-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/tamboerskloof/?$ https://shalean.co.za/locations/tamboerskloof-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/vredehoek-cleaning-services/?$ https://shalean.co.za/locations/vredehoek-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/vredehoek/?$ https://shalean.co.za/locations/vredehoek-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/vredehoek/?$ https://shalean.co.za/locations/vredehoek-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/vredehoek/?$ https://shalean.co.za/locations/vredehoek-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/woodstock-cleaning-services/?$ https://shalean.co.za/locations/woodstock-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/woodstock/?$ https://shalean.co.za/locations/woodstock-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/woodstock/?$ https://shalean.co.za/locations/woodstock-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/woodstock/?$ https://shalean.co.za/locations/woodstock-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/wynberg-cleaning-services/?$ https://shalean.co.za/locations/wynberg-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/wynberg/?$ https://shalean.co.za/locations/wynberg-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/wynberg/?$ https://shalean.co.za/locations/wynberg-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/wynberg/?$ https://shalean.co.za/locations/wynberg-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/zonnebloem-cleaning-services/?$ https://shalean.co.za/locations/zonnebloem-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/zonnebloem/?$ https://shalean.co.za/locations/zonnebloem-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/zonnebloem/?$ https://shalean.co.za/locations/zonnebloem-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/zonnebloem/?$ https://shalean.co.za/locations/zonnebloem-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/constantia-cleaning-services/?$ https://shalean.co.za/locations/constantia-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/constantia/?$ https://shalean.co.za/locations/constantia-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/constantia/?$ https://shalean.co.za/locations/constantia-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/constantia/?$ https://shalean.co.za/locations/constantia-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/table-view-cleaning-services/?$ https://shalean.co.za/locations/table-view-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/table-view/?$ https://shalean.co.za/locations/table-view-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/table-view/?$ https://shalean.co.za/locations/table-view-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/table-view/?$ https://shalean.co.za/locations/table-view-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/durbanville-cleaning-services/?$ https://shalean.co.za/locations/durbanville-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/durbanville/?$ https://shalean.co.za/locations/durbanville-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/durbanville/?$ https://shalean.co.za/locations/durbanville-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/durbanville/?$ https://shalean.co.za/locations/durbanville-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^locations/bellville-cleaning-services/?$ https://shalean.co.za/locations/bellville-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^location/cape-town/bellville/?$ https://shalean.co.za/locations/bellville-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services/bellville/?$ https://shalean.co.za/locations/bellville-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cape-town/cleaning-services/bellville/?$ https://shalean.co.za/locations/bellville-cleaning-services [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/airbnb-cleaning-checklist-cape-town/?$ https://shalean.co.za/blog/airbnb-cleaning-checklist-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/airbnb-cleaning-constantia-cape-town/?$ https://shalean.co.za/blog/airbnb-cleaning-constantia-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/airbnb-cleaning-cost-cape-town/?$ https://shalean.co.za/blog/airbnb-cleaning-cost-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/airbnb-cleaning-mistakes-hosts-make/?$ https://shalean.co.za/blog/airbnb-cleaning-mistakes-hosts-make [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/airbnb-cleaning-newlands-cape-town/?$ https://shalean.co.za/blog/airbnb-cleaning-newlands-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/airbnb-cleaning-observatory-cape-town/?$ https://shalean.co.za/blog/airbnb-cleaning-observatory-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/apartment-cleaning-tips-sea-point-cape-town/?$ https://shalean.co.za/blog/apartment-cleaning-tips-sea-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/best-airbnb-cleaning-tips-cape-town/?$ https://shalean.co.za/blog/best-airbnb-cleaning-tips-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/carpet-cleaning-constantia-cape-town/?$ https://shalean.co.za/blog/carpet-cleaning-constantia-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/carpet-cleaning-durbanville-cape-town/?$ https://shalean.co.za/blog/carpet-cleaning-durbanville-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/carpet-cleaning-green-point-cape-town/?$ https://shalean.co.za/blog/carpet-cleaning-green-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/cleaning-mistakes-that-make-your-home-dirtier-cape-town/?$ https://shalean.co.za/blog/cleaning-mistakes-that-make-your-home-dirtier-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/cleaning-prices-claremont-cape-town/?$ https://shalean.co.za/blog/cleaning-prices-claremont-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/cleaning-prices-durbanville-cape-town/?$ https://shalean.co.za/blog/cleaning-prices-durbanville-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/cleaning-prices-gardens-cape-town/?$ https://shalean.co.za/blog/cleaning-prices-gardens-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/cleaning-prices-green-point-cape-town/?$ https://shalean.co.za/blog/cleaning-prices-green-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/cleaning-prices-newlands-cape-town/?$ https://shalean.co.za/blog/cleaning-prices-newlands-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/cleaning-prices-observatory-cape-town/?$ https://shalean.co.za/blog/cleaning-prices-observatory-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/cleaning-prices-rondebosch-cape-town/?$ https://shalean.co.za/blog/cleaning-prices-rondebosch-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/cleaning-prices-sea-point-cape-town/?$ https://shalean.co.za/blog/cleaning-prices-sea-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-checklist-claremont-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-checklist-claremont-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-checklist-durbanville-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-checklist-durbanville-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-checklist-gardens-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-checklist-gardens-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-checklist-green-point-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-checklist-green-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-checklist-newlands-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-checklist-newlands-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-checklist-observatory-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-checklist-observatory-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-checklist-rondebosch-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-checklist-rondebosch-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-checklist-sea-point-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-checklist-sea-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-constantia-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-constantia-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-newlands-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-newlands-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-observatory-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-observatory-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/deep-cleaning-vs-regular-cleaning-cape-town/?$ https://shalean.co.za/blog/deep-cleaning-vs-regular-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/home-cleaning-frequency-claremont-cape-town/?$ https://shalean.co.za/blog/home-cleaning-frequency-claremont-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/home-cleaning-frequency-durbanville-cape-town/?$ https://shalean.co.za/blog/home-cleaning-frequency-durbanville-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/home-cleaning-frequency-gardens-cape-town/?$ https://shalean.co.za/blog/home-cleaning-frequency-gardens-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/home-cleaning-frequency-green-point-cape-town/?$ https://shalean.co.za/blog/home-cleaning-frequency-green-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/home-cleaning-frequency-newlands-cape-town/?$ https://shalean.co.za/blog/home-cleaning-frequency-newlands-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/home-cleaning-frequency-observatory-cape-town/?$ https://shalean.co.za/blog/home-cleaning-frequency-observatory-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/home-cleaning-frequency-rondebosch-cape-town/?$ https://shalean.co.za/blog/home-cleaning-frequency-rondebosch-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/home-cleaning-frequency-sea-point-cape-town/?$ https://shalean.co.za/blog/home-cleaning-frequency-sea-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/how-long-does-house-cleaning-take-cape-town/?$ https://shalean.co.za/blog/how-long-does-house-cleaning-take-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/how-much-does-cleaning-cost-cape-town-2026/?$ https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026 [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/how-often-deep-clean-home-cape-town/?$ https://shalean.co.za/blog/how-often-deep-clean-home-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/how-often-to-clean-airbnb-cape-town/?$ https://shalean.co.za/blog/how-often-to-clean-airbnb-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/is-it-worth-hiring-cleaner-cape-town/?$ https://shalean.co.za/blog/is-it-worth-hiring-cleaner-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-checklist-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-checklist-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-constantia-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-constantia-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-cost-claremont-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-cost-claremont-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-cost-durbanville-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-cost-durbanville-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-cost-gardens-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-cost-gardens-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-cost-green-point-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-cost-green-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-cost-newlands-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-cost-newlands-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-cost-observatory-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-cost-observatory-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-cost-rondebosch-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-cost-rondebosch-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-cost-sea-point-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-cost-sea-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-newlands-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-newlands-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/move-out-cleaning-observatory-cape-town/?$ https://shalean.co.za/blog/move-out-cleaning-observatory-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/prepare-airbnb-for-cleaning/?$ https://shalean.co.za/blog/prepare-airbnb-for-cleaning [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/prepare-home-before-cleaner-arrives-cape-town/?$ https://shalean.co.za/blog/prepare-home-before-cleaner-arrives-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/same-day-cleaning-cape-town/?$ https://shalean.co.za/blog/same-day-cleaning-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/standard-cleaning-constantia-cape-town/?$ https://shalean.co.za/blog/standard-cleaning-constantia-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/standard-cleaning-durbanville-cape-town/?$ https://shalean.co.za/blog/standard-cleaning-durbanville-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/standard-cleaning-green-point-cape-town/?$ https://shalean.co.za/blog/standard-cleaning-green-point-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/standard-cleaning-newlands-cape-town/?$ https://shalean.co.za/blog/standard-cleaning-newlands-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/standard-cleaning-observatory-cape-town/?$ https://shalean.co.za/blog/standard-cleaning-observatory-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/weekly-cleaning-routine-busy-professionals-cape-town/?$ https://shalean.co.za/blog/weekly-cleaning-routine-busy-professionals-cape-town [R=301,L,QSA]
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/what-does-professional-cleaner-do-cape-town/?$ https://shalean.co.za/blog/what-does-professional-cleaner-do-cape-town [R=301,L,QSA]
+
+# Path-preserving fallback for remaining public URLs (keeps query string)
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^(.*)$ https://shalean.co.za/$1 [R=301,L,QSA]
+# END SHALEAN.COM FULL MIGRATION MAP
+
+# BEGIN WordPress
+# The directives (lines) between "BEGIN WordPress" and "END WordPress" are
+# dynamically generated, and should only be modified via WordPress filters.
+# Any changes to the directives between these markers will be overwritten.
+<IfModule mod_rewrite.c>
+RewriteEngine On
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+RewriteBase /
+RewriteRule ^index\.php$ - [L]
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule . /index.php [L]
+</IfModule>
+
+# END WordPress
+
+# BEGIN cPanel-generated php ini directives, do not edit
+# Manual editing of this file may result in unexpected behavior.
+# To make changes to this file, use the cPanel MultiPHP INI Editor (Home >> Software >> MultiPHP INI Editor)
+# For more information, read our documentation (https://go.cpanel.net/EA4ModifyINI)
+<IfModule php8_module>
+   php_flag display_errors Off
+   php_value max_execution_time 300
+   php_value max_input_time 600
+   php_value max_input_vars 5000
+   php_value memory_limit 528M
+   php_value post_max_size 228M
+   php_value session.gc_maxlifetime 1440
+   php_value session.save_path "/var/cpanel/php/sessions/ea-php81"
+   php_value upload_max_filesize 128M
+   php_flag zlib.output_compression Off
+</IfModule>
+<IfModule lsapi_module>
+   php_flag display_errors Off
+   php_value max_execution_time 300
+   php_value max_input_time 600
+   php_value max_input_vars 5000
+   php_value memory_limit 528M
+   php_value post_max_size 228M
+   php_value session.gc_maxlifetime 1440
+   php_value session.save_path "/var/cpanel/php/sessions/ea-php81"
+   php_value upload_max_filesize 128M
+   php_flag zlib.output_compression Off
+</IfModule>
+# END cPanel-generated php ini directives, do not edit
+
+# php -- BEGIN cPanel-generated handler, do not edit
+# Set the “ea-php81” package as the default “PHP” programming language.
+<IfModule mime_module>
+  AddHandler application/x-httpd-ea-php81 .php .php8 .phtml
+</IfModule>
+# php -- END cPanel-generated handler, do not edit

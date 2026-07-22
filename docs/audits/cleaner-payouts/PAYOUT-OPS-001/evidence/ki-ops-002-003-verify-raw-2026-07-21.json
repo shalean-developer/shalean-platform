@@ -1,0 +1,135 @@
+{
+  "startedAt": "2026-07-21T12:01:53.206Z",
+  "preview": "https://shalean-platform-rdemww8pd-shalean-cleaning-services.vercel.app",
+  "stagingRef": "gbgnemlpyykyhpqqbgru",
+  "kiOps002": {
+    "proposalId": "4db13e7e-2fc8-456e-8675-b4c5c9c92577",
+    "actionType": "adjust_payout_earnings",
+    "status": "approved",
+    "bookingId": "b89645ad-663c-4060-b0b5-5719cc4644ef",
+    "canonicalPreChangeFromApproveAuditCents": 30000,
+    "storedOriginalTotalCents": 30000,
+    "storedOriginalPayoutCents": 30000,
+    "storedProposedPayoutCents": 20000,
+    "storedProposedBonusCents": 0,
+    "storedProposedTotalCents": 20000,
+    "computedDeltaCents": -10000,
+    "userExpectedExample": {
+      "note": "User cited R300→R250 as expected shape; actual successful test was R300→R200",
+      "expectedIfR300toR250": {
+        "original": 30000,
+        "proposed": 25000,
+        "delta": -5000
+      },
+      "actualObserved": {
+        "original": 30000,
+        "proposed": 20000,
+        "delta": -10000
+      }
+    },
+    "snapshotAt": "2026-07-21T11:38:43.696Z",
+    "verdict": "PASS",
+    "reason": "original_total_cents equals canonical pre-change amount from approve audit old_values.total_cents"
+  },
+  "kiOps003": {
+    "sequential": {
+      "proposalId": "d45d1d50-38cf-476e-ba5b-5619216c69c0",
+      "reject1": {
+        "status": 200,
+        "ok": true,
+        "json": {
+          "ok": true,
+          "already_processed": false,
+          "status": "rejected"
+        }
+      },
+      "reject2": {
+        "status": 200,
+        "ok": true,
+        "json": {
+          "ok": true,
+          "already_processed": true,
+          "status": "rejected"
+        }
+      },
+      "proposalAfterFirst": {
+        "status": "rejected",
+        "reviewed_by": "e99ac17b-1a2f-4173-a44b-c94be39cd9e5",
+        "review_note": "KI-OPS-003 sequential reject note A",
+        "reviewed_at": "2026-07-21T12:02:01.101359+00:00"
+      },
+      "proposalAfterRetry": {
+        "status": "rejected",
+        "reviewed_by": "e99ac17b-1a2f-4173-a44b-c94be39cd9e5",
+        "review_note": "KI-OPS-003 sequential reject note A",
+        "reviewed_at": "2026-07-21T12:02:01.101359+00:00"
+      },
+      "checkerUnchanged": true,
+      "reviewNoteUnchanged": true,
+      "reviewedAtUnchanged": true,
+      "earningsUnchanged": true,
+      "rejectAuditCountAfterFirst": 1,
+      "rejectAuditCountAfterRetry": 2,
+      "rejectAuditIds": [
+        "b6e17120-fc3d-4dd2-87db-c74326d09625",
+        "e44c5adc-a982-478c-b753-2d3960ee589c"
+      ],
+      "approveAfterReject": {
+        "status": 409,
+        "ok": false,
+        "code": "proposal_already_rejected"
+      },
+      "approveAfterRejectBlocked": true,
+      "verdict": "FAIL"
+    },
+    "concurrent": {
+      "proposalId": "d76df02e-5acd-4ef2-8933-3d287ed922b6",
+      "responses": [
+        {
+          "status": 200,
+          "ok": true,
+          "already_processed": false
+        },
+        {
+          "status": 200,
+          "ok": true,
+          "already_processed": true
+        }
+      ],
+      "proposal": {
+        "status": "rejected",
+        "reviewed_by": "e99ac17b-1a2f-4173-a44b-c94be39cd9e5",
+        "review_note": "KI-OPS-003 concurrent reject A",
+        "reviewed_at": "2026-07-21T12:02:08.905572+00:00"
+      },
+      "earningsUnchanged": true,
+      "rejectAuditCount": 2,
+      "rejectAuditIds": [
+        "65d97298-602b-44c7-9566-5d5aa421dfa5",
+        "0be47b17-dc15-492f-b9b9-96a87d6442c0"
+      ],
+      "verdict": "FAIL"
+    },
+    "priorAppPathRejectSample": {
+      "proposalId": "8823bfad-5689-4772-ab8f-d57d56b94b09",
+      "rejectAuditCount": 2,
+      "note": "Earlier app-path sequential retry already showed duplicate audits"
+    },
+    "overallVerdict": "FAIL",
+    "summary": {
+      "sequentialRejectAuditEvents": 2,
+      "concurrentRejectAuditEvents": 2
+    }
+  },
+  "health": {
+    "shaleanAppEnv": "staging",
+    "configuredRef": "gbgnemlpyykyhpqqbgru",
+    "gitSha": "a533794b92abbea722c6d1e65e6c97dd5416be17"
+  },
+  "restoredAt": "2026-07-21T12:02:12.147Z",
+  "finishedAt": "2026-07-21T12:02:12.147Z",
+  "overall": {
+    "kiOps002": "PASS",
+    "kiOps003": "FAIL"
+  }
+}

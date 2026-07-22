@@ -1,0 +1,113 @@
+{
+  "documentId": "SEO-P2C-CWV-lighthouse-summary-2026-07-22",
+  "measuredAt": "2026-07-22T09:37:29.059Z",
+  "tool": "lighthouse@13.4.1 (local lab)",
+  "chrome": "C:\\\\Program Files\\\\Google\\\\Chrome\\\\Application\\\\chrome.exe",
+  "note": "Lab metrics only. PSI API returned HTTP 429 (quota). No field CrUX in this package. No GSC used.",
+  "rows": [
+    {
+      "url": "https://shalean.co.za/book",
+      "formFactor": "desktop",
+      "performanceScore": 80,
+      "LCP_ms": 1323,
+      "CLS": 0,
+      "TBT_ms": 321,
+      "FCP_ms": 763,
+      "SpeedIndex_ms": 1651,
+      "fetchTime": "2026-07-22T09:36:07.910Z",
+      "lighthouseVersion": "13.4.1",
+      "file": "docs/audits/seo/evidence/lh-shalean-co-za-book-desktop-2026-07-22.json"
+    },
+    {
+      "url": "https://shalean.co.za/book",
+      "formFactor": "mobile",
+      "performanceScore": 66,
+      "LCP_ms": 2753,
+      "CLS": 0.001,
+      "TBT_ms": 2051,
+      "FCP_ms": 1598,
+      "SpeedIndex_ms": 3486,
+      "fetchTime": "2026-07-22T09:35:39.349Z",
+      "lighthouseVersion": "13.4.1",
+      "file": "docs/audits/seo/evidence/lh-shalean-co-za-book-mobile-2026-07-22.json"
+    },
+    {
+      "url": "https://shalean.co.za/",
+      "formFactor": "desktop",
+      "performanceScore": 73,
+      "LCP_ms": 1470,
+      "CLS": 0.009,
+      "TBT_ms": 322,
+      "FCP_ms": 858,
+      "SpeedIndex_ms": 3363,
+      "fetchTime": "2026-07-22T09:32:52.649Z",
+      "lighthouseVersion": "13.4.1",
+      "file": "docs/audits/seo/evidence/lh-shalean-co-za--desktop-2026-07-22.json"
+    },
+    {
+      "url": "https://shalean.co.za/locations/sea-point-cleaning-services",
+      "formFactor": "desktop",
+      "performanceScore": 97,
+      "LCP_ms": 1150,
+      "CLS": 0,
+      "TBT_ms": 18,
+      "FCP_ms": 665,
+      "SpeedIndex_ms": 1104,
+      "fetchTime": "2026-07-22T09:34:09.106Z",
+      "lighthouseVersion": "13.4.1",
+      "file": "docs/audits/seo/evidence/lh-shalean-co-za-locations-sea-point-cleaning-services-desktop-2026-07-22.json"
+    },
+    {
+      "url": "https://shalean.co.za/locations/sea-point-cleaning-services",
+      "formFactor": "mobile",
+      "performanceScore": 48,
+      "LCP_ms": 5316,
+      "CLS": 0,
+      "TBT_ms": 2394,
+      "FCP_ms": 1959,
+      "SpeedIndex_ms": 4032,
+      "fetchTime": "2026-07-22T09:33:42.332Z",
+      "lighthouseVersion": "13.4.1",
+      "file": "docs/audits/seo/evidence/lh-shalean-co-za-locations-sea-point-cleaning-services-mobile-2026-07-22.json"
+    },
+    {
+      "url": "https://shalean.co.za/",
+      "formFactor": "mobile",
+      "performanceScore": 43,
+      "LCP_ms": 6471,
+      "CLS": 0,
+      "TBT_ms": 2575,
+      "FCP_ms": 1509,
+      "SpeedIndex_ms": 6010,
+      "fetchTime": "2026-07-22T09:32:09.845Z",
+      "lighthouseVersion": "13.4.1",
+      "file": "docs/audits/seo/evidence/lh-shalean-co-za--mobile-2026-07-22.json"
+    },
+    {
+      "url": "https://shalean.co.za/services/standard-cleaning-cape-town",
+      "formFactor": "desktop",
+      "performanceScore": 78,
+      "LCP_ms": 1068,
+      "CLS": 0,
+      "TBT_ms": 404,
+      "FCP_ms": 525,
+      "SpeedIndex_ms": 1784,
+      "fetchTime": "2026-07-22T09:34:58.770Z",
+      "lighthouseVersion": "13.4.1",
+      "file": "docs/audits/seo/evidence/lh-shalean-co-za-services-standard-cleaning-cape-town-desktop-2026-07-22.json"
+    },
+    {
+      "url": "https://shalean.co.za/services/standard-cleaning-cape-town",
+      "formFactor": "mobile",
+      "performanceScore": 71,
+      "LCP_ms": 4582,
+      "CLS": 0,
+      "TBT_ms": 480,
+      "FCP_ms": 1489,
+      "SpeedIndex_ms": 3169,
+      "fetchTime": "2026-07-22T09:34:36.142Z",
+      "lighthouseVersion": "13.4.1",
+      "file": "docs/audits/seo/evidence/lh-shalean-co-za-services-standard-cleaning-cape-town-mobile-2026-07-22.json"
+    }
+  ]
+}

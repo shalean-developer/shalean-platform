@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { aggregateMarketingData } from "@/lib/admin/marketingAggregation";
 import { MARKETING_CHANNELS, type MarketingChannel } from "@/lib/admin/marketingAttribution";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -32,7 +32,9 @@ async function assertAdmin(request: Request): Promise<{ ok: true } | { ok: false
     data: { user },
     error: userErr,
   } = await pub.auth.getUser(token);
-  if (userErr || !user?.email || !isAdmin(user.email)) return { ok: false, status: 403, error: "Forbidden." };
+  if (userErr || !user?.id) return { ok: false, status: 401, error: "Invalid or expired session." };
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) return { ok: false, status: adminAuth.status, error: adminAuth.error };
   return { ok: true };
 }
 

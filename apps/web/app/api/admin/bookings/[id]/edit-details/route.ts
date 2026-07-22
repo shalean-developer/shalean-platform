@@ -7,7 +7,7 @@ import {
   isAdminEditBookingDetailsNotesOnlyBody,
 } from "@/lib/booking/adminEditBookingDetails";
 import { adminRepriceBooking, adminUpdateBookingNotes } from "@/lib/booking/bookingOperations";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { withMoneyActionMakerChecker } from "@/lib/payout/earningsAdjustMakerChecker";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -63,14 +63,12 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const {
     data: { user },
   } = await pub.auth.getUser(token);
-  if (!user?.email || !isAdmin(user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
-  const adminUserId = typeof user.id === "string" && user.id.trim() ? user.id.trim() : "";
-  if (!adminUserId) {
-    return NextResponse.json({ error: "Missing admin user id." }, { status: 401 });
-  }
+  const adminUserId = adminAuth.userId;
 
   let body: AdminEditBookingDetailsBody & { proposal_id?: string };
   try {
@@ -134,7 +132,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       confirm_collect_additional: body.confirm_collect_additional,
     },
     adminUserId,
-    adminEmail: user.email,
+    adminEmail: adminAuth.email,
     proposalId: proposalId || null,
     apply: async () => {
       const result = await adminRepriceBooking({

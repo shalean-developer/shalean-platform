@@ -1,6 +1,6 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { isAdmin } from "@/lib/auth/admin";
+import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { aggregateCleanerPerformance, type BookingPerfInput } from "@/lib/admin/cleanerPerformance";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -26,8 +26,12 @@ export async function GET(request: Request) {
     error: userErr,
   } = await pub.auth.getUser(token);
 
-  if (userErr || !user?.email || !isAdmin(user.email)) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
+  if (userErr || !user?.id) {
+    return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
+  }
+  const adminAuth = await requireAdminUser(user);
+  if (!adminAuth.ok) {
+    return NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status });
   }
 
   const admin = getSupabaseAdmin();

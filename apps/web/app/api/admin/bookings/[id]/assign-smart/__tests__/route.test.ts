@@ -40,7 +40,7 @@ describe("POST /api/admin/bookings/[id]/assign-smart", () => {
     createClientMock.mockReturnValue({
       auth: {
         getUser: vi.fn().mockResolvedValue({
-          data: { user: { email: "admin@example.com" } },
+          data: { user: { id: "00000000-0000-4000-8000-00000000a001", email: "admin@example.com" } },
         }),
       },
     });

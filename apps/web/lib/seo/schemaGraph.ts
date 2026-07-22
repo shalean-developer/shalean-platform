@@ -33,12 +33,16 @@ export type WebSiteJsonLdOptions = {
   includeSearchAction?: boolean;
 };
 
+/** Preferred short brand for Google site-name `alternateName` (SEO-SITENAME-001R). */
+export const WEBSITE_ALTERNATE_NAMES = ["Shalean"] as const;
+
 export function buildWebSiteJsonLdNode(opts?: WebSiteJsonLdOptions): Record<string, unknown> {
   const node: Record<string, unknown> = {
     "@type": "WebSite",
     "@id": SITE_WEBSITE_ID,
     url: SITE_ORIGIN,
     name: "Shalean Cleaning Services",
+    alternateName: [...WEBSITE_ALTERNATE_NAMES],
     inLanguage: "en-ZA",
     publisher: { "@id": PRIMARY_LOCAL_BUSINESS_ID },
   };
