@@ -309,7 +309,7 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
           </p>
           <ul className="mt-6 space-y-4 text-base leading-relaxed text-zinc-700">
             <li>
-              <strong className="text-zinc-900">Atlantic Seaboard two-bed, same-day flip.</strong> Sand in entry tracks,
+              <strong className="text-zinc-900">Atlantic Seaboard two-bed turnover.</strong> Sand in entry tracks,
               balcony rail dust after a southeaster week, and a kitchen photographed for check-in—teams sequence wet-to-dry so
               glass and chrome stay review-ready when humidity rebounds.
             </li>
