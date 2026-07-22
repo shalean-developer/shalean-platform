@@ -95,6 +95,28 @@ describe("SEO-FIX-001/002 service money pages", () => {
     expect(hrefs).toContain("/services");
   });
 
+  it("keeps homepage Window Cleaning card informational with no booking/quote/contact CTA", () => {
+    const sectionPath = path.join(process.cwd(), "components/home/sections/ServicesSection.tsx");
+    const src = readFileSync(sectionPath, "utf8");
+
+    const windowCardMatch = src.match(
+      /\{\s*title:\s*"Window Cleaning",[\s\S]*?kind:\s*"link",[\s\S]*?\},/,
+    );
+    expect(windowCardMatch, "Window Cleaning card definition").toBeTruthy();
+    const windowCard = windowCardMatch![0];
+
+    expect(windowCard).toContain('servicePage: "/services/window-cleaning-cape-town"');
+    expect(windowCard).toMatch(/bookCta:\s*false/);
+    expect(windowCard).not.toMatch(/\/book\b/);
+    expect(windowCard).not.toMatch(/\/quote\b/);
+    expect(windowCard).not.toMatch(/\/contact\b/);
+    expect(windowCard).not.toMatch(/Book Now|Enquire|Request a Quote|Request a quote/i);
+
+    // Book Now CTA must be gated; Window Cleaning uses bookCta: false so it stays informational.
+    expect(src).toMatch(/s\.kind === "priced" \|\| \(s\.kind === "link" && s\.bookCta\)/);
+    expect(src).toMatch(/See service scope/);
+  });
+
   it("omits blocked unverified claims from service money-page copy and metadata", () => {
     const blocked = [
       /4,?500\+?\s*homes/i,

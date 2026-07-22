@@ -24,6 +24,8 @@ type LinkOnlyServiceCard = {
   servicePage: string;
   source: string;
   kind: "link";
+  /** When false, card stays informational (service-page link only; no booking CTA). */
+  bookCta: boolean;
 };
 
 type ServiceCard = PricedServiceCard | LinkOnlyServiceCard;
@@ -84,14 +86,17 @@ const linkOnlyServices: LinkOnlyServiceCard[] = [
     servicePage: "/services/office-cleaning-cape-town",
     source: "home_services_office",
     kind: "link",
+    bookCta: true,
   },
   {
     title: "Window Cleaning",
     description: "Interior and safely reachable exterior glass for coastal apartments and Southern Suburb homes.",
     icon: AppWindow,
     servicePage: "/services/window-cleaning-cape-town",
+    // Informational only: window cleaning is not selectable in booking-v2.
     source: "home_services_window",
     kind: "link",
+    bookCta: false,
   },
 ];
 
@@ -136,7 +141,13 @@ export function ServicesSection() {
                 </h3>
                 <p className="mt-2 flex-1 text-sm leading-relaxed text-gray-600">{s.description}</p>
                 <p className="mt-4 text-sm font-semibold text-blue-600">
-                  {s.kind === "priced" ? (from != null ? `From R ${from.toLocaleString("en-ZA")}` : "From —") : "See scope & quote"}
+                  {s.kind === "priced"
+                    ? from != null
+                      ? `From R ${from.toLocaleString("en-ZA")}`
+                      : "From —"
+                    : s.kind === "link" && s.bookCta
+                      ? "See scope & quote"
+                      : "See service scope"}
                 </p>
                 <Link href={s.servicePage} className="mt-3 text-sm font-semibold text-blue-700 transition hover:text-blue-900">
                   Learn more about {s.title}
@@ -152,12 +163,14 @@ export function ServicesSection() {
                     </Link>
                   </p>
                 ) : null}
-                <BookCleaningLink
-                  source={s.source}
-                  className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-blue-700"
-                >
-                  Book Now
-                </BookCleaningLink>
+                {s.kind === "priced" || (s.kind === "link" && s.bookCta) ? (
+                  <BookCleaningLink
+                    source={s.source}
+                    className="mt-4 w-full rounded-xl bg-blue-600 py-2.5 text-center text-sm font-semibold text-white transition hover:bg-blue-700"
+                  >
+                    Book Now
+                  </BookCleaningLink>
+                ) : null}
               </li>
             );
           })}

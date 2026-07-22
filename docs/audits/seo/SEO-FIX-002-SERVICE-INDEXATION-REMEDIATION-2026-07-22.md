@@ -75,22 +75,36 @@ In `lib/seo/capeTownSeoPages.ts`:
 
 * `marketingServiceNavLinks.ts` — header nav now lists all seven money pages + hub.
 * `ServicesSection.tsx` — homepage cards for Office and Window (link-only; no invented widget prices).
+  * **Codex P2 correction:** Window Cleaning card is **informational only** (`bookCta: false`) — no `Book Now`, no `/book` / `/quote` / `/contact` action. Booking-v2 does not offer window cleaning; do not route customers into an unsupported flow.
+* `ServicePageCommercialIntentSection.tsx` — for `window-cleaning-cape-town`, removed the shared “book online” `/book` CTA (kept service-to-service informational cross-links only).
 
 ### 3.4 Tests
 
-* `lib/seo/__tests__/seoFix001002ServiceRemediation.test.ts` — canonical host, metadata, uniqueness/exclusions, sitemap inclusion/exclusions, nav targets, location disposition, `/details` → `/book`, cleaner form noindex.
+* `lib/seo/__tests__/seoFix001002ServiceRemediation.test.ts` — canonical host, metadata, uniqueness/exclusions, sitemap inclusion/exclusions, nav targets, **homepage Window Cleaning no-CTA guard**, location disposition, `/details` → `/book`, cleaner form noindex.
 
 ### 3.5 Explicitly not changed
 
 * Redirect maps / proxy edge behaviour (already aligned to `/locations/` spine).
 * `/cleaner/apply/form` noindex (preserved).
 * `/booking/details` noindex (preserved; recommended remain `NOINDEX`).
+* Window Cleaning **service page** and **nav link** retained.
+* Window Cleaning **not** added to booking-v2.
+* No contact / quotation workaround CTA for Window Cleaning on the homepage.
 * Shared “4,500+ Homes Cleaned” overlay — **flagged for verification**, not removed (affects indexed pages too).
 * Production, DNS, GSC, sitemap submission, indexing requests.
 
 ---
 
 ## 4. Evidence appendix
+
+### 4.0 Production package tip (PR #89)
+
+| Item | Value |
+|------|-------|
+| PR | https://github.com/shalean-developer/shalean-platform/pull/89 |
+| Branch | `seo/fix-001-002-prod-ready` |
+| Tip SHA | `_PENDING_COMMIT_` |
+| Codex P2 (Window Cleaning homepage Book Now → unsupported booking-v2) | **Resolved** by removing the CTA entirely (informational card only); no quote/contact workaround; window not added to booking-v2 |
 
 ### 4.1 Baseline (pre-change, repository)
 
@@ -185,7 +199,7 @@ Classification:
 
 ## 10. Proposed next authorization (exact)
 
-> **Authorize staging deploy + post-deploy HTTP verification of SEO-FIX-001/002 repository changes only. Do not authorize production merge, GSC writes, sitemap submission, or indexing requests.**
+> **Authorize EO review of PR #89 tip `_PENDING_COMMIT_` on `seo/fix-001-002-prod-ready` (SEO-FIX-001/002 production package + Window Cleaning homepage CTA removal). Preview/CI verification against that exact SHA only. Do not authorize production merge, production deploy, GSC writes, sitemap submission, indexing requests, DNS/Plesk changes, or booking-v2 catalog expansion for window cleaning.**
 
 Optional follow-on (separate):
 
