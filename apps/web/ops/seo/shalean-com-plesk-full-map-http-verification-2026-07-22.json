@@ -1,0 +1,203 @@
+{
+  "verifiedAt": "2026-07-22T08:00:45.764Z",
+  "status": "LIVE_HTTP_VERIFIED",
+  "verdict": "PASS",
+  "mapMode": "full-explicit-map",
+  "webspace": "shalean.com",
+  "wwwRoot": "/var/www/vhosts/shalean.com/public_html",
+  "artifact": "apps/web/ops/seo/shalean-com-plesk.htaccess",
+  "evidenceDoc": "docs/audits/seo/SHALEAN-COM-PLESK-FULL-MAP-HTTP-VERIFICATION-2026-07-22.md",
+  "approvedMapEntries": 193,
+  "htaccessExplicitRules": 193,
+  "htaccessFallbackRules": 1,
+  "missingEntries": 0,
+  "duplicateEntries": 0,
+  "conflictingEntries": 0,
+  "liveApplySucceeded": true,
+  "rollbackRequired": false,
+  "rollbackExecuted": false,
+  "remoteBackupName": ".htaccess.bak-before-com-migration-2026-07-22T08-00-45-764Z",
+  "localBackupName": "shalean-com-htaccess-BEFORE-2026-07-22T08-00-45-764Z.htaccess",
+  "tempFtpUserDeleted": true,
+  "preservedBlocks": ["LSCACHE", "NON_LSCACHE", "WordPress", "cPanel-php-ini", "cPanel-php-handler"],
+  "excludedFromGit": [
+    "apps/web/ops/seo/backups/",
+    "apps/web/ops/seo/apply-shalean-com-plesk-htaccess.mjs",
+    "apps/web/ops/seo/_generate-full-htaccess.mjs",
+    "apps/web/ops/seo/_dump-migration-htaccess.ts",
+    "temporary FTP credentials"
+  ],
+  "searchConsoleOrExternalPlatformActions": false,
+  "cases": [
+    {
+      "url": "https://shalean.com/",
+      "status": 301,
+      "location": "https://shalean.co.za/",
+      "expect": "https://shalean.co.za/",
+      "hops": 1
+    },
+    {
+      "url": "https://www.shalean.com/",
+      "status": 301,
+      "location": "https://shalean.co.za/",
+      "expect": "https://shalean.co.za/",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/blog",
+      "status": 301,
+      "location": "https://shalean.co.za/blog",
+      "expect": "https://shalean.co.za/blog",
+      "hops": 1
+    },
+    {
+      "url": "https://www.shalean.com/blog",
+      "status": 301,
+      "location": "https://shalean.co.za/blog",
+      "expect": "https://shalean.co.za/blog",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/blog/",
+      "status": 301,
+      "location": "https://shalean.co.za/blog",
+      "expect": "https://shalean.co.za/blog",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/blog/how-much-does-cleaning-cost-cape-town-2026",
+      "status": 301,
+      "location": "https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026",
+      "expect": "https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/services",
+      "status": 301,
+      "location": "https://shalean.co.za/services",
+      "expect": "https://shalean.co.za/services",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/contact",
+      "status": 301,
+      "location": "https://shalean.co.za/contact",
+      "expect": "https://shalean.co.za/contact",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/quote",
+      "status": 301,
+      "location": "https://shalean.co.za/quote",
+      "expect": "https://shalean.co.za/quote",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/services/standard-cleaning",
+      "status": 301,
+      "location": "https://shalean.co.za/services/standard-cleaning-cape-town",
+      "expect": "https://shalean.co.za/services/standard-cleaning-cape-town",
+      "hops": 1
+    },
+    {
+      "url": "https://www.shalean.com/services/standard-cleaning/",
+      "status": 301,
+      "location": "https://shalean.co.za/services/standard-cleaning-cape-town",
+      "expect": "https://shalean.co.za/services/standard-cleaning-cape-town",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/services/deep-cleaning",
+      "status": 301,
+      "location": "https://shalean.co.za/services/deep-cleaning-cape-town",
+      "expect": "https://shalean.co.za/services/deep-cleaning-cape-town",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/location/cape-town/sea-point",
+      "status": 301,
+      "location": "https://shalean.co.za/locations/sea-point-cleaning-services",
+      "expect": "https://shalean.co.za/locations/sea-point-cleaning-services",
+      "hops": 1
+    },
+    {
+      "url": "https://www.shalean.com/location/cape-town/camps-bay/",
+      "status": 301,
+      "location": "https://shalean.co.za/locations/camps-bay-cleaning-services",
+      "expect": "https://shalean.co.za/locations/camps-bay-cleaning-services",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/cleaning-services/sea-point",
+      "status": 301,
+      "location": "https://shalean.co.za/locations/sea-point-cleaning-services",
+      "expect": "https://shalean.co.za/locations/sea-point-cleaning-services",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/locations/sea-point-cleaning-services",
+      "status": 301,
+      "location": "https://shalean.co.za/locations/sea-point-cleaning-services",
+      "expect": "https://shalean.co.za/locations/sea-point-cleaning-services",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/how-it-works",
+      "status": 301,
+      "location": "https://shalean.co.za/#how-it-works",
+      "expect": "https://shalean.co.za/#how-it-works",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/testimonials",
+      "status": 301,
+      "location": "https://shalean.co.za/reviews",
+      "expect": "https://shalean.co.za/reviews",
+      "hops": 1
+    },
+    {
+      "url": "https://shalean.com/some-unmapped-legacy-page",
+      "status": 301,
+      "location": "https://shalean.co.za/some-unmapped-legacy-page",
+      "expect": "https://shalean.co.za/some-unmapped-legacy-page",
+      "hops": 1,
+      "note": "path-preserve fallback"
+    },
+    {
+      "url": "https://shalean.com/contact?utm_source=test",
+      "status": 301,
+      "location": "https://shalean.co.za/contact?utm_source=test",
+      "expectPath": "https://shalean.co.za/contact",
+      "hops": 1,
+      "note": "QSA preserved query string"
+    }
+  ],
+  "httpPlatformCases": [
+    {
+      "url": "http://shalean.com/",
+      "status": 301,
+      "location": "https://shalean.com/",
+      "note": "platform HTTPS upgrade (same-host) before migration rules"
+    },
+    {
+      "url": "http://www.shalean.com/services/standard-cleaning",
+      "status": 301,
+      "location": "https://www.shalean.com/services/standard-cleaning",
+      "note": "platform HTTPS upgrade (same-host) before migration rules"
+    }
+  ],
+  "malformedOrUnexpected": [
+    {
+      "url": "https://shalean.com/%2e%2e/etc/passwd",
+      "status": 301,
+      "location": "https://shalean.co.za/etc/passwd",
+      "note": "normalized then path-preserve fallback"
+    },
+    {
+      "url": "https://shalean.com/wp-admin",
+      "status": 301,
+      "location": "https://shalean.com/wp-admin/",
+      "note": "WordPress directory trailing-slash on same host; not an approved map entry"
+    }
+  ]
+}
