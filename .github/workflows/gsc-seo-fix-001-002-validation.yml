@@ -1,0 +1,107 @@
+name: gsc-seo-fix-001-002-validation
+
+# One-shot EO-authorized GSC validation for SEO-FIX-001/002.
+# Prefer Production cron (Vercel Production GSC_* in-place). Manual dispatch only.
+# Secrets (Production environment): CRON_SECRET
+# Optional fallback secrets (only if cron not yet deployed): GSC_CLIENT_EMAIL, GSC_PRIVATE_KEY, GSC_SITE_URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_scope:
+        description: "Type EXACTLY: SEO-FIX-001/002-GSC-ONLY"
+        required: true
+        type: string
+      invoke_via:
+        description: "production-cron (preferred) | local-script (fallback; requires GSC_* secrets)"
+        required: true
+        type: choice
+        default: production-cron
+        options:
+          - production-cron
+          - local-script
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    environment: Production
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Confirm scope phrase
+        run: |
+          if [ "${{ inputs.confirm_scope }}" != "SEO-FIX-001/002-GSC-ONLY" ]; then
+            echo "Refusing: confirm_scope must be SEO-FIX-001/002-GSC-ONLY"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - name: Invoke Production cron (preferred)
+        if: ${{ inputs.invoke_via == 'production-cron' }}
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET missing in Production environment secrets"
+            exit 1
+          fi
+          mkdir -p tmp
+          curl -sS -X POST "https://shalean.co.za/api/cron/gsc-seo-fix-001-002-validate" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            -H "x-seo-fix-confirm: SEO-FIX-001/002-GSC-ONLY" \
+            -d '{"confirm":"SEO-FIX-001/002-GSC-ONLY","mode":"validate"}' \
+            -o tmp/gsc-seo-fix-001-002-validation-production.json \
+            -w "\nHTTP %{http_code}\n"
+          # Redaction guard — fail if private key material leaked into evidence
+          if grep -E 'BEGIN PRIVATE KEY|GSC_PRIVATE_KEY=' tmp/gsc-seo-fix-001-002-validation-production.json; then
+            echo "Refusing to upload evidence that appears to contain secret material"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json,sys
+          p="tmp/gsc-seo-fix-001-002-validation-production.json"
+          data=json.load(open(p))
+          assert data.get("secretsLogged") is False
+          assert data.get("requestIndexingUiRequired") is True
+          print("mode", data.get("mode"))
+          print("siteUrl", data.get("siteUrl"))
+          print("sitemap", (data.get("sitemap") or {}).get("action"))
+          for row in data.get("inspections") or []:
+            print(row.get("inspectionUrl"), row.get("verdict"), row.get("coverageState"), row.get("pageFetchState"), row.get("lastCrawlTime"))
+          if data.get("errors"):
+            print("errors", len(data["errors"]))
+            sys.exit(1)
+          PY
+
+      - uses: actions/setup-node@v4
+        if: ${{ inputs.invoke_via == 'local-script' }}
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install
+        if: ${{ inputs.invoke_via == 'local-script' }}
+        run: npm ci
+
+      - name: Run scoped GSC validation script (fallback)
+        if: ${{ inputs.invoke_via == 'local-script' }}
+        env:
+          GSC_CLIENT_EMAIL: ${{ secrets.GSC_CLIENT_EMAIL }}
+          GSC_PRIVATE_KEY: ${{ secrets.GSC_PRIVATE_KEY }}
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+        run: npm run gsc:seo-fix-001-002-validate -- --confirm=SEO-FIX-001/002-GSC-ONLY --mode=validate
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsc-seo-fix-001-002-validation-evidence
+          path: |
+            apps/web/tmp/gsc-seo-fix-001-002-validation*.json
+          if-no-files-found: warn
+          retention-days: 400
