@@ -82,7 +82,7 @@ export function isSeoRebuildCoreSitemapPath(pathname: string): boolean {
 
 /**
  * Public recruitment landing that is intentionally indexable under an otherwise
- * Disallow'd `/cleaner/` tree. Also listed in the marketing sitemap.
+ * Disallow'd `/cleaner` tree. Also listed in the marketing sitemap.
  */
 export const SEO_CLEANER_APPLY_LANDING_SITEMAP_PATH = "/cleaner/apply" as const;
 
@@ -90,16 +90,17 @@ export const SEO_CLEANER_APPLY_LANDING_SITEMAP_PATH = "/cleaner/apply" as const;
  * Private / operational robots.txt disallow prefixes.
  * Public legacy URLs that permanently redirect must remain crawlable (no Disallow).
  *
- * `/cleaner/` blocks the cleaner workspace tree. A separate Allow rule
- * (`/cleaner/apply$`) carves out only the recruitment landing — not `/cleaner/apply/form`
- * or other `/cleaner/*` routes. robots.txt is not access control.
+ * `Disallow: /cleaner` blocks `/cleaner`, `/cleaner/`, and all `/cleaner/*` paths.
+ * A separate Allow rule (`/cleaner/apply$`) carves out only the exact recruitment
+ * landing — not `/cleaner/apply/`, `/cleaner/apply/form`, or other `/cleaner/*` routes.
+ * robots.txt is not access control.
  */
 export function seoRobotsDisallowPaths(): string[] {
   const shared = [
     "/admin",
     "/office",
     "/api",
-    "/cleaner/",
+    "/cleaner",
     "/payment",
     "/pay",
     "/offer",

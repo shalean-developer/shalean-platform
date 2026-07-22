@@ -11,12 +11,6 @@ export type RobotsPathRuleSet = {
   readonly disallow: readonly string[];
 };
 
-function normalizePathname(pathname: string): string {
-  const t = pathname.trim();
-  if (!t || t === "/") return "/";
-  return t.replace(/\/+$/, "") || "/";
-}
-
 /**
  * Convert a robots Allow/Disallow pattern into a RegExp.
  * Supports Google's `$` end anchor and `*` wildcards.
@@ -46,15 +40,14 @@ export function robotsPatternToRegExp(pattern: string): RegExp {
   return new RegExp(`^${body}`);
 }
 
+/**
+ * Test whether `pathname` matches a robots Allow/Disallow pattern.
+ * Evaluates the actual requested path only — does not invent trailing-slash variants.
+ */
 export function pathMatchesRobotsPattern(pathname: string, pattern: string): boolean {
   if (!pattern) return false;
-  // Match against both the normalized path and a trailing-slash variant so
-  // `Disallow: /cleaner/` still covers `/cleaner` directory semantics when callers
-  // normalize trailing slashes away before evaluation.
-  const p = normalizePathname(pathname);
-  const candidates = p === "/" ? ["/"] : [p, `${p}/`];
-  const re = robotsPatternToRegExp(pattern);
-  return candidates.some((candidate) => re.test(candidate));
+  const p = pathname.trim() || "/";
+  return robotsPatternToRegExp(pattern).test(p);
 }
 
 type MatchedRule = { readonly pattern: string; readonly kind: "allow" | "disallow" };

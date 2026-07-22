@@ -65,8 +65,8 @@ describe("seoRebuildPhase1", () => {
     expect(disallow).toContain("/admin");
     expect(disallow).toContain("/office");
     expect(disallow).toContain("/api");
-    expect(disallow).toContain("/cleaner/");
-    expect(disallow).not.toContain("/cleaner");
+    expect(disallow).toContain("/cleaner");
+    expect(disallow).not.toContain("/cleaner/");
     expect(disallow).toContain("/account");
     expect(disallow).toContain("/login");
   });

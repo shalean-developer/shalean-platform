@@ -11,9 +11,10 @@ import { SITE_ORIGIN } from "@/lib/site/canonical";
  * authentication via middleware / app code even when Disallow'd here.
  *
  * Intended cleaner rules (Google longest-match):
- *   Disallow: /cleaner/
+ *   Disallow: /cleaner
  *   Allow: /cleaner/apply$
- * so only the recruitment landing is crawlable; `/cleaner/apply/form` stays blocked.
+ * so only the exact recruitment landing is crawlable; `/cleaner`, `/cleaner/`,
+ * `/cleaner/apply/`, `/cleaner/apply/form`, and other `/cleaner/*` stay blocked.
  */
 export default function robots(): MetadataRoute.Robots {
   if (!isCustomerFacingProduction()) {

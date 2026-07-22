@@ -89,10 +89,10 @@ describe("cleaner apply landing SEO exception", () => {
     expect(allow).toContain(CLEANER_APPLY_LANDING_ROBOTS_ALLOW);
     expect(allow).not.toContain("/cleaner/apply");
     expect(allow).not.toContain("/cleaner/apply/");
-    expect(disallow).toContain("/cleaner/");
-    expect(disallow).not.toContain("/cleaner");
+    expect(disallow).toContain("/cleaner");
+    expect(disallow).not.toContain("/cleaner/");
     expect(seoRobotsAllowPaths()).toEqual(["/", "/cleaner/apply$"]);
-    expect(seoRobotsDisallowPaths()).toContain("/cleaner/");
+    expect(seoRobotsDisallowPaths()).toContain("/cleaner");
 
     // Mirror Next.js MetadataRoute robots serialization (resolveRobots).
     const serialized = [
@@ -101,12 +101,13 @@ describe("cleaner apply landing SEO exception", () => {
       ...disallow.filter(Boolean).map((item) => `Disallow: ${item}`),
     ].join("\n");
     expect(serialized).toContain("Allow: /cleaner/apply$");
-    expect(serialized).toContain("Disallow: /cleaner/");
+    expect(serialized).toContain("Disallow: /cleaner\n");
+    expect(serialized).not.toContain("Disallow: /cleaner/");
     expect(serialized).not.toContain("Allow: /cleaner/apply\n");
     expect(serialized).not.toMatch(/Allow: \/cleaner\/apply\/(?!\$)/);
   });
 
-  it("does not allow /cleaner/apply/form through a broad prefix Allow rule", () => {
+  it("applies longest-match: exact /cleaner/apply allowed; siblings and trailing slash blocked", () => {
     const rules = {
       allow: seoRobotsAllowPaths(),
       disallow: seoRobotsDisallowPaths(),
@@ -115,6 +116,7 @@ describe("cleaner apply landing SEO exception", () => {
     expect(pathMatchesRobotsPattern(CLEANER_APPLY_LANDING_PATH, CLEANER_APPLY_LANDING_ROBOTS_ALLOW)).toBe(
       true,
     );
+    expect(pathMatchesRobotsPattern("/cleaner/apply/", CLEANER_APPLY_LANDING_ROBOTS_ALLOW)).toBe(false);
     expect(pathMatchesRobotsPattern(CLEANER_APPLY_FORM_PATH, CLEANER_APPLY_LANDING_ROBOTS_ALLOW)).toBe(
       false,
     );
@@ -122,13 +124,16 @@ describe("cleaner apply landing SEO exception", () => {
       false,
     );
 
-    expect(isPathDisallowedByRobots(CLEANER_APPLY_LANDING_PATH, rules)).toBe(false);
-    expect(isPathDisallowedByRobots(CLEANER_APPLY_FORM_PATH, rules)).toBe(true);
+    expect(isPathDisallowedByRobots("/cleaner", rules)).toBe(true);
+    expect(isPathDisallowedByRobots("/cleaner/", rules)).toBe(true);
     expect(isPathDisallowedByRobots("/cleaner/login", rules)).toBe(true);
     expect(isPathDisallowedByRobots("/cleaner/dashboard", rules)).toBe(true);
     expect(isPathDisallowedByRobots("/cleaner/jobs", rules)).toBe(true);
     expect(isPathDisallowedByRobots("/cleaner/earnings", rules)).toBe(true);
     expect(isPathDisallowedByRobots("/cleaner/profile", rules)).toBe(true);
-    expect(isPathDisallowedByRobots("/cleaner", rules)).toBe(true);
+    expect(isPathDisallowedByRobots(CLEANER_APPLY_LANDING_PATH, rules)).toBe(false);
+    expect(isPathDisallowedByRobots("/cleaner/apply/", rules)).toBe(true);
+    expect(isPathDisallowedByRobots(CLEANER_APPLY_FORM_PATH, rules)).toBe(true);
+    expect(isPathDisallowedByRobots("/cleaner/apply/anything", rules)).toBe(true);
   });
 });
