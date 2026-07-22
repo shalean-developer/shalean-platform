@@ -7,6 +7,7 @@ import {
   SEO_REBUILD_SITEMAP_CONTENT_PATHS,
   SEO_REBUILD_SITEMAP_CORE_PATHS,
   SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS,
+  seoRobotsAllowPaths,
   seoRobotsDisallowPaths,
 } from "@/lib/seo/seoRebuildPhase1";
 
@@ -64,7 +65,13 @@ describe("seoRebuildPhase1", () => {
     expect(disallow).toContain("/admin");
     expect(disallow).toContain("/office");
     expect(disallow).toContain("/api");
+    expect(disallow).toContain("/cleaner/");
+    expect(disallow).not.toContain("/cleaner");
     expect(disallow).toContain("/account");
     expect(disallow).toContain("/login");
+  });
+
+  it("allows only the end-anchored cleaner apply landing exception", () => {
+    expect(seoRobotsAllowPaths()).toEqual(["/", "/cleaner/apply$"]);
   });
 });
