@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
 
 const ACTIVE_ASSIGNMENT_STATUSES = ["assigned", "in_progress"] as const;
 
@@ -14,7 +15,7 @@ export async function findTeamJobSlotConflict(
 ): Promise<AssignmentSlotConflictRow | null> {
   const teamId = params.teamId.trim();
   const dateYmd = params.dateYmd.trim();
-  const timeHm = params.timeHm.trim();
+  const timeHm = normalizeTimeHm(params.timeHm);
   if (!teamId || !dateYmd || !timeHm) return null;
 
   const { data, error } = await admin
@@ -22,7 +23,7 @@ export async function findTeamJobSlotConflict(
     .select("id, customer_name, time")
     .eq("team_id", teamId)
     .eq("date", dateYmd)
-    .eq("time", timeHm)
+    .in("time", bookingTimeMatchValues(timeHm))
     .eq("is_team_job", true)
     .in("status", [...ACTIVE_ASSIGNMENT_STATUSES])
     .neq("id", params.excludeBookingId)
@@ -38,7 +39,7 @@ export async function findIndividualCleanerSlotConflict(
 ): Promise<AssignmentSlotConflictRow | null> {
   const cleanerId = params.cleanerId.trim();
   const dateYmd = params.dateYmd.trim();
-  const timeHm = params.timeHm.trim();
+  const timeHm = normalizeTimeHm(params.timeHm);
   if (!cleanerId || !dateYmd || !timeHm) return null;
 
   const { data, error } = await admin
@@ -46,7 +47,7 @@ export async function findIndividualCleanerSlotConflict(
     .select("id, customer_name, time")
     .eq("cleaner_id", cleanerId)
     .eq("date", dateYmd)
-    .eq("time", timeHm)
+    .in("time", bookingTimeMatchValues(timeHm))
     .eq("is_team_job", false)
     .in("status", [...ACTIVE_ASSIGNMENT_STATUSES])
     .neq("id", params.excludeBookingId)
@@ -54,6 +55,13 @@ export async function findIndividualCleanerSlotConflict(
 
   if (error) throw new Error(error.message);
   return (data as AssignmentSlotConflictRow | null) ?? null;
+}
+
+/** Match both canonical `HH:MM` and legacy `HH:MM:SS` text stored on bookings.time. */
+function bookingTimeMatchValues(timeHm: string): string[] {
+  const hm = normalizeTimeHm(timeHm);
+  if (!hm) return [];
+  return hm.length === 5 ? [hm, `${hm}:00`] : [hm];
 }
 
 export function formatTeamAssignmentSlotConflictError(input: {
