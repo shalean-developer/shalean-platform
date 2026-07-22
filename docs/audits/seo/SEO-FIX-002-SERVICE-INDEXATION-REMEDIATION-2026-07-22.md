@@ -206,6 +206,14 @@ Classification:
 
 > **Authorize EO review of PR #89 tip `5662e82eafaa44ba695589c3be59e492a9e99ebc` on `seo/fix-001-002-prod-ready` (SEO-FIX-001/002 production package + Window Cleaning homepage CTA removal at `6e6a1429225a0513e0bb58ba688247e367104ab5`). Preview/CI verification against that exact tip SHA only. Do not authorize production merge, production deploy, GSC writes, sitemap submission, indexing requests, DNS/Plesk changes, or booking-v2 catalog expansion for window cleaning.**
 
+### Production + GSC status (2026-07-22)
+
+| Item | Status |
+|------|--------|
+| Production merge | **Done** — `28aa82ca2da8680baf88673fac20cdb5b0af80e0` |
+| Production deploy | **Done** — live `gitSha` matches merge |
+| GSC read/write validation (inspect ×5, sitemap ×1, index ×5, 8-week monitor) | **Authorized** — see `SEO-FIX-001-002-GSC-VALIDATION-AND-MONITORING-2026-07-22.md`; live API run pending `GSC_*` credential injection |
+
 Optional follow-on (separate):
 
 > **Authorize EO review of formal SEO Engineering mandate / Constitution / Interaction Matrix so SEO-FIX packages can exit provisional status.**

@@ -1,0 +1,54 @@
+name: gsc-seo-fix-001-002-validation
+
+# One-shot EO-authorized GSC validation for SEO-FIX-001/002.
+# Does NOT schedule. Manual dispatch only.
+# Requires repository secrets: GSC_CLIENT_EMAIL, GSC_PRIVATE_KEY, GSC_SITE_URL
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_scope:
+        description: "Type EXACTLY: SEO-FIX-001/002-GSC-ONLY"
+        required: true
+        type: string
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - name: Confirm scope phrase
+        run: |
+          if [ "${{ inputs.confirm_scope }}" != "SEO-FIX-001/002-GSC-ONLY" ]; then
+            echo "Refusing: confirm_scope must be SEO-FIX-001/002-GSC-ONLY"
+            exit 1
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Run scoped GSC validation
+        env:
+          GSC_CLIENT_EMAIL: ${{ secrets.GSC_CLIENT_EMAIL }}
+          GSC_PRIVATE_KEY: ${{ secrets.GSC_PRIVATE_KEY }}
+          GSC_SITE_URL: ${{ secrets.GSC_SITE_URL }}
+        run: npm run gsc:seo-fix-001-002-validate
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsc-seo-fix-001-002-validation-evidence
+          path: apps/web/tmp/gsc-seo-fix-001-002-validation-*.json
+          if-no-files-found: warn
+          retention-days: 400
