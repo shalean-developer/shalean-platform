@@ -408,6 +408,36 @@ describe("performAdminAssignTeam", () => {
     );
   });
 
+  it("accepts booking times stored as HH:MM:SS (production text format)", async () => {
+    const { admin } = createMockAdmin({
+      booking: baseBooking({ time: "09:00:00" }),
+    });
+    const res = await performAdminAssignTeam({
+      admin: admin as never,
+      bookingId,
+      teamId: newTeamId,
+      adminUserId: "admin-uuid",
+    });
+    expect(res).toEqual({ ok: true, teamId: newTeamId, oldTeamId: null });
+  });
+
+  it("rejects when booking time is missing", async () => {
+    const { admin } = createMockAdmin({
+      booking: baseBooking({ time: null }),
+    });
+    const res = await performAdminAssignTeam({
+      admin: admin as never,
+      bookingId,
+      teamId: newTeamId,
+      adminUserId: "admin-uuid",
+    });
+    expect(res.ok).toBe(false);
+    if (!res.ok) {
+      expect(res.httpStatus).toBe(400);
+      expect(res.error).toMatch(/booking time is required/i);
+    }
+  });
+
   it("rejects when team has no active members on booking date", async () => {
     const pastMembers = [
       { cleaner_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", active_from: "2020-01-01", active_to: "2020-06-01" },
