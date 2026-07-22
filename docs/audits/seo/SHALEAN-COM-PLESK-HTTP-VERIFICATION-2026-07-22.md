@@ -1,8 +1,9 @@
 # shalean.com Plesk → shalean.co.za HTTP verification (2026-07-22)
 
-**Status recorded in repo:** `SHALEAN_COM_MIGRATION_STATUS = LIVE_HTTP_VERIFIED`  
+**Status recorded in repo (at time of this 193-rule apply):** `SHALEAN_COM_MIGRATION_STATUS = LIVE_HTTP_VERIFIED`  
+**Current complete artifact (PR #94+):** repository candidate with **273** explicit rules; status is `PENDING_EXTERNAL_PLESK` because **80** location-expansion rules are not yet Plesk-applied/HTTP-verified. Do not treat the full 273-rule map as `LIVE_HTTP_VERIFIED`.  
 **Host:** LiteSpeed / PleskLin webspace `shalean.com` (document root `public_html`)  
-**Artifact applied:** `apps/web/ops/seo/shalean-com-plesk.htaccess`  
+**Artifact applied (2026-07-22):** `apps/web/ops/seo/shalean-com-plesk.htaccess` (then **193** explicit rules)  
 **Out of scope:** Search Console actions, Vercel deploy from this evidence note
 
 ## Method

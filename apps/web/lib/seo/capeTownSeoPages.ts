@@ -1526,6 +1526,583 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
       "Vetted cleaners and structured checklists for high-traffic wet rooms.",
     ],
   },
+  "bishopscourt-cleaning-services": {
+    slug: "bishopscourt-cleaning-services",
+    path: "/locations/bishopscourt-cleaning-services",
+    title: "Bishopscourt Cleaning Cape Town | Large Homes | Shalean",
+    description:
+      "Bishopscourt cleaning in Cape Town for larger homes and estate-style plots near Constantia. Standard, deep, or move-out—book Shalean online with clear scope.",
+    ogImage: "/images/marketing/house-deep-cleaning-cape-town.webp",
+    h1: "Bishopscourt cleaning services in Cape Town for larger homes and estate-style plots",
+    bookingLabel: "cleaning in Bishopscourt",
+    relatedBlogGuide: {
+      href: "/locations/constantia-cleaning-services",
+      linkAnchorText: "Constantia cleaning services (nearby estate-style hub)",
+    },
+    intro: [
+      "Bishopscourt sits among Cape Town’s leafier Southern Suburbs estates—homes here often stretch across more rooms, bathrooms, and outdoor-adjacent living than a compact flat quote assumes.",
+      "Shalean maps Bishopscourt bookings to real on-site time: choose bedrooms, bathrooms, extras, and intensity online, then confirm pricing before checkout.",
+      "Between entertaining weeks and quieter stretches, scoped visits keep kitchens and wet rooms aligned with the rooms and extras you select online.",
+    ],
+    localAngle: [
+      "Estate gates and long drives are common—leave boom codes, visitor bay rules, and the preferred entrance in your booking notes.",
+      "Pets, sculleries, and entertainment kitchens quietly expand scope—select relevant extras when they should be in the visit.",
+    ],
+    whyChoose: [
+      "Room-scoped visits sized for larger Bishopscourt footprints—not one-size compact defaults.",
+      "Transparent Cape Town totals before you pay, with extras visible at checkout.",
+      "Access notes captured upfront so crews plan gear and timing for estate layouts.",
+    ],
+  },
+  "diep-river-cleaning-services": {
+    slug: "diep-river-cleaning-services",
+    path: "/locations/diep-river-cleaning-services",
+    title: "Diep River Cleaning Cape Town | Family Homes | Shalean",
+    description:
+      "Diep River cleaning in Cape Town for family houses and townhomes near Plumstead. Standard, deep, or move-out cleaning—book Shalean online with clear totals.",
+    ogImage: "/images/marketing/bright-living-room-after-cleaning-cape-town.webp",
+    h1: "Diep River cleaning services in Cape Town for family homes and practical suburban weeks",
+    bookingLabel: "cleaning in Diep River",
+    relatedBlogGuide: {
+      href: "/locations/plumstead-cleaning-services",
+      linkAnchorText: "Plumstead cleaning services (nearby Southern Suburbs hub)",
+    },
+    intro: [
+      "Diep River sits in Cape Town’s Southern Suburbs corridor where family homes, townhouses, and school-week kitchens set the cleaning rhythm—dust from gardens and pets through passages add up between visits.",
+      "Shalean serves Diep River with metro-consistent booking: rooms, bathrooms, extras, and service tier lock in online before checkout.",
+      "Whether you want recurring weekday upkeep or a move-out reset before handover, Diep River scopes stay tied to real on-site time—not oversized villa defaults.",
+    ],
+    localAngle: [
+      "Side drives and shared walls are common—precise pins and gate notes help teams arrive without circling quiet cul-de-sacs.",
+      "If pets or leaf litter dominate floors, say so in comments so vacuum time is planned honestly.",
+    ],
+    whyChoose: [
+      "Structured checklists tuned to suburban Diep River layouts.",
+      "Transparent Cape Town pricing before you commit.",
+      "Support if something is missed after a visit.",
+    ],
+  },
+  "harfield-village-cleaning-services": {
+    slug: "harfield-village-cleaning-services",
+    path: "/locations/harfield-village-cleaning-services",
+    title: "Harfield Village Cleaning Cape Town | Cottages | Shalean",
+    description:
+      "Harfield Village cleaning in Cape Town for cottages and flats near Claremont. Standard, deep, or move-out—book Shalean online with access notes and clear scope.",
+    ogImage: "/images/marketing/cleaning-team-bright-space-cape-town.webp",
+    h1: "Harfield Village cleaning services in Cape Town for cottages, flats, and narrow streets",
+    bookingLabel: "cleaning in Harfield Village",
+    relatedBlogGuide: {
+      href: "/locations/claremont-cleaning-services",
+      linkAnchorText: "Claremont cleaning services (nearby Southern Suburbs hub)",
+    },
+    intro: [
+      "Harfield Village sits between Claremont retail energy and quieter Southern Suburb lanes—character cottages, compact flats, and tight parking shape how cleaning time stacks up.",
+      "Shalean quotes Harfield Village honestly: choose bedrooms, bathrooms, extras, and intensity, then confirm pricing before checkout.",
+      "Weekly upkeep and deeper guest resets both work here—precise access notes keep crews on schedule on narrow village streets.",
+    ],
+    localAngle: [
+      "Narrow streets and limited bays are the norm—leave parking and gate guidance in your booking.",
+      "Older cottages often have quirky layouts—mention stairs, wooden floors, and pets so dwell time matches the home.",
+    ],
+    whyChoose: [
+      "Scoped visits sized for compact Harfield Village footprints.",
+      "Online Cape Town totals with extras visible before you pay.",
+      "Access-first briefing so crews arrive ready for village streets.",
+    ],
+  },
+  "meadowridge-cleaning-services": {
+    slug: "meadowridge-cleaning-services",
+    path: "/locations/meadowridge-cleaning-services",
+    title: "Meadowridge Cleaning Cape Town | Family Homes | Shalean",
+    description:
+      "Meadowridge cleaning in Cape Town for family houses near Bergvliet and Constantia. Standard, deep, or move-out—book Shalean online with clear scope.",
+    ogImage: "/images/marketing/bright-living-room-after-cleaning-cape-town.webp",
+    h1: "Meadowridge cleaning services in Cape Town for family homes near green belts",
+    bookingLabel: "cleaning in Meadowridge",
+    relatedBlogGuide: {
+      href: "/locations/bergvliet-cleaning-services",
+      linkAnchorText: "Bergvliet cleaning services (nearby Southern Suburbs hub)",
+    },
+    intro: [
+      "Meadowridge sits in Cape Town’s Southern Suburbs where family homes meet leafy edges—garden dust, pets, and school-week kitchens shape what realistic cleaning looks like between visits.",
+      "Shalean supports Meadowridge with the same metro booking flow: rooms, bathrooms, extras, and tier—then confirm totals before checkout.",
+      "From weekly family upkeep to move-out resets before handovers, scoped visits keep wet rooms and floors aligned with what you selected at checkout.",
+    ],
+    localAngle: [
+      "Complex visitor rules differ—leave boom codes and parking notes when you book.",
+      "Green-belt dust after windy weeks is common—flag floor types so vacuum time matches reality.",
+    ],
+    whyChoose: [
+      "Suburban checklists tuned to Meadowridge family layouts.",
+      "Clear Cape Town pricing before you commit.",
+      "Feedback path if something needs a follow-up.",
+    ],
+  },
+  "tokai-cleaning-services": {
+    slug: "tokai-cleaning-services",
+    path: "/locations/tokai-cleaning-services",
+    title: "Tokai Cleaning Cape Town | Estates & Homes | Shalean",
+    description:
+      "Tokai cleaning in Cape Town for estate homes and family houses near Constantia. Standard, deep, or move-out—book Shalean online with clear access notes.",
+    ogImage: "/images/marketing/house-deep-cleaning-cape-town.webp",
+    h1: "Tokai cleaning services in Cape Town for estate homes and leafy family properties",
+    bookingLabel: "cleaning in Tokai",
+    relatedBlogGuide: {
+      href: "/locations/constantia-cleaning-services",
+      linkAnchorText: "Constantia cleaning services (nearby estate-style hub)",
+    },
+    intro: [
+      "Tokai sits beneath Southern Suburb canopy where estate pockets and larger family homes need scoped cleaning—pollen, pets, and multi-bath layouts quietly extend time on site.",
+      "Shalean books Tokai with transparent Cape Town quoting: bedrooms, bathrooms, extras, and intensity confirmed online before checkout.",
+      "Schedule between school weeks or before guests arrive—clear boom and entrance notes keep estate arrivals efficient so booked hours stay on cleaning.",
+    ],
+    localAngle: [
+      "Boom gates and long drives are frequent—brief remotes, visitor rules, and the preferred entrance.",
+      "Canopy dust after windy weeks is real—mention sills and hard floors when grit is heavy.",
+    ],
+    whyChoose: [
+      "Scope sized for Tokai’s larger footprints—not compact-flat defaults.",
+      "Extras visible at Cape Town checkout before you pay.",
+      "Estate access captured so crews plan gear and timing.",
+    ],
+  },
+  "pinelands-cleaning-services": {
+    slug: "pinelands-cleaning-services",
+    path: "/locations/pinelands-cleaning-services",
+    title: "Pinelands Cleaning Cape Town | Garden Suburb | Shalean",
+    description:
+      "Pinelands cleaning in Cape Town for garden-suburb homes near Observatory and Mowbray. Standard, deep, or move-out—book Shalean online with clear scope.",
+    ogImage: "/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp",
+    h1: "Pinelands cleaning services in Cape Town for garden-suburb homes and steady weekly care",
+    bookingLabel: "cleaning in Pinelands",
+    relatedBlogGuide: {
+      href: "/locations/observatory-cleaning-services",
+      linkAnchorText: "Observatory cleaning services (nearby corridor hub)",
+    },
+    intro: [
+      "Pinelands is a Cape Town garden suburb where family homes, townhouses, and quieter streets favour predictable maintenance cleaning over one-off hero visits.",
+      "Shalean serves Pinelands with metro-wide booking: set rooms, bathrooms, extras, and intensity, then lock pricing before checkout.",
+      "Recurring workweek upkeep and move-out resets both stay scoped to kitchens and bathrooms you actually use—not padded room counts.",
+    ],
+    localAngle: [
+      "Driveways and quiet crescents are common—precise pins still help when visitor parking is limited.",
+      "Pets and garden grit track indoors—mention floor types so vacuum passes match reality.",
+    ],
+    whyChoose: [
+      "Steady standard and deep cycles sized for Pinelands homes.",
+      "Transparent Cape Town totals before you pay.",
+      "Clear booking notes path for access and pets.",
+    ],
+  },
+  "mowbray-cleaning-services": {
+    slug: "mowbray-cleaning-services",
+    path: "/locations/mowbray-cleaning-services",
+    title: "Mowbray Cleaning Cape Town | Rentals & Shares | Shalean",
+    description:
+      "Mowbray cleaning in Cape Town for campus-fringe rentals, shares, and homes near Rosebank. Standard, deep, or move-out—book Shalean online.",
+    ogImage: "/images/marketing/cleaning-team-bright-space-cape-town.webp",
+    h1: "Mowbray cleaning services in Cape Town for rentals, shares, and campus-fringe homes",
+    bookingLabel: "cleaning in Mowbray",
+    tier: "medium",
+    hasApartmentFocus: true,
+    relatedBlogGuide: {
+      href: "/locations/rosebank-cleaning-services",
+      linkAnchorText: "Rosebank cleaning services (nearby student-adjacent hub)",
+    },
+    intro: [
+      "Mowbray sits on Cape Town’s campus fringe where student shares, young professionals, and family pockets overlap—rentals turn over fast and bathrooms work hard between visits.",
+      "Shalean quotes Mowbray with transparent totals: bedrooms, bathrooms, extras, and tier lock in online before checkout—useful when flatmates or landlords need a shared paper trail.",
+      "Mid-term bathroom and kitchen resets suit busy semesters; move-out intensity covers inspection lists when leases end—scoped visits stay honest to agency expectations.",
+    ],
+    localAngle: [
+      "Street parking and gates vary—precise pins and buzzer notes save time during lecture-hour traffic.",
+      "For shared leases, brief common-area priorities in booking comments so expectations match the checklist.",
+    ],
+    whyChoose: [
+      "Scoped visits so Mowbray flats are not quoted like large freestanding homes.",
+      "Clear Cape Town totals flatmates can confirm before paying.",
+      "Move-out options mapped to rental inspection realities.",
+    ],
+  },
+  "rondebosch-east-cleaning-services": {
+    slug: "rondebosch-east-cleaning-services",
+    path: "/locations/rondebosch-east-cleaning-services",
+    title: "Rondebosch East Cleaning Cape Town | Homes | Shalean",
+    description:
+      "Rondebosch East cleaning in Cape Town for family homes and rentals near Rondebosch. Standard, deep, or move-out—book Shalean online with clear scope.",
+    ogImage: "/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp",
+    h1: "Rondebosch East cleaning services in Cape Town for family homes and practical rentals",
+    bookingLabel: "cleaning in Rondebosch East",
+    relatedBlogGuide: {
+      href: "/locations/rondebosch-cleaning-services",
+      linkAnchorText: "Rondebosch cleaning services (nearby Southern Suburbs hub)",
+    },
+    intro: [
+      "Rondebosch East sits beside Cape Town’s Rondebosch corridor with a practical mix of family homes, townhouses, and rentals—weekday kitchens and lease-end windows shape cleaning demand.",
+      "Shalean supports Rondebosch East with metro booking: rooms, bathrooms, extras, and intensity confirmed online before checkout.",
+      "Workweek maintenance and agency-aligned move-outs both benefit from accurate bathroom counts and clear access notes on corridor streets.",
+    ],
+    localAngle: [
+      "Corridor traffic and complex security vary—mention boom gates, remotes, and visitor bays.",
+      "End-of-lease windows are tight—flag oven and fridge add-ons early so time stays honest.",
+    ],
+    whyChoose: [
+      "Move-out and deep options suited to Rondebosch East layouts.",
+      "Transparent Cape Town pricing before you confirm.",
+      "Vetted cleaners with structured wet-room checklists.",
+    ],
+  },
+  "southfield-cleaning-services": {
+    slug: "southfield-cleaning-services",
+    path: "/locations/southfield-cleaning-services",
+    title: "Southfield Cleaning Cape Town | Family Homes | Shalean",
+    description:
+      "Southfield cleaning in Cape Town for family houses near Plumstead and Diep River. Standard, deep, or move-out—book Shalean online with transparent pricing.",
+    ogImage: "/images/marketing/bright-living-room-after-cleaning-cape-town.webp",
+    h1: "Southfield cleaning services in Cape Town for practical family homes and townhouses",
+    bookingLabel: "cleaning in Southfield",
+    relatedBlogGuide: {
+      href: "/locations/plumstead-cleaning-services",
+      linkAnchorText: "Plumstead cleaning services (nearby Southern Suburbs hub)",
+    },
+    intro: [
+      "Southfield sits in Cape Town’s Southern Suburbs with practical family homes and townhouses—school-week kitchens and garden grit set a steady maintenance rhythm.",
+      "Shalean books Southfield with clear online quoting: bedrooms, bathrooms, extras, and tier before checkout.",
+      "Weekly family upkeep or a handover reset—scoped visits keep wet rooms aligned with the total you confirmed online.",
+    ],
+    localAngle: [
+      "Driveways and quiet streets are common—still leave a precise pin when visitor parking is limited.",
+      "Pets and outdoor grit are frequent—mention floor types so vacuum time matches reality.",
+    ],
+    whyChoose: [
+      "Suburban checklists sized for Southfield homes.",
+      "Clear Cape Town totals before you pay.",
+      "Straightforward notes path for access and pets.",
+    ],
+  },
+  "heathfield-cleaning-services": {
+    slug: "heathfield-cleaning-services",
+    path: "/locations/heathfield-cleaning-services",
+    title: "Heathfield Cleaning Cape Town | Quiet Homes | Shalean",
+    description:
+      "Heathfield cleaning in Cape Town for family homes near Diep River and Bergvliet. Book standard, deep, or move-out cleaning online with clear Shalean scope.",
+    ogImage: "/images/marketing/cleaning-team-bright-space-cape-town.webp",
+    h1: "Heathfield cleaning services in Cape Town for quiet residential streets and family homes",
+    bookingLabel: "cleaning in Heathfield",
+    relatedBlogGuide: {
+      href: "/locations/diep-river-cleaning-services",
+      linkAnchorText: "Diep River cleaning services (nearby Southern Suburbs hub)",
+    },
+    intro: [
+      "Heathfield offers quieter Cape Town residential streets where family homes and townhouses need dependable maintenance cleaning—pets and garden grit still track indoors between visits.",
+      "Shalean supports Heathfield with metro-wide booking: rooms, bathrooms, extras, and intensity confirmed before checkout.",
+      "Book between workweeks for steady maintenance, or step up for move-out detail before handovers—kitchens and bathrooms stay honest to your quote.",
+    ],
+    localAngle: [
+      "Quiet crescents still need precise pins when visitor parking is scarce.",
+      "Mention pets and outdoor grit so vacuum time matches how the home is actually used.",
+    ],
+    whyChoose: [
+      "Steady standard and deep cycles for Heathfield family layouts.",
+      "Transparent Cape Town pricing before checkout.",
+      "Simple briefing for access, pets, and floor types.",
+    ],
+  },
+  "hout-bay-cleaning-services": {
+    slug: "hout-bay-cleaning-services",
+    path: "/locations/hout-bay-cleaning-services",
+    title: "Hout Bay Cleaning Cape Town | Harbour Homes | Shalean",
+    description:
+      "Hout Bay cleaning in Cape Town for harbour-side homes, hillside houses, and short stays. Standard, deep, or Airbnb-ready—book Shalean online.",
+    ogImage: "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
+    h1: "Hout Bay cleaning services in Cape Town for harbour living and hillside homes",
+    bookingLabel: "cleaning in Hout Bay",
+    hasAirbnbFocus: true,
+    relatedBlogGuide: {
+      href: "/locations/camps-bay-cleaning-services",
+      linkAnchorText: "Camps Bay cleaning services (nearby Atlantic Seaboard hub)",
+    },
+    intro: [
+      "Hout Bay combines Cape Town harbour living with hillside streets—salt air, sand, and winding access mean cleaning time depends on access notes as much as room count.",
+      "Shalean schedules Hout Bay with transparent quoting: bedrooms, bathrooms, extras, and intensity locked in online before checkout.",
+      "When turnovers are tight, flag balcony grit and linen resets so the booked slot matches your calendar—not a generic coastal default.",
+    ],
+    localAngle: [
+      "Winding roads and estate gates are common—leave remotes, boom codes, and the preferred entrance.",
+      "Harbour and beach days push grit indoors—mention sliders, mats, and outdoor areas when they should be included.",
+    ],
+    whyChoose: [
+      "Coastal-aware scopes for Hout Bay homes and short stays.",
+      "Clear Cape Town totals before you pay.",
+      "Access-first briefing for hillside and harbour addresses.",
+    ],
+  },
+  "clifton-cleaning-services": {
+    slug: "clifton-cleaning-services",
+    path: "/locations/clifton-cleaning-services",
+    title: "Clifton Cleaning Cape Town | Luxury Apartments | Shalean",
+    description:
+      "Clifton cleaning in Cape Town for cliff-side apartments and guest-ready homes near Camps Bay. Discreet standard, deep, or turnover cleans—book Shalean online.",
+    ogImage: "/images/marketing/cape-town-house-cleaning-kitchen.webp",
+    h1: "Clifton cleaning services in Cape Town for cliff-side apartments and discreet turnovers",
+    bookingLabel: "cleaning in Clifton",
+    tier: "medium",
+    hasAirbnbFocus: true,
+    hasApartmentFocus: true,
+    relatedBlogGuide: {
+      href: "/locations/camps-bay-cleaning-services",
+      linkAnchorText: "Camps Bay cleaning services (nearby Atlantic Seaboard hub)",
+    },
+    intro: [
+      "Clifton sits above Cape Town’s Atlantic rocks where luxury apartments and guest-ready homes face salt air, wind, and steep access—finishes show wear quickly between visits.",
+      "Shalean sends scoped teams to Clifton with metro-wide transparent quoting: rooms, bathrooms, extras, and intensity confirmed online before checkout.",
+      "Between guest stays or before a handover, discreet access notes keep visits aligned with cliff-side privacy expectations.",
+    ],
+    localAngle: [
+      "Cliff paths, lifts, and limited parking define the day—pin entrances and drop-off rules clearly.",
+      "Sea-facing glass collects salt film—flag balconies and rails when they should be in scope.",
+    ],
+    whyChoose: [
+      "Discreet, access-aware cleans for Clifton pads.",
+      "Clear Cape Town totals before you pay.",
+      "Turnover-friendly scopes for guest-ready finishes.",
+    ],
+  },
+  "mouille-point-cleaning-services": {
+    slug: "mouille-point-cleaning-services",
+    path: "/locations/mouille-point-cleaning-services",
+    title: "Mouille Point Cleaning Cape Town | Waterfront Flats | Shalean",
+    description:
+      "Mouille Point cleaning in Cape Town for waterfront apartments near Green Point. Standard, deep, or Airbnb turnovers—book Shalean online with clear scope.",
+    ogImage: "/images/marketing/cape-town-house-cleaning-kitchen.webp",
+    h1: "Mouille Point cleaning services in Cape Town for waterfront flats after promenade living",
+    bookingLabel: "cleaning in Mouille Point",
+    tier: "medium",
+    hasAirbnbFocus: true,
+    hasApartmentFocus: true,
+    relatedBlogGuide: {
+      href: "/locations/green-point-cleaning-services",
+      linkAnchorText: "Green Point cleaning services (nearby Atlantic Seaboard hub)",
+    },
+    intro: [
+      "Mouille Point pairs Cape Town waterfront walks with compact apartments—sand rides home on shoes and rugs while kitchens and bathrooms work hard between guests.",
+      "Shalean scopes Mouille Point with transparent online quoting: bedrooms, bathrooms, extras, and intensity locked before checkout.",
+      "Guests judge bathrooms and kitchens first—flag linen resets and balcony grit so the visit matches the clock you booked.",
+    ],
+    localAngle: [
+      "Building access and basement bays differ—pin entrances and note remotes or concierge steps.",
+      "Promenade sand on runners is common—mention mats and balcony tracks when they should be included.",
+    ],
+    whyChoose: [
+      "Waterfront-aware floor and balcony scopes for Mouille Point flats.",
+      "Clear Cape Town totals before you pay.",
+      "Turnover-friendly bathrooms and kitchens for short stays.",
+    ],
+  },
+  "three-anchor-bay-cleaning-services": {
+    slug: "three-anchor-bay-cleaning-services",
+    path: "/locations/three-anchor-bay-cleaning-services",
+    title: "Three Anchor Bay Cleaning Cape Town | Flats | Shalean",
+    description:
+      "Three Anchor Bay cleaning in Cape Town for compact Seaboard apartments near Sea Point. Standard, deep, or turnover cleans—book Shalean online.",
+    ogImage: "/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp",
+    h1: "Three Anchor Bay cleaning services in Cape Town for compact Seaboard flats",
+    bookingLabel: "cleaning in Three Anchor Bay",
+    hasApartmentFocus: true,
+    relatedBlogGuide: {
+      href: "/locations/sea-point-cleaning-services",
+      linkAnchorText: "Sea Point cleaning services (nearby Atlantic Seaboard hub)",
+    },
+    intro: [
+      "Three Anchor Bay packs Cape Town Seaboard living into compact apartments—cupboards, bathrooms, and kitchens show wear quickly between professional visits.",
+      "Shalean sequences Three Anchor Bay cleans with metro quoting: rooms, bathrooms, extras, and tier confirmed online before checkout.",
+      "Between workweeks or before guests arrive, scoped visits still cover high-touch cupboards and wet rooms in compact Seaboard footprints.",
+    ],
+    localAngle: [
+      "Intercoms and visitor parking vary—leave precise pins and remotes in your booking.",
+      "Salt grit on sills is common—flag glass and balconies when they should be included.",
+    ],
+    whyChoose: [
+      "Compact-flat scopes that still cover high-touch Seaboard zones.",
+      "Transparent Cape Town pricing before checkout.",
+      "Access notes captured for lifts and visitor bays.",
+    ],
+  },
+  "oranjezicht-cleaning-services": {
+    slug: "oranjezicht-cleaning-services",
+    path: "/locations/oranjezicht-cleaning-services",
+    title: "Oranjezicht Cleaning Cape Town | City Bowl Flats | Shalean",
+    description:
+      "Oranjezicht cleaning in Cape Town for mountain-dust flats and City Bowl homes near Gardens. Standard, deep, or move-out—book Shalean online.",
+    ogImage: "/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp",
+    h1: "Oranjezicht cleaning services in Cape Town for mountain-dust flats and City Bowl living",
+    bookingLabel: "cleaning in Oranjezicht",
+    hasApartmentFocus: true,
+    relatedBlogGuide: {
+      href: "/locations/gardens-cleaning-services",
+      linkAnchorText: "Gardens cleaning services (nearby City Bowl hub)",
+    },
+    intro: [
+      "Oranjezicht climbs Cape Town’s City Bowl where mountain gusts dust counters and sills between weekends—compact flats and hillside homes need realistic kitchen and floor time.",
+      "Shalean books Oranjezicht with transparent quoting: bedrooms, bathrooms, extras, and intensity confirmed online before checkout.",
+      "Mid-week maintenance and deeper resets before guests both stay sized to compact layouts—honest totals, not padded room lists.",
+    ],
+    localAngle: [
+      "Steep streets and limited bays—pin parking and intercom details clearly.",
+      "Wind weeks raise sill dust—flag balconies and floor types when grit is heavy.",
+    ],
+    whyChoose: [
+      "City Bowl scopes tuned to Oranjezicht’s compact and hillside stock.",
+      "Clear Cape Town totals before you pay.",
+      "Access notes for steep streets and intercoms.",
+    ],
+  },
+  "de-waterkant-cleaning-services": {
+    slug: "de-waterkant-cleaning-services",
+    path: "/locations/de-waterkant-cleaning-services",
+    title: "De Waterkant Cleaning Cape Town | Terraces & Lets | Shalean",
+    description:
+      "De Waterkant cleaning in Cape Town for compact terraces and guest stays near Green Point. Standard, deep, or turnover cleans—book Shalean online.",
+    ogImage: "/images/marketing/cleaning-team-bright-space-cape-town.webp",
+    h1: "De Waterkant cleaning services in Cape Town for cobbled-lane terraces and guest-ready flats",
+    bookingLabel: "cleaning in De Waterkant",
+    tier: "medium",
+    hasAirbnbFocus: true,
+    hasApartmentFocus: true,
+    relatedBlogGuide: {
+      href: "/locations/green-point-cleaning-services",
+      linkAnchorText: "Green Point cleaning services (nearby Atlantic / City Bowl hub)",
+    },
+    intro: [
+      "De Waterkant sits on Cape Town’s City Bowl edge with cobbled lanes, compact terraces, and guest-ready flats—narrow access and high-touch interiors shape every cleaning visit.",
+      "Shalean supports De Waterkant with metro quoting: rooms, bathrooms, extras, and intensity locked online before checkout.",
+      "Guests notice bathrooms and kitchens first—flag linen resets so the booked visit matches check-in windows on narrow lanes.",
+    ],
+    localAngle: [
+      "Narrow lanes limit parking—leave drop-off or garage instructions clearly.",
+      "Short-stay turnovers are common—note linen, balconies, and priority photo zones.",
+    ],
+    whyChoose: [
+      "Turnover-aware scopes for De Waterkant terraces and flats.",
+      "Transparent Cape Town totals before you pay.",
+      "Access-first briefing for cobbled-lane addresses.",
+    ],
+  },
+  "century-city-cleaning-services": {
+    slug: "century-city-cleaning-services",
+    path: "/locations/century-city-cleaning-services",
+    title: "Century City Cleaning Cape Town | Apartments | Shalean",
+    description:
+      "Century City cleaning in Cape Town for apartments and canal complexes near Milnerton. Standard, deep, or move-out—book Shalean online with clear access notes.",
+    ogImage: "/images/marketing/professional-cleaner-vacuum-bedroom-cape-town.webp",
+    h1: "Century City cleaning services in Cape Town for apartments, canal living, and complex access",
+    bookingLabel: "cleaning in Century City",
+    hasApartmentFocus: true,
+    relatedBlogGuide: {
+      href: "/locations/bellville-cleaning-services",
+      linkAnchorText: "Bellville cleaning services (nearby Northern Suburbs hub)",
+    },
+    intro: [
+      "Century City concentrates Cape Town apartment and canal living inside managed complexes—lifts, visitor rules, and open-plan dust shape how cleaning time is spent.",
+      "Shalean books Century City with transparent metro quoting: bedrooms, bathrooms, extras, and tier confirmed online before checkout.",
+      "Between workweek upkeep and move-out handovers, clear tower and lift notes keep crews at the right entrance first.",
+    ],
+    localAngle: [
+      "Precincts and lift banks differ—name your tower, visitor bay, and remotes clearly.",
+      "Open-plan floors collect entry grit—mention mats and pets when relevant.",
+    ],
+    whyChoose: [
+      "Complex-aware scopes for Century City apartments and townhouses.",
+      "Clear Cape Town totals before you pay.",
+      "Access briefing that respects precinct security rules.",
+    ],
+  },
+  "milnerton-cleaning-services": {
+    slug: "milnerton-cleaning-services",
+    path: "/locations/milnerton-cleaning-services",
+    title: "Milnerton Cleaning Cape Town | Coastal Homes | Shalean",
+    description:
+      "Milnerton cleaning in Cape Town for coastal apartments and family homes near Table View. Standard, deep, or move-out—book Shalean online.",
+    ogImage: "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
+    h1: "Milnerton cleaning services in Cape Town for coastal apartments and lagoon-side living",
+    bookingLabel: "cleaning in Milnerton",
+    hasApartmentFocus: true,
+    relatedBlogGuide: {
+      href: "/locations/table-view-cleaning-services",
+      linkAnchorText: "Table View cleaning services (nearby Blouberg hub)",
+    },
+    intro: [
+      "Milnerton sits between Cape Town’s Blouberg corridor and lagoon edges—coastal grit, wind, and busy family apartments mean floors and balconies need honest time between visits.",
+      "Shalean supports Milnerton with metro booking: rooms, bathrooms, extras, and intensity locked online before checkout.",
+      "When weeks run long, flag balcony grit and sand tracks so floor time matches how the home is actually used.",
+    ],
+    localAngle: [
+      "Beach Road complexes vary—leave intercom, remotes, and visitor parking notes.",
+      "Windy weeks push grit through sliders—mention tracks and outdoor mats when relevant.",
+    ],
+    whyChoose: [
+      "Coastal-aware floor and balcony scopes for Milnerton homes.",
+      "Transparent Cape Town pricing before checkout.",
+      "Complex access notes captured upfront.",
+    ],
+  },
+  "bloubergstrand-cleaning-services": {
+    slug: "bloubergstrand-cleaning-services",
+    path: "/locations/bloubergstrand-cleaning-services",
+    title: "Bloubergstrand Cleaning Cape Town | Beach Homes | Shalean",
+    description:
+      "Bloubergstrand cleaning in Cape Town for beach-side homes and apartments near Table View. Standard, deep, or Airbnb-ready—book Shalean online.",
+    ogImage: "/images/marketing/shalean-cleaner-balcony-cape-town.webp",
+    h1: "Bloubergstrand cleaning services in Cape Town for beach-side homes and sandy weekends",
+    bookingLabel: "cleaning in Bloubergstrand",
+    hasAirbnbFocus: true,
+    relatedBlogGuide: {
+      href: "/locations/table-view-cleaning-services",
+      linkAnchorText: "Table View cleaning services (nearby Blouberg hub)",
+    },
+    intro: [
+      "Bloubergstrand faces Cape Town’s Atlantic with beach-day sand that rides into passages and open-plan kitchens—balcony grit and wind shape realistic cleaning between visits.",
+      "Shalean books Bloubergstrand with transparent quoting: bedrooms, bathrooms, extras, and intensity confirmed online before checkout.",
+      "After busy beach weekends, flag outdoor mats and sliders so vacuum and mop passes match sand-heavy floors.",
+    ],
+    localAngle: [
+      "Windy beach weeks push grit through sliders—mention tracks and outdoor showers when in scope.",
+      "Complex and street parking vary—leave visitor bay and intercom notes.",
+    ],
+    whyChoose: [
+      "Beach-aware floor and balcony scopes for Bloubergstrand homes.",
+      "Clear Cape Town totals before you pay.",
+      "Turnover-friendly options for short stays near the beach.",
+    ],
+  },
+  "goodwood-cleaning-services": {
+    slug: "goodwood-cleaning-services",
+    path: "/locations/goodwood-cleaning-services",
+    title: "Goodwood Cleaning Cape Town | Homes & Rentals | Shalean",
+    description:
+      "Goodwood cleaning in Cape Town for family houses, townhomes, and end-of-lease handovers. Standard, deep, or move-out—book Shalean online.",
+    ogImage: "/images/marketing/bright-living-room-after-cleaning-cape-town.webp",
+    h1: "Goodwood cleaning services in Cape Town for practical Northern Suburb homes and rentals",
+    bookingLabel: "cleaning in Goodwood",
+    relatedBlogGuide: {
+      href: "/locations/bellville-cleaning-services",
+      linkAnchorText: "Bellville cleaning services (nearby Northern Suburbs hub)",
+    },
+    intro: [
+      "Goodwood sits in Cape Town’s Northern Suburbs with a practical mix of family homes, townhouses, and rentals—move-out windows and weekday kitchens shape cleaning demand.",
+      "Shalean supports Goodwood with metro booking: rooms, bathrooms, extras, and intensity confirmed online before checkout.",
+      "Schedule between workweeks for steady upkeep, or choose move-out intensity for agency lists—access notes keep Northern Suburb visits smooth.",
+    ],
+    localAngle: [
+      "Complex security and visitor parking vary—mention boom gates, remotes, and basement bays.",
+      "End-of-lease windows are tight—flag oven and fridge add-ons early so time stays honest.",
+    ],
+    whyChoose: [
+      "Move-out and deep options suited to Goodwood rental and family layouts.",
+      "Transparent Cape Town pricing before you confirm.",
+      "Structured checklists for high-traffic wet rooms.",
+    ],
+  },
 };
 
 /** Short suburb label for keyword-rich cross-links (e.g. “Airbnb cleaning in Claremont”). */

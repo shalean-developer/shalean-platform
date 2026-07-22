@@ -9,7 +9,7 @@
       "nearby": [
         "fresnaye",
         "sea-point",
-        "camps-bay"
+        "clifton"
       ],
       "uniqueContextLine": "Bantry Bay is cliff-side Atlantic living—wind, salt spray, and compact luxury layouts that need careful scope on every visit.",
       "locationType": "coastal",
@@ -36,8 +36,8 @@
       "region": "Southern Suburbs",
       "nearby": [
         "plumstead",
-        "wynberg",
-        "constantia"
+        "meadowridge",
+        "tokai"
       ],
       "uniqueContextLine": "Bergvliet sits between green belts and school runs—garden dust, pets, and weekend sport sand shape what “clean” means here.",
       "locationType": "suburban",
@@ -63,8 +63,8 @@
       "region": "Atlantic Seaboard",
       "nearby": [
         "sea-point",
-        "bantry-bay",
-        "gardens"
+        "clifton",
+        "bantry-bay"
       ],
       "uniqueContextLine": "Camps Bay pairs beach-day traffic with guest-ready homes—sand in passages and salt on balconies add up fast between turnovers.",
       "locationType": "coastal",
@@ -92,6 +92,7 @@
       "nearby": [
         "newlands",
         "rondebosch",
+        "harfield-village",
         "kenilworth"
       ],
       "uniqueContextLine": "Claremont blends family homes and leafy streets with school-week intensity—kitchens, passages, and entrances work hard between visits.",
@@ -145,9 +146,9 @@
       "city": "Cape Town",
       "region": "City Bowl",
       "nearby": [
+        "oranjezicht",
         "tamboerskloof",
-        "vredehoek",
-        "zonnebloem"
+        "de-waterkant"
       ],
       "uniqueContextLine": "Gardens stacks heritage walk-ups, Kloof-adjacent flats, and festival-week footfall—stairs and tight turnovers are the norm.",
       "locationType": "urban",
@@ -173,8 +174,8 @@
       "region": "Atlantic Seaboard",
       "nearby": [
         "sea-point",
-        "fresnaye",
-        "gardens"
+        "mouille-point",
+        "de-waterkant"
       ],
       "uniqueContextLine": "Green Point mixes Seaboard apartments with promenade energy—lifts, parking bays, and salty balconies define the typical job.",
       "locationType": "coastal",
@@ -254,8 +255,8 @@
       "region": "Southern Suburbs",
       "nearby": [
         "woodstock",
-        "zonnebloem",
-        "rosebank"
+        "mowbray",
+        "pinelands"
       ],
       "uniqueContextLine": "Observatory is shares, student flats, and walkable Main Road living—compact kitchens and high-turnover bathrooms lead the scope.",
       "locationType": "suburban",
@@ -280,9 +281,9 @@
       "city": "Cape Town",
       "region": "Southern Suburbs",
       "nearby": [
+        "diep-river",
         "wynberg",
-        "kenilworth",
-        "bergvliet"
+        "southfield"
       ],
       "uniqueContextLine": "Plumstead pairs garden homes with school-week traffic—side drives, pets, and leaf litter quietly eat vacuum time.",
       "locationType": "suburban",
@@ -308,8 +309,9 @@
       "region": "Southern Suburbs",
       "nearby": [
         "claremont",
-        "observatory",
-        "newlands"
+        "newlands",
+        "rosebank",
+        "mowbray"
       ],
       "uniqueContextLine": "Rondebosch swings between UCT-adjacent rentals and long-standing family streets—split levels and narrow drives are everyday realities.",
       "locationType": "suburban",
@@ -336,8 +338,8 @@
       "region": "Southern Suburbs",
       "nearby": [
         "rondebosch",
-        "observatory",
-        "wynberg"
+        "mowbray",
+        "observatory"
       ],
       "uniqueContextLine": "Rosebank stitches duplex corridors to quieter pockets—student kitchens and shared entrances mean access notes matter.",
       "locationType": "suburban",
@@ -364,8 +366,8 @@
       "region": "Atlantic Seaboard",
       "nearby": [
         "green-point",
-        "fresnaye",
-        "bantry-bay"
+        "mouille-point",
+        "three-anchor-bay"
       ],
       "uniqueContextLine": "Sea Point is apartments and coastal properties along Main Road—salt air, lifts, and tight turnovers set the pace.",
       "locationType": "coastal",
@@ -444,9 +446,9 @@
       "city": "Cape Town",
       "region": "City Bowl",
       "nearby": [
-        "zonnebloem",
         "observatory",
-        "gardens"
+        "gardens",
+        "de-waterkant"
       ],
       "uniqueContextLine": "Woodstock is lofts and mixed-use spaces between studios and cafés—construction dust and creative schedules shape the reset cadence.",
       "locationType": "urban",
@@ -471,9 +473,9 @@
       "city": "Cape Town",
       "region": "Southern Suburbs",
       "nearby": [
-        "plumstead",
+        "claremont",
         "kenilworth",
-        "constantia"
+        "harfield-village"
       ],
       "uniqueContextLine": "Wynberg layers character homes, parks, and Upper Wynberg pockets—older floors and pet-friendly gardens need scoped time.",
       "locationType": "suburban",
@@ -525,9 +527,9 @@
       "region": "Southern Suburbs",
       "nearby": [
         "claremont",
-        "wynberg",
-        "bergvliet",
-        "newlands"
+        "tokai",
+        "bishopscourt",
+        "bergvliet"
       ],
       "uniqueContextLine": "Constantia pairs larger plots and tree canopy with busy kitchens—pollen, pet traffic, and entertainment areas need scoped time on every visit.",
       "locationType": "estate",
@@ -552,10 +554,9 @@
       "city": "Cape Town",
       "region": "Blouberg",
       "nearby": [
-        "sea-point",
-        "bellville",
-        "durbanville",
-        "camps-bay"
+        "bloubergstrand",
+        "milnerton",
+        "bellville"
       ],
       "uniqueContextLine": "Table View mixes coastal sand with family homes—balcony grit, beach-day floors, and open-plan living shape realistic vacuum and mop dwell.",
       "locationType": "blouberg",
@@ -582,9 +583,8 @@
       "region": "Northern Suburbs",
       "nearby": [
         "bellville",
-        "table-view",
-        "claremont",
-        "cape-town"
+        "goodwood",
+        "table-view"
       ],
       "uniqueContextLine": "Durbanville skews toward larger family houses and townhouses—school-week kitchens, garden dust, and multi-bath layouts drive honest scope.",
       "locationType": "northern",
@@ -610,9 +610,8 @@
       "region": "Northern Suburbs",
       "nearby": [
         "durbanville",
-        "table-view",
-        "kenilworth",
-        "claremont"
+        "goodwood",
+        "century-city"
       ],
       "uniqueContextLine": "Bellville balances rentals and family homes—move-out windows, pets, and practical weekday access notes keep visits on schedule.",
       "locationType": "northern",
@@ -630,6 +629,559 @@
       "localizedFaq": {
         "q": "Do Bellville move-outs need inventory-specific add-ons?",
         "a": "When agencies list ovens, fridges, or garages explicitly, select those add-ons at checkout. Northern homes often have larger floor plates—accurate bathroom counts matter more than adding extra bedrooms you do not use."
+      }
+    },
+    {
+      "slug": "bishopscourt-cleaning-services",
+      "name": "Bishopscourt",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": [
+        "constantia",
+        "claremont",
+        "newlands"
+      ],
+      "uniqueContextLine": "Bishopscourt skews toward larger plots and estate-style access—room counts, pets, and entertainment zones quietly multiply scope.",
+      "locationType": "estate",
+      "propertyTypes": [
+        "luxury_home",
+        "family_home"
+      ],
+      "pricingBand": "estate_premium",
+      "serviceDemandProfile": [
+        "Large-home room counts with kitchens and wet rooms that need honest dwell time—not compact-flat defaults.",
+        "Estate boom gates and long drives—kitchen-entrance pins save equipment carry minutes.",
+        "Pets and entertainment zones often sit outside a thin checklist—flag them when they matter."
+      ],
+      "localizedFaq": {
+        "q": "How should Bishopscourt estates brief cleaner access?",
+        "a": "Add boom codes, visitor rules, and whether crews should use a kitchen or service entrance. Large plots mean longer indoor walks—brief the fastest safe route so booked hours target cleaning, not searching the property."
+      }
+    },
+    {
+      "slug": "diep-river-cleaning-services",
+      "name": "Diep River",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": [
+        "plumstead",
+        "bergvliet",
+        "wynberg"
+      ],
+      "uniqueContextLine": "Diep River mixes family homes and practical streets—garden dust, pets, and school-week kitchens shape realistic maintenance cleaning.",
+      "locationType": "suburban",
+      "propertyTypes": [
+        "family_home",
+        "townhouse"
+      ],
+      "pricingBand": "southern_standard",
+      "serviceDemandProfile": [
+        "Family-home maintenance between school terms—kitchens, passages, and pet zones lead most standard scopes.",
+        "Garden dust after windy weeks—vacuum time is the usual adjustment, not extra rooms on paper.",
+        "Move-out cleans spike near lease ends; oven and fridge extras are common add-ons."
+      ],
+      "localizedFaq": {
+        "q": "Do Diep River bookings need notes for pets and garden dust?",
+        "a": "Yes when pets roam indoors or you back onto leafy gardens. Mention floor types and outdoor grit in booking notes so vacuum passes match reality without turning every visit into a deep clean."
+      }
+    },
+    {
+      "slug": "harfield-village-cleaning-services",
+      "name": "Harfield Village",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": [
+        "claremont",
+        "kenilworth",
+        "wynberg"
+      ],
+      "uniqueContextLine": "Harfield Village packs character cottages onto narrow streets—parking notes and compact kitchens matter as much as room count.",
+      "locationType": "suburban",
+      "propertyTypes": [
+        "family_home",
+        "apartment",
+        "townhouse"
+      ],
+      "pricingBand": "southern_standard",
+      "serviceDemandProfile": [
+        "Narrow-street cottages and flats—access notes often matter more than an extra bedroom on paper.",
+        "Compact kitchens and high-use bathrooms between Claremont retail and residential pockets.",
+        "Lease-end and inspection cleans for rental stock tucked off Main Road corridors."
+      ],
+      "localizedFaq": {
+        "q": "How should I brief parking for Harfield Village cleans?",
+        "a": "Pin visitor bays, rear lanes, or loading zones you are allowed to use. Narrow streets back up midday—clear notes prevent lost minutes before cleaners reach your door."
+      }
+    },
+    {
+      "slug": "meadowridge-cleaning-services",
+      "name": "Meadowridge",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": [
+        "bergvliet",
+        "constantia",
+        "tokai"
+      ],
+      "uniqueContextLine": "Meadowridge pairs family homes with green-belt edges—garden grit, pets, and school-week kitchens define most maintenance visits.",
+      "locationType": "suburban",
+      "propertyTypes": [
+        "family_home",
+        "townhouse"
+      ],
+      "pricingBand": "southern_standard",
+      "serviceDemandProfile": [
+        "Family homes near green belts—leaf litter and outdoor grit raise vacuum time after windy weeks.",
+        "School-week kitchens and multi-bath layouts drive baseline hours more than guest turnovers.",
+        "Townhouse clusters with shared walls—unit pins and visitor rules keep arrivals smooth."
+      ],
+      "localizedFaq": {
+        "q": "Does green-belt dust change Meadowridge cleaning scope?",
+        "a": "If you back onto trees or large gardens, mention outdoor grit and pets in your notes. Crews can allocate vacuum passes for leaf litter on hard floors—without that flag, a standard scope stays kitchen- and bathroom-first."
+      }
+    },
+    {
+      "slug": "tokai-cleaning-services",
+      "name": "Tokai",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": [
+        "constantia",
+        "bergvliet",
+        "meadowridge"
+      ],
+      "uniqueContextLine": "Tokai mixes estate pockets and family homes under canopy—pollen, pets, and longer drives mean access notes and honest room counts matter.",
+      "locationType": "estate",
+      "propertyTypes": [
+        "family_home",
+        "luxury_home",
+        "townhouse"
+      ],
+      "pricingBand": "estate_premium",
+      "serviceDemandProfile": [
+        "Estate and larger-home layouts—kitchen-first pins save equipment carry on bigger plots.",
+        "Canopy pollen and garden grit after windy weeks—floors and sills need realistic vacuum passes.",
+        "Family entertaining kitchens—deep cycles before guests, then lighter standard upkeep."
+      ],
+      "localizedFaq": {
+        "q": "How do Tokai estate bookings handle boom gates?",
+        "a": "Add estate name, boom code, and whether cleaners should use a service gate. If visitor bays are limited, say where to stop safely so crews avoid blocking narrow estate roads."
+      }
+    },
+    {
+      "slug": "pinelands-cleaning-services",
+      "name": "Pinelands",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": [
+        "observatory",
+        "mowbray",
+        "rondebosch"
+      ],
+      "uniqueContextLine": "Pinelands blends garden-suburb homes with practical weekday living—family kitchens, pets, and quiet streets set a steady maintenance rhythm.",
+      "locationType": "suburban",
+      "propertyTypes": [
+        "family_home",
+        "townhouse",
+        "apartment"
+      ],
+      "pricingBand": "southern_standard",
+      "serviceDemandProfile": [
+        "Garden-suburb family homes—kitchens and bathrooms lead recurring standard scopes.",
+        "Quiet streets with driveway access—pins still matter when visitors share narrow lanes.",
+        "Lease-end cleans for flats and townhouses near the Observatory–Mowbray corridor."
+      ],
+      "localizedFaq": {
+        "q": "What should Pinelands households add for pets and gardens?",
+        "a": "Note pets, floor types, and whether outdoor grit tracks indoors. Crews allocate vacuum time honestly when those details are in the booking—otherwise a standard visit stays room-count led."
+      }
+    },
+    {
+      "slug": "mowbray-cleaning-services",
+      "name": "Mowbray",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": [
+        "rosebank",
+        "observatory",
+        "rondebosch"
+      ],
+      "uniqueContextLine": "Mowbray sits on the campus fringe where rentals turn over fast—bathrooms, floors, and ovens need inspection-ready scope on short notice.",
+      "locationType": "suburban",
+      "propertyTypes": [
+        "student_share",
+        "apartment",
+        "family_home"
+      ],
+      "pricingBand": "southern_standard",
+      "serviceDemandProfile": [
+        "Campus-fringe rentals—mid-term bathroom and kitchen resets; lease-end move-outs with agency checklists.",
+        "Shared flats where flatmates need a fair, visible total before anyone pays.",
+        "Street parking and gates vary—precise pins save time during peak traffic."
+      ],
+      "localizedFaq": {
+        "q": "How do Mowbray rentals prep for inspection cleans?",
+        "a": "Select move-out intensity and any oven or fridge extras listed on the inventory. Accurate bathroom counts matter more than adding unused bedrooms—notes on shared access help crews finish within the booked window."
+      }
+    },
+    {
+      "slug": "rondebosch-east-cleaning-services",
+      "name": "Rondebosch East",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": [
+        "rondebosch",
+        "athlone",
+        "kenilworth"
+      ],
+      "uniqueContextLine": "Rondebosch East bridges family homes and practical corridors—weekday kitchens, pets, and lease-end windows set cleaning demand.",
+      "locationType": "suburban",
+      "propertyTypes": [
+        "family_home",
+        "apartment",
+        "townhouse"
+      ],
+      "pricingBand": "southern_standard",
+      "serviceDemandProfile": [
+        "Family and rental mix—standard upkeep plus move-out spikes near lease ends.",
+        "Practical weekday access along busier corridors—clear pins keep arrivals on time.",
+        "Pets and multi-bath homes—vacuum and wet-room time drive realistic totals."
+      ],
+      "localizedFaq": {
+        "q": "Do Rondebosch East move-outs need inventory-specific add-ons?",
+        "a": "When agencies list ovens, fridges, or garages explicitly, select those add-ons at checkout. Accurate bathroom counts matter more than adding extra bedrooms you do not use."
+      }
+    },
+    {
+      "slug": "southfield-cleaning-services",
+      "name": "Southfield",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": [
+        "plumstead",
+        "diep-river",
+        "wynberg"
+      ],
+      "uniqueContextLine": "Southfield favours practical family homes—school-week kitchens, pets, and garden grit set a steady suburban cleaning cadence.",
+      "locationType": "suburban",
+      "propertyTypes": [
+        "family_home",
+        "townhouse"
+      ],
+      "pricingBand": "southern_standard",
+      "serviceDemandProfile": [
+        "Family-home maintenance—kitchens, passages, and bathrooms lead standard scopes.",
+        "Garden grit and pet traffic after outdoor play—vacuum time is the usual adjustment.",
+        "Lease-end cleans for townhouses and freestanding homes near Plumstead."
+      ],
+      "localizedFaq": {
+        "q": "Should Southfield bookings mention pets and outdoor grit?",
+        "a": "Yes when pets roam indoors or garden dust tracks through entrances. Those notes help crews budget vacuum passes without expanding every visit into a deep clean."
+      }
+    },
+    {
+      "slug": "heathfield-cleaning-services",
+      "name": "Heathfield",
+      "city": "Cape Town",
+      "region": "Southern Suburbs",
+      "nearby": [
+        "diep-river",
+        "bergvliet",
+        "southfield"
+      ],
+      "uniqueContextLine": "Heathfield mixes quieter residential streets with family living—pets, gardens, and weekday kitchens define most cleaning briefs.",
+      "locationType": "suburban",
+      "propertyTypes": [
+        "family_home",
+        "townhouse"
+      ],
+      "pricingBand": "southern_standard",
+      "serviceDemandProfile": [
+        "Quiet residential streets—family kitchens and bathrooms lead recurring scopes.",
+        "Garden and pet grit after outdoor weeks—vacuum passes are the usual scope adjuster.",
+        "Move-out windows for freestanding homes and townhouses near Diep River."
+      ],
+      "localizedFaq": {
+        "q": "What access details help Heathfield cleans run smoothly?",
+        "a": "Leave a precise pin, gate codes if any, and notes on pets or floor types. Quiet streets still have limited visitor parking—clear guidance prevents delays before work starts."
+      }
+    },
+    {
+      "slug": "hout-bay-cleaning-services",
+      "name": "Hout Bay",
+      "city": "Cape Town",
+      "region": "Atlantic Seaboard",
+      "nearby": [
+        "camps-bay",
+        "constantia",
+        "llandudno"
+      ],
+      "uniqueContextLine": "Hout Bay pairs harbour living with hillside homes—salt air, sand, and winding access roads shape realistic cleaning time.",
+      "locationType": "coastal",
+      "propertyTypes": [
+        "family_home",
+        "apartment",
+        "short_stay",
+        "luxury_home"
+      ],
+      "pricingBand": "atlantic_premium",
+      "serviceDemandProfile": [
+        "Coastal grit and harbour humidity—glass, rails, and floors need honest dwell after windy weeks.",
+        "Hillside and valley access—precise pins and gate notes prevent lost minutes on winding roads.",
+        "Short-stay and family mix—turnovers and weekly maintenance both appear in booking patterns."
+      ],
+      "localizedFaq": {
+        "q": "How does coastal weather change Hout Bay cleaning scope?",
+        "a": "Salt film and sand after windy or beach days can extend glass and floor time. Flag balconies, outdoor furniture, and mats when you want them in scope so the quote reflects real passes—not room count alone."
+      }
+    },
+    {
+      "slug": "clifton-cleaning-services",
+      "name": "Clifton",
+      "city": "Cape Town",
+      "region": "Atlantic Seaboard",
+      "nearby": [
+        "camps-bay",
+        "bantry-bay",
+        "fresnaye"
+      ],
+      "uniqueContextLine": "Clifton guests notice scuffs long before the view—cliff-side access, privacy, and salt-exposed finishes define every visit.",
+      "locationType": "coastal",
+      "propertyTypes": [
+        "luxury_home",
+        "apartment",
+        "short_stay"
+      ],
+      "pricingBand": "atlantic_premium",
+      "serviceDemandProfile": [
+        "Cliff-side luxury pads—privacy, noise, and access notes are part of realistic routing.",
+        "Salt-exposed glass and rails—dry passes before wet work reduce streaking.",
+        "Guest-ready turnovers on short clocks—kitchens and bathrooms lead photo-ready zones."
+      ],
+      "localizedFaq": {
+        "q": "How should Clifton homes brief cliff-side access?",
+        "a": "Pin the correct entrance, note parking or drop-off rules, and mention stairs or lifts. Cliff-side carries shrink effective minutes unless access is precise—those notes keep the booked window focused on cleaning."
+      }
+    },
+    {
+      "slug": "mouille-point-cleaning-services",
+      "name": "Mouille Point",
+      "city": "Cape Town",
+      "region": "Atlantic Seaboard",
+      "nearby": [
+        "green-point",
+        "sea-point",
+        "three-anchor-bay"
+      ],
+      "uniqueContextLine": "Mouille Point pairs promenade walks with sand that rides home on shoes—compact flats need turnover-ready bathrooms and kitchens.",
+      "locationType": "coastal",
+      "propertyTypes": [
+        "apartment",
+        "short_stay"
+      ],
+      "pricingBand": "atlantic_premium",
+      "serviceDemandProfile": [
+        "Promenade sand on rugs and balcony tracks—floor time is a frequent scope adjuster.",
+        "Compact Seaboard flats—bathrooms and kitchens lead guest-ready briefs.",
+        "Lifts and intercoms vary by block—entrance pins prevent delays."
+      ],
+      "localizedFaq": {
+        "q": "Should Mouille Point bookings include balcony and sand notes?",
+        "a": "Yes when promenade walks track grit indoors or you want outdoor areas in scope. Flag mats, runners, and balcony tracks at checkout so vacuum and mop passes are budgeted honestly."
+      }
+    },
+    {
+      "slug": "three-anchor-bay-cleaning-services",
+      "name": "Three Anchor Bay",
+      "city": "Cape Town",
+      "region": "Atlantic Seaboard",
+      "nearby": [
+        "sea-point",
+        "mouille-point",
+        "green-point"
+      ],
+      "uniqueContextLine": "Three Anchor Bay packs Seaboard life into compact footprints—every cupboard and corner shows wear faster between visits.",
+      "locationType": "coastal",
+      "propertyTypes": [
+        "apartment",
+        "short_stay"
+      ],
+      "pricingBand": "atlantic_premium",
+      "serviceDemandProfile": [
+        "Compact Seaboard flats—high-touch kitchens and bathrooms lead every brief.",
+        "Salt air and wind grit on glass and sills—dry dusting before wet work helps.",
+        "Intercom and visitor parking variance—pins keep short slots productive."
+      ],
+      "localizedFaq": {
+        "q": "How do compact Three Anchor Bay flats affect cleaning time?",
+        "a": "Small footprints still need careful cupboard and wet-room detail. Accurate bathroom counts and notes on balcony grit matter more than adding unused bedrooms—scope stays honest to what you select online."
+      }
+    },
+    {
+      "slug": "oranjezicht-cleaning-services",
+      "name": "Oranjezicht",
+      "city": "Cape Town",
+      "region": "City Bowl",
+      "nearby": [
+        "gardens",
+        "tamboerskloof",
+        "vredehoek"
+      ],
+      "uniqueContextLine": "Oranjezicht catches mountain gusts that dust counters faster—compact City Bowl flats need realistic kitchen and sill time.",
+      "locationType": "urban",
+      "propertyTypes": [
+        "apartment",
+        "family_home"
+      ],
+      "pricingBand": "city_bowl",
+      "serviceDemandProfile": [
+        "Mountain-gust flats—counters and sills collect grit between weekends.",
+        "Compact City Bowl layouts—kitchens, baths, and living zones compete for the same window.",
+        "Steep-street parking and intercoms—pins keep arrivals punctual."
+      ],
+      "localizedFaq": {
+        "q": "How do mountain winds affect Oranjezicht cleaning?",
+        "a": "Gusts push grit onto sills and counters faster than sheltered suburbs. Mention dusty weeks and balcony exposure in notes so crews plan dry dusting before wet work without skipping high-traffic kitchens."
+      }
+    },
+    {
+      "slug": "de-waterkant-cleaning-services",
+      "name": "De Waterkant",
+      "city": "Cape Town",
+      "region": "City Bowl",
+      "nearby": [
+        "green-point",
+        "gardens",
+        "woodstock"
+      ],
+      "uniqueContextLine": "De Waterkant packs cobbled lanes and compact terraces—guest turnovers, narrow access, and high-touch interiors define the brief.",
+      "locationType": "urban",
+      "propertyTypes": [
+        "apartment",
+        "short_stay",
+        "townhouse"
+      ],
+      "pricingBand": "city_bowl",
+      "serviceDemandProfile": [
+        "Guest-ready terraces and flats—bathrooms and kitchens lead short-clock turnovers.",
+        "Narrow cobbled access—precise pins and drop-off notes prevent delays.",
+        "High-touch interiors in compact footprints—detail time matters more than extra rooms."
+      ],
+      "localizedFaq": {
+        "q": "How should De Waterkant hosts brief access for turnovers?",
+        "a": "Pin the exact entrance, note parking or drop-off constraints on narrow lanes, and list linen or balcony extras you need. Compact footprints still need accurate bathroom counts so the quote matches the visit."
+      }
+    },
+    {
+      "slug": "century-city-cleaning-services",
+      "name": "Century City",
+      "city": "Cape Town",
+      "region": "Northern Suburbs",
+      "nearby": [
+        "milnerton",
+        "goodwood",
+        "bellville"
+      ],
+      "uniqueContextLine": "Century City mixes apartments, canal living, and complex access—lift banks, visitor rules, and open-plan dust define most visits.",
+      "locationType": "northern",
+      "propertyTypes": [
+        "apartment",
+        "townhouse",
+        "short_stay"
+      ],
+      "pricingBand": "northern_standard",
+      "serviceDemandProfile": [
+        "Apartment towers and canal complexes—lift and intercom notes are standard briefing.",
+        "Open-plan living with weekday dust—vacuum near entries is a common adjuster.",
+        "Short-stay and residential mix—turnovers need accurate bathroom counts at checkout."
+      ],
+      "localizedFaq": {
+        "q": "What should Century City residents add for complex access?",
+        "a": "Pin the correct tower or precinct, visitor bay rules, remotes, and lift bank. Complexes route differently—naming the entrance saves time before cleaning starts."
+      }
+    },
+    {
+      "slug": "milnerton-cleaning-services",
+      "name": "Milnerton",
+      "city": "Cape Town",
+      "region": "Blouberg",
+      "nearby": [
+        "table-view",
+        "century-city",
+        "bloubergstrand"
+      ],
+      "uniqueContextLine": "Milnerton straddles coastal and lagoon living—sand, wind grit, and family apartments shape realistic floor and balcony time.",
+      "locationType": "blouberg",
+      "propertyTypes": [
+        "apartment",
+        "family_home",
+        "short_stay"
+      ],
+      "pricingBand": "blouberg_coastal",
+      "serviceDemandProfile": [
+        "Coastal and lagoon grit in passages—balcony and mat notes adjust vacuum time.",
+        "Family apartments and freestanding homes—open-plan kitchens carry weekday traffic.",
+        "Complex access along Beach Road corridors—pins and remotes keep arrivals smooth."
+      ],
+      "localizedFaq": {
+        "q": "How much does coastal grit change Milnerton scope?",
+        "a": "Sand and wind grit track through sliders and rugs after outdoor days. Flag passages, mats, and balconies at checkout so crews budget floor passes; otherwise a standard visit stays room-count led."
+      }
+    },
+    {
+      "slug": "bloubergstrand-cleaning-services",
+      "name": "Bloubergstrand",
+      "city": "Cape Town",
+      "region": "Blouberg",
+      "nearby": [
+        "table-view",
+        "milnerton",
+        "bloubergrant"
+      ],
+      "uniqueContextLine": "Bloubergstrand brings beach-day sand into passages fast—balcony grit and open-plan living need realistic vacuum and mop dwell.",
+      "locationType": "blouberg",
+      "propertyTypes": [
+        "family_home",
+        "apartment",
+        "short_stay"
+      ],
+      "pricingBand": "blouberg_coastal",
+      "serviceDemandProfile": [
+        "Beach sand in sliders and passages—balcony and outdoor gear add vacuum time.",
+        "Family homes and short-stay stock—open-plan kitchens carry weekend traffic grit.",
+        "Windy weeks—dry dusting before wet mopping reduces streaking near the beach."
+      ],
+      "localizedFaq": {
+        "q": "Should I book extra floor time after beach days in Bloubergstrand?",
+        "a": "Yes when passages and open-plan floors see heavy foot traffic. Flag sliders, outdoor showers, and mats at checkout so the quote includes realistic vacuum and mop minutes—not just indoor room count."
+      }
+    },
+    {
+      "slug": "goodwood-cleaning-services",
+      "name": "Goodwood",
+      "city": "Cape Town",
+      "region": "Northern Suburbs",
+      "nearby": [
+        "bellville",
+        "century-city",
+        "pinelands"
+      ],
+      "uniqueContextLine": "Goodwood balances practical family homes and rentals—move-out windows, pets, and weekday access notes keep visits on schedule.",
+      "locationType": "northern",
+      "propertyTypes": [
+        "family_home",
+        "apartment",
+        "townhouse"
+      ],
+      "pricingBand": "northern_standard",
+      "serviceDemandProfile": [
+        "Rental and family mix—move-out spikes and practical weekday access patterns.",
+        "Townhouse clusters—shared walls and compact kitchens with multi-bath layouts.",
+        "Northern corridor traffic—clear pins keep Voortrekker-adjacent arrivals on time."
+      ],
+      "localizedFaq": {
+        "q": "Do Goodwood move-outs need inventory-specific add-ons?",
+        "a": "When agencies list ovens, fridges, or garages explicitly, select those add-ons at checkout. Accurate bathroom counts matter more than adding extra bedrooms you do not use."
       }
     }
   ]
