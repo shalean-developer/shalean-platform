@@ -104,7 +104,7 @@ In `lib/seo/capeTownSeoPages.ts`:
 | PR | https://github.com/shalean-developer/shalean-platform/pull/89 |
 | Branch | `seo/fix-001-002-prod-ready` |
 | Code tip (Window Cleaning CTA removal) | `6e6a1429225a0513e0bb58ba688247e367104ab5` |
-| EO package tip (verify CI / preview against this SHA) | `9499262519a9a0713a4166df32684ea5f6bea092` |
+| EO package tip (verify CI / preview against this SHA) | `064ff1e916542a5092b1b3ca7b97ababa63277b1` |
 | Codex P2 (Window Cleaning homepage Book Now → unsupported booking-v2) | **Resolved** by removing the CTA entirely (informational card only); no quote/contact workaround; window not added to booking-v2 |
 
 ### 4.1 Baseline (pre-change, repository)
@@ -203,7 +203,7 @@ Classification:
 
 ## 10. Proposed next authorization (exact)
 
-> **Authorize EO review of PR #89 tip `9499262519a9a0713a4166df32684ea5f6bea092` on `seo/fix-001-002-prod-ready` (SEO-FIX-001/002 production package + Window Cleaning homepage CTA removal at `6e6a1429225a0513e0bb58ba688247e367104ab5`). Preview/CI verification against that exact tip SHA only. Do not authorize production merge, production deploy, GSC writes, sitemap submission, indexing requests, DNS/Plesk changes, or booking-v2 catalog expansion for window cleaning.**
+> **Authorize EO review of PR #89 tip `064ff1e916542a5092b1b3ca7b97ababa63277b1` on `seo/fix-001-002-prod-ready` (SEO-FIX-001/002 production package + Window Cleaning homepage CTA removal at `6e6a1429225a0513e0bb58ba688247e367104ab5`). Preview/CI verification against that exact tip SHA only. Do not authorize production merge, production deploy, GSC writes, sitemap submission, indexing requests, DNS/Plesk changes, or booking-v2 catalog expansion for window cleaning.**
 
 Optional follow-on (separate):
 
