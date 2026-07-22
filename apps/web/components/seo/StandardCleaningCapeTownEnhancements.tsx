@@ -121,7 +121,7 @@ export function StandardCleaningCapeTownEnhancements({ bookingPath }: Props) {
             Book a cleaner in Cape Town today
           </h2>
           <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-zinc-600">
-            Same-day and next-day slots when routing allows — pick rooms, see your total, and confirm online.
+            Choose a slot that works for your schedule — pick rooms, see your total, and confirm online.
           </p>
           <div className="mt-8 flex flex-wrap justify-center gap-3">
             <GrowthCtaLink

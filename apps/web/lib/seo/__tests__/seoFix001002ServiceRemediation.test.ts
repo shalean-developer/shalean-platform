@@ -94,6 +94,44 @@ describe("SEO-FIX-001/002 service money pages", () => {
     }
     expect(hrefs).toContain("/services");
   });
+
+  it("omits blocked unverified claims from service money-page copy and metadata", () => {
+    const blocked = [
+      /4,?500\+?\s*homes/i,
+      /4\.8\s*★/,
+      /129\s*reviews/i,
+      /\bvetted\b/i,
+      /from\s*r\s*250/i,
+      /same-day\s+availability/i,
+      /same-day\s+and\s+next-day/i,
+      /guaranteed\s+deposit/i,
+      /guaranteed\s+same-day/i,
+    ];
+
+    for (const slug of CAPE_TOWN_SEO_SERVICE_SLUGS) {
+      const block = CAPE_TOWN_SERVICE_SEO[slug];
+      const meta = buildCapeTownServiceMetadata(block);
+      const corpus = [
+        String(meta.title),
+        String(meta.description),
+        block.title,
+        block.description,
+        block.h1,
+        ...block.explanation,
+        ...block.included,
+        ...(block.exclusions ?? []).filter((e) => !/^guaranteed\b/i.test(e) && !/^same-day emergency/i.test(e)),
+        ...block.benefits.flatMap((b) => [b.title, b.body]),
+        ...block.faqs.flatMap((f) => [f.q, f.a]),
+      ].join("\n");
+
+      for (const re of blocked) {
+        // Exclusions that deny guarantees / same-day emergency remain allowed as negative scope.
+        expect(corpus, `${slug} matched ${re}`).not.toMatch(re);
+      }
+      expect(String(meta.title)).not.toMatch(/PREVIEW|STAGING/i);
+      expect(String(meta.title)).not.toMatch(/from\s*r\s*\d+/i);
+    }
+  });
 });
 
 describe("SEO-FIX-001 location disposition rules", () => {

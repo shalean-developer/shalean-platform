@@ -442,7 +442,7 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
             {[
               {
                 title: "Reliable cleaners",
-                body: "Vetted teams work from structured checklists—not ad-hoc WhatsApp lists—so quality survives busy months when you are travelling.",
+                body: "Teams work from structured checklists—not ad-hoc WhatsApp lists—so quality survives busy months when you are travelling.",
               },
               {
                 title: "Fast turnaround",
