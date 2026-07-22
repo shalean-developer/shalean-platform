@@ -39,6 +39,7 @@ describe("shaleanComMigrationMap", () => {
     expect(ht).toContain("PENDING_EXTERNAL_PLESK");
     expect(ht).toContain("RewriteEngine On");
     expect(ht).toContain("https://shalean.co.za/$1");
+    expect(ht).toMatch(/#how-it-works \[R=301,L,QSA,NE\]/);
     expect(absoluteShaleanCoZaUrl("/contact")).toBe("https://shalean.co.za/contact");
   });
 });

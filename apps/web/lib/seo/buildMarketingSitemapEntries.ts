@@ -118,12 +118,10 @@ export async function buildMarketingSitemapEntries(): Promise<MetadataRoute.Site
     push(path, locationLastModified);
   }
 
-  /** File-based routed articles always included (deterministic even if CMS is unavailable). */
-  for (const row of collectFileBasedBlogSitemapRows()) {
-    push(`/blog/${row.slug}`, row.lastModified);
-  }
-
-  /** CMS articles — safe empty when Supabase unavailable. */
+  /**
+   * CMS articles first — live `/blog/[slug]` prefers Supabase, so sitemap lastmod must follow CMS
+   * when both sources publish the same slug. File-based rows then fill gaps if CMS is unavailable.
+   */
   try {
     const blogRows = await getPublishedBlogSitemapRows();
     for (const row of blogRows) {
@@ -134,6 +132,10 @@ export async function buildMarketingSitemapEntries(): Promise<MetadataRoute.Site
     }
   } catch (err) {
     console.error("[sitemap] getPublishedBlogSitemapRows failed — continuing with file-based posts", err);
+  }
+
+  for (const row of collectFileBasedBlogSitemapRows()) {
+    push(`/blog/${row.slug}`, row.lastModified);
   }
 
   return entries;

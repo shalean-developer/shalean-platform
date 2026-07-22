@@ -52,7 +52,7 @@ RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
 RewriteRule ^team/?$ https://shalean.co.za/about [R=301,L,QSA]
 
 RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
-RewriteRule ^how-it-works/?$ https://shalean.co.za/#how-it-works [R=301,L,QSA]
+RewriteRule ^how-it-works/?$ https://shalean.co.za/#how-it-works [R=301,L,QSA,NE]
 
 RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
 RewriteRule ^cleaning-prices-cape-town/?$ https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026 [R=301,L,QSA]

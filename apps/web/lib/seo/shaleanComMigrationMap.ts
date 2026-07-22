@@ -140,12 +140,14 @@ export function buildShaleanComHtaccessRules(): string {
 
   for (const rule of getShaleanComMigrationRules()) {
     const dest = absoluteShaleanCoZaUrl(rule.destinationPath);
+    // NE keeps `#fragment` destinations unescaped (%23 breaks homepage anchors).
+    const flags = dest.includes("#") ? "[R=301,L,QSA,NE]" : "[R=301,L,QSA]";
     lines.push(hostCond);
     if (rule.sourcePath === "/") {
-      lines.push(`RewriteRule ^/?$ ${dest} [R=301,L,QSA]`);
+      lines.push(`RewriteRule ^/?$ ${dest} ${flags}`);
     } else {
       const src = rule.sourcePath.replace(/^\//, "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      lines.push(`RewriteRule ^${src}/?$ ${dest} [R=301,L,QSA]`);
+      lines.push(`RewriteRule ^${src}/?$ ${dest} ${flags}`);
     }
   }
 
