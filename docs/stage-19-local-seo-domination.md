@@ -116,7 +116,7 @@ Still valid for **hub and metro** CTAs. Stage 19-specific CTA sources remain dor
 |--------|---------|
 | Hub / service → quote start | `seo-attribution` + funnel |
 | Landing → completed booking | Same + `booking_completed` |
-| Organic impressions/clicks | Search Console (**read-only** while GSC freeze holds) |
+| Organic impressions/clicks | Search Console analysis only under separately authorized read-only scope; no GSC access or writes are authorized by P1A |
 | Cannibalization | GSC + canonical audits when separately authorized |
 
 ---
