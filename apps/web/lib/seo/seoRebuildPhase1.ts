@@ -1,5 +1,3 @@
-import { STAGE19_INTENT_SEGMENTS } from "@/lib/seo/seoPageRegistry";
-
 /**
  * SEO rebuild phase — increment when re-enabling programmatic URL classes.
  * Phase 1: minimal sitemap + 410 location hubs and window cleaning.
@@ -47,25 +45,15 @@ function normalizePathname(pathname: string): string {
   return t.replace(/\/+$/, "") || "/";
 }
 
-/** Retired in every rebuild phase — consolidated elsewhere or thin duplicates. */
+/**
+ * Paths that remain HTTP 410 after redirect resolvers run (no relevant live replacement).
+ * Public legacy URLs that permanently redirect must NOT be listed here.
+ */
 function isPermanentlyRetiredSeoPath(p: string): boolean {
-  if (p === "/growth/local" || p.startsWith("/growth/local/")) return true;
+  if (p === "/growth/local") return true;
+  if (p === "/location") return true;
 
-  if (p === "/location" || p.startsWith("/location/")) return true;
-
-  for (const intent of STAGE19_INTENT_SEGMENTS) {
-    if (p === `/${intent}` || p.startsWith(`/${intent}/`)) return true;
-  }
-
-  if (p.startsWith("/cape-town/cleaning-services/")) return true;
   if (p.startsWith("/johannesburg/")) return true;
-
-  if (p === "/cleaning-services" || p.startsWith("/cleaning-services/")) return true;
-
-  /** Consolidated to `/services` + pricing blog — avoid competing commercial hubs. */
-  if (p === "/cleaning-services-cape-town") return true;
-  if (p === "/cleaning-prices-cape-town") return true;
-  if (p === "/maid-services-cape-town") return true;
 
   if (/^\/services\/airbnb-cleaning-(sea-point|green-point|claremont)$/.test(p)) return true;
 
@@ -92,7 +80,10 @@ export function isSeoRebuildCoreSitemapPath(pathname: string): boolean {
   return (SEO_REBUILD_SITEMAP_CORE_PATHS as readonly string[]).includes(p);
 }
 
-/** Robots.txt disallow prefixes/paths — aligned with {@link isSeoRebuildGonePath}. */
+/**
+ * Private / operational robots.txt disallow prefixes.
+ * Public legacy URLs that permanently redirect must remain crawlable (no Disallow).
+ */
 export function seoRobotsDisallowPaths(): string[] {
   const shared = [
     "/admin",
@@ -110,22 +101,27 @@ export function seoRobotsDisallowPaths(): string[] {
     "/login",
     "/account/success",
     "/booking/success",
-    "/growth/local/",
-    "/location/",
-    "/deep-cleaning/",
-    "/move-out-cleaning/",
-    "/airbnb-cleaning/",
-    "/same-day-cleaning/",
-    "/office-cleaning/",
-    "/cleaning-services/",
-    "/cleaning-services-cape-town",
-    "/cleaning-prices-cape-town",
-    "/maid-services-cape-town",
-    "/johannesburg/",
-    "/cape-town/cleaning-services/",
+    "/payment/success",
   ];
   if (SEO_REBUILD_PHASE < 2) {
     return [...shared, "/locations/"];
   }
   return shared;
 }
+
+/** Public legacy prefixes that must never be Disallow'd while they redirect or 410 for deindexation. */
+export const PUBLIC_LEGACY_REDIRECT_ROBOTS_PATHS = [
+  "/growth/local/",
+  "/location/",
+  "/deep-cleaning/",
+  "/move-out-cleaning/",
+  "/airbnb-cleaning/",
+  "/same-day-cleaning/",
+  "/office-cleaning/",
+  "/cleaning-services/",
+  "/cleaning-services-cape-town",
+  "/cleaning-prices-cape-town",
+  "/maid-services-cape-town",
+  "/johannesburg/",
+  "/cape-town/cleaning-services/",
+] as const;

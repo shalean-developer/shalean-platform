@@ -1,12 +1,10 @@
 /**
  * Phase 1 legacy URL resolution for `proxy.ts` (Edge).
- * Single-hop redirects or 410 — no homepage, no `/locations` catalogue dumping.
+ * Single-hop redirects or 410 — destinations must be live indexable URLs (no chains into 410).
  */
 
-import { locationNameForCity } from "@/lib/growth/locations";
 import { locationSeoPathFromLegacyAreaSlug } from "@/lib/seo/capeTownSeoPages";
 import {
-  findStage19RegistryRow,
   isStage19IntentSegment,
   STAGE19_INTENT_SEGMENTS,
   type Stage19IntentSegment,
@@ -17,6 +15,16 @@ export type LegacyPhase1Resolution = { type: "redirect"; pathname: string } | { 
 export function normalizeLegacyCitySlug(raw: string): string {
   return raw.trim().toLowerCase().replace(/\s+/g, "-");
 }
+
+const SERVICE_PATH_BY_INTENT: Record<Stage19IntentSegment, string> = {
+  "deep-cleaning": "/services/deep-cleaning-cape-town",
+  "move-out-cleaning": "/services/move-out-cleaning-cape-town",
+  "airbnb-cleaning": "/services/airbnb-cleaning-cape-town",
+  "same-day-cleaning": "/services/standard-cleaning-cape-town",
+  "office-cleaning": "/services/office-cleaning-cape-town",
+};
+
+const INTENTS_LONGEST_FIRST = [...STAGE19_INTENT_SEGMENTS].sort((a, b) => b.length - a.length);
 
 /** Cape Town hub exists in `location-hubs.json` iff this returns a non-null path. */
 export function resolveLegacySingularLocation(cityRaw: string, suburbRaw: string): LegacyPhase1Resolution {
@@ -30,30 +38,9 @@ export function resolveLegacySingularLocation(cityRaw: string, suburbRaw: string
     return { type: "gone" };
   }
 
-  if (city === "johannesburg") {
-    if (locationNameForCity("johannesburg", suburb)) {
-      return { type: "redirect", pathname: `/johannesburg/cleaning-services/${suburb}` };
-    }
-    return { type: "gone" };
-  }
-
-  /** Pretoria / Durban / eThekwini: no `/{city}/cleaning-services/{suburb}` routes in app today. */
-  if (city === "pretoria" || city === "tshwane" || city === "durban" || city === "ekurhuleni" || city === "pietermaritzburg") {
-    return { type: "gone" };
-  }
-
+  /** Johannesburg / other metros: area routes retired — no relevant live replacement. */
   return { type: "gone" };
 }
-
-const SERVICE_PATH_BY_INTENT: Record<Stage19IntentSegment, string> = {
-  "deep-cleaning": "/services/deep-cleaning-cape-town",
-  "move-out-cleaning": "/services/move-out-cleaning-cape-town",
-  "airbnb-cleaning": "/services/airbnb-cleaning-cape-town",
-  "same-day-cleaning": "/services/standard-cleaning-cape-town",
-  "office-cleaning": "/services/office-cleaning-cape-town",
-};
-
-const INTENTS_LONGEST_FIRST = [...STAGE19_INTENT_SEGMENTS].sort((a, b) => b.length - a.length);
 
 function parseGrowthLocalCombinedSegment(rest: string): { intent: Stage19IntentSegment; suburb: string } | null {
   const r = rest.trim().toLowerCase();
@@ -68,20 +55,23 @@ function parseGrowthLocalCombinedSegment(rest: string): { intent: Stage19IntentS
   return null;
 }
 
+/**
+ * Intent × suburb → location hub when catalogue match exists, else Cape Town service page.
+ * Never targets retired Stage-19 `/{intent}/{suburb}` paths (those 410'd / chain).
+ */
 function resolveGrowthIntentAndSuburb(intentRaw: string, suburbRaw: string): LegacyPhase1Resolution {
   const intent = intentRaw.trim().toLowerCase();
   const suburb = suburbRaw.trim().toLowerCase();
   if (!isStage19IntentSegment(intent) || !suburb) return { type: "gone" };
 
-  const row = findStage19RegistryRow(intent, suburb);
-  if (row) return { type: "redirect", pathname: row.canonicalPath };
+  const hubPath = locationSeoPathFromLegacyAreaSlug(suburb);
+  if (hubPath) return { type: "redirect", pathname: hubPath };
 
-  const svc = SERVICE_PATH_BY_INTENT[intent];
-  return { type: "redirect", pathname: svc };
+  return { type: "redirect", pathname: SERVICE_PATH_BY_INTENT[intent] };
 }
 
 /**
- * `/growth/local/*` — Stage 19 match first, else Cape Town service hub for intent, else 410.
+ * `/growth/local/*` — location hub or service page (one hop), else 410.
  * Supports `/growth/local/{intent}/{suburb}` or `/growth/local/{intent}-{suburb}` (single tail).
  */
 export function resolveLegacyGrowthLocal(pathname: string): LegacyPhase1Resolution | null {
@@ -90,7 +80,6 @@ export function resolveLegacyGrowthLocal(pathname: string): LegacyPhase1Resoluti
   if (norm === "/growth/local") return { type: "gone" };
 
   const parts = norm.split("/").filter(Boolean);
-  // ["growth", "local", ...]
   if (parts.length < 3 || parts[0] !== "growth" || parts[1] !== "local") return null;
 
   if (parts.length === 3) {
@@ -105,4 +94,18 @@ export function resolveLegacyGrowthLocal(pathname: string): LegacyPhase1Resoluti
   }
 
   return { type: "gone" };
+}
+
+/**
+ * Retired Stage-19 `/{intent}/{suburb}` landings → hub or service (one hop).
+ * Returns null when the path is not a Stage-19 intent URL.
+ */
+export function resolveLegacyStage19IntentPath(pathname: string): LegacyPhase1Resolution | null {
+  const norm = pathname.replace(/\/+$/, "") || "/";
+  const parts = norm.split("/").filter(Boolean);
+  if (parts.length !== 2) return null;
+  const intent = parts[0] ?? "";
+  const suburb = parts[1] ?? "";
+  if (!isStage19IntentSegment(intent)) return null;
+  return resolveGrowthIntentAndSuburb(intent, suburb);
 }

@@ -27,10 +27,10 @@ function commercialCleaningServicesBlogToLocationRedirects(): {
 }
 
 const coreProgrammaticBlogCleanupRedirects = [
-  /** Retired draft-only slug → live pricing authority (no cluster bleed into unrelated blog topics). */
+  /** Retired draft-only slug → live pricing authority (one hop; never via retired hub). */
   {
     source: "/blog/cleaning-prices-cape-town-guide",
-    destination: "/cleaning-prices-cape-town",
+    destination: "/blog/how-much-does-cleaning-cost-cape-town-2026",
     permanent: true,
   },
   {
@@ -83,22 +83,22 @@ const coreProgrammaticBlogCleanupRedirects = [
     destination: "/services/standard-cleaning-cape-town",
     permanent: true,
   },
-  /** Legacy editorial slug — not in TS router unless published in CMS; pricing hub is always live. */
+  /** Legacy editorial slug — not in TS router unless published in CMS; pricing article is canonical. */
   {
     source: "/blog/cleaning-cost-cape-town",
-    destination: "/cleaning-prices-cape-town",
+    destination: "/blog/how-much-does-cleaning-cost-cape-town-2026",
     permanent: true,
   },
-  /** SiteGuru / legacy CMS — same transactional intent as hub; consolidate PageRank + SERP clarity. */
+  /** SiteGuru / legacy CMS — same transactional intent as pricing article. */
   {
     source: "/blog/what-does-professional-cleaning-cost",
-    destination: "/cleaning-prices-cape-town",
+    destination: "/blog/how-much-does-cleaning-cost-cape-town-2026",
     permanent: true,
   },
-  /** Geo-suffixed variant — same transactional intent as hub (avoid duplicate `/blog` terminals). */
+  /** Geo-suffixed variant — same transactional intent as pricing article. */
   {
     source: "/blog/what-does-professional-cleaning-cost-cape-town",
-    destination: "/cleaning-prices-cape-town",
+    destination: "/blog/how-much-does-cleaning-cost-cape-town-2026",
     permanent: true,
   },
 

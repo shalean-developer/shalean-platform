@@ -1,0 +1,68 @@
+# =============================================================================
+# shalean.com → https://shalean.co.za migration (Plesk / Apache / LiteSpeed)
+# STATUS: PENDING_EXTERNAL_PLESK — do not treat as live until HTTP-verified
+# Source of truth: apps/web/lib/seo/shaleanComMigrationMap.ts
+# Regenerate: npx tsx -e "import { buildShaleanComHtaccessRules } from './lib/seo/shaleanComMigrationMap.ts'; console.log(buildShaleanComHtaccessRules())"
+# =============================================================================
+#
+# Evidence gap (2026-07-22):
+# - https://shalean.com/contact → 301 https://shalean.co.za/contact (LiteSpeed) — path-preserve OK
+# - https://shalean.com/blog → 301 https://www.shalean.com/blog then WordPress 200 — NOT migrated
+# - https://www.shalean.com/blog → 200 with wp-json — WordPress still serving
+#
+# Apply this file on the shalean.com (and www) document root in Plesk, replacing any
+# rule that sends /blog to www WordPress. Then verify representative URLs with curl -sI.
+#
+# NOTE: The full generated rule list is large (locations + blog slugs). Prefer generating
+# from shaleanComMigrationMap.ts at apply-time. Minimal emergency rules below cover the
+# known high-value failures; keep the path-preserve fallback last.
+# =============================================================================
+
+RewriteEngine On
+
+# Kill www.shalean.com WordPress stay — always leave .com for .co.za
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^/?$ https://shalean.co.za/ [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/?$ https://shalean.co.za/blog [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^blog/(.*)$ https://shalean.co.za/blog/$1 [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^contact/?$ https://shalean.co.za/contact [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^quote/?$ https://shalean.co.za/quote [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^services/?$ https://shalean.co.za/services [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^about-us-shalean-cleaning-services/?$ https://shalean.co.za/about [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^about/?$ https://shalean.co.za/about [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^testimonials/?$ https://shalean.co.za/reviews [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^team/?$ https://shalean.co.za/about [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^how-it-works/?$ https://shalean.co.za/#how-it-works [R=301,L,QSA,NE]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-prices-cape-town/?$ https://shalean.co.za/blog/how-much-does-cleaning-cost-cape-town-2026 [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^cleaning-services-cape-town/?$ https://shalean.co.za/services [R=301,L,QSA]
+
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^maid-services-cape-town/?$ https://shalean.co.za/services [R=301,L,QSA]
+
+# Path-preserving fallback (must remain last)
+RewriteCond %{HTTP_HOST} ^(www\.)?shalean\.com$ [NC]
+RewriteRule ^(.*)$ https://shalean.co.za/$1 [R=301,L,QSA]
