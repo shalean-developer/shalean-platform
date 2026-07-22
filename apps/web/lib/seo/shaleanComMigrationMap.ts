@@ -1,11 +1,11 @@
 /**
  * One-to-one `shalean.com` → `https://shalean.co.za` migration map (repo source of truth).
  *
- * EXTERNAL APPLICATION STATUS: Plesk/LiteSpeed `.htaccess` applied and HTTP-verified
- * (2026-07-22). Host-level path-preserving rules also exist in `next.config.ts` / `proxy.ts`
- * for when `.com` traffic reaches this Next app.
+ * EXTERNAL APPLICATION STATUS: Full explicit Plesk/LiteSpeed `.htaccess` map applied and
+ * HTTP-verified (2026-07-22). Host-level path-preserving rules also exist in
+ * `next.config.ts` / `proxy.ts` for when `.com` traffic reaches this Next app.
  *
- * Evidence: `docs/audits/seo/SHALEAN-COM-PLESK-HTTP-VERIFICATION-2026-07-22.md`
+ * Evidence: `docs/audits/seo/SHALEAN-COM-PLESK-FULL-MAP-HTTP-VERIFICATION-2026-07-22.md`
  */
 
 import { CAPE_TOWN_LOCATIONS, HUB_SUFFIX } from "@/lib/seo/capeTownLocations";
@@ -22,7 +22,7 @@ export type ShaleanComMigrationStatus =
   | typeof SHALEAN_COM_MIGRATION_STATUS_PENDING
   | typeof SHALEAN_COM_MIGRATION_STATUS_LIVE;
 
-/** Current external migration state (live/verified as of 2026-07-22). */
+/** Current external migration state (full explicit map live/verified as of 2026-07-22). */
 export const SHALEAN_COM_MIGRATION_STATUS: ShaleanComMigrationStatus =
   SHALEAN_COM_MIGRATION_STATUS_LIVE;
 
@@ -142,7 +142,7 @@ export function buildShaleanComHtaccessRules(): string {
   const lines: string[] = [
     "# =============================================================================",
     "# shalean.com → https://shalean.co.za migration (Plesk / Apache / LiteSpeed)",
-    `# STATUS: ${SHALEAN_COM_MIGRATION_STATUS} — HTTP-verified 2026-07-22 (see docs/audits/seo/)`,
+    `# STATUS: ${SHALEAN_COM_MIGRATION_STATUS} — full map HTTP-verified 2026-07-22 (see docs/audits/seo/)`,
     "# Generated from apps/web/lib/seo/shaleanComMigrationMap.ts",
     "# Apply on the shalean.com document root in Plesk, then verify with curl -sI.",
     "# =============================================================================",

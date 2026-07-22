@@ -62,5 +62,8 @@ next-env.d.ts
 # Plesk recoverable .htaccess backups + local apply scratch (never commit secrets/backups)
 /ops/seo/backups/
 /ops/seo/apply-shalean-com-plesk-htaccess.mjs
+/ops/seo/_generate-full-htaccess.mjs
+/ops/seo/_dump-migration-htaccess.ts
+/ops/seo/probe-plesk-*.mjs
 /ops/seo/*.tmp
 /ops/seo/*-pass*.txt
