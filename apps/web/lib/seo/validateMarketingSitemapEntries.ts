@@ -1,8 +1,11 @@
 import type { MetadataRoute } from "next";
 import { legacyMarketingRedirectSourcePaths } from "@/lib/seo/legacyMarketingRedirectMatrix";
+import { isPathDisallowedByRobots } from "@/lib/seo/robotsPathRules";
 import {
   PUBLIC_LEGACY_REDIRECT_ROBOTS_PATHS,
+  SEO_CLEANER_APPLY_LANDING_SITEMAP_PATH,
   isSeoRebuildGonePath,
+  seoRobotsAllowPaths,
   seoRobotsDisallowPaths,
 } from "@/lib/seo/seoRebuildPhase1";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
@@ -24,6 +27,9 @@ const PRIVATE_PREFIXES = [
   "/offer",
 ] as const;
 
+/** Explicit public exceptions under otherwise-private prefixes (sitemap-safe). */
+const PUBLIC_PRIVATE_PREFIX_EXCEPTIONS = new Set<string>([SEO_CLEANER_APPLY_LANDING_SITEMAP_PATH]);
+
 export type SitemapValidationIssue = {
   readonly url: string;
   readonly code: string;
@@ -35,22 +41,17 @@ function normalizePath(pathname: string): string {
   return pathname.replace(/\/+$/, "") || "/";
 }
 
-function isBlockedByRobots(pathname: string, disallow: readonly string[]): boolean {
-  const p = normalizePath(pathname);
-  for (const rule of disallow) {
-    if (!rule) continue;
-    if (rule.endsWith("/")) {
-      if (p === rule.slice(0, -1) || p.startsWith(rule)) return true;
-    } else if (p === rule || p.startsWith(`${rule}/`)) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function isPrivatePath(pathname: string): boolean {
   const p = normalizePath(pathname);
+  if (PUBLIC_PRIVATE_PREFIX_EXCEPTIONS.has(p)) return false;
   return PRIVATE_PREFIXES.some((prefix) => p === prefix || p.startsWith(`${prefix}/`));
+}
+
+function isBlockedByRobots(pathname: string): boolean {
+  return isPathDisallowedByRobots(pathname, {
+    allow: seoRobotsAllowPaths(),
+    disallow: seoRobotsDisallowPaths(),
+  });
 }
 
 /**
@@ -65,7 +66,6 @@ export function validateMarketingSitemapEntries(
   const now = options?.now ?? new Date();
   const seen = new Set<string>();
   const redirectSources = new Set(legacyMarketingRedirectSourcePaths());
-  const disallow = seoRobotsDisallowPaths();
 
   for (const entry of entries) {
     const url = entry.url;
@@ -121,7 +121,7 @@ export function validateMarketingSitemapEntries(
     if (isPrivatePath(path)) {
       issues.push({ url, code: "private_path", message: "Private/operational path must not be in sitemap" });
     }
-    if (isBlockedByRobots(path, disallow)) {
+    if (isBlockedByRobots(path)) {
       issues.push({ url, code: "robots_blocked", message: "URL is Disallow'd in robots.txt" });
     }
 
@@ -143,8 +143,8 @@ export function validateMarketingSitemapEntries(
 
 /** Assert public redirect URLs are not Disallow'd (regression guard for P0-3). */
 export function assertPublicRedirectsNotBlockedByRobots(): SitemapValidationIssue[] {
-  const disallow = seoRobotsDisallowPaths();
   const issues: SitemapValidationIssue[] = [];
+  const disallow = seoRobotsDisallowPaths();
   for (const path of PUBLIC_LEGACY_REDIRECT_ROBOTS_PATHS) {
     if (disallow.includes(path)) {
       issues.push({
@@ -155,7 +155,7 @@ export function assertPublicRedirectsNotBlockedByRobots(): SitemapValidationIssu
     }
   }
   for (const source of legacyMarketingRedirectSourcePaths()) {
-    if (isBlockedByRobots(source, disallow)) {
+    if (isBlockedByRobots(source)) {
       issues.push({
         url: source,
         code: "robots_blocks_marketing_redirect",

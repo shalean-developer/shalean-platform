@@ -3,6 +3,7 @@ import { collectUnionBlogSitemapRows } from "@/lib/seo/blogSitemapUnion";
 import { LOCATION_SEO_PAGES, type LocationSeoSlug } from "@/lib/seo/capeTownSeoPages";
 import { legacyMarketingRedirectSourcePaths } from "@/lib/seo/legacyMarketingRedirectMatrix";
 import {
+  SEO_CLEANER_APPLY_LANDING_SITEMAP_PATH,
   SEO_REBUILD_PHASE,
   SEO_REBUILD_SITEMAP_CONTENT_PATHS,
   SEO_REBUILD_SITEMAP_CORE_PATHS,
@@ -33,6 +34,7 @@ function priorityForMarketingPath(path: string): number {
   if (path === "/faq" || path === "/reviews") return 0.72;
   if (path === "/quote") return 0.68;
   if (path === "/privacy-policy" || path === "/terms-of-service") return 0.55;
+  if (path === SEO_CLEANER_APPLY_LANDING_SITEMAP_PATH) return 0.64;
   if (path.startsWith("/blog/")) return 0.62;
   if (path.startsWith("/locations/")) return 0.58;
   if (path === "/locations") return 0.6;
@@ -75,6 +77,9 @@ export async function buildMarketingSitemapEntries(): Promise<MetadataRoute.Site
   for (const path of SEO_REBUILD_SITEMAP_CONTENT_PATHS) {
     push(path, resolveStaticPathLastModified(path));
   }
+
+  // Narrow public recruitment exception — form and other /cleaner/* stay off sitemap.
+  push(SEO_CLEANER_APPLY_LANDING_SITEMAP_PATH, resolveStaticPathLastModified(SEO_CLEANER_APPLY_LANDING_SITEMAP_PATH));
 
   for (const path of collectLocationHubSitemapPaths()) {
     push(path, locationLastModified);

@@ -12,7 +12,8 @@ import { resolveLegacyMarketingExactRedirect } from "@/lib/seo/legacyMarketingRe
 import { resolveLegacySingularLocation, resolveLegacyGrowthLocal } from "@/lib/seo/legacyPhase1EdgeRedirects";
 import { absoluteCanonicalUrl, SITE_ORIGIN } from "@/lib/site/canonical";
 import { MARKETING_SERVICE_NAV_LINKS } from "@/lib/marketing/marketingServiceNavLinks";
-import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
+import { SEO_INDEX_FOLLOW, SEO_NOINDEX_FOLLOW } from "@/lib/site/seoRobots";
+import { buildCleanerApplyFormMetadata } from "@/lib/seo/cleanerApplyLandingSeo";
 
 const UNINDEXED_REMEDIATION_SLUGS = [
   "deep-cleaning-cape-town",
@@ -186,10 +187,14 @@ describe("SEO-FIX-001 transactional / private route hygiene", () => {
     });
   });
 
-  it("keeps cleaner apply form noindex,nofollow in source", () => {
+  it("keeps cleaner apply form noindex,follow with self-canonical (not homepage)", () => {
+    const meta = buildCleanerApplyFormMetadata();
+    expect(meta.robots).toEqual(SEO_NOINDEX_FOLLOW);
+    expect(meta.alternates?.canonical).toBe("https://shalean.co.za/cleaner/apply/form");
+    expect(meta.alternates?.canonical).not.toBe("https://shalean.co.za/");
+
     const formPath = path.join(process.cwd(), "app/cleaner/apply/form/page.tsx");
     const src = readFileSync(formPath, "utf8");
-    expect(src).toMatch(/index:\s*false/);
-    expect(src).toMatch(/follow:\s*false/);
+    expect(src).toContain("buildCleanerApplyFormMetadata");
   });
 });
