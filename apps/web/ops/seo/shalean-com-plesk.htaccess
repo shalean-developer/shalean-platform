@@ -1,9 +1,11 @@
 # =============================================================================
 # shalean.com → https://shalean.co.za FULL migration map (Plesk / Apache / LiteSpeed)
-# STATUS: LIVE_HTTP_VERIFIED — full explicit map applied and HTTP-verified 2026-07-22
+# STATUS: PENDING_EXTERNAL_PLESK — repository candidate (273 explicit rules)
+# PLESK HTTP-VERIFIED (2026-07-22): 193 explicit rules previously applied
+# PENDING PLESK APPLY/VERIFY: 80 location-expansion rules (20 hubs × 4 patterns)
+# Map entries: 273 explicit + path-preserve fallback (candidate; not fully LIVE_HTTP_VERIFIED)
+# Evidence (193-rule apply): docs/audits/seo/SHALEAN-COM-PLESK-FULL-MAP-HTTP-VERIFICATION-2026-07-22.md
 # Source of truth: apps/web/lib/seo/shaleanComMigrationMap.ts
-# Map entries: 273 explicit + path-preserve fallback
-# Evidence: docs/audits/seo/SHALEAN-COM-PLESK-FULL-MAP-HTTP-VERIFICATION-2026-07-22.md
 # Regenerate migration block from buildShaleanComHtaccessRules(); preserve LSCACHE/WP/PHP below.
 # Do not commit recoverable .htaccess backups or hosting credentials.
 # =============================================================================
@@ -46,9 +48,12 @@ CacheKeyModify -qs:_ga
 # BEGIN SHALEAN.COM FULL MIGRATION MAP (generated)
 # =============================================================================
 # shalean.com → https://shalean.co.za migration (Plesk / Apache / LiteSpeed)
-# STATUS: LIVE_HTTP_VERIFIED — full map HTTP-verified 2026-07-22 (see docs/audits/seo/)
+# STATUS: PENDING_EXTERNAL_PLESK — repository candidate (273 explicit rules)
+# PLESK HTTP-VERIFIED (2026-07-22): 193 explicit rules previously applied
+# PENDING PLESK APPLY/VERIFY: 80 location-expansion rules (20 hubs × 4 patterns)
+# Path-preserving fallback included. Do not claim the full 273-rule map as LIVE_HTTP_VERIFIED.
 # Generated from apps/web/lib/seo/shaleanComMigrationMap.ts
-# Apply on the shalean.com document root in Plesk, then verify with curl -sI.
+# Apply on the shalean.com document root in Plesk only after dual approval, then verify with curl -sI.
 # =============================================================================
 RewriteEngine On
 

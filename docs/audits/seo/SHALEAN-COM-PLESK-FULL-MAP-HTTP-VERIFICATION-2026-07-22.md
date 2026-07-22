@@ -15,10 +15,11 @@
 
 | Field | Value |
 |-------|-------|
-| Status | `SHALEAN_COM_MIGRATION_STATUS = LIVE_HTTP_VERIFIED` (full map) |
+| Status (at apply, 2026-07-22) | `LIVE_HTTP_VERIFIED` for the **193**-rule map then applied |
+| Current repo candidate (PR #94+) | `PENDING_EXTERNAL_PLESK` — **273** explicit rules; **80** location-expansion rules not yet Plesk-applied/HTTP-verified |
 | Host | LiteSpeed / PleskLin webspace `shalean.com` (`public_html`) |
-| Approved map entries | **193** unique source paths |
-| Represented in `.htaccess` | **193** explicit host-scoped `RewriteRule`s + 1 path-preserve fallback |
+| Approved map entries (verified apply) | **193** unique source paths |
+| Represented in `.htaccess` (at apply) | **193** explicit host-scoped `RewriteRule`s + 1 path-preserve fallback |
 | Missing / duplicate / conflicting | **0 / 0 / 0** |
 | Artifact | `apps/web/ops/seo/shalean-com-plesk.htaccess` |
 | Sanitized JSON | `apps/web/ops/seo/shalean-com-plesk-full-map-http-verification-2026-07-22.json` |
@@ -109,3 +110,19 @@ Subsequent HTTPS request then one-hops to the approved `.co.za` destination.
 ## External platforms
 
 No Search Console, GBP, DNS, indexing, or other external-platform actions were performed.
+
+---
+
+## Post-verification update — location expansion candidate (PR #94)
+
+As of the Jul 2026 location catalogue expansion (23 → 43 hubs), the **checked-in** artifact grew from **193 → 273** explicit rules (+80 = 20 hubs × 4 path patterns).
+
+| Field | Value |
+|-------|-------|
+| Plesk HTTP-verified (this document) | **193** explicit rules applied 2026-07-22 |
+| Pending Plesk apply / HTTP verify | **80** location-expansion rules (in-repo only) |
+| Repository candidate total | **273** explicit rules + path-preserve fallback |
+| `SHALEAN_COM_MIGRATION_STATUS` | `PENDING_EXTERNAL_PLESK` for the **complete** candidate |
+| Do not claim | Full 273-rule map as `LIVE_HTTP_VERIFIED` |
+
+The destinations of existing verified rules were **not** changed. No Plesk apply was performed for the +80 expansion rules in PR #94.

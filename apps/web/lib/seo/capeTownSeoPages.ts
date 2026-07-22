@@ -1542,7 +1542,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Bishopscourt sits among Cape Town’s leafier Southern Suburbs estates—homes here often stretch across more rooms, bathrooms, and outdoor-adjacent living than a compact flat quote assumes.",
       "Shalean maps Bishopscourt bookings to real on-site time: choose bedrooms, bathrooms, extras, and intensity online, then confirm pricing before checkout.",
-      "Whether you need house cleaning Cape Town families book between entertaining weeks or a deeper reset before guests, scoped professional cleaning services keep kitchens and wet rooms aligned with your quote.",
+      "Between entertaining weeks and quieter stretches, scoped visits keep kitchens and wet rooms aligned with the rooms and extras you select online.",
     ],
     localAngle: [
       "Estate gates and long drives are common—leave boom codes, visitor bay rules, and the preferred entrance in your booking notes.",
@@ -1570,7 +1570,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Diep River sits in Cape Town’s Southern Suburbs corridor where family homes, townhouses, and school-week kitchens set the cleaning rhythm—dust from gardens and pets through passages add up between visits.",
       "Shalean serves Diep River with metro-consistent booking: rooms, bathrooms, extras, and service tier lock in online before checkout.",
-      "From recurring house cleaning Cape Town households split fairly to move-out professional cleaning services before handovers, Diep River scopes stay tied to real on-site time.",
+      "Whether you want recurring weekday upkeep or a move-out reset before handover, Diep River scopes stay tied to real on-site time—not oversized villa defaults.",
     ],
     localAngle: [
       "Side drives and shared walls are common—precise pins and gate notes help teams arrive without circling quiet cul-de-sacs.",
@@ -1598,7 +1598,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Harfield Village sits between Claremont retail energy and quieter Southern Suburb lanes—character cottages, compact flats, and tight parking shape how cleaning time stacks up.",
       "Shalean quotes Harfield Village honestly: choose bedrooms, bathrooms, extras, and intensity, then confirm pricing before checkout.",
-      "Whether you need home cleaning services Cape Town renters book weekly or a deeper reset before guests, precise access notes keep professional cleaning services on schedule.",
+      "Weekly upkeep and deeper guest resets both work here—precise access notes keep crews on schedule on narrow village streets.",
     ],
     localAngle: [
       "Narrow streets and limited bays are the norm—leave parking and gate guidance in your booking.",
@@ -1626,7 +1626,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Meadowridge sits in Cape Town’s Southern Suburbs where family homes meet leafy edges—garden dust, pets, and school-week kitchens shape what realistic cleaning looks like between visits.",
       "Shalean supports Meadowridge with the same metro booking flow: rooms, bathrooms, extras, and tier—then confirm totals before checkout.",
-      "From weekly house cleaning Cape Town families rely on to move-out professional cleaning services before handovers, scoped visits keep wet rooms and floors aligned with your quote.",
+      "From weekly family upkeep to move-out resets before handovers, scoped visits keep wet rooms and floors aligned with what you selected at checkout.",
     ],
     localAngle: [
       "Complex visitor rules differ—leave boom codes and parking notes when you book.",
@@ -1654,7 +1654,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Tokai sits beneath Southern Suburb canopy where estate pockets and larger family homes need scoped cleaning—pollen, pets, and multi-bath layouts quietly extend time on site.",
       "Shalean books Tokai with transparent Cape Town quoting: bedrooms, bathrooms, extras, and intensity confirmed online before checkout.",
-      "Whether you need house cleaning Cape Town households schedule between school weeks or professional cleaning services before guests, access notes keep estate arrivals efficient.",
+      "Schedule between school weeks or before guests arrive—clear boom and entrance notes keep estate arrivals efficient so booked hours stay on cleaning.",
     ],
     localAngle: [
       "Boom gates and long drives are frequent—brief remotes, visitor rules, and the preferred entrance.",
@@ -1682,7 +1682,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Pinelands is a Cape Town garden suburb where family homes, townhouses, and quieter streets favour predictable maintenance cleaning over one-off hero visits.",
       "Shalean serves Pinelands with metro-wide booking: set rooms, bathrooms, extras, and intensity, then lock pricing before checkout.",
-      "From recurring house cleaning Cape Town families schedule between workweeks to move-out professional cleaning services before handovers, scoped visits keep kitchens and bathrooms aligned with your quote.",
+      "Recurring workweek upkeep and move-out resets both stay scoped to kitchens and bathrooms you actually use—not padded room counts.",
     ],
     localAngle: [
       "Driveways and quiet crescents are common—precise pins still help when visitor parking is limited.",
@@ -1712,7 +1712,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Mowbray sits on Cape Town’s campus fringe where student shares, young professionals, and family pockets overlap—rentals turn over fast and bathrooms work hard between visits.",
       "Shalean quotes Mowbray with transparent totals: bedrooms, bathrooms, extras, and tier lock in online before checkout—useful when flatmates or landlords need a shared paper trail.",
-      "Whether you need affordable home cleaning services Cape Town students book mid-term or move-out professional cleaning services before inspections, scoped visits keep kitchens and floors aligned with agency expectations.",
+      "Mid-term bathroom and kitchen resets suit busy semesters; move-out intensity covers inspection lists when leases end—scoped visits stay honest to agency expectations.",
     ],
     localAngle: [
       "Street parking and gates vary—precise pins and buzzer notes save time during lecture-hour traffic.",
@@ -1740,7 +1740,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Rondebosch East sits beside Cape Town’s Rondebosch corridor with a practical mix of family homes, townhouses, and rentals—weekday kitchens and lease-end windows shape cleaning demand.",
       "Shalean supports Rondebosch East with metro booking: rooms, bathrooms, extras, and intensity confirmed online before checkout.",
-      "From recurring house cleaning Cape Town households schedule between workweeks to move-out professional cleaning services aligned with agencies, notes on access keep visits smooth.",
+      "Workweek maintenance and agency-aligned move-outs both benefit from accurate bathroom counts and clear access notes on corridor streets.",
     ],
     localAngle: [
       "Corridor traffic and complex security vary—mention boom gates, remotes, and visitor bays.",
@@ -1768,7 +1768,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Southfield sits in Cape Town’s Southern Suburbs with practical family homes and townhouses—school-week kitchens and garden grit set a steady maintenance rhythm.",
       "Shalean books Southfield with clear online quoting: bedrooms, bathrooms, extras, and tier before checkout.",
-      "Whether you need house cleaning Cape Town families schedule weekly or professional cleaning services before a handover, scoped visits keep wet rooms aligned with your total.",
+      "Weekly family upkeep or a handover reset—scoped visits keep wet rooms aligned with the total you confirmed online.",
     ],
     localAngle: [
       "Driveways and quiet streets are common—still leave a precise pin when visitor parking is limited.",
@@ -1796,7 +1796,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Heathfield offers quieter Cape Town residential streets where family homes and townhouses need dependable maintenance cleaning—pets and garden grit still track indoors between visits.",
       "Shalean supports Heathfield with metro-wide booking: rooms, bathrooms, extras, and intensity confirmed before checkout.",
-      "From recurring house cleaning Cape Town households book between workweeks to move-out professional cleaning services before handovers, scoped visits keep kitchens and bathrooms honest to your quote.",
+      "Book between workweeks for steady maintenance, or step up for move-out detail before handovers—kitchens and bathrooms stay honest to your quote.",
     ],
     localAngle: [
       "Quiet crescents still need precise pins when visitor parking is scarce.",
@@ -1825,7 +1825,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Hout Bay combines Cape Town harbour living with hillside streets—salt air, sand, and winding access mean cleaning time depends on access notes as much as room count.",
       "Shalean schedules Hout Bay with transparent quoting: bedrooms, bathrooms, extras, and intensity locked in online before checkout.",
-      "Hosts and residents use home cleaning services Cape Town trusts when turnovers are tight—flag balcony grit and linen resets so professional cleaning services match your calendar.",
+      "When turnovers are tight, flag balcony grit and linen resets so the booked slot matches your calendar—not a generic coastal default.",
     ],
     localAngle: [
       "Winding roads and estate gates are common—leave remotes, boom codes, and the preferred entrance.",
@@ -1856,7 +1856,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Clifton sits above Cape Town’s Atlantic rocks where luxury apartments and guest-ready homes face salt air, wind, and steep access—finishes show wear quickly between visits.",
       "Shalean sends scoped teams to Clifton with metro-wide transparent quoting: rooms, bathrooms, extras, and intensity confirmed online before checkout.",
-      "Whether you need house cleaning Cape Town hosts rely on between stays or professional cleaning services before a handover, discreet access notes keep visits aligned with privacy expectations.",
+      "Between guest stays or before a handover, discreet access notes keep visits aligned with cliff-side privacy expectations.",
     ],
     localAngle: [
       "Cliff paths, lifts, and limited parking define the day—pin entrances and drop-off rules clearly.",
@@ -1887,7 +1887,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Mouille Point pairs Cape Town waterfront walks with compact apartments—sand rides home on shoes and rugs while kitchens and bathrooms work hard between guests.",
       "Shalean scopes Mouille Point with transparent online quoting: bedrooms, bathrooms, extras, and intensity locked before checkout.",
-      "Hosts and residents book home cleaning services Cape Town guests judge on first impressions—flag linen resets and balcony grit so professional cleaning services match the clock.",
+      "Guests judge bathrooms and kitchens first—flag linen resets and balcony grit so the visit matches the clock you booked.",
     ],
     localAngle: [
       "Building access and basement bays differ—pin entrances and note remotes or concierge steps.",
@@ -1916,7 +1916,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Three Anchor Bay packs Cape Town Seaboard living into compact apartments—cupboards, bathrooms, and kitchens show wear quickly between professional visits.",
       "Shalean sequences Three Anchor Bay cleans with metro quoting: rooms, bathrooms, extras, and tier confirmed online before checkout.",
-      "Whether you need house cleaning Cape Town residents book between workweeks or professional cleaning services before guests arrive, scoped visits keep small flats feeling properly reset.",
+      "Between workweeks or before guests arrive, scoped visits still cover high-touch cupboards and wet rooms in compact Seaboard footprints.",
     ],
     localAngle: [
       "Intercoms and visitor parking vary—leave precise pins and remotes in your booking.",
@@ -1945,7 +1945,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Oranjezicht climbs Cape Town’s City Bowl where mountain gusts dust counters and sills between weekends—compact flats and hillside homes need realistic kitchen and floor time.",
       "Shalean books Oranjezicht with transparent quoting: bedrooms, bathrooms, extras, and intensity confirmed online before checkout.",
-      "From recurring home cleaning services Cape Town professionals schedule mid-week to deeper professional cleaning services before guests, scoped visits keep small layouts honest to your total.",
+      "Mid-week maintenance and deeper resets before guests both stay sized to compact layouts—honest totals, not padded room lists.",
     ],
     localAngle: [
       "Steep streets and limited bays—pin parking and intercom details clearly.",
@@ -1976,7 +1976,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "De Waterkant sits on Cape Town’s City Bowl edge with cobbled lanes, compact terraces, and guest-ready flats—narrow access and high-touch interiors shape every cleaning visit.",
       "Shalean supports De Waterkant with metro quoting: rooms, bathrooms, extras, and intensity locked online before checkout.",
-      "Hosts book home cleaning services Cape Town guests notice first in bathrooms and kitchens—flag linen resets so professional cleaning services match check-in windows.",
+      "Guests notice bathrooms and kitchens first—flag linen resets so the booked visit matches check-in windows on narrow lanes.",
     ],
     localAngle: [
       "Narrow lanes limit parking—leave drop-off or garage instructions clearly.",
@@ -2005,7 +2005,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Century City concentrates Cape Town apartment and canal living inside managed complexes—lifts, visitor rules, and open-plan dust shape how cleaning time is spent.",
       "Shalean books Century City with transparent metro quoting: bedrooms, bathrooms, extras, and tier confirmed online before checkout.",
-      "From recurring home cleaning services Cape Town residents schedule between workweeks to move-out professional cleaning services before handovers, access notes keep crews moving through the right entrance first.",
+      "Between workweek upkeep and move-out handovers, clear tower and lift notes keep crews at the right entrance first.",
     ],
     localAngle: [
       "Precincts and lift banks differ—name your tower, visitor bay, and remotes clearly.",
@@ -2034,7 +2034,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Milnerton sits between Cape Town’s Blouberg corridor and lagoon edges—coastal grit, wind, and busy family apartments mean floors and balconies need honest time between visits.",
       "Shalean supports Milnerton with metro booking: rooms, bathrooms, extras, and intensity locked online before checkout.",
-      "Hosts and residents use house cleaning Cape Town trusts when weeks run long—flag balcony grit so professional cleaning services match how the home is used.",
+      "When weeks run long, flag balcony grit and sand tracks so floor time matches how the home is actually used.",
     ],
     localAngle: [
       "Beach Road complexes vary—leave intercom, remotes, and visitor parking notes.",
@@ -2063,7 +2063,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Bloubergstrand faces Cape Town’s Atlantic with beach-day sand that rides into passages and open-plan kitchens—balcony grit and wind shape realistic cleaning between visits.",
       "Shalean books Bloubergstrand with transparent quoting: bedrooms, bathrooms, extras, and intensity confirmed online before checkout.",
-      "Hosts and families use home cleaning services Cape Town relies on after busy weekends—flag outdoor mats so professional cleaning services match sand-heavy floors.",
+      "After busy beach weekends, flag outdoor mats and sliders so vacuum and mop passes match sand-heavy floors.",
     ],
     localAngle: [
       "Windy beach weeks push grit through sliders—mention tracks and outdoor showers when in scope.",
@@ -2091,7 +2091,7 @@ export const LOCATION_SEO_PAGES: Record<LocationSeoSlug, LocationSeoBlock> = {
     intro: [
       "Goodwood sits in Cape Town’s Northern Suburbs with a practical mix of family homes, townhouses, and rentals—move-out windows and weekday kitchens shape cleaning demand.",
       "Shalean supports Goodwood with metro booking: rooms, bathrooms, extras, and intensity confirmed online before checkout.",
-      "Whether you need house cleaning Cape Town households schedule between workweeks or move-out professional cleaning services aligned with agencies, access notes keep visits smooth.",
+      "Schedule between workweeks for steady upkeep, or choose move-out intensity for agency lists—access notes keep Northern Suburb visits smooth.",
     ],
     localAngle: [
       "Complex security and visitor parking vary—mention boom gates, remotes, and basement bays.",

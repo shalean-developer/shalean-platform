@@ -2,23 +2,32 @@ import { readFileSync } from "fs";
 import { resolve } from "path";
 import { describe, expect, it } from "vitest";
 import {
+  SHALEAN_COM_LOCATION_EXPANSION_PENDING_RULE_COUNT,
   SHALEAN_COM_MIGRATION_STATUS,
   SHALEAN_COM_MIGRATION_STATUS_LIVE,
   SHALEAN_COM_MIGRATION_STATUS_PENDING,
+  SHALEAN_COM_PLESK_HTTP_VERIFIED_EXPLICIT_RULE_COUNT,
+  SHALEAN_COM_REPO_CANDIDATE_EXPLICIT_RULE_COUNT,
   absoluteShaleanCoZaUrl,
   buildShaleanComHtaccessRules,
+  getPendingLocationExpansionComRules,
   getShaleanComMigrationRules,
   resolveShaleanComDestinationPath,
 } from "@/lib/seo/shaleanComMigrationMap";
+import { LOCATION_HUB_EXPANSION_JUL_2026_SLUGS } from "@/lib/seo/locationHubExpansion";
 
 const HTACCESS_PATH = resolve(__dirname, "../../../ops/seo/shalean-com-plesk.htaccess");
 
 describe("shaleanComMigrationMap", () => {
-  it("marks external Plesk migration as live/HTTP-verified", () => {
+  it("marks the complete 273-rule candidate as pending external Plesk verification", () => {
     expect(SHALEAN_COM_MIGRATION_STATUS_PENDING).toBe("PENDING_EXTERNAL_PLESK");
     expect(SHALEAN_COM_MIGRATION_STATUS_LIVE).toBe("LIVE_HTTP_VERIFIED");
-    expect(SHALEAN_COM_MIGRATION_STATUS).toBe(SHALEAN_COM_MIGRATION_STATUS_LIVE);
-    expect(SHALEAN_COM_MIGRATION_STATUS).not.toBe(SHALEAN_COM_MIGRATION_STATUS_PENDING);
+    expect(SHALEAN_COM_MIGRATION_STATUS).toBe(SHALEAN_COM_MIGRATION_STATUS_PENDING);
+    expect(SHALEAN_COM_MIGRATION_STATUS).not.toBe(SHALEAN_COM_MIGRATION_STATUS_LIVE);
+    expect(SHALEAN_COM_PLESK_HTTP_VERIFIED_EXPLICIT_RULE_COUNT).toBe(193);
+    expect(SHALEAN_COM_LOCATION_EXPANSION_PENDING_RULE_COUNT).toBe(80);
+    expect(SHALEAN_COM_REPO_CANDIDATE_EXPLICIT_RULE_COUNT).toBe(273);
+    expect(LOCATION_HUB_EXPANSION_JUL_2026_SLUGS).toHaveLength(20);
   });
 
   it("maps known high-value .com paths one-to-one", () => {
@@ -83,10 +92,27 @@ describe("shaleanComMigrationMap", () => {
     expect(ambiguous).toEqual([]);
   });
 
-  it("builds htaccess with live status and path-preserve fallback", () => {
+  it("identifies exactly 80 pending location-expansion rules", () => {
+    const pending = getPendingLocationExpansionComRules();
+    expect(pending).toHaveLength(80);
+    expect(pending.every((r) => r.note?.includes("pending Plesk"))).toBe(true);
+    expect(pending.some((r) => r.sourcePath === "/locations/bishopscourt-cleaning-services")).toBe(
+      true,
+    );
+    expect(pending.some((r) => r.sourcePath === "/locations/goodwood-cleaning-services")).toBe(true);
+    expect(pending.some((r) => r.sourcePath === "/locations/sea-point-cleaning-services")).toBe(
+      false,
+    );
+  });
+
+  it("builds htaccess as a pending candidate — not full LIVE_HTTP_VERIFIED", () => {
     const ht = buildShaleanComHtaccessRules();
-    expect(ht).toContain("LIVE_HTTP_VERIFIED");
-    expect(ht).not.toContain("PENDING_EXTERNAL_PLESK");
+    expect(ht).toContain("PENDING_EXTERNAL_PLESK");
+    expect(ht).toContain("repository candidate (273 explicit rules)");
+    expect(ht).toContain("PLESK HTTP-VERIFIED (2026-07-22): 193 explicit rules previously applied");
+    expect(ht).toContain("PENDING PLESK APPLY/VERIFY: 80 location-expansion rules");
+    expect(ht).toContain("Do not claim the full 273-rule map as LIVE_HTTP_VERIFIED");
+    expect(ht).not.toMatch(/STATUS: LIVE_HTTP_VERIFIED/);
     expect(ht).toContain("RewriteEngine On");
     expect(ht).toContain("https://shalean.co.za/$1");
     expect(ht).toMatch(/#how-it-works \[R=301,L,QSA,NE\]/);
@@ -144,7 +170,20 @@ describe("shalean-com-plesk.htaccess artifact (full map)", () => {
 
     expect(missing).toEqual([]);
     expect(duplicatePatterns).toEqual([]);
+    expect(rules.length).toBe(SHALEAN_COM_REPO_CANDIDATE_EXPLICIT_RULE_COUNT);
     expect(rules.length).toBe(273);
+  });
+
+  it("does not claim the complete 273-rule artifact is LIVE_HTTP_VERIFIED", () => {
+    expect(artifact).toContain("PENDING_EXTERNAL_PLESK");
+    expect(artifact).toContain("repository candidate (273 explicit rules)");
+    expect(artifact).toContain("PLESK HTTP-VERIFIED (2026-07-22): 193 explicit rules previously applied");
+    expect(artifact).toContain("PENDING PLESK APPLY/VERIFY: 80 location-expansion rules");
+    expect(artifact).toContain("Do not claim the full 273-rule map as LIVE_HTTP_VERIFIED");
+    expect(artifact).not.toMatch(/STATUS: LIVE_HTTP_VERIFIED/);
+    // Historical evidence doc path may still mention LIVE for the 193-rule event — header status must not.
+    const header = artifact.slice(0, artifact.indexOf("# BEGIN LSCACHE"));
+    expect(header).not.toMatch(/STATUS: LIVE_HTTP_VERIFIED/);
   });
 
   it("keeps path-preserve fallback last among shalean.com migration RewriteRules", () => {
