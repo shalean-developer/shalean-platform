@@ -103,7 +103,7 @@ In `lib/seo/capeTownSeoPages.ts`:
 |------|-------|
 | PR | https://github.com/shalean-developer/shalean-platform/pull/89 |
 | Branch | `seo/fix-001-002-prod-ready` |
-| Tip SHA | `6e6a1429225a0513e0bb58ba688247e367104ab5` |
+| Tip SHA | `436c28b8a9fa8eac6dcdcc7a8f44cf1e05689949` |
 | Codex P2 (Window Cleaning homepage Book Now → unsupported booking-v2) | **Resolved** by removing the CTA entirely (informational card only); no quote/contact workaround; window not added to booking-v2 |
 
 ### 4.1 Baseline (pre-change, repository)
@@ -202,7 +202,7 @@ Classification:
 
 ## 10. Proposed next authorization (exact)
 
-> **Authorize EO review of PR #89 tip `6e6a1429225a0513e0bb58ba688247e367104ab5` on `seo/fix-001-002-prod-ready` (SEO-FIX-001/002 production package + Window Cleaning homepage CTA removal). Preview/CI verification against that exact SHA only. Do not authorize production merge, production deploy, GSC writes, sitemap submission, indexing requests, DNS/Plesk changes, or booking-v2 catalog expansion for window cleaning.**
+> **Authorize EO review of PR #89 tip `436c28b8a9fa8eac6dcdcc7a8f44cf1e05689949` on `seo/fix-001-002-prod-ready` (SEO-FIX-001/002 production package + Window Cleaning homepage CTA removal). Preview/CI verification against that exact SHA only. Do not authorize production merge, production deploy, GSC writes, sitemap submission, indexing requests, DNS/Plesk changes, or booking-v2 catalog expansion for window cleaning.**
 
 Optional follow-on (separate):
 
