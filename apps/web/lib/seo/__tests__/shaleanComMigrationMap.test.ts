@@ -144,7 +144,7 @@ describe("shalean-com-plesk.htaccess artifact (full map)", () => {
 
     expect(missing).toEqual([]);
     expect(duplicatePatterns).toEqual([]);
-    expect(rules.length).toBe(193);
+    expect(rules.length).toBe(273);
   });
 
   it("keeps path-preserve fallback last among shalean.com migration RewriteRules", () => {
