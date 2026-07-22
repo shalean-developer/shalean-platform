@@ -1,0 +1,95 @@
+{
+  "document": "SEO-FIX-001-002-GSC-VALIDATION-PREFLIGHT",
+  "recordedAt": "2026-07-22T15:55:43.158718Z",
+  "productionMergeSha": "28aa82ca2da8680baf88673fac20cdb5b0af80e0",
+  "productionDeployedAt": "2026-07-22T15:15:16Z",
+  "productionDeploymentId": 5557973699,
+  "liveEnvironment": {
+    "deployment": "production",
+    "vercelEnv": "production",
+    "gitBranch": "main",
+    "gitSha": "28aa82ca2da8680baf88673fac20cdb5b0af80e0"
+  },
+  "propertyExpected": "sc-domain:shalean.co.za",
+  "confirmationPhrase": "SEO-FIX-001/002-GSC-ONLY",
+  "preferredInvoke": "POST https://shalean.co.za/api/cron/gsc-seo-fix-001-002-validate with CRON_SECRET + confirm phrase",
+  "cronRouteOnProductionAtProbe": false,
+  "cronRouteProbeStatus": 404,
+  "gscSyncCronAuthConfigured": true,
+  "gscSyncCronProbeStatus": 401,
+  "agentHasGscClientEmail": false,
+  "agentHasGscPrivateKey": false,
+  "agentHasGscSiteUrl": false,
+  "agentHasVercelToken": false,
+  "agentHasCronSecret": false,
+  "secretsLogged": false,
+  "httpReachabilityNotGscInspection": [
+    {
+      "url": "https://shalean.co.za/services/deep-cleaning-cape-town",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytesSampled": 200
+    },
+    {
+      "url": "https://shalean.co.za/services/airbnb-cleaning-cape-town",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytesSampled": 200
+    },
+    {
+      "url": "https://shalean.co.za/services/office-cleaning-cape-town",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytesSampled": 200
+    },
+    {
+      "url": "https://shalean.co.za/services/move-out-cleaning-cape-town",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytesSampled": 200
+    },
+    {
+      "url": "https://shalean.co.za/services/window-cleaning-cape-town",
+      "httpStatus": 200,
+      "contentType": "text/html; charset=utf-8",
+      "bytesSampled": 200
+    },
+    {
+      "url": "https://shalean.co.za/sitemap.xml",
+      "httpStatus": 200,
+      "contentType": "application/xml",
+      "bytesSampled": 200
+    }
+  ],
+  "gscUrlInspection": "PENDING_PRODUCTION_CRON_OR_VERCEL_ENV_PULL",
+  "sitemapSubmissionDecision": "PENDING_LIVE_GSC",
+  "requestIndexingViaApi": "NOT_EXECUTED_NOT_CLAIMED",
+  "requestIndexingUiRequired": true,
+  "weeklyWorkflow": {
+    "scheduleCron": "0 9 * * 3",
+    "startDate": "2026-07-29",
+    "endDate": "2026-09-16",
+    "runs": 8,
+    "mode": "inspect-only",
+    "forbidden": [
+      "sitemap submit",
+      "request indexing",
+      "removals",
+      "property changes",
+      "Change of Address",
+      "unrelated URL inspection"
+    ]
+  },
+  "actionsCompleted": [
+    "Inspected existing gsc-sync auth pattern (CRON_SECRET)",
+    "Implemented Production-gated validation cron + CLI",
+    "Configured weekly inspect-only workflow (8 runs ending 2026-09-16)",
+    "Confirmed production SHA/deploy time",
+    "Confirmed five URLs + sitemap HTTP reachability (not GSC Inspection)"
+  ],
+  "actionsRequiringManualOrSecretAccess": [
+    "Merge/deploy PR so /api/cron/gsc-seo-fix-001-002-validate exists on Production",
+    "Invoke cron with CRON_SECRET + SEO-FIX-001/002-GSC-ONLY (or vercel env pull Production into gitignored .env.local and run npm script once)",
+    "Optional: GSC UI Request Indexing for the five URLs (API cannot claim this)"
+  ]
+}

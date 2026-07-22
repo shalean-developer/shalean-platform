@@ -15,6 +15,8 @@
     "validate:search-console-readiness": "tsx scripts/validate-search-console-readiness.ts",
     "check:sitemap-uptime": "tsx scripts/check-sitemap-uptime.ts",
     "audit:gsc-cannibalization": "tsx scripts/gsc-cannibalization-audit.ts",
+    "gsc:seo-fix-001-002-validate": "tsx scripts/gsc-seo-fix-001-002-validation.ts",
+    "gsc:seo-fix-001-002-validate:from-vercel-production": "bash scripts/gsc-seo-fix-001-002-validate-from-vercel-production.sh",
     "report:blog-seo-governance": "tsx scripts/blog-seo-governance-report.ts",
     "report:canonical-purity": "tsx scripts/calculate-canonical-purity.ts",
     "export:blog-route-graph": "tsx scripts/export-blog-route-graph.ts",

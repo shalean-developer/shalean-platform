@@ -196,7 +196,7 @@ Classification:
 |------|-------|
 | Formal approval that provisional repo remediation may merge | EO / governance |
 | Authorisation to deploy | Release / EO |
-| GSC monitoring / any indexing request | EO (SEO-MIG-002 still Deferred) |
+| GSC monitoring / conditional sitemap / weekly inspect-only | EO — see `SEO-FIX-001-002-GSC-VALIDATION-AND-MONITORING-2026-07-22.md` (`SEO-FIX-001/002-GSC-ONLY`). Request Indexing remains manual GSC UI if desired (not claimed via API). |
 | Price-band reconciliation ship | Marketing + Finance/Pricing |
 | Century City + city-phrase ownership | Marketing + SEO Eng |
 
