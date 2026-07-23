@@ -35,6 +35,10 @@ import {
   AdminBookingBillingMode,
   type BookingBillingMode,
 } from "@/components/admin/create-booking/AdminBookingBillingMode";
+import {
+  AdminPaymentAlreadyReceivedFields,
+  type SettlementMethod,
+} from "@/components/admin/create-booking/AdminPaymentAlreadyReceivedFields";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
 import { AdminPreferredCleanerSelect } from "@/components/admin/create-booking/AdminPreferredCleanerSelect";
@@ -148,7 +152,10 @@ function emptyForm(): FormState {
 }
 
 function normBookingBillingMode(s: string): BookingBillingMode {
-  return s.toLowerCase() === "monthly" ? "monthly" : "per_booking";
+  const x = s.toLowerCase();
+  if (x === "monthly") return "monthly";
+  if (x === "payment_already_received") return "payment_already_received";
+  return "per_booking";
 }
 
 function billingLabel(t: string): string {
@@ -286,6 +293,8 @@ function AdminCreateBookingPage() {
   const [savedAddresses, setSavedAddresses] = useState<CustomerAddressRow[]>([]);
   const [lastVisitPriceZar, setLastVisitPriceZar] = useState<number | null>(null);
   const [bookingBillingType, setBookingBillingType] = useState<BookingBillingMode>("per_booking");
+  const [settlementMethod, setSettlementMethod] = useState<SettlementMethod>("cash");
+  const [settlementReference, setSettlementReference] = useState("");
   const submitGuard = useRef(false);
   const forceDuplicateNextSubmit = useRef(false);
   const forceIgnoreCleanerSlotConflictNextSubmit = useRef(false);
@@ -853,6 +862,16 @@ function AdminCreateBookingPage() {
       }
 
       const trimmedOverrideReason = duplicateOverrideReason.trim().slice(0, 500);
+      if (bookingBillingType === "payment_already_received") {
+        if (
+          (settlementMethod === "eft" || settlementMethod === "zoho") &&
+          settlementReference.trim().length < 2
+        ) {
+          setFieldError("Enter a settlement reference for EFT or external / Zoho payments.");
+          submitGuard.current = false;
+          return;
+        }
+      }
       const body = {
         user_id: cust.id,
         date: form.date.trim(),
@@ -864,6 +883,14 @@ function AdminCreateBookingPage() {
         notes: form.notes.trim(),
         totalPaidZar: Math.round(Number(form.totalPaidZar)),
         billing_type: bookingBillingType,
+        ...(bookingBillingType === "payment_already_received"
+          ? {
+              settlement_method: settlementMethod,
+              ...(settlementReference.trim().length > 0
+                ? { settlement_reference: settlementReference.trim().slice(0, 500) }
+                : {}),
+            }
+          : {}),
         ...(form.selectedExtras.length > 0 ? { extras: form.selectedExtras } : {}),
         ...(form.allowAdminSlotOverride ? { admin_slot_override: true } : {}),
         ...(form.selectedCleanerIds.length > 0 ? { selected_cleaner_ids: form.selectedCleanerIds } : {}),
@@ -982,10 +1009,14 @@ function AdminCreateBookingPage() {
         lastSlotConflictAtRef.current = 0;
         setSuccess(
           json.message ??
-            (bookingBillingType === "monthly" ? "Booking created (billed monthly)" : "Payment link sent"),
+            (bookingBillingType === "monthly"
+              ? "Booking created (billed monthly)"
+              : bookingBillingType === "payment_already_received"
+                ? "Booking created, payment recorded"
+                : "Payment link sent"),
         );
         if (typeof json.bookingId === "string") setLastBookingId(json.bookingId);
-        if (bookingBillingType === "monthly") {
+        if (bookingBillingType === "monthly" || bookingBillingType === "payment_already_received") {
           setPerBookingPay(null);
           setPaymentLinkMeta(null);
         } else if (typeof json.bookingId === "string" && typeof json.authorizationUrl === "string") {
@@ -1022,7 +1053,7 @@ function AdminCreateBookingPage() {
         setSubmitting(false);
       }
     },
-    [bookingBillingType, duplicateOverrideReason, form, persistLastBooking, slotOptions, todayJhb],
+    [bookingBillingType, duplicateOverrideReason, form, persistLastBooking, settlementMethod, settlementReference, slotOptions, todayJhb],
   );
 
   const resendPaymentLink = useCallback(async () => {
@@ -1339,7 +1370,11 @@ function AdminCreateBookingPage() {
                     onBillingUpdated={(next) =>
                       setForm((s) => {
                         if (!s.selectedCustomer) return s;
-                        writeStoredBilling(s.selectedCustomer.id, next.billing_type, next.schedule_type);
+                        writeStoredBilling(
+                          s.selectedCustomer.id,
+                          next.billing_type === "monthly" ? "monthly" : "per_booking",
+                          next.schedule_type,
+                        );
                         setBookingBillingType(normBookingBillingMode(next.billing_type));
                         return { ...s, selectedCustomer: { ...s.selectedCustomer, ...next } };
                       })
@@ -1352,6 +1387,15 @@ function AdminCreateBookingPage() {
                       disabled={submitting}
                       onChange={setBookingBillingType}
                     />
+                    {bookingBillingType === "payment_already_received" ? (
+                      <AdminPaymentAlreadyReceivedFields
+                        method={settlementMethod}
+                        reference={settlementReference}
+                        disabled={submitting}
+                        onMethodChange={setSettlementMethod}
+                        onReferenceChange={setSettlementReference}
+                      />
+                    ) : null}
                   </div>
                   <button
                     type="button"
@@ -2009,6 +2053,8 @@ function AdminCreateBookingPage() {
                   "Select a customer"
                 ) : bookingBillingType === "monthly" ? (
                   "Create booking (billed monthly)"
+                ) : bookingBillingType === "payment_already_received" ? (
+                  "Create paid booking & email receipt"
                 ) : (
                   "Create & send payment link"
                 )}

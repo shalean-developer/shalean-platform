@@ -36,6 +36,7 @@ const STATIC_CONTENT_LASTMOD: Record<string, string> = {
   "/privacy-policy": "2026-05-01T00:00:00.000Z",
   "/terms-of-service": "2026-05-01T00:00:00.000Z",
   "/locations": "2026-07-01T00:00:00.000Z",
+  "/cleaner/apply": "2026-07-22T00:00:00.000Z",
 };
 
 function isoToDate(iso: string | undefined): Date | null {

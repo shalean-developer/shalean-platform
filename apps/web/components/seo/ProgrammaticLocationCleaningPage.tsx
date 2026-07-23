@@ -19,6 +19,7 @@ import { LocationHubSessionDepth } from "@/components/seo/LocationHubSessionDept
 import { LocationHubShareBar } from "@/components/seo/LocationHubShareBar";
 import { SeaPointLocationEnhancements } from "@/components/seo/SeaPointLocationEnhancements";
 import { LocationReviewHighlights } from "@/components/seo/LocationReviewHighlights";
+import { shouldRenderIllustrativeLocationReviews } from "@/lib/seo/locationHubExpansion";
 import { LocationHubServiceDemandSection } from "@/components/seo/LocationHubServiceDemandSection";
 import { LocationHubTrustedResidentsSection } from "@/components/seo/LocationHubTrustedResidentsSection";
 import { LocationTrustSignals } from "@/components/seo/LocationTrustSignals";
@@ -673,7 +674,9 @@ export function ProgrammaticLocationCleaningPage({
 
       <LocationHubRankingSections location={location} slug={slug} analyticsCtx={seoCtx} />
 
-      <LocationReviewHighlights location={location} />
+      {shouldRenderIllustrativeLocationReviews(slug) ? (
+        <LocationReviewHighlights location={location} />
+      ) : null}
 
       {!rankingResolved?.skipDefaultWhyChoose ? (
         <section className="border-b border-zinc-100 bg-zinc-50/50 py-16">
