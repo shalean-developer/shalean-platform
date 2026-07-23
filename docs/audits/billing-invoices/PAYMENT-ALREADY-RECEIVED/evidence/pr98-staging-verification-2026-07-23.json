@@ -1,0 +1,87 @@
+{
+  "document": "PR98-staging-merge-authorization-and-verification-2026-07-23",
+  "authorizedAt": "2026-07-23T18:00:00Z",
+  "verifiedAt": "2026-07-23T18:08:43Z",
+  "authorization": {
+    "text": "Authorize merging PR #98 into staging only and verify the staging deployment. Do not merge PR #96 or deploy the payment feature to Production.",
+    "mergePr98ToStaging": true,
+    "mergePr96ToMain": false,
+    "deployPaymentFeatureToProduction": false
+  },
+  "agentRun": "https://cursor.com/agents/bc-d79be9fc-9cba-493c-b9ca-f9e85e073f1b",
+  "pullRequest98": {
+    "url": "https://github.com/shalean-developer/shalean-platform/pull/98",
+    "state": "MERGED",
+    "base": "staging",
+    "headBranch": "cursor/staging-payment-already-received-de4e",
+    "headSha": "194c15c790b3351b630da83ce41a8575d0dfadc5",
+    "mergedAt": "2026-07-23T18:01:02Z",
+    "mergedBy": "app/cursor",
+    "mergeCommit": "1c09fd9d5799e3b27d031097c51d8a6046566176"
+  },
+  "preMergeChecks": {
+    "vitest": "SUCCESS",
+    "validateMigrationFilenames": "SUCCESS",
+    "gitGuardian": "SUCCESS",
+    "vercelPreviewPrHead": "SUCCESS",
+    "supabasePreview": "SKIPPED"
+  },
+  "stagingDeployment": {
+    "githubDeploymentId": 5577433835,
+    "environment": "Preview",
+    "productionEnvironment": false,
+    "sha": "1c09fd9d5799e3b27d031097c51d8a6046566176",
+    "exactShaMatch": true,
+    "createdAt": "2026-07-23T18:07:23Z",
+    "commitStatus": "success",
+    "description": "Deployment has completed",
+    "inspectorUrl": "https://vercel.com/shalean-cleaning-services/shalean-platform/HjBVk4zoUae4DCdyRDCiPMFxa39W",
+    "deploymentUrl": "https://shalean-platform-p1nxsj7u2-shalean-cleaning-services.vercel.app",
+    "stagingAlias": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app"
+  },
+  "unauthenticatedProbe": {
+    "stagingAliasHome": {
+      "httpStatus": 302,
+      "locationHost": "vercel.com",
+      "note": "Vercel Deployment Protection SSO"
+    },
+    "stagingAliasHealth": {
+      "path": "/api/health/environment",
+      "httpStatus": 302,
+      "locationHost": "vercel.com",
+      "note": "Vercel Deployment Protection SSO — body not claimed"
+    },
+    "deploymentUrlHealth": {
+      "httpStatus": 302,
+      "locationHost": "vercel.com",
+      "note": "Vercel Deployment Protection SSO — body not claimed"
+    }
+  },
+  "productionIsolation": {
+    "pr96": {
+      "url": "https://github.com/shalean-developer/shalean-platform/pull/96",
+      "state": "OPEN",
+      "base": "main",
+      "headSha": "75b73db18db74f5e2b1bbda334bec1b75520f216",
+      "mergedAt": null
+    },
+    "originMainTip": "592bd1c3bcb6ff18c734b21c937d866bf4036a08",
+    "pr96HeadIsAncestorOfMain": false,
+    "featureCommitC7cfb3e1IsAncestorOfMain": false,
+    "stagingMergeIsAncestorOfMain": false,
+    "settleModuleOnMain": false,
+    "settleModuleOnStaging": true,
+    "latestProductionDeployment": {
+      "id": 5577162617,
+      "sha": "592bd1c3bcb6ff18c734b21c937d866bf4036a08",
+      "createdAt": "2026-07-23T17:47:08Z",
+      "note": "Unrelated PR #100 streaming/canonical hotfix — not payment-already-received"
+    }
+  },
+  "decisions": {
+    "stagingMerge": "PASS",
+    "exactShaStagingDeploy": "PASS",
+    "operatorFunctionalGate": "OPERATOR_PENDING",
+    "production": "NO_GO"
+  }
+}
