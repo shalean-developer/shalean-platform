@@ -12,6 +12,33 @@ import { resolveZohoCustomerContactForBooking } from "@/lib/zoho/resolveZohoCust
 import { provisionV2RecurringPlan } from "@/lib/recurring/provisionV2RecurringPlan";
 import { preferredCleanerIdsFromSnapshot } from "@/lib/booking/persistPreferredCleaners";
 
+export type SyncPaidBookingInvoiceResult =
+  | {
+      kind: "synced";
+      zohoInvoiceId: string;
+      zohoInvoiceNumber: string | null;
+      balanceCents: number;
+      status: string | null;
+    }
+  | {
+      kind: "skipped";
+      reason:
+        | "no_zoho_config"
+        | "monthly"
+        | "sales_doc"
+        | "payment_method_zoho"
+        | "no_customer"
+        | "already_linked"
+        | "booking_not_found"
+        | "load_failed";
+      zohoInvoiceId?: string;
+      balanceCents?: number;
+      status?: string | null;
+    }
+  | { kind: "failed"; error: string };
+
+export type SyncPaidBookingSideEffectsResult = SyncPaidBookingInvoiceResult;
+
 /**
  * Idempotent post-payment side effects for a paid booking:
  *   1. Sync invoice to Zoho Books (create + mark paid) — skipped if `zoho_invoice_id` already set.
@@ -21,7 +48,8 @@ import { preferredCleanerIdsFromSnapshot } from "@/lib/booking/persistPreferredC
  * Safe to call multiple times for the same booking.
  *
  * Never throws — all failures are logged to `system_logs` so they cannot interrupt payment
- * confirmation.
+ * confirmation. Returns a structured invoice result for callers that must gate receipt email
+ * on create/allocate/zero-balance confirmation.
  */
 type PaidBookingRow = {
   customer_id?: string | null;
@@ -51,12 +79,24 @@ type PaidBookingRow = {
   selected_cleaner_id?: string | null;
 };
 
-function shouldCreateBookingZohoInvoice(row: PaidBookingRow): boolean {
-  if (row.is_monthly_billing_booking === true) return false;
-  if (String(row.zoho_invoice_id ?? "").trim()) return false;
-  if (String(row.sales_document_id ?? "").trim()) return false;
-  if (String(row.payment_method ?? "").toLowerCase() === "zoho") return false;
-  return Boolean(bookingCustomerKey(row) || String(row.customer_email ?? "").trim());
+function skipReasonForZohoInvoice(row: PaidBookingRow): SyncPaidBookingInvoiceResult | null {
+  if (row.is_monthly_billing_booking === true) {
+    return { kind: "skipped", reason: "monthly" };
+  }
+  const existingZoho = String(row.zoho_invoice_id ?? "").trim();
+  if (existingZoho) {
+    return { kind: "skipped", reason: "already_linked", zohoInvoiceId: existingZoho };
+  }
+  if (String(row.sales_document_id ?? "").trim()) {
+    return { kind: "skipped", reason: "sales_doc" };
+  }
+  if (String(row.payment_method ?? "").toLowerCase() === "zoho") {
+    return { kind: "skipped", reason: "payment_method_zoho" };
+  }
+  if (!bookingCustomerKey(row) && !String(row.customer_email ?? "").trim()) {
+    return { kind: "skipped", reason: "no_customer" };
+  }
+  return null;
 }
 
 async function loadPaidBookingRow(
@@ -98,7 +138,7 @@ async function loadPaidBookingRow(
 export async function syncPaidBookingSideEffects(
   admin: SupabaseClient,
   params: { bookingId: string; reference: string; amountCents: number },
-): Promise<void> {
+): Promise<SyncPaidBookingSideEffectsResult> {
   const { bookingId, reference, amountCents } = params;
 
   let row: PaidBookingRow | null = null;
@@ -112,20 +152,52 @@ export async function syncPaidBookingSideEffects(
       message: "side_effects_load_failed",
       context: { bookingId, error: String(err) },
     });
-    return;
+    return { kind: "skipped", reason: "load_failed" };
   }
 
-  if (!row) return;
+  if (!row) return { kind: "skipped", reason: "booking_not_found" };
 
   const totalZar = row.total_paid_zar ?? amountCents / 100;
   const customerId = bookingCustomerKey(row);
 
+  let invoiceResult: SyncPaidBookingInvoiceResult;
+
   // ── 1. Zoho Books invoice sync (idempotent: skip if already synced) ──────────
-  if (
-    process.env.ZOHO_CLIENT_ID &&
-    process.env.ZOHO_REFRESH_TOKEN &&
-    shouldCreateBookingZohoInvoice(row)
-  ) {
+  const zohoReady = Boolean(process.env.ZOHO_CLIENT_ID?.trim() && process.env.ZOHO_REFRESH_TOKEN?.trim());
+  const skip = skipReasonForZohoInvoice(row);
+
+  if (!zohoReady) {
+    invoiceResult = { kind: "skipped", reason: "no_zoho_config" };
+  } else if (skip) {
+    if (skip.reason === "already_linked" && skip.zohoInvoiceId) {
+      const details = await getZohoInvoice(skip.zohoInvoiceId);
+      if (details.ok) {
+        await upsertInvoiceSyncMetadata(admin, {
+          entityType: "booking",
+          entityId: bookingId,
+          zohoInvoiceId: details.zohoInvoiceId,
+          zohoInvoiceNumber: details.invoiceNumber,
+          bookingId,
+          zohoCustomerId: details.customerId,
+          invoiceStatus: details.status,
+          invoiceTotalCents: details.totalCents,
+          taxAmountCents: details.taxCents,
+          outstandingBalanceCents: details.balanceCents,
+        });
+        invoiceResult = {
+          kind: "skipped",
+          reason: "already_linked",
+          zohoInvoiceId: details.zohoInvoiceId,
+          balanceCents: details.balanceCents,
+          status: details.status,
+        };
+      } else {
+        invoiceResult = skip;
+      }
+    } else {
+      invoiceResult = skip;
+    }
+  } else {
     try {
       const contactRes = await resolveZohoCustomerContactForBooking(admin, row);
       if (!contactRes.ok) {
@@ -135,6 +207,7 @@ export async function syncPaidBookingSideEffects(
           message: "zoho_invoice_create_failed",
           context: { bookingId, error: contactRes.error },
         });
+        invoiceResult = { kind: "failed", error: contactRes.error };
       } else {
         const contact = contactRes.contact;
         const today = todayYmdJhb();
@@ -161,7 +234,7 @@ export async function syncPaidBookingSideEffects(
         });
 
         if (zohoInvoiceRes.ok) {
-          await markZohoInvoicePaid({
+          const payRes = await markZohoInvoicePaid({
             zohoInvoiceId: zohoInvoiceRes.zohoInvoiceId,
             amountZar: totalZar,
             paymentDate: today,
@@ -178,6 +251,7 @@ export async function syncPaidBookingSideEffects(
             .eq("id", bookingId);
 
           const details = await getZohoInvoice(zohoInvoiceRes.zohoInvoiceId);
+          const balanceCents = details.ok ? details.balanceCents : payRes.ok ? 0 : -1;
           await upsertInvoiceSyncMetadata(admin, {
             entityType: "booking",
             entityId: bookingId,
@@ -190,6 +264,21 @@ export async function syncPaidBookingSideEffects(
             taxAmountCents: details.ok ? details.taxCents : null,
             outstandingBalanceCents: details.ok ? details.balanceCents : 0,
           });
+
+          if (!payRes.ok && details.ok && details.balanceCents > 0) {
+            invoiceResult = {
+              kind: "failed",
+              error: payRes.error || "zoho_mark_paid_failed",
+            };
+          } else {
+            invoiceResult = {
+              kind: "synced",
+              zohoInvoiceId: zohoInvoiceRes.zohoInvoiceId,
+              zohoInvoiceNumber: zohoInvoiceRes.invoiceNumber,
+              balanceCents: balanceCents < 0 ? 0 : balanceCents,
+              status: details.ok ? details.status : "paid",
+            };
+          }
         } else {
           await logSystemEvent({
             level: "warn",
@@ -197,6 +286,7 @@ export async function syncPaidBookingSideEffects(
             message: "zoho_invoice_create_failed",
             context: { bookingId, error: zohoInvoiceRes.error },
           });
+          invoiceResult = { kind: "failed", error: zohoInvoiceRes.error };
         }
       }
     } catch (err) {
@@ -206,6 +296,7 @@ export async function syncPaidBookingSideEffects(
         message: "zoho_sync_exception",
         context: { bookingId, error: String(err) },
       });
+      invoiceResult = { kind: "failed", error: String(err) };
     }
   }
 
@@ -253,4 +344,6 @@ export async function syncPaidBookingSideEffects(
       });
     }
   }
+
+  return invoiceResult;
 }

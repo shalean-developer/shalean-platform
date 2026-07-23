@@ -3,7 +3,7 @@
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
-export type BookingBillingMode = "per_booking" | "monthly";
+export type BookingBillingMode = "per_booking" | "monthly" | "payment_already_received";
 
 type Props = {
   value: BookingBillingMode;
@@ -12,13 +12,14 @@ type Props = {
   onChange: (next: BookingBillingMode) => void;
 };
 
-function normBilling(s: string): BookingBillingMode {
+function normProfileBilling(s: string): "per_booking" | "monthly" {
   return s.toLowerCase() === "monthly" ? "monthly" : "per_booking";
 }
 
 export function AdminBookingBillingMode({ value, profileBillingType, disabled = false, onChange }: Props) {
-  const profileMode = normBilling(profileBillingType);
-  const differsFromProfile = value !== profileMode;
+  const profileMode = normProfileBilling(profileBillingType);
+  const differsFromProfile =
+    value === "payment_already_received" ? true : value !== profileMode;
 
   const segBtn = (active: boolean) =>
     cn(
@@ -49,8 +50,21 @@ export function AdminBookingBillingMode({ value, profileBillingType, disabled = 
         >
           Monthly
         </button>
+        <button
+          type="button"
+          disabled={disabled}
+          className={segBtn(value === "payment_already_received")}
+          onClick={() => onChange("payment_already_received")}
+        >
+          Payment already received
+        </button>
       </div>
-      {differsFromProfile ? (
+      {value === "payment_already_received" ? (
+        <p className="text-xs text-zinc-500 dark:text-zinc-400">
+          Creates the booking without a Paystack link, records the off-platform payment, syncs the paid
+          invoice, then emails the receipt. No unpaid invoice or payment reminder is sent.
+        </p>
+      ) : differsFromProfile ? (
         <p className="text-xs text-amber-800 dark:text-amber-200">
           One-off override — customer account default is {profileMode === "monthly" ? "Monthly" : "Per booking"}.
         </p>

@@ -251,9 +251,17 @@ export async function adminMarkBookingPaid(
     amountCentsOverride?: number | null;
     /** Supabase Auth user id of the admin performing mark-paid (audit). */
     adminUserId: string;
+    /**
+     * Zoho invoice create/allocate via {@link syncPaidBookingSideEffects}.
+     * - `fire_and_forget` (default): existing mark-paid behavior
+     * - `skip`: caller will sync + gate receipt email (payment-already-received create flow)
+     * - `await`: wait for sync before returning (unused by default paths)
+     */
+    invoiceSync?: "fire_and_forget" | "await" | "skip";
   },
 ): Promise<AdminMarkBookingPaidResult> {
   const { bookingId, method, reference, amountCentsOverride, adminUserId } = params;
+  const invoiceSync = params.invoiceSync ?? "fire_and_forget";
 
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const { data: row, error: loadErr } = await admin
@@ -446,11 +454,19 @@ export async function adminMarkBookingPaid(
     });
   }
 
-  void syncPaidBookingSideEffects(admin, {
-    bookingId,
-    reference: preservedPaystackReference ?? externalRef,
-    amountCents,
-  });
+  if (invoiceSync === "await") {
+    await syncPaidBookingSideEffects(admin, {
+      bookingId,
+      reference: preservedPaystackReference ?? externalRef,
+      amountCents,
+    });
+  } else if (invoiceSync !== "skip") {
+    void syncPaidBookingSideEffects(admin, {
+      bookingId,
+      reference: preservedPaystackReference ?? externalRef,
+      amountCents,
+    });
+  }
 
   const cityId = typeof b.city_id === "string" && b.city_id.trim() ? b.city_id.trim() : null;
   void syncUserPrimaryCityFromBooking(admin, userIdForEffects, cityId);
