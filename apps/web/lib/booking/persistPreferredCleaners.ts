@@ -2,7 +2,10 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ADMIN_MAX_PREFERRED_CLEANERS } from "@/lib/admin/adminPreferredCleanerLimits";
-import { validateMembersToReplaceBookingCleanersRpcRows } from "@/lib/admin/bookingRosterReplacePayload";
+import {
+  validateMembersToReplaceBookingCleanersRpcRows,
+  type ReplaceBookingCleanersRpcRow,
+} from "@/lib/admin/bookingRosterReplacePayload";
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -65,26 +68,58 @@ export function preferredCleanerAssignmentFields(
 
 /**
  * Build `booking_cleaners` roster when 2+ preferred cleaners were chosen.
- * Safe to call after payment or on admin monthly create (not on `pending_payment` per-booking).
+ * Safe to call after payment or on admin monthly / payment-already-received create
+ * (not on `pending_payment` per-booking).
  */
+export type SyncPreferredCleanerRosterResult =
+  | { ok: true; kind: "synced"; cleanerCount: number; rows: ReplaceBookingCleanersRpcRow[] }
+  | { ok: true; kind: "skipped_single_or_empty"; cleanerCount: number }
+  | { ok: false; kind: "validation_failed"; error: string; cleanerCount: number }
+  | { ok: false; kind: "rpc_failed"; error: string; cleanerCount: number };
+
 export async function syncPreferredCleanerRoster(
   admin: SupabaseClient,
   bookingId: string,
   selectedCleanerIds: readonly string[],
   source = "customer_preferred",
-): Promise<void> {
-  if (selectedCleanerIds.length < 2) return;
+): Promise<SyncPreferredCleanerRosterResult> {
+  const ids = normalizePreferredCleanerIds(selectedCleanerIds);
+  if (ids.length < 2) {
+    return { ok: true, kind: "skipped_single_or_empty", cleanerCount: ids.length };
+  }
 
   const rosterValidated = validateMembersToReplaceBookingCleanersRpcRows(
-    selectedCleanerIds.map((id, i) => ({ cleanerId: id, role: i === 0 ? "lead" : "member" })),
+    ids.map((id, i) => ({ cleanerId: id, role: i === 0 ? "lead" : "member" })),
     { defaultSource: source },
   );
-  if (!rosterValidated.ok) return;
+  if (!rosterValidated.ok) {
+    return {
+      ok: false,
+      kind: "validation_failed",
+      error: rosterValidated.error,
+      cleanerCount: ids.length,
+    };
+  }
 
-  await admin.rpc("replace_booking_cleaners_admin_atomic", {
+  const { error } = await admin.rpc("replace_booking_cleaners_admin_atomic", {
     p_booking_id: bookingId,
     p_rows: rosterValidated.rows,
   });
+  if (error) {
+    return {
+      ok: false,
+      kind: "rpc_failed",
+      error: error.message ?? String(error),
+      cleanerCount: ids.length,
+    };
+  }
+
+  return {
+    ok: true,
+    kind: "synced",
+    cleanerCount: ids.length,
+    rows: rosterValidated.rows,
+  };
 }
 
 /** Merge multi-cleaner preference into `booking_snapshot` (per-booking pending path). */
@@ -122,7 +157,7 @@ export async function syncPreferredCleanerRosterFromBookingRow(
   bookingId: string,
   row: { booking_snapshot?: unknown; selected_cleaner_id?: string | null },
   source = "checkout_preferred",
-): Promise<void> {
+): Promise<SyncPreferredCleanerRosterResult> {
   const ids = preferredCleanerIdsFromSnapshot(row.booking_snapshot, row.selected_cleaner_id);
-  await syncPreferredCleanerRoster(admin, bookingId, ids, source);
+  return syncPreferredCleanerRoster(admin, bookingId, ids, source);
 }

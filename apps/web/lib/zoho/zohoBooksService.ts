@@ -38,6 +38,17 @@ type ServiceResult<T> =
  * Looks up a customer contact id in Zoho Books.
  * Never returns an unrelated first search hit when an exact match was required.
  */
+export async function lookupZohoCustomerContactId(options: {
+  email?: string | null;
+  contactName?: string | null;
+}): Promise<string | null> {
+  return findContactId(options);
+}
+
+/**
+ * Looks up a customer contact id in Zoho Books.
+ * Never returns an unrelated first search hit when an exact match was required.
+ */
 async function findContactId(options: {
   email?: string | null;
   contactName?: string | null;

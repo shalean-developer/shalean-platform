@@ -5,7 +5,13 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { createZohoInvoice, getZohoInvoice, markZohoInvoicePaid, todayYmdJhb } from "@/lib/zoho/zohoBooksService";
+import {
+  createZohoInvoice,
+  getZohoInvoice,
+  lookupZohoCustomerContactId,
+  markZohoInvoicePaid,
+  todayYmdJhb,
+} from "@/lib/zoho/zohoBooksService";
 import { upsertInvoiceSyncMetadata } from "@/lib/accounting/syncInvoiceMetadata";
 import { buildZohoLineItemsWithReferralPromos } from "@/lib/referrals/zohoLineItems";
 import { resolveZohoCustomerContactForBooking } from "@/lib/zoho/resolveZohoCustomerContact";
@@ -87,6 +93,85 @@ export function isAuthoritativeZohoInvoicePaid(details: {
   return String(details.status ?? "").trim().toLowerCase() === "paid" && details.balanceCents === 0;
 }
 
+export type ZohoInvoiceSettlementExpectation = {
+  /** Booking settlement amount in cents — must match invoice total. */
+  expectedAmountCents: number;
+  /** ISO-4217; defaults to ZAR. */
+  expectedCurrencyCode?: string;
+  /** Zoho Books customer/contact id when authoritative identity is known. */
+  expectedZohoCustomerId?: string | null;
+  /** When true, missing/unknown/mismatched customer ids are blocking failures. */
+  requireCustomerMatch?: boolean;
+};
+
+/**
+ * Require paid + R0.00, settlement amount, ZAR currency, and (when required) customer match.
+ * Missing / unknown / mismatched values are blocking failures — never coerce to success.
+ */
+export function validateAuthoritativeZohoInvoiceSettlement(
+  details: {
+    status: string;
+    balanceCents: number;
+    totalCents: number;
+    currencyCode?: string | null;
+    customerId?: string | null;
+  },
+  expectation: ZohoInvoiceSettlementExpectation,
+): { ok: true } | { ok: false; error: string } {
+  if (!isAuthoritativeZohoInvoicePaid(details)) {
+    return {
+      ok: false,
+      error: `zoho_invoice_not_paid_zero_balance:status=${details.status}:balanceCents=${details.balanceCents}`,
+    };
+  }
+
+  const expectedCurrency = String(expectation.expectedCurrencyCode ?? "ZAR").trim().toUpperCase() || "ZAR";
+  const actualCurrency = String(details.currencyCode ?? "").trim().toUpperCase();
+  if (!actualCurrency) {
+    return { ok: false, error: "zoho_invoice_currency_missing" };
+  }
+  if (actualCurrency !== expectedCurrency) {
+    return {
+      ok: false,
+      error: `zoho_invoice_currency_mismatch:expected=${expectedCurrency}:actual=${actualCurrency}`,
+    };
+  }
+
+  const expectedAmountCents = Math.round(Number(expectation.expectedAmountCents));
+  if (!Number.isFinite(expectedAmountCents) || expectedAmountCents <= 0) {
+    return { ok: false, error: "zoho_invoice_expected_amount_missing" };
+  }
+  if (!Number.isFinite(details.totalCents)) {
+    return { ok: false, error: "zoho_invoice_total_missing" };
+  }
+  const actualAmountCents = Math.round(details.totalCents);
+  if (actualAmountCents !== expectedAmountCents) {
+    return {
+      ok: false,
+      error: `zoho_invoice_amount_mismatch:expectedCents=${expectedAmountCents}:actualCents=${actualAmountCents}`,
+    };
+  }
+
+  if (expectation.requireCustomerMatch) {
+    const expectedCustomerId = String(expectation.expectedZohoCustomerId ?? "").trim();
+    const actualCustomerId = String(details.customerId ?? "").trim();
+    if (!expectedCustomerId) {
+      return { ok: false, error: "zoho_invoice_expected_customer_missing" };
+    }
+    if (!actualCustomerId) {
+      return { ok: false, error: "zoho_invoice_customer_missing" };
+    }
+    if (expectedCustomerId !== actualCustomerId) {
+      return {
+        ok: false,
+        error: `zoho_invoice_customer_mismatch:expected=${expectedCustomerId}:actual=${actualCustomerId}`,
+      };
+    }
+  }
+
+  return { ok: true };
+}
+
 function resolveExternalZohoInvoiceId(row: PaidBookingRow): string {
   const linked = String(row.zoho_invoice_id ?? "").trim();
   if (linked) return linked;
@@ -160,7 +245,9 @@ async function persistAuthoritativeInvoiceMetadata(
 }
 
 /**
- * Retrieve Zoho invoice and confirm paid + zero balance. Never treats a failed read as paid.
+ * Retrieve Zoho invoice and confirm paid + zero balance + settlement match.
+ * Never treats a failed/mismatched read as paid/synced. Does not link the booking
+ * or persist invoice metadata until validation succeeds.
  */
 async function verifyZohoInvoicePaidZeroBalance(
   admin: SupabaseClient,
@@ -169,6 +256,10 @@ async function verifyZohoInvoicePaidZeroBalance(
     zohoInvoiceId: string;
     zohoInvoiceNumber?: string | null;
     linkOnBooking?: boolean;
+    expectedAmountCents: number;
+    expectedCurrencyCode?: string;
+    expectedZohoCustomerId?: string | null;
+    requireCustomerMatch?: boolean;
   },
 ): Promise<SyncPaidBookingInvoiceResult> {
   const details = await getZohoInvoice(params.zohoInvoiceId);
@@ -180,6 +271,31 @@ async function verifyZohoInvoicePaidZeroBalance(
       context: { bookingId: params.bookingId, zohoInvoiceId: params.zohoInvoiceId, error: details.error },
     });
     return { kind: "failed", error: `zoho_invoice_read_failed:${details.error}` };
+  }
+
+  const match = validateAuthoritativeZohoInvoiceSettlement(details, {
+    expectedAmountCents: params.expectedAmountCents,
+    expectedCurrencyCode: params.expectedCurrencyCode,
+    expectedZohoCustomerId: params.expectedZohoCustomerId,
+    requireCustomerMatch: params.requireCustomerMatch,
+  });
+  if (!match.ok) {
+    await logSystemEvent({
+      level: "warn",
+      source: "booking/side_effects",
+      message: "zoho_invoice_settlement_mismatch",
+      context: {
+        bookingId: params.bookingId,
+        zohoInvoiceId: details.zohoInvoiceId,
+        error: match.error,
+        status: details.status,
+        balanceCents: details.balanceCents,
+        totalCents: details.totalCents,
+        currencyCode: details.currencyCode,
+        customerId: details.customerId,
+      },
+    });
+    return { kind: "failed", error: match.error };
   }
 
   await persistAuthoritativeInvoiceMetadata(admin, {
@@ -203,24 +319,6 @@ async function verifyZohoInvoicePaidZeroBalance(
         zoho_invoice_number: details.invoiceNumber,
       })
       .eq("id", params.bookingId);
-  }
-
-  if (!isAuthoritativeZohoInvoicePaid(details)) {
-    await logSystemEvent({
-      level: "warn",
-      source: "booking/side_effects",
-      message: "zoho_invoice_not_fully_paid",
-      context: {
-        bookingId: params.bookingId,
-        zohoInvoiceId: details.zohoInvoiceId,
-        status: details.status,
-        balanceCents: details.balanceCents,
-      },
-    });
-    return {
-      kind: "failed",
-      error: `zoho_invoice_not_paid_zero_balance:status=${details.status}:balanceCents=${details.balanceCents}`,
-    };
   }
 
   return {
@@ -280,17 +378,39 @@ export async function syncPaidBookingSideEffects(
     if (!zohoInvoiceId) {
       invoiceResult = { kind: "failed", error: "missing_zoho_invoice_identifier" };
     } else {
-      invoiceResult = await verifyZohoInvoicePaidZeroBalance(admin, {
-        bookingId,
-        zohoInvoiceId,
-        linkOnBooking: !String(row.zoho_invoice_id ?? "").trim(),
-      });
+      const contactRes = await resolveZohoCustomerContactForBooking(admin, row);
+      if (!contactRes.ok) {
+        invoiceResult = {
+          kind: "failed",
+          error: `zoho_invoice_expected_customer_unresolved:${contactRes.error}`,
+        };
+      } else {
+        const expectedZohoCustomerId = await lookupZohoCustomerContactId({
+          email: contactRes.contact.email ?? null,
+          contactName: contactRes.contact.name,
+        });
+        if (!expectedZohoCustomerId) {
+          invoiceResult = { kind: "failed", error: "zoho_invoice_expected_customer_missing" };
+        } else {
+          invoiceResult = await verifyZohoInvoicePaidZeroBalance(admin, {
+            bookingId,
+            zohoInvoiceId,
+            linkOnBooking: !String(row.zoho_invoice_id ?? "").trim(),
+            expectedAmountCents: amountCents,
+            expectedCurrencyCode: "ZAR",
+            expectedZohoCustomerId,
+            requireCustomerMatch: true,
+          });
+        }
+      }
     }
   } else if (String(row.zoho_invoice_id ?? "").trim()) {
     // Already linked: re-read authoritatively; never invent paid/zero.
     invoiceResult = await verifyZohoInvoicePaidZeroBalance(admin, {
       bookingId,
       zohoInvoiceId: String(row.zoho_invoice_id).trim(),
+      expectedAmountCents: amountCents,
+      expectedCurrencyCode: "ZAR",
     });
   } else if (!bookingCustomerKey(row) && !String(row.customer_email ?? "").trim()) {
     invoiceResult = { kind: "skipped", reason: "no_customer" };
@@ -370,11 +490,13 @@ export async function syncPaidBookingSideEffects(
               error: `zoho_payment_allocation_failed:${payRes.error}`,
             };
           } else {
-            // Allocation succeeded — still require an authoritative read of paid + zero balance.
+            // Allocation succeeded — still require an authoritative paid + settlement match read.
             invoiceResult = await verifyZohoInvoicePaidZeroBalance(admin, {
               bookingId,
               zohoInvoiceId: zohoInvoiceRes.zohoInvoiceId,
               zohoInvoiceNumber: zohoInvoiceRes.invoiceNumber,
+              expectedAmountCents: amountCents,
+              expectedCurrencyCode: "ZAR",
             });
           }
         }

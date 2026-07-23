@@ -1341,7 +1341,26 @@ export async function POST(request: Request) {
       newPaidBookingId,
       "admin_booking_create_payment_already_received",
     );
-    await patchAdminPerBookingPreferredCleaners(admin, newPaidBookingId, selectedCleanerIds);
+    // Immediately paid/active — sync booking_cleaners like monthly create (not snapshot-only).
+    const rosterSync = await syncAdminPreferredCleanerRoster(
+      admin,
+      newPaidBookingId,
+      selectedCleanerIds,
+      "admin_payment_already_received",
+    );
+    if (!rosterSync.ok) {
+      void logSystemEvent({
+        level: "error",
+        source: "admin_booking_create",
+        message: "admin_payment_already_received_roster_sync_failed",
+        context: {
+          bookingId: newPaidBookingId,
+          error: rosterSync.error,
+          kind: rosterSync.kind,
+          cleanerCount: rosterSync.cleanerCount,
+        },
+      });
+    }
 
     const settled = await settleAdminBookingPaymentAlreadyReceived(admin, {
       bookingId: newPaidBookingId,
