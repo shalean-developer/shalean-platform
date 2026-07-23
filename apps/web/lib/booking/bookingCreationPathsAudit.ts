@@ -37,6 +37,13 @@
  * - `admin_mark_completed` without cleaner: requires `is_team_job` + active `team_id` + roster-derived `payout_owner_cleaner_id` (DB invariant); merges {@link buildCompletionCoherencePatch}
  * - `amount_paid_cents` / totals from admin quote; invoice attachment via DB triggers
  *
+ * **3b. Admin — payment already received** — same route + {@link insertBookingRowUnified} (`source: admin_payment_already_received`)
+ * then {@link settleAdminBookingPaymentAlreadyReceived} (`adminMarkBookingPaidOperation` + awaited invoice sync + `payment_confirmed` email)
+ * - No Paystack link / recovery / unpaid invoice email
+ * - `status`: `pending` \| `assigned`; `payment_status` starts `pending`, then `success` after settlement
+ * - `billing_type`: `per_booking`; `is_monthly_billing_booking`: false
+ * - Synthetic ref `adm_ar_<uuid>` (preserved on mark-paid per M-2)
+ *
  * **4. Admin — per-booking Paystack link** — same route → {@link processPaystackInitializeBody} (pending row + link), not a second insert shape beyond (1)+(init update).
  *
  * **5. Dashboard monthly self-service** — `POST /api/dashboard/bookings` + {@link insertBookingRowUnified} (`dashboard_monthly`)

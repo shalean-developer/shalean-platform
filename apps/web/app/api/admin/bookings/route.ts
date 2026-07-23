@@ -67,6 +67,9 @@ import {
   buildCompletionCoherencePatch,
   validateAdminMonthlyCompletedAssignee,
 } from "@/lib/booking/bookingCompletionIntegrity";
+import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
+import type { AdminMarkPaidMethod } from "@/lib/booking/adminMarkBookingPaid";
+import { settleAdminBookingPaymentAlreadyReceived } from "@/lib/admin/settleAdminBookingPaymentAlreadyReceived";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -822,8 +825,10 @@ const ADMIN_BOOKING_SERVICE_IDS = new Set<string>(["standard", "airbnb", "deep",
 
 /**
  * Admin: create a booking for an existing customer.
- * `billing_type` in the body (`per_booking` | `monthly`) selects the create path; defaults to the customer profile.
- * Monthly → no Paystack; per_booking → Paystack + notifications.
+ * `billing_type` in the body (`per_booking` | `monthly` | `payment_already_received`) selects the create path;
+ * defaults to the customer profile (`per_booking` | `monthly` only).
+ * Monthly → no Paystack; per_booking → Paystack + notifications;
+ * payment_already_received → no Paystack; settle off-platform, sync paid invoice, then email receipt.
  */
 export async function POST(request: Request) {
   const auth = await requireAdminApi(request);
@@ -1068,7 +1073,26 @@ export async function POST(request: Request) {
   const scheduleType = String(profResult.schedule_type ?? "on_demand").toLowerCase();
   const billingTypeRaw = typeof body.billing_type === "string" ? body.billing_type.trim().toLowerCase() : "";
   const createBillingType =
-    billingTypeRaw === "monthly" || billingTypeRaw === "per_booking" ? billingTypeRaw : profileBillingType;
+    billingTypeRaw === "monthly" ||
+    billingTypeRaw === "per_booking" ||
+    billingTypeRaw === "payment_already_received"
+      ? billingTypeRaw
+      : profileBillingType === "monthly"
+        ? "monthly"
+        : "per_booking";
+
+  const settlementMethodRaw =
+    typeof body.settlement_method === "string"
+      ? body.settlement_method.trim().toLowerCase()
+      : typeof body.payment_method === "string"
+        ? body.payment_method.trim().toLowerCase()
+        : "";
+  const settlementReferenceRaw =
+    typeof body.settlement_reference === "string"
+      ? body.settlement_reference.trim().slice(0, 500)
+      : typeof body.payment_reference === "string"
+        ? body.payment_reference.trim().slice(0, 500)
+        : "";
 
   const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(userId);
   if (authErr || !authUser?.user?.email) {
@@ -1084,6 +1108,342 @@ export async function POST(request: Request) {
 
   const serviceId: BookingServiceId = parseBookingServiceId(serviceRaw) ?? "standard";
   const paymentLinkTtlHours = Math.max(1, Math.round(adminPaymentLinkTtlMs() / (60 * 60 * 1000)));
+
+  if (createBillingType === "payment_already_received") {
+    if (adminMarkCompleted) {
+      return bail(
+        NextResponse.json(
+          {
+            error:
+              "admin_mark_completed is not supported with payment already received. Create the paid booking, then complete it from booking details if needed.",
+            code: "admin_mark_completed_unsupported_for_payment_already_received",
+          },
+          { status: 400 },
+        ),
+      );
+    }
+
+    if (settlementMethodRaw !== "cash" && settlementMethodRaw !== "zoho" && settlementMethodRaw !== "eft") {
+      return bail(
+        NextResponse.json(
+          {
+            error: 'settlement_method must be "cash", "eft", or "zoho" when payment is already received.',
+            code: "payment_already_received_method_required",
+          },
+          { status: 400 },
+        ),
+      );
+    }
+    const settlementMethod = settlementMethodRaw as AdminMarkPaidMethod;
+    if ((settlementMethod === "eft" || settlementMethod === "zoho") && settlementReferenceRaw.length < 2) {
+      return bail(
+        NextResponse.json(
+          {
+            error: "settlement_reference is required for EFT and Zoho / off-platform payments.",
+            code: "payment_already_received_reference_required",
+          },
+          { status: 400 },
+        ),
+      );
+    }
+
+    if (selectedCleanerIds.length > 0 && !ignoreCleanerSlotConflict) {
+      for (const cleanerId of selectedCleanerIds) {
+        const lateConflictPaid = await findCleanerSlotConflict(admin, {
+          cleanerId,
+          dateYmd: date,
+          timeHm,
+        });
+        if (lateConflictPaid) {
+          return bail(
+            NextResponse.json(
+              {
+                error:
+                  "Another booking took a selected cleaner for this slot while you were submitting. Try again, or acknowledge the overlap.",
+                cleaner_slot_conflict: true,
+                conflicting_booking_id: lateConflictPaid,
+              },
+              { status: 409 },
+            ),
+          );
+        }
+      }
+    }
+
+    let equipmentPatchPaid: Record<string, unknown> = {};
+    if (serviceRaw === "standard" && typeof body.equipment_required === "boolean") {
+      if (equipmentRequired) {
+        const equipConfig = await loadEquipmentPricingConfig();
+        let quote = await quoteEquipmentForAddress({
+          config: equipConfig,
+          address: equipmentAddress,
+          suburb: equipmentSuburb,
+          city: equipmentCity,
+          postalCode: equipmentPostal,
+          equipmentRequired: true,
+        });
+        if (
+          equipmentLogisticsFeeBody != null &&
+          equipmentLogisticsFeeBody !== quote.logistics_fee &&
+          equipmentOverrideReason.length < 3
+        ) {
+          return bail(
+            NextResponse.json(
+              { error: "equipment_fee_override_reason is required when overriding the equipment fee." },
+              { status: 400 },
+            ),
+          );
+        }
+        if (equipmentLogisticsFeeBody != null && equipmentLogisticsFeeBody !== quote.logistics_fee) {
+          quote = { ...quote, logistics_fee: equipmentLogisticsFeeBody };
+        }
+        equipmentPatchPaid = equipmentPersistFields({
+          equipmentRequired: true,
+          quote,
+          pricingSnapshot: buildEquipmentPricingSnapshot({ config: equipConfig, quote }),
+          overrideReason: equipmentOverrideReason || null,
+        });
+      } else {
+        equipmentPatchPaid = equipmentPersistFields({
+          equipmentRequired: false,
+          quote: null,
+          pricingSnapshot: null,
+        });
+      }
+    }
+
+    const paystackReferencePaid = `adm_ar_${crypto.randomUUID()}`;
+    const assignedAtIsoPaid = selectedCleanerId ? new Date().toISOString() : null;
+    const rowStatusPaid: "assigned" | "pending" = selectedCleanerId ? "assigned" : "pending";
+    const uncollected = bookingUncollectedCashColumns();
+
+    const insPaid = await insertBookingRowUnified(admin, {
+      source: "admin_payment_already_received",
+      rowBase: {
+        paystack_reference: paystackReferencePaid,
+        customer_email: customerEmail,
+        customer_name: customerName,
+        customer_phone: customerPhone,
+        ...bookingCustomerOwnershipPatch(userId, ownershipColumn),
+        ...uncollected,
+        currency: "ZAR",
+        service_slug: serviceSlug,
+        status: rowStatusPaid,
+        dispatch_status: selectedCleanerId ? "assigned" : "searching",
+        surge_multiplier: 1,
+        surge_reason: null,
+        service: getServiceLabel(serviceId),
+        location,
+        location_id: null,
+        city_id: null,
+        date,
+        time: timeHm,
+        total_price: totalPaidZar,
+        pricing_version_id: null,
+        price_breakdown: null,
+        created_by_admin: true,
+        created_by: auth.userId,
+        booking_source: "admin",
+        created_by_admin_id: auth.userId,
+        ...equipmentPatchPaid,
+        ...preferredCleanerExtras.rowExtras,
+        ...(selectedCleanerId
+          ? {
+              selected_cleaner_id: selectedCleanerId,
+              assignment_type: "user_selected",
+              cleaner_id: selectedCleanerId,
+              cleaner_response_status: CLEANER_RESPONSE.PENDING,
+              ...(assignedAtIsoPaid ? { assigned_at: assignedAtIsoPaid } : {}),
+            }
+          : {}),
+        ...(ignoreCleanerSlotConflict
+          ? {
+              ignore_cleaner_conflict: true,
+              ...(cleanerSlotOverrideReasonForDb
+                ? { cleaner_slot_override_reason: cleanerSlotOverrideReasonForDb }
+                : {}),
+            }
+          : {}),
+        ...(force
+          ? {
+              slot_duplicate_exempt: true,
+              admin_force_slot_override: true,
+            }
+          : {}),
+        is_monthly_billing_booking: false,
+        payment_status: "pending",
+        billing_type: "per_booking",
+      },
+      rooms,
+      bathrooms,
+      extrasRaw: extrasPersist,
+      serviceSlugForFlat: serviceRaw,
+      locationForFlat: location,
+      dateForFlat: date,
+      timeForFlat: timeHm,
+      snapshotExtension: {
+        admin_notes: notes,
+        customer_notes: notes,
+        service_slug: serviceSlug,
+        payment_already_received: true,
+        ...preferredCleanerExtras.snapshotExtension,
+        ...(ignoreCleanerSlotConflict && cleanerSlotOverrideReasonForDb
+          ? { cleaner_slot_override_reason: cleanerSlotOverrideReasonForDb }
+          : {}),
+      },
+      select: "id, created_at",
+      logInsert: false,
+      lineItemsPricing: {
+        mode: "monthly_bundled_zar",
+        quotedTotalZar: totalPaidZar,
+        bundleLabel: "Admin booking (payment already received)",
+      },
+    });
+
+    const paidRow = insPaid.ok ? insPaid.row : null;
+    if (!insPaid.ok || !paidRow || typeof (paidRow as { id?: string }).id !== "string") {
+      const pgCode = insPaid.ok ? undefined : insPaid.pgCode;
+      const msg = insPaid.ok ? "" : insPaid.error;
+      if (
+        pgCode === "23505" ||
+        /duplicate key|unique constraint|idx_bookings_unique_active_customer_slot/i.test(msg)
+      ) {
+        const { data: dupExisting } = await applyActiveAdminBookingSlotFilters(
+          admin.from("bookings").select("id, created_at"),
+          { userId, ownershipColumn, date, timeHm, serviceSlug },
+        ).limit(1);
+        const ex = dupExisting?.[0] as { id: string; created_at?: string | null } | undefined;
+        return bail(
+          NextResponse.json(
+            {
+              error:
+                "This slot already has an active booking (database constraint). Open the existing row, or use force after acknowledging the duplicate.",
+              existing_booking_id: ex?.id ?? null,
+              existing_booking_created_at: typeof ex?.created_at === "string" ? ex.created_at : null,
+              duplicate: true,
+            },
+            { status: 409 },
+          ),
+        );
+      }
+      return bail(
+        NextResponse.json(
+          { error: !insPaid.ok ? insPaid.error : "Could not create booking." },
+          { status: 500 },
+        ),
+      );
+    }
+
+    const newPaidBookingId = (paidRow as { id: string }).id;
+
+    await runAdminBookingPostCreateNormalizationAndEarnings(
+      admin,
+      newPaidBookingId,
+      "admin_booking_create_payment_already_received",
+    );
+    // Immediately paid/active — sync booking_cleaners like monthly create (not snapshot-only).
+    const rosterSync = await syncAdminPreferredCleanerRoster(
+      admin,
+      newPaidBookingId,
+      selectedCleanerIds,
+      "admin_payment_already_received",
+    );
+    if (!rosterSync.ok) {
+      void logSystemEvent({
+        level: "error",
+        source: "admin_booking_create",
+        message: "admin_payment_already_received_roster_sync_failed",
+        context: {
+          bookingId: newPaidBookingId,
+          error: rosterSync.error,
+          kind: rosterSync.kind,
+          cleanerCount: rosterSync.cleanerCount,
+        },
+      });
+    }
+
+    const settled = await settleAdminBookingPaymentAlreadyReceived(admin, {
+      bookingId: newPaidBookingId,
+      adminUserId: auth.userId,
+      method: settlementMethod,
+      reference: settlementReferenceRaw.length > 0 ? settlementReferenceRaw : null,
+      amountCents: amountPaidCents,
+      customerEmail,
+    });
+
+    if (!settled.ok) {
+      void logSystemEvent({
+        level: "error",
+        source: "admin_booking_create",
+        message: "admin_payment_already_received_settle_failed",
+        context: {
+          bookingId: newPaidBookingId,
+          error: settled.error,
+          code: settled.code ?? null,
+          method: settlementMethod,
+        },
+      });
+      // Booking row exists; finalize idempotency with the failure payload so retries
+      // replay the same booking id instead of creating another unpaid/paid row.
+      const failBody: Record<string, unknown> = {
+        ok: false,
+        error: settled.error,
+        code: settled.code ?? "payment_already_received_settle_failed",
+        bookingId: newPaidBookingId,
+        mode: "payment_already_received",
+      };
+      if (claimId) await finalizeAdminBookingCreateIdempotency(admin, claimId, settled.httpStatus, failBody);
+      invalidateCleanerAvailabilityCache(date, timeHm);
+      return NextResponse.json(failBody, { status: settled.httpStatus });
+    }
+
+    void logSystemEvent({
+      level: "info",
+      source: "admin_booking_create",
+      message: "admin_payment_already_received_booking_created",
+      context: {
+        bookingId: newPaidBookingId,
+        userId,
+        admin_id: auth.userId,
+        method: settlementMethod,
+        amount_cents: settled.settlement.amount_cents,
+        receipt_email_sent: settled.receipt_email_sent,
+        invoice_kind: settled.invoice.kind,
+      },
+    });
+
+    const paidBody: Record<string, unknown> = {
+      ok: true,
+      mode: "payment_already_received",
+      message: settled.receipt_email_sent
+        ? settled.paid_invoice_included
+          ? "Booking created, payment recorded, paid invoice emailed"
+          : "Booking created, payment recorded, payment confirmation receipt emailed"
+        : "Booking created and payment recorded (payment confirmation receipt could not be sent)",
+      bookingId: newPaidBookingId,
+      amount_paid_cents: settled.settlement.amount_cents,
+      settlement: {
+        method: settled.settlement.method,
+        payment_reference_external: settled.settlement.payment_reference_external,
+        settlement_marker: settled.settlement.settlement_marker,
+      },
+      invoice: settled.invoice,
+      paid_confirmed: settled.paid_confirmed,
+      zero_balance_confirmed: settled.zero_balance_confirmed,
+      receipt_email_sent: settled.receipt_email_sent,
+      paid_invoice_included: settled.paid_invoice_included,
+      receipt_kind: settled.receipt_kind,
+      notification: settled.notification,
+      ...(settled.receipt_email_skipped_reason
+        ? { receipt_email_skipped_reason: settled.receipt_email_skipped_reason }
+        : {}),
+      authorizationUrl: null,
+      payment_link: null,
+    };
+    if (claimId) await finalizeAdminBookingCreateIdempotency(admin, claimId, 200, paidBody);
+    invalidateCleanerAvailabilityCache(date, timeHm);
+    return NextResponse.json(paidBody);
+  }
 
   if (createBillingType === "monthly") {
     if (selectedCleanerId && !ignoreCleanerSlotConflict) {
