@@ -699,6 +699,8 @@ export type AdminMarkBookingPaidOperationArgs = {
   settlementMode: "full" | "deposit";
   depositCents?: number;
   depositReason?: string;
+  /** Forwarded to {@link adminMarkBookingPaid} (full settlement only). */
+  invoiceSync?: "fire_and_forget" | "await" | "skip";
 };
 
 /**
@@ -750,6 +752,7 @@ export async function adminMarkBookingPaidOperation(
     amountCentsOverride:
       amountCentsOverride != null && Number(amountCentsOverride) > 0 ? Math.round(Number(amountCentsOverride)) : null,
     adminUserId,
+    ...(args.invoiceSync ? { invoiceSync: args.invoiceSync } : {}),
   });
 
   if (!result.ok) {

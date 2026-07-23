@@ -1,30 +1,51 @@
 /**
  * One-to-one `shalean.com` → `https://shalean.co.za` migration map (repo source of truth).
  *
- * EXTERNAL APPLICATION STATUS: Full explicit Plesk/LiteSpeed `.htaccess` map applied and
- * HTTP-verified (2026-07-22). Host-level path-preserving rules also exist in
- * `next.config.ts` / `proxy.ts` for when `.com` traffic reaches this Next app.
+ * EXTERNAL APPLICATION STATUS (accurate as of location expansion PR #94):
+ * - **193** explicit rules: previously applied on Plesk and HTTP-verified (2026-07-22).
+ * - **80** newly generated location-expansion rules (20 hubs × 4 path patterns): prepared
+ *   in-repo only — **not** Plesk-applied and **not** HTTP-verified.
+ * - **273** total explicit rules: repository **candidate** state only.
+ * - Path-preserving fallback remains in the generated artifact.
+ * - Do **not** describe the complete 273-rule artifact as `LIVE_HTTP_VERIFIED`.
  *
- * Evidence: `docs/audits/seo/SHALEAN-COM-PLESK-FULL-MAP-HTTP-VERIFICATION-2026-07-22.md`
+ * Evidence (193-rule apply): `docs/audits/seo/SHALEAN-COM-PLESK-FULL-MAP-HTTP-VERIFICATION-2026-07-22.md`
  */
 
 import { CAPE_TOWN_LOCATIONS, HUB_SUFFIX } from "@/lib/seo/capeTownLocations";
 import { ROUTED_HIGH_CONVERSION_POSTS } from "@/lib/blog/highConversionPosts";
 import { AIRBNB_HOST_GUIDE_POSTS } from "@/lib/blog/airbnbHostGuidePosts";
 import { ROUTED_PROGRAMMATIC_POSTS } from "@/lib/blog/programmaticPosts";
+import {
+  LOCATION_HUB_EXPANSION_JUL_2026_SLUGS,
+  isLocationHubExpansionJul2026Slug,
+} from "@/lib/seo/locationHubExpansion";
 
 /** Plesk apply pending — do not claim live redirects without HTTP proof. */
 export const SHALEAN_COM_MIGRATION_STATUS_PENDING = "PENDING_EXTERNAL_PLESK" as const;
-/** Plesk rules applied and representative URLs HTTP-verified one-hop to `.co.za`. */
+/** Historical label for the 193-rule map that was applied and HTTP-verified on 2026-07-22. */
 export const SHALEAN_COM_MIGRATION_STATUS_LIVE = "LIVE_HTTP_VERIFIED" as const;
 
 export type ShaleanComMigrationStatus =
   | typeof SHALEAN_COM_MIGRATION_STATUS_PENDING
   | typeof SHALEAN_COM_MIGRATION_STATUS_LIVE;
 
-/** Current external migration state (full explicit map live/verified as of 2026-07-22). */
+/**
+ * Current external migration state for the **complete** checked-in artifact.
+ * The 273-rule candidate is not fully Plesk-applied/HTTP-verified — keep PENDING.
+ */
 export const SHALEAN_COM_MIGRATION_STATUS: ShaleanComMigrationStatus =
-  SHALEAN_COM_MIGRATION_STATUS_LIVE;
+  SHALEAN_COM_MIGRATION_STATUS_PENDING;
+
+/** Explicit rules HTTP-verified on Plesk (2026-07-22 full-map apply). */
+export const SHALEAN_COM_PLESK_HTTP_VERIFIED_EXPLICIT_RULE_COUNT = 193;
+/** New location-hub redirect patterns awaiting Plesk apply + HTTP verify (20 × 4). */
+export const SHALEAN_COM_LOCATION_EXPANSION_PENDING_RULE_COUNT =
+  LOCATION_HUB_EXPANSION_JUL_2026_SLUGS.length * 4;
+/** Full explicit map size in the repository candidate artifact. */
+export const SHALEAN_COM_REPO_CANDIDATE_EXPLICIT_RULE_COUNT =
+  SHALEAN_COM_PLESK_HTTP_VERIFIED_EXPLICIT_RULE_COUNT +
+  SHALEAN_COM_LOCATION_EXPANSION_PENDING_RULE_COUNT;
 
 export type ShaleanComMigrationRule = {
   readonly sourcePath: string;
@@ -76,19 +97,27 @@ const EXPLICIT_COM_RULES: readonly ShaleanComMigrationRule[] = [
   { sourcePath: "/services/window-cleaning-cape-town", destinationPath: "/services/window-cleaning-cape-town" },
 ];
 
+function locationAreaKebab(slug: string): string {
+  return slug.endsWith(HUB_SUFFIX) ? slug.slice(0, -HUB_SUFFIX.length) : slug;
+}
+
+function locationComRulesForSlug(slug: string): ShaleanComMigrationRule[] {
+  const areaKebab = locationAreaKebab(slug);
+  const hub = `/locations/${slug}`;
+  const pending = isLocationHubExpansionJul2026Slug(slug);
+  const note = pending
+    ? "Location expansion Jul 2026 — in-repo only; pending Plesk apply/HTTP verify"
+    : undefined;
+  return [
+    { sourcePath: hub, destinationPath: hub, note },
+    { sourcePath: `/location/cape-town/${areaKebab}`, destinationPath: hub, note },
+    { sourcePath: `/cleaning-services/${areaKebab}`, destinationPath: hub, note },
+    { sourcePath: `/cape-town/cleaning-services/${areaKebab}`, destinationPath: hub, note },
+  ];
+}
+
 function locationComRules(): ShaleanComMigrationRule[] {
-  return CAPE_TOWN_LOCATIONS.flatMap((row) => {
-    const areaKebab = row.slug.endsWith(HUB_SUFFIX)
-      ? row.slug.slice(0, -HUB_SUFFIX.length)
-      : row.slug;
-    const hub = `/locations/${row.slug}`;
-    return [
-      { sourcePath: hub, destinationPath: hub },
-      { sourcePath: `/location/cape-town/${areaKebab}`, destinationPath: hub },
-      { sourcePath: `/cleaning-services/${areaKebab}`, destinationPath: hub },
-      { sourcePath: `/cape-town/cleaning-services/${areaKebab}`, destinationPath: hub },
-    ];
-  });
+  return CAPE_TOWN_LOCATIONS.flatMap((row) => locationComRulesForSlug(row.slug));
 }
 
 function blogComRules(): ShaleanComMigrationRule[] {
@@ -119,6 +148,11 @@ export function getShaleanComMigrationRules(): readonly ShaleanComMigrationRule[
   return dedupeRules([...EXPLICIT_COM_RULES, ...locationComRules(), ...blogComRules()]);
 }
 
+/** Source paths for the 80 Jul-2026 location-expansion rules awaiting external verify. */
+export function getPendingLocationExpansionComRules(): readonly ShaleanComMigrationRule[] {
+  return LOCATION_HUB_EXPANSION_JUL_2026_SLUGS.flatMap((slug) => locationComRulesForSlug(slug));
+}
+
 export function resolveShaleanComDestinationPath(sourcePath: string): string {
   const norm = sourcePath.trim().replace(/\/+$/, "") || "/";
   const hit = getShaleanComMigrationRules().find((r) => r.sourcePath === norm);
@@ -135,16 +169,19 @@ export function absoluteShaleanCoZaUrl(pathname: string): string {
 
 /**
  * Apache/LiteSpeed RewriteRule lines for Plesk (exact one-to-one + path-preserve fallback).
- * Status marked {@link SHALEAN_COM_MIGRATION_STATUS} (live after HTTP verification).
+ * Header reflects {@link SHALEAN_COM_MIGRATION_STATUS} (candidate pending full external verify).
  */
 export function buildShaleanComHtaccessRules(): string {
   const hostCond = "RewriteCond %{HTTP_HOST} ^(www\\.)?shalean\\.com$ [NC]";
   const lines: string[] = [
     "# =============================================================================",
     "# shalean.com → https://shalean.co.za migration (Plesk / Apache / LiteSpeed)",
-    `# STATUS: ${SHALEAN_COM_MIGRATION_STATUS} — full map HTTP-verified 2026-07-22 (see docs/audits/seo/)`,
+    `# STATUS: ${SHALEAN_COM_MIGRATION_STATUS} — repository candidate (${SHALEAN_COM_REPO_CANDIDATE_EXPLICIT_RULE_COUNT} explicit rules)`,
+    `# PLESK HTTP-VERIFIED (2026-07-22): ${SHALEAN_COM_PLESK_HTTP_VERIFIED_EXPLICIT_RULE_COUNT} explicit rules previously applied`,
+    `# PENDING PLESK APPLY/VERIFY: ${SHALEAN_COM_LOCATION_EXPANSION_PENDING_RULE_COUNT} location-expansion rules (20 hubs × 4 patterns)`,
+    "# Path-preserving fallback included. Do not claim the full 273-rule map as LIVE_HTTP_VERIFIED.",
     "# Generated from apps/web/lib/seo/shaleanComMigrationMap.ts",
-    "# Apply on the shalean.com document root in Plesk, then verify with curl -sI.",
+    "# Apply on the shalean.com document root in Plesk only after dual approval, then verify with curl -sI.",
     "# =============================================================================",
     "RewriteEngine On",
     "",

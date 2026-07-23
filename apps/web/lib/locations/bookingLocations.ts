@@ -254,6 +254,7 @@ const BOOKING_LOCATION_NAMES = [
   "Rhodes",
   "Rondebosch",
   "Rondebosch East",
+  "Rosebank",
   "Salt River",
   "Scarborough",
   "Schotse Kloof",

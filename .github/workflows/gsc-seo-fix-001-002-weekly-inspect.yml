@@ -1,0 +1,87 @@
+name: gsc-seo-fix-001-002-weekly-inspect
+
+# Eight weekly inspect-only runs for SEO-FIX-001/002 (Wed 09:00 UTC), ending 2026-09-16.
+# Invokes Production cron only — never submits sitemap, never requests indexing,
+# never removals / property changes / Change of Address / unrelated URLs.
+#
+# Requires Production environment secret: CRON_SECRET
+# Requires Production deploy of /api/cron/gsc-seo-fix-001-002-validate
+
+on:
+  schedule:
+    # Wednesdays 09:00 UTC: 2026-07-29 … 2026-09-16 inclusive = 8 runs
+    - cron: "0 9 * * 3"
+  workflow_dispatch:
+    inputs:
+      confirm_scope:
+        description: "Type EXACTLY: SEO-FIX-001/002-GSC-ONLY"
+        required: true
+        type: string
+
+jobs:
+  inspect-only:
+    runs-on: ubuntu-latest
+    environment: Production
+    steps:
+      - name: Gate confirmation + window
+        env:
+          CONFIRM_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.confirm_scope || 'SEO-FIX-001/002-GSC-ONLY' }}
+        run: |
+          set -euo pipefail
+          if [ "${CONFIRM_INPUT}" != "SEO-FIX-001/002-GSC-ONLY" ]; then
+            echo "Refusing: confirm_scope must be SEO-FIX-001/002-GSC-ONLY"
+            exit 1
+          fi
+          TODAY="$(date -u +%F)"
+          if [ "$TODAY" \< "2026-07-29" ] || [ "$TODAY" \> "2026-09-16" ]; then
+            echo "Outside weekly inspect window (2026-07-29 .. 2026-09-16). Today=$TODAY — skipping."
+            echo "SKIP=1" >> "$GITHUB_ENV"
+          else
+            echo "SKIP=0" >> "$GITHUB_ENV"
+            echo "Within window: $TODAY"
+          fi
+
+      - name: Inspect-only via Production cron
+        if: ${{ env.SKIP == '0' }}
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CRON_SECRET:-}" ]; then
+            echo "CRON_SECRET missing in Production environment secrets"
+            exit 1
+          fi
+          mkdir -p apps/web/tmp
+          curl -sS -X POST "https://shalean.co.za/api/cron/gsc-seo-fix-001-002-validate" \
+            -H "Authorization: Bearer ${CRON_SECRET}" \
+            -H "Content-Type: application/json" \
+            -H "x-seo-fix-confirm: SEO-FIX-001/002-GSC-ONLY" \
+            -d '{"confirm":"SEO-FIX-001/002-GSC-ONLY","mode":"inspect-only"}' \
+            -o apps/web/tmp/gsc-seo-fix-001-002-weekly-inspect.json \
+            -w "\nHTTP %{http_code}\n"
+          if grep -E 'BEGIN PRIVATE KEY|GSC_PRIVATE_KEY=' apps/web/tmp/gsc-seo-fix-001-002-weekly-inspect.json; then
+            echo "Refusing to upload evidence that appears to contain secret material"
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json,sys
+          data=json.load(open("apps/web/tmp/gsc-seo-fix-001-002-weekly-inspect.json"))
+          assert data.get("mode") == "inspect-only"
+          assert data.get("secretsLogged") is False
+          sitemap=data.get("sitemap") or {}
+          assert sitemap.get("action") == "skip", sitemap
+          print("siteUrl", data.get("siteUrl"))
+          for row in data.get("inspections") or []:
+            print(row.get("inspectionUrl"), row.get("verdict"), row.get("coverageState"), row.get("lastCrawlTime"))
+          if data.get("errors"):
+            sys.exit(1)
+          PY
+
+      - name: Upload weekly evidence
+        if: ${{ always() && env.SKIP == '0' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: gsc-seo-fix-001-002-weekly-inspect-${{ github.run_id }}
+          path: apps/web/tmp/gsc-seo-fix-001-002-weekly-inspect.json
+          if-no-files-found: warn
+          retention-days: 400

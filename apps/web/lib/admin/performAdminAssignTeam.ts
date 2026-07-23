@@ -23,6 +23,7 @@ import {
   findTeamJobSlotConflict,
   formatTeamAssignmentSlotConflictError,
 } from "@/lib/admin/teamAssignmentSlotConflicts";
+import { isHm, normalizeTimeHm } from "@/lib/admin/validateAdminBookingSlot";
 import {
   countPlatformTeamJobsOnDate,
   fetchTeamCapacityUsageSlotsByTeam,
@@ -162,8 +163,9 @@ export async function performAdminAssignTeam(opts: AdminAssignTeamOptions): Prom
     return { ok: false, httpStatus: 400, error: "Booking date is required for team assignment." };
   }
 
-  const timeHm = String(b.time ?? "").trim();
-  if (!/^\d{2}:\d{2}$/.test(timeHm)) {
+  // Production rows often store `HH:MM:SS` (or unpadded `H:MM`); normalize like other admin paths.
+  const timeHm = normalizeTimeHm(String(b.time ?? ""));
+  if (!isHm(timeHm)) {
     return { ok: false, httpStatus: 400, error: "Booking time is required for team assignment." };
   }
 
