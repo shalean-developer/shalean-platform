@@ -191,7 +191,33 @@ async function enqueueNotificationDeliveryFailure(payload: {
  * `payment_confirmed` customer/admin/SMS/in-app uses Paystack `paymentReference` + event + channel (migration
  * `20260868_notification_idempotency_paystack_reference.sql`) so verify + webhook + retries cannot double-send.
  */
-export async function notifyBookingEvent(event: NotifyBookingEventInput): Promise<void> {
+export type NotifyBookingEventDeliveryResult = {
+  customerEmailSent: boolean;
+  dedupeSkipped: boolean;
+  failed: boolean;
+  error?: string;
+};
+
+function emptyNotifyDeliveryResult(
+  overrides?: Partial<NotifyBookingEventDeliveryResult>,
+): NotifyBookingEventDeliveryResult {
+  return {
+    customerEmailSent: false,
+    dedupeSkipped: false,
+    failed: false,
+    ...overrides,
+  };
+}
+
+/**
+ * Booking lifecycle notifications (customer / admin / SMS / in-app).
+ *
+ * Returns a structured delivery result. For `payment_confirmed`, `customerEmailSent` is true only when
+ * the customer email provider confirms acceptance (`sendBookingConfirmationEmail` → `sent: true`).
+ * Callers that ignore the return value (Paystack finalize) keep working unchanged.
+ */
+export async function notifyBookingEvent(event: NotifyBookingEventInput): Promise<NotifyBookingEventDeliveryResult> {
+
   try {
   const { supabase } = event;
 
@@ -206,6 +232,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
     let debugEmailClaimed: boolean | null = null;
     let debugSmsClaimed: boolean | null = null;
     let debugCustomerSmsOk: boolean | null = null;
+    let delivery: NotifyBookingEventDeliveryResult = emptyNotifyDeliveryResult();
     const { data: bookingHead } = await supabase
       .from("bookings")
       .select(
@@ -263,6 +290,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         message: "No customer email on payment_confirmed — confirmation email skipped",
         context: { bookingId: event.bookingId, stage: "payment_confirmed" },
       });
+      delivery = emptyNotifyDeliveryResult({ failed: true, error: "missing_customer_email" });
     }
     const assignmentType = head ? String(head.assignment_type ?? "").trim() || null : null;
     const fallbackReason = head ? String(head.fallback_reason ?? "").trim() || null : null;
@@ -345,6 +373,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             channel: "email",
             error: msg,
           });
+          cust = { sent: false, error: msg };
         }
         if (!cust.sent && cust.error) {
           await releaseNotificationIdempotencyClaim(supabase, {
@@ -376,6 +405,12 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
             channel: "email",
             event_type: "payment_confirmed",
           });
+          delivery = emptyNotifyDeliveryResult({ customerEmailSent: true });
+        } else {
+          delivery = emptyNotifyDeliveryResult({
+            failed: true,
+            error: cust.error ?? "customer_email_not_accepted",
+          });
         }
       } else {
         await logPipelineEmailTelemetry({
@@ -385,6 +420,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
           error: "dedupe_skip",
           bookingId: event.bookingId,
         });
+        delivery = emptyNotifyDeliveryResult({ dedupeSkipped: true });
       }
       notifyBookingDebug("payment_confirmed_email_result", {
         bookingId: event.bookingId,
@@ -592,8 +628,11 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       emailError: cust.error ?? null,
       smsClaimed: debugSmsClaimed,
       customerSmsOk: debugCustomerSmsOk,
+      customerEmailSent: delivery.customerEmailSent,
+      dedupeSkipped: delivery.dedupeSkipped,
+      failed: delivery.failed,
     });
-    return;
+    return delivery;
   }
 
   if (event.type === "assigned") {
@@ -601,7 +640,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       bookingId: event.bookingId,
       cleanerId: event.cleanerId,
     });
-    if (!assignedClaimed) return;
+    if (!assignedClaimed) return emptyNotifyDeliveryResult();
 
     await notifyCustomerCleanerAssigned(supabase, event.bookingId);
 
@@ -613,7 +652,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       .eq("id", event.bookingId)
       .maybeSingle();
 
-    if (!b || typeof b !== "object") return;
+    if (!b || typeof b !== "object") return emptyNotifyDeliveryResult();
 
     const row = b as Record<string, unknown>;
     const snap = row.booking_snapshot as BookingSnapshotV1 | null;
@@ -773,14 +812,14 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         });
       }
     }
-    return;
+    return emptyNotifyDeliveryResult();
   }
 
   if (event.type === "completed") {
     const completedClaimed = await tryClaimNotificationDedupe(supabase, "completed_sent", {
       bookingId: event.bookingId,
     });
-    if (!completedClaimed) return;
+    if (!completedClaimed) return emptyNotifyDeliveryResult();
 
     const { data: b } = await supabase
       .from("bookings")
@@ -789,7 +828,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       )
       .eq("id", event.bookingId)
       .maybeSingle();
-    if (!b || typeof b !== "object") return;
+    if (!b || typeof b !== "object") return emptyNotifyDeliveryResult();
     const row = b as Record<string, unknown>;
     const email = String(row.customer_email ?? "").trim();
     if (!email) {
@@ -861,7 +900,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         context: { bookingId: event.bookingId, type: "completed" },
       });
     });
-    return;
+    return emptyNotifyDeliveryResult();
   }
 
   if (event.type === "cancelled") {
@@ -869,7 +908,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       bookingId: event.bookingId,
       cancellationReason: event.cancellationReason ?? null,
     });
-    return;
+    return emptyNotifyDeliveryResult();
   }
 
   if (event.type === "rescheduled") {
@@ -905,17 +944,17 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         context: { bookingId: event.bookingId, type: "rescheduled" },
       });
     });
-    return;
+    return emptyNotifyDeliveryResult();
   }
 
   if (event.type === "sla_breach") {
-    if (!event.bookingIds.length) return;
+    if (!event.bookingIds.length) return emptyNotifyDeliveryResult();
     const freshIds: string[] = [];
     for (const id of event.bookingIds.slice(0, 50)) {
       const claimed = await tryClaimNotificationDedupe(supabase, "sla_breach_sent", { bookingId: id });
       if (claimed) freshIds.push(id);
     }
-    if (!freshIds.length) return;
+    if (!freshIds.length) return emptyNotifyDeliveryResult();
 
     const lines: string[] = [];
     for (const id of freshIds.slice(0, 40)) {
@@ -941,21 +980,21 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
         });
       },
     );
-    return;
+    return emptyNotifyDeliveryResult();
   }
 
   if (event.type === "reminder_2h") {
     const reminderClaimed = await tryClaimNotificationDedupe(supabase, "reminder_2h_sent", {
       bookingId: event.bookingId,
     });
-    if (!reminderClaimed) return;
+    if (!reminderClaimed) return emptyNotifyDeliveryResult();
 
     const { data: b } = await supabase
       .from("bookings")
       .select("id, customer_email, service, service_slug, date, time, location, suburb, booking_snapshot, cleaner_id")
       .eq("id", event.bookingId)
       .maybeSingle();
-    if (!b || typeof b !== "object") return;
+    if (!b || typeof b !== "object") return emptyNotifyDeliveryResult();
     const row = b as Record<string, unknown>;
     const email = String(row.customer_email ?? "").trim();
     if (!email && event.includeCustomerEmail) {
@@ -1037,5 +1076,7 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
       eventType: event.type,
       bookingId: "bookingId" in event ? (event as { bookingId?: string }).bookingId : undefined,
     });
+    return emptyNotifyDeliveryResult({ failed: true, error: msg });
   }
+  return emptyNotifyDeliveryResult();
 }

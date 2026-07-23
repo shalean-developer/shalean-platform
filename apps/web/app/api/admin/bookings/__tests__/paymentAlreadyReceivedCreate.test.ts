@@ -28,8 +28,22 @@ describe("admin booking create payment_already_received contract", () => {
     );
     expect(src).toContain('invoiceSync: "skip"');
     expect(src).toContain("syncPaidBookingSideEffects");
-    expect(src).toContain('type: "payment_confirmed"');
-    expect(src).toContain("payment_already_received_invoice_balance_nonzero");
+    expect(src).toContain("deliverPaymentAlreadyReceivedReceipt");
     expect(src).toContain("payment_already_received_invoice_sync_failed");
+    expect(src).toContain("payment_confirmation_receipt");
+    expect(src).toContain("receipt_email_sent: receiptEmailSent");
+  });
+
+  it("syncPaidBookingSideEffects never invents a zero Zoho balance", () => {
+    const src = fs.readFileSync(
+      path.resolve(__dirname, "../../../../../lib/booking/syncPaidBookingSideEffects.ts"),
+      "utf8",
+    );
+    expect(src).toContain("isAuthoritativeZohoInvoicePaid");
+    expect(src).toContain("zoho_payment_allocation_failed");
+    expect(src).toContain("zoho_invoice_read_failed");
+    expect(src).not.toContain("payRes.ok ? 0");
+    expect(src).not.toContain('reason: "payment_method_zoho"');
+    expect(src).toContain("missing_zoho_invoice_identifier");
   });
 });

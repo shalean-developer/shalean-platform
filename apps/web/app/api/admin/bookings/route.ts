@@ -1397,8 +1397,10 @@ export async function POST(request: Request) {
       ok: true,
       mode: "payment_already_received",
       message: settled.receipt_email_sent
-        ? "Booking created, payment recorded, paid invoice/receipt emailed"
-        : "Booking created and payment recorded (receipt email could not be sent)",
+        ? settled.paid_invoice_included
+          ? "Booking created, payment recorded, paid invoice emailed"
+          : "Booking created, payment recorded, payment confirmation receipt emailed"
+        : "Booking created and payment recorded (payment confirmation receipt could not be sent)",
       bookingId: newPaidBookingId,
       amount_paid_cents: settled.settlement.amount_cents,
       settlement: {
@@ -1410,6 +1412,9 @@ export async function POST(request: Request) {
       paid_confirmed: settled.paid_confirmed,
       zero_balance_confirmed: settled.zero_balance_confirmed,
       receipt_email_sent: settled.receipt_email_sent,
+      paid_invoice_included: settled.paid_invoice_included,
+      receipt_kind: settled.receipt_kind,
+      notification: settled.notification,
       ...(settled.receipt_email_skipped_reason
         ? { receipt_email_skipped_reason: settled.receipt_email_skipped_reason }
         : {}),

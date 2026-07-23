@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { deliverPaymentAlreadyReceivedReceipt } from "@/lib/admin/deliverPaymentAlreadyReceivedReceipt";
 import type { AdminMarkPaidMethod } from "@/lib/booking/adminMarkBookingPaid";
 import { adminMarkBookingPaidOperation } from "@/lib/booking/bookingOperations";
 import {
@@ -9,7 +10,6 @@ import {
   type SyncPaidBookingInvoiceResult,
 } from "@/lib/booking/syncPaidBookingSideEffects";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
-import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 
 export type SettleAdminBookingPaymentAlreadyReceivedResult =
   | {
@@ -25,7 +25,15 @@ export type SettleAdminBookingPaymentAlreadyReceivedResult =
       paid_confirmed: true;
       zero_balance_confirmed: boolean;
       receipt_email_sent: boolean;
+      paid_invoice_included: boolean;
+      receipt_kind: "paid_invoice" | "payment_confirmation_receipt";
       receipt_email_skipped_reason?: string;
+      notification: {
+        customerEmailSent: boolean;
+        dedupeSkipped: boolean;
+        failed: boolean;
+        error?: string;
+      };
     }
   | { ok: false; error: string; httpStatus: number; code?: string };
 
@@ -37,11 +45,11 @@ function zohoConfigured(): boolean {
  * After an admin "Payment already received" booking insert (no Paystack link):
  *   1. Record verified off-platform payment via {@link adminMarkBookingPaidOperation}
  *   2. Create/sync the Zoho invoice and allocate payment ({@link syncPaidBookingSideEffects})
- *   3. Confirm local paid status (+ zero outstanding balance when an invoice was synced)
- *   4. Only then email the paid invoice/receipt (`payment_confirmed`)
+ *      — for `payment_method=zoho`, requires a Zoho invoice id and authoritative paid+zero read
+ *   3. Confirm local paid status (+ zero outstanding balance when Zoho applies)
+ *   4. Only then email a payment confirmation receipt (and paid invoice PDF when attached)
  *
- * Never sends unpaid invoices or payment-link / payment-recovery reminders (those paths are
- * not entered: no `pending_payment` row, no payment link, no monthly finalize email).
+ * Never sends unpaid invoices or payment-link / payment-recovery reminders.
  */
 export async function settleAdminBookingPaymentAlreadyReceived(
   admin: SupabaseClient,
@@ -76,7 +84,17 @@ export async function settleAdminBookingPaymentAlreadyReceived(
     };
   }
 
-  if (settle.data.variant === "deposit_recorded") {
+  const settleData = settle.data;
+  if (!settleData) {
+    return {
+      ok: false,
+      error: "Unexpected mark-paid result.",
+      httpStatus: 500,
+      code: "payment_already_received_settle_missing_data",
+    };
+  }
+
+  if (settleData.variant === "deposit_recorded") {
     return {
       ok: false,
       error: "Payment already received requires full settlement, not a deposit.",
@@ -90,7 +108,7 @@ export async function settleAdminBookingPaymentAlreadyReceived(
   let preservedPaystackReference: string | null = null;
   let settledAmountCents = amountCents;
 
-  if (settle.data.variant === "full_skipped") {
+  if (settleData.variant === "full_skipped") {
     const { data: paidRow } = await admin
       .from("bookings")
       .select(
@@ -125,7 +143,7 @@ export async function settleAdminBookingPaymentAlreadyReceived(
         : null;
     settlementMarker = preservedPaystackReference ?? settlementMarker;
   } else {
-    const { settlement } = settle.data;
+    const { settlement } = settleData;
     settledAmountCents = settlement.amount_cents;
     paymentReferenceExternal = settlement.payment_reference_external;
     settlementMarker = settlement.paystack_reference;
@@ -177,7 +195,7 @@ export async function settleAdminBookingPaymentAlreadyReceived(
   let zeroBalanceConfirmed = false;
 
   if (invoiceSync.kind === "synced") {
-    zeroBalanceConfirmed = invoiceSync.balanceCents <= 0;
+    zeroBalanceConfirmed = invoiceSync.balanceCents === 0 && String(invoiceSync.status).toLowerCase() === "paid";
     if (!zeroBalanceConfirmed) {
       await logSystemEvent({
         level: "warn",
@@ -198,54 +216,58 @@ export async function settleAdminBookingPaymentAlreadyReceived(
       };
     }
   } else if (invoiceSync.kind === "failed") {
-    if (zohoConfigured() && method !== "zoho") {
+    // Zoho method always requires successful verification. Cash/EFT require it when Zoho is configured.
+    if (method === "zoho" || zohoConfigured()) {
       return {
         ok: false,
-        error: `Could not create or sync the paid invoice (${invoiceSync.error}). Receipt email was not sent.`,
+        error: `Could not create or verify the paid invoice (${invoiceSync.error}). Receipt email was not sent.`,
         httpStatus: 502,
         code: "payment_already_received_invoice_sync_failed",
       };
     }
-    // Zoho not required / external Zoho method: local paid confirmation is enough.
     zeroBalanceConfirmed = true;
   } else {
-    // skipped (no Zoho config, method=zoho, already linked, etc.)
-    if (invoiceSync.reason === "already_linked" && invoiceSync.zohoInvoiceId) {
-      zeroBalanceConfirmed = (invoiceSync.balanceCents ?? 0) <= 0;
-      if (!zeroBalanceConfirmed && zohoConfigured()) {
-        return {
-          ok: false,
-          error: "Linked invoice still shows an outstanding balance. Receipt email was not sent.",
-          httpStatus: 409,
-          code: "payment_already_received_invoice_balance_nonzero",
-        };
-      }
-    } else {
-      zeroBalanceConfirmed = true;
+    // skipped — only allowed when Zoho is not configured (and method is not zoho).
+    if (method === "zoho") {
+      return {
+        ok: false,
+        error: `Zoho invoice verification was skipped (${invoiceSync.reason}). Receipt email was not sent.`,
+        httpStatus: 502,
+        code: "payment_already_received_zoho_verification_skipped",
+      };
     }
+    if (invoiceSync.reason !== "no_zoho_config" && zohoConfigured()) {
+      return {
+        ok: false,
+        error: `Invoice sync skipped unexpectedly (${invoiceSync.reason}). Receipt email was not sent.`,
+        httpStatus: 502,
+        code: "payment_already_received_invoice_sync_skipped",
+      };
+    }
+    zeroBalanceConfirmed = true;
   }
 
-  let receiptEmailSent = false;
-  let receiptSkipReason: string | undefined;
+  const delivery = await deliverPaymentAlreadyReceivedReceipt(admin, {
+    bookingId,
+    customerEmail,
+    amountCents: settledAmountCents,
+    paymentReference: settlementMarker,
+    zohoInvoiceId: invoiceSync.kind === "synced" ? invoiceSync.zohoInvoiceId : confirmed.zoho_invoice_id,
+  });
 
-  try {
-    await notifyBookingEvent({
-      type: "payment_confirmed",
-      supabase: admin,
-      bookingId,
-      customerEmail,
-      amountCents: settledAmountCents,
-      paymentReference: settlementMarker,
-    });
-    receiptEmailSent = true;
-  } catch (err) {
-    receiptSkipReason = err instanceof Error ? err.message : String(err);
-    await reportOperationalIssue(
-      "error",
-      "admin/payment_already_received",
-      `receipt_email_failed: ${receiptSkipReason}`,
-      { bookingId },
-    );
+  const receiptEmailSent = delivery.customerEmailSent === true;
+  const receiptKind = delivery.paidInvoiceIncluded ? "paid_invoice" : "payment_confirmation_receipt";
+  let receiptSkipReason: string | undefined;
+  if (!receiptEmailSent) {
+    receiptSkipReason = delivery.error ?? (delivery.dedupeSkipped ? "dedupe_skipped" : "customer_email_not_accepted");
+    if (delivery.failed || !delivery.dedupeSkipped) {
+      await reportOperationalIssue(
+        "error",
+        "admin/payment_already_received",
+        `receipt_email_failed: ${receiptSkipReason}`,
+        { bookingId },
+      );
+    }
   }
 
   void logSystemEvent({
@@ -259,6 +281,9 @@ export async function settleAdminBookingPaymentAlreadyReceived(
       invoice_kind: invoiceSync.kind,
       zero_balance_confirmed: zeroBalanceConfirmed,
       receipt_email_sent: receiptEmailSent,
+      paid_invoice_included: delivery.paidInvoiceIncluded,
+      receipt_kind: receiptKind,
+      notification_dedupe_skipped: delivery.dedupeSkipped,
     },
   });
 
@@ -275,6 +300,14 @@ export async function settleAdminBookingPaymentAlreadyReceived(
     paid_confirmed: true,
     zero_balance_confirmed: zeroBalanceConfirmed,
     receipt_email_sent: receiptEmailSent,
+    paid_invoice_included: delivery.paidInvoiceIncluded,
+    receipt_kind: receiptKind,
     ...(receiptSkipReason ? { receipt_email_skipped_reason: receiptSkipReason } : {}),
+    notification: {
+      customerEmailSent: delivery.customerEmailSent,
+      dedupeSkipped: delivery.dedupeSkipped,
+      failed: delivery.failed,
+      ...(delivery.error ? { error: delivery.error } : {}),
+    },
   };
 }

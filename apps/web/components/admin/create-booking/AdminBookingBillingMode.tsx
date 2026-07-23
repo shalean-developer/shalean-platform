@@ -61,8 +61,9 @@ export function AdminBookingBillingMode({ value, profileBillingType, disabled = 
       </div>
       {value === "payment_already_received" ? (
         <p className="text-xs text-zinc-500 dark:text-zinc-400">
-          Creates the booking without a Paystack link, records the off-platform payment, syncs the paid
-          invoice, then emails the receipt. No unpaid invoice or payment reminder is sent.
+          Creates the booking without a Paystack link, records the off-platform payment, verifies the
+          paid invoice, then emails a payment confirmation receipt (and paid invoice PDF when available).
+          No unpaid invoice or payment reminder is sent.
         </p>
       ) : differsFromProfile ? (
         <p className="text-xs text-amber-800 dark:text-amber-200">
