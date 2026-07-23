@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 import path from "path";
 import { fileURLToPath } from "url";
 import { collectEnvironmentSafetyIssues } from "./lib/env/assertEnvironmentSafety";
+import { HTML_LIMITED_BOTS } from "./lib/seo/htmlLimitedBots";
 import { loadLocationSeoFeedbackJsonForNextEnv } from "./lib/seo/load-location-seo-feedback-env";
 import { programmaticBlogCleanupRedirects } from "./lib/seo/programmaticBlogCleanupRedirects";
 
@@ -69,6 +70,12 @@ const nextConfig: NextConfig = {
   transpilePackages: ["@shalean/utils", "@shalean/types", "@shalean/validation", "@shalean/api-client"],
   serverExternalPackages: ["googleapis", "google-auth-library"],
   poweredByHeader: false,
+  /**
+   * Force blocking `<head>` metadata for Googlebot + live SEO crawler (plus Next defaults).
+   * Without this, concurrent blog crawls intermittently stream canonical into `<body>`
+   * past the live SEO 180k scan window. See `lib/seo/htmlLimitedBots.ts`.
+   */
+  htmlLimitedBots: HTML_LIMITED_BOTS,
   typescript: {
     // Types are enforced by `npm run typecheck` (CI + local). Skipping the second full-program
     // pass inside `next build` avoids OOM on large trees when the default ~4GB heap is exhausted.
