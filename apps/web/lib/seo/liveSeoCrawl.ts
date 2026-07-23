@@ -4,6 +4,15 @@
 
 export const DEFAULT_AUDIT_BASE_URL = "https://shalean.co.za";
 
+/** User-Agent for live production SEO crawls (must match `htmlLimitedBots` extras). */
+export const LIVE_SEO_CRAWL_USER_AGENT = "ShaleanLiveSeoCrawl/1.0";
+
+/**
+ * How many leading HTML characters live SEO extractors inspect.
+ * Streamed metadata that lands after this window is reported as missing.
+ */
+export const LIVE_SEO_HTML_SCAN_CHARS = 180_000;
+
 export function resolveAuditBaseUrl(raw?: string | null): string {
   return raw?.trim().replace(/\/+$/, "") || DEFAULT_AUDIT_BASE_URL;
 }
@@ -43,7 +52,7 @@ export function extractSameOriginLinks(html: string, pageUrl: string): string[] 
 }
 
 export function extractGoogleSiteVerificationToken(html: string): string | null {
-  const head = html.slice(0, 180_000);
+  const head = html.slice(0, LIVE_SEO_HTML_SCAN_CHARS);
   const re = /<meta\b[^>]*\bname\s*=\s*["']google-site-verification["'][^>]*>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(head)) !== null) {
@@ -51,6 +60,24 @@ export function extractGoogleSiteVerificationToken(html: string): string | null 
     const c = /\bcontent\s*=\s*["']([^"']+)["']/i.exec(tag);
     const content = c?.[1]?.trim();
     if (content) return content;
+  }
+  return null;
+}
+
+/**
+ * First canonical href within the live SEO scan window (same logic as validate:live-seo).
+ * Returns null when the tag is absent from the window — including when it only appears
+ * later via Next.js streaming metadata in `<body>`.
+ */
+export function extractCanonicalHref(html: string): string | null {
+  const head = html.slice(0, LIVE_SEO_HTML_SCAN_CHARS);
+  const linkRe = /<link\b[^>]*\brel\s*=\s*["']canonical["'][^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(head)) !== null) {
+    const tag = m[0];
+    const hrefM = /\bhref\s*=\s*["']([^"']+)["']/i.exec(tag);
+    const href = hrefM?.[1]?.trim();
+    if (href) return href;
   }
   return null;
 }
@@ -66,7 +93,7 @@ export async function fetchWithNoRedirect(url: string, timeoutMs = 25_000): Prom
       redirect: "manual",
       signal: ac.signal,
       headers: {
-        "user-agent": "ShaleanLiveSeoCrawl/1.0",
+        "user-agent": LIVE_SEO_CRAWL_USER_AGENT,
         accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       },
     });
@@ -87,7 +114,7 @@ export async function probePathStatus(url: string, timeoutMs = 12_000): Promise<
       method: "HEAD",
       redirect: "manual",
       signal: ac.signal,
-      headers: { "user-agent": "ShaleanLiveSeoCrawl/1.0" },
+      headers: { "user-agent": LIVE_SEO_CRAWL_USER_AGENT },
     });
     if (head.status !== 405 && head.status !== 501) return head.status;
   } catch {
@@ -103,7 +130,7 @@ export async function probePathStatus(url: string, timeoutMs = 12_000): Promise<
       method: "GET",
       redirect: "manual",
       signal: ac2.signal,
-      headers: { "user-agent": "ShaleanLiveSeoCrawl/1.0" },
+      headers: { "user-agent": LIVE_SEO_CRAWL_USER_AGENT },
     });
     return get.status;
   } catch {
