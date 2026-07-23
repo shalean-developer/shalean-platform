@@ -25,7 +25,6 @@ import {
   getAirbnbHostGuidePost,
 } from "@/lib/blog/airbnbHostGuidePosts";
 import {
-  absoluteUrlFromCanonicalPath,
   buildDbBlogGraphJsonLd,
   collectFaqItemsFromContent,
 } from "@/lib/blog/db-blog-jsonld";
@@ -60,6 +59,11 @@ import { locationHubHrefFromPlaceName } from "@/lib/seo/location-hub-from-blog";
 import { resolveBlogFeaturedAlt, resolveBlogFeaturedSrc } from "@/lib/blogImageMap";
 import { clampMetaDescription, resolveBlogDbMetaDescription } from "@/lib/seo/metaDescription";
 import { generateBlogArticleTitle } from "@/lib/seo/metaTitle";
+import {
+  blogPostSelfCanonical,
+  buildStaticBlogMetadataFallback,
+  ensureBlogPostSelfCanonical,
+} from "@/lib/blog/seo/blogPostCanonicalMetadata";
 import { SITE_ORIGIN as SITE } from "@/lib/site/canonical";
 import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 import { getSupabaseServer } from "@/lib/supabase/server";
@@ -165,7 +169,9 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
   blogRouteTrace("generateMetadata_post_fetch", { slug, dbHit: Boolean(dbPost), id: dbPost?.id });
   if (dbPost) {
     try {
-      const canonicalAbsolute = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
+      // Always self-reference the rendered `/blog/{slug}` URL. Do not inherit homepage
+      // canonical from ROOT_METADATA, and do not let empty/root CMS canonical_url omit the tag.
+      const canonicalForPage = blogPostSelfCanonical(dbPost.slug);
       const titleBase = safeBlogMetaText(dbPost.metaTitle, safeBlogMetaText(dbPost.title, "Blog"));
       const description = resolveBlogDbMetaDescription({
         metaTitle: dbPost.metaTitle,
@@ -192,13 +198,13 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
       return {
         title: pageTitle,
         description,
-        alternates: { canonical: canonicalAbsolute },
+        alternates: { canonical: canonicalForPage },
         ...(keywords && keywords.length > 0 ? { keywords } : {}),
         robots: dbPost.indexedForSearch ? SEO_INDEX_FOLLOW : { index: false, follow: true },
         openGraph: {
           title: pageTitle,
           description,
-          url: canonicalAbsolute,
+          url: canonicalForPage,
           type: "article",
           ...(pubOk ? { publishedTime: dbPost.publishedAt } : {}),
           ...(modOk ? { modifiedTime: dbPost.updatedAt } : {}),
@@ -214,13 +220,15 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
     } catch (err) {
       if (isNextNavigationError(err)) throw err;
       console.error("❌ METADATA DB BRANCH:", { slug: dbPost.slug, err });
-      return null;
+      // Never return null here — null previously fell through to a no-canonical static
+      // fallback that could omit <link rel="canonical"> under root metadata merge.
+      return buildStaticBlogMetadataFallback(dbPost.slug);
     }
   }
 
   const hc = getHighConversionBlogPost(slug);
   if (hc) {
-    const url = `${SITE}/blog/${hc.slug}`;
+    const url = blogPostSelfCanonical(hc.slug);
     const heroPath = resolveBlogFeaturedSrc(hc.slug);
     const heroAbs = `${SITE}${heroPath}`;
     const heroAlt = resolveBlogFeaturedAlt(hc.slug);
@@ -257,8 +265,7 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
 
   const hostGuide = getAirbnbHostGuidePost(slug);
   if (hostGuide) {
-    const path = `/blog/${hostGuide.slug}`;
-    const url = `${SITE}${path}`;
+    const url = blogPostSelfCanonical(hostGuide.slug);
     const heroPath = resolveBlogFeaturedSrc(hostGuide.slug);
     const heroOg = `${SITE}${heroPath}`;
     const heroOgAlt = resolveBlogFeaturedAlt(hostGuide.slug);
@@ -311,8 +318,7 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
     return notFound();
   }
 
-  const path = `/blog/${prog.slug}`;
-  const url = `${SITE}${path}`;
+  const url = blogPostSelfCanonical(prog.slug);
   const heroPath = resolveBlogFeaturedSrc(prog.slug);
   const heroOg = `${SITE}${heroPath}`;
   const heroOgAlt = resolveBlogFeaturedAlt(prog.slug);
@@ -347,17 +353,6 @@ async function buildBlogMetadataInner(props: Props): Promise<Metadata | null> {
   };
 }
 
-/**
- * Last-resort metadata only — **plain strings**, no helpers, so this object never throws during evaluation
- * or when returned from `generateMetadata` after an unexpected error.
- */
-const STATIC_BLOG_METADATA_FALLBACK: Metadata = {
-  title: "Cleaning guides & tips | Shalean",
-  description:
-    "Shalean Cleaning Services — trusted home cleaning in Cape Town. Book vetted cleaners with instant pricing.",
-  robots: SEO_INDEX_FOLLOW,
-};
-
 async function buildBlogMetadata(props: Props): Promise<Metadata | null> {
   try {
     return await buildBlogMetadataInner(props);
@@ -368,14 +363,25 @@ async function buildBlogMetadata(props: Props): Promise<Metadata | null> {
   }
 }
 
+async function resolveSlugFromProps(props: Props): Promise<string> {
+  try {
+    const p = await props.params;
+    return typeof p.slug === "string" ? p.slug.trim() : "";
+  } catch {
+    return "";
+  }
+}
+
 export async function generateMetadata(props: Props): Promise<Metadata> {
+  const slug = await resolveSlugFromProps(props);
   try {
     const data = await buildBlogMetadata(props);
-    return data ?? STATIC_BLOG_METADATA_FALLBACK;
+    if (data) return ensureBlogPostSelfCanonical(data, slug);
+    return buildStaticBlogMetadataFallback(slug);
   } catch (err) {
     if (isNextNavigationError(err)) throw err;
     console.error("❌ METADATA CRASH (outer) — static fallback", err);
-    return STATIC_BLOG_METADATA_FALLBACK;
+    return buildStaticBlogMetadataFallback(slug);
   }
 }
 
@@ -620,7 +626,7 @@ async function BlogPostPageImpl(props: Props) {
       }
       const contentSafe = { ...dbPost.content, blocks: safeBlocks };
 
-      const pageUrl = absoluteUrlFromCanonicalPath(dbPost.canonicalPath);
+      const pageUrl = blogPostSelfCanonical(dbPost.slug);
       const heroSrcAbs = toAbsoluteAssetUrl(dbPost.featuredImageUrl);
 
       let faqItems: ReturnType<typeof collectFaqItemsFromContent> = [];
