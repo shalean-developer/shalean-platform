@@ -65,6 +65,13 @@ export function allowSelfApproveMoneyAction(): boolean {
   );
 }
 
+/** Why Approve/Reject are hidden — computed server-side; do not infer from can_review alone. */
+export type MoneyActionProposalReviewBlockReason =
+  | "self_proposal"
+  | "expired"
+  | "not_pending"
+  | null;
+
 /** Shared list DTO for Office Approvals (safe for client imports). */
 export type MoneyActionProposalListItem = {
   id: string;
@@ -92,4 +99,5 @@ export type MoneyActionProposalListItem = {
   reviewed_at: string | null;
   review_note: string | null;
   can_review: boolean;
+  review_block_reason: MoneyActionProposalReviewBlockReason;
 };
