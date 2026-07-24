@@ -75,3 +75,13 @@ AUDIT_DATE=2026-07-24 npm run audit:office-dashboard
 5. Paste script output + `/office` screenshot into this report to close acceptance.
 
 **Until steps 1–5 complete, deployment must not be marked successful.**
+
+---
+
+## Follow-up (same day): CI unblock
+
+`web-test` failed on required `npm run audit:production` due to PostCSS GHSA-r28c-9q8g-f849.
+Repo already pinned `overrides.postcss` to `8.5.12` (vulnerable). Bumped override to **`8.5.23`** (patched) — no Next downgrade.
+
+Local `npm run audit:production` → **found 0 vulnerabilities**.
+
