@@ -117,8 +117,7 @@ export async function listMoneyActionProposals(
       { count: "exact" },
     )
     .in("status", statuses)
-    .order("created_at", { ascending: false })
-    .range(offset, offset + limit - 1);
+    .order("created_at", { ascending: false });
 
   // Defense in depth: default Pending queue must not surface overdue rows even if
   // expire RPC briefly fails / migration not yet applied.
@@ -135,7 +134,7 @@ export async function listMoneyActionProposals(
     query = query.contains("payload", { cleaner_id: params.cleanerId });
   }
 
-  const { data, error, count } = await query;
+  const { data, error, count } = await query.range(offset, offset + limit - 1);
   if (error) return { ok: false, error: error.message };
 
   const rows = (data ?? []) as MoneyActionProposalRow[];
