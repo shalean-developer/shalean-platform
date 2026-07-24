@@ -3,7 +3,7 @@
 **Repository:** `shalean-developer/shalean-platform`  
 **Audit date:** 2026-07-24  
 **Default branch:** `main` (protected)  
-**Scope:** Read-only inventory. **No branches were deleted.**
+**Scope:** Inventory (read-only) + authorized SAFE TO DELETE execution (see §6).
 
 **Method notes:**
 - Remote refs after `git fetch --all --prune`
@@ -141,15 +141,15 @@ Periodic promote/reconcile is recommended (see §5).
 
 ### SAFE TO DELETE
 
-Fully merged and/or no unique commits remaining anywhere. **Not deleted in this audit.**
+Fully merged and/or no unique commits remaining anywhere. **Deleted 2026-07-24 after Engineering GO** (see §6).
 
-| Branch | Why safe |
-|--------|----------|
-| `beaulla/pr1-zoho-resend-staging-email-guard` | Fully merged into main + staging; closed PR #22 |
-| `codex-cleaner-audit` | Fully merged; ~60d stale; no PR; no unique commits |
-| `fix/p2-r1-cash-sot-integrity` | Merged PR #3; tip fully in main + staging |
-| `seo/fix-001-002-staging` | Tip fully in `staging`; unique-anywhere = 0; no open PR |
-| `cursor/pr98-staging-auth-verify-3f1b` | Unique-anywhere = 0 (docs ≡ staging; hotfixes ≡ main); no open PR |
+| Branch | Why safe | Status |
+|--------|----------|--------|
+| `beaulla/pr1-zoho-resend-staging-email-guard` | Fully merged into main + staging; closed PR #22 | **Deleted** |
+| `codex-cleaner-audit` | Fully merged; ~60d stale; no PR; no unique commits | **Deleted** |
+| `fix/p2-r1-cash-sot-integrity` | Merged PR #3; tip fully in main + staging | **Deleted** |
+| `seo/fix-001-002-staging` | Tip fully in `staging`; unique-anywhere = 0; no open PR | **Deleted** |
+| `cursor/pr98-staging-auth-verify-3f1b` | Unique-anywhere = 0 (docs ≡ staging; hotfixes ≡ main); no open PR | **Deleted** |
 
 ### REQUIRES REVIEW
 
@@ -173,18 +173,7 @@ Fully merged and/or no unique commits remaining anywhere. **Not deleted in this 
 
 ## 4. Commands that would delete SAFE TO DELETE branches
 
-**Do not run unless explicitly authorized.** Remote-only deletes (no local clones of these branches in this workspace):
-
-```bash
-# SAFE TO DELETE — remote branches only
-git push origin --delete beaulla/pr1-zoho-resend-staging-email-guard
-git push origin --delete codex-cleaner-audit
-git push origin --delete fix/p2-r1-cash-sot-integrity
-git push origin --delete seo/fix-001-002-staging
-git push origin --delete cursor/pr98-staging-auth-verify-3f1b
-```
-
-Batched form:
+**Authorized and executed 2026-07-24** (Engineering GO). Batched form used:
 
 ```bash
 git push origin --delete \
@@ -195,7 +184,7 @@ git push origin --delete \
   cursor/pr98-staging-auth-verify-3f1b
 ```
 
-After reviewing REQUIRES REVIEW (only if decided discard):
+REQUIRES REVIEW branches remain untouched (still need human land-vs-discard):
 
 ```bash
 # ONLY after human confirmation that content is not needed
@@ -207,7 +196,7 @@ After reviewing REQUIRES REVIEW (only if decided discard):
 
 ## 5. Repository cleanup recommendations
 
-1. **Authorize a first delete pass** for the five SAFE TO DELETE remotes above (no open PRs, no unique commits).
+1. ~~Authorize a first delete pass for the five SAFE TO DELETE remotes~~ — **Done 2026-07-24** (see §6).
 2. **Protect `staging`** (and optionally `development`) the same way as `main` — require PR reviews / block force-push — so UAT cannot be rewritten accidentally. Today only `main` is protected.
 3. **Reconcile `main` ↔ `staging` divergence** (13 behind / 12 ahead). Prefer an explicit promote PR (`staging` → `main` and/or cherry-pick missing main hotfixes onto staging) so Preview and Production do not drift.
 4. **Close or merge the four stale-ish open docs/chore PRs** (#4, #40, #56, #58) or mark them blocked with owners — they are 6–9 days behind and accumulate merge conflict risk.
@@ -218,16 +207,81 @@ After reviewing REQUIRES REVIEW (only if decided discard):
 
 ---
 
+## 6. Execution evidence — SAFE TO DELETE (2026-07-24)
+
+**Authorization:** Engineering GO — delete only the five SAFE TO DELETE remotes; no other scope.
+
+**Pre-delete controls (all passed):**
+- Tips unchanged vs audit: `210e6a49`, `0aad6d27`, `301a3713`, `6780b1c7`, `9281d033`
+- `unique_anywhere = 0` for all five (`git cherry` vs main ∩ staging)
+- None were open-PR heads; none were `main` / `staging` / `development`
+- REQUIRES REVIEW branches not in delete set
+
+**Command executed:**
+
+```bash
+git push origin --delete \
+  beaulla/pr1-zoho-resend-staging-email-guard \
+  codex-cleaner-audit \
+  fix/p2-r1-cash-sot-integrity \
+  seo/fix-001-002-staging \
+  cursor/pr98-staging-auth-verify-3f1b
+```
+
+**Result:** exit `0`. Remote reported deleted for all five:
+
+```
+ - [deleted]           beaulla/pr1-zoho-resend-staging-email-guard
+ - [deleted]           codex-cleaner-audit
+ - [deleted]           cursor/pr98-staging-auth-verify-3f1b
+ - [deleted]           fix/p2-r1-cash-sot-integrity
+ - [deleted]           seo/fix-001-002-staging
+```
+
+**Post-delete:** `git fetch --all --prune` then verify:
+
+| Check | Result |
+|-------|--------|
+| Five SAFE branches absent from `origin` | Pass |
+| All 11 KEEP branches present | Pass |
+| Open PR heads present (#4, #40, #56, #58, #88, #90, #92, #102, plus audit #103) | Pass |
+| REQUIRES REVIEW still present | Pass (`cursor/seo-fix-89-eo-preflight-42bc`, `fix/bk-001-…`) |
+| Remote branch count after prune | **14** (was 18 at audit + 1 audit PR branch `cursor/git-branch-audit-04d3` = 19 pre-delete; −5 = 14) |
+| Exceptions | **None** |
+
+**Out of scope (not performed):** merge/close/modify PRs; main↔staging reconcile; branch protection changes; Vercel config changes; delete of REQUIRES REVIEW branches.
+
+**Remaining remote branches (14):**
+
+```
+origin/chore/r1-2x-release-control-hardening
+origin/cursor/git-branch-audit-04d3
+origin/cursor/gsc-seo-fix-001-002-evidence-2c5d
+origin/cursor/gsc-seo-fix-001-002-validation-2caf
+origin/cursor/july-cleaner-earnings-reconcile-e29f
+origin/cursor/seo-fix-89-eo-preflight-42bc
+origin/development
+origin/docs/mkt-001a-prod-release-gate
+origin/docs/mkt-001g-staging-verification
+origin/docs/mkt-001h-staging-verification
+origin/docs/seo-p1a-option-b-baseline
+origin/fix/bk-001-confirm-cash-columns-before-payment
+origin/main
+origin/staging
+```
+
+---
+
 ## Appendix A — Quick counts
 
-| Metric | Count |
-|--------|------:|
-| Remote branches | 18 |
-| Local branches (this workspace) | 1 (`main`) |
-| Open PR head branches | 8 |
-| SAFE TO DELETE | 5 |
-| REQUIRES REVIEW | 2 |
-| KEEP (long-lived + open PR) | 11 |
+| Metric | At audit | After SAFE delete |
+|--------|--------:|------------------:|
+| Remote branches | 18 | **14** (includes audit branch `cursor/git-branch-audit-04d3`) |
+| Local branches (this workspace) | 1 | 1 (`cursor/git-branch-audit-04d3`) |
+| Open PR head branches | 8 | 9 (original 8 + audit #103) |
+| SAFE TO DELETE remaining | 5 | **0** |
+| REQUIRES REVIEW | 2 | 2 |
+| KEEP (long-lived + open PR from audit) | 11 | 11 |
 
 ## Appendix B — Audit commands used
 
