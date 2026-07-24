@@ -8,6 +8,8 @@ import {
   type MoneyActionProposalStatus,
 } from "@/lib/payout/moneyActionProposalTypes";
 import { parseEarningsAdjustPayload } from "@/lib/payout/moneyActionProposalPayload";
+import { computeMoneyActionProposalReviewability } from "@/lib/payout/moneyActionProposalReviewability";
+import { expireOverdueMoneyActionProposals } from "@/lib/payout/expireOverdueMoneyActionProposals";
 
 export type { MoneyActionProposalListItem };
 
@@ -59,16 +61,17 @@ function mapRow(
   const payload = parsed?.ok ? parsed.payload : null;
   const proposedTotal = payload ? payload.payout_cents + payload.bonus_cents : null;
   const originalTotal = payload?.original_total_cents ?? null;
-  const status = String(row.status).toLowerCase();
-  const canReview =
-    status === "pending" &&
-    String(row.proposed_by) !== viewerUserId &&
-    new Date(row.expires_at).getTime() > Date.now();
+  const reviewability = computeMoneyActionProposalReviewability({
+    status: String(row.status),
+    proposed_by: String(row.proposed_by),
+    expires_at: row.expires_at,
+    viewerUserId,
+  });
 
   return {
     id: row.id,
     action_type: String(row.action_type),
-    status: status as MoneyActionProposalStatus,
+    status: reviewability.status as MoneyActionProposalStatus,
     booking_id: row.booking_id,
     booking: {
       date: enrich.date,
@@ -91,7 +94,8 @@ function mapRow(
     reviewed_by: row.reviewed_by,
     reviewed_at: row.reviewed_at,
     review_note: row.review_note,
-    can_review: canReview,
+    can_review: reviewability.can_review,
+    review_block_reason: reviewability.review_block_reason,
   };
 }
 
@@ -99,6 +103,9 @@ export async function listMoneyActionProposals(
   admin: SupabaseClient,
   params: ListMoneyActionProposalsParams,
 ): Promise<{ ok: true; items: MoneyActionProposalListItem[]; total: number } | { ok: false; error: string }> {
+  // Persist overdue pending→expired before filtering so Pending queue stays accurate.
+  await expireOverdueMoneyActionProposals(admin);
+
   const limit = Math.min(100, Math.max(1, Math.round(params.limit ?? 25)));
   const offset = Math.max(0, Math.round(params.offset ?? 0));
   const statuses = parseStatusFilter(params.status);
@@ -196,6 +203,8 @@ export async function getMoneyActionProposalById(
   admin: SupabaseClient,
   params: { proposalId: string; viewerUserId: string },
 ): Promise<{ ok: true; item: MoneyActionProposalListItem } | { ok: false; error: string; code: string }> {
+  await expireOverdueMoneyActionProposals(admin);
+
   const { data, error } = await admin
     .from("admin_money_action_proposals")
     .select(
