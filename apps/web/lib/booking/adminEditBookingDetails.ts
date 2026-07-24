@@ -706,7 +706,7 @@ async function executeRepricingAdminEditBookingDetails(
   const { data: row, error: selErr } = await admin
     .from("bookings")
     .select(
-      "id, booking_snapshot, pricing_summary, total_price, total_paid_cents, amount_paid_cents, total_paid_zar, payment_status, payment_completed_at, rooms, bathrooms, extras, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, is_team_job, status, dispatch_status, payment_mismatch, updated_at, date, time, service, service_slug, pricing_version_id, created_at",
+      "id, booking_snapshot, pricing_summary, total_price, total_paid_cents, amount_paid_cents, total_paid_zar, payment_status, payment_completed_at, rooms, bathrooms, extras, cleaner_id, selected_cleaner_id, payout_owner_cleaner_id, is_team_job, status, completed_at, dispatch_status, payment_mismatch, updated_at, date, time, service, service_slug, pricing_version_id, created_at",
     )
     .eq("id", bookingId)
     .maybeSingle();
@@ -926,7 +926,16 @@ async function executeRepricingAdminEditBookingDetails(
   const hasCleaner = !!(
     String(b.cleaner_id ?? "").trim() || String((b as { selected_cleaner_id?: string | null }).selected_cleaner_id ?? "").trim()
   );
-  if (paid && st0 !== "pending_payment" && hasCleaner) {
+  const completedAtSet = Boolean(String((b as { completed_at?: string | null }).completed_at ?? "").trim());
+  const terminalLifecycle =
+    st0 === "completed" ||
+    st0 === "cancelled" ||
+    st0 === "failed" ||
+    st0 === "payment_expired" ||
+    completedAtSet;
+  // Paid + cleaner should surface as assigned for open jobs only. Never collapse a completed
+  // (or completed_at-stamped) visit back to assigned — that excludes it from office earnings.
+  if (paid && st0 !== "pending_payment" && hasCleaner && !terminalLifecycle) {
     patch.status = "assigned";
     patch.dispatch_status = "assigned";
   }

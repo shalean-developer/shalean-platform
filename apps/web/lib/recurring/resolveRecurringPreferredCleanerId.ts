@@ -61,13 +61,61 @@ export function recurringOccurrenceShouldDirectAssign(operationalStatus: string 
 /**
  * Maps a generated booking's current status to the patch mode used when propagating
  * plan edits onto existing occurrences.
+ *
+ * Terminal / lifecycle-active statuses must not collapse to `"pending"` — that path
+ * forces `status: "assigned"` via {@link recurringOccurrenceCleanerPatch} and historically
+ * left `completed_at` in place while excluding the visit from office earnings.
  */
 export function recurringPropagateCleanerOperationalStatus(bookingStatus: string | null | undefined):
   | "pending"
-  | "pending_payment" {
+  | "pending_payment"
+  | "preserve_lifecycle" {
   const st = String(bookingStatus ?? "").trim().toLowerCase();
   if (st === "pending_payment") return "pending_payment";
+  if (
+    st === "completed" ||
+    st === "cancelled" ||
+    st === "failed" ||
+    st === "payment_expired" ||
+    st === "in_progress"
+  ) {
+    return "preserve_lifecycle";
+  }
   return "pending";
+}
+
+/**
+ * Whether a generated occurrence must keep its lifecycle columns when propagating
+ * preferred-cleaner identity (completed visits with or without status drift).
+ */
+export function recurringOccurrenceMustPreserveLifecycle(row: {
+  status?: string | null;
+  completed_at?: string | null;
+}): boolean {
+  const st = String(row.status ?? "")
+    .trim()
+    .toLowerCase();
+  if (st === "completed" || st === "cancelled" || st === "failed" || st === "payment_expired" || st === "in_progress") {
+    return true;
+  }
+  return Boolean(String(row.completed_at ?? "").trim());
+}
+
+/**
+ * Preferred-cleaner identity only — never rewrites status / response / assigned_at.
+ * Used for completed (or completed_at-stamped) occurrences during plan propagate.
+ */
+export function recurringOccurrenceCleanerIdentityOnlyPatch(preferredCleanerId: string | null): {
+  selected_cleaner_id?: string;
+  assignment_type?: "user_selected";
+  cleaner_id?: string;
+} {
+  if (!preferredCleanerId) return {};
+  return {
+    selected_cleaner_id: preferredCleanerId,
+    cleaner_id: preferredCleanerId,
+    assignment_type: "user_selected",
+  };
 }
 
 /**
@@ -76,6 +124,7 @@ export function recurringPropagateCleanerOperationalStatus(bookingStatus: string
  *
  * - `pending_payment` (per-booking Paystack): records customer intent via
  *   `selected_cleaner_id`; `cleaner_id` stays null until post-payment dispatch.
+ * - `preserve_lifecycle`: identity only (no status / response rewrite).
  * - All other open statuses (monthly invoice, repair, propagate): direct-assign for
  *   continuity — including `pending_assignment` rows stuck by ack-timeout / propagate.
  */
@@ -100,6 +149,10 @@ export function recurringOccurrenceCleanerPatch(
       assignment_type: "user_selected" as const,
       cleaner_id: null,
     };
+  }
+
+  if (st === "preserve_lifecycle") {
+    return recurringOccurrenceCleanerIdentityOnlyPatch(preferredCleanerId);
   }
 
   if (recurringOccurrenceShouldDirectAssign(st)) {

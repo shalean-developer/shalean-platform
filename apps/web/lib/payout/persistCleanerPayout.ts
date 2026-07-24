@@ -18,6 +18,7 @@ import {
 import { computeBookingEarnings, type ComputeBookingEarningsOutput } from "@/lib/payout/computeBookingEarnings";
 import { sumEligibleLineItemsSubtotalCents } from "@/lib/payout/computeEarningsFromLineItems";
 import { persistBookingCleanerEarningsSnapshot } from "@/lib/payout/persistBookingCleanerEarningsSnapshot";
+import { healBookingCleanerEarningsSnapshotOwnershipIfNeeded } from "@/lib/payout/healBookingCleanerEarningsSnapshotOwnership";
 import { computeCleanerEarningsForBooking } from "@/lib/payout/computeCleanerEarningsForBooking";
 import {
   buildTeamJobMemberFixedPerCleanerPayoutRows,
@@ -850,6 +851,11 @@ async function persistCleanerPayoutIfUnsetCore(
           ensureLedger: true,
         });
       }
+      await healBookingCleanerEarningsSnapshotOwnershipIfNeeded({
+        admin,
+        bookingId,
+        expectedCleanerId,
+      });
     }
     const skipReason = isTeamJob
       ? "display_earnings_already_set_team"
