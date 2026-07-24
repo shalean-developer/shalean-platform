@@ -201,3 +201,51 @@ Exactly what is missing to proceed:
 2. A logged-in production admin browser session for `https://shalean.co.za/office`.
 
 No unrelated code changes were made. No secrets were exposed.
+
+---
+
+## Live access recheck (2026-07-24 ~20:55 UTC) — browser claim vs agent Chrome
+
+User reported that the agent browser was signed in and `/office` was loaded. Rechecked the **agent-controlled Chrome** session (CDP + window title) without capturing customer screenshots and without printing cookie/credential values.
+
+### Agent Chrome observation
+
+| Check | Result |
+|-------|--------|
+| Chrome user-data-dir | `/tmp/chrome-agent-profile` (only Chrome instance with CDP) |
+| Window title | `Sign in — Shalean - Google Chrome` |
+| Active URL path | `/login` (redirect target `/office`) — **not** `/office` |
+| Auth cookie **names** present (`sb-*` / auth) | **0** |
+| Analytics cookies only (`_ga`, `_gcl_au`, …) | Present (not a session) |
+| Local Storage auth/supabase key names | **None** |
+| Alternate Chrome profile session | **None** |
+| Continuous login watcher (`ok=True`) | Never fired |
+
+Conclusion: the agent browser is **not** authenticated. Live widget reconciliation cannot start from this session.
+
+### Database access (unchanged)
+
+| Requirement | Status |
+|-------------|--------|
+| `apps/web/.env.local` | **MISSING** |
+| `NEXT_PUBLIC_SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` | **MISSING** |
+| Cloud environment secrets | **None** (`environment: null`) |
+| `npm run audit:office-dashboard` | Still exits 1 (missing env) |
+
+### Privacy / secrets
+
+- No credentials printed.
+- No cookie values printed or committed.
+- No `/office` screenshots retained (page never loaded in agent Chrome).
+- No customer/PII fields captured.
+
+### Decision after this recheck
+
+# BLOCKED
+
+Still required for PASS:
+
+1. Sign in **inside the agent Computer Chrome** until the window title/path is `/office` (or inject a real admin session into that profile), **and**
+2. Provide production service-role env for `npm run audit:office-dashboard` (today + `2026-07-24`).
+
+Only then reconcile every `/office` widget (including Refresh) to audit output and flip this document to **PASS** if metrics match.
