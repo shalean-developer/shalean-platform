@@ -153,3 +153,51 @@ AUDIT_DATE=2026-07-24 npm run audit:office-dashboard | tee /tmp/office-audit-202
 Then reconcile every `/office` widget to those outputs (including Refresh), attach screenshots, and update this document to **PASS** only if all material metrics match.
 
 **Do not describe this release as fully successful until that live reconciliation is complete.**
+
+---
+
+## Live access recheck (2026-07-24 ~20:36 UTC)
+
+Authorized to complete remaining verification only. Rechecked required access **without** printing secret values.
+
+### Database access
+
+| Requirement | Status |
+|-------------|--------|
+| Process env `NEXT_PUBLIC_SUPABASE_URL` | **MISSING** |
+| Process env `SUPABASE_URL` | **MISSING** |
+| Process env `SUPABASE_SERVICE_ROLE_KEY` | **MISSING** |
+| Process env `SUPABASE_SERVICE_KEY` | **MISSING** |
+| `apps/web/.env.local` | **MISSING** |
+| Vercel CLI auth (to pull env) | **MISSING** |
+
+```text
+npm run audit:office-dashboard
+→ Missing NEXT_PUBLIC_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY
+```
+
+### Admin browser session
+
+| Requirement | Status |
+|-------------|--------|
+| `GET https://shalean.co.za/office` | **307** → `/login?redirect=%2Foffice` |
+| Chrome cookies for `shalean` / `supabase` hosts | **0** matching cookies |
+| Authenticated production admin session | **UNAVAILABLE** |
+
+### Production deploy (unchanged)
+
+| Field | Value |
+|-------|-------|
+| Production deployment SHA | `ccc60f1cf0646cf1799f09e84f4a81acca07ee3e` |
+| Matches merge SHA | **YES** |
+
+### Decision after recheck
+
+# BLOCKED
+
+Exactly what is missing to proceed:
+
+1. Production `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` available to the agent (e.g. via `apps/web/.env.local` or injected env).
+2. A logged-in production admin browser session for `https://shalean.co.za/office`.
+
+No unrelated code changes were made. No secrets were exposed.
