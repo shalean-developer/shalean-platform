@@ -56,6 +56,7 @@
     "recalculate:cleaner-earnings-v3": "tsx --env-file=.env.local --conditions=react-server scripts/recalculateAllCleanerEarningsV3.ts",
     "repair:paired-roster-earnings": "tsx --env-file=.env.local --conditions=react-server scripts/repairPairedRosterEarnings.ts",
     "ops:smoke": "node scripts/ops-smoke-checklist.mjs",
+    "audit:office-dashboard": "tsx --env-file=.env.local scripts/auditOfficeDashboardAccuracy.mjs",
     "simulate:dispatch": "tsx scripts/simulate-dispatch.ts",
     "process-favicons": "node scripts/process-favicons-transparent.mjs",
     "generate-favicons": "node scripts/generate-favicons-from-logo.mjs",

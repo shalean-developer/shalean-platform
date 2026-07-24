@@ -1,5 +1,5 @@
 export const ADMIN_DASHBOARD_REVENUE_SCOPE_LABEL =
-  "Booking payments only; monthly invoice collections excluded.";
+  "Payments received by payment_completed_at (JHB day). Booking payments only; monthly invoice collections excluded. Visit-day paid value is separate on the schedule panel.";
 
 export const ADMIN_DASHBOARD_CONVERSION_SOURCE_LABEL =
   "Conversion uses booking_events plus selected user_events over the last 30 days.";

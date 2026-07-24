@@ -9,23 +9,39 @@ export type OfficeScheduleBookingRow = {
 };
 
 export type OfficeTodayScheduleStats = {
+  /**
+   * Operational bookings for the day — excludes cancelled / failed / payment_expired.
+   * Segments (completed + inProgress + upcoming + unassigned) sum to this total.
+   */
   total: number;
+  /** All rows returned for the day, including terminal cancelled/failed/expired. */
+  rawTotal: number;
   completed: number;
   inProgress: number;
   upcoming: number;
   unassigned: number;
+  /** cancelled + failed + payment_expired */
+  cancelled: number;
 };
 
 export function normBookingStatus(status: string | null | undefined): string {
   return String(status ?? "").trim().toLowerCase();
 }
 
+/**
+ * Confirmed assignment for schedule / Needs Action alignment.
+ * `selected_cleaner_id` alone is a preference, not a confirmed cleaner assignment.
+ */
 export function bookingHasAssignment(row: OfficeScheduleBookingRow): boolean {
   if (String(row.cleaner_id ?? "").trim()) return true;
-  if (String(row.selected_cleaner_id ?? "").trim()) return true;
   if (String(row.team_id ?? "").trim()) return true;
   if ((row.booking_cleaners ?? []).length > 0) return true;
   return false;
+}
+
+export function bookingHasPreferredCleanerOnly(row: OfficeScheduleBookingRow): boolean {
+  if (bookingHasAssignment(row)) return false;
+  return Boolean(String(row.selected_cleaner_id ?? "").trim());
 }
 
 export function computeOfficeTodayScheduleStats(bookings: OfficeScheduleBookingRow[]): OfficeTodayScheduleStats {
@@ -33,6 +49,7 @@ export function computeOfficeTodayScheduleStats(bookings: OfficeScheduleBookingR
   let inProgress = 0;
   let upcoming = 0;
   let unassigned = 0;
+  let cancelled = 0;
 
   for (const b of bookings) {
     const st = normBookingStatus(b.status);
@@ -41,6 +58,7 @@ export function computeOfficeTodayScheduleStats(bookings: OfficeScheduleBookingR
       continue;
     }
     if (st === "cancelled" || st === "failed" || st === "payment_expired") {
+      cancelled += 1;
       continue;
     }
     if (st === "in_progress" || st === "en_route") {
@@ -54,12 +72,16 @@ export function computeOfficeTodayScheduleStats(bookings: OfficeScheduleBookingR
     }
   }
 
+  const total = completed + inProgress + upcoming + unassigned;
+
   return {
-    total: bookings.length,
+    total,
+    rawTotal: bookings.length,
     completed,
     inProgress,
     upcoming,
     unassigned,
+    cancelled,
   };
 }
 
@@ -70,7 +92,11 @@ export function officeScheduleStatusPresentation(row: OfficeScheduleBookingRow):
   const st = normBookingStatus(row.status);
   if (st === "completed") return { label: "Done", tone: "completed" };
   if (st === "in_progress" || st === "en_route") return { label: "In progress", tone: "in_progress" };
-  if (!bookingHasAssignment(row) && st !== "cancelled" && st !== "failed") {
+  if (st === "cancelled" || st === "failed" || st === "payment_expired") {
+    return { label: st.replace(/_/g, " "), tone: "neutral" };
+  }
+  if (!bookingHasAssignment(row)) {
+    if (bookingHasPreferredCleanerOnly(row)) return { label: "Preferred", tone: "unassigned" };
     return { label: "Unassigned", tone: "unassigned" };
   }
   if (st === "assigned" || st === "confirmed") return { label: "Assigned", tone: "assigned" };

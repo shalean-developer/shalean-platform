@@ -42,6 +42,7 @@ type DashboardStats = {
   paidBookingsMonth?: number;
   totalBookingsWindow?: number;
   avgBookingValueZar?: number;
+  revenueScope?: string;
   notificationsToday?: {
     available?: boolean;
     email: { sent: number; failed: number };
@@ -332,13 +333,14 @@ export default function OfficeDashboardPage() {
 
   const todayYmd = johannesburgTodayYmd();
   const isViewingToday = selectedYmd === todayYmd;
-  const { data: scheduleData } = useAdminData<OfficeScheduleDayResponse>(
+  const { data: scheduleData, refetch: refetchSchedule } = useAdminData<OfficeScheduleDayResponse>(
     "/api/admin/schedule/day",
     { params: { date: selectedYmd } },
   );
 
   const todayBookings = scheduleData?.bookings ?? [];
   const todayStats = scheduleData?.summary ?? computeOfficeTodayScheduleStats(todayBookings);
+  const visitFinance = scheduleData?.finance;
 
   const cleanerStats = useMemo(
     () =>
@@ -434,9 +436,9 @@ export default function OfficeDashboardPage() {
   ];
 
   const cashSegments: BreakdownSegment[] = [
-    { key: "paid", label: "Collected today", value: revenueToday, color: "bg-emerald-500", legendColor: "bg-emerald-500" },
-    { key: "pending", label: "Pending", value: pendingZar, color: "bg-sky-400", legendColor: "bg-sky-400" },
-    { key: "overdue", label: "Overdue", value: overdueZar, color: "bg-amber-500", legendColor: "bg-amber-500" },
+    { key: "paid", label: "Payments received today", value: revenueToday, color: "bg-emerald-500", legendColor: "bg-emerald-500" },
+    { key: "pending", label: "Pending bookings", value: pendingZar, color: "bg-sky-400", legendColor: "bg-sky-400" },
+    { key: "overdue", label: "Overdue invoices", value: overdueZar, color: "bg-amber-500", legendColor: "bg-amber-500" },
   ];
   const cashTotal = revenueToday + pendingZar + overdueZar;
 
@@ -528,7 +530,7 @@ export default function OfficeDashboardPage() {
         key: "overdue",
         label: `${zar(overdueZar)} overdue`,
         tone: "critical",
-        href: "/office/payouts",
+        href: "/office/invoices",
       });
     }
 
@@ -597,6 +599,7 @@ export default function OfficeDashboardPage() {
               setLoading(true);
               setLastRefresh(new Date());
               void refetchOps();
+              void refetchSchedule();
             }}
             className="flex items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-50"
           >
@@ -616,13 +619,26 @@ export default function OfficeDashboardPage() {
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{bookingsCountLabel}</p>
               <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{todayStats.total}</p>
+              {todayStats.cancelled > 0 ? (
+                <p className="mt-0.5 text-[11px] text-slate-400">{todayStats.cancelled} cancelled / expired excluded</p>
+              ) : null}
             </div>
             <div className="text-right">
-              <p className="text-xs text-slate-400">Revenue collected</p>
+              <p className="text-xs text-slate-400">Payments received today</p>
               <p className="text-lg font-bold tabular-nums text-emerald-700">
                 {stats != null ? zar(revenueToday) : loading ? "…" : "—"}
               </p>
-              <p className="text-[11px] text-slate-400">{stats?.paidBookingsToday ?? 0} paid bookings</p>
+              <p className="text-[11px] text-slate-400">
+                {stats?.paidBookingsToday ?? 0} paid by payment time
+              </p>
+              {visitFinance != null ? (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  Visit paid value {zar(visitFinance.paidValueZar)}
+                  {visitFinance.unpaidCompletedCount > 0
+                    ? ` · ${visitFinance.unpaidCompletedCount} completed unpaid`
+                    : ""}
+                </p>
+              ) : null}
             </div>
           </div>
           <HorizontalBreakdownBar segments={scheduleSegments} total={todayStats.total} />
@@ -730,9 +746,9 @@ export default function OfficeDashboardPage() {
         <ZohoPanel title="Cleaner capacity" href="/office/cleaners" linkLabel="Manage cleaners">
           <div className="mb-4 flex items-end justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Workforce today</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Active workforce</p>
               <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{cleanerStats.total}</p>
-              <p className="text-xs text-slate-500">total cleaners on roster</p>
+              <p className="text-xs text-slate-500">active cleaners on roster</p>
             </div>
             <div className="rounded-lg bg-emerald-50 px-3 py-2 text-right">
               <p className="text-xs text-emerald-700">Available now</p>
@@ -742,12 +758,15 @@ export default function OfficeDashboardPage() {
           <HorizontalBreakdownBar segments={cleanerSegments} total={cleanerStats.total} />
         </ZohoPanel>
 
-        <ZohoPanel title="Revenue & cash" href="/office/payouts" linkLabel="View payments">
+        <ZohoPanel title="Revenue & receivables" href="/office/payment-reconciliation" linkLabel="Reconcile payments">
           <div className="mb-4 flex items-end justify-between">
             <div>
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Cash position</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Receivables exposure</p>
               <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">
                 {stats != null ? zar(cashTotal) : loading ? "…" : "—"}
+              </p>
+              <p className="mt-0.5 text-[11px] text-slate-400">
+                Payments received today + pending bookings + overdue invoices (not bank cash)
               </p>
             </div>
             {overdueZar > 0 ? (
@@ -805,9 +824,9 @@ export default function OfficeDashboardPage() {
           {
             label: "Pending payments",
             value: stats != null ? zar(pendingZar) : loading ? "…" : "—",
-            sub: `${paymentsSnapshot?.pendingCount ?? 0} invoices`,
+            sub: `${paymentsSnapshot?.pendingCount ?? 0} awaiting payment`,
             icon: Clock,
-            href: "/office/payouts",
+            href: "/office/bookings",
           },
           {
             label: "System health",
