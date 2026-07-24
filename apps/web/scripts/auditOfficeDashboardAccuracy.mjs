@@ -257,13 +257,33 @@ console.log("All cleaners rows:", allCleaners, "| is_active=false:", inactiveCle
 section("8. NEEDS ACTION");
 const OPS_SELECT =
   "id,status,date,time,cleaner_id,team_id,dispatch_status,became_pending_at,created_at,total_paid_zar,amount_paid_cents,is_recurring_generated,is_monthly_billing_booking,billing_type,monthly_invoice_id,recurring_id,payment_status";
-const { data: openBookings } = await admin
-  .from("bookings")
-  .select(OPS_SELECT)
-  .not("status", "in", "(completed,cancelled,failed)")
-  .limit(3500);
-const ops = computeOpsSnapshotFromRows(openBookings ?? [], now.getTime());
-console.log("Open bookings scanned:", openBookings?.length ?? 0, "(limit 3500)");
+const openBookings = [];
+let opsFrom = 0;
+const OPS_PAGE = 1000;
+let opsTruncated = false;
+for (;;) {
+  const { data, error } = await admin
+    .from("bookings")
+    .select(OPS_SELECT)
+    .not("status", "in", "(completed,cancelled,failed,payment_expired)")
+    .order("created_at", { ascending: true })
+    .order("id", { ascending: true })
+    .range(opsFrom, opsFrom + OPS_PAGE - 1);
+  if (error) {
+    console.error("Ops open bookings failed:", error.message);
+    break;
+  }
+  const chunk = data ?? [];
+  openBookings.push(...chunk);
+  if (chunk.length < OPS_PAGE) break;
+  opsFrom += OPS_PAGE;
+  if (opsFrom >= 50_000) {
+    opsTruncated = true;
+    break;
+  }
+}
+const ops = computeOpsSnapshotFromRows(openBookings, now.getTime());
+console.log("Open bookings scanned:", openBookings.length, opsTruncated ? "(TRUNCATED)" : "(complete)");
 console.log(ops);
 
 section("10. CROSS-MODULE CHECK");
@@ -302,11 +322,11 @@ if ((paymentTxToday?.length ?? 0) > 0 && Math.abs(Math.round(txSuccessCents / 10
     message: `payment_transactions success ${money(txSuccessCents / 100)} != booking revenueToday ${money(revenueSummary.revenueTodayZar)}`,
   });
 }
-if ((openBookings?.length ?? 0) >= 3500) {
+if (opsTruncated) {
   findings.push({
     severity: "High",
-    code: "OPS_SNAPSHOT_LIMIT",
-    message: "ops-snapshot hit 3500 open-booking limit — Needs Action may undercount",
+    code: "OPS_SNAPSHOT_TRUNCATED",
+    message: `ops open-booking scan hit safety ceiling (${openBookings.length} rows) — Needs Action may undercount`,
   });
 }
 

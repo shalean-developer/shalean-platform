@@ -6,7 +6,11 @@
  * (service day) so operators can reconcile completed visits vs collected cash.
  */
 
-import { adminDashboardRevenueCents, isAdminDashboardRevenueEligible } from "@/lib/admin/dashboardRevenue";
+import {
+  adminDashboardRevenueCents,
+  isAdminDashboardRevenueEligible,
+  type AdminDashboardRevenueRow,
+} from "@/lib/admin/dashboardRevenue";
 
 export const OFFICE_VISIT_DAY_FINANCE_SCOPE =
   "Visit-date booking paid value (Africa/Johannesburg calendar day). Uses booking payment fields; monthly invoice child rows are reported separately and excluded from paid visit totals to avoid double-counting invoice collections.";
@@ -14,11 +18,11 @@ export const OFFICE_VISIT_DAY_FINANCE_SCOPE =
 export type OfficeVisitDayFinanceRow = {
   id: string;
   status: string | null;
-  payment_status: string | null;
-  payment_completed_at: string | null;
+  payment_status?: string | null;
+  payment_completed_at?: string | null;
   payment_method?: string | null;
-  total_paid_zar: number | string | null;
-  amount_paid_cents: number | string | null;
+  total_paid_zar?: number | string | null;
+  amount_paid_cents?: number | string | null;
   total_price?: number | string | null;
   refunded_at?: string | null;
   refund_status?: string | null;
@@ -64,10 +68,26 @@ function isMonthlyChild(row: OfficeVisitDayFinanceRow): boolean {
   return MONTHLY_CHILD_BILLING_TYPES.has(norm(row.billing_type));
 }
 
+function toRevenueRow(row: OfficeVisitDayFinanceRow): AdminDashboardRevenueRow {
+  return {
+    id: row.id,
+    status: row.status,
+    payment_status: row.payment_status ?? null,
+    payment_completed_at: row.payment_completed_at ?? null,
+    total_paid_zar: row.total_paid_zar ?? null,
+    amount_paid_cents: row.amount_paid_cents ?? null,
+    refunded_at: row.refunded_at ?? null,
+    refund_status: row.refund_status ?? null,
+    billing_type: row.billing_type ?? null,
+    is_monthly_billing_booking: row.is_monthly_billing_booking ?? null,
+    monthly_invoice_id: row.monthly_invoice_id ?? null,
+  };
+}
+
 function quotedZar(row: OfficeVisitDayFinanceRow): number {
   const price = Number(row.total_price);
   if (Number.isFinite(price) && price > 0) return Math.round(price);
-  const cents = adminDashboardRevenueCents(row);
+  const cents = adminDashboardRevenueCents(toRevenueRow(row));
   return cents > 0 ? Math.round(cents / 100) : 0;
 }
 
@@ -94,8 +114,9 @@ export function computeOfficeVisitDayFinance(rows: OfficeVisitDayFinanceRow[]): 
     quotedTotalZar += quotedZar(row);
 
     const monthly = isMonthlyChild(row);
-    const eligible = isAdminDashboardRevenueEligible(row);
-    const cents = adminDashboardRevenueCents(row);
+    const revenueRow = toRevenueRow(row);
+    const eligible = isAdminDashboardRevenueEligible(revenueRow);
+    const cents = adminDashboardRevenueCents(revenueRow);
 
     if (monthly) {
       monthlyChildCount += 1;

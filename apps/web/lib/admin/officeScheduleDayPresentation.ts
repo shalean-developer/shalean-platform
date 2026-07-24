@@ -55,6 +55,8 @@ export type OfficeScheduleDayResponse = {
   cleaners: OfficeScheduleDayCleaner[];
   summary: OfficeTodayScheduleStats;
   finance?: import("@/lib/admin/dashboardVisitDayFinance").OfficeVisitDayFinance;
+  truncated?: boolean;
+  scannedBookings?: number;
 };
 
 const STATUS_TONE_CLS: Record<string, string> = {

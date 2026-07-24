@@ -338,7 +338,7 @@ export default function OfficeDashboardPage() {
     { params: { date: selectedYmd } },
   );
 
-  const todayBookings = scheduleData?.bookings ?? [];
+  const todayBookings = useMemo(() => scheduleData?.bookings ?? [], [scheduleData?.bookings]);
   const todayStats = scheduleData?.summary ?? computeOfficeTodayScheduleStats(todayBookings);
   const visitFinance = scheduleData?.finance;
 
