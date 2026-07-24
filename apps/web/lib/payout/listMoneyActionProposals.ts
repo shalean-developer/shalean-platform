@@ -120,6 +120,12 @@ export async function listMoneyActionProposals(
     .order("created_at", { ascending: false })
     .range(offset, offset + limit - 1);
 
+  // Defense in depth: default Pending queue must not surface overdue rows even if
+  // expire RPC briefly fails / migration not yet applied.
+  if (statuses.length === 1 && statuses[0] === "pending") {
+    query = query.gt("expires_at", new Date().toISOString());
+  }
+
   if (params.actionType) query = query.eq("action_type", params.actionType);
   if (params.bookingId) query = query.eq("booking_id", params.bookingId);
   if (params.proposedBy) query = query.eq("proposed_by", params.proposedBy);
