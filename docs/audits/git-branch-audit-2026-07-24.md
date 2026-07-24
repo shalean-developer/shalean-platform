@@ -201,7 +201,7 @@ REQUIRES REVIEW branches remain untouched (still need human land-vs-discard):
 3. **Reconcile `main` ↔ `staging` divergence** (13 behind / 12 ahead). Prefer an explicit promote PR (`staging` → `main` and/or cherry-pick missing main hotfixes onto staging) so Preview and Production do not drift.
 4. **Close or merge the four stale-ish open docs/chore PRs** (#4, #40, #56, #58) or mark them blocked with owners — they are 6–9 days behind and accumulate merge conflict risk.
 5. **Keep `development`** until ENV-03 Vercel/Supabase mapping is redesigned; deleting the git branch would break Preview env scoping documented under `docs/audits/environments/`.
-6. **Enable auto-delete of head branches** on merge (GitHub setting) if not already on — most recent Cursor merges already cleaned up, but leftovers like `fix/p2-r1-…` show gaps.
+6. **Enable auto-delete of head branches** on merge (GitHub setting) if not already on — reduces leftover merged tips like those removed in §6.
 7. **Triage REQUIRES REVIEW within one cleanup pass:** decide land-vs-discard for EO preflight evidence and the BK-001 WIP tip.
 8. **Naming hygiene:** prefer `cursor/…`, `fix/…`, `docs/…` prefixes; retire flat names like `codex-cleaner-audit` when deleting.
 
