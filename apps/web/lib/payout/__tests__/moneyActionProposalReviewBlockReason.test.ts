@@ -165,6 +165,7 @@ describe("expireOverdueMoneyActionProposals + listMoneyActionProposals", () => {
       order: () => selectChain,
       range: async () => ({ data: [pendingRow], error: null, count: 1 }),
       eq: () => selectChain,
+      gt: () => selectChain,
       gte: () => selectChain,
       lte: () => selectChain,
       contains: () => selectChain,
@@ -246,6 +247,7 @@ describe("expireOverdueMoneyActionProposals + listMoneyActionProposals", () => {
     selectChain.order = () => selectChain;
     selectChain.range = async () => ({ data: [pendingRow], error: null, count: 1 });
     selectChain.eq = () => selectChain;
+    selectChain.gt = () => selectChain;
 
     const admin = {
       rpc,
