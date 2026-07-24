@@ -4,7 +4,7 @@
 |-------|-------|
 | **PR** | https://github.com/shalean-developer/shalean-platform/pull/104 |
 | **Final decision** | **BLOCKED** |
-| **Reason** | Production code is on the merge SHA, but production DB credentials and authenticated `/office` access are unavailable in the cloud agent — live audit + widget reconciliation cannot be completed |
+| **Reason** | Production code is on the merge SHA, but the agent still lacks DB service-role env and an authenticated agent-Chrome `/office` session (latest ~20:55 UTC recheck: window still on Sign in; 0 auth cookies) — live audit + widget reconciliation cannot be completed |
 
 ---
 
