@@ -33,7 +33,7 @@
 - Do NOT treat full `npm run lint` as a gate: it reports pre-existing errors/warnings and is not run in CI. Use `lint:booking-core` for the enforced lint gate.
 
 ### Development database seed
-- Dev DB (Supabase project `mbvixuzfvzbooiurvxwz`) has migrations applied but no data by default. Run the seed from repo root (requires `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set in `apps/web/.env.local` or as env vars):
+- Dev DB (the development Supabase project whose URL is in `NEXT_PUBLIC_SUPABASE_URL`) has migrations applied but no data by default. Run the seed from repo root (requires `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set in `apps/web/.env.local` or as env vars):
   ```
   npm run db:seed:dev        # seed / re-seed (idempotent)
   npm run db:seed:dev:reset  # wipe seed rows then re-seed
@@ -42,10 +42,11 @@
   ```
 - The seed creates: 1 city (Cape Town), 7 suburbs, 6 pricing services, 26 extras, 17 auth users (3 admin, 6 cleaner, 8 customer), 15 bookings, 3 recurring schedules, 5 earnings rows, 5 payout rows, 2 monthly invoices, 5 admin proposals.
 - All seed emails use `@example.com` (IANA reserved, undeliverable). All seed phones use `+27000...` — the `000` area prefix is structurally impossible in South Africa (SA area codes never begin with zero) and cannot route to any real recipient via Twilio, Meta, or any provider.
-- The seed has a multi-layer safety guard in `scripts/seed-dev.mjs`: (1) refuses the production project ref `tchayecuvzssixyxlvfu`, (2) only allows the explicit dev/staging ref allow-list, (3) requires `SHALEAN_APP_ENV=development|staging`. `process.env` overrides the file value so `SHALEAN_APP_ENV=production` always blocks.
+- The seed has a multi-layer safety guard in `scripts/seed-dev.mjs`: (1) `SHALEAN_APP_ENV` must be `development` or `staging`; (2) if `SUPABASE_PROD_REF` env var is set the URL must not match it; (3) if `SEED_ALLOWED_PROJECT_REFS` is set the ref must be in that list. Project refs are never hardcoded in source — they are read from environment variables (in `apps/web/.env.local`, gitignored) so no real identifiers appear in committed code.
 - Outbound comms guard: `apps/web/lib/seed/devSeedGuard.ts` exports `assertNotSeedRecipient()`, `assertNotSeedWhatsApp()`, `assertNotSeedSms()`, `assertNotSeedEmail()` — import and call these before any SMS/WhatsApp/email/push provider call in non-production code paths. No-op in `NODE_ENV=production`.
 - Seed script location: `scripts/seed-dev.mjs`. Reference pricing SQL: `supabase/seed/reference/pricing.sql`.
 - Unit tests for seed safety: `apps/web/lib/seed/__tests__/seedSafety.test.ts` (80 tests).
+- Recommended additional `.env.local` entries for maximum seed safety: `SUPABASE_PROD_REF=<prod-project-ref>` and `SEED_ALLOWED_PROJECT_REFS=<dev-ref>,<stg-ref>`.
 
 ### Mobile apps
 - Not installed by the update script. Install on demand with `npm ci` inside `apps/mobile` or `apps/customer-mobile`, then `npm start` (Expo). See each app's own README/AGENTS.md.

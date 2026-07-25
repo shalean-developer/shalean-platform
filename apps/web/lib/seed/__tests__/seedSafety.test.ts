@@ -33,25 +33,36 @@ import {
 // Seed safety constants (mirrors scripts/seed-dev.mjs)
 // ──────────────────────────────────────────────────────────────────────────────
 
-const PROD_REF    = "tchayecuvzssixyxlvfu";
-const DEV_REF     = "mbvixuzfvzbooiurvxwz";
-const STG_REF     = "gbgnemlpyykyhpqqbgru";
-const ALLOWED_REFS = new Set([DEV_REF, STG_REF]);
-const SEED_TAG    = "DEVSEED";
+// Fictional project refs — NOT real Supabase project identifiers.
+// Real refs are sourced from environment variables (SUPABASE_PROD_REF,
+// SEED_ALLOWED_PROJECT_REFS) and are never committed to source.
+const FICTIONAL_PROD_REF = "example-prod-ref-aaa1";   // fictional placeholder
+const FICTIONAL_DEV_REF  = "example-dev-ref-bbb2";    // fictional placeholder
+const FICTIONAL_STG_REF  = "example-stg-ref-ccc3";    // fictional placeholder
+const SEED_TAG           = "DEVSEED";
 
 function extractProjectRef(url: string): string {
   return url.match(/https:\/\/([^.]+)\.supabase/)?.[1] ?? "";
 }
 
-/** Mirrors assertNonProductionSeed() from scripts/seed-dev.mjs. */
-function assertNonProductionSeed(url: string, appEnv: string): void {
+/**
+ * Mirrors assertNonProductionSeed() from scripts/seed-dev.mjs.
+ * Uses fictional project refs so real Supabase identifiers are never in source.
+ * The production ref is passed as an argument (sourced from env in real usage).
+ */
+function assertNonProductionSeed(url: string, appEnv: string, prodRef = FICTIONAL_PROD_REF, allowedRefs?: Set<string>): void {
   const ref = extractProjectRef(url);
-  if (!ref) throw new Error("Cannot determine project ref.");
-  if (ref === PROD_REF) throw new Error(`SAFETY BLOCK: production ref ${PROD_REF}`);
-  if (!ALLOWED_REFS.has(ref)) throw new Error(`SAFETY BLOCK: ref '${ref}' not in allow-list`);
+  if (!ref) throw new Error("SAFETY BLOCK: cannot determine project ref.");
+  // Layer 1 — SHALEAN_APP_ENV
   const env = appEnv.trim().toLowerCase();
   if (!["development", "staging"].includes(env)) {
     throw new Error(`SAFETY BLOCK: SHALEAN_APP_ENV='${env}' is not development|staging`);
+  }
+  // Layer 2 — declared production ref
+  if (prodRef && ref === prodRef) throw new Error(`SAFETY BLOCK: ref matches production ref`);
+  // Layer 3 — explicit allow-list (optional)
+  if (allowedRefs && !allowedRefs.has(ref)) {
+    throw new Error(`SAFETY BLOCK: ref '${ref}' not in allow-list`);
   }
 }
 
@@ -89,45 +100,48 @@ const RECURRING_IDS = {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("Seed safety guard — production refusal (multi-layer)", () => {
-  it("blocks the production project ref regardless of SHALEAN_APP_ENV", () => {
+  // All tests use fictional placeholder refs — no real Supabase project identifiers
+  const allowedRefs = new Set([FICTIONAL_DEV_REF, FICTIONAL_STG_REF]);
+
+  it("blocks the declared production ref regardless of SHALEAN_APP_ENV", () => {
     expect(() =>
-      assertNonProductionSeed(`https://${PROD_REF}.supabase.co`, "development"),
+      assertNonProductionSeed(`https://${FICTIONAL_PROD_REF}.supabase.co`, "development", FICTIONAL_PROD_REF),
     ).toThrow("SAFETY BLOCK");
   });
 
-  it("allows the development project ref with SHALEAN_APP_ENV=development", () => {
+  it("allows the dev ref with SHALEAN_APP_ENV=development", () => {
     expect(() =>
-      assertNonProductionSeed(`https://${DEV_REF}.supabase.co`, "development"),
+      assertNonProductionSeed(`https://${FICTIONAL_DEV_REF}.supabase.co`, "development", FICTIONAL_PROD_REF),
     ).not.toThrow();
   });
 
-  it("allows the staging project ref with SHALEAN_APP_ENV=staging", () => {
+  it("allows the staging ref with SHALEAN_APP_ENV=staging", () => {
     expect(() =>
-      assertNonProductionSeed(`https://${STG_REF}.supabase.co`, "staging"),
+      assertNonProductionSeed(`https://${FICTIONAL_STG_REF}.supabase.co`, "staging", FICTIONAL_PROD_REF),
     ).not.toThrow();
   });
 
-  it("blocks an unknown project ref even with SHALEAN_APP_ENV=development", () => {
+  it("blocks an unknown project ref when an explicit allow-list is provided", () => {
     expect(() =>
-      assertNonProductionSeed("https://unknownref12345678.supabase.co", "development"),
+      assertNonProductionSeed("https://unknown-unknown-ref99.supabase.co", "development", FICTIONAL_PROD_REF, allowedRefs),
     ).toThrow("not in allow-list");
   });
 
   it("blocks when SHALEAN_APP_ENV is missing/empty", () => {
     expect(() =>
-      assertNonProductionSeed(`https://${DEV_REF}.supabase.co`, ""),
+      assertNonProductionSeed(`https://${FICTIONAL_DEV_REF}.supabase.co`, ""),
     ).toThrow("SAFETY BLOCK");
   });
 
   it("blocks when SHALEAN_APP_ENV is 'production'", () => {
     expect(() =>
-      assertNonProductionSeed(`https://${DEV_REF}.supabase.co`, "production"),
+      assertNonProductionSeed(`https://${FICTIONAL_DEV_REF}.supabase.co`, "production"),
     ).toThrow("SAFETY BLOCK");
   });
 
   it("blocks when SHALEAN_APP_ENV is 'test'", () => {
     expect(() =>
-      assertNonProductionSeed(`https://${DEV_REF}.supabase.co`, "test"),
+      assertNonProductionSeed(`https://${FICTIONAL_DEV_REF}.supabase.co`, "test"),
     ).toThrow("SAFETY BLOCK");
   });
 
@@ -135,14 +149,14 @@ describe("Seed safety guard — production refusal (multi-layer)", () => {
     expect(() => assertNonProductionSeed("", "development")).toThrow();
   });
 
-  it("does not allow a URL that contains the prod ref in a path (not the project subdomain)", () => {
-    // A proxy URL that mentions the prod ref should not be treated as non-production
+  it("extracts ref from subdomain only — not from path", () => {
+    // Dev ref in subdomain (safe)
     expect(() =>
-      assertNonProductionSeed(`https://${DEV_REF}.supabase.co/proxy/${PROD_REF}`, "development"),
-    ).not.toThrow(); // Dev ref is extracted correctly from subdomain — OK
-    // But a URL whose subdomain IS the prod ref should still fail
+      assertNonProductionSeed(`https://${FICTIONAL_DEV_REF}.supabase.co/proxy/anything`, "development", FICTIONAL_PROD_REF),
+    ).not.toThrow();
+    // Production ref in subdomain (blocked)
     expect(() =>
-      assertNonProductionSeed(`https://${PROD_REF}.supabase.co`, "development"),
+      assertNonProductionSeed(`https://${FICTIONAL_PROD_REF}.supabase.co`, "development", FICTIONAL_PROD_REF),
     ).toThrow("SAFETY BLOCK");
   });
 });

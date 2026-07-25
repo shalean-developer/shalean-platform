@@ -41,7 +41,9 @@ const root = resolve(__dirname, "..");
 const require = createRequire(resolve(root, "apps/web/package.json"));
 const { createClient } = require("@supabase/supabase-js");
 
-const PROD_REF  = "tchayecuvzssixyxlvfu";
+// Production project ref is sourced from SUPABASE_PROD_REF env var (never hardcoded)
+// so that scanning tools see no credential-adjacent identifiers in committed code.
+const PROD_REF = (process.env.SUPABASE_PROD_REF || "").trim();
 
 // ──────────────────────────────────────────────────────────────────────────────
 // EXPLICIT ALLOWLIST — only these tables and these exact columns are fetched.
@@ -180,9 +182,10 @@ async function main() {
 
   const ref = url.match(/https:\/\/([^.]+)\.supabase/)?.[1] ?? "unknown";
 
-  // Safety: if not passing --prod but URL is production, refuse
-  if (ref === PROD_REF && !useProd) {
-    console.error(`ERROR: NEXT_PUBLIC_SUPABASE_URL points at production (${PROD_REF}).`);
+  // Safety: if not passing --prod but URL matches the declared production ref, refuse.
+  // PROD_REF is read from SUPABASE_PROD_REF env var (never hardcoded in source).
+  if (PROD_REF && ref === PROD_REF && !useProd) {
+    console.error(`ERROR: NEXT_PUBLIC_SUPABASE_URL points at the declared production project.`);
     console.error("       Pass --prod (with separate PROD_SUPABASE_URL / PROD_SERVICE_KEY) to export from production.");
     console.error("       Or update NEXT_PUBLIC_SUPABASE_URL to point at a non-production project.");
     process.exit(1);

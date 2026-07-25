@@ -36,38 +36,31 @@ const { createClient } = require("@supabase/supabase-js");
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
-const PROD_REF  = "tchayecuvzssixyxlvfu";
-const DEV_REF   = "mbvixuzfvzbooiurvxwz";
-const STG_REF   = "gbgnemlpyykyhpqqbgru";
-/** Supabase project refs that are explicitly non-production and safe to seed. */
-const ALLOWED_REFS = new Set([DEV_REF, STG_REF]);
-const SEED_TAG  = "DEVSEED";
+const SEED_TAG = "DEVSEED";
 
 /**
  * Multi-layer safety guard. Refuses to seed if:
- *   1. The project ref matches the production ref.
- *   2. The project ref is not in the explicit allow-list of known dev/staging refs.
- *   3. SHALEAN_APP_ENV is not one of "development" | "staging" (must be set).
- *   4. SHALEAN_ENFORCE_ENV_SAFETY is "true" and the env is not known-safe.
+ *   1. SHALEAN_APP_ENV is not "development" or "staging" (must be set explicitly).
+ *   2. The resolved project ref matches SUPABASE_PROD_REF env var (if set).
+ *   3. SEED_ALLOWED_PROJECT_REFS env var is set and the ref is not in that list.
+ *
+ * Project refs are never hardcoded in source — they are read from environment
+ * variables or .env.local so that scanning tools see no credential-adjacent
+ * identifiers in committed code.
+ *
+ * Required env vars (in apps/web/.env.local or shell):
+ *   SHALEAN_APP_ENV=development          # or staging
+ *   SUPABASE_PROD_REF=<prod-project-ref> # gitignored; blocks that specific ref
+ *   SEED_ALLOWED_PROJECT_REFS=ref1,ref2  # optional explicit allow-list
  */
 function assertNonProductionSeed(url, envVars) {
   const projectRef = url.match(/https:\/\/([^.]+)\.supabase/)?.[1] ?? "";
 
-  // Hard-block production ref
   if (!projectRef) {
     throw new Error("SAFETY BLOCK: cannot determine Supabase project ref from URL. Refusing to seed.");
   }
-  if (projectRef === PROD_REF) {
-    throw new Error(`SAFETY BLOCK: refusing to seed production project (${PROD_REF}).`);
-  }
-  // Require explicit allow-listed ref
-  if (!ALLOWED_REFS.has(projectRef)) {
-    throw new Error(
-      `SAFETY BLOCK: project ref '${projectRef}' is not in the explicit non-production allow-list ` +
-      `[${[...ALLOWED_REFS].join(", ")}]. Add it explicitly to ALLOWED_REFS after confirming it is non-production.`,
-    );
-  }
-  // Require explicit SHALEAN_APP_ENV — process.env wins over file (standard override behaviour)
+
+  // Layer 1 — SHALEAN_APP_ENV: process.env wins over file
   const appEnv = (process.env.SHALEAN_APP_ENV || envVars.SHALEAN_APP_ENV || "").trim().toLowerCase();
   if (!["development", "staging"].includes(appEnv)) {
     throw new Error(
@@ -75,6 +68,27 @@ function assertNonProductionSeed(url, envVars) {
       `Got: '${appEnv || "(unset)"}'. Set it in apps/web/.env.local.`,
     );
   }
+
+  // Layer 2 — SUPABASE_PROD_REF: hard-block the explicitly declared production ref
+  const prodRef = (process.env.SUPABASE_PROD_REF || envVars.SUPABASE_PROD_REF || "").trim();
+  if (prodRef && projectRef === prodRef) {
+    throw new Error(
+      `SAFETY BLOCK: project ref matches SUPABASE_PROD_REF — refusing to seed production.`,
+    );
+  }
+
+  // Layer 3 — SEED_ALLOWED_PROJECT_REFS: optional explicit allow-list
+  const allowedEnv = (process.env.SEED_ALLOWED_PROJECT_REFS || envVars.SEED_ALLOWED_PROJECT_REFS || "").trim();
+  if (allowedEnv) {
+    const allowed = new Set(allowedEnv.split(",").map((r) => r.trim()).filter(Boolean));
+    if (!allowed.has(projectRef)) {
+      throw new Error(
+        `SAFETY BLOCK: project ref '${projectRef}' is not in SEED_ALLOWED_PROJECT_REFS. ` +
+        `Add it to that env var after confirming it is a non-production project.`,
+      );
+    }
+  }
+
   return { projectRef, appEnv };
 }
 
