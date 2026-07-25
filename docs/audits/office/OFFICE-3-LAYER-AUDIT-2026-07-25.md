@@ -1,9 +1,11 @@
 # Office Dashboard Three-Layer Audit
 
-> **Scope:** audit infrastructure + initial production evidence capture.
-> This document does **not** claim `/office` is 100% accurate.
-> Decision below is **NO-GO** until UI credentials unlock three-layer PASS for every required metric.
-> `summary.system_health` stays **NOT AUTHORITATIVE** until an independent health source exists.
+> **Production UI re-run attempt** on infrastructure `abab7b1fe9c4e2186405a489aa2610f6ab80216a`.
+> Target `https://shalean.co.za`. `OFFICE_AUDIT_READ_ONLY=true`.
+> Required `OFFICE_AUDIT_ADMIN_*` credentials were **not present** in the execution environment.
+> Credentials were not created, printed, logged, committed, or exposed.
+> No production data or business logic modified.
+> `/office` is **not** certified 100% accurate.
 
 ## Executive summary
 
@@ -13,7 +15,7 @@ Application↔Database agreement on available numeric/rule metrics: **33 agree**
 
 | Field | Value |
 | --- | --- |
-| Generated | 2026-07-25T13:27:57.969Z |
+| Generated | 2026-07-25T16:46:01.390Z |
 | Audit date (JHB) | 2026-07-25 |
 | Target | production |
 | Base URL | https://shalean.co.za |
@@ -117,30 +119,23 @@ Application↔Database agreement on available numeric/rule metrics: **33 agree**
 - Redaction applied: true
 - Prohibited fields stripped: customer names, customer emails, phone numbers, addresses, booking IDs, cleaner IDs, access tokens, refresh tokens, Supabase keys, project references, service-role credentials, payment references
 
-## Additional findings (app↔DB layer; UI still blocked)
 
-| Finding | Classification | Notes |
-| --- | --- | --- |
-| UI layer unavailable | unavailable evidence | No `OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD` or storage state in this environment |
-| System health | NOT AUTHORITATIVE | Depends on `collectOfficeOpsHealthSignals` + production health scanner; not a single SQL metric |
-| SLA breaches = 6 (live) | data integrity / ops signal | Independent DB matches app; UI not verified |
-| Unassigned Needs Action = 3 (live) | ops signal | Fleet-wide; today visit-day unassigned = 0 |
-| Overdue invoices ZAR = 0 while an invoice `due_date` is before today | business-rule ambiguity | Dashboard only sums `status=overdue OR is_overdue=true`; past-due `sent` drafts are excluded by design |
-| Bookings with `status='paid'` | business-rule ambiguity | Not mapped to completed/in_progress/cancelled; falls into upcoming/unassigned by assignment |
-| Page `johannesburgTodayYmd` uses `en-ZA` parts; ops uses `en-CA` | timezone defect (low) | Both target Africa/Johannesburg; report inconsistency, do not silently unify in this audit |
-| Row status/assignment UI pairing | unavailable evidence | Requires Playwright + non-PII DOM↔API pairing; left BLOCKED rather than false PASS |
-| App↔DB agreement | 33/33 | Independent calculations matched application helpers on this snapshot |
+## UI credential gate (this run)
+
+| Item | Result |
+| --- | --- |
+| `OFFICE_AUDIT_ADMIN_EMAIL` | unset |
+| `OFFICE_AUDIT_ADMIN_PASSWORD` | unset |
+| `OFFICE_AUDIT_STORAGE_STATE` | unset |
+| `OFFICE_AUDIT_ADMIN_ACCESS_TOKEN` | unset |
+| UI metrics captured | **0 / 33** |
+| App↔DB agreement | **33 / 33** (0 mismatches) |
+| Row-level non-PII verification | **BLOCKED** (requires UI session) |
+| `summary.system_health` | **NOT AUTHORITATIVE** |
+| Write attempts blocked | **0** |
+| Process exit | **1** (nonzero for BLOCKED / NOT AUTHORITATIVE) |
 
 ## Proposed fixes (not executed)
-
-1. **Provide audit admin credentials** (`OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD` or storage state) and re-run against `https://shalean.co.za/office` with `OFFICE_AUDIT_READ_ONLY=true`.
-2. **Expose system health as an authoritative queryable snapshot** (or documented RPC) so the DB layer can independently reproduce website/bookingEngine/paymentGateway/cronErrors.
-3. **Clarify overdue invoice SoT**: either auto-set `is_overdue` from `due_date`, or label the widget “Overdue-flagged invoices” to avoid past-due `sent` ambiguity.
-4. **Document or normalize `status='paid'`** in schedule bucketing (treat as upcoming-with-assignment vs completed).
-5. **Unify Johannesburg “today” helpers** onto one shared function (`todayYmdJohannesburg` / `en-CA`) — report-only in this audit.
-6. **Add non-PII schedule row keys in the DOM** (e.g. hashed test ids) so row status/assignment can be three-layer verified without leaking booking IDs.
-
-### Per-metric blockers
 - **ops.total_bookings_today** (BLOCKED): Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured.
 - **ops.completed** (BLOCKED): Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured.
 - **ops.in_progress** (BLOCKED): Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured.
