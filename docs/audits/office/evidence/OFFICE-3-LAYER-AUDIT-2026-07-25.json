@@ -1,6 +1,6 @@
 {
   "title": "Office Dashboard Three-Layer Audit",
-  "generatedAt": "2026-07-25T16:46:01.390Z",
+  "generatedAt": "2026-07-25T16:53:25.472Z",
   "auditDateYmd": "2026-07-25",
   "timezone": "Africa/Johannesburg",
   "target": "production",
@@ -969,7 +969,8 @@
     "payment_transactions exists as ledger but is not the home dashboard revenue SoT",
     "Needs Action uses cleaner_id/team_id only (not booking_cleaners); schedule assignment includes roster",
     "public.payments unavailable: Could not find the table 'public.payments' in the schema cache",
-    "UI re-run blocked: OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD/STORAGE_STATE unset in execution environment; credentials not created or loaded"
+    "UI re-run blocked: OFFICE_AUDIT_ADMIN_* unset in execution environment; credentials not created or loaded",
+    "UI re-run (2026-07-25 ~16:53Z): OFFICE_AUDIT_ADMIN_* still unset in CLOUD_AGENT secrets; credentials not created"
   ],
   "safety": {
     "officeAuditReadOnly": true,

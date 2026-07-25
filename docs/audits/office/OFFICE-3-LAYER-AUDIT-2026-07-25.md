@@ -1,11 +1,11 @@
 # Office Dashboard Three-Layer Audit
 
-> **Production UI re-run attempt** on infrastructure `abab7b1fe9c4e2186405a489aa2610f6ab80216a`.
+> **Production UI re-run** on infrastructure `abab7b1fe9c4e2186405a489aa2610f6ab80216a`.
 > Target `https://shalean.co.za`. `OFFICE_AUDIT_READ_ONLY=true`.
-> Required `OFFICE_AUDIT_ADMIN_*` credentials were **not present** in the execution environment.
+> Required `OFFICE_AUDIT_ADMIN_*` credentials were **not present** among injected cloud secrets
+> (`CLOUD_AGENT_INJECTED_SECRET_NAMES` has only Supabase/Paystack keys).
 > Credentials were not created, printed, logged, committed, or exposed.
 > No production data or business logic modified.
-> `/office` is **not** certified 100% accurate.
 
 ## Executive summary
 
@@ -15,7 +15,7 @@ Application↔Database agreement on available numeric/rule metrics: **33 agree**
 
 | Field | Value |
 | --- | --- |
-| Generated | 2026-07-25T16:46:01.390Z |
+| Generated | 2026-07-25T16:53:25.472Z |
 | Audit date (JHB) | 2026-07-25 |
 | Target | production |
 | Base URL | https://shalean.co.za |
@@ -120,20 +120,18 @@ Application↔Database agreement on available numeric/rule metrics: **33 agree**
 - Prohibited fields stripped: customer names, customer emails, phone numbers, addresses, booking IDs, cleaner IDs, access tokens, refresh tokens, Supabase keys, project references, service-role credentials, payment references
 
 
-## UI credential gate (this run)
+## UI credential gate
 
 | Item | Result |
 | --- | --- |
-| `OFFICE_AUDIT_ADMIN_EMAIL` | unset |
-| `OFFICE_AUDIT_ADMIN_PASSWORD` | unset |
-| `OFFICE_AUDIT_STORAGE_STATE` | unset |
-| `OFFICE_AUDIT_ADMIN_ACCESS_TOKEN` | unset |
+| Injected cloud secrets include `OFFICE_AUDIT_ADMIN_*` | **No** |
 | UI metrics captured | **0 / 33** |
 | App↔DB agreement | **33 / 33** (0 mismatches) |
-| Row-level non-PII verification | **BLOCKED** (requires UI session) |
+| Row-level non-PII verification | **BLOCKED** |
 | `summary.system_health` | **NOT AUTHORITATIVE** |
 | Write attempts blocked | **0** |
-| Process exit | **1** (nonzero for BLOCKED / NOT AUTHORITATIVE) |
+| Process exit | **1** |
+
 
 ## Proposed fixes (not executed)
 - **ops.total_bookings_today** (BLOCKED): Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured.
