@@ -45,7 +45,7 @@
 - The seed has a multi-layer safety guard in `scripts/seed-dev.mjs`: (1) refuses the production project ref `tchayecuvzssixyxlvfu`, (2) only allows the explicit dev/staging ref allow-list, (3) requires `SHALEAN_APP_ENV=development|staging`. `process.env` overrides the file value so `SHALEAN_APP_ENV=production` always blocks.
 - Outbound comms guard: `apps/web/lib/seed/devSeedGuard.ts` exports `assertNotSeedRecipient()`, `assertNotSeedWhatsApp()`, `assertNotSeedSms()`, `assertNotSeedEmail()` — import and call these before any SMS/WhatsApp/email/push provider call in non-production code paths. No-op in `NODE_ENV=production`.
 - Seed script location: `scripts/seed-dev.mjs`. Reference pricing SQL: `supabase/seed/reference/pricing.sql`.
-- Unit tests for seed safety: `apps/web/lib/seed/__tests__/seedSafety.test.ts` (43 tests).
+- Unit tests for seed safety: `apps/web/lib/seed/__tests__/seedSafety.test.ts` (80 tests).
 
 ### Mobile apps
 - Not installed by the update script. Install on demand with `npm ci` inside `apps/mobile` or `apps/customer-mobile`, then `npm start` (Expo). See each app's own README/AGENTS.md.
