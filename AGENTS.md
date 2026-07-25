@@ -14,7 +14,19 @@
 
 ### Env / graceful degradation
 - The app boots and degrades gracefully with no secrets: marketing/blog pages and the booking form (real-time pricing via `@shalean/pricing`, static `SERVICE_CONFIG` fallback) all work without a database.
-- DB-backed features require Supabase env in `apps/web/.env.local` (copy from `apps/web/.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Without these you will see, e.g., "Area not yet covered / server configuration error" on suburb validation and cannot advance past booking Step 1; auth, admin/office, dispatch, and payments also need real creds (Supabase + Paystack sandbox). These are not present in the base cloud env.
+- DB-backed features require Supabase env in `apps/web/.env.local` (copy from `apps/web/.env.example`): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`. Also add `NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY` + `PAYSTACK_SECRET_KEY` for the payment path. Without Supabase you will see "Area not yet covered / server configuration error" on suburb validation; auth, admin/office, dispatch, and payments also need real creds. Minimal `apps/web/.env.local`:
+  ```
+  SHALEAN_APP_ENV=development
+  NEXT_PUBLIC_SITE_URL=http://localhost:3000
+  OUTBOUND_MESSAGING_DISABLED=true
+  NEXT_PUBLIC_SUPABASE_URL=...
+  NEXT_PUBLIC_SUPABASE_ANON_KEY=...
+  SUPABASE_URL=...   # same as NEXT_PUBLIC_SUPABASE_URL
+  SUPABASE_SERVICE_ROLE_KEY=...
+  NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=...
+  PAYSTACK_SECRET_KEY=...
+  ```
+- **Dev DB is empty by default (schema only, no seed data).** The development Supabase project has migrations applied but no city/location/booking data. Suburb resolution (`/api/booking-v2/resolve-location`) returns "unresolved_suburb" for all suburbs until you seed rows into `cities` and `locations`. To unblock the full booking flow, seed at minimum one city and a few location rows (use the Supabase REST API or dashboard). There is one pre-seeded test cleaner (`TEST Development Cleaner`, id `dfdde545-77da-4ef9-81e4-8931630687e8`) — assign it to a location by setting `city_id` and `location_id` on the cleaner row.
 
 ### Lint / test / build (see `apps/web/package.json` + `apps/web/README.md`)
 - CI gates (`.github/workflows/web-test.yml`) are the source of truth: `npm run test:critical`, `npm run lint:booking-core`, and `npm run typecheck` — all pass clean. `npm run build` (validate-blog-routes + typecheck + `next build --webpack`) also succeeds.
