@@ -2,8 +2,9 @@
 
 > **Production UI re-run** on infrastructure `abab7b1fe9c4e2186405a489aa2610f6ab80216a`.
 > Target `https://shalean.co.za`. `OFFICE_AUDIT_READ_ONLY=true`.
-> Required `OFFICE_AUDIT_ADMIN_*` credentials were **not present** among injected cloud secrets
-> (`CLOUD_AGENT_INJECTED_SECRET_NAMES` has only Supabase/Paystack keys).
+> User reported Cursor Cloud secrets available, but this running agent process still has
+> `OFFICE_AUDIT_ADMIN_EMAIL` / `OFFICE_AUDIT_ADMIN_PASSWORD` **unset**, and those names are
+> absent from `CLOUD_AGENT_INJECTED_SECRET_NAMES` (only Supabase/Paystack keys are injected).
 > Credentials were not created, printed, logged, committed, or exposed.
 > No production data or business logic modified.
 
@@ -15,7 +16,7 @@ Application↔Database agreement on available numeric/rule metrics: **33 agree**
 
 | Field | Value |
 | --- | --- |
-| Generated | 2026-07-25T16:53:25.472Z |
+| Generated | 2026-07-25T16:55:38.331Z |
 | Audit date (JHB) | 2026-07-25 |
 | Target | production |
 | Base URL | https://shalean.co.za |
@@ -124,13 +125,16 @@ Application↔Database agreement on available numeric/rule metrics: **33 agree**
 
 | Item | Result |
 | --- | --- |
-| Injected cloud secrets include `OFFICE_AUDIT_ADMIN_*` | **No** |
+| `OFFICE_AUDIT_ADMIN_*` in this process env | **Unset** |
+| Present in `CLOUD_AGENT_INJECTED_SECRET_NAMES` | **No** |
 | UI metrics captured | **0 / 33** |
 | App↔DB agreement | **33 / 33** (0 mismatches) |
 | Row-level non-PII verification | **BLOCKED** |
 | `summary.system_health` | **NOT AUTHORITATIVE** |
 | Write attempts blocked | **0** |
 | Process exit | **1** |
+
+**Unblock:** add secrets to the Cloud environment, then start a **new** agent run so they are injected at process start.
 
 
 ## Proposed fixes (not executed)
