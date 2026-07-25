@@ -57,6 +57,8 @@
     "repair:paired-roster-earnings": "tsx --env-file=.env.local --conditions=react-server scripts/repairPairedRosterEarnings.ts",
     "ops:smoke": "node scripts/ops-smoke-checklist.mjs",
     "audit:office-dashboard": "tsx scripts/auditOfficeDashboardAccuracy.mjs",
+    "audit:office": "tsx scripts/office-3-layer-audit/run.ts",
+    "test:office-audit": "vitest run lib/admin/officeAudit/__tests__/officeThreeLayerAudit.test.ts",
     "simulate:dispatch": "tsx scripts/simulate-dispatch.ts",
     "process-favicons": "node scripts/process-favicons-transparent.mjs",
     "generate-favicons": "node scripts/generate-favicons-from-logo.mjs",
