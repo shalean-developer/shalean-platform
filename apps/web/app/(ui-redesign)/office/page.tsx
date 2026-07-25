@@ -273,16 +273,28 @@ function ActionQueueRow({ item }: { item: ActionItem }) {
     info: "text-blue-700",
     clear: "text-emerald-700",
   };
+  const testIdByKey: Record<string, string> = {
+    unassigned: "office-metric-action-unassigned",
+    "starting-soon": "office-metric-action-starting-soon",
+    sla: "office-metric-action-sla",
+    unassignable: "office-metric-action-unassignable",
+  };
 
   return (
     <Link
       href={item.href}
+      data-testid={testIdByKey[item.key]}
       className={cn(
         "group flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
         toneStyles[item.tone],
       )}
     >
-      <p className={cn("w-10 shrink-0 text-xl font-bold tabular-nums", countStyles[item.tone])}>{item.count}</p>
+      <p
+        data-testid={testIdByKey[item.key] ? `${testIdByKey[item.key]}-count` : undefined}
+        className={cn("w-10 shrink-0 text-xl font-bold tabular-nums", countStyles[item.tone])}
+      >
+        {item.count}
+      </p>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-slate-800">{item.label}</p>
         <p className="text-xs text-slate-500">{item.detail}</p>
@@ -618,28 +630,52 @@ export default function OfficeDashboardPage() {
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{bookingsCountLabel}</p>
-              <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{todayStats.total}</p>
+              <p
+                data-testid="office-metric-ops-total"
+                className="mt-1 text-3xl font-bold tabular-nums text-slate-900"
+              >
+                {todayStats.total}
+              </p>
               {todayStats.cancelled > 0 ? (
-                <p className="mt-0.5 text-[11px] text-slate-400">{todayStats.cancelled} cancelled / expired excluded</p>
-              ) : null}
+                <p data-testid="office-metric-ops-cancelled-excluded" className="mt-0.5 text-[11px] text-slate-400">
+                  {todayStats.cancelled} cancelled / expired excluded
+                </p>
+              ) : (
+                <p data-testid="office-metric-ops-cancelled-excluded" className="sr-only">
+                  0 cancelled / expired excluded
+                </p>
+              )}
             </div>
             <div className="text-right">
               <p className="text-xs text-slate-400">Payments received today</p>
-              <p className="text-lg font-bold tabular-nums text-emerald-700">
+              <p
+                data-testid="office-metric-ops-payments-received-today"
+                className="text-lg font-bold tabular-nums text-emerald-700"
+              >
                 {stats != null ? zar(revenueToday) : loading ? "…" : "—"}
               </p>
-              <p className="text-[11px] text-slate-400">
+              <p data-testid="office-metric-ops-paid-by-payment-time" className="text-[11px] text-slate-400">
                 {stats?.paidBookingsToday ?? 0} paid by payment time
               </p>
               {visitFinance != null ? (
-                <p className="mt-1 text-[11px] text-slate-500">
+                <p data-testid="office-metric-ops-visit-paid-value" className="mt-1 text-[11px] text-slate-500">
                   Visit paid value {zar(visitFinance.paidValueZar)}
                   {visitFinance.unpaidCompletedCount > 0
                     ? ` · ${visitFinance.unpaidCompletedCount} completed unpaid`
                     : ""}
                 </p>
-              ) : null}
+              ) : (
+                <p data-testid="office-metric-ops-visit-paid-value" className="sr-only">
+                  Visit paid value —
+                </p>
+              )}
             </div>
+          </div>
+          <div className="sr-only" aria-hidden>
+            <span data-testid="office-metric-ops-completed">{todayStats.completed}</span>
+            <span data-testid="office-metric-ops-in-progress">{todayStats.inProgress}</span>
+            <span data-testid="office-metric-ops-upcoming">{todayStats.upcoming}</span>
+            <span data-testid="office-metric-ops-unassigned">{todayStats.unassigned}</span>
           </div>
           <HorizontalBreakdownBar segments={scheduleSegments} total={todayStats.total} />
         </ZohoPanel>
@@ -662,14 +698,22 @@ export default function OfficeDashboardPage() {
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-4">
             {[
-              { label: "Total", value: todayStats.total },
-              { label: "Completed", value: todayStats.completed },
-              { label: "In progress", value: todayStats.inProgress },
-              { label: "Upcoming", value: todayStats.upcoming },
-              { label: "Unassigned", value: todayStats.unassigned, alert: todayStats.unassigned > 0 },
+              { label: "Total", value: todayStats.total, testId: "office-metric-schedule-total" },
+              { label: "Completed", value: todayStats.completed, testId: "office-metric-schedule-completed" },
+              { label: "In progress", value: todayStats.inProgress, testId: "office-metric-schedule-in-progress" },
+              { label: "Upcoming", value: todayStats.upcoming, testId: "office-metric-schedule-upcoming" },
+              {
+                label: "Unassigned",
+                value: todayStats.unassigned,
+                alert: todayStats.unassigned > 0,
+                testId: "office-metric-schedule-unassigned",
+              },
             ].map((stat) => (
               <div key={stat.label} className="min-w-[72px]">
-                <p className={cn("text-lg font-bold tabular-nums", stat.alert ? "text-amber-700" : "text-slate-900")}>
+                <p
+                  data-testid={stat.testId}
+                  className={cn("text-lg font-bold tabular-nums", stat.alert ? "text-amber-700" : "text-slate-900")}
+                >
                   {stat.value}
                 </p>
                 <p className="text-[11px] text-slate-500">{stat.label}</p>
@@ -747,13 +791,29 @@ export default function OfficeDashboardPage() {
           <div className="mb-4 flex items-end justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Active workforce</p>
-              <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{cleanerStats.total}</p>
+              <p
+                data-testid="office-metric-capacity-active"
+                className="mt-1 text-3xl font-bold tabular-nums text-slate-900"
+              >
+                {cleanerStats.total}
+              </p>
               <p className="text-xs text-slate-500">active cleaners on roster</p>
             </div>
             <div className="rounded-lg bg-emerald-50 px-3 py-2 text-right">
               <p className="text-xs text-emerald-700">Available now</p>
-              <p className="text-xl font-bold tabular-nums text-emerald-800">{cleanerStats.availableIdle}</p>
+              <p
+                data-testid="office-metric-capacity-available-now"
+                className="text-xl font-bold tabular-nums text-emerald-800"
+              >
+                {cleanerStats.availableIdle}
+              </p>
             </div>
+          </div>
+          <div className="sr-only" aria-hidden>
+            <span data-testid="office-metric-capacity-available">{cleanerStats.availableIdle}</span>
+            <span data-testid="office-metric-capacity-busy">{cleanerStats.busy}</span>
+            <span data-testid="office-metric-capacity-off-today">{cleanerStats.offToday}</span>
+            <span data-testid="office-metric-capacity-offline">{cleanerStats.manuallyUnavailable}</span>
           </div>
           <HorizontalBreakdownBar segments={cleanerSegments} total={cleanerStats.total} />
         </ZohoPanel>
@@ -762,7 +822,10 @@ export default function OfficeDashboardPage() {
           <div className="mb-4 flex items-end justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Receivables exposure</p>
-              <p className="mt-1 text-3xl font-bold tabular-nums text-slate-900">
+              <p
+                data-testid="office-metric-revenue-receivables-exposure"
+                className="mt-1 text-3xl font-bold tabular-nums text-slate-900"
+              >
                 {stats != null ? zar(cashTotal) : loading ? "…" : "—"}
               </p>
               <p className="mt-0.5 text-[11px] text-slate-400">
@@ -775,6 +838,11 @@ export default function OfficeDashboardPage() {
                 <p className="text-lg font-bold tabular-nums text-amber-800">{zar(overdueZar)}</p>
               </div>
             ) : null}
+          </div>
+          <div className="sr-only" aria-hidden>
+            <span data-testid="office-metric-revenue-payments-received-today">{stats != null ? zar(revenueToday) : "—"}</span>
+            <span data-testid="office-metric-revenue-pending-bookings">{stats != null ? zar(pendingZar) : "—"}</span>
+            <span data-testid="office-metric-revenue-overdue-invoices">{stats != null ? zar(overdueZar) : "—"}</span>
           </div>
           <HorizontalBreakdownBar segments={cashSegments} total={cashTotal} />
 
@@ -813,6 +881,7 @@ export default function OfficeDashboardPage() {
             sub: "Paid, revenue-eligible",
             icon: BarChart3,
             href: "/office/analytics",
+            testId: "office-metric-summary-bookings-30d",
           },
           {
             label: "Avg booking value",
@@ -820,6 +889,7 @@ export default function OfficeDashboardPage() {
             sub: "30-day window",
             icon: Zap,
             href: "/office/analytics",
+            testId: "office-metric-summary-avg-booking-value",
           },
           {
             label: "Pending payments",
@@ -827,6 +897,7 @@ export default function OfficeDashboardPage() {
             sub: `${paymentsSnapshot?.pendingCount ?? 0} awaiting payment`,
             icon: Clock,
             href: "/office/bookings",
+            testId: "office-metric-summary-pending-payments",
           },
           {
             label: "System health",
@@ -835,6 +906,7 @@ export default function OfficeDashboardPage() {
             icon: allSystemsOperational ? CheckCircle2 : Shield,
             href: "/office/ops-health",
             tone: allSystemsOperational ? "ok" : "warn",
+            testId: "office-metric-summary-system-health",
           },
         ].map((kpi) => {
           const KpiIcon = kpi.icon;
@@ -848,6 +920,7 @@ export default function OfficeDashboardPage() {
                 <div>
                   <p className="text-xs font-medium text-slate-500">{kpi.label}</p>
                   <p
+                    data-testid={kpi.testId}
                     className={cn(
                       "mt-1 text-xl font-bold tabular-nums",
                       kpi.tone === "ok" ? "text-emerald-700" : kpi.tone === "warn" ? "text-amber-700" : "text-slate-900",

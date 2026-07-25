@@ -9,6 +9,11 @@
     "db:seed:reference": "node scripts/export-reference-data.mjs",
     "db:seed:dev": "node scripts/seed-dev.mjs",
     "db:seed:dev:reset": "node scripts/seed-dev.mjs --reset",
-    "db:seed:dev:dry-run": "node scripts/seed-dev.mjs --dry-run"
+    "db:seed:dev:dry-run": "node scripts/seed-dev.mjs --dry-run",
+    "audit:office": "npm --prefix apps/web run audit:office",
+    "lint:booking-core": "npm --prefix apps/web run lint:booking-core",
+    "typecheck": "npm --prefix apps/web run typecheck",
+    "test:critical": "npm --prefix apps/web run test:critical",
+    "audit:production": "npm --prefix apps/web run audit:production"
   }
 }
