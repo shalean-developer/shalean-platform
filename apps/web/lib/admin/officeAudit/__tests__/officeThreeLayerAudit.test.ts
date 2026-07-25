@@ -299,13 +299,17 @@ describe("redaction and safety", () => {
     const f = createReadOnlyFetch(attempts);
     await expect(f("https://example.com/api", { method: "POST", body: "{}" })).rejects.toThrow(/blocked/i);
     expect(attempts.count).toBe(1);
-    expect(loadOfficeAuditSafetyFromEnv({ OFFICE_AUDIT_READ_ONLY: "true", OFFICE_AUDIT_TARGET: "production" })).toEqual(
-      {
-        readOnly: true,
-        target: "production",
-        allowProduction: true,
-      },
-    );
+    expect(
+      loadOfficeAuditSafetyFromEnv({
+        NODE_ENV: "test",
+        OFFICE_AUDIT_READ_ONLY: "true",
+        OFFICE_AUDIT_TARGET: "production",
+      } as NodeJS.ProcessEnv),
+    ).toEqual({
+      readOnly: true,
+      target: "production",
+      allowProduction: true,
+    });
   });
 });
 

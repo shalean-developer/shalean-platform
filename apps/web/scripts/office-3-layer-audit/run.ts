@@ -477,8 +477,24 @@ function layerFor(
 }
 
 function renderMarkdown(report: OfficeAuditReport): string {
+  let appDbAgree = 0;
+  let appDbDisagree = 0;
+  for (const m of report.metrics) {
+    if (!m.application.available || !m.database.available) continue;
+    if (String(m.application.normalized) === String(m.database.normalized)) appDbAgree += 1;
+    else appDbDisagree += 1;
+  }
+
   const lines: string[] = [];
   lines.push(`# ${report.title}`);
+  lines.push("");
+  lines.push(`## Executive summary`);
+  lines.push("");
+  lines.push(report.decisionText);
+  lines.push("");
+  lines.push(
+    `Application↔Database agreement on available numeric/rule metrics: **${appDbAgree} agree**, **${appDbDisagree} disagree**. UI layer available: **${report.metrics.some((m) => m.ui.available)}**.`,
+  );
   lines.push("");
   lines.push(`| Field | Value |`);
   lines.push(`| --- | --- |`);
