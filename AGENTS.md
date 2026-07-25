@@ -32,5 +32,19 @@
 - CI gates (`.github/workflows/web-test.yml`) are the source of truth: `npm run test:critical`, `npm run lint:booking-core`, and `npm run typecheck` — all pass clean. `npm run build` (validate-blog-routes + typecheck + `next build --webpack`) also succeeds.
 - Do NOT treat full `npm run lint` as a gate: it reports pre-existing errors/warnings and is not run in CI. Use `lint:booking-core` for the enforced lint gate.
 
+### Development database seed
+- Dev DB (Supabase project `mbvixuzfvzbooiurvxwz`) has migrations applied but no data by default. Run the seed from repo root (requires `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set in `apps/web/.env.local` or as env vars):
+  ```
+  npm run db:seed:dev        # seed / re-seed (idempotent)
+  npm run db:seed:dev:reset  # wipe seed rows then re-seed
+  npm run db:seed:dev:dry-run  # print plan without writing
+  npm run db:seed:reference  # export reference pricing from dev DB
+  ```
+- The seed creates: 1 city (Cape Town), 7 suburbs, 6 pricing services, 26 extras, 17 auth users (3 admin, 6 cleaner, 8 customer), 15 bookings, 3 recurring schedules, 5 earnings rows, 5 payout rows, 2 monthly invoices, 5 admin proposals.
+- All seed emails use `@example.com` (IANA reserved); all phones use `+27800...` (reserved/non-allocable).
+- The seed BLOCKS production (`tchayecuvzssixyxlvfu`) — safety guard is enforced in `scripts/seed-dev.mjs`.
+- Seed script location: `scripts/seed-dev.mjs`. Reference pricing SQL: `supabase/seed/reference/pricing.sql`.
+- Unit tests for seed safety: `apps/web/lib/seed/__tests__/seedSafety.test.ts` (43 tests).
+
 ### Mobile apps
 - Not installed by the update script. Install on demand with `npm ci` inside `apps/mobile` or `apps/customer-mobile`, then `npm start` (Expo). See each app's own README/AGENTS.md.
