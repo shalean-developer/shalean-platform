@@ -1,30 +1,34 @@
 #!/usr/bin/env node
 /**
- * export-reference-data.mjs — READ-ONLY production reference export.
+ * export-reference-data.mjs — READ-ONLY export of non-sensitive reference/config data.
  *
- * Exports only safe, non-sensitive reference/configuration records from
- * production and writes sanitised SQL fixtures to supabase/seed/reference/.
+ * DEFAULT target: the DEVELOPMENT project (reads NEXT_PUBLIC_SUPABASE_URL from env).
+ * This script does NOT export from production unless --prod is passed explicitly.
  *
  * Safety controls:
- *   - Operates in strict read-only mode (SELECT only; no writes to production).
- *   - Stops with a non-zero exit if any exported row contains personal,
- *     authentication, payment, banking, or customer-specific data.
- *   - Requires explicit --prod flag to read from production; without it,
- *     uses the development project as the export source.
+ *   - Operates in strict read-only mode (SELECT only — no INSERT/UPDATE/DELETE on any project).
+ *   - Uses an explicit ALLOWLIST of tables and columns. Only those exact columns are
+ *     fetched and written. Any table or column not in the allowlist is never touched.
+ *   - Will not export any table containing personal, authentication, payment, banking,
+ *     or customer-specific information; those tables are not in the allowlist.
+ *   - Aborts if any exported row contains a value matching a known-sensitive column name
+ *     (defence-in-depth on top of the allowlist).
+ *   - Requires --prod flag to read from production; without it defaults to the dev project.
+ *   - When targeting production: requires PROD_SUPABASE_URL and PROD_SERVICE_KEY env vars
+ *     (separate from dev creds) so production and dev credentials stay isolated.
  *   - Never prints secret values.
- *   - Does not alter production in any way.
+ *   - Does NOT alter any project in any way.
  *
  * Usage:
- *   node scripts/export-reference-data.mjs             # read from dev (safe default)
- *   node scripts/export-reference-data.mjs --prod      # read from production (requires PROD_SERVICE_KEY)
- *   node scripts/export-reference-data.mjs --dry-run   # print SQL without writing
+ *   node scripts/export-reference-data.mjs               # export from dev DB (safe default)
+ *   node scripts/export-reference-data.mjs --prod        # export from production (needs PROD_SERVICE_KEY)
+ *   node scripts/export-reference-data.mjs --dry-run     # print SQL to stdout without writing
  *
  * Output: supabase/seed/reference/pricing_export.sql
  *
- * NOTE: The static reference fixture at supabase/seed/reference/pricing.sql is
- * derived from the @shalean/pricing static config and does NOT require a live
- * production export. This script supplements that with live DB pricing rows
- * when production credentials are available.
+ * NOTE: The static reference fixture at supabase/seed/reference/pricing.sql is derived
+ * from the @shalean/pricing static config and is safe to use without running this script.
+ * Run this script when you want to snapshot live DB pricing into a reproducible SQL fixture.
  */
 
 import { createRequire } from "node:module";
@@ -37,144 +41,156 @@ const root = resolve(__dirname, "..");
 const require = createRequire(resolve(root, "apps/web/package.json"));
 const { createClient } = require("@supabase/supabase-js");
 
-const PROD_REF = "tchayecuvzssixyxlvfu";
-const DEV_REF  = "mbvixuzfvzbooiurvxwz";
+const PROD_REF  = "tchayecuvzssixyxlvfu";
 
-// ──────────────────────────────────────────────────────────────
-// Safety: tables that must NEVER be exported
-// ──────────────────────────────────────────────────────────────
-const FORBIDDEN_TABLES = new Set([
-  "auth.users",
-  "bookings",
-  "cleaners",
-  "cleaner_payment_details",
-  "cleaner_earnings",
-  "cleaner_payouts",
-  "cleaner_payout_runs",
-  "cleaner_earnings_disbursements",
-  "monthly_invoices",
-  "user_profiles",
-  "customer_saved_addresses",
-  "notification_logs",
-  "notification_idempotency_claims",
-  "dispatch_logs",
-  "dispatch_offers",
-  "reviews",
-  "payment_transactions",
-  "payout_transfers",
-  "payout_transfer_outbox",
-  "payout_audit_events",
-  "admin_money_action_proposals",
-  "sales_documents",
-  "whatsapp_logs",
-  "whatsapp_queue",
-  "cleaner_applications",
-  "referral_submissions",
-  "system_logs",
-]);
+// ──────────────────────────────────────────────────────────────────────────────
+// EXPLICIT ALLOWLIST — only these tables and these exact columns are fetched.
+// Any table or column not listed here is never accessed by this script.
+// ──────────────────────────────────────────────────────────────────────────────
 
-// Columns that must never appear in exported rows
-const FORBIDDEN_COLUMNS = [
-  "email", "phone", "auth_user_id", "customer_email", "customer_phone",
-  "customer_name", "paystack_reference", "paystack_authorization_code",
-  "account_number", "bank_code", "recipient_code", "access_token",
-  "refresh_token", "zoho_invoice_id", "zoho_invoice_number",
+/** Each entry is { table, columns: string[], filter? } */
+const EXPORT_ALLOWLIST = [
+  {
+    table: "pricing_services",
+    columns: [
+      "slug", "name", "base_price",
+      "price_per_bedroom", "price_per_bathroom", "price_per_extra_room",
+      "min_hours", "max_hours",
+      "duration_base", "duration_per_bedroom", "duration_per_bathroom", "duration_per_extra_room",
+      "is_active", "sort_order",
+    ],
+    conflictKey: "slug",
+  },
+  {
+    table: "pricing_extras",
+    columns: [
+      "slug", "name", "description", "price",
+      "service_type", "is_popular", "is_active", "sort_order",
+    ],
+    conflictKey: "slug",
+  },
+  {
+    table: "pricing_booking_config",
+    columns: ["id", "config"],
+    filter: { col: "id", val: "default" },
+    conflictKey: "id",
+  },
+  {
+    table: "services",
+    columns: [
+      "id", "slug", "title", "description",
+      "starting_price", "features", "sort_order", "is_active",
+    ],
+    conflictKey: "id",
+  },
 ];
 
-function containsPersonalData(rows) {
+// ──────────────────────────────────────────────────────────────────────────────
+// DEFENCE-IN-DEPTH: columns that must never appear in any exported row,
+// even if (somehow) they slip through the allowlist above.
+// ──────────────────────────────────────────────────────────────────────────────
+
+// Defence-in-depth: column names that are unmistakably personal/sensitive and
+// must never appear in any export row. Uses precise identifiers (not "name",
+// which is shared by config tables like pricing_services.name = "Regular Cleaning").
+const SENSITIVE_COLUMN_NAMES = new Set([
+  "email", "phone", "phone_number", "phone_e164",
+  "auth_user_id", "user_id", "customer_id",
+  "customer_email", "customer_phone", "customer_name",
+  "billing_email",
+  "paystack_reference", "paystack_authorization_code",
+  "account_number", "bank_code", "bank_name", "recipient_code",
+  "access_token", "refresh_token", "service_role_key", "anon_key",
+  "zoho_invoice_id", "zoho_invoice_number", "zoho_integration_id",
+  "full_name",
+]);
+
+function checkForSensitiveColumns(table, rows) {
   for (const row of rows) {
-    for (const col of FORBIDDEN_COLUMNS) {
-      if (col in row && row[col] != null && String(row[col]).length > 0) {
-        return col;
+    for (const col of Object.keys(row)) {
+      if (SENSITIVE_COLUMN_NAMES.has(col.toLowerCase())) {
+        throw new Error(
+          `SAFETY VIOLATION: exported column '${col}' from '${table}' matches a sensitive column name. ` +
+          `Remove '${col}' from the allowlist or verify it is safe.`,
+        );
       }
     }
   }
-  return null;
 }
 
-function escapeString(s) {
-  if (s == null) return "NULL";
-  return `'${String(s).replace(/'/g, "''")}'`;
+// ──────────────────────────────────────────────────────────────────────────────
+// SQL generation
+// ──────────────────────────────────────────────────────────────────────────────
+
+function escapeValue(v) {
+  if (v == null) return "NULL";
+  if (typeof v === "boolean") return v ? "true" : "false";
+  if (typeof v === "number") return String(v);
+  if (Array.isArray(v)) return `ARRAY[${v.map((e) => escapeValue(e)).join(", ")}]::text[]`;
+  if (typeof v === "object") return `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
+  return `'${String(v).replace(/'/g, "''")}'`;
 }
 
-function buildInsertSQL(table, rows) {
-  if (!rows || rows.length === 0) return `-- ${table}: 0 rows\n`;
-  const cols = Object.keys(rows[0]);
-  const lines = rows.map((row) => {
-    const vals = cols.map((c) => {
-      const v = row[c];
-      if (v == null) return "NULL";
-      if (typeof v === "boolean") return v ? "true" : "false";
-      if (typeof v === "number") return String(v);
-      if (typeof v === "object") return `'${JSON.stringify(v).replace(/'/g, "''")}'::jsonb`;
-      return escapeString(v);
-    });
+function buildUpsertSQL(entry, rows) {
+  if (!rows || rows.length === 0) return `-- ${entry.table}: 0 rows\n\n`;
+  const exportedCols = entry.columns.filter((c) => c in rows[0]);
+  const valueLines = rows.map((row) => {
+    const vals = exportedCols.map((c) => escapeValue(row[c]));
     return `  (${vals.join(", ")})`;
   });
   return (
-    `-- ${table}: ${rows.length} rows\n` +
-    `INSERT INTO public.${table} (\n  ${cols.join(", ")}\n) VALUES\n` +
-    lines.join(",\n") +
-    "\nON CONFLICT DO NOTHING;\n\n"
+    `-- ${entry.table}: ${rows.length} rows (columns: ${exportedCols.join(", ")})\n` +
+    `INSERT INTO public.${entry.table} (\n  ${exportedCols.join(", ")}\n) VALUES\n` +
+    valueLines.join(",\n") + "\n" +
+    `ON CONFLICT (${entry.conflictKey}) DO UPDATE SET\n` +
+    exportedCols
+      .filter((c) => c !== entry.conflictKey)
+      .map((c) => `  ${c} = EXCLUDED.${c}`)
+      .join(",\n") +
+    ";\n\n"
   );
 }
 
-async function exportTable(client, table, columns, filter = null) {
-  if (FORBIDDEN_TABLES.has(table)) {
-    throw new Error(`SAFETY VIOLATION: attempted export of forbidden table '${table}'`);
-  }
-  let query = client.from(table).select(columns ?? "*");
-  if (filter) query = query.eq(filter.col, filter.val);
-  const { data, error } = await query.limit(500);
-  if (error) {
-    console.warn(`  [skip] ${table}: ${error.message}`);
-    return [];
-  }
-  const personalCol = containsPersonalData(data ?? []);
-  if (personalCol) {
-    throw new Error(
-      `SAFETY VIOLATION: table '${table}' contains personal data in column '${personalCol}'. Export aborted.`,
-    );
-  }
-  return data ?? [];
-}
+// ──────────────────────────────────────────────────────────────────────────────
+// Main
+// ──────────────────────────────────────────────────────────────────────────────
 
 async function main() {
   const args = process.argv.slice(2);
-  const useProd  = args.includes("--prod");
-  const dryRun   = args.includes("--dry-run");
+  const useProd = args.includes("--prod");
+  const dryRun  = args.includes("--dry-run");
 
-  if (useProd) {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
-    if (!url.includes(PROD_REF)) {
-      console.error("ERROR: --prod requires NEXT_PUBLIC_SUPABASE_URL to point at the production project.");
-      console.error("       Set PROD_SUPABASE_URL and PROD_SERVICE_KEY to use production creds without");
-      console.error("       modifying your local .env.local.");
-      process.exit(1);
-    }
-  }
-
+  // When --prod is passed, use separate PROD_* env vars to keep creds isolated
   const url = useProd
-    ? (process.env.PROD_SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL ?? "")
+    ? (process.env.PROD_SUPABASE_URL ?? "")
     : (process.env.NEXT_PUBLIC_SUPABASE_URL ?? "");
   const serviceKey = useProd
-    ? (process.env.PROD_SERVICE_KEY ?? process.env.SUPABASE_SERVICE_ROLE_KEY ?? "")
+    ? (process.env.PROD_SERVICE_KEY ?? "")
     : (process.env.SUPABASE_SERVICE_ROLE_KEY ?? "");
 
   if (!url || !serviceKey) {
-    console.error("ERROR: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.");
+    if (useProd) {
+      console.error("ERROR: --prod requires PROD_SUPABASE_URL and PROD_SERVICE_KEY env vars.");
+      console.error("       Do NOT reuse dev creds for production access.");
+    } else {
+      console.error("ERROR: NEXT_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set.");
+    }
     process.exit(1);
   }
 
   const ref = url.match(/https:\/\/([^.]+)\.supabase/)?.[1] ?? "unknown";
+
+  // Safety: if not passing --prod but URL is production, refuse
   if (ref === PROD_REF && !useProd) {
-    console.error(`ERROR: URL points at production (${PROD_REF}) but --prod flag was not passed.`);
-    console.error("       Pass --prod explicitly to export from production, or use a dev/staging URL.");
+    console.error(`ERROR: NEXT_PUBLIC_SUPABASE_URL points at production (${PROD_REF}).`);
+    console.error("       Pass --prod (with separate PROD_SUPABASE_URL / PROD_SERVICE_KEY) to export from production.");
+    console.error("       Or update NEXT_PUBLIC_SUPABASE_URL to point at a non-production project.");
     process.exit(1);
   }
 
-  console.log(`[export-reference-data] source=${ref} ${useProd ? "(PRODUCTION — read-only)" : "(dev)"}`);
-  console.log("[export-reference-data] Exporting ONLY non-sensitive reference/config tables.");
+  const source = useProd ? `PRODUCTION (${ref}) — READ-ONLY` : `dev/staging (${ref})`;
+  console.log(`[export-reference-data] source=${source}`);
+  console.log("[export-reference-data] Allowlisted tables:", EXPORT_ALLOWLIST.map((e) => e.table).join(", "));
 
   const client = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -183,51 +199,45 @@ async function main() {
   const parts = [
     `-- =============================================================================\n`,
     `-- Reference data export — generated by scripts/export-reference-data.mjs\n`,
-    `-- Source project: ${ref}${useProd ? " (PRODUCTION — read-only; no personal data)" : " (dev)"}\n`,
+    `-- Source project: ${ref}${useProd ? " (PRODUCTION — read-only)" : " (dev/staging)"}\n`,
     `-- Generated: ${new Date().toISOString()}\n`,
+    `-- Tables: ${EXPORT_ALLOWLIST.map((e) => e.table).join(", ")}\n`,
     `-- SAFE TO COMMIT: no personal, auth, payment, or banking data.\n`,
+    `-- Columns exported per table are explicit (allowlist); no wildcard SELECT used.\n`,
     `-- =============================================================================\n\nBEGIN;\n\n`,
   ];
 
-  // ── pricing_services ──────────────────────────────────────────
-  const pricingServices = await exportTable(
-    client, "pricing_services",
-    "slug, name, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, min_hours, max_hours, duration_base, duration_per_bedroom, duration_per_bathroom, duration_per_extra_room, is_active, sort_order",
-  );
-  parts.push(buildInsertSQL("pricing_services", pricingServices));
-  console.log(`  pricing_services: ${pricingServices.length} rows`);
+  for (const entry of EXPORT_ALLOWLIST) {
+    let query = client
+      .from(entry.table)
+      .select(entry.columns.join(", "))  // only the allowlisted columns — no SELECT *
+      .limit(500);
 
-  // ── pricing_extras ────────────────────────────────────────────
-  const pricingExtras = await exportTable(
-    client, "pricing_extras",
-    "slug, name, description, price, service_type, is_popular, is_active, sort_order",
-  );
-  parts.push(buildInsertSQL("pricing_extras", pricingExtras));
-  console.log(`  pricing_extras: ${pricingExtras.length} rows`);
+    if (entry.filter) {
+      query = query.eq(entry.filter.col, entry.filter.val);
+    }
 
-  // ── pricing_booking_config ────────────────────────────────────
-  const bookingConfig = await exportTable(
-    client, "pricing_booking_config", "id, config",
-    { col: "id", val: "default" },
-  );
-  parts.push(buildInsertSQL("pricing_booking_config", bookingConfig));
-  console.log(`  pricing_booking_config: ${bookingConfig.length} rows`);
+    const { data, error } = await query;
+    if (error) {
+      console.warn(`  [skip] ${entry.table}: ${error.message}`);
+      parts.push(`-- ${entry.table}: skipped (${error.message})\n\n`);
+      continue;
+    }
 
-  // ── services (marketing) ──────────────────────────────────────
-  const services = await exportTable(
-    client, "services",
-    "id, slug, title, description, starting_price, features, sort_order, is_active",
-  );
-  parts.push(buildInsertSQL("services", services));
-  console.log(`  services: ${services.length} rows`);
+    const rows = data ?? [];
+    // Defence-in-depth: verify no sensitive columns slipped through
+    checkForSensitiveColumns(entry.table, rows);
+
+    console.log(`  ${entry.table}: ${rows.length} rows`);
+    parts.push(buildUpsertSQL(entry, rows));
+  }
 
   parts.push("COMMIT;\n");
-
   const sql = parts.join("");
 
   if (dryRun) {
-    console.log("\n[dry-run] SQL output:\n");
-    console.log(sql.slice(0, 3000) + (sql.length > 3000 ? "\n... (truncated)" : ""));
+    console.log("\n[dry-run] SQL preview (first 2000 chars):\n");
+    console.log(sql.slice(0, 2000) + (sql.length > 2000 ? "\n... (truncated)" : ""));
   } else {
     const outDir = resolve(root, "supabase/seed/reference");
     mkdirSync(outDir, { recursive: true });
@@ -236,8 +246,10 @@ async function main() {
     console.log(`\n[export-reference-data] Written: ${outPath}`);
   }
 
-  console.log("[export-reference-data] DONE — no production mutations performed.");
-  console.log("[export-reference-data] Confirm: NO personal, auth, payment, or banking data exported.");
+  console.log(`\n[export-reference-data] DONE.`);
+  console.log("  No production mutations performed.");
+  console.log("  No personal, auth, payment, or banking data exported.");
+  console.log(`  All exports were: ${EXPORT_ALLOWLIST.map((e) => e.table).join(", ")}`);
 }
 
 main().catch((err) => {

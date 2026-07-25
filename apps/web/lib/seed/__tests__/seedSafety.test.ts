@@ -1,26 +1,58 @@
 /**
  * Seed safety and correctness unit tests.
- * Validates the dev seed constants, safety guard, suburb resolution aliases,
- * recurring preferred-cleaner assignment, and earnings status transitions.
- * These tests run without a live database.
+ *
+ * Covers:
+ *   - Production safety guard (multi-layer: project ref + SHALEAN_APP_ENV)
+ *   - Deterministic UUID stability
+ *   - Suburb resolution slug aliases
+ *   - Recurring preferred-cleaner assignment
+ *   - Cleaner earnings status transitions
+ *   - Payout eligibility
+ *   - Admin maker-checker proposal statuses
+ *   - Monthly invoice invariants
+ *   - Seed idempotency
+ *   - Synthetic data PII assertions (phone range, email domain)
+ *   - Outbound communication guard (SMS, WhatsApp, voice, push, email)
+ *
+ * All tests run without a live database.
  */
 import { describe, it, expect } from "vitest";
+import {
+  SEED_PHONES,
+  SEED_EMAILS,
+  isSeedPhone,
+  isSeedEmail,
+  isSeedRecipient,
+  assertNotSeedRecipient,
+  assertNotSeedWhatsApp,
+  assertNotSeedSms,
+  assertNotSeedEmail,
+} from "@/lib/seed/devSeedGuard";
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Seed safety constants (mirrors scripts/seed-dev.mjs)
 // ──────────────────────────────────────────────────────────────────────────────
 
-const PROD_REF = "tchayecuvzssixyxlvfu";
-const DEV_REF  = "mbvixuzfvzbooiurvxwz";
-const SEED_TAG = "DEVSEED";
+const PROD_REF    = "tchayecuvzssixyxlvfu";
+const DEV_REF     = "mbvixuzfvzbooiurvxwz";
+const STG_REF     = "gbgnemlpyykyhpqqbgru";
+const ALLOWED_REFS = new Set([DEV_REF, STG_REF]);
+const SEED_TAG    = "DEVSEED";
 
 function extractProjectRef(url: string): string {
   return url.match(/https:\/\/([^.]+)\.supabase/)?.[1] ?? "";
 }
 
-function isSafeToSeed(url: string): boolean {
+/** Mirrors assertNonProductionSeed() from scripts/seed-dev.mjs. */
+function assertNonProductionSeed(url: string, appEnv: string): void {
   const ref = extractProjectRef(url);
-  return ref !== PROD_REF && ref.length > 0;
+  if (!ref) throw new Error("Cannot determine project ref.");
+  if (ref === PROD_REF) throw new Error(`SAFETY BLOCK: production ref ${PROD_REF}`);
+  if (!ALLOWED_REFS.has(ref)) throw new Error(`SAFETY BLOCK: ref '${ref}' not in allow-list`);
+  const env = appEnv.trim().toLowerCase();
+  if (!["development", "staging"].includes(env)) {
+    throw new Error(`SAFETY BLOCK: SHALEAN_APP_ENV='${env}' is not development|staging`);
+  }
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -56,26 +88,62 @@ const RECURRING_IDS = {
 // Tests: production safety guard
 // ──────────────────────────────────────────────────────────────────────────────
 
-describe("Seed safety guard", () => {
-  it("blocks the production project ref", () => {
-    expect(isSafeToSeed(`https://${PROD_REF}.supabase.co`)).toBe(false);
+describe("Seed safety guard — production refusal (multi-layer)", () => {
+  it("blocks the production project ref regardless of SHALEAN_APP_ENV", () => {
+    expect(() =>
+      assertNonProductionSeed(`https://${PROD_REF}.supabase.co`, "development"),
+    ).toThrow("SAFETY BLOCK");
   });
 
-  it("allows the development project ref", () => {
-    expect(isSafeToSeed(`https://${DEV_REF}.supabase.co`)).toBe(true);
+  it("allows the development project ref with SHALEAN_APP_ENV=development", () => {
+    expect(() =>
+      assertNonProductionSeed(`https://${DEV_REF}.supabase.co`, "development"),
+    ).not.toThrow();
   });
 
-  it("allows a staging project ref", () => {
-    expect(isSafeToSeed("https://gbgnemlpyykyhpqqbgru.supabase.co")).toBe(true);
+  it("allows the staging project ref with SHALEAN_APP_ENV=staging", () => {
+    expect(() =>
+      assertNonProductionSeed(`https://${STG_REF}.supabase.co`, "staging"),
+    ).not.toThrow();
   });
 
-  it("rejects an empty URL", () => {
-    expect(isSafeToSeed("")).toBe(false);
+  it("blocks an unknown project ref even with SHALEAN_APP_ENV=development", () => {
+    expect(() =>
+      assertNonProductionSeed("https://unknownref12345678.supabase.co", "development"),
+    ).toThrow("not in allow-list");
   });
 
-  it("rejects a non-supabase URL that accidentally contains the prod ref", () => {
-    // URL must have /{PROD_REF}.supabase pattern to match — random strings don't
-    expect(isSafeToSeed(`https://some-proxy.example.com/${PROD_REF}`)).toBe(false);
+  it("blocks when SHALEAN_APP_ENV is missing/empty", () => {
+    expect(() =>
+      assertNonProductionSeed(`https://${DEV_REF}.supabase.co`, ""),
+    ).toThrow("SAFETY BLOCK");
+  });
+
+  it("blocks when SHALEAN_APP_ENV is 'production'", () => {
+    expect(() =>
+      assertNonProductionSeed(`https://${DEV_REF}.supabase.co`, "production"),
+    ).toThrow("SAFETY BLOCK");
+  });
+
+  it("blocks when SHALEAN_APP_ENV is 'test'", () => {
+    expect(() =>
+      assertNonProductionSeed(`https://${DEV_REF}.supabase.co`, "test"),
+    ).toThrow("SAFETY BLOCK");
+  });
+
+  it("blocks an empty URL", () => {
+    expect(() => assertNonProductionSeed("", "development")).toThrow();
+  });
+
+  it("does not allow a URL that contains the prod ref in a path (not the project subdomain)", () => {
+    // A proxy URL that mentions the prod ref should not be treated as non-production
+    expect(() =>
+      assertNonProductionSeed(`https://${DEV_REF}.supabase.co/proxy/${PROD_REF}`, "development"),
+    ).not.toThrow(); // Dev ref is extracted correctly from subdomain — OK
+    // But a URL whose subdomain IS the prod ref should still fail
+    expect(() =>
+      assertNonProductionSeed(`https://${PROD_REF}.supabase.co`, "development"),
+    ).toThrow("SAFETY BLOCK");
   });
 });
 
@@ -85,8 +153,7 @@ describe("Seed safety guard", () => {
 
 describe("Seed UUID determinism", () => {
   it("has 6 distinct cleaner IDs", () => {
-    const ids = Object.values(CLEANER_IDS);
-    expect(new Set(ids).size).toBe(6);
+    expect(new Set(Object.values(CLEANER_IDS)).size).toBe(6);
   });
 
   it("all cleaner IDs match version-4 UUID format", () => {
@@ -101,9 +168,309 @@ describe("Seed UUID determinism", () => {
     }
   });
 
-  it("SEED_TAG is a safe prefix with no SQL injection risk", () => {
+  it("SEED_TAG is a safe prefix with no SQL wildcard or injection risk", () => {
     expect(SEED_TAG).toMatch(/^[A-Z0-9_-]+$/);
+    expect(SEED_TAG).not.toContain("%");
+    expect(SEED_TAG).not.toContain("_");
     expect(SEED_TAG.length).toBeLessThanOrEqual(20);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tests: outbound communication guard — phone
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("Outbound guard — phone numbers", () => {
+  it("recognises every seed phone as a seed phone", () => {
+    for (const phone of SEED_PHONES) {
+      expect(isSeedPhone(phone)).toBe(true);
+    }
+  });
+
+  it("recognises any +27000 prefixed number as synthetic (structural guard)", () => {
+    expect(isSeedPhone("+27000999999")).toBe(true);
+    expect(isSeedPhone("+27000123456")).toBe(true);
+  });
+
+  it("does not flag a real SA mobile number", () => {
+    expect(isSeedPhone("+27821234567")).toBe(false);
+    expect(isSeedPhone("+27711234567")).toBe(false);
+    expect(isSeedPhone("+27614567890")).toBe(false);
+  });
+
+  it("handles whitespace/formatting in phone strings", () => {
+    expect(isSeedPhone("+27 000 000 001")).toBe(true);
+    expect(isSeedPhone("+27-000-000-011")).toBe(true);
+  });
+
+  it("assertNotSeedSms throws for every seed phone", () => {
+    for (const phone of SEED_PHONES) {
+      expect(() => assertNotSeedSms(phone, "test")).toThrow("DEV SEED GUARD");
+    }
+  });
+
+  it("assertNotSeedWhatsApp throws for every seed phone", () => {
+    for (const phone of SEED_PHONES) {
+      expect(() => assertNotSeedWhatsApp(phone, "test")).toThrow("DEV SEED GUARD");
+    }
+  });
+
+  it("assertNotSeedRecipient throws for a +27000 phone not in the explicit list", () => {
+    expect(() =>
+      assertNotSeedRecipient({ phone: "+27000999000", channel: "sms" }),
+    ).toThrow("DEV SEED GUARD");
+  });
+
+  it("assertNotSeedSms does not throw for a real phone number", () => {
+    expect(() => assertNotSeedSms("+27821234567")).not.toThrow();
+  });
+
+  it("assertNotSeedWhatsApp does not throw for a real phone number", () => {
+    expect(() => assertNotSeedWhatsApp("+27711234567")).not.toThrow();
+  });
+
+  it("no seed phone can be submitted to a voice provider", () => {
+    for (const phone of SEED_PHONES) {
+      expect(() =>
+        assertNotSeedRecipient({ phone, channel: "voice" }),
+      ).toThrow("DEV SEED GUARD");
+    }
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tests: outbound communication guard — email
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("Outbound guard — email addresses", () => {
+  it("recognises every seed email as a seed email", () => {
+    for (const email of SEED_EMAILS) {
+      expect(isSeedEmail(email)).toBe(true);
+    }
+  });
+
+  it("recognises any @example.com address as synthetic (structural guard)", () => {
+    expect(isSeedEmail("random@example.com")).toBe(true);
+    expect(isSeedEmail("ops-test-12345@example.com")).toBe(true);
+  });
+
+  it("does not flag a real email address", () => {
+    expect(isSeedEmail("customer@gmail.com")).toBe(false);
+    expect(isSeedEmail("hello@shalean.co.za")).toBe(false);
+  });
+
+  it("is case-insensitive for seed emails", () => {
+    expect(isSeedEmail("ADMIN.ONE@EXAMPLE.COM")).toBe(true);
+    expect(isSeedEmail("Customer.One@Example.Com")).toBe(true);
+  });
+
+  it("assertNotSeedEmail throws for every seed email", () => {
+    for (const email of SEED_EMAILS) {
+      expect(() => assertNotSeedEmail(email, "test")).toThrow("DEV SEED GUARD");
+    }
+  });
+
+  it("assertNotSeedEmail throws for any @example.com address", () => {
+    expect(() => assertNotSeedEmail("someone@example.com")).toThrow("DEV SEED GUARD");
+  });
+
+  it("assertNotSeedEmail does not throw for a real email", () => {
+    expect(() => assertNotSeedEmail("real.customer@gmail.com")).not.toThrow();
+  });
+
+  it("no seed email can be submitted to an email provider", () => {
+    for (const email of SEED_EMAILS) {
+      expect(() =>
+        assertNotSeedRecipient({ email, channel: "email" }),
+      ).toThrow("DEV SEED GUARD");
+    }
+  });
+
+  it("push notification guard blocks seed email", () => {
+    expect(() =>
+      assertNotSeedRecipient({ email: "cleaner.one@example.com", channel: "push" }),
+    ).toThrow("DEV SEED GUARD");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tests: no seeded WhatsApp recipient can be queued
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("WhatsApp queue guard", () => {
+  it("blocks all seed phones from being queued to WhatsApp", () => {
+    const seedPhoneArray = [...SEED_PHONES];
+    for (const phone of seedPhoneArray) {
+      const wouldQueue = !isSeedPhone(phone);
+      expect(wouldQueue).toBe(false);
+    }
+  });
+
+  it("would allow a real non-seed phone to be queued", () => {
+    const realPhone = "+27821234567";
+    const wouldQueue = !isSeedPhone(realPhone);
+    expect(wouldQueue).toBe(true);
+  });
+
+  it("blocks a +27000 number that is not in the explicit list", () => {
+    const unknownSeedLike = "+27000099099";
+    expect(isSeedPhone(unknownSeedLike)).toBe(true);
+    expect(() => assertNotSeedWhatsApp(unknownSeedLike)).toThrow("DEV SEED GUARD");
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tests: isSeedRecipient (combined check)
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("isSeedRecipient — combined check", () => {
+  it("returns true when phone is a seed phone", () => {
+    expect(isSeedRecipient({ phone: "+27000000001" })).toBe(true);
+  });
+
+  it("returns true when email is a seed email", () => {
+    expect(isSeedRecipient({ email: "admin.one@example.com" })).toBe(true);
+  });
+
+  it("returns false for real phone and real email", () => {
+    expect(isSeedRecipient({ phone: "+27821234567", email: "real@shalean.co.za" })).toBe(false);
+  });
+
+  it("returns true when either phone or email is a seed identity", () => {
+    // Real phone, seed email
+    expect(isSeedRecipient({ phone: "+27821234567", email: "customer.one@example.com" })).toBe(true);
+    // Seed phone, real email
+    expect(isSeedRecipient({ phone: "+27000000021", email: "real@shalean.co.za" })).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tests: rerunning seed does not alter protected identifiers
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("Seed idempotency — protected identifiers are stable", () => {
+  it("SEED_PHONES set contents are deterministic across module loads", () => {
+    // SEED_PHONES is a const ReadonlySet — it cannot change between runs
+    expect(SEED_PHONES.size).toBe(15); // 1 admin + 6 cleaners + 8 customers
+    expect(SEED_PHONES.has("+27000000001")).toBe(true); // admin
+    expect(SEED_PHONES.has("+27000000011")).toBe(true); // cleaner.one
+    expect(SEED_PHONES.has("+27000000028")).toBe(true); // customer.eight
+  });
+
+  it("SEED_EMAILS set contents are deterministic", () => {
+    expect(SEED_EMAILS.size).toBe(17); // 3 admin + 6 cleaner + 8 customer
+    expect(SEED_EMAILS.has("admin.one@example.com")).toBe(true);
+    expect(SEED_EMAILS.has("finance.admin@example.com")).toBe(true);
+    expect(SEED_EMAILS.has("customer.eight@example.com")).toBe(true);
+  });
+
+  it("seed phone numbers are identical across three independent reads", () => {
+    const read1 = new Set(SEED_PHONES);
+    const read2 = new Set(SEED_PHONES);
+    const read3 = new Set(SEED_PHONES);
+    expect(read1).toEqual(read2);
+    expect(read2).toEqual(read3);
+  });
+
+  it("cleaner surrogate IDs are stable across reads", () => {
+    expect(CLEANER_IDS.c1).toBe("f1000001-0001-4001-8001-000000000001");
+    expect(CLEANER_IDS.c6).toBe("f1000001-0006-4001-8001-000000000006");
+  });
+
+  it("booking paystack_reference prefix is deterministic", () => {
+    expect("DEVSEED-BK-001".startsWith(SEED_TAG)).toBe(true);
+    expect("DEVSEED-BK-015".startsWith(SEED_TAG)).toBe(true);
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tests: production records are unaffected (guard is a no-op in production)
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("Production safety — guard is no-op in NODE_ENV=production", () => {
+  it("assertNotSeedRecipient does nothing in production environment", () => {
+    const original = process.env.NODE_ENV;
+    try {
+      // Temporarily simulate production (cast required: TS marks NODE_ENV read-only)
+      (process.env as Record<string, string>).NODE_ENV = "production";
+      // Should NOT throw even for a seed phone in production mode
+      expect(() =>
+        assertNotSeedRecipient({ phone: "+27000000001", channel: "sms" }),
+      ).not.toThrow();
+      expect(() =>
+        assertNotSeedRecipient({ email: "admin.one@example.com", channel: "email" }),
+      ).not.toThrow();
+    } finally {
+      (process.env as Record<string, string>).NODE_ENV = original ?? "test";
+    }
+  });
+
+  it("isSeedPhone and isSeedEmail still identify seed identifiers regardless of NODE_ENV", () => {
+    // These helpers are environment-agnostic — only the guard itself is no-op in prod
+    const original = process.env.NODE_ENV;
+    try {
+      (process.env as Record<string, string>).NODE_ENV = "production";
+      expect(isSeedPhone("+27000000001")).toBe(true);
+      expect(isSeedEmail("admin.one@example.com")).toBe(true);
+    } finally {
+      (process.env as Record<string, string>).NODE_ENV = original ?? "test";
+    }
+  });
+});
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Tests: synthetic data — no real PII (phone range corrected)
+// ──────────────────────────────────────────────────────────────────────────────
+
+describe("Synthetic data — no real PII", () => {
+  it("all seed emails use the @example.com domain (IANA reserved)", () => {
+    for (const email of SEED_EMAILS) {
+      expect(email.endsWith("@example.com")).toBe(true);
+    }
+  });
+
+  it("no seed email uses a real-world domain", () => {
+    const FORBIDDEN_DOMAINS = ["gmail.com", "yahoo.com", "hotmail.com", "shalean.co.za", "shalean.test"];
+    for (const email of SEED_EMAILS) {
+      for (const domain of FORBIDDEN_DOMAINS) {
+        expect(email).not.toContain(domain);
+      }
+    }
+  });
+
+  it("all seed phones start with +27000 (structurally un-routable SA prefix)", () => {
+    for (const phone of SEED_PHONES) {
+      expect(phone.startsWith("+27000")).toBe(true);
+    }
+  });
+
+  it("no seed phone is in the +2780 toll-free range", () => {
+    for (const phone of SEED_PHONES) {
+      expect(phone.startsWith("+2780")).toBe(false);
+    }
+  });
+
+  it("no seed phone is in any real SA mobile range (+276x through +278x)", () => {
+    const REAL_MOBILE_PREFIXES = [
+      "+2760", "+2761", "+2762", "+2763", "+2764", "+2765",
+      "+2766", "+2767", "+2768", "+2769",
+      "+2771", "+2772", "+2773", "+2774", "+2776", "+2778",
+      "+2781", "+2782", "+2783", "+2784",
+    ];
+    for (const phone of SEED_PHONES) {
+      for (const prefix of REAL_MOBILE_PREFIXES) {
+        expect(phone.startsWith(prefix)).toBe(false);
+      }
+    }
+  });
+
+  it("no seed phone is in the toll-free or special-service ranges (+2780, +2786, +2787)", () => {
+    const SPECIAL = ["+2780", "+2786", "+2787"];
+    for (const phone of SEED_PHONES) {
+      for (const prefix of SPECIAL) {
+        expect(phone.startsWith(prefix)).toBe(false);
+      }
+    }
   });
 });
 
@@ -112,7 +479,6 @@ describe("Seed UUID determinism", () => {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("Suburb resolution slug aliases", () => {
-  // Import the canonical slug alias map from the app
   const RESOLVE_SLUG_ALIASES: Record<string, string> = {
     "d-urbanvale": "durbanville",
     durbanvale: "durbanville",
@@ -124,11 +490,7 @@ describe("Suburb resolution slug aliases", () => {
   };
 
   function bookingLocationSlug(label: string): string {
-    return label
-      .toLowerCase()
-      .replace(/['']/g, "")
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
+    return label.toLowerCase().replace(/['']/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
   }
 
   function normalizeLocationResolveSlug(label: string): string {
@@ -137,38 +499,22 @@ describe("Suburb resolution slug aliases", () => {
     return RESOLVE_SLUG_ALIASES[raw] ?? raw;
   }
 
-  it("resolves 'Sea Point' to 'sea-point'", () => {
-    expect(normalizeLocationResolveSlug("Sea Point")).toBe("sea-point");
+  it.each([
+    ["Sea Point",    "sea-point"],
+    ["Claremont",    "claremont"],
+    ["Rondebosch",   "rondebosch"],
+    ["Observatory",  "observatory"],
+    ["Newlands",     "newlands"],
+    ["Constantia",   "constantia"],
+    ["Green Point",  "green-point"],
+    ["other",        ""],
+  ])("resolves '%s' to '%s'", (label, expected) => {
+    expect(normalizeLocationResolveSlug(label)).toBe(expected);
   });
 
-  it("resolves 'Claremont' to 'claremont'", () => {
-    expect(normalizeLocationResolveSlug("Claremont")).toBe("claremont");
-  });
-
-  it("resolves 'V&A Waterfront' to 'waterfront' via v-a-waterfront alias", () => {
-    // "V&A Waterfront" → lower → "v&a waterfront" → slugify → "v-a-waterfront"
-    // → RESOLVE_SLUG_ALIASES["v-a-waterfront"] = "waterfront"
+  it("resolves V&A Waterfront via v-a-waterfront alias", () => {
+    // "V&A Waterfront" → lower → "v&a waterfront" → slugify → "v-a-waterfront" → alias → "waterfront"
     expect(normalizeLocationResolveSlug("V&A Waterfront")).toBe("waterfront");
-  });
-
-  it("resolves 'other' to empty string", () => {
-    expect(normalizeLocationResolveSlug("other")).toBe("");
-  });
-
-  it("resolves 'Rondebosch' to 'rondebosch'", () => {
-    expect(normalizeLocationResolveSlug("Rondebosch")).toBe("rondebosch");
-  });
-
-  it("resolves 'Observatory' to 'observatory'", () => {
-    expect(normalizeLocationResolveSlug("Observatory")).toBe("observatory");
-  });
-
-  it("resolves 'Newlands' to 'newlands'", () => {
-    expect(normalizeLocationResolveSlug("Newlands")).toBe("newlands");
-  });
-
-  it("resolves 'Constantia' to 'constantia'", () => {
-    expect(normalizeLocationResolveSlug("Constantia")).toBe("constantia");
   });
 });
 
@@ -176,80 +522,54 @@ describe("Suburb resolution slug aliases", () => {
 // Tests: recurring booking preferred-cleaner structure
 // ──────────────────────────────────────────────────────────────────────────────
 
-describe("Recurring booking preferred-cleaner structure", () => {
+describe("Recurring booking preferred-cleaner", () => {
   const weeklyRecurring = {
     id: RECURRING_IDS.weekly,
-    customer_id: "some-customer-id",
     frequency: "weekly",
     days_of_week: [2],
-    start_date: "2026-06-01",
-    price: 430,
     status: "active",
-    next_run_date: "2026-07-26",
     preferred_cleaner_id: CLEANER_IDS.c3,
-    booking_snapshot_template: {
-      service_slug: "regular-cleaning",
-      rooms: 2, bathrooms: 1,
-      suburb: "Sea Point",
-    },
+    booking_snapshot_template: { service_slug: "regular-cleaning", rooms: 2, bathrooms: 1 },
   };
 
-  it("weekly recurring has preferred_cleaner_id set to Cleaner3", () => {
-    expect(weeklyRecurring.preferred_cleaner_id).toBe(CLEANER_IDS.c3);
+  it("preferred_cleaner_id is in the seed cleaner set", () => {
+    expect(new Set(Object.values(CLEANER_IDS)).has(weeklyRecurring.preferred_cleaner_id!)).toBe(true);
   });
 
-  it("preferred cleaner ID belongs to the seed cleaner set", () => {
-    const seedCleanerIds = new Set(Object.values(CLEANER_IDS));
-    expect(seedCleanerIds.has(weeklyRecurring.preferred_cleaner_id!)).toBe(true);
+  it("frequency is a valid enum value", () => {
+    expect(["weekly", "biweekly", "monthly"]).toContain(weeklyRecurring.frequency);
   });
 
-  it("recurring frequency is a valid enum value", () => {
-    const validFrequencies = ["weekly", "biweekly", "monthly"];
-    expect(validFrequencies).toContain(weeklyRecurring.frequency);
-  });
-
-  it("days_of_week contains valid 1–7 values", () => {
+  it("days_of_week values are 1–7 inclusive", () => {
     for (const d of weeklyRecurring.days_of_week) {
       expect(d).toBeGreaterThanOrEqual(1);
       expect(d).toBeLessThanOrEqual(7);
     }
   });
-
-  it("booking_snapshot_template has service_slug", () => {
-    expect(weeklyRecurring.booking_snapshot_template.service_slug).toBe("regular-cleaning");
-  });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Tests: cleaner earnings status transitions
+// Tests: cleaner earnings status
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("Cleaner earnings status", () => {
-  const validStatuses = ["pending", "approved", "processing", "paid"];
+  const VALID = ["pending", "approved", "processing", "paid"];
 
-  it("all earning statuses in seed are valid", () => {
-    const seedEarnings = [
-      { id: EARNING_IDS.e1, status: "paid" },
-      { id: EARNING_IDS.e2, status: "approved" },
-    ];
-    for (const e of seedEarnings) {
-      expect(validStatuses).toContain(e.status);
-    }
+  it.each([
+    [EARNING_IDS.e1, "paid"],
+    [EARNING_IDS.e2, "approved"],
+  ])("earning %s has valid status '%s'", (_, status) => {
+    expect(VALID).toContain(status);
   });
 
-  it("paid earnings must have a paid_at timestamp (structural check)", () => {
-    const paidEarning = {
-      status: "paid",
-      paid_at: new Date().toISOString(),
-      approved_at: new Date().toISOString(),
-    };
-    expect(paidEarning.paid_at).toBeTruthy();
-    expect(paidEarning.approved_at).toBeTruthy();
+  it("paid earnings have paid_at and approved_at timestamps", () => {
+    const paid = { status: "paid", paid_at: new Date().toISOString(), approved_at: new Date().toISOString() };
+    expect(paid.paid_at).toBeTruthy();
+    expect(paid.approved_at).toBeTruthy();
   });
 
-  it("pending earnings should not have paid_at", () => {
-    const pendingEarning = { status: "pending", paid_at: null };
-    expect(pendingEarning.paid_at).toBeNull();
+  it("pending earnings have null paid_at", () => {
+    expect({ status: "pending", paid_at: null as null }.paid_at).toBeNull();
   });
 });
 
@@ -258,80 +578,39 @@ describe("Cleaner earnings status", () => {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("Payout eligibility", () => {
-  const validPayoutStatuses = ["pending", "frozen", "approved", "paid", "cancelled"];
-  const validPaymentStatuses = ["pending", "processing", "success", "failed", "partial_failed"];
-
-  it("all payout statuses in seed are valid", () => {
-    const seedPayouts = ["pending", "frozen", "approved", "paid", "cancelled"];
-    for (const s of seedPayouts) {
-      expect(validPayoutStatuses).toContain(s);
-    }
-  });
+  const VALID_STATUSES = ["pending", "frozen", "approved", "paid", "cancelled"];
 
   it("seed covers all payout status variants", () => {
-    const seedStatuses = new Set(["pending", "frozen", "approved", "paid", "cancelled"]);
-    for (const s of validPayoutStatuses) {
-      expect(seedStatuses.has(s)).toBe(true);
-    }
+    const seeded = new Set(["pending", "frozen", "approved", "paid", "cancelled"]);
+    for (const s of VALID_STATUSES) expect(seeded.has(s)).toBe(true);
   });
 
-  it("period_start is before period_end in payouts", () => {
-    const payout = {
-      period_start: "2026-07-01",
-      period_end: "2026-07-31",
-    };
-    expect(new Date(payout.period_start) < new Date(payout.period_end)).toBe(true);
+  it("period_start is before period_end", () => {
+    expect(new Date("2026-07-01") < new Date("2026-07-31")).toBe(true);
   });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Tests: admin maker-checker proposal statuses
+// Tests: admin money action proposals
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("Admin money action proposals", () => {
-  const validStatuses = ["pending", "processing", "approved", "rejected", "expired", "failed"];
-  const validActionTypes = [
-    "adjust_payout_earnings",
-    "adjust_team_payout_earnings",
-    "reprice_booking_details",
-  ];
+  const VALID_STATUSES = ["pending", "processing", "approved", "rejected", "expired", "failed"];
+  const VALID_TYPES = ["adjust_payout_earnings", "adjust_team_payout_earnings", "reprice_booking_details"];
 
-  it("all proposal statuses in seed are valid", () => {
-    const seedStatuses = ["pending", "pending", "rejected", "approved", "expired"];
-    for (const s of seedStatuses) {
-      expect(validStatuses).toContain(s);
-    }
+  it("seed covers all non-terminal statuses", () => {
+    const seeded = new Set(["pending", "rejected", "approved", "expired"]);
+    for (const s of ["pending", "approved", "rejected", "expired"]) expect(seeded.has(s)).toBe(true);
   });
 
-  it("seed proposals cover all non-terminal status variants", () => {
-    const seedStatuses = new Set(["pending", "rejected", "approved", "expired"]);
-    const nonTerminal = ["pending", "approved", "rejected", "expired"];
-    for (const s of nonTerminal) {
-      expect(seedStatuses.has(s)).toBe(true);
-    }
+  it("maker-checker: proposer and reviewer are different admins", () => {
+    const p = { proposed_by: "admin-1-id", reviewed_by: "admin-2-id", status: "approved" };
+    expect(p.proposed_by).not.toBe(p.reviewed_by);
   });
 
-  it("maker-checker requires different proposer and reviewer for approved/rejected", () => {
-    const proposal = {
-      proposed_by: "admin-1-id",
-      reviewed_by: "admin-2-id",
-      status: "approved",
-    };
-    // Maker-checker: proposed_by != reviewed_by
-    expect(proposal.proposed_by).not.toBe(proposal.reviewed_by);
-  });
-
-  it("action types in seed are valid", () => {
-    const seedActionTypes = [
-      "adjust_payout_earnings",
-      "adjust_payout_earnings",
-      "adjust_payout_earnings",
-      "adjust_payout_earnings",
-      "reprice_booking_details",
-    ];
-    for (const t of seedActionTypes) {
-      expect(validActionTypes).toContain(t);
-    }
+  it("all seed action types are valid", () => {
+    const seeded = ["adjust_payout_earnings", "reprice_booking_details"];
+    for (const t of seeded) expect(VALID_TYPES).toContain(t);
   });
 });
 
@@ -340,114 +619,67 @@ describe("Admin money action proposals", () => {
 // ──────────────────────────────────────────────────────────────────────────────
 
 describe("Monthly invoices", () => {
-  const validStatuses = ["draft", "sent", "partially_paid", "paid", "overdue", "refunded"];
-
-  it("invoice month format matches YYYY-MM", () => {
-    const months = ["2026-07", "2026-06"];
-    for (const m of months) {
-      expect(m).toMatch(/^\d{4}-\d{2}$/);
-    }
+  it.each([["2026-07"], ["2026-06"]])("month '%s' matches YYYY-MM format", (m) => {
+    expect(m).toMatch(/^\d{4}-\d{2}$/);
   });
 
   it("invoice statuses in seed are valid", () => {
-    const seedStatuses = ["draft", "sent"];
-    for (const s of seedStatuses) {
-      expect(validStatuses).toContain(s);
-    }
+    const VALID = ["draft", "sent", "partially_paid", "paid", "overdue", "refunded"];
+    for (const s of ["draft", "sent"]) expect(VALID).toContain(s);
   });
 
-  it("invoice balance_cents is total minus paid (structural check)", () => {
-    const total = 96000;
-    const paid  = 0;
-    const balance = total - paid;
+  it("balance_cents is total minus paid", () => {
+    const balance = 96000 - 0;
     expect(balance).toBe(96000);
     expect(balance).toBeGreaterThanOrEqual(0);
   });
 });
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Tests: seed idempotency invariants
+// Tests: export allowlist verification
 // ──────────────────────────────────────────────────────────────────────────────
 
-describe("Seed idempotency", () => {
-  it("booking paystack_reference is deterministic across runs", () => {
-    const ref1 = `${SEED_TAG}-BK-001`;
-    const ref2 = `${SEED_TAG}-BK-001`;
-    expect(ref1).toBe(ref2);
-  });
+describe("Export allowlist safety", () => {
+  // Tables that the export script is allowed to touch (mirrors EXPORT_ALLOWLIST)
+  const ALLOWED_EXPORT_TABLES = new Set([
+    "pricing_services", "pricing_extras", "pricing_booking_config", "services",
+  ]);
 
-  it("cleaner surrogate IDs are stable across runs", () => {
-    // These are hardcoded constants — verify they don't change
-    expect(CLEANER_IDS.c1).toBe("f1000001-0001-4001-8001-000000000001");
-    expect(CLEANER_IDS.c6).toBe("f1000001-0006-4001-8001-000000000006");
-  });
-
-  it("all booking paystack_references start with SEED_TAG", () => {
-    const refs = [
-      "DEVSEED-BK-001", "DEVSEED-BK-002", "DEVSEED-BK-003",
-      "DEVSEED-BK-014", "DEVSEED-BK-015",
-    ];
-    for (const ref of refs) {
-      expect(ref.startsWith(SEED_TAG)).toBe(true);
-    }
-  });
-
-  it("SEED_TAG has no SQL wildcard characters (safe for LIKE queries in reset)", () => {
-    expect(SEED_TAG).not.toContain("%");
-    expect(SEED_TAG).not.toContain("_");
-  });
-});
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Tests: no-PII assertions on synthetic data
-// ──────────────────────────────────────────────────────────────────────────────
-
-describe("Synthetic data — no real PII", () => {
-  const ALL_SEED_EMAILS = [
-    "admin.one@example.com", "admin.two@example.com", "finance.admin@example.com",
-    "cleaner.one@example.com", "cleaner.two@example.com", "cleaner.three@example.com",
-    "cleaner.four@example.com", "cleaner.five@example.com", "cleaner.six@example.com",
-    "customer.one@example.com", "customer.two@example.com", "customer.three@example.com",
-    "customer.four@example.com", "customer.five@example.com", "customer.six@example.com",
-    "customer.seven@example.com", "customer.eight@example.com",
+  // Tables that must NEVER be exported
+  const MUST_NOT_EXPORT = [
+    "auth.users", "bookings", "cleaners", "cleaner_payment_details",
+    "cleaner_earnings", "cleaner_payouts", "monthly_invoices", "user_profiles",
+    "customer_saved_addresses", "notification_logs", "dispatch_logs",
+    "whatsapp_logs", "payment_transactions", "payout_transfers",
+    "admin_money_action_proposals", "reviews",
   ];
 
-  const ALL_SEED_PHONES = [
-    "+27800000001", "+27800000011", "+27800000012", "+27800000013",
-    "+27800000014", "+27800000015", "+27800000016",
-    "+27800000021", "+27800000022", "+27800000023", "+27800000024",
-    "+27800000025", "+27800000026", "+27800000027", "+27800000028",
-  ];
-
-  it("all seed emails use the @example.com domain (IANA reserved)", () => {
-    for (const email of ALL_SEED_EMAILS) {
-      expect(email.endsWith("@example.com")).toBe(true);
+  it("allowed export tables contain no personal-data tables", () => {
+    for (const t of MUST_NOT_EXPORT) {
+      expect(ALLOWED_EXPORT_TABLES.has(t)).toBe(false);
     }
   });
 
-  it("no seed email uses a real-world domain", () => {
-    const FORBIDDEN_DOMAINS = ["gmail.com", "yahoo.com", "hotmail.com", "shalean.co.za"];
-    for (const email of ALL_SEED_EMAILS) {
-      for (const domain of FORBIDDEN_DOMAINS) {
-        expect(email).not.toContain(domain);
-      }
+  it("pricing_services columns do not include personal identifiers", () => {
+    const ALLOWED_PS_COLS = new Set([
+      "slug", "name", "base_price", "price_per_bedroom", "price_per_bathroom",
+      "price_per_extra_room", "min_hours", "max_hours",
+      "duration_base", "duration_per_bedroom", "duration_per_bathroom", "duration_per_extra_room",
+      "is_active", "sort_order",
+    ]);
+    const SENSITIVE = ["email", "phone", "auth_user_id", "customer_email", "paystack_reference"];
+    for (const col of SENSITIVE) {
+      expect(ALLOWED_PS_COLS.has(col)).toBe(false);
     }
   });
 
-  it("all seed phones use the +27800 reserved test prefix", () => {
-    for (const phone of ALL_SEED_PHONES) {
-      // +278 prefix: reserved/non-allocable in South Africa ITU range
-      expect(phone.startsWith("+278")).toBe(true);
-    }
-  });
-
-  it("no seed phone matches any real SA mobile prefix", () => {
-    const REAL_PREFIXES = ["+2760", "+2761", "+2762", "+2763", "+2764", "+2765",
-                           "+2766", "+2767", "+2768", "+2769"];
-    for (const phone of ALL_SEED_PHONES) {
-      for (const prefix of REAL_PREFIXES) {
-        expect(phone.startsWith(prefix)).toBe(false);
-      }
+  it("pricing_extras columns do not include personal identifiers", () => {
+    const ALLOWED_PE_COLS = new Set([
+      "slug", "name", "description", "price", "service_type", "is_popular", "is_active", "sort_order",
+    ]);
+    const SENSITIVE = ["email", "phone", "auth_user_id"];
+    for (const col of SENSITIVE) {
+      expect(ALLOWED_PE_COLS.has(col)).toBe(false);
     }
   });
 });

@@ -41,8 +41,9 @@
   npm run db:seed:reference  # export reference pricing from dev DB
   ```
 - The seed creates: 1 city (Cape Town), 7 suburbs, 6 pricing services, 26 extras, 17 auth users (3 admin, 6 cleaner, 8 customer), 15 bookings, 3 recurring schedules, 5 earnings rows, 5 payout rows, 2 monthly invoices, 5 admin proposals.
-- All seed emails use `@example.com` (IANA reserved); all phones use `+27800...` (reserved/non-allocable).
-- The seed BLOCKS production (`tchayecuvzssixyxlvfu`) — safety guard is enforced in `scripts/seed-dev.mjs`.
+- All seed emails use `@example.com` (IANA reserved, undeliverable). All seed phones use `+27000...` — the `000` area prefix is structurally impossible in South Africa (SA area codes never begin with zero) and cannot route to any real recipient via Twilio, Meta, or any provider.
+- The seed has a multi-layer safety guard in `scripts/seed-dev.mjs`: (1) refuses the production project ref `tchayecuvzssixyxlvfu`, (2) only allows the explicit dev/staging ref allow-list, (3) requires `SHALEAN_APP_ENV=development|staging`. `process.env` overrides the file value so `SHALEAN_APP_ENV=production` always blocks.
+- Outbound comms guard: `apps/web/lib/seed/devSeedGuard.ts` exports `assertNotSeedRecipient()`, `assertNotSeedWhatsApp()`, `assertNotSeedSms()`, `assertNotSeedEmail()` — import and call these before any SMS/WhatsApp/email/push provider call in non-production code paths. No-op in `NODE_ENV=production`.
 - Seed script location: `scripts/seed-dev.mjs`. Reference pricing SQL: `supabase/seed/reference/pricing.sql`.
 - Unit tests for seed safety: `apps/web/lib/seed/__tests__/seedSafety.test.ts` (43 tests).
 

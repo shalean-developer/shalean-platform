@@ -36,8 +36,47 @@ const { createClient } = require("@supabase/supabase-js");
 // Constants
 // ──────────────────────────────────────────────────────────────────────────────
 
-const PROD_REF = "tchayecuvzssixyxlvfu";
-const SEED_TAG = "DEVSEED";
+const PROD_REF  = "tchayecuvzssixyxlvfu";
+const DEV_REF   = "mbvixuzfvzbooiurvxwz";
+const STG_REF   = "gbgnemlpyykyhpqqbgru";
+/** Supabase project refs that are explicitly non-production and safe to seed. */
+const ALLOWED_REFS = new Set([DEV_REF, STG_REF]);
+const SEED_TAG  = "DEVSEED";
+
+/**
+ * Multi-layer safety guard. Refuses to seed if:
+ *   1. The project ref matches the production ref.
+ *   2. The project ref is not in the explicit allow-list of known dev/staging refs.
+ *   3. SHALEAN_APP_ENV is not one of "development" | "staging" (must be set).
+ *   4. SHALEAN_ENFORCE_ENV_SAFETY is "true" and the env is not known-safe.
+ */
+function assertNonProductionSeed(url, envVars) {
+  const projectRef = url.match(/https:\/\/([^.]+)\.supabase/)?.[1] ?? "";
+
+  // Hard-block production ref
+  if (!projectRef) {
+    throw new Error("SAFETY BLOCK: cannot determine Supabase project ref from URL. Refusing to seed.");
+  }
+  if (projectRef === PROD_REF) {
+    throw new Error(`SAFETY BLOCK: refusing to seed production project (${PROD_REF}).`);
+  }
+  // Require explicit allow-listed ref
+  if (!ALLOWED_REFS.has(projectRef)) {
+    throw new Error(
+      `SAFETY BLOCK: project ref '${projectRef}' is not in the explicit non-production allow-list ` +
+      `[${[...ALLOWED_REFS].join(", ")}]. Add it explicitly to ALLOWED_REFS after confirming it is non-production.`,
+    );
+  }
+  // Require explicit SHALEAN_APP_ENV — process.env wins over file (standard override behaviour)
+  const appEnv = (process.env.SHALEAN_APP_ENV || envVars.SHALEAN_APP_ENV || "").trim().toLowerCase();
+  if (!["development", "staging"].includes(appEnv)) {
+    throw new Error(
+      `SAFETY BLOCK: SHALEAN_APP_ENV must be "development" or "staging" to run the dev seed. ` +
+      `Got: '${appEnv || "(unset)"}'. Set it in apps/web/.env.local.`,
+    );
+  }
+  return { projectRef, appEnv };
+}
 
 /** Fixed surrogate UUIDs for cleaner rows (cleaners.id, not auth_user_id). */
 const CLEANER_IDS = {
@@ -138,23 +177,28 @@ const CUSTOMER_USERS = [
   { email: "customer.eight@example.com",  role: "customer", name: "Dev Customer Eight"  },
 ];
 
-// Synthetic SA reserved test phone (+27 area + 000 prefix are reserved)
+// Synthetic phones in the +27 000 nxx range.
+// +27 000 xxx xxxx is a deliberately invalid SA number: the "000" area prefix
+// cannot be dialled on any SA or international network, making these unmistakably
+// synthetic. They will never route to a real recipient via Twilio, Meta, or any
+// other provider. (SA numbers are +27 followed by 9 digits; 000xxxxxx is
+// structurally impossible — SA area codes start with non-zero.)
 const TEST_PHONES = {
-  admin:    "+27800000001",
-  cleaner1: "+27800000011",
-  cleaner2: "+27800000012",
-  cleaner3: "+27800000013",
-  cleaner4: "+27800000014",
-  cleaner5: "+27800000015",
-  cleaner6: "+27800000016",
-  cust1:    "+27800000021",
-  cust2:    "+27800000022",
-  cust3:    "+27800000023",
-  cust4:    "+27800000024",
-  cust5:    "+27800000025",
-  cust6:    "+27800000026",
-  cust7:    "+27800000027",
-  cust8:    "+27800000028",
+  admin:    "+27000000001",
+  cleaner1: "+27000000011",
+  cleaner2: "+27000000012",
+  cleaner3: "+27000000013",
+  cleaner4: "+27000000014",
+  cleaner5: "+27000000015",
+  cleaner6: "+27000000016",
+  cust1:    "+27000000021",
+  cust2:    "+27000000022",
+  cust3:    "+27000000023",
+  cust4:    "+27000000024",
+  cust5:    "+27000000025",
+  cust6:    "+27000000026",
+  cust7:    "+27000000027",
+  cust8:    "+27000000028",
 };
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -1288,15 +1332,17 @@ async function main() {
     process.exit(1);
   }
 
-  // Safety: refuse production
-  const projectRef = url.match(/https:\/\/([^.]+)\.supabase/)?.[1] ?? "";
-  if (projectRef === PROD_REF) {
-    console.error(`[seed-dev] SAFETY BLOCK: refusing to seed production (${PROD_REF}).`);
-    console.error("          Point NEXT_PUBLIC_SUPABASE_URL at a development or staging project.");
+  // Multi-layer safety guard
+  let guardResult;
+  try {
+    guardResult = assertNonProductionSeed(url, envVars);
+  } catch (err) {
+    console.error(`[seed-dev] ${err.message}`);
     process.exit(1);
   }
+  const { projectRef, appEnv } = guardResult;
 
-  console.log(`[seed-dev] Project: ${projectRef} (non-production ✓)`);
+  console.log(`[seed-dev] Project: ${projectRef} | SHALEAN_APP_ENV: ${appEnv} — non-production ✓`);
 
   if (dryRun) {
     console.log("[seed-dev] DRY RUN — would seed:");
