@@ -74,3 +74,27 @@ Service-role read against configured Supabase project (not Playwright UI):
 | Overdue invoices ZAR | 0 | 0 |
 
 App↔DB: **33/33 agree** on available metrics. UI: **blocked** (no audit admin credentials). System health: **not authoritative** without dashboard-stats HTTP + production health scanner.
+
+## Pre-merge checklist (audit infrastructure only)
+
+| Check | Result |
+| --- | --- |
+| CI: `lint:booking-core` | PASS |
+| CI: `typecheck` | PASS |
+| CI: `test:critical` (134) | PASS |
+| CI: `audit:production` (0 high) | PASS |
+| Unit: `test:office-audit` | PASS |
+| Audit reports contain no personal/credential data | PASS (scanned; redaction applied) |
+| Runner cannot perform production writes | PASS (read-only fetch on Supabase + Playwright abort of non-auth writes; `OFFICE_AUDIT_READ_ONLY=true` required for production) |
+| Incomplete evidence → nonzero exit | PASS (`BLOCKED` / `NOT AUTHORITATIVE` / `FAIL` → exit `1`) |
+| `data-testid` privacy / production safety | PASS (aggregate metric labels only; no booking/customer/cleaner IDs; schedule row pairing left BLOCKED rather than leaking IDs) |
+| Claims `/office` 100% accurate | **NO** — decision remains **NO-GO** |
+
+### After merge + deploy (operator steps)
+
+1. Run `npm run audit:office` against production with a **restricted audit-admin** account.
+2. Capture all 33 UI metrics (do not skip BLOCKED).
+3. Compare UI → application → independent database; return PASS/FAIL per metric.
+4. Keep `system_health` as **NOT AUTHORITATIVE** until an independent health source exists.
+5. Do not change production data or business logic.
+6. Only then reconsider GO/NO-GO for 100% Office dashboard accuracy.

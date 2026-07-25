@@ -33,6 +33,8 @@ import {
   assertOfficeAuditMayRun,
   createReadOnlyFetch,
   loadOfficeAuditSafetyFromEnv,
+  officeAuditShouldFailProcess,
+  shouldBlockBrowserWrite,
 } from "@/lib/admin/officeAudit/safety";
 import { getOfficeMetricRegistry } from "@/lib/admin/officeAudit/metricRegistry";
 import type { MetricRegistryEntry } from "@/lib/admin/officeAudit/types";
@@ -298,7 +300,13 @@ describe("redaction and safety", () => {
     const attempts = { count: 0 };
     const f = createReadOnlyFetch(attempts);
     await expect(f("https://example.com/api", { method: "POST", body: "{}" })).rejects.toThrow(/blocked/i);
-    expect(attempts.count).toBe(1);
+    await expect(
+      f("https://xyz.supabase.co/rest/v1/bookings", { method: "PATCH", body: "{}" }),
+    ).rejects.toThrow(/blocked/i);
+    await expect(
+      f("https://xyz.supabase.co/rest/v1/bookings", { method: "DELETE" }),
+    ).rejects.toThrow(/blocked/i);
+    expect(attempts.count).toBe(3);
     expect(
       loadOfficeAuditSafetyFromEnv({
         NODE_ENV: "test",
@@ -310,6 +318,56 @@ describe("redaction and safety", () => {
       target: "production",
       allowProduction: true,
     });
+  });
+
+  it("blocks browser business writes but allows auth session POSTs", () => {
+    expect(shouldBlockBrowserWrite("POST", "https://shalean.co.za/api/admin/assign")).toBe(true);
+    expect(shouldBlockBrowserWrite("PUT", "https://shalean.co.za/api/admin/bookings/x")).toBe(true);
+    expect(shouldBlockBrowserWrite("DELETE", "https://shalean.co.za/api/admin/payouts/1")).toBe(true);
+    expect(shouldBlockBrowserWrite("POST", "https://xyz.supabase.co/auth/v1/token?grant_type=password")).toBe(
+      false,
+    );
+    expect(shouldBlockBrowserWrite("POST", "https://shalean.co.za/login")).toBe(false);
+    expect(shouldBlockBrowserWrite("GET", "https://shalean.co.za/office")).toBe(false);
+  });
+
+  it("incomplete evidence forces nonzero process exit", () => {
+    expect(
+      officeAuditShouldFailProcess(
+        {
+          FAIL: 0,
+          BLOCKED: 33,
+          "NOT AUTHORITATIVE": 1,
+          "NOT IMPLEMENTED": 0,
+          "SKIPPED WITH JUSTIFICATION": 0,
+        },
+        "NO-GO",
+      ),
+    ).toBe(true);
+    expect(
+      officeAuditShouldFailProcess(
+        {
+          FAIL: 0,
+          BLOCKED: 0,
+          "NOT AUTHORITATIVE": 0,
+          "NOT IMPLEMENTED": 0,
+          "SKIPPED WITH JUSTIFICATION": 0,
+        },
+        "GO",
+      ),
+    ).toBe(false);
+    expect(
+      officeAuditShouldFailProcess(
+        {
+          FAIL: 0,
+          BLOCKED: 0,
+          "NOT AUTHORITATIVE": 1,
+          "NOT IMPLEMENTED": 0,
+          "SKIPPED WITH JUSTIFICATION": 0,
+        },
+        "NO-GO",
+      ),
+    ).toBe(true);
   });
 });
 

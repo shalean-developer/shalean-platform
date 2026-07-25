@@ -47,6 +47,8 @@ import {
   assertOfficeAuditMayRun,
   createReadOnlyFetch,
   loadOfficeAuditSafetyFromEnv,
+  officeAuditShouldFailProcess,
+  shouldBlockBrowserWrite,
 } from "@/lib/admin/officeAudit/safety";
 import type { LayerEvidence, MetricAuditResult, OfficeAuditReport } from "@/lib/admin/officeAudit/types";
 
@@ -425,13 +427,27 @@ async function captureUi(baseUrl: string): Promise<{ ui: Record<string, unknown>
     browser = await chromium.launch({ headless: true });
     const context = await browser.newContext(storageState ? { storageState } : {});
     const page = await context.newPage();
+
+    // Block production business writes in the browser. Auth/session POSTs are the only exception.
+    await page.route("**/*", async (route) => {
+      const req = route.request();
+      const method = req.method();
+      const url = req.url();
+      if (shouldBlockBrowserWrite(method, url)) {
+        writeAttempts.count += 1;
+        await route.abort("blockedbyclient");
+        return;
+      }
+      await route.continue();
+    });
+
     if (!storageState) {
       await loginOffice(page, baseUrl, email!, password!);
     } else {
       await page.goto(`${baseUrl}/office`, { waitUntil: "networkidle" });
     }
 
-    // Wait for key metric test ids (or fall back to text)
+    // Wait for key metric test ids (aggregates only — no booking/customer IDs in DOM testids)
     await page.waitForTimeout(2500);
     const registry = getOfficeMetricRegistry();
     const ui: Record<string, unknown> = {};
@@ -560,7 +576,11 @@ async function main() {
     process.exit(2);
   }
 
-  const admin = createClient(url, key, { auth: { persistSession: false } });
+  // Route all Supabase REST traffic through the read-only fetch guard (blocks POST/PUT/PATCH/DELETE).
+  const admin = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: readOnlyFetch },
+  });
   const now = new Date();
   const auditYmd = process.env.AUDIT_DATE?.trim() || johannesburgYmd(now);
 
@@ -653,13 +673,8 @@ async function main() {
   console.log(`Counts: ${JSON.stringify(redacted.counts)}`);
   console.log(`UI available: ${uiCapture.uiAvailable}; App via HTTP: ${appViaHttp}; Write attempts blocked: ${writeAttempts.count}`);
 
-  const failed =
-    redacted.decision !== "GO" ||
-    redacted.counts.FAIL > 0 ||
-    redacted.counts.BLOCKED > 0 ||
-    redacted.counts["NOT AUTHORITATIVE"] > 0 ||
-    redacted.counts["NOT IMPLEMENTED"] > 0 ||
-    redacted.counts["SKIPPED WITH JUSTIFICATION"] > 0;
+  // Incomplete evidence (BLOCKED / NOT AUTHORITATIVE / FAIL / …) must never exit 0.
+  const failed = officeAuditShouldFailProcess(redacted.counts, redacted.decision);
   process.exit(failed ? 1 : 0);
 }
 

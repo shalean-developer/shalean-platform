@@ -1,5 +1,10 @@
 # Office Dashboard Three-Layer Audit
 
+> **Scope:** audit infrastructure + initial production evidence capture.
+> This document does **not** claim `/office` is 100% accurate.
+> Decision below is **NO-GO** until UI credentials unlock three-layer PASS for every required metric.
+> `summary.system_health` stays **NOT AUTHORITATIVE** until an independent health source exists.
+
 ## Executive summary
 
 NO-GO — OFFICE DASHBOARD NOT YET VERIFIED 100% ACCURATE

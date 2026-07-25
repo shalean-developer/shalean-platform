@@ -1,5 +1,8 @@
 /**
  * Read-only safety controls for the Office three-layer audit.
+ *
+ * This audit is infrastructure for accuracy verification only.
+ * It must never mutate production bookings, payments, cleaners, or notifications.
  */
 
 export type OfficeAuditSafetyConfig = {
@@ -9,8 +12,10 @@ export type OfficeAuditSafetyConfig = {
 };
 
 const WRITE_METHOD_RE = /^(POST|PUT|PATCH|DELETE)$/i;
-const WRITE_PATH_HINT_RE =
-  /(assign|unassign|create|update|delete|approve|payout|notify|sms|whatsapp|email|call|zoho|paystack|charge|refund)/i;
+
+/** Auth-only browser POSTs needed to establish an admin session for UI capture. */
+const AUTH_PATH_ALLOW_RE =
+  /\/(auth\/v1\/(token|logout|user)|api\/auth|login|signin|sign-in|session)(\b|\/|\?|#|$)/i;
 
 export function loadOfficeAuditSafetyFromEnv(
   env: NodeJS.ProcessEnv = process.env,
@@ -52,22 +57,30 @@ export function assertOfficeAuditMayRun(params: {
   }
 }
 
-export function assertReadOnlyHttpRequest(method: string, url: string): void {
-  if (WRITE_METHOD_RE.test(method)) {
-    throw new Error(`Blocked non-GET audit HTTP method ${method} for ${url}`);
-  }
-  // Allow GET even if path contains words like "payment" — only block obvious write endpoints when method is non-GET.
-  if (WRITE_METHOD_RE.test(method) && WRITE_PATH_HINT_RE.test(url)) {
-    throw new Error(`Blocked write-like audit request ${method} ${url}`);
+export function isAuthOnlyWritePath(url: string): boolean {
+  try {
+    const path = new URL(url).pathname;
+    return AUTH_PATH_ALLOW_RE.test(path);
+  } catch {
+    return AUTH_PATH_ALLOW_RE.test(url);
   }
 }
 
-/** Proxy guard used by tests / runners — never issues writes. */
+export function assertReadOnlyHttpRequest(method: string, url: string): void {
+  const m = method.toUpperCase();
+  if (m === "GET" || m === "HEAD") return;
+  if (isAuthOnlyWritePath(url)) return;
+  throw new Error(`Blocked non-GET audit HTTP method ${m} for ${url}`);
+}
+
+/** Proxy guard used by tests / runners — never issues production business writes. */
 export function createReadOnlyFetch(writeAttempts: { count: number }): typeof fetch {
   return async (input: RequestInfo | URL, init?: RequestInit) => {
     const method = String(init?.method ?? "GET").toUpperCase();
     const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
     if (method !== "GET" && method !== "HEAD") {
+      // Supabase PostgREST mutations and admin APIs use non-GET verbs — always block here.
+      // Auth-only browser login is handled separately in Playwright (not via this fetch).
       writeAttempts.count += 1;
       throw new Error(`OFFICE_AUDIT_READ_ONLY blocked ${method} ${url}`);
     }
@@ -76,6 +89,34 @@ export function createReadOnlyFetch(writeAttempts: { count: number }): typeof fe
   };
 }
 
+/**
+ * Playwright network guard: abort non-GET/HEAD except auth/session establishment.
+ * Counts blocked business-write attempts for the audit safety report.
+ */
+export function shouldBlockBrowserWrite(method: string, url: string): boolean {
+  const m = method.toUpperCase();
+  if (m === "GET" || m === "HEAD" || m === "OPTIONS") return false;
+  return !isAuthOnlyWritePath(url);
+}
+
 export function isMutatingSupabaseCall(method: string): boolean {
   return ["insert", "update", "upsert", "delete", "rpc"].includes(method.toLowerCase());
+}
+
+/** Incomplete evidence / non-PASS statuses must fail the process (nonzero exit). */
+export function officeAuditShouldFailProcess(counts: {
+  FAIL: number;
+  BLOCKED: number;
+  "NOT AUTHORITATIVE": number;
+  "NOT IMPLEMENTED": number;
+  "SKIPPED WITH JUSTIFICATION": number;
+}, decision: "GO" | "NO-GO"): boolean {
+  return (
+    decision !== "GO" ||
+    counts.FAIL > 0 ||
+    counts.BLOCKED > 0 ||
+    counts["NOT AUTHORITATIVE"] > 0 ||
+    counts["NOT IMPLEMENTED"] > 0 ||
+    counts["SKIPPED WITH JUSTIFICATION"] > 0
+  );
 }
