@@ -81,11 +81,11 @@ export default function BookingProfitabilityPage() {
         <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <p>
-            {incompleteCount} team booking{incompleteCount === 1 ? "" : "s"} marked{" "}
+            {incompleteCount} team booking{incompleteCount === 1 ? "" : "s"} in this period marked{" "}
             <span className="font-medium">Incomplete team earnings</span> and excluded from trusted
-            net-profit totals
+            period net-profit totals
             {data?.trusted_totals
-              ? ` (trusted net ${formatZar(data.trusted_totals.net_booking_profit_cents)} across ${data.trusted_totals.booking_count} bookings)`
+              ? ` (trusted period net ${formatZar(data.trusted_totals.net_booking_profit_cents)} across ${data.trusted_totals.booking_count} bookings)`
               : ""}
             .
           </p>

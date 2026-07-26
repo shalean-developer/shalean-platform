@@ -12,7 +12,7 @@ import {
   loadExpensesByCategory,
   sumApprovedExpensesInRange,
 } from "@/lib/admin/expenses/loadExpenses";
-import { resolveBookingProfitabilityCleanerCost } from "@/lib/admin/expenses/bookingProfitabilityCleanerCost";
+import { trustedBookingRollupContribution } from "@/lib/admin/expenses/bookingProfitabilityCleanerCost";
 import { loadPaymentTransactionMetrics } from "@/lib/payments/loadPaymentTransactionMetrics";
 import { loadReferralPromoCostTotals } from "@/lib/admin/referrals/loadReferralPromoCosts";
 import { isZohoConfigured } from "@/lib/accounting/zohoIntegrationSettings";
@@ -69,6 +69,14 @@ export type FinancialDashboardPayload = {
     net_settlement_cents: number;
     transaction_count: number;
   };
+  /**
+   * Operational visibility only — incomplete team bookings are excluded from trusted
+   * monthly/branch revenue, payout, booking count, margin, and profit rollups above.
+   */
+  untrusted_incomplete_team: {
+    booking_count: number;
+    customer_revenue_cents: number;
+  };
 };
 
 function monthKey(ymd: string): string {
@@ -108,13 +116,6 @@ type BookingFinancialRow = {
   is_team_job?: boolean | null;
   payout_frozen_cents?: number | null;
 };
-
-/** Cleaner cost for finance rollups; incomplete team totals are skipped by the caller. */
-function bookingCleanerPayoutCents(b: BookingFinancialRow): number | null {
-  const cost = resolveBookingProfitabilityCleanerCost(b);
-  if (!cost.included_in_trusted_totals || cost.cleaner_cost_cents == null) return null;
-  return cost.cleaner_cost_cents;
-}
 
 export async function loadFinancialDashboard(
   admin: SupabaseClient,
@@ -170,26 +171,35 @@ export async function loadFinancialDashboard(
   const { data: bookingRows } = await bookingsQuery;
   const bookings = (bookingRows ?? []) as BookingFinancialRow[];
 
+  // Monthly / branch maps are trusted rollups only. Incomplete team bookings are
+  // excluded entirely (revenue, payout, booking count, margin, profit) so gross
+  // margin is not inflated by revenue without cleaner cost. Operational revenue for
+  // those bookings is surfaced separately under untrusted_incomplete_team.
   const monthlyMap = new Map<string, { revenue: number; payouts: number; expenses: number }>();
   const branchRevenue = new Map<string, { revenue: number; payouts: number; bookings: number }>();
+  let untrustedIncompleteTeamBookingCount = 0;
+  let untrustedIncompleteTeamRevenueCents = 0;
 
   for (const b of bookings) {
+    const rev = bookingCustomerRevenueCents(b);
+    const contribution = trustedBookingRollupContribution(b, rev);
+    if (!contribution.included_in_trusted_totals) {
+      untrustedIncompleteTeamBookingCount += 1;
+      untrustedIncompleteTeamRevenueCents += contribution.customer_revenue_cents;
+      continue;
+    }
+
     const mk = monthKey(b.date ?? from);
     const m = monthlyMap.get(mk) ?? { revenue: 0, payouts: 0, expenses: 0 };
-    const rev = bookingCustomerRevenueCents(b);
-    const payout = bookingCleanerPayoutCents(b);
-    // Incomplete team earnings: keep revenue visible, exclude from trusted payout/profit rollups.
-    m.revenue += rev;
-    if (payout != null) m.payouts += payout;
+    m.revenue += contribution.customer_revenue_cents;
+    m.payouts += contribution.cleaner_cost_cents;
     monthlyMap.set(mk, m);
 
     const bid = b.city_id ?? "unknown";
     const br = branchRevenue.get(bid) ?? { revenue: 0, payouts: 0, bookings: 0 };
-    br.revenue += rev;
-    if (payout != null) {
-      br.payouts += payout;
-      br.bookings += 1;
-    }
+    br.revenue += contribution.customer_revenue_cents;
+    br.payouts += contribution.cleaner_cost_cents;
+    br.bookings += 1;
     branchRevenue.set(bid, br);
   }
 
@@ -330,5 +340,9 @@ export async function loadFinancialDashboard(
       })),
     },
     gateway_payments: gatewayPayments,
+    untrusted_incomplete_team: {
+      booking_count: untrustedIncompleteTeamBookingCount,
+      customer_revenue_cents: untrustedIncompleteTeamRevenueCents,
+    },
   };
 }

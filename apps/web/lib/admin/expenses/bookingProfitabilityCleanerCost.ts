@@ -18,6 +18,9 @@ export type BookingProfitabilityCleanerCostInput = {
  * Team jobs must use the team-wide `cleaner_earnings_total_cents` and must never
  * silently fall back to one cleaner's `display_earnings_cents`.
  * Solo jobs continue to use `display_earnings_cents`.
+ *
+ * For completed team jobs, `cleaner_earnings_total_cents` null or <= 0 is treated as
+ * incomplete. There is no documented explicit zero-cost team state for profitability.
  */
 export type BookingProfitabilityCleanerCost = {
   /** Resolved cleaner cost in cents, or null when team totals are incomplete. */
@@ -27,12 +30,17 @@ export type BookingProfitabilityCleanerCost = {
   included_in_trusted_totals: boolean;
 };
 
+/** Positive team total required for trusted profitability inclusion. */
+export function isCompleteTeamEarningsTotalCents(value: unknown): value is number {
+  const teamTotal = optionalCentsFromDb(value);
+  return teamTotal !== null && teamTotal > 0;
+}
+
 export function resolveBookingProfitabilityCleanerCost(
   booking: BookingProfitabilityCleanerCostInput,
 ): BookingProfitabilityCleanerCost {
   if (booking.is_team_job === true) {
-    const teamTotal = optionalCentsFromDb(booking.cleaner_earnings_total_cents);
-    if (teamTotal === null) {
+    if (!isCompleteTeamEarningsTotalCents(booking.cleaner_earnings_total_cents)) {
       return {
         cleaner_cost_cents: null,
         incomplete_team_earnings: true,
@@ -41,7 +49,7 @@ export function resolveBookingProfitabilityCleanerCost(
       };
     }
     return {
-      cleaner_cost_cents: teamTotal,
+      cleaner_cost_cents: optionalCentsFromDb(booking.cleaner_earnings_total_cents)!,
       incomplete_team_earnings: false,
       warning: null,
       included_in_trusted_totals: true,
@@ -54,6 +62,44 @@ export function resolveBookingProfitabilityCleanerCost(
     incomplete_team_earnings: false,
     warning: null,
     included_in_trusted_totals: true,
+  };
+}
+
+/**
+ * Trusted rollup contribution for finance dashboards.
+ * Incomplete team bookings contribute neither revenue nor cleaner cost.
+ */
+export type TrustedBookingRollupContribution =
+  | {
+      included_in_trusted_totals: true;
+      customer_revenue_cents: number;
+      cleaner_cost_cents: number;
+    }
+  | {
+      included_in_trusted_totals: false;
+      incomplete_team_earnings: true;
+      customer_revenue_cents: number;
+      cleaner_cost_cents: null;
+    };
+
+export function trustedBookingRollupContribution(
+  booking: BookingProfitabilityCleanerCostInput,
+  customerRevenueCents: number,
+): TrustedBookingRollupContribution {
+  const cost = resolveBookingProfitabilityCleanerCost(booking);
+  const revenue = Math.max(0, Math.round(customerRevenueCents));
+  if (!cost.included_in_trusted_totals || cost.cleaner_cost_cents == null) {
+    return {
+      included_in_trusted_totals: false,
+      incomplete_team_earnings: true,
+      customer_revenue_cents: revenue,
+      cleaner_cost_cents: null,
+    };
+  }
+  return {
+    included_in_trusted_totals: true,
+    customer_revenue_cents: revenue,
+    cleaner_cost_cents: cost.cleaner_cost_cents,
   };
 }
 
@@ -123,6 +169,7 @@ export function computeBookingProfitabilityRow(
 }
 
 export type TrustedBookingProfitTotals = {
+  /** Period-wide (or full input set) trusted booking count. */
   booking_count: number;
   excluded_incomplete_team_count: number;
   customer_payment_cents: number;
@@ -163,5 +210,25 @@ export function sumTrustedBookingProfitTotals(
     customer_payment_cents,
     cleaner_payment_cents,
     net_booking_profit_cents,
+  };
+}
+
+/**
+ * Page a precomputed period row list while keeping trusted totals period-wide.
+ * Totals must be identical for every page of the same input set.
+ */
+export function paginateBookingProfitabilityItems<T>(
+  periodRows: T[],
+  page: number,
+  pageSize: number,
+): { items: T[]; page: number; page_size: number; total: number } {
+  const safePage = Math.max(1, Math.floor(page) || 1);
+  const safeSize = Math.min(100, Math.max(1, Math.floor(pageSize) || 50));
+  const start = (safePage - 1) * safeSize;
+  return {
+    items: periodRows.slice(start, start + safeSize),
+    page: safePage,
+    page_size: safeSize,
+    total: periodRows.length,
   };
 }

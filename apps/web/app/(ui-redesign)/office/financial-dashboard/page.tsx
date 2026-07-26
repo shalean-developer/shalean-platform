@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   ArrowDownRight,
   ArrowUpRight,
+  AlertTriangle,
   Banknote,
   BarChart3,
   Building2,
@@ -165,6 +166,23 @@ export default function FinancialDashboardPage() {
       />
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+      {(data?.untrusted_incomplete_team?.booking_count ?? 0) > 0 ? (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <p>
+            <span className="font-medium">Untrusted incomplete team bookings:</span>{" "}
+            {data!.untrusted_incomplete_team.booking_count} booking
+            {data!.untrusted_incomplete_team.booking_count === 1 ? "" : "s"} (
+            {formatZar(data!.untrusted_incomplete_team.customer_revenue_cents)} operational revenue)
+            excluded from trusted monthly/branch revenue, payout, margin, and profit rollups. See{" "}
+            <Link href="/office/booking-profitability" className="font-medium text-[#408df7] hover:underline">
+              Booking profitability
+            </Link>
+            .
+          </p>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap gap-3">
         <FinanceKpiCard

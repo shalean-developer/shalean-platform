@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   INCOMPLETE_TEAM_EARNINGS_WARNING,
   computeBookingProfitabilityRow,
+  paginateBookingProfitabilityItems,
   resolveBookingProfitabilityCleanerCost,
   sumTrustedBookingProfitTotals,
+  trustedBookingRollupContribution,
 } from "@/lib/admin/expenses/bookingProfitabilityCleanerCost";
 import { computeBookingProfit } from "@/lib/admin/expenses/profitCalculations";
 
@@ -63,6 +65,29 @@ describe("resolveBookingProfitabilityCleanerCost", () => {
     expect(result.cleaner_cost_cents).not.toBe(25_000);
   });
 
+  it("treats completed team booking with team total 0 as Incomplete team earnings", () => {
+    const result = resolveBookingProfitabilityCleanerCost({
+      is_team_job: true,
+      display_earnings_cents: 25_000,
+      cleaner_earnings_total_cents: 0,
+    });
+    expect(result.incomplete_team_earnings).toBe(true);
+    expect(result.warning).toBe(INCOMPLETE_TEAM_EARNINGS_WARNING);
+    expect(result.cleaner_cost_cents).toBeNull();
+    expect(result.included_in_trusted_totals).toBe(false);
+  });
+
+  it("includes complete positive team total in trusted totals", () => {
+    const result = resolveBookingProfitabilityCleanerCost({
+      is_team_job: true,
+      display_earnings_cents: 1,
+      cleaner_earnings_total_cents: 1,
+    });
+    expect(result.included_in_trusted_totals).toBe(true);
+    expect(result.cleaner_cost_cents).toBe(1);
+    expect(result.incomplete_team_earnings).toBe(false);
+  });
+
   it.each([
     { teamSize: 2, memberCents: [30_000, 30_000], totalCents: 60_000 },
     { teamSize: 3, memberCents: [40_000, 40_000, 40_000], totalCents: 120_000 },
@@ -93,14 +118,13 @@ describe("resolveBookingProfitabilityCleanerCost", () => {
   it("regression: five-person team totaling R1,270 must not display R250", () => {
     const booking = {
       is_team_job: true as const,
-      // Lead cleaner display (one of five) — the old bug surface.
       display_earnings_cents: 25_000,
       cleaner_earnings_total_cents: 127_000,
     };
 
-    expect(legacyCleanerCostCents(booking)).toBe(25_000); // R250 before
+    expect(legacyCleanerCostCents(booking)).toBe(25_000);
     const fixed = resolveBookingProfitabilityCleanerCost(booking);
-    expect(fixed.cleaner_cost_cents).toBe(127_000); // R1,270 after
+    expect(fixed.cleaner_cost_cents).toBe(127_000);
     expect(fixed.cleaner_cost_cents).not.toBe(25_000);
 
     const customer = 250_000;
@@ -111,6 +135,69 @@ describe("resolveBookingProfitabilityCleanerCost", () => {
     expect(after.cleaner_payment_cents).toBe(127_000);
     expect(after.net_booking_profit_cents).toBe(123_000);
     expect(after.profit_margin_percent).toBe(49.2);
+  });
+});
+
+describe("trustedBookingRollupContribution", () => {
+  it("incomplete team booking contributes neither revenue nor cleaner cost to trusted margin/profit", () => {
+    const incomplete = trustedBookingRollupContribution(
+      {
+        is_team_job: true,
+        display_earnings_cents: 25_000,
+        cleaner_earnings_total_cents: null,
+      },
+      250_000,
+    );
+    expect(incomplete.included_in_trusted_totals).toBe(false);
+    expect(incomplete.cleaner_cost_cents).toBeNull();
+    // Operational revenue may still be known, but must not enter trusted rollups.
+    expect(incomplete.customer_revenue_cents).toBe(250_000);
+
+    const trustedOnly = [incomplete]
+      .filter((c) => c.included_in_trusted_totals)
+      .reduce(
+        (acc, c) => {
+          if (!c.included_in_trusted_totals) return acc;
+          return {
+            revenue: acc.revenue + c.customer_revenue_cents,
+            payouts: acc.payouts + c.cleaner_cost_cents,
+            bookings: acc.bookings + 1,
+          };
+        },
+        { revenue: 0, payouts: 0, bookings: 0 },
+      );
+
+    expect(trustedOnly).toEqual({ revenue: 0, payouts: 0, bookings: 0 });
+    expect(trustedOnly.revenue - trustedOnly.payouts).toBe(0);
+  });
+
+  it("complete positive team total remains included in trusted rollups", () => {
+    const complete = trustedBookingRollupContribution(
+      {
+        is_team_job: true,
+        display_earnings_cents: 25_000,
+        cleaner_earnings_total_cents: 127_000,
+      },
+      250_000,
+    );
+    expect(complete).toEqual({
+      included_in_trusted_totals: true,
+      customer_revenue_cents: 250_000,
+      cleaner_cost_cents: 127_000,
+    });
+  });
+
+  it("completed team booking with team total 0 is excluded from trusted rollups", () => {
+    const zeroTotal = trustedBookingRollupContribution(
+      {
+        is_team_job: true,
+        display_earnings_cents: 25_000,
+        cleaner_earnings_total_cents: 0,
+      },
+      250_000,
+    );
+    expect(zeroTotal.included_in_trusted_totals).toBe(false);
+    expect(zeroTotal.cleaner_cost_cents).toBeNull();
   });
 });
 
@@ -150,9 +237,24 @@ describe("computeBookingProfitabilityRow", () => {
     expect(row.profit_margin_percent).toBeNull();
     expect(row.included_in_trusted_totals).toBe(false);
   });
+
+  it("excludes completed team booking with team total 0 from trusted profit", () => {
+    const row = computeBookingProfitabilityRow(
+      {
+        is_team_job: true,
+        display_earnings_cents: 25_000,
+        cleaner_earnings_total_cents: 0,
+      },
+      200_000,
+      0,
+    );
+    expect(row.warning).toBe(INCOMPLETE_TEAM_EARNINGS_WARNING);
+    expect(row.included_in_trusted_totals).toBe(false);
+    expect(row.net_booking_profit_cents).toBeNull();
+  });
 });
 
-describe("sumTrustedBookingProfitTotals", () => {
+describe("sumTrustedBookingProfitTotals + pagination", () => {
   it("excludes incomplete team bookings from trusted net-profit totals", () => {
     const complete = computeBookingProfitabilityRow(
       {
@@ -185,7 +287,60 @@ describe("sumTrustedBookingProfitTotals", () => {
     const totals = sumTrustedBookingProfitTotals([complete, incomplete, solo]);
     expect(totals.booking_count).toBe(2);
     expect(totals.excluded_incomplete_team_count).toBe(1);
+    expect(totals.customer_payment_cents).toBe(250_000 + 100_000);
     expect(totals.cleaner_payment_cents).toBe(127_000 + 40_000);
     expect(totals.net_booking_profit_cents).toBe(123_000 + 60_000);
+  });
+
+  it("trusted totals remain identical across pagination pages", () => {
+    const periodRows = [
+      computeBookingProfitabilityRow(
+        { is_team_job: true, display_earnings_cents: 25_000, cleaner_earnings_total_cents: 127_000 },
+        250_000,
+        0,
+      ),
+      computeBookingProfitabilityRow(
+        { is_team_job: true, display_earnings_cents: 25_000, cleaner_earnings_total_cents: null },
+        250_000,
+        0,
+      ),
+      computeBookingProfitabilityRow(
+        { is_team_job: false, display_earnings_cents: 40_000, cleaner_earnings_total_cents: null },
+        100_000,
+        0,
+      ),
+      computeBookingProfitabilityRow(
+        { is_team_job: true, display_earnings_cents: 10_000, cleaner_earnings_total_cents: 0 },
+        80_000,
+        0,
+      ),
+      computeBookingProfitabilityRow(
+        { is_team_job: true, display_earnings_cents: 20_000, cleaner_earnings_total_cents: 60_000 },
+        150_000,
+        0,
+      ),
+    ];
+
+    const periodTrusted = sumTrustedBookingProfitTotals(periodRows);
+    expect(periodTrusted.booking_count).toBe(3);
+    expect(periodTrusted.excluded_incomplete_team_count).toBe(2);
+
+    const page1 = paginateBookingProfitabilityItems(periodRows, 1, 2);
+    const page2 = paginateBookingProfitabilityItems(periodRows, 2, 2);
+    const page3 = paginateBookingProfitabilityItems(periodRows, 3, 2);
+
+    expect(page1.items).toHaveLength(2);
+    expect(page2.items).toHaveLength(2);
+    expect(page3.items).toHaveLength(1);
+
+    // Period-wide totals must not be recomputed from the page slice.
+    expect(sumTrustedBookingProfitTotals(periodRows)).toEqual(periodTrusted);
+    expect(sumTrustedBookingProfitTotals(periodRows)).toEqual(
+      sumTrustedBookingProfitTotals([...page1.items, ...page2.items, ...page3.items]),
+    );
+
+    // Page-only sums differ from period totals — proving why totals must be period-wide.
+    expect(sumTrustedBookingProfitTotals(page1.items)).not.toEqual(periodTrusted);
+    expect(sumTrustedBookingProfitTotals(page2.items)).not.toEqual(periodTrusted);
   });
 });
