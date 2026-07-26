@@ -19,6 +19,10 @@ describe("admin booking create payment_already_received contract", () => {
     expect(branch).not.toContain("processPaystackInitializeBody");
     expect(branch).not.toContain("finalizeAdminPaystackCheckout");
     expect(branch).not.toContain("deliverAdminPaymentLink");
+    // Immediately paid path must sync booking_cleaners like monthly (not snapshot-only).
+    expect(branch).toContain("syncAdminPreferredCleanerRoster");
+    expect(branch).toContain('"admin_payment_already_received"');
+    expect(branch).not.toContain("patchAdminPerBookingPreferredCleaners");
   });
 
   it("settlement helper gates receipt email on paid + zero balance", () => {
@@ -40,8 +44,11 @@ describe("admin booking create payment_already_received contract", () => {
       "utf8",
     );
     expect(src).toContain("isAuthoritativeZohoInvoicePaid");
+    expect(src).toContain("validateAuthoritativeZohoInvoiceSettlement");
     expect(src).toContain("zoho_payment_allocation_failed");
     expect(src).toContain("zoho_invoice_read_failed");
+    expect(src).toContain("zoho_invoice_amount_mismatch");
+    expect(src).toContain("requireCustomerMatch: true");
     expect(src).not.toContain("payRes.ok ? 0");
     expect(src).not.toContain('reason: "payment_method_zoho"');
     expect(src).toContain("missing_zoho_invoice_identifier");

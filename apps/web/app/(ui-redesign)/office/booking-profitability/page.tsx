@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import Link from "next/link";
-import { RefreshCw } from "lucide-react";
+import { AlertTriangle, RefreshCw } from "lucide-react";
 import {
   OfficeZohoPageHeader,
   OfficeZohoSecondaryButton,
@@ -14,20 +14,32 @@ import { cn } from "@/lib/utils";
 
 type BookingProfitItem = {
   booking_id: string;
+  booking_reference: string | null;
   date: string;
   branch_name: string;
   service_name: string;
+  is_team_job: boolean;
   customer_payment_cents: number;
-  cleaner_payment_cents: number;
+  cleaner_payment_cents: number | null;
   booking_expenses_cents: number;
   processing_fees_cents: number;
   platform_fees_cents: number;
-  net_booking_profit_cents: number;
+  net_booking_profit_cents: number | null;
   profit_margin_percent: number | null;
+  incomplete_team_earnings: boolean;
+  warning: string | null;
+  included_in_trusted_totals: boolean;
 };
 
 type Response = {
   items: BookingProfitItem[];
+  trusted_totals: {
+    booking_count: number;
+    excluded_incomplete_team_count: number;
+    customer_payment_cents: number;
+    cleaner_payment_cents: number;
+    net_booking_profit_cents: number;
+  };
   pagination: { page: number; page_size: number; total: number };
 };
 
@@ -43,6 +55,8 @@ export default function BookingProfitabilityPage() {
 
   const params = useMemo(() => ({ from, to, page: String(page) }), [from, to, page]);
   const { data, loading, error, refetch } = useAdminData<Response>("/api/admin/booking-profitability", { params });
+
+  const incompleteCount = data?.trusted_totals.excluded_incomplete_team_count ?? 0;
 
   return (
     <div className="space-y-6 p-4 md:p-6">
@@ -62,6 +76,21 @@ export default function BookingProfitabilityPage() {
       />
 
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
+
+      {incompleteCount > 0 ? (
+        <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          <p>
+            {incompleteCount} team booking{incompleteCount === 1 ? "" : "s"} in this period marked{" "}
+            <span className="font-medium">Incomplete team earnings</span> and excluded from trusted
+            period net-profit totals
+            {data?.trusted_totals
+              ? ` (trusted period net ${formatZar(data.trusted_totals.net_booking_profit_cents)} across ${data.trusted_totals.booking_count} bookings)`
+              : ""}
+            .
+          </p>
+        </div>
+      ) : null}
 
       <OfficeZohoTableShell>
         <table className="w-full text-sm">
@@ -86,23 +115,48 @@ export default function BookingProfitabilityPage() {
               <tr><td colSpan={10} className="px-4 py-8 text-center text-slate-500">No bookings in range.</td></tr>
             ) : (
               data!.items.map((row) => (
-                <tr key={row.booking_id} className="border-b border-slate-50">
+                <tr
+                  key={row.booking_id}
+                  className={cn(
+                    "border-b border-slate-50",
+                    row.incomplete_team_earnings && "bg-amber-50/60",
+                  )}
+                >
                   <td className="px-4 py-3">
                     <Link href={`/office/bookings/${row.booking_id}`} className="font-medium text-[#408df7] hover:underline">
                       {row.date}
                     </Link>
+                    {row.incomplete_team_earnings ? (
+                      <p className="mt-1 flex items-center gap-1 text-xs font-medium text-amber-800">
+                        <AlertTriangle className="h-3 w-3" aria-hidden />
+                        {row.warning ?? "Incomplete team earnings"}
+                      </p>
+                    ) : null}
                   </td>
                   <td className="px-4 py-3 text-slate-600">{row.branch_name}</td>
                   <td className="px-4 py-3 text-slate-600">{row.service_name}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatZar(row.customer_payment_cents)}</td>
-                  <td className="px-4 py-3 text-right tabular-nums">{formatZar(row.cleaner_payment_cents)}</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {row.cleaner_payment_cents == null ? "—" : formatZar(row.cleaner_payment_cents)}
+                  </td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatZar(row.booking_expenses_cents)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatZar(row.processing_fees_cents)}</td>
                   <td className="px-4 py-3 text-right tabular-nums">{formatZar(row.platform_fees_cents)}</td>
-                  <td className={cn("px-4 py-3 text-right font-semibold tabular-nums", row.net_booking_profit_cents >= 0 ? "text-emerald-700" : "text-red-600")}>
-                    {formatZar(row.net_booking_profit_cents)}
+                  <td
+                    className={cn(
+                      "px-4 py-3 text-right font-semibold tabular-nums",
+                      row.net_booking_profit_cents == null
+                        ? "text-amber-800"
+                        : row.net_booking_profit_cents >= 0
+                          ? "text-emerald-700"
+                          : "text-red-600",
+                    )}
+                  >
+                    {row.net_booking_profit_cents == null ? "—" : formatZar(row.net_booking_profit_cents)}
                   </td>
-                  <td className="px-4 py-3 text-right tabular-nums">{row.profit_margin_percent ?? "—"}%</td>
+                  <td className="px-4 py-3 text-right tabular-nums">
+                    {row.profit_margin_percent == null ? "—" : `${row.profit_margin_percent}%`}
+                  </td>
                 </tr>
               ))
             )}

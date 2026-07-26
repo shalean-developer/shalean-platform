@@ -13,7 +13,9 @@
  */
 
 import {
+  extractCanonicalHref,
   fetchWithNoRedirect,
+  LIVE_SEO_HTML_SCAN_CHARS,
   normalizeUrlPath,
   resolveAuditBaseUrl,
 } from "@/lib/seo/liveSeoCrawl";
@@ -27,20 +29,11 @@ const concurrency = Math.min(12, Math.max(1, parseInt(process.env.LIVE_SEO_CONCU
 const extendedChecks = process.env.LIVE_SEO_EXTENDED === "1";
 
 function extractCanonical(html: string): string | null {
-  const head = html.slice(0, 180_000);
-  const linkRe = /<link\b[^>]*\brel\s*=\s*["']canonical["'][^>]*>/gi;
-  let m: RegExpExecArray | null;
-  while ((m = linkRe.exec(head)) !== null) {
-    const tag = m[0];
-    const hrefM = /\bhref\s*=\s*["']([^"']+)["']/i.exec(tag);
-    const href = hrefM?.[1]?.trim();
-    if (href) return href;
-  }
-  return null;
+  return extractCanonicalHref(html);
 }
 
 function extractMetaRobots(html: string): string | null {
-  const head = html.slice(0, 180_000);
+  const head = html.slice(0, LIVE_SEO_HTML_SCAN_CHARS);
   const re = /<meta\b[^>]*\bname\s*=\s*["']robots["'][^>]*>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(head)) !== null) {
@@ -53,7 +46,7 @@ function extractMetaRobots(html: string): string | null {
 }
 
 function extractOgUrl(html: string): string | null {
-  const head = html.slice(0, 180_000);
+  const head = html.slice(0, LIVE_SEO_HTML_SCAN_CHARS);
   const re = /<meta\b[^>]*\bproperty\s*=\s*["']og:url["'][^>]*>/gi;
   let m: RegExpExecArray | null;
   while ((m = re.exec(head)) !== null) {

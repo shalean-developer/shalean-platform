@@ -33,8 +33,24 @@ function scheduleBooking(
 describe("resolveOfficeScheduleSummary", () => {
   it("uses API summary when provided", () => {
     expect(
-      resolveOfficeScheduleSummary([], { total: 3, completed: 1, inProgress: 0, upcoming: 2, unassigned: 0 }),
-    ).toEqual({ total: 3, completed: 1, inProgress: 0, upcoming: 2, unassigned: 0 });
+      resolveOfficeScheduleSummary([], {
+        total: 3,
+        rawTotal: 3,
+        completed: 1,
+        inProgress: 0,
+        upcoming: 2,
+        unassigned: 0,
+        cancelled: 0,
+      }),
+    ).toEqual({
+      total: 3,
+      rawTotal: 3,
+      completed: 1,
+      inProgress: 0,
+      upcoming: 2,
+      unassigned: 0,
+      cancelled: 0,
+    });
   });
 });
 
@@ -206,7 +222,7 @@ describe("officeScheduleAssignedCleanerLabel", () => {
     ).toBe("Alex Cleaner");
   });
 
-  it("falls back to selected_cleaner_id when cleaner_id is null", () => {
+  it("labels preferred cleaner when only selected_cleaner_id is set", () => {
     expect(
       officeScheduleAssignedCleanerLabel(
         scheduleBooking({
@@ -219,7 +235,7 @@ describe("officeScheduleAssignedCleanerLabel", () => {
         }),
         cleanersById,
       ),
-    ).toBe("Bea Helper");
+    ).toBe("Preferred: Bea Helper");
   });
 
   it("returns team label when team_id is set", () => {

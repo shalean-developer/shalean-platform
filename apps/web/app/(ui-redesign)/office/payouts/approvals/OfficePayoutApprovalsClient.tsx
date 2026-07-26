@@ -365,14 +365,32 @@ export default function OfficePayoutApprovalsClient() {
                         >
                           {item.status}
                         </span>
-                        {!item.can_review && item.status === "pending" ? (
+                        {item.review_block_reason === "self_proposal" ? (
                           <p className="mt-1 text-[10px] text-slate-500">
                             You proposed this — another admin must review.
                           </p>
                         ) : null}
+                        {item.review_block_reason === "expired" ? (
+                          <p className="mt-1 text-[10px] text-slate-500">
+                            This proposal expired and can no longer be reviewed.
+                          </p>
+                        ) : null}
+                        {item.review_block_reason === "not_pending" ? (
+                          <p className="mt-1 text-[10px] text-slate-500">
+                            {item.status === "approved"
+                              ? "Already approved."
+                              : item.status === "rejected"
+                                ? "Already rejected."
+                                : item.status === "processing"
+                                  ? "Currently processing."
+                                  : item.status === "failed"
+                                    ? "Previously failed during apply."
+                                    : "Not available for review."}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-3 py-3 align-top text-right">
-                        {item.can_review ? (
+                        {item.can_review && item.review_block_reason == null ? (
                           <div className="inline-flex flex-col gap-1 sm:flex-row">
                             <OfficeZohoPrimaryButton
                               disabled={busyId !== null}

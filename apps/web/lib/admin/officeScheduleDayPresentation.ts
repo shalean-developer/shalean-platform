@@ -25,6 +25,17 @@ export type OfficeScheduleDayBooking = OfficeScheduleBookingRow &
   team_id?: string | null;
   is_team_job?: boolean | null;
   estimated_finish_at?: string | null;
+  payment_status?: string | null;
+  payment_completed_at?: string | null;
+  payment_method?: string | null;
+  total_paid_zar?: number | string | null;
+  amount_paid_cents?: number | string | null;
+  total_price?: number | string | null;
+  refunded_at?: string | null;
+  refund_status?: string | null;
+  billing_type?: string | null;
+  is_monthly_billing_booking?: boolean | null;
+  monthly_invoice_id?: string | null;
   booking_cleaners?: readonly { cleaner_id: string; full_name: string | null; role: string }[] | null;
 };
 
@@ -34,6 +45,7 @@ export type OfficeScheduleDayCleaner = {
   phone?: string | null;
   is_available: boolean | null;
   status?: string | null;
+  is_active?: boolean | null;
   availability_weekdays?: unknown;
 };
 
@@ -42,6 +54,9 @@ export type OfficeScheduleDayResponse = {
   bookings: OfficeScheduleDayBooking[];
   cleaners: OfficeScheduleDayCleaner[];
   summary: OfficeTodayScheduleStats;
+  finance?: import("@/lib/admin/dashboardVisitDayFinance").OfficeVisitDayFinance;
+  truncated?: boolean;
+  scannedBookings?: number;
 };
 
 const STATUS_TONE_CLS: Record<string, string> = {
@@ -151,16 +166,19 @@ export function buildOfficeScheduleCleanersById(
   return new Map(cleaners.map((cleaner) => [cleaner.id, cleaner.full_name ?? null]));
 }
 
+/**
+ * Confirmed roster cleaner ids for capacity / assignment — excludes preferred-only
+ * `selected_cleaner_id` so preference does not mark a cleaner as booked.
+ */
 function officeScheduleRosterCleanerIds(
-  booking: Pick<OfficeScheduleDayBooking, "cleaner_id" | "selected_cleaner_id" | "booking_cleaners">,
+  booking: Pick<OfficeScheduleDayBooking, "cleaner_id" | "booking_cleaners">,
 ): string[] {
   const fromRoster = (booking.booking_cleaners ?? [])
     .map((member) => String(member.cleaner_id ?? "").trim())
     .filter(Boolean);
   if (fromRoster.length > 0) return fromRoster;
-  return [booking.cleaner_id, booking.selected_cleaner_id]
-    .map((id) => String(id ?? "").trim())
-    .filter(Boolean);
+  const direct = String(booking.cleaner_id ?? "").trim();
+  return direct ? [direct] : [];
 }
 
 /** Display label for the cleaner (or team) assigned to a schedule booking. */
@@ -186,10 +204,16 @@ export function officeScheduleAssignedCleanerLabel(
     return names.join(", ");
   }
 
-  const cleanerId = String(booking.cleaner_id ?? booking.selected_cleaner_id ?? "").trim();
-  if (!cleanerId) return null;
-  const name = cleanersById.get(cleanerId)?.trim();
-  return name || "Assigned cleaner";
+  const confirmedId = String(booking.cleaner_id ?? "").trim();
+  if (confirmedId) {
+    const name = cleanersById.get(confirmedId)?.trim();
+    return name || "Assigned cleaner";
+  }
+
+  const preferredId = String(booking.selected_cleaner_id ?? "").trim();
+  if (!preferredId) return null;
+  const preferredName = cleanersById.get(preferredId)?.trim();
+  return preferredName ? `Preferred: ${preferredName}` : "Preferred cleaner";
 }
 
 export function weekdayIndexForScheduleYmd(ymd: string): number {
