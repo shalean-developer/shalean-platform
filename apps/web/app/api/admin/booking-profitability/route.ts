@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
-import { computeBookingProfit } from "@/lib/admin/expenses/profitCalculations";
+import {
+  computeBookingProfitabilityRow,
+  sumTrustedBookingProfitTotals,
+} from "@/lib/admin/expenses/bookingProfitabilityCleanerCost";
 import { normalizeOfficePayoutPeriodRange, bookingCustomerRevenueCents } from "@/lib/admin/payouts/officePayoutPeriodReport";
-import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import {
   resolveBookingGatewayProcessingFeeCents,
   sumApprovedBookingOperatingExpenses,
@@ -34,7 +36,7 @@ export async function GET(request: Request) {
   let query = admin
     .from("bookings")
     .select(
-      "id, date, city_id, cleaner_id, service, service_slug, total_paid_zar, amount_paid_cents, total_paid_cents, service_fee_cents, company_revenue_cents, earnings_summary, cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents, cities ( name )",
+      "id, booking_reference, date, city_id, cleaner_id, service, service_slug, is_team_job, total_paid_zar, amount_paid_cents, total_paid_cents, service_fee_cents, company_revenue_cents, earnings_summary, cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents, cities ( name )",
       { count: "exact" },
     )
     .eq("status", "completed")
@@ -57,19 +59,19 @@ export async function GET(request: Request) {
   const items = await Promise.all(
     (bookings ?? []).map(async (b) => {
       const customerPayment = bookingCustomerRevenueCents(b);
-      const cleanerPayment = Math.max(
-        0,
-        Math.round(resolveCleanerEarningsCents(b) ?? Number(b.cleaner_payout_cents) ?? 0),
-      );
       const bookingExpenses = await sumApprovedBookingOperatingExpenses(admin, b.id);
       const gatewayFees = await resolveBookingGatewayProcessingFeeCents(admin, b.id);
       const platformFees = Math.max(0, Math.round(Number(b.service_fee_cents) ?? 0));
       const promo = promoByBooking.get(String(b.id));
       const referralDiscount = promo?.referral_discount_cents ?? 0;
       const cleaningCredit = promo?.cleaning_credit_cents ?? 0;
-      const profit = computeBookingProfit(
+      const profit = computeBookingProfitabilityRow(
+        {
+          is_team_job: b.is_team_job === true,
+          cleaner_earnings_total_cents: b.cleaner_earnings_total_cents,
+          display_earnings_cents: b.display_earnings_cents,
+        },
         customerPayment,
-        cleanerPayment,
         bookingExpenses,
         gatewayFees,
         platformFees,
@@ -83,18 +85,23 @@ export async function GET(request: Request) {
         "Unknown";
       return {
         booking_id: b.id,
+        booking_reference: b.booking_reference ?? null,
         date: b.date,
         branch_name: city?.name ?? "Unknown",
         service_name: serviceLabel,
         cleaner_id: b.cleaner_id,
+        is_team_job: b.is_team_job === true,
         ...profit,
       };
     }),
   );
 
+  const trusted_totals = sumTrustedBookingProfitTotals(items);
+
   return NextResponse.json({
     period: { from, to },
     items,
+    trusted_totals,
     pagination: { page, page_size: pageSize, total: count ?? 0 },
   });
 }

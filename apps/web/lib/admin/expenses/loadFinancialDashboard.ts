@@ -12,7 +12,7 @@ import {
   loadExpensesByCategory,
   sumApprovedExpensesInRange,
 } from "@/lib/admin/expenses/loadExpenses";
-import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { resolveBookingProfitabilityCleanerCost } from "@/lib/admin/expenses/bookingProfitabilityCleanerCost";
 import { loadPaymentTransactionMetrics } from "@/lib/payments/loadPaymentTransactionMetrics";
 import { loadReferralPromoCostTotals } from "@/lib/admin/referrals/loadReferralPromoCosts";
 import { isZohoConfigured } from "@/lib/accounting/zohoIntegrationSettings";
@@ -105,15 +105,15 @@ type BookingFinancialRow = {
   display_earnings_cents: number | null;
   cleaner_earnings_total_cents: number | null;
   cleaner_bonus_cents?: number | null;
+  is_team_job?: boolean | null;
   payout_frozen_cents?: number | null;
 };
 
-function bookingCleanerPayoutCents(b: BookingFinancialRow): number {
-  const resolved = resolveCleanerEarningsCents(b);
-  if (resolved != null && resolved > 0) return resolved;
-  const cp = Number(b.cleaner_payout_cents);
-  const cb = Number(b.cleaner_bonus_cents);
-  return (Number.isFinite(cp) && cp > 0 ? Math.round(cp) : 0) + (Number.isFinite(cb) && cb > 0 ? Math.round(cb) : 0);
+/** Cleaner cost for finance rollups; incomplete team totals are skipped by the caller. */
+function bookingCleanerPayoutCents(b: BookingFinancialRow): number | null {
+  const cost = resolveBookingProfitabilityCleanerCost(b);
+  if (!cost.included_in_trusted_totals || cost.cleaner_cost_cents == null) return null;
+  return cost.cleaner_cost_cents;
 }
 
 export async function loadFinancialDashboard(
@@ -160,7 +160,7 @@ export async function loadFinancialDashboard(
   let bookingsQuery = admin
     .from("bookings")
     .select(
-      "id, date, city_id, total_paid_zar, amount_paid_cents, total_paid_cents, company_revenue_cents, earnings_summary, cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents, payout_frozen_cents",
+      "id, date, city_id, is_team_job, total_paid_zar, amount_paid_cents, total_paid_cents, company_revenue_cents, earnings_summary, cleaner_payout_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_bonus_cents, payout_frozen_cents",
     )
     .eq("status", "completed")
     .eq("is_test", false)
@@ -178,15 +178,18 @@ export async function loadFinancialDashboard(
     const m = monthlyMap.get(mk) ?? { revenue: 0, payouts: 0, expenses: 0 };
     const rev = bookingCustomerRevenueCents(b);
     const payout = bookingCleanerPayoutCents(b);
+    // Incomplete team earnings: keep revenue visible, exclude from trusted payout/profit rollups.
     m.revenue += rev;
-    m.payouts += payout;
+    if (payout != null) m.payouts += payout;
     monthlyMap.set(mk, m);
 
     const bid = b.city_id ?? "unknown";
     const br = branchRevenue.get(bid) ?? { revenue: 0, payouts: 0, bookings: 0 };
     br.revenue += rev;
-    br.payouts += payout;
-    br.bookings += 1;
+    if (payout != null) {
+      br.payouts += payout;
+      br.bookings += 1;
+    }
     branchRevenue.set(bid, br);
   }
 
