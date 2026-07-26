@@ -18,24 +18,24 @@ export const dynamic = "force-dynamic";
 
 type BookingProfitQueryRow = {
   id: string;
-  booking_reference?: string | null;
+  booking_reference: string | null;
   date: string;
-  city_id?: string | null;
-  cleaner_id?: string | null;
-  service?: string | null;
-  service_slug?: string | null;
-  is_team_job?: boolean | null;
-  total_paid_zar?: number | null;
-  amount_paid_cents?: number | null;
-  total_paid_cents?: number | null;
-  service_fee_cents?: number | null;
-  company_revenue_cents?: number | null;
-  earnings_summary?: unknown;
-  cleaner_payout_cents?: number | null;
-  display_earnings_cents?: number | null;
-  cleaner_earnings_total_cents?: number | null;
-  cleaner_bonus_cents?: number | null;
-  cities?: { name?: string } | null;
+  city_id: string | null;
+  cleaner_id: string | null;
+  service: string | null;
+  service_slug: string | null;
+  is_team_job: boolean | null;
+  total_paid_zar: number | null;
+  amount_paid_cents: number | null;
+  total_paid_cents: number | null;
+  service_fee_cents: number | null;
+  company_revenue_cents: number | null;
+  earnings_summary: unknown;
+  cleaner_payout_cents: number | null;
+  display_earnings_cents: number | null;
+  cleaner_earnings_total_cents: number | null;
+  cleaner_bonus_cents: number | null;
+  cities: { name?: string } | null;
 };
 
 export async function GET(request: Request) {

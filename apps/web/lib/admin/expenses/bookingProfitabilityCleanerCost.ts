@@ -103,7 +103,10 @@ export function trustedBookingRollupContribution(
   };
 }
 
-export type BookingProfitabilityRow = BookingProfitBreakdown & {
+export type BookingProfitabilityRow = Omit<
+  BookingProfitBreakdown,
+  "cleaner_payment_cents" | "net_booking_profit_cents" | "profit_margin_percent"
+> & {
   cleaner_payment_cents: number | null;
   net_booking_profit_cents: number | null;
   profit_margin_percent: number | null;
