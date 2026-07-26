@@ -65,6 +65,12 @@ import { parseStoredPriceBreakdown } from "@/lib/dashboard/storedPriceBreakdown"
 import { adminLinesFromPricingSummary } from "@/lib/booking-v2/adminPricingDisplay";
 import { adminBookingDispatchAttemptId } from "@/lib/admin/adminBookingAssignmentLabels";
 import { computeAdminBookingCleanerPayoutDisplay } from "@/lib/admin/adminBookingCleanerPayoutDisplay";
+import {
+  bookingProfitIncompleteTeamWarning,
+  formatBookingProfitCentsZar,
+  formatBookingProfitMarginPercent,
+  type BookingExpensesProfit,
+} from "@/lib/admin/expenses/bookingExpensesProfitDisplay";
 import type { AdminEarningsDisplay } from "@/lib/payout/bookingEarningsSummary";
 import {
   describeBookingOperationalState,
@@ -862,15 +868,7 @@ export default function BookingDetailsView({
   const [error, setError] = useState<string | null>(null);
   const [fullBooking, setFullBooking] = useState<BookingDetails | null>(null);
   const [earningsDisplay, setEarningsDisplay] = useState<AdminEarningsDisplay | null>(null);
-  const [bookingProfit, setBookingProfit] = useState<{
-    customer_payment_cents: number;
-    cleaner_payment_cents: number;
-    booking_expenses_cents: number;
-    processing_fees_cents: number;
-    platform_fees_cents: number;
-    net_booking_profit_cents: number;
-    profit_margin_percent: number | null;
-  } | null>(null);
+  const [bookingProfit, setBookingProfit] = useState<BookingExpensesProfit | null>(null);
   const [paymentTransaction, setPaymentTransaction] = useState<PaymentTransactionRow | null>(null);
   const [cleaner, setCleaner] = useState<Cleaner | null>(null);
   /** From GET `selected_cleaner` — customer pick when not same row as assigned `cleaner`. */
@@ -1210,7 +1208,7 @@ export default function BookingDetailsView({
         });
         if (!res.ok || cancelled) return;
         const json = (await res.json()) as {
-          profit?: typeof bookingProfit;
+          profit?: BookingExpensesProfit;
           payment_transaction?: PaymentTransactionRow | null;
         };
         if (!cancelled) {
@@ -1926,6 +1924,7 @@ export default function BookingDetailsView({
       : centsToZar(fullBooking.company_revenue_cents));
   const v2PricingLines = adminLinesFromPricingSummary(fullBooking.pricing_summary);
   const isAssigned = !!fullBooking.cleaner_id;
+  const incompleteTeamProfitWarning = bookingProfitIncompleteTeamWarning(bookingProfit);
   const jobRosterLocked =
     (fullBooking.cleaner_line_earnings_finalized_at ?? "").toString().trim().length > 0;
   const assignmentSummaryLine = assignmentSourceLabel({
@@ -3905,34 +3904,44 @@ export default function BookingDetailsView({
           </DetailCard>
           {bookingProfit ? (
             <DetailCard title="Booking profit">
+              {incompleteTeamProfitWarning ? (
+                <div className="flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <p className="font-medium">{incompleteTeamProfitWarning}</p>
+                </div>
+              ) : null}
               <DetailRow
                 label="Customer payment"
-                value={`R ${(bookingProfit.customer_payment_cents / 100).toLocaleString("en-ZA")}`}
+                value={formatBookingProfitCentsZar(bookingProfit.customer_payment_cents)}
               />
               <DetailRow
                 label="Cleaner payment"
-                value={`R ${(bookingProfit.cleaner_payment_cents / 100).toLocaleString("en-ZA")}`}
+                value={formatBookingProfitCentsZar(bookingProfit.cleaner_payment_cents)}
+                muted={bookingProfit.cleaner_payment_cents == null}
               />
               <DetailRow
                 label="Booking expenses"
-                value={`R ${(bookingProfit.booking_expenses_cents / 100).toLocaleString("en-ZA")}`}
+                value={formatBookingProfitCentsZar(bookingProfit.booking_expenses_cents)}
               />
               <DetailRow
                 label="Gateway fee (Paystack)"
-                value={`R ${(bookingProfit.processing_fees_cents / 100).toLocaleString("en-ZA")}`}
+                value={formatBookingProfitCentsZar(bookingProfit.processing_fees_cents)}
               />
               <DetailRow
                 label="Platform fee"
-                value={`R ${(bookingProfit.platform_fees_cents / 100).toLocaleString("en-ZA")}`}
+                value={formatBookingProfitCentsZar(bookingProfit.platform_fees_cents)}
               />
               <DetailRow
                 label="Net booking profit"
-                value={`R ${(bookingProfit.net_booking_profit_cents / 100).toLocaleString("en-ZA")}`}
-                strong
+                value={formatBookingProfitCentsZar(bookingProfit.net_booking_profit_cents)}
+                strong={bookingProfit.net_booking_profit_cents != null}
+                muted={bookingProfit.net_booking_profit_cents == null}
               />
-              {bookingProfit.profit_margin_percent != null ? (
-                <DetailRow label="Profit margin" value={`${bookingProfit.profit_margin_percent}%`} />
-              ) : null}
+              <DetailRow
+                label="Profit margin"
+                value={formatBookingProfitMarginPercent(bookingProfit.profit_margin_percent)}
+                muted={bookingProfit.profit_margin_percent == null}
+              />
               <div className="mt-3">
                 <BookingPaymentGatewayCard paymentTransaction={paymentTransaction} />
               </div>
@@ -4920,11 +4929,32 @@ function DetailCard({ title, children }: { title: string; children: React.ReactN
   );
 }
 
-function DetailRow({ label, value, mono = false, strong = false }: { label: string; value: ReactNode; mono?: boolean; strong?: boolean }) {
+function DetailRow({
+  label,
+  value,
+  mono = false,
+  strong = false,
+  muted = false,
+}: {
+  label: string;
+  value: ReactNode;
+  mono?: boolean;
+  strong?: boolean;
+  muted?: boolean;
+}) {
   return (
     <div className="flex items-start justify-between gap-3">
       <span className="text-xs text-zinc-500">{label}</span>
-      <span className={["text-base font-medium text-zinc-800", mono ? "font-mono text-xs" : "", strong ? "font-semibold" : ""].join(" ")}>{value}</span>
+      <span
+        className={[
+          "text-base font-medium",
+          muted ? "text-amber-800" : "text-zinc-800",
+          mono ? "font-mono text-xs" : "",
+          strong ? "font-semibold" : "",
+        ].join(" ")}
+      >
+        {value}
+      </span>
     </div>
   );
 }
