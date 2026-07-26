@@ -22,8 +22,9 @@ describe("bookingExpensesProfitDisplay", () => {
       included_in_trusted_totals: false,
     };
 
-    // Regression: JS would coerce `null / 100` → 0 → "R 0".
-    expect(null / 100).toBe(0);
+    // Regression: runtime JS coerces `null / 100` → 0 → "R 0" if callers divide unchecked.
+    const coerced = (null as unknown as number) / 100;
+    expect(coerced).toBe(0);
     expect(formatBookingProfitCentsZar(incomplete.cleaner_payment_cents)).toBe("—");
     expect(formatBookingProfitCentsZar(incomplete.net_booking_profit_cents)).toBe("—");
     expect(formatBookingProfitMarginPercent(incomplete.profit_margin_percent)).toBe("—");
