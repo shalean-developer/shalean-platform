@@ -101,7 +101,7 @@ Investigation note (no payout changes):
 | Solo booking still uses `display_earnings_cents` | Covered |
 | No changes to `team_job_member_payouts` / individual cleaner payout amounts | Confirmed — PR diff has no payout write paths / no migration touching member payouts |
 | SHL-BK-000527 prod probe | Script ready (`apps/web/scripts/investigate-shl-bk-000527.mjs`); service-role env unavailable in agent session — run against prod before merge if needed |
-| Vercel Preview READY | Recorded in PR comment / checks after push |
+| Vercel Preview READY | Ready — https://shalean-platform-6r6zerfal-shalean-cleaning-services.vercel.app (inspect: https://vercel.com/shalean-cleaning-services/shalean-platform/3nJQUcHJpnyhcbbZagGhmw6fowxt). Initial push hit build OOM; redeploy succeeded. |
 
 ## Explicit non-changes
 
