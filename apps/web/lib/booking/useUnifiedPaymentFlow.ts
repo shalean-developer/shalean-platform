@@ -198,9 +198,9 @@ export function useUnifiedPaymentFlow({
   const handlePay = useCallback(() => {
     setError(null);
     setMessage(null);
-    const email = summary.email?.trim() ?? "";
-    if (!email) {
-      setError("This booking has no customer email. Contact support.");
+    const email = summary.email?.trim().toLowerCase() ?? "";
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setError("This booking has no valid customer email. Update the booking email or contact support.");
       return;
     }
     if (summary.priceZar <= 0) {
