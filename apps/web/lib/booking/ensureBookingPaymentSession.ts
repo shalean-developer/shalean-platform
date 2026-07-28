@@ -558,17 +558,38 @@ async function ensureBookingPaymentSessionInner(
     };
   }
 
-  const hasBrowserGaClient =
-    typeof gaIdentity?.gaClientId === "string" && /^\d+\.\d+$/.test(gaIdentity.gaClientId);
-
   if (
-    !hasBrowserGaClient &&
     isStoredPaymentLinkUsable({
       status: row.status,
       payment_link: row.payment_link,
       payment_link_expires_at: row.payment_link_expires_at,
     })
   ) {
+    // Never replace a usable Paystack session solely to attach GA identity (duplicate-charge risk).
+    // Persist browser identity onto the booking snapshot so finalize/MP can still stitch.
+    if (
+      typeof gaIdentity?.gaClientId === "string" &&
+      /^\d+\.\d+$/.test(gaIdentity.gaClientId)
+    ) {
+      try {
+        const snap =
+          row.booking_snapshot && typeof row.booking_snapshot === "object" && !Array.isArray(row.booking_snapshot)
+            ? { ...(row.booking_snapshot as Record<string, unknown>) }
+            : {};
+        const analytics =
+          snap.analytics && typeof snap.analytics === "object" && !Array.isArray(snap.analytics)
+            ? { ...(snap.analytics as Record<string, unknown>) }
+            : {};
+        analytics.ga_client_id = gaIdentity.gaClientId;
+        if (typeof gaIdentity.gaSessionId === "string" && /^\d+$/.test(gaIdentity.gaSessionId)) {
+          analytics.ga_session_id = gaIdentity.gaSessionId;
+        }
+        snap.analytics = analytics;
+        await admin.from("bookings").update({ booking_snapshot: snap }).eq("id", row.id);
+      } catch {
+        /* non-fatal — checkout must proceed */
+      }
+    }
     logPaymentStructured("payment_initialize", {
       booking_id: id,
       reference: row.paystack_reference,
