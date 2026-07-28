@@ -3,6 +3,7 @@
 import {
   GA4_BRANCH,
   GA4_CANONICAL_MEASUREMENT_ID,
+  GA4_LEGACY_MEASUREMENT_IDS,
   getGa4MeasurementId,
   isGa4PathExcluded,
 } from "@/lib/analytics/ga4Config";
@@ -29,17 +30,29 @@ declare global {
   }
 }
 
-function gaDisableKey(measurementId: string): string {
+export function gaDisableKey(measurementId: string): string {
   return `ga-disable-${measurementId}`;
 }
 
+/** Canonical + every legacy Measurement ID that must be silenced on internal routes. */
+export function ga4DisableTargetIds(): string[] {
+  const ids = new Set<string>([GA4_CANONICAL_MEASUREMENT_ID, ...GA4_LEGACY_MEASUREMENT_IDS]);
+  const active = getGa4MeasurementId();
+  if (active) ids.add(active);
+  return [...ids];
+}
+
+/**
+ * Toggle GA4 collection for internal app surfaces.
+ * Sets `ga-disable-<id>` for the active ID, the canonical apex ID, and every legacy ID
+ * (exactly once each — no duplicate assignment of the canonical key).
+ */
 export function setGa4Disabled(disabled: boolean): void {
   if (typeof window === "undefined") return;
-  const id = getGa4MeasurementId();
-  (window as unknown as Record<string, boolean>)[gaDisableKey(id)] = disabled;
-  // Also disable legacy id if a stale tab still had it configured
-  (window as unknown as Record<string, boolean>)[gaDisableKey(GA4_CANONICAL_MEASUREMENT_ID)] =
-    disabled;
+  const flags = window as unknown as Record<string, boolean>;
+  for (const id of ga4DisableTargetIds()) {
+    flags[gaDisableKey(id)] = disabled;
+  }
 }
 
 function canSendGa4(): boolean {

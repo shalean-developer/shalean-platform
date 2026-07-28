@@ -18,8 +18,8 @@ export function GoogleAds() {
     [
       GA4_PATH_EXCLUSION_SNIPPET,
       `window.dataLayer=window.dataLayer||[];`,
-      `window.gtag=window.gtag||function(){dataLayer.push(arguments);};`,
-      `gtag("config",${id});`,
+      `window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};`,
+      `window.gtag("config",${id});`,
     ].join(""),
   );
 

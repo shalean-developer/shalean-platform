@@ -1,62 +1,24 @@
-# PR #113 — Staging deploy evidence (GA4 canonical stream)
+# PR #113 — Staging evidence (GA4-only, rebuilt from main)
 
-**Date:** 2026-07-28  
+**Date:** 2026-07-28 (scope cleanup)  
 **PR:** https://github.com/shalean-developer/shalean-platform/pull/113  
-**Feature head:** `e64ec952`  
-**Staging merge:** `f3d0f784`  
-**Production:** **not deployed** (awaiting staging DebugView sign-off + operator approval)
+**Base:** `main` (unrelated staging/SEO/finance history removed)  
+**Production:** **not deployed**
 
-## Guardrails
+## Scope
 
-| Check | Result |
-|-------|--------|
-| Merged to `staging` only | **PASS** — `f3d0f784` |
-| Merged to `main`? | **No** |
-| Production deploy? | **No** |
-| Vitest (PR CI) | **PASS** |
-| PR Vercel Preview | **FAIL** — OOM/SIGKILL during `next build` (infrastructure; not GA4-specific). Staging Preview build **READY**. |
+GA4 apex stream + booking funnel + PII scrub + path exclusions only.  
+Paystack email / session guards moved to a separate PR.  
+Window Cleaning CTAs: unchanged from `main` (informational; `bookCta: false`).
 
-## Staging deployment
+## Codex review corrections
 
-| Field | Value |
-|-------|-------|
-| Status | **READY** |
-| Deployment | `dpl_Goy9bNk1qNpQfpXUBrYBWCHs3LJo` |
-| Deployment URL | https://shalean-platform-dmz7ij96i-shalean-cleaning-services.vercel.app |
-| Staging alias | https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app |
-| Target | Preview (not Production) |
-| git SHA | `f3d0f784` |
+| Thread | Fix |
+|--------|-----|
+| P1 `window.gtag` queue | Bootstrap assigns `window.gtag` inside IIFE; queue test in `ga4BootstrapQueue.test.ts` |
+| P2 Window Cleaning | Restored by rebasing onto `main` (pre-regression); regression tests lock behaviour |
+| P2 legacy `ga-disable` | `setGa4Disabled` targets canonical + every `GA4_LEGACY_MEASUREMENT_IDS` entry once |
 
-Unauthenticated probes to the staging alias return **HTTP 302** (Vercel Deployment Protection / SSO), consistent with prior staging programs.
+## Staging
 
-## Automated test evidence (pre-merge / local)
-
-```
-npx vitest run lib/analytics/__tests__/ga4Config.test.ts \
-  lib/analytics/__tests__/ga4Events.test.ts \
-  lib/ads/__tests__/sendServerPurchaseConversions.test.ts
-→ 19 passed
-```
-
-`npm run typecheck` (8192 MB heap) → exit 0.
-
-## Operator follow-up (SSO session)
-
-1. Open staging alias with Vercel SSO.
-2. Confirm `GET /api/health/environment` → `shaleanAppEnv=staging`, `gitSha=f3d0f784`.
-3. Set staging env if missing:
-   - `NEXT_PUBLIC_GA_MEASUREMENT_ID=G-GEVTBDWTQW` (optional; code default)
-   - `GA4_MEASUREMENT_PROTOCOL_SECRET` for stream **G-GEVTBDWTQW**
-4. Run DebugView matrix: `docs/audits/ga4/GA4-DEBUGVIEW-VERIFICATION-MATRIX.md`
-5. Confirm Network: collect `tid=G-GEVTBDWTQW` only; no `G-6JR2GPGPN3`.
-6. Confirm `/office`, `/cleaner`, `/jobs` do not initialise GA4.
-
-## Google Admin (outside repo)
-
-- Leave legacy stream `G-6JR2GPGPN3` intact; remove from Google tag / GTM destinations.
-- Disable automatic user-provided email collection on the Google tag (`__ogt_1p_data_v2` currently enabled in live tag config).
-- Mark `purchase` as primary key event; optional secondaries: `booking_submitted`, `phone_click`, `whatsapp_click`.
-
-## Production approval
-
-**Not requested yet.** Attach completed DebugView checklist to PR #113 before production promote.
+Filled after push / deploy in the agent return block.
