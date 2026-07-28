@@ -2,6 +2,7 @@ import "server-only";
 
 import crypto from "crypto";
 import type { AdsPurchaseConversion } from "@/lib/ads/purchaseConversionTypes";
+import { GA4_BRANCH, getGa4MeasurementId } from "@/lib/analytics/ga4Config";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 function sha256Norm(value: string): string {
@@ -115,14 +116,13 @@ export async function sendMetaCapiPurchase(payload: AdsPurchaseConversion): Prom
 type Ga4Result = { ok: true } | { ok: false; skipped: true; reason: string } | { ok: false; error: string };
 
 /**
- * GA4 Measurement Protocol purchase — link GA4 to Google Ads for conversion import.
- * Requires `GA4_MEASUREMENT_PROTOCOL_SECRET` + `NEXT_PUBLIC_GA_MEASUREMENT_ID` (or `GA4_MEASUREMENT_ID`).
+ * GA4 Measurement Protocol purchase — sole path for the primary `purchase` conversion.
+ * Requires `GA4_MEASUREMENT_PROTOCOL_SECRET` + canonical Measurement ID (`G-GEVTBDWTQW`).
+ * Idempotency is enforced by the caller (`ads_purchase` claim per Paystack reference).
+ * Never includes PII (email/phone/name stay on the Meta CAPI path only).
  */
 export async function sendGa4MeasurementPurchase(payload: AdsPurchaseConversion): Promise<Ga4Result> {
-  const measurementId =
-    process.env.GA4_MEASUREMENT_ID?.trim() ||
-    process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() ||
-    "G-6JR2GPGPN3";
+  const measurementId = getGa4MeasurementId();
   const apiSecret = process.env.GA4_MEASUREMENT_PROTOCOL_SECRET?.trim() || "";
   if (!apiSecret) {
     return { ok: false, skipped: true, reason: "ga4_mp_not_configured" };
@@ -130,6 +130,11 @@ export async function sendGa4MeasurementPurchase(payload: AdsPurchaseConversion)
 
   const eventId = payload.eventId.trim();
   if (!eventId) return { ok: false, skipped: true, reason: "missing_event_id" };
+
+  const service =
+    typeof payload.service === "string" && payload.service.trim()
+      ? payload.service.trim()
+      : "cleaning";
 
   const clientId = crypto.createHash("sha256").update(`shalean:${eventId}`).digest("hex").slice(0, 32);
   const body = {
@@ -141,12 +146,14 @@ export async function sendGa4MeasurementPurchase(payload: AdsPurchaseConversion)
           transaction_id: eventId,
           value: payload.valueZar,
           currency: (payload.currency || "ZAR").toUpperCase(),
+          service,
+          branch: GA4_BRANCH,
           engagement_time_msec: 1,
-          ...(payload.bookingId ? { booking_id: payload.bookingId } : {}),
           items: [
             {
-              item_id: payload.bookingId || eventId,
-              item_name: "Cleaning booking",
+              item_id: service,
+              item_name: service,
+              item_category: GA4_BRANCH,
               quantity: 1,
               price: payload.valueZar,
             },

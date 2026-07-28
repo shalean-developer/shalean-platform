@@ -224,25 +224,55 @@ export async function finalizePaystackChargeSuccess(
           customerPhone: row?.customer_phone,
         });
       }
-    } catch {
-      /* non-fatal */
-    }
 
-    const meta = paystackMetadata;
-    const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
-    const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";
-    void reportPaidBookingAdsConversions({
-      admin,
-      paystackReference: params.paystackReference,
-      bookingId: result.bookingId,
-      amountCents: params.amountCents,
-      currency: params.currency,
-      email: resolvedCustomerEmail || null,
-      phone: params.snapshot?.customer?.phone ?? null,
-      customerName: params.snapshot?.customer?.name ?? null,
-      gclid: gclid || null,
-      fbclid: fbclid || null,
-    });
+      const meta = paystackMetadata;
+      const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
+      const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";
+      const serviceFromRow =
+        typeof (softRow as { service_slug?: string | null } | null)?.service_slug === "string"
+          ? String((softRow as { service_slug?: string | null }).service_slug).trim()
+          : "";
+      const serviceFromMeta =
+        (typeof meta.service_slug === "string" && meta.service_slug.trim()) ||
+        (typeof meta.service === "string" && meta.service.trim()) ||
+        "";
+      const serviceFromSnapshot =
+        (typeof params.snapshot?.locked?.service_type === "string" &&
+          params.snapshot.locked.service_type.trim()) ||
+        (typeof params.snapshot?.locked?.service === "string" && params.snapshot.locked.service.trim()) ||
+        (typeof params.snapshot?.flat?.service === "string" && params.snapshot.flat.service.trim()) ||
+        "";
+      void reportPaidBookingAdsConversions({
+        admin,
+        paystackReference: params.paystackReference,
+        bookingId: result.bookingId,
+        amountCents: params.amountCents,
+        currency: params.currency,
+        email: resolvedCustomerEmail || null,
+        phone: params.snapshot?.customer?.phone ?? null,
+        customerName: params.snapshot?.customer?.name ?? null,
+        service: serviceFromRow || serviceFromMeta || serviceFromSnapshot || null,
+        gclid: gclid || null,
+        fbclid: fbclid || null,
+      });
+    } catch {
+      /* non-fatal — ads conversions must not block finalize */
+      const meta = paystackMetadata;
+      const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
+      const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";
+      void reportPaidBookingAdsConversions({
+        admin,
+        paystackReference: params.paystackReference,
+        bookingId: result.bookingId,
+        amountCents: params.amountCents,
+        currency: params.currency,
+        email: resolvedCustomerEmail || null,
+        phone: params.snapshot?.customer?.phone ?? null,
+        customerName: params.snapshot?.customer?.name ?? null,
+        gclid: gclid || null,
+        fbclid: fbclid || null,
+      });
+    }
   }
 
   return result;
