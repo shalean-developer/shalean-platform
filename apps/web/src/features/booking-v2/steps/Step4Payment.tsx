@@ -48,10 +48,13 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
   async function handleSignIn(data: SignInData) {
     setLoading(true);
     setServerError(null);
-    const { user, error } = await signIn(data.email, data.password);
+    const { user, session, error } = await signIn(data.email, data.password);
     setLoading(false);
-    if (error || !user) {
-      setServerError(error?.message ?? "Sign in failed. Check your email and password.");
+    if (error || !user || !session?.access_token) {
+      setServerError(
+        error?.message ??
+          "Sign in failed. Check your email and password, or confirm your account from the email we sent.",
+      );
       return;
     }
     onAuthenticated(user);
@@ -60,10 +63,19 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
   async function handleSignUp(data: SignUpData) {
     setLoading(true);
     setServerError(null);
-    const { user, error } = await signUp(data.email, data.password, data.fullName, data.phone ?? "");
+    const { user, session, error } = await signUp(data.email, data.password, data.fullName, data.phone ?? "");
     setLoading(false);
-    if (error || !user) {
-      setServerError(error?.message ?? "Sign up failed. Please try again.");
+    if (error) {
+      setServerError(error.message ?? "Sign up failed. Please try again.");
+      return;
+    }
+    // Supabase returns a user without a session when email confirmation is required.
+    // Do not advance to payment — Paystack confirm needs a live access token.
+    if (!session?.access_token || !user) {
+      setMode("sign_in");
+      setServerError(
+        "Account created. Confirm your email from the link we sent, then sign in to complete payment.",
+      );
       return;
     }
     onAuthenticated(user);
@@ -249,7 +261,13 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
 
 // ??? Payment section ????????????????????????????????????????????????????????????
 
-function PaymentSection({ user }: { user: User }) {
+function PaymentSection({
+  user,
+  onSessionLost,
+}: {
+  user: User;
+  onSessionLost: (message: string) => void;
+}) {
   const { serviceSlug, clearBooking, catalogLoading } = useBookingV2();
   const { watch, setValue } = useFormContext<BookingV2FormData>();
   const values = watch();
@@ -419,9 +437,21 @@ function PaymentSection({ user }: { user: User }) {
 
     try {
       // 1. Confirm booking and get bookingId + paystackReference
-      const session = await getSession();
+      let session = await getSession();
       if (!session?.access_token) {
-        setError("Session expired. Please refresh the page.");
+        try {
+          const { getSupabaseBrowser } = await import("@/lib/supabase/browser");
+          const sb = getSupabaseBrowser();
+          if (sb) {
+            const refreshed = await sb.auth.refreshSession();
+            session = refreshed.data.session ?? null;
+          }
+        } catch {
+          session = null;
+        }
+      }
+      if (!session?.access_token) {
+        onSessionLost("Your sign-in session expired. Please sign in again to complete payment.");
         setConfirming(false);
         return;
       }
@@ -900,6 +930,7 @@ function PaymentSection({ user }: { user: User }) {
 export function Step4Payment() {
   const [user, setUser] = useState<User | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
+  const [authNotice, setAuthNotice] = useState<string | null>(null);
 
   useEffect(() => {
     getUser().then((u) => {
@@ -925,10 +956,28 @@ export function Step4Payment() {
         </p>
       </div>
 
+      {authNotice && !user ? (
+        <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
+          {authNotice}
+        </div>
+      ) : null}
+
       {!user ? (
-        <AuthGate onAuthenticated={(u) => setUser(u)} />
+        <AuthGate
+          onAuthenticated={(u) => {
+            setAuthNotice(null);
+            setUser(u);
+          }}
+        />
       ) : (
-        <PaymentSection user={user} />
+        <PaymentSection
+          user={user}
+          onSessionLost={(message) => {
+            setAuthNotice(message);
+            setUser(null);
+          }}
+        />
       )}
     </div>
   );
