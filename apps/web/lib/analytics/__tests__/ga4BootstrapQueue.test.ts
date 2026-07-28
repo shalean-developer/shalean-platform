@@ -117,3 +117,46 @@ describe("setGa4Disabled internal-route flags", () => {
     expect(keys.filter((k) => k === gaDisableKey(GA4_CANONICAL_MEASUREMENT_ID))).toHaveLength(1);
   });
 });
+
+describe("Ga4RouteGuard bootstrap after excluded hard load", () => {
+  it("ensureGa4Bootstrapped installs window.gtag and schedules the loader", async () => {
+    const appendChild = vi.fn();
+    const querySelector = vi.fn(() => null);
+    const createElement = vi.fn(() => ({ async: false, dataset: {} as Record<string, string>, src: "" }));
+    const dataLayer: unknown[] = [];
+    const win: Record<string, unknown> = {
+      dataLayer,
+      location: { pathname: "/book/regular-cleaning" },
+      __shaleanGa4Bootstrapped: false,
+    };
+    vi.stubGlobal("window", win);
+    vi.stubGlobal("document", {
+      querySelector,
+      createElement,
+      head: { appendChild },
+    });
+    delete process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+    delete process.env.GA4_MEASUREMENT_ID;
+
+    const { ensureGa4Bootstrapped } = await import("@/components/analytics/Ga4RouteGuard");
+    ensureGa4Bootstrapped();
+
+    expect(typeof window.gtag).toBe("function");
+    expect(window.__shaleanGa4Bootstrapped).toBe(true);
+    expect(appendChild).toHaveBeenCalled();
+    expect(createElement).toHaveBeenCalledWith("script");
+
+    vi.unstubAllGlobals();
+  });
+
+  it("Ga4RouteGuard source calls ensureGa4Bootstrapped when leaving excluded routes", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const src = await fs.readFile(
+      path.join(process.cwd(), "components/analytics/Ga4RouteGuard.tsx"),
+      "utf8",
+    );
+    expect(src).toContain("ensureGa4Bootstrapped");
+    expect(src).toContain("setGa4Disabled(excluded)");
+  });
+});

@@ -220,12 +220,18 @@ async function maybeFinalizeSuccessfulCharge(
   };
 }
 
+export type BookingPaymentSessionGaIdentity = {
+  gaClientId?: string | null;
+  gaSessionId?: string | null;
+};
+
 async function initializeFreshPaystackSession(
   admin: SupabaseClient,
   row: BookingPayRow,
   secret: string,
   amountZar: number,
   reason: string,
+  gaIdentity?: BookingPaymentSessionGaIdentity | null,
 ): Promise<EnsureBookingPaymentSessionResult> {
   const email = String(row.customer_email ?? "").trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -336,6 +342,12 @@ async function initializeFreshPaystackSession(
           expected_total_zar: String(amountZar),
           payment_path: "ensure_booking_payment_session",
           ensure_reason: reason,
+          ...(typeof gaIdentity?.gaClientId === "string" && /^\d+\.\d+$/.test(gaIdentity.gaClientId)
+            ? { ga_client_id: gaIdentity.gaClientId }
+            : {}),
+          ...(typeof gaIdentity?.gaSessionId === "string" && /^\d+$/.test(gaIdentity.gaSessionId)
+            ? { ga_session_id: gaIdentity.gaSessionId }
+            : {}),
         },
       }),
     });
@@ -443,6 +455,7 @@ async function ensureBookingPaymentSessionInner(
   admin: SupabaseClient,
   bookingId: string,
   access: BookingPaymentSessionAccess,
+  gaIdentity?: BookingPaymentSessionGaIdentity | null,
 ): Promise<EnsureBookingPaymentSessionResult> {
   const id = bookingId.trim();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
@@ -575,7 +588,7 @@ async function ensureBookingPaymentSessionInner(
       ? PAYMENT_ERROR_CODES.PAYMENT_LINK_EXPIRED
       : PAYMENT_ERROR_CODES.PAYMENT_ATTEMPT_ABANDONED;
 
-  return initializeFreshPaystackSession(admin, row, secret, amountZar, reason);
+  return initializeFreshPaystackSession(admin, row, secret, amountZar, reason, gaIdentity);
 }
 
 /**
@@ -584,13 +597,23 @@ async function ensureBookingPaymentSessionInner(
  */
 export async function ensureBookingPaymentSession(
   admin: SupabaseClient,
-  params: { bookingId: string; access: BookingPaymentSessionAccess },
+  params: {
+    bookingId: string;
+    access: BookingPaymentSessionAccess;
+    /** Browser GA4 identity for Measurement Protocol purchase stitching. */
+    gaIdentity?: BookingPaymentSessionGaIdentity | null;
+  },
 ): Promise<EnsureBookingPaymentSessionResult> {
   const bookingId = params.bookingId.trim();
   const existing = inflightByBookingId.get(bookingId);
   if (existing) return existing;
 
-  const promise = ensureBookingPaymentSessionInner(admin, bookingId, params.access).finally(() => {
+  const promise = ensureBookingPaymentSessionInner(
+    admin,
+    bookingId,
+    params.access,
+    params.gaIdentity,
+  ).finally(() => {
     if (inflightByBookingId.get(bookingId) === promise) {
       inflightByBookingId.delete(bookingId);
     }

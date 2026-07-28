@@ -24,6 +24,8 @@ export async function reportPaidBookingAdsConversions(params: {
   service?: string | null;
   gclid?: string | null;
   fbclid?: string | null;
+  gaClientId?: string | null;
+  gaSessionId?: string | null;
 }): Promise<void> {
   const reference = params.paystackReference.trim();
   if (!reference || !params.bookingId) return;
@@ -54,6 +56,8 @@ export async function reportPaidBookingAdsConversions(params: {
     lastName,
     gclid: params.gclid ?? null,
     fbclid: params.fbclid ?? null,
+    gaClientId: params.gaClientId ?? null,
+    gaSessionId: params.gaSessionId ?? null,
     eventSourceUrl: appUrl ? `${appUrl.replace(/\/$/, "")}/account/success` : null,
   };
 

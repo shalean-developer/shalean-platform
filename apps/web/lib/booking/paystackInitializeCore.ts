@@ -950,6 +950,8 @@ export async function processPaystackInitializeBody(
     "fbclid",
     "fbp",
     "fbc",
+    "ga_client_id",
+    "ga_session_id",
   ]);
   for (const [k, v] of Object.entries(extraMetadata)) {
     if (k === "booking_json") continue;
