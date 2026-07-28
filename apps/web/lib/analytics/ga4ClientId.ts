@@ -3,6 +3,8 @@
  * to the same client/session that emitted the booking funnel events.
  */
 
+import { getGa4MeasurementId } from "@/lib/analytics/ga4Config";
+
 const GA_CLIENT_STORAGE_KEY = "shalean_ga4_client_id";
 
 function readCookie(name: string): string | null {
@@ -54,20 +56,16 @@ export function getGa4BrowserClientId(): string | null {
   return generated;
 }
 
-/** Optional GA4 session id from `_ga_<measurement>` cookie when present. */
+/** Optional GA4 session id from the active Measurement ID cookie (`_ga_<id without G->`). */
 export function getGa4BrowserSessionId(): string | null {
   if (typeof document === "undefined") return null;
-  const cookies = document.cookie.split(";").map((c) => c.trim());
-  for (const c of cookies) {
-    if (!c.startsWith("_ga_")) continue;
-    const eq = c.indexOf("=");
-    if (eq < 0) continue;
-    const raw = decodeURIComponent(c.slice(eq + 1));
-    // GS2.1.s<sessionId>$o... or GS1.1.<sessionId>...
-    const m = raw.match(/\.s(\d+)/) || raw.match(/^GS\d+\.\d+\.(\d+)/);
-    if (m?.[1]) return m[1];
-  }
-  return null;
+  const measurementId = getGa4MeasurementId();
+  const cookieName = `_ga_${measurementId.replace(/^G-/, "")}`;
+  const raw = readCookie(cookieName);
+  if (!raw) return null;
+  // GS2.1.s<sessionId>$o... or GS1.1.<sessionId>...
+  const m = raw.match(/\.s(\d+)/) || raw.match(/^GS\d+\.\d+\.(\d+)/);
+  return m?.[1] ?? null;
 }
 
 export function getGa4BrowserIdentity(): { gaClientId: string | null; gaSessionId: string | null } {

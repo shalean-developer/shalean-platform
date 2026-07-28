@@ -35,6 +35,8 @@ describe("getGa4BrowserClientId", () => {
       },
     });
     vi.stubGlobal("document", { cookie: "" });
+    delete process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+    delete process.env.GA4_MEASUREMENT_ID;
   });
 
   afterEach(() => {
@@ -57,5 +59,14 @@ describe("getGa4BrowserClientId", () => {
     vi.stubGlobal("document", { cookie: "_ga=GA1.1.1111111111.2222222222" });
     expect(getGa4BrowserClientId()).toBe("1111111111.2222222222");
     expect(getGa4CheckoutIdentityFields().gaClientId).toBe("1111111111.2222222222");
+  });
+
+  it("prefers the canonical stream session cookie over legacy", async () => {
+    const { getGa4BrowserSessionId } = await import("@/lib/analytics/ga4ClientId");
+    vi.stubGlobal("document", {
+      cookie:
+        "_ga_6JR2GPGPN3=GS1.1.9999999999; _ga_GEVTBDWTQW=GS2.1.s1712345678$o1$g0; _ga=GA1.1.1111111111.2222222222",
+    });
+    expect(getGa4BrowserSessionId()).toBe("1712345678");
   });
 });

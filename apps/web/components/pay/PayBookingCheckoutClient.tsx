@@ -97,7 +97,9 @@ export function PayBookingCheckoutClient({
           type="button"
           disabled={busy}
           onClick={() => {
-            void openCheckout(authorizationUrl);
+            // Always go through payment-session so browser GA identity is attached
+            // before Paystack initialize (SSR pay-link sessions lack ga_client_id).
+            void ensureAndOpen();
           }}
           className="inline-flex items-center justify-center rounded-xl bg-blue-600 px-5 py-3 text-center text-sm font-semibold text-white shadow hover:bg-blue-700 disabled:opacity-60"
         >

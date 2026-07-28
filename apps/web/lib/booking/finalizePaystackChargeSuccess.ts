@@ -250,7 +250,7 @@ export async function finalizePaystackChargeSuccess(
         (typeof params.snapshot?.locked?.service === "string" && params.snapshot.locked.service.trim()) ||
         (typeof params.snapshot?.flat?.service === "string" && params.snapshot.flat.service.trim()) ||
         "";
-      void reportPaidBookingAdsConversions({
+      await reportPaidBookingAdsConversions({
         admin,
         paystackReference: params.paystackReference,
         bookingId: result.bookingId,
@@ -266,32 +266,36 @@ export async function finalizePaystackChargeSuccess(
         gaSessionId: gaSessionId || null,
       });
     } catch {
-      /* non-fatal — ads conversions must not block finalize */
-      const meta = paystackMetadata;
-      const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
-      const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";
-      const gaClientId =
-        typeof meta.ga_client_id === "string" && /^\d+\.\d+$/.test(meta.ga_client_id.trim())
-          ? meta.ga_client_id.trim()
-          : "";
-      const gaSessionId =
-        typeof meta.ga_session_id === "string" && /^\d+$/.test(meta.ga_session_id.trim())
-          ? meta.ga_session_id.trim()
-          : "";
-      void reportPaidBookingAdsConversions({
-        admin,
-        paystackReference: params.paystackReference,
-        bookingId: result.bookingId,
-        amountCents: params.amountCents,
-        currency: params.currency,
-        email: resolvedCustomerEmail || null,
-        phone: params.snapshot?.customer?.phone ?? null,
-        customerName: params.snapshot?.customer?.name ?? null,
-        gclid: gclid || null,
-        fbclid: fbclid || null,
-        gaClientId: gaClientId || null,
-        gaSessionId: gaSessionId || null,
-      });
+      /* non-fatal — ads conversions must not block finalize success */
+      try {
+        const meta = paystackMetadata;
+        const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
+        const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";
+        const gaClientId =
+          typeof meta.ga_client_id === "string" && /^\d+\.\d+$/.test(meta.ga_client_id.trim())
+            ? meta.ga_client_id.trim()
+            : "";
+        const gaSessionId =
+          typeof meta.ga_session_id === "string" && /^\d+$/.test(meta.ga_session_id.trim())
+            ? meta.ga_session_id.trim()
+            : "";
+        await reportPaidBookingAdsConversions({
+          admin,
+          paystackReference: params.paystackReference,
+          bookingId: result.bookingId,
+          amountCents: params.amountCents,
+          currency: params.currency,
+          email: resolvedCustomerEmail || null,
+          phone: params.snapshot?.customer?.phone ?? null,
+          customerName: params.snapshot?.customer?.name ?? null,
+          gclid: gclid || null,
+          fbclid: fbclid || null,
+          gaClientId: gaClientId || null,
+          gaSessionId: gaSessionId || null,
+        });
+      } catch {
+        /* swallow — payment already finalized */
+      }
     }
   }
 
