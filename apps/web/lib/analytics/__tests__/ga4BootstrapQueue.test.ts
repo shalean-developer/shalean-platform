@@ -351,7 +351,52 @@ describe("booking_submitted once after confirm", () => {
     expect(telemetry).not.toContain("trackGa4BookingSubmitted");
     expect(telemetry).toContain("trackGa4BeginCheckout");
     expect(step4).toContain("trackGa4BookingSubmitted");
-    expect(step4).toMatch(/confirmJson\.success[\s\S]*trackGa4BookingSubmitted|trackGa4BookingSubmitted[\s\S]*bookingId/);
+    expect(step4).toMatch(/confirmJson\.success[\s\S]*trackGa4BookingSubmitted/);
+    // Area-review path must not count as booking_submitted.
+    const areaIdx = step4.indexOf("areaReview=1");
+    const areaSlice = step4.slice(Math.max(0, areaIdx - 400), areaIdx + 80);
+    expect(areaSlice).not.toContain("trackGa4BookingSubmitted");
+  });
+
+  it("appends gtag.js when config was queued but deferred loader skipped", async () => {
+    const appendChild = vi.fn();
+    const createElement = vi.fn(() => ({ async: false, dataset: {} as Record<string, string>, src: "" }));
+    const dataLayer: unknown[] = [];
+    const gtag = vi.fn((...args: unknown[]) => {
+      dataLayer.push(args);
+    });
+    vi.stubGlobal("window", {
+      dataLayer,
+      gtag,
+      location: { pathname: "/book" },
+      __shaleanGa4Bootstrapped: true,
+    });
+    vi.stubGlobal("document", {
+      querySelector: vi.fn(() => null),
+      querySelectorAll: vi.fn(() => []),
+      createElement,
+      head: { appendChild },
+    });
+
+    const { ensureGa4Bootstrapped } = await import("@/components/analytics/Ga4RouteGuard");
+    ensureGa4Bootstrapped();
+    ensureGa4Bootstrapped();
+
+    expect(appendChild).toHaveBeenCalledTimes(1);
+    const configs = dataLayer.filter((e) => Array.isArray(e) && e[0] === "config");
+    expect(configs).toHaveLength(0);
+  });
+
+  it("GTM bootstrap uses a valid data-shalean-gtm attribute selector", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const src = await fs.readFile(
+      path.join(process.cwd(), "components/analytics/GoogleTagManager.tsx"),
+      "utf8",
+    );
+    expect(src).toContain("JSON.stringify(${id})");
+    expect(src).toContain("dataset.shaleanGtm");
+    expect(src).toContain("__shaleanGtmBootstrapped=true");
   });
 });
 
