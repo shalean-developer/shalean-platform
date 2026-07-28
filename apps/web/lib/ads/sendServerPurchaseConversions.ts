@@ -136,29 +136,40 @@ export async function sendGa4MeasurementPurchase(payload: AdsPurchaseConversion)
       ? payload.service.trim()
       : "cleaning";
 
-  const clientId = crypto.createHash("sha256").update(`shalean:${eventId}`).digest("hex").slice(0, 32);
+  const browserClientId =
+    typeof payload.gaClientId === "string" && /^\d+\.\d+$/.test(payload.gaClientId.trim())
+      ? payload.gaClientId.trim()
+      : null;
+  const synthetic = crypto.createHash("sha256").update(`shalean:${eventId}`).digest("hex").slice(0, 32);
+  const clientId = browserClientId || `${synthetic.slice(0, 16)}.${synthetic.slice(16)}`;
+
+  const eventParams: Record<string, unknown> = {
+    transaction_id: eventId,
+    value: payload.valueZar,
+    currency: (payload.currency || "ZAR").toUpperCase(),
+    service,
+    branch: GA4_BRANCH,
+    engagement_time_msec: 1,
+    items: [
+      {
+        item_id: service,
+        item_name: service,
+        item_category: GA4_BRANCH,
+        quantity: 1,
+        price: payload.valueZar,
+      },
+    ],
+  };
+  if (typeof payload.gaSessionId === "string" && /^\d+$/.test(payload.gaSessionId.trim())) {
+    eventParams.session_id = payload.gaSessionId.trim();
+  }
+
   const body = {
-    client_id: `${clientId.slice(0, 16)}.${clientId.slice(16)}`,
+    client_id: clientId,
     events: [
       {
         name: "purchase",
-        params: {
-          transaction_id: eventId,
-          value: payload.valueZar,
-          currency: (payload.currency || "ZAR").toUpperCase(),
-          service,
-          branch: GA4_BRANCH,
-          engagement_time_msec: 1,
-          items: [
-            {
-              item_id: service,
-              item_name: service,
-              item_category: GA4_BRANCH,
-              quantity: 1,
-              price: payload.valueZar,
-            },
-          ],
-        },
+        params: eventParams,
       },
     ],
   };

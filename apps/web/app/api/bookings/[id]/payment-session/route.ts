@@ -19,7 +19,28 @@ const UUID_RE =
 
 type Body = {
   reference?: string;
+  /** Browser GA4 `_ga` client id (`1234567890.1234567890`) for MP purchase stitching. */
+  gaClientId?: string;
+  ga_client_id?: string;
+  /** Browser GA4 session id when available. */
+  gaSessionId?: string;
+  ga_session_id?: string;
 };
+
+function parseGaIdentity(body: Body): { gaClientId?: string; gaSessionId?: string } | undefined {
+  const clientRaw =
+    (typeof body.gaClientId === "string" && body.gaClientId.trim()) ||
+    (typeof body.ga_client_id === "string" && body.ga_client_id.trim()) ||
+    "";
+  const sessionRaw =
+    (typeof body.gaSessionId === "string" && body.gaSessionId.trim()) ||
+    (typeof body.ga_session_id === "string" && body.ga_session_id.trim()) ||
+    "";
+  const gaClientId = /^\d+\.\d+$/.test(clientRaw) ? clientRaw : undefined;
+  const gaSessionId = /^\d+$/.test(sessionRaw) ? sessionRaw : undefined;
+  if (!gaClientId && !gaSessionId) return undefined;
+  return { gaClientId, gaSessionId };
+}
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id: bookingIdRaw } = await ctx.params;
@@ -120,7 +141,11 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     );
   }
 
-  const session = await ensureBookingPaymentSession(admin, { bookingId, access });
+  const session = await ensureBookingPaymentSession(admin, {
+    bookingId,
+    access,
+    gaIdentity: parseGaIdentity(body),
+  });
 
   if (session.status === "paid") {
     return NextResponse.json({

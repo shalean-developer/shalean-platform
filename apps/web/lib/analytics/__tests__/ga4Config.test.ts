@@ -50,6 +50,12 @@ describe("ga4Config", () => {
     expect(isGa4PathExcluded("/office-supplies")).toBe(false);
   });
 
+  it("keeps public cleaner application paths eligible for GA4", () => {
+    expect(isGa4PathExcluded("/cleaner/apply")).toBe(false);
+    expect(isGa4PathExcluded("/cleaner/apply/form")).toBe(false);
+    expect(isGa4PathExcluded("/cleaner/dashboard")).toBe(true);
+  });
+
   it("exports cape-town branch constant", () => {
     expect(GA4_BRANCH).toBe("cape-town");
   });
@@ -116,5 +122,10 @@ describe("GoogleAnalytics bootstrap source", () => {
     expect(src).toContain("GA4_PATH_EXCLUSION_SNIPPET");
     expect(src).toContain("getGa4MeasurementId");
     expect(src).not.toContain("G-6JR2GPGPN3");
+  });
+
+  it("path exclusion snippet allows /cleaner/apply", async () => {
+    const { GA4_PATH_EXCLUSION_SNIPPET } = await import("@/lib/analytics/ga4Config");
+    expect(GA4_PATH_EXCLUSION_SNIPPET).toContain("cleaner\\/apply");
   });
 });

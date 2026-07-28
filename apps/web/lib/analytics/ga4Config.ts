@@ -18,6 +18,9 @@ export const GA4_BRANCH = "cape-town";
  */
 export const GA4_EXCLUDED_PATH_PREFIXES = ["/office", "/cleaner", "/jobs"] as const;
 
+/** Public recruitment paths under `/cleaner` that must still receive GA4. */
+export const GA4_CLEANER_PUBLIC_PATH_PREFIXES = ["/cleaner/apply"] as const;
+
 export function getGa4MeasurementId(): string {
   const fromEnv =
     (typeof process !== "undefined" && process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()) ||
@@ -33,6 +36,12 @@ export function getGa4MeasurementId(): string {
 export function isGa4PathExcluded(pathname: string | null | undefined): boolean {
   if (!pathname) return false;
   const path = pathname.split("?")[0]?.split("#")[0] || "";
+  // Careers / cleaner application is a public marketing funnel (see CleanerRouteShell).
+  if (
+    GA4_CLEANER_PUBLIC_PATH_PREFIXES.some((prefix) => path === prefix || path.startsWith(`${prefix}/`))
+  ) {
+    return false;
+  }
   return GA4_EXCLUDED_PATH_PREFIXES.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`),
   );
@@ -40,7 +49,7 @@ export function isGa4PathExcluded(pathname: string | null | undefined): boolean 
 
 /**
  * Compact path-exclusion snippet for injected scripts (hard navigations / first paint).
- * Matches `/office`, `/cleaner`, `/jobs` and all subpaths.
+ * Matches `/office`, `/cleaner`, `/jobs` and subpaths, but not `/cleaner/apply`.
  */
 export const GA4_PATH_EXCLUSION_SNIPPET =
-  'var __ga4p=(location.pathname||"").split("?")[0];if(/^\\/(office|cleaner|jobs)(\\/|$)/.test(__ga4p))return;';
+  'var __ga4p=(location.pathname||"").split("?")[0];if(/^\\/(office|jobs)(\\/|$)/.test(__ga4p)||(/^\\/cleaner(\\/|$)/.test(__ga4p)&&!/^\\/cleaner\\/apply(\\/|$)/.test(__ga4p)))return;';

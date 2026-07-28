@@ -160,4 +160,30 @@ describe("sendGa4MeasurementPurchase", () => {
     expect(String(call[0])).toContain("measurement_id=G-GEVTBDWTQW");
     expect(String(call[0])).not.toContain("G-6JR2GPGPN3");
   });
+
+  it("prefers browser gaClientId/session_id over synthetic client_id", async () => {
+    process.env.GA4_MEASUREMENT_PROTOCOL_SECRET = "secret";
+    delete process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+    delete process.env.GA4_MEASUREMENT_ID;
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await sendGa4MeasurementPurchase({
+      eventId: "ref-stitch",
+      valueZar: 450,
+      currency: "ZAR",
+      service: "regular-cleaning",
+      gaClientId: "1234567890.0987654321",
+      gaSessionId: "1712345678",
+    });
+
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    const body = JSON.parse(String(call[1]?.body)) as {
+      client_id: string;
+      events: Array<{ params: { session_id?: string; transaction_id: string } }>;
+    };
+    expect(body.client_id).toBe("1234567890.0987654321");
+    expect(body.events[0]?.params.session_id).toBe("1712345678");
+    expect(body.events[0]?.params.transaction_id).toBe("ref-stitch");
+  });
 });

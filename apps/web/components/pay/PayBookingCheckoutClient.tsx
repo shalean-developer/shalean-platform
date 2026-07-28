@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
+import { getGa4CheckoutIdentityFields } from "@/lib/analytics/ga4ClientId";
 
 type Props = {
   bookingId: string;
@@ -47,7 +48,10 @@ export function PayBookingCheckoutClient({
           "Content-Type": "application/json",
           ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
         },
-        body: JSON.stringify(ref ? { reference: ref } : {}),
+        body: JSON.stringify({
+          ...(ref ? { reference: ref } : {}),
+          ...getGa4CheckoutIdentityFields(),
+        }),
       });
       const json = (await res.json()) as {
         status?: string;
