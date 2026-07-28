@@ -69,4 +69,10 @@ describe("getGa4BrowserClientId", () => {
     });
     expect(getGa4BrowserSessionId()).toBe("1712345678");
   });
+
+  it("treats malformed cookie encoding as missing identity", () => {
+    vi.stubGlobal("document", { cookie: "_ga=%E0%A4%A" });
+    expect(getGa4BrowserClientId()).toMatch(/^\d+\.\d+$/);
+    expect(() => getGa4CheckoutIdentityFields()).not.toThrow();
+  });
 });

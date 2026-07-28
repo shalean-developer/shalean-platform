@@ -33,18 +33,16 @@ export function ensureGa4Bootstrapped(): void {
       window.dataLayer!.push(arguments);
     };
   window.gtag("js", new Date());
+  window.gtag("config", measurementId, {
+    send_page_view: true,
+    allow_enhanced_conversions: false,
+  });
 
   if (!document.querySelector(`script[data-shalean-ga4="${measurementId}"]`)) {
     const s = document.createElement("script");
     s.async = true;
     s.dataset.shaleanGa4 = measurementId;
     s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
-    s.onload = () => {
-      window.gtag?.("config", measurementId, {
-        send_page_view: true,
-        allow_enhanced_conversions: false,
-      });
-    };
     document.head.appendChild(s);
   }
 

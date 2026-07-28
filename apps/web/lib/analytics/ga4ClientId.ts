@@ -10,7 +10,13 @@ const GA_CLIENT_STORAGE_KEY = "shalean_ga4_client_id";
 function readCookie(name: string): string | null {
   if (typeof document === "undefined") return null;
   const match = document.cookie.match(new RegExp(`(?:^|; )${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}=([^;]*)`));
-  return match ? decodeURIComponent(match[1]) : null;
+  if (!match?.[1]) return null;
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    // Malformed percent-encoding must never block checkout identity helpers.
+    return null;
+  }
 }
 
 /**
