@@ -82,6 +82,16 @@ export function ensureGtmBootstrapped(): void {
     window.__shaleanGtmBootstrapped = true;
     return;
   }
+  if (
+    Array.from(document.querySelectorAll("script[src]")).some((el) =>
+      String((el as HTMLScriptElement).src || "").includes(
+        `googletagmanager.com/gtm.js?id=${encodeURIComponent(gtmId)}`,
+      ),
+    )
+  ) {
+    window.__shaleanGtmBootstrapped = true;
+    return;
+  }
   window.dataLayer = window.dataLayer || [];
   window.dataLayer.push({ "gtm.start": new Date().getTime(), event: "gtm.js" });
   const s = document.createElement("script");
