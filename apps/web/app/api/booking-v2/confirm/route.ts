@@ -196,6 +196,17 @@ export async function POST(request: Request) {
   }
 
   const { userId, email } = auth;
+  const customerEmailNormalized = typeof email === "string" ? email.trim().toLowerCase() : "";
+  if (!customerEmailNormalized || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmailNormalized)) {
+    return NextResponse.json(
+      {
+        error:
+          "Your account has no valid email address. Update your email in Account settings, then confirm this booking again.",
+        code: "CUSTOMER_EMAIL_REQUIRED",
+      },
+      { status: 400 },
+    );
+  }
 
   // ── 2. Validate payload ───────────────────────────────────────────────────────
   let body: unknown;
@@ -563,7 +574,7 @@ export async function POST(request: Request) {
         admin: supabase,
         code: referralCodeInput,
         userId,
-        customerEmail: email ?? "",
+        customerEmail: customerEmailNormalized,
         bookingTotalZar: preDiscountTotalZar,
         serviceSlug: data.serviceSlug,
         checkoutFingerprint: referralCheckoutFingerprint,
@@ -587,7 +598,7 @@ export async function POST(request: Request) {
   let promotionDiscountZar = 0;
   try {
     const [completedBookingCount, membershipDiscountPercent] = await Promise.all([
-      getCompletedBookingCount(supabase, userId, email ?? ""),
+      getCompletedBookingCount(supabase, userId, customerEmailNormalized),
       getActiveMembershipDiscountPercent(supabase, userId),
     ]);
     const promoExtras = await resolveCheckoutPromoEligibilityExtras(supabase, {
@@ -597,7 +608,7 @@ export async function POST(request: Request) {
     });
     const promoEval = await evaluateCheckoutPromotions(supabase, {
       userId,
-      customerEmail: email ?? "",
+      customerEmail: customerEmailNormalized,
       completedBookingCount,
       serviceSlug: data.serviceSlug,
       selectedExtraIds,
@@ -715,7 +726,7 @@ export async function POST(request: Request) {
           contactPhone: customerPhone,
           customer: {
             name: customerName || null,
-            email,
+            email: customerEmailNormalized,
             phone: customerPhone,
           },
           ...(data.recurringFrequency
@@ -802,7 +813,7 @@ export async function POST(request: Request) {
           applied: promotionApplied,
           userId,
           bookingId: existingBooking.id,
-          customerEmail: email ?? "",
+          customerEmail: customerEmailNormalized,
           bookingRevenueZar: Math.round(payAmountZar),
           idempotencyPrefix: "bv2",
         });
@@ -837,7 +848,7 @@ export async function POST(request: Request) {
     .insert({
       // Core identity
       ...bookingCustomerOwnershipPatch(userId, ownershipColumn),
-      customer_email: email,
+      customer_email: customerEmailNormalized,
       customer_name: customerName,
       customer_phone: customerPhone,
       paystack_reference: paystackReference,
@@ -913,7 +924,7 @@ export async function POST(request: Request) {
         contactPhone: customerPhone,
         customer: {
           name: customerName || null,
-          email,
+          email: customerEmailNormalized,
           phone: customerPhone,
         },
         ...(data.recurringFrequency
@@ -1030,7 +1041,7 @@ export async function POST(request: Request) {
         applied: promotionApplied,
         userId,
         bookingId: inserted.id,
-        customerEmail: email ?? "",
+        customerEmail: customerEmailNormalized,
         bookingRevenueZar: Math.round(payAmountZar),
         idempotencyPrefix: "bv2",
       });

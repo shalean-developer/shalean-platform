@@ -405,6 +405,15 @@ function PaymentSection({ user }: { user: User }) {
       setError(quoteReadiness.message ?? "Your quote is not ready. Please refresh pricing.");
       return;
     }
+    const checkoutEmail = String(user.email ?? "")
+      .trim()
+      .toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail)) {
+      setError(
+        "Your account has no valid email for payment. Update your email, then try again.",
+      );
+      return;
+    }
     setConfirming(true);
     setError(null);
 
@@ -620,7 +629,25 @@ function PaymentSection({ user }: { user: User }) {
         return;
       }
 
-      // Fallback: Inline popup if session recovery failed (e.g. transient Paystack outage).
+      // Fallback: Inline popup only when we still have a Paystack-valid email.
+      // Never open Paystack with "" — that surfaces Paystack's opaque
+      // `"email" must be a valid email` modal instead of a recoverable UI error.
+      const checkoutEmail = String(user.email ?? "")
+        .trim()
+        .toLowerCase();
+      const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail);
+      const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY?.trim() ?? "";
+      if (!emailLooksValid || !publicKey || !paystackReference) {
+        setError(
+          sessJson.error?.trim() ||
+            (!emailLooksValid
+              ? "Your account has no valid email for payment. Update your email, then try again."
+              : "We could not start the secure payment checkout. Your booking is saved — try again or use the pay link from your confirmation email."),
+        );
+        setConfirming(false);
+        return;
+      }
+
       const { getAcquisitionPayloadFields } = await import("@/lib/analytics/acquisitionContext");
       const acq = getAcquisitionPayloadFields();
       const gclid = typeof acq.gclid === "string" ? acq.gclid.trim() : "";
@@ -630,8 +657,8 @@ function PaymentSection({ user }: { user: User }) {
       const popup = new PaystackPop();
 
       const paystackOpts = {
-        key: process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY ?? "",
-        email: user.email ?? "",
+        key: publicKey,
+        email: checkoutEmail,
         amount: Math.round(chargeAmount * 100),
         currency: "ZAR" as const,
         reference: paystackReference,
