@@ -1,24 +1,9 @@
-# PR #113 — Staging evidence (GA4-only, rebuilt from main)
+# PR #113 — Staging evidence (browser GA4 infra only)
 
-**Date:** 2026-07-28 (scope cleanup)  
+**Date:** 2026-07-29  
 **PR:** https://github.com/shalean-developer/shalean-platform/pull/113  
-**Base:** `main` (unrelated staging/SEO/finance history removed)  
+**Scope:** Canonical stream + exclusions + funnel through `begin_checkout` + PII scrub + single loader/GTM.  
+**Out of scope:** Server MP purchase identity stitching / durable delivery (follow-up PR).  
 **Production:** **not deployed**
 
-## Scope
-
-GA4 apex stream + booking funnel + PII scrub + path exclusions only.  
-Paystack email / session guards moved to a separate PR.  
-Window Cleaning CTAs: unchanged from `main` (informational; `bookCta: false`).
-
-## Codex review corrections
-
-| Thread | Fix |
-|--------|-----|
-| P1 `window.gtag` queue | Bootstrap assigns `window.gtag` inside IIFE; queue test in `ga4BootstrapQueue.test.ts` |
-| P2 Window Cleaning | Restored by rebasing onto `main` (pre-regression); regression tests lock behaviour |
-| P2 legacy `ga-disable` | `setGa4Disabled` targets canonical + every `GA4_LEGACY_MEASUREMENT_IDS` entry once |
-
-## Staging
-
-Filled after push / deploy in the agent return block.
+Filled with deploy ID/URL after staging promote of the narrowed tip.

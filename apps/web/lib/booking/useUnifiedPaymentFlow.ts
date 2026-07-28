@@ -6,7 +6,6 @@ import type { BookingPaymentSummary } from "@/lib/payments/bookingPaymentSummary
 import type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyResponse";
 import { getAnalyticsSessionId } from "@/lib/analytics/sessionId";
 import { getAcquisitionPayloadFields } from "@/lib/analytics/acquisitionContext";
-import { getGa4CheckoutIdentityFields } from "@/lib/analytics/ga4ClientId";
 import {
   ANALYTICS_EVENTS,
   trackBookingAnalyticsEvent,
@@ -83,7 +82,6 @@ export function buildInlinePaystackMetadata(
   const acq = getAcquisitionPayloadFields();
   const gclid = typeof acq.gclid === "string" ? acq.gclid.trim() : "";
   const fbclid = typeof acq.fbclid === "string" ? acq.fbclid.trim() : "";
-  const ga = getGa4CheckoutIdentityFields();
 
   return {
     ...buildCanonicalPaystackCheckoutMetadata({
@@ -117,8 +115,6 @@ export function buildInlinePaystackMetadata(
     }),
     ...(gclid ? { gclid } : {}),
     ...(fbclid ? { fbclid } : {}),
-    ...(ga.gaClientId ? { ga_client_id: ga.gaClientId } : {}),
-    ...(ga.gaSessionId ? { ga_session_id: ga.gaSessionId } : {}),
   };
 }
 
@@ -258,9 +254,7 @@ export function useUnifiedPaymentFlow({
         const sessRes = await fetch(`/api/bookings/${encodeURIComponent(summary.id)}/payment-session`, {
           method: "POST",
           headers,
-          body: JSON.stringify({
-            ...getGa4CheckoutIdentityFields(),
-          }),
+          body: JSON.stringify({}),
         });
         const sessJson = (await sessRes.json()) as {
           status?: string;

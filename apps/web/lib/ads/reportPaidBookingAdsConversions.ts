@@ -4,13 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { sendServerPurchaseConversions } from "@/lib/ads/sendServerPurchaseConversions";
 import type { AdsPurchaseConversion } from "@/lib/ads/purchaseConversionTypes";
 import { purchaseValueZar } from "@/lib/ads/purchaseConversionTypes";
-import { tryClaimNotificationIdempotency, releaseNotificationIdempotencyClaim } from "@/lib/notifications/notificationIdempotencyClaim";
+import { tryClaimNotificationIdempotency } from "@/lib/notifications/notificationIdempotencyClaim";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 /**
  * After a paid booking is persisted, send Meta CAPI + GA4 purchase (best-effort).
  * Deduped once per Paystack reference via notification_idempotency_claims.
- * Releases the claim when GA4 Measurement Protocol delivery fails so retries can recover.
  */
 export async function reportPaidBookingAdsConversions(params: {
   admin: SupabaseClient;
@@ -21,12 +20,8 @@ export async function reportPaidBookingAdsConversions(params: {
   email: string | null;
   phone?: string | null;
   customerName?: string | null;
-  /** Service slug for GA4 purchase (no PII). */
-  service?: string | null;
   gclid?: string | null;
   fbclid?: string | null;
-  gaClientId?: string | null;
-  gaSessionId?: string | null;
 }): Promise<void> {
   const reference = params.paystackReference.trim();
   if (!reference || !params.bookingId) return;
@@ -50,39 +45,18 @@ export async function reportPaidBookingAdsConversions(params: {
     valueZar: purchaseValueZar(params.amountCents),
     currency: params.currency || "ZAR",
     bookingId: params.bookingId,
-    service: params.service ?? null,
     email: params.email,
     phone: params.phone ?? null,
     firstName,
     lastName,
     gclid: params.gclid ?? null,
     fbclid: params.fbclid ?? null,
-    gaClientId: params.gaClientId ?? null,
-    gaSessionId: params.gaSessionId ?? null,
     eventSourceUrl: appUrl ? `${appUrl.replace(/\/$/, "")}/account/success` : null,
   };
 
   try {
-    const { ga4 } = await sendServerPurchaseConversions(payload);
-    // GA4 MP is the sole purchase path — release claim on hard failure/timeout so retries can resend.
-    if (ga4.ok !== true && !("skipped" in ga4 && ga4.skipped)) {
-      await releaseNotificationIdempotencyClaim(params.admin, {
-        reference,
-        eventType: "ads_purchase",
-        channel: "in_app",
-      });
-      void reportOperationalIssue("warn", "ads/reportPaidBookingAdsConversions", "ga4_mp_failed_claim_released", {
-        reference,
-        bookingId: params.bookingId,
-        reason: "error" in ga4 ? ga4.error : "unknown",
-      });
-    }
+    await sendServerPurchaseConversions(payload);
   } catch (e) {
-    await releaseNotificationIdempotencyClaim(params.admin, {
-      reference,
-      eventType: "ads_purchase",
-      channel: "in_app",
-    });
     void reportOperationalIssue("warn", "ads/reportPaidBookingAdsConversions", String(e), {
       reference,
       bookingId: params.bookingId,

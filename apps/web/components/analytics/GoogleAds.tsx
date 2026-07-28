@@ -17,9 +17,11 @@ export function GoogleAds() {
   const bootstrap = scheduleThirdPartyScript(
     [
       GA4_PATH_EXCLUSION_SNIPPET,
+      `if(window.__shaleanAdsBootstrapped)return;`,
       `window.dataLayer=window.dataLayer||[];`,
       `window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};`,
       `window.gtag("config",${id});`,
+      `window.__shaleanAdsBootstrapped=true;`,
     ].join(""),
   );
 

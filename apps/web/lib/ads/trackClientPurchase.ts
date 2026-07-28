@@ -27,12 +27,7 @@ function buildFbc(fbclid: string | null | undefined): string | null {
 }
 
 /**
- * Fire browser purchase conversions (Meta Pixel + Google Ads) once per Paystack reference.
- *
- * GA4 `purchase` is intentionally omitted here — it is fired exactly once from the server
- * Measurement Protocol after authoritative payment verification (`sendGa4MeasurementPurchase`),
- * deduped via `ads_purchase` notification claims. That prevents double-counting on refresh,
- * Paystack callback retry, webhook retry, or revisiting `/account/success`.
+ * Fire browser purchase conversions (Meta Pixel + Google Ads + dataLayer) once per Paystack reference.
  */
 export function trackClientPurchase(params: {
   reference: string;
@@ -75,15 +70,16 @@ export function trackClientPurchase(params: {
     eventSourceUrl: typeof window !== "undefined" ? window.location.href.slice(0, 2000) : null,
   };
 
-  // dataLayer: Google Ads / Meta listeners only — do NOT emit GA4 ecommerce purchase
-  // (server MP is the single source of truth for GA4 purchase).
   try {
     window.dataLayer = window.dataLayer || [];
     window.dataLayer.push({
-      event: "ads_purchase_browser",
-      transaction_id: eventId,
-      value,
-      currency,
+      event: "purchase",
+      ecommerce: {
+        transaction_id: eventId,
+        value,
+        currency,
+        booking_id: payload.bookingId,
+      },
       gclid: payload.gclid,
       fbclid: payload.fbclid,
     });
@@ -94,13 +90,21 @@ export function trackClientPurchase(params: {
   const adsId = process.env.NEXT_PUBLIC_GOOGLE_ADS_ID?.trim() || "AW-11050850519";
   const adsLabel = process.env.NEXT_PUBLIC_GOOGLE_ADS_PURCHASE_LABEL?.trim();
   try {
-    if (typeof window.gtag === "function" && adsId && adsLabel) {
-      window.gtag("event", "conversion", {
-        send_to: `${adsId}/${adsLabel}`,
+    if (typeof window.gtag === "function") {
+      window.gtag("event", "purchase", {
+        transaction_id: eventId,
         value,
         currency,
-        transaction_id: eventId,
+        items: [{ item_id: payload.bookingId || eventId, item_name: "Cleaning booking", quantity: 1, price: value }],
       });
+      if (adsId && adsLabel) {
+        window.gtag("event", "conversion", {
+          send_to: `${adsId}/${adsLabel}`,
+          value,
+          currency,
+          transaction_id: eventId,
+        });
+      }
     }
   } catch {
     /* ignore */
