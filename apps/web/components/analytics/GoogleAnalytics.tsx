@@ -37,12 +37,13 @@ export function GoogleAnalytics() {
     scheduleThirdPartyScript(
       [
         GA4_PATH_EXCLUSION_SNIPPET,
-        `if(document.querySelector('script[data-shalean-ga4='+JSON.stringify(${id})+']'))return;`,
+        `if(document.querySelector('script[data-shalean-ga4='+JSON.stringify(${id})+']')){window.__shaleanGa4LoaderPresent=true;return;}`,
         `var s=document.createElement("script");`,
         `s.async=true;`,
         `s.dataset.shaleanGa4=${id};`,
         `s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(${id});`,
         `document.head.appendChild(s);`,
+        `window.__shaleanGa4LoaderPresent=true;`,
       ].join(""),
     ),
   ].join("");

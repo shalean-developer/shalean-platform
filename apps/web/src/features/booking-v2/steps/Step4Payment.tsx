@@ -523,11 +523,7 @@ function PaymentSection({ user }: { user: User }) {
           error?: string;
         };
         if (areaRes.ok && areaJson.success && areaJson.bookingId) {
-          trackGa4BookingSubmitted({
-            bookingId: areaJson.bookingId,
-            service: values.serviceSlug,
-            value: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
-          });
+          // Area-review requests are not confirmed bookings — do not emit booking_submitted.
           window.location.href = `/account/success?areaReview=1&bookingId=${encodeURIComponent(areaJson.bookingId)}`;
           return;
         }

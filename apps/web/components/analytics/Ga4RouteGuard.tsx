@@ -12,18 +12,36 @@ import { setGa4Disabled } from "@/lib/analytics/ga4Events";
 declare global {
   interface Window {
     __shaleanGa4Bootstrapped?: boolean;
+    /** True once gtag.js has been appended (or detected) — distinct from config queue. */
+    __shaleanGa4LoaderPresent?: boolean;
     __shaleanAdsBootstrapped?: boolean;
     __shaleanGtmBootstrapped?: boolean;
   }
 }
 
 function hasGa4LoaderScript(measurementId: string): boolean {
+  if (typeof window !== "undefined" && window.__shaleanGa4LoaderPresent) return true;
   if (typeof document === "undefined") return false;
-  if (document.querySelector(`script[data-shalean-ga4="${measurementId}"]`)) return true;
+  if (document.querySelector(`script[data-shalean-ga4="${measurementId}"]`)) {
+    window.__shaleanGa4LoaderPresent = true;
+    return true;
+  }
   const needle = `googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
-  return Array.from(document.querySelectorAll("script[src]")).some((el) =>
+  const found = Array.from(document.querySelectorAll("script[src]")).some((el) =>
     String((el as HTMLScriptElement).src || "").includes(needle),
   );
+  if (found) window.__shaleanGa4LoaderPresent = true;
+  return found;
+}
+
+function appendGa4LoaderScript(measurementId: string): void {
+  if (hasGa4LoaderScript(measurementId)) return;
+  const s = document.createElement("script");
+  s.async = true;
+  s.dataset.shaleanGa4 = measurementId;
+  s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
+  document.head.appendChild(s);
+  window.__shaleanGa4LoaderPresent = true;
 }
 
 /**
@@ -44,9 +62,13 @@ export function ensureGa4Bootstrapped(): void {
       window.dataLayer!.push(arguments);
     };
 
-  // Already bootstrapped (or hard-load script already marked) — do not config again.
-  if (window.__shaleanGa4Bootstrapped || hasGa4LoaderScript(measurementId)) {
+  const loaderPresent = hasGa4LoaderScript(measurementId);
+
+  // Config already queued (hard-load / prior bootstrap) — never re-queue config/page_view.
+  // Still append gtag.js if the deferred idle loader was skipped on an excluded route.
+  if (window.__shaleanGa4Bootstrapped || loaderPresent) {
     window.__shaleanGa4Bootstrapped = true;
+    appendGa4LoaderScript(measurementId);
     return;
   }
 
@@ -56,11 +78,7 @@ export function ensureGa4Bootstrapped(): void {
     allow_enhanced_conversions: false,
   });
 
-  const s = document.createElement("script");
-  s.async = true;
-  s.dataset.shaleanGa4 = measurementId;
-  s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
-  document.head.appendChild(s);
+  appendGa4LoaderScript(measurementId);
 
   window.__shaleanGa4Bootstrapped = true;
   void GA4_PATH_EXCLUSION_SNIPPET;
