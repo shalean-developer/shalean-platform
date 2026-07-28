@@ -1,6 +1,7 @@
 "use client";
 
 import { captureAcquisitionFirstTouchIfNeeded, getAcquisitionPayloadFields } from "@/lib/analytics/acquisitionContext";
+import { sanitizeGa4Params } from "@/lib/analytics/ga4Pii";
 import { tagReplay } from "@/lib/analytics/sessionReplay";
 import { getAnalyticsSessionId } from "@/lib/analytics/sessionId";
 import { ANALYTICS_EVENTS, type AnalyticsClientEventName } from "@/lib/analytics/userEventRegistry";
@@ -68,7 +69,7 @@ function pushSeoGrowthEventToDataLayer(eventType: GrowthEventType, payload: Reco
       event: name,
       event_category: "seo_growth",
       event_type: eventType,
-      ...payload,
+      ...sanitizeGa4Params(payload),
     });
   } catch {
     // ignore

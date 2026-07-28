@@ -10,6 +10,14 @@ import {
   trackBookingFunnelEvent,
 } from "@/lib/booking/bookingFlowAnalytics";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
+import {
+  trackGa4BeginCheckout,
+  trackGa4BookingReview,
+  trackGa4BookingStart,
+  trackGa4BookingSubmitted,
+  trackGa4ScheduleSelected,
+  trackGa4ServiceSelected,
+} from "@/lib/analytics/ga4Events";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingStep, BookingV2FormData } from "@/src/features/booking-v2/types";
 
@@ -55,6 +63,9 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
   const timeTracked = useRef(false);
   const cleanerTracked = useRef(false);
   const paymentStartedTracked = useRef(false);
+  const ga4ScheduleTracked = useRef(false);
+  const ga4ReviewTracked = useRef(false);
+  const ga4CheckoutTracked = useRef(false);
 
   // Page-level growth + entry funnel view
   useEffect(() => {
@@ -103,6 +114,14 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
         service_type: serviceSlug,
         suburb: values.suburb ?? null,
       });
+      trackGa4BookingStart({
+        service: serviceSlug,
+        value: state.finalPrice,
+      });
+      trackGa4ServiceSelected({
+        service: serviceSlug,
+        value: state.finalPrice,
+      });
       return;
     }
 
@@ -114,6 +133,14 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
       return;
     }
 
+    if (currentStep === 3 && !ga4ReviewTracked.current) {
+      ga4ReviewTracked.current = true;
+      trackGa4BookingReview({
+        service: serviceSlug,
+        value: state.finalPrice,
+      });
+    }
+
     if (currentStep === 4 && !paymentStartedTracked.current) {
       paymentStartedTracked.current = true;
       trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYMENT_STARTED, state, {
@@ -121,6 +148,17 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
         suburb: values.suburb ?? null,
         estimated_price: state.finalPrice,
       });
+      if (!ga4CheckoutTracked.current) {
+        ga4CheckoutTracked.current = true;
+        trackGa4BeginCheckout({
+          service: serviceSlug,
+          value: state.finalPrice,
+        });
+        trackGa4BookingSubmitted({
+          service: serviceSlug,
+          value: state.finalPrice,
+        });
+      }
     }
   }, [currentStep, serviceSlug, form]);
 
@@ -179,6 +217,13 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
           date: values.date ?? null,
           time: values.time,
         });
+        if (!ga4ScheduleTracked.current && values.date) {
+          ga4ScheduleTracked.current = true;
+          trackGa4ScheduleSelected({
+            service: serviceSlug,
+            value: state.finalPrice,
+          });
+        }
       }
 
       if (name === "selectedCleanerIds" && values.selectedCleanerIds?.length && !cleanerTracked.current) {

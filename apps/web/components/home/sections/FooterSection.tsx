@@ -5,16 +5,14 @@ import { Phone, Mail, MapPin } from "lucide-react";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { SHALEAN_SOCIAL_LINKS } from "@/lib/brand/shaleanSocialLinks";
 import { MARKETING_FOOTER_SERVICE_LINKS } from "@/lib/marketing/marketingServiceNavLinks";
+import { trackGa4PhoneClick, trackGa4WhatsAppClick } from "@/lib/analytics/ga4Events";
 import { customerSupportWhatsAppHref } from "@/lib/site/customerSupport";
 
 const waHref = customerSupportWhatsAppHref();
 
-const trackEvent = (eventName: string) => {
-  if (typeof window === "undefined") return;
-  const gtag = (window as unknown as { gtag?: (...args: unknown[]) => void }).gtag;
-  if (typeof gtag === "function") {
-    gtag("event", eventName);
-  }
+const trackEvent = (eventName: "whatsapp_click" | "phone_click") => {
+  if (eventName === "whatsapp_click") trackGa4WhatsAppClick();
+  else trackGa4PhoneClick();
 };
 
 const FOOTER_SERVICES = [...MARKETING_FOOTER_SERVICE_LINKS];
