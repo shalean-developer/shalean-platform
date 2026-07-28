@@ -71,6 +71,8 @@ describe("GoogleAnalytics window.gtag bootstrap queue", () => {
       "utf8",
     );
     expect(src).toContain("window.gtag=window.gtag||function");
+    expect(src).toContain("__shaleanGa4Bootstrapped=true");
+    expect(src).toContain("dataset.shaleanGa4");
     expect(src).not.toMatch(/["']function gtag\(\)\{dataLayer\.push/);
   });
 });

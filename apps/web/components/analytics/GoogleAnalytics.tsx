@@ -4,6 +4,12 @@ import {
   getGa4MeasurementId,
 } from "@/lib/analytics/ga4Config";
 
+declare global {
+  interface Window {
+    __shaleanGa4Bootstrapped?: boolean;
+  }
+}
+
 /**
  * GA4 gtag — queues events immediately but loads `gtag/js` after idle / load so LCP is not blocked.
  *
@@ -24,11 +30,14 @@ export function GoogleAnalytics() {
     // early `trackGa4Event` calls would no-op until GoogleAds' deferred fallback ran.
     "window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};",
     "window.gtag('js',new Date());",
+    "window.__shaleanGa4Bootstrapped=true;",
     scheduleThirdPartyScript(
       [
         GA4_PATH_EXCLUSION_SNIPPET,
+        `if(document.querySelector('script[data-shalean-ga4='+JSON.stringify(${id})+']'))return;`,
         `var s=document.createElement("script");`,
         `s.async=true;`,
+        `s.dataset.shaleanGa4=${id};`,
         `s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(${id});`,
         `s.onload=function(){window.gtag("config",${id},{send_page_view:true,allow_enhanced_conversions:false});};`,
         `document.head.appendChild(s);`,
@@ -49,5 +58,6 @@ export function buildGoogleAnalyticsBootstrap(measurementId: string): string {
     "window.gtag('js',new Date());",
     // Tests stub script load — keep config call synchronous for delivery proof.
     `window.gtag("config",${id},{send_page_view:true,allow_enhanced_conversions:false});`,
+    "window.__shaleanGa4Bootstrapped=true;",
   ].join("");
 }

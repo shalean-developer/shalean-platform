@@ -558,7 +558,11 @@ async function ensureBookingPaymentSessionInner(
     };
   }
 
+  const hasBrowserGaClient =
+    typeof gaIdentity?.gaClientId === "string" && /^\d+\.\d+$/.test(gaIdentity.gaClientId);
+
   if (
+    !hasBrowserGaClient &&
     isStoredPaymentLinkUsable({
       status: row.status,
       payment_link: row.payment_link,
