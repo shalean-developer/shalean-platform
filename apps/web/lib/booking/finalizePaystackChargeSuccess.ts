@@ -194,9 +194,7 @@ export async function finalizePaystackChargeSuccess(
     try {
       const { data: softRow } = await admin
         .from("bookings")
-        .select(
-          "fulfillment_mode, suburb, date, time, service_slug, customer_name, customer_email, customer_phone, booking_snapshot",
-        )
+        .select("fulfillment_mode, suburb, date, time, service_slug, customer_name, customer_email, customer_phone")
         .eq("id", result.bookingId)
         .maybeSingle();
       const mode = String((softRow as { fulfillment_mode?: string | null } | null)?.fulfillment_mode ?? "")
@@ -226,94 +224,25 @@ export async function finalizePaystackChargeSuccess(
           customerPhone: row?.customer_phone,
         });
       }
-
-      const meta = paystackMetadata;
-      const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
-      const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";
-      const snapAnalytics = (() => {
-        const snap = (softRow as { booking_snapshot?: unknown } | null)?.booking_snapshot;
-        if (!snap || typeof snap !== "object" || Array.isArray(snap)) return null;
-        const analytics = (snap as { analytics?: unknown }).analytics;
-        if (!analytics || typeof analytics !== "object" || Array.isArray(analytics)) return null;
-        return analytics as { ga_client_id?: unknown; ga_session_id?: unknown };
-      })();
-      const gaClientIdFromSnap =
-        typeof snapAnalytics?.ga_client_id === "string" && /^\d+\.\d+$/.test(snapAnalytics.ga_client_id.trim())
-          ? snapAnalytics.ga_client_id.trim()
-          : "";
-      const gaSessionIdFromSnap =
-        typeof snapAnalytics?.ga_session_id === "string" && /^\d+$/.test(snapAnalytics.ga_session_id.trim())
-          ? snapAnalytics.ga_session_id.trim()
-          : "";
-      const gaClientId =
-        (typeof meta.ga_client_id === "string" && /^\d+\.\d+$/.test(meta.ga_client_id.trim())
-          ? meta.ga_client_id.trim()
-          : "") || gaClientIdFromSnap;
-      const gaSessionId =
-        (typeof meta.ga_session_id === "string" && /^\d+$/.test(meta.ga_session_id.trim())
-          ? meta.ga_session_id.trim()
-          : "") || gaSessionIdFromSnap;
-      const serviceFromRow =
-        typeof (softRow as { service_slug?: string | null } | null)?.service_slug === "string"
-          ? String((softRow as { service_slug?: string | null }).service_slug).trim()
-          : "";
-      const serviceFromMeta =
-        (typeof meta.service_slug === "string" && meta.service_slug.trim()) ||
-        (typeof meta.service === "string" && meta.service.trim()) ||
-        "";
-      const serviceFromSnapshot =
-        (typeof params.snapshot?.locked?.service_type === "string" &&
-          params.snapshot.locked.service_type.trim()) ||
-        (typeof params.snapshot?.locked?.service === "string" && params.snapshot.locked.service.trim()) ||
-        (typeof params.snapshot?.flat?.service === "string" && params.snapshot.flat.service.trim()) ||
-        "";
-      await reportPaidBookingAdsConversions({
-        admin,
-        paystackReference: params.paystackReference,
-        bookingId: result.bookingId,
-        amountCents: params.amountCents,
-        currency: params.currency,
-        email: resolvedCustomerEmail || null,
-        phone: params.snapshot?.customer?.phone ?? null,
-        customerName: params.snapshot?.customer?.name ?? null,
-        service: serviceFromRow || serviceFromMeta || serviceFromSnapshot || null,
-        gclid: gclid || null,
-        fbclid: fbclid || null,
-        gaClientId: gaClientId || null,
-        gaSessionId: gaSessionId || null,
-      });
     } catch {
-      /* non-fatal — ads conversions must not block finalize success */
-      try {
-        const meta = paystackMetadata;
-        const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
-        const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";
-        const gaClientId =
-          typeof meta.ga_client_id === "string" && /^\d+\.\d+$/.test(meta.ga_client_id.trim())
-            ? meta.ga_client_id.trim()
-            : "";
-        const gaSessionId =
-          typeof meta.ga_session_id === "string" && /^\d+$/.test(meta.ga_session_id.trim())
-            ? meta.ga_session_id.trim()
-            : "";
-        await reportPaidBookingAdsConversions({
-          admin,
-          paystackReference: params.paystackReference,
-          bookingId: result.bookingId,
-          amountCents: params.amountCents,
-          currency: params.currency,
-          email: resolvedCustomerEmail || null,
-          phone: params.snapshot?.customer?.phone ?? null,
-          customerName: params.snapshot?.customer?.name ?? null,
-          gclid: gclid || null,
-          fbclid: fbclid || null,
-          gaClientId: gaClientId || null,
-          gaSessionId: gaSessionId || null,
-        });
-      } catch {
-        /* swallow — payment already finalized */
-      }
+      /* non-fatal */
     }
+
+    const meta = paystackMetadata;
+    const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
+    const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";
+    void reportPaidBookingAdsConversions({
+      admin,
+      paystackReference: params.paystackReference,
+      bookingId: result.bookingId,
+      amountCents: params.amountCents,
+      currency: params.currency,
+      email: resolvedCustomerEmail || null,
+      phone: params.snapshot?.customer?.phone ?? null,
+      customerName: params.snapshot?.customer?.name ?? null,
+      gclid: gclid || null,
+      fbclid: fbclid || null,
+    });
   }
 
   return result;

@@ -8,12 +8,6 @@ export type AdsPurchaseConversion = {
   valueZar: number;
   currency: string;
   bookingId?: string | null;
-  /** Service slug for GA4 (e.g. regular-cleaning). Never PII. */
-  service?: string | null;
-  /** Browser GA4 client_id (`_ga`) for MP session stitching. */
-  gaClientId?: string | null;
-  /** Browser GA4 session_id when available. */
-  gaSessionId?: string | null;
   email?: string | null;
   phone?: string | null;
   firstName?: string | null;

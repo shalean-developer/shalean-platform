@@ -152,7 +152,7 @@ export function trackGa4WhatsAppClick(): void {
 }
 
 /**
- * Client-side GA4 purchase is intentionally NOT exposed.
- * Purchase is fired once from the server Measurement Protocol after payment verification
- * (see sendGa4MeasurementPurchase) so refresh / webhook / callback retries cannot double-count.
+ * Client-side GA4 `purchase` helper is not part of this browser-infra PR.
+ * Existing checkout still uses `trackClientPurchase` (Meta/Ads/dataLayer).
+ * Durable server Measurement Protocol purchase + identity stitching is a follow-up PR.
  */

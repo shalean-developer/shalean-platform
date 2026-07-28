@@ -1,26 +1,17 @@
-# GA4 production audit — Measurement ID inventory
+# GA4 Measurement ID inventory (PR #113 — browser infra)
 
-**Date:** 2026-07-28  
-**Canonical stream:** `G-GEVTBDWTQW` → website URL `https://shalean.co.za`  
-**Stop sending (do not delete):** `G-6JR2GPGPN3` (legacy Google tag / www-linked)
+| ID | Role | App behaviour |
+|----|------|----------------|
+| **G-GEVTBDWTQW** | Canonical apex stream (`https://shalean.co.za`) | Sole Measurement ID loaded by `GoogleAnalytics` / `getGa4MeasurementId()` |
+| **G-6JR2GPGPN3** | Legacy / www-linked | Never loaded; listed in `GA4_LEGACY_MEASUREMENT_IDS` and disabled via `ga-disable-*` on internal routes |
 
-## Inventory
+Do **not** delete the legacy stream in GA Admin — only stop sending.
 
-| ID | Source | Action |
-|----|--------|--------|
-| `G-GEVTBDWTQW` | Live `g/collect?tid=` on apex; `__ccd_ga_first` destination in gtag config | **Keep — sole public + MP Measurement ID** |
-| `G-6JR2GPGPN3` | Former hardcoded default in `GoogleAnalytics.tsx` / MP fallback; gtag/js loader ID | **Stop loading / ignore if set in env** |
-| `GTM-5XRFHPL8` | `.env.example` only (optional `NEXT_PUBLIC_GTM_ID`) | Keep optional; GA4 tag inside GTM must target `G-GEVTBDWTQW` only |
-| `AW-11050850519` | Google Ads (not GA4) | Unchanged |
+## Path policy
 
-## Code touchpoints (after this change)
+Excluded (no public GA/GTM/Ads init): `/office`, `/cleaner`, `/jobs` (+ subpaths).  
+Carve-out (still tracked): `/cleaner/apply`, `/cleaner/apply/form`.
 
-- `apps/web/lib/analytics/ga4Config.ts` — canonical ID, path exclusions
-- `apps/web/components/analytics/GoogleAnalytics.tsx` — loads canonical ID; path skip
-- `apps/web/lib/ads/sendServerPurchaseConversions.ts` — MP purchase once
-- `apps/web/lib/analytics/ga4Events.ts` — funnel + secondary events
-- `apps/web/.env.example` — docs
+## Follow-up (not this PR)
 
-## Related
-
-- [DebugView verification matrix](./GA4-DEBUGVIEW-VERIFICATION-MATRIX.md)
+Durable Measurement Protocol `purchase`, browser `client_id`/`session_id` stitching, and payment-session identity are deferred to a separate PR with an outbox/worker design.

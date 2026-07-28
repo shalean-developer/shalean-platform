@@ -220,18 +220,12 @@ async function maybeFinalizeSuccessfulCharge(
   };
 }
 
-export type BookingPaymentSessionGaIdentity = {
-  gaClientId?: string | null;
-  gaSessionId?: string | null;
-};
-
 async function initializeFreshPaystackSession(
   admin: SupabaseClient,
   row: BookingPayRow,
   secret: string,
   amountZar: number,
   reason: string,
-  gaIdentity?: BookingPaymentSessionGaIdentity | null,
 ): Promise<EnsureBookingPaymentSessionResult> {
   const email = String(row.customer_email ?? "").trim().toLowerCase();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
@@ -342,12 +336,6 @@ async function initializeFreshPaystackSession(
           expected_total_zar: String(amountZar),
           payment_path: "ensure_booking_payment_session",
           ensure_reason: reason,
-          ...(typeof gaIdentity?.gaClientId === "string" && /^\d+\.\d+$/.test(gaIdentity.gaClientId)
-            ? { ga_client_id: gaIdentity.gaClientId }
-            : {}),
-          ...(typeof gaIdentity?.gaSessionId === "string" && /^\d+$/.test(gaIdentity.gaSessionId)
-            ? { ga_session_id: gaIdentity.gaSessionId }
-            : {}),
         },
       }),
     });
@@ -455,7 +443,6 @@ async function ensureBookingPaymentSessionInner(
   admin: SupabaseClient,
   bookingId: string,
   access: BookingPaymentSessionAccess,
-  gaIdentity?: BookingPaymentSessionGaIdentity | null,
 ): Promise<EnsureBookingPaymentSessionResult> {
   const id = bookingId.trim();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
@@ -565,31 +552,6 @@ async function ensureBookingPaymentSessionInner(
       payment_link_expires_at: row.payment_link_expires_at,
     })
   ) {
-    // Never replace a usable Paystack session solely to attach GA identity (duplicate-charge risk).
-    // Persist browser identity onto the booking snapshot so finalize/MP can still stitch.
-    if (
-      typeof gaIdentity?.gaClientId === "string" &&
-      /^\d+\.\d+$/.test(gaIdentity.gaClientId)
-    ) {
-      try {
-        const snap =
-          row.booking_snapshot && typeof row.booking_snapshot === "object" && !Array.isArray(row.booking_snapshot)
-            ? { ...(row.booking_snapshot as Record<string, unknown>) }
-            : {};
-        const analytics =
-          snap.analytics && typeof snap.analytics === "object" && !Array.isArray(snap.analytics)
-            ? { ...(snap.analytics as Record<string, unknown>) }
-            : {};
-        analytics.ga_client_id = gaIdentity.gaClientId;
-        if (typeof gaIdentity.gaSessionId === "string" && /^\d+$/.test(gaIdentity.gaSessionId)) {
-          analytics.ga_session_id = gaIdentity.gaSessionId;
-        }
-        snap.analytics = analytics;
-        await admin.from("bookings").update({ booking_snapshot: snap }).eq("id", row.id);
-      } catch {
-        /* non-fatal — checkout must proceed */
-      }
-    }
     logPaymentStructured("payment_initialize", {
       booking_id: id,
       reference: row.paystack_reference,
@@ -613,7 +575,7 @@ async function ensureBookingPaymentSessionInner(
       ? PAYMENT_ERROR_CODES.PAYMENT_LINK_EXPIRED
       : PAYMENT_ERROR_CODES.PAYMENT_ATTEMPT_ABANDONED;
 
-  return initializeFreshPaystackSession(admin, row, secret, amountZar, reason, gaIdentity);
+  return initializeFreshPaystackSession(admin, row, secret, amountZar, reason);
 }
 
 /**
@@ -622,23 +584,13 @@ async function ensureBookingPaymentSessionInner(
  */
 export async function ensureBookingPaymentSession(
   admin: SupabaseClient,
-  params: {
-    bookingId: string;
-    access: BookingPaymentSessionAccess;
-    /** Browser GA4 identity for Measurement Protocol purchase stitching. */
-    gaIdentity?: BookingPaymentSessionGaIdentity | null;
-  },
+  params: { bookingId: string; access: BookingPaymentSessionAccess },
 ): Promise<EnsureBookingPaymentSessionResult> {
   const bookingId = params.bookingId.trim();
   const existing = inflightByBookingId.get(bookingId);
   if (existing) return existing;
 
-  const promise = ensureBookingPaymentSessionInner(
-    admin,
-    bookingId,
-    params.access,
-    params.gaIdentity,
-  ).finally(() => {
+  const promise = ensureBookingPaymentSessionInner(admin, bookingId, params.access).finally(() => {
     if (inflightByBookingId.get(bookingId) === promise) {
       inflightByBookingId.delete(bookingId);
     }

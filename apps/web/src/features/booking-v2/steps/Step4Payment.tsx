@@ -32,7 +32,6 @@ import {
 import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
 import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
 import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurringScheduleOptions";
-import { getGa4CheckoutIdentityFields } from "@/lib/analytics/ga4ClientId";
 
 // ??? Auth Form ?????????????????????????????????????????????????????????????????
 
@@ -465,9 +464,7 @@ function PaymentSection({
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
-          body: JSON.stringify({
-            ...getGa4CheckoutIdentityFields(),
-          }),
+          body: JSON.stringify({}),
         });
         const sessJson = (await sessRes.json()) as {
           status?: string;
@@ -640,10 +637,7 @@ function PaymentSection({
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          reference: paystackReference,
-          ...getGa4CheckoutIdentityFields(),
-        }),
+        body: JSON.stringify({ reference: paystackReference }),
       });
       const sessJson = (await sessRes.json()) as {
         status?: string;
@@ -688,7 +682,6 @@ function PaymentSection({
       const acq = getAcquisitionPayloadFields();
       const gclid = typeof acq.gclid === "string" ? acq.gclid.trim() : "";
       const fbclid = typeof acq.fbclid === "string" ? acq.fbclid.trim() : "";
-      const ga = getGa4CheckoutIdentityFields();
 
       const PaystackPop = (await import("@paystack/inline-js")).default;
       const popup = new PaystackPop();
@@ -705,8 +698,6 @@ function PaymentSection({
           expected_total_zar: String(chargeAmount),
           ...(gclid ? { gclid } : {}),
           ...(fbclid ? { fbclid } : {}),
-          ...(ga.gaClientId ? { ga_client_id: ga.gaClientId } : {}),
-          ...(ga.gaSessionId ? { ga_session_id: ga.gaSessionId } : {}),
         },
         onSuccess: (transaction?: { reference?: string }) => {
           const ref =
