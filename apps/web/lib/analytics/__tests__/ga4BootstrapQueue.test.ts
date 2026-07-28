@@ -73,9 +73,15 @@ describe("GoogleAnalytics window.gtag bootstrap queue", () => {
     expect(src).toContain("window.gtag=window.gtag||function");
     expect(src).toContain("__shaleanGa4Bootstrapped=true");
     expect(src).toContain("dataset.shaleanGa4");
-    // config must be queued before the deferred external script, not only on onload
-    expect(src).toMatch(/window\.gtag\("config".*scheduleThirdPartyScript|window\.gtag\('config'/s);
-    expect(src).not.toMatch(/s\.onload=function\(\)\{window\.gtag\("config"/);
+    // Production bootstrap queues config in the inline script body before scheduling gtag.js.
+    const bootstrapStart = src.indexOf("const bootstrap = [");
+    expect(bootstrapStart).toBeGreaterThan(-1);
+    const bootstrapSlice = src.slice(bootstrapStart);
+    const configIdx = bootstrapSlice.indexOf('window.gtag("config"');
+    const scheduleIdx = bootstrapSlice.indexOf("scheduleThirdPartyScript(");
+    expect(configIdx).toBeGreaterThan(-1);
+    expect(scheduleIdx).toBeGreaterThan(configIdx);
+    expect(src).not.toContain('s.onload=function(){window.gtag("config"');
     expect(src).not.toMatch(/["']function gtag\(\)\{dataLayer\.push/);
   });
 });

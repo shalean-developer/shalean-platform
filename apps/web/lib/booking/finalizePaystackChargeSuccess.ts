@@ -194,7 +194,9 @@ export async function finalizePaystackChargeSuccess(
     try {
       const { data: softRow } = await admin
         .from("bookings")
-        .select("fulfillment_mode, suburb, date, time, service_slug, customer_name, customer_email, customer_phone")
+        .select(
+          "fulfillment_mode, suburb, date, time, service_slug, customer_name, customer_email, customer_phone, booking_snapshot",
+        )
         .eq("id", result.bookingId)
         .maybeSingle();
       const mode = String((softRow as { fulfillment_mode?: string | null } | null)?.fulfillment_mode ?? "")
@@ -228,14 +230,29 @@ export async function finalizePaystackChargeSuccess(
       const meta = paystackMetadata;
       const gclid = typeof meta.gclid === "string" ? meta.gclid.trim() : "";
       const fbclid = typeof meta.fbclid === "string" ? meta.fbclid.trim() : "";
+      const snapAnalytics = (() => {
+        const snap = (softRow as { booking_snapshot?: unknown } | null)?.booking_snapshot;
+        if (!snap || typeof snap !== "object" || Array.isArray(snap)) return null;
+        const analytics = (snap as { analytics?: unknown }).analytics;
+        if (!analytics || typeof analytics !== "object" || Array.isArray(analytics)) return null;
+        return analytics as { ga_client_id?: unknown; ga_session_id?: unknown };
+      })();
+      const gaClientIdFromSnap =
+        typeof snapAnalytics?.ga_client_id === "string" && /^\d+\.\d+$/.test(snapAnalytics.ga_client_id.trim())
+          ? snapAnalytics.ga_client_id.trim()
+          : "";
+      const gaSessionIdFromSnap =
+        typeof snapAnalytics?.ga_session_id === "string" && /^\d+$/.test(snapAnalytics.ga_session_id.trim())
+          ? snapAnalytics.ga_session_id.trim()
+          : "";
       const gaClientId =
-        typeof meta.ga_client_id === "string" && /^\d+\.\d+$/.test(meta.ga_client_id.trim())
+        (typeof meta.ga_client_id === "string" && /^\d+\.\d+$/.test(meta.ga_client_id.trim())
           ? meta.ga_client_id.trim()
-          : "";
+          : "") || gaClientIdFromSnap;
       const gaSessionId =
-        typeof meta.ga_session_id === "string" && /^\d+$/.test(meta.ga_session_id.trim())
+        (typeof meta.ga_session_id === "string" && /^\d+$/.test(meta.ga_session_id.trim())
           ? meta.ga_session_id.trim()
-          : "";
+          : "") || gaSessionIdFromSnap;
       const serviceFromRow =
         typeof (softRow as { service_slug?: string | null } | null)?.service_slug === "string"
           ? String((softRow as { service_slug?: string | null }).service_slug).trim()

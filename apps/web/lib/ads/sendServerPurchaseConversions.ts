@@ -212,6 +212,13 @@ export async function sendGa4MeasurementPurchase(payload: AdsPurchaseConversion)
  * Fire server-side purchase conversions (Meta CAPI + optional GA4 MP). Never throws.
  * Idempotent at the caller via Paystack reference / notification claim patterns.
  */
-export async function sendServerPurchaseConversions(payload: AdsPurchaseConversion): Promise<void> {
-  await Promise.all([sendMetaCapiPurchase(payload), sendGa4MeasurementPurchase(payload)]);
+export async function sendServerPurchaseConversions(payload: AdsPurchaseConversion): Promise<{
+  meta: MetaCapiResult;
+  ga4: Ga4Result;
+}> {
+  const [meta, ga4] = await Promise.all([
+    sendMetaCapiPurchase(payload),
+    sendGa4MeasurementPurchase(payload),
+  ]);
+  return { meta, ga4 };
 }
