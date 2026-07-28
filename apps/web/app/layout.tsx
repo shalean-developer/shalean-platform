@@ -51,11 +51,13 @@ export default function RootLayout({
           <NonProductionBanner />
           <SessionReplayProvider />
           <GlobalTopNav />
+          {/* Must run before {children} effects so SPA /office → /book clears ga-disable
+              and restores gtag before booking funnel telemetry fires. */}
+          <Ga4RouteGuard />
           {children}
         <Suspense fallback={null}>
           <ReferralCapture />
         </Suspense>
-        <Ga4RouteGuard />
         <GoogleAnalytics />
         <GoogleAds />
         <GoogleTagManager />
