@@ -20,6 +20,8 @@ export async function reportPaidBookingAdsConversions(params: {
   email: string | null;
   phone?: string | null;
   customerName?: string | null;
+  /** Service slug for GA4 purchase (no PII). */
+  service?: string | null;
   gclid?: string | null;
   fbclid?: string | null;
 }): Promise<void> {
@@ -45,6 +47,7 @@ export async function reportPaidBookingAdsConversions(params: {
     valueZar: purchaseValueZar(params.amountCents),
     currency: params.currency || "ZAR",
     bookingId: params.bookingId,
+    service: params.service ?? null,
     email: params.email,
     phone: params.phone ?? null,
     firstName,

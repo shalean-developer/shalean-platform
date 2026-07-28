@@ -100,9 +100,64 @@ describe("sendGa4MeasurementPurchase", () => {
       valueZar: 200,
       currency: "ZAR",
       bookingId: "b1",
+      service: "regular-cleaning",
     });
     expect(res).toEqual({ ok: true });
     const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
     expect(String(call[0])).toContain("measurement_id=G-TEST");
+    const body = JSON.parse(String(call[1]?.body)) as {
+      events: Array<{
+        name: string;
+        params: {
+          transaction_id: string;
+          value: number;
+          currency: string;
+          service: string;
+          branch: string;
+        };
+      }>;
+    };
+    expect(body.events[0]?.name).toBe("purchase");
+    expect(body.events[0]?.params).toMatchObject({
+      transaction_id: "ref-xyz",
+      value: 200,
+      currency: "ZAR",
+      service: "regular-cleaning",
+      branch: "cape-town",
+    });
+    expect(JSON.stringify(body)).not.toMatch(/email|phone|@|customer/i);
+  });
+
+  it("uses canonical Measurement ID when env unset", async () => {
+    process.env.GA4_MEASUREMENT_PROTOCOL_SECRET = "secret";
+    delete process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
+    delete process.env.GA4_MEASUREMENT_ID;
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await sendGa4MeasurementPurchase({
+      eventId: "ref-canon",
+      valueZar: 100,
+      currency: "ZAR",
+      service: "deep-cleaning",
+    });
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(String(call[0])).toContain("measurement_id=G-GEVTBDWTQW");
+  });
+
+  it("never falls back to the legacy www Measurement ID", async () => {
+    process.env.GA4_MEASUREMENT_PROTOCOL_SECRET = "secret";
+    process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID = "G-6JR2GPGPN3";
+    const fetchMock = vi.fn(async () => new Response(null, { status: 204 }));
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    await sendGa4MeasurementPurchase({
+      eventId: "ref-legacy",
+      valueZar: 100,
+      currency: "ZAR",
+    });
+    const call = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
+    expect(String(call[0])).toContain("measurement_id=G-GEVTBDWTQW");
+    expect(String(call[0])).not.toContain("G-6JR2GPGPN3");
   });
 });
