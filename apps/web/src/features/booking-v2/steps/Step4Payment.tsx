@@ -32,6 +32,7 @@ import {
 import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
 import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
 import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurringScheduleOptions";
+import { trackGa4BookingSubmitted } from "@/lib/analytics/ga4Events";
 
 // ??? Auth Form ?????????????????????????????????????????????????????????????????
 
@@ -561,6 +562,11 @@ function PaymentSection({
           error?: string;
         };
         if (areaRes.ok && areaJson.success && areaJson.bookingId) {
+          trackGa4BookingSubmitted({
+            bookingId: areaJson.bookingId,
+            service: values.serviceSlug,
+            value: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+          });
           window.location.href = `/account/success?areaReview=1&bookingId=${encodeURIComponent(areaJson.bookingId)}`;
           return;
         }
@@ -583,6 +589,12 @@ function PaymentSection({
 
       const { paystackReference, bookingId } = confirmJson;
       setPendingBookingId(bookingId);
+      trackGa4BookingSubmitted({
+        bookingId,
+        reference: paystackReference ?? null,
+        service: values.serviceSlug,
+        value: confirmJson.payAmountZar ?? payTotal,
+      });
       const chargeAmount = confirmJson.payAmountZar ?? payTotal;
       const requiresPayment = confirmJson.requiresPayment !== false && chargeAmount > 0;
 

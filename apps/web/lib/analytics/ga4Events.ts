@@ -138,8 +138,23 @@ export function trackGa4BeginCheckout(ctx?: Ga4BookingContext): void {
   trackGa4Event(GA4_FUNNEL_EVENTS.BEGIN_CHECKOUT, withBookingContext(ctx));
 }
 
-/** Secondary conversion — booking form submitted / payment initiated. */
-export function trackGa4BookingSubmitted(ctx?: Ga4BookingContext): void {
+/** Secondary conversion — only after a real booking is accepted/created (once per booking id). */
+export function trackGa4BookingSubmitted(
+  ctx: Ga4BookingContext & { bookingId: string; reference?: string | null },
+): void {
+  const bookingId = typeof ctx.bookingId === "string" ? ctx.bookingId.trim() : "";
+  if (!bookingId) return;
+
+  if (typeof window !== "undefined") {
+    const key = `shalean_ga4_booking_submitted_${bookingId}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return;
+      window.sessionStorage.setItem(key, "1");
+    } catch {
+      /* still fire once for this call if storage unavailable */
+    }
+  }
+
   trackGa4Event(GA4_FUNNEL_EVENTS.BOOKING_SUBMITTED, withBookingContext(ctx));
 }
 

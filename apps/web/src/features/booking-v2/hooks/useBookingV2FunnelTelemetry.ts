@@ -14,7 +14,6 @@ import {
   trackGa4BeginCheckout,
   trackGa4BookingReview,
   trackGa4BookingStart,
-  trackGa4BookingSubmitted,
   trackGa4ScheduleSelected,
   trackGa4ServiceSelected,
 } from "@/lib/analytics/ga4Events";
@@ -151,10 +150,6 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
       if (!ga4CheckoutTracked.current) {
         ga4CheckoutTracked.current = true;
         trackGa4BeginCheckout({
-          service: serviceSlug,
-          value: state.finalPrice,
-        });
-        trackGa4BookingSubmitted({
           service: serviceSlug,
           value: state.finalPrice,
         });
