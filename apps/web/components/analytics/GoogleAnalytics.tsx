@@ -30,6 +30,9 @@ export function GoogleAnalytics() {
     // early `trackGa4Event` calls would no-op until GoogleAds' deferred fallback ran.
     "window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};",
     "window.gtag('js',new Date());",
+    // Queue destination config immediately so early funnel events (booking_start, …)
+    // are associated with the Measurement ID before the deferred gtag.js load.
+    `window.gtag("config",${id},{send_page_view:true,allow_enhanced_conversions:false});`,
     "window.__shaleanGa4Bootstrapped=true;",
     scheduleThirdPartyScript(
       [
@@ -39,7 +42,6 @@ export function GoogleAnalytics() {
         `s.async=true;`,
         `s.dataset.shaleanGa4=${id};`,
         `s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(${id});`,
-        `s.onload=function(){window.gtag("config",${id},{send_page_view:true,allow_enhanced_conversions:false});};`,
         `document.head.appendChild(s);`,
       ].join(""),
     ),

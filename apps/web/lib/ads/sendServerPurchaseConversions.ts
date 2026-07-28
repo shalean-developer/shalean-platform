@@ -5,6 +5,17 @@ import type { AdsPurchaseConversion } from "@/lib/ads/purchaseConversionTypes";
 import { GA4_BRANCH, getGa4MeasurementId } from "@/lib/analytics/ga4Config";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
+/** Bound Meta/GA4 waits so payment finalize cannot hang the verify/webhook response. */
+const ADS_CONVERSION_FETCH_TIMEOUT_MS = 4_000;
+
+function conversionFetchSignal(): AbortSignal | undefined {
+  try {
+    return AbortSignal.timeout(ADS_CONVERSION_FETCH_TIMEOUT_MS);
+  } catch {
+    return undefined;
+  }
+}
+
 function sha256Norm(value: string): string {
   return crypto.createHash("sha256").update(value.trim().toLowerCase()).digest("hex");
 }
@@ -98,6 +109,7 @@ export async function sendMetaCapiPurchase(payload: AdsPurchaseConversion): Prom
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: conversionFetchSignal(),
     });
     const json = (await res.json().catch(() => ({}))) as { error?: { message?: string }; events_received?: number };
     if (!res.ok) {
@@ -180,6 +192,7 @@ export async function sendGa4MeasurementPurchase(payload: AdsPurchaseConversion)
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
+      signal: conversionFetchSignal(),
     });
     // MP returns 204 with empty body on success
     if (!res.ok) {
