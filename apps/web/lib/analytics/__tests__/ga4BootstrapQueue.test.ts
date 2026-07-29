@@ -231,6 +231,7 @@ describe("Ga4RouteGuard transitions and idempotency", () => {
   });
 
   it("syncGa4RoutePolicy clears disable before funnel events on /office → /book", async () => {
+    process.env.NEXT_PUBLIC_GOOGLE_ADS_ID = "AW-9999999999";
     vi.stubGlobal("window", {
       dataLayer: [] as unknown[],
       location: { pathname: "/office" },
@@ -246,15 +247,16 @@ describe("Ga4RouteGuard transitions and idempotency", () => {
 
     const { syncGa4RoutePolicy } = await import("@/components/analytics/Ga4RouteGuard");
     syncGa4RoutePolicy("/office");
-    expect((window as unknown as Record<string, boolean>)[gaDisableKey(GA4_CANONICAL_MEASUREMENT_ID)]).toBe(
-      true,
-    );
+    const flags = window as unknown as Record<string, boolean>;
+    expect(flags[gaDisableKey(GA4_CANONICAL_MEASUREMENT_ID)]).toBe(true);
+    expect(flags[gaDisableKey("AW-9999999999")]).toBe(true);
+    expect(window.__shaleanAnalyticsRouteEligible).toBe(false);
 
     (window as unknown as { location: { pathname: string } }).location.pathname = "/book/regular-cleaning";
     syncGa4RoutePolicy("/book/regular-cleaning");
-    expect((window as unknown as Record<string, boolean>)[gaDisableKey(GA4_CANONICAL_MEASUREMENT_ID)]).toBe(
-      false,
-    );
+    expect(flags[gaDisableKey(GA4_CANONICAL_MEASUREMENT_ID)]).toBe(false);
+    expect(flags[gaDisableKey("AW-9999999999")]).toBe(false);
+    expect(window.__shaleanAnalyticsRouteEligible).toBe(true);
 
     trackGa4BookingStart({ service: "regular-cleaning" });
     trackGa4ServiceSelected({ service: "regular-cleaning" });
@@ -432,7 +434,7 @@ describe("booking_submitted once after confirm", () => {
     expect(telemetry).toContain("trackGa4BeginCheckout");
     expect(step4).not.toContain("trackGa4BookingSubmitted");
     expect(successPage).toContain("trackGa4BookingSubmitted");
-    expect(successPage).toMatch(/isBookingPersisted[\s\S]*trackGa4BookingSubmitted/);
+    expect(successPage).toMatch(/isBookingPersisted[\s\S]*trackGa4BookingSubmitted[\s\S]*completedRef/);
     // Area-review path must not count as booking_submitted.
     const areaIdx = step4.indexOf("areaReview=1");
     const areaSlice = step4.slice(Math.max(0, areaIdx - 400), areaIdx + 80);
