@@ -433,13 +433,15 @@ describe("booking_submitted once after confirm", () => {
     expect(telemetry).not.toContain("trackGa4BookingSubmitted");
     expect(telemetry).toContain("trackBookingV2Step4Ga4First");
     expect(step4).not.toContain("trackGa4BookingSubmitted");
-    expect(successPage).toContain("trackGa4BookingSubmitted");
-    expect(successPage).toMatch(/isBookingPersisted[\s\S]*trackGa4BookingSubmitted[\s\S]*completedRef/);
-    expect(successPage).toMatch(/trackGa4BookingSubmitted[\s\S]*markRetargetingCandidate/);
+    expect(successPage).toContain("emitBookingSubmittedAfterPaystackVerify");
+    expect(successPage).toContain("finalizeCoveredBookingSubmitted");
+    expect(successPage).toMatch(/isBookingPersisted[\s\S]*emitBookingSubmittedAfterPaystackVerify[\s\S]*completedRef/);
+    expect(successPage).toMatch(/emitBookingSubmittedAfterPaystackVerify[\s\S]*markRetargetingCandidate/);
     // Area-review path must not count as booking_submitted.
     const areaIdx = step4.indexOf("areaReview=1");
     const areaSlice = step4.slice(Math.max(0, areaIdx - 400), areaIdx + 80);
     expect(areaSlice).not.toContain("trackGa4BookingSubmitted");
+    expect(step4).toContain("bookingV2CoveredSuccessHref");
   });
 
   it("appends gtag.js when config was queued but deferred loader skipped", async () => {
