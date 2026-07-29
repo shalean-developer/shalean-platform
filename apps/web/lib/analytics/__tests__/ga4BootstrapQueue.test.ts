@@ -435,6 +435,7 @@ describe("booking_submitted once after confirm", () => {
     expect(step4).not.toContain("trackGa4BookingSubmitted");
     expect(successPage).toContain("trackGa4BookingSubmitted");
     expect(successPage).toMatch(/isBookingPersisted[\s\S]*trackGa4BookingSubmitted[\s\S]*completedRef/);
+    expect(successPage).toMatch(/trackGa4BookingSubmitted[\s\S]*markRetargetingCandidate/);
     // Area-review path must not count as booking_submitted.
     const areaIdx = step4.indexOf("areaReview=1");
     const areaSlice = step4.slice(Math.max(0, areaIdx - 400), areaIdx + 80);

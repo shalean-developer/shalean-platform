@@ -58,12 +58,12 @@ export function installDataLayerGuard(): void {
   const dl = (window.dataLayer = window.dataLayer || []) as unknown[] & {
     push: (...items: unknown[]) => number;
   };
-  const originalPush = Array.prototype.push.bind(dl) as (...items: unknown[]) => number;
+  const priorPush = dl.push.bind(dl);
 
   dl.push = (...items: unknown[]) => {
     const eligible = window.__shaleanAnalyticsRouteEligible !== false;
     if (eligible || isAllowedDataLayerPushWhenBlocked(items[0])) {
-      return originalPush(...items);
+      return priorPush(...items);
     }
     return dl.length;
   };
