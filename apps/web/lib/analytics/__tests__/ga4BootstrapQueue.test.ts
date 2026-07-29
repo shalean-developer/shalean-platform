@@ -294,18 +294,26 @@ describe("Ga4RouteGuard transitions and idempotency", () => {
 describe("booking_submitted once after confirm", () => {
   beforeEach(() => {
     const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+      clear: () => store.clear(),
+      key: () => null,
+      length: 0,
+    };
     vi.stubGlobal("window", {
       dataLayer: [] as unknown[],
       location: { pathname: "/book/regular-cleaning" },
       gtag: (...args: unknown[]) => {
         (window.dataLayer as unknown[]).push(args);
       },
-      sessionStorage: {
-        getItem: (k: string) => store.get(k) ?? null,
-        setItem: (k: string, v: string) => {
-          store.set(k, v);
-        },
-      },
+      localStorage: storage,
+      sessionStorage: storage,
     });
     delete process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
   });
@@ -335,6 +343,42 @@ describe("booking_submitted once after confirm", () => {
         return a[0] === "event" && a[1] === GA4_FUNNEL_EVENTS.BOOKING_SUBMITTED;
       });
     expect(submitted).toHaveLength(2);
+  });
+
+  it("dedupes booking_submitted via localStorage across simulated sessions", () => {
+    const store = new Map<string, string>();
+    (window as unknown as { localStorage: Storage }).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+      clear: () => store.clear(),
+      key: () => null,
+      length: 0,
+    } as Storage;
+
+    trackGa4BookingSubmitted({
+      bookingId: "33333333-3333-4333-8333-333333333333",
+      service: "regular-cleaning",
+    });
+    // Simulate new tab / session with same origin localStorage.
+    (window.dataLayer as unknown[]).length = 0;
+    trackGa4BookingSubmitted({
+      bookingId: "33333333-3333-4333-8333-333333333333",
+      service: "regular-cleaning",
+    });
+    const submitted = ((window.dataLayer ?? []) as unknown[]).filter((entry) => {
+      if (!entry || typeof entry !== "object") return false;
+      const a = entry as { 0?: string; 1?: string };
+      return a[0] === "event" && a[1] === GA4_FUNNEL_EVENTS.BOOKING_SUBMITTED;
+    });
+    expect(submitted).toHaveLength(0);
+    expect(store.has("shalean_ga4_booking_submitted_33333333-3333-4333-8333-333333333333")).toBe(
+      true,
+    );
   });
 
   it("telemetry does not emit booking_submitted on step-4 entry", async () => {

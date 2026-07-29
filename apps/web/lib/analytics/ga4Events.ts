@@ -148,10 +148,17 @@ export function trackGa4BookingSubmitted(
   if (typeof window !== "undefined") {
     const key = `shalean_ga4_booking_submitted_${bookingId}`;
     try {
-      if (window.sessionStorage.getItem(key)) return;
-      window.sessionStorage.setItem(key, "1");
+      // localStorage survives tabs/sessions on the same browser origin.
+      // Cross-device dedupe would need a server claim (out of scope for browser infra).
+      if (window.localStorage.getItem(key)) return;
+      window.localStorage.setItem(key, "1");
     } catch {
-      /* still fire once for this call if storage unavailable */
+      try {
+        if (window.sessionStorage.getItem(key)) return;
+        window.sessionStorage.setItem(key, "1");
+      } catch {
+        /* still fire once for this call if storage unavailable */
+      }
     }
   }
 
