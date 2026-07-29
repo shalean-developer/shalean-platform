@@ -42,8 +42,12 @@ export function withHomepageContext(payload: Record<string, unknown> = {}): Reco
 
 export function markRetargetingCandidate(enabled: boolean): void {
   if (typeof window === "undefined") return;
-  if (enabled) window.localStorage.setItem(RETARGETING_KEY, "1");
-  else window.localStorage.removeItem(RETARGETING_KEY);
+  try {
+    if (enabled) window.localStorage.setItem(RETARGETING_KEY, "1");
+    else window.localStorage.removeItem(RETARGETING_KEY);
+  } catch {
+    // localStorage may throw SecurityError (iframe / blocked storage) — never escalate
+  }
 }
 
 /** SEO growth signals for GTM → GA4 (no direct `gtag` / measurement id in the app bundle). */
@@ -88,6 +92,12 @@ export function trackGrowthEvent(
   captureAcquisitionFirstTouchIfNeeded();
   const sid = getAnalyticsSessionId();
   syncReplayProviders(sid);
+  let retargetingPending = false;
+  try {
+    retargetingPending = window.localStorage.getItem(RETARGETING_KEY) === "1";
+  } catch {
+    // ignore SecurityError / blocked storage
+  }
   const enriched = {
     ...getAcquisitionPayloadFields(),
     ...payload,
@@ -96,7 +106,7 @@ export function trackGrowthEvent(
     device: getAnalyticsDevice(),
     pathname: window.location.pathname,
     referrer: document.referrer || null,
-    retargeting_pending: window.localStorage.getItem(RETARGETING_KEY) === "1",
+    retargeting_pending: retargetingPending,
   };
 
   const body = JSON.stringify({
