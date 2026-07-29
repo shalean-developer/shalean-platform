@@ -373,13 +373,44 @@ describe("booking_submitted once after confirm", () => {
     });
     const submitted = ((window.dataLayer ?? []) as unknown[]).filter((entry) => {
       if (!entry || typeof entry !== "object") return false;
-      const a = entry as { 0?: string; 1?: string };
-      return a[0] === "event" && a[1] === GA4_FUNNEL_EVENTS.BOOKING_SUBMITTED;
+      const a = entry as { 0?: string; 1?: string; event?: string };
+      if (a[0] === "event" && a[1] === GA4_FUNNEL_EVENTS.BOOKING_SUBMITTED) return true;
+      return a.event === GA4_FUNNEL_EVENTS.BOOKING_SUBMITTED;
     });
     expect(submitted).toHaveLength(0);
     expect(store.has("shalean_ga4_booking_submitted_33333333-3333-4333-8333-333333333333")).toBe(
       true,
     );
+  });
+
+  it("does not write dedupe marker when GA send is blocked", () => {
+    (window as unknown as { location: { pathname: string } }).location.pathname = "/office";
+    const store = new Map<string, string>();
+    (window as unknown as { localStorage: Storage }).localStorage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, v);
+      },
+      removeItem: (k: string) => {
+        store.delete(k);
+      },
+      clear: () => store.clear(),
+      key: () => null,
+      length: 0,
+    } as Storage;
+
+    trackGa4BookingSubmitted({
+      bookingId: "44444444-4444-4444-8444-444444444444",
+      service: "regular-cleaning",
+    });
+
+    expect(store.size).toBe(0);
+    ((window as unknown as { location: { pathname: string } }).location.pathname = "/book/regular-cleaning");
+    trackGa4BookingSubmitted({
+      bookingId: "44444444-4444-4444-8444-444444444444",
+      service: "regular-cleaning",
+    });
+    expect(store.size).toBe(1);
   });
 
   it("telemetry does not emit booking_submitted on step-4 entry", async () => {
@@ -393,10 +424,15 @@ describe("booking_submitted once after confirm", () => {
       path.join(process.cwd(), "src/features/booking-v2/steps/Step4Payment.tsx"),
       "utf8",
     );
+    const successPage = await fs.readFile(
+      path.join(process.cwd(), "app/booking/success/page.tsx"),
+      "utf8",
+    );
     expect(telemetry).not.toContain("trackGa4BookingSubmitted");
     expect(telemetry).toContain("trackGa4BeginCheckout");
-    expect(step4).toContain("trackGa4BookingSubmitted");
-    expect(step4).toMatch(/confirmJson\.success[\s\S]*trackGa4BookingSubmitted/);
+    expect(step4).not.toContain("trackGa4BookingSubmitted");
+    expect(successPage).toContain("trackGa4BookingSubmitted");
+    expect(successPage).toMatch(/isBookingPersisted[\s\S]*trackGa4BookingSubmitted/);
     // Area-review path must not count as booking_submitted.
     const areaIdx = step4.indexOf("areaReview=1");
     const areaSlice = step4.slice(Math.max(0, areaIdx - 400), areaIdx + 80);

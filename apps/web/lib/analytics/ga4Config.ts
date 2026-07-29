@@ -21,15 +21,30 @@ export const GA4_EXCLUDED_PATH_PREFIXES = ["/office", "/cleaner", "/jobs"] as co
 /** Public recruitment paths under `/cleaner` that must still receive GA4. */
 export const GA4_CLEANER_PUBLIC_PATH_PREFIXES = ["/cleaner/apply"] as const;
 
+/** Valid GA4 web stream Measurement ID (`G-` prefix). */
+export function isGa4MeasurementId(value: string | null | undefined): boolean {
+  return typeof value === "string" && /^G-[A-Z0-9]+$/i.test(value.trim());
+}
+
+/**
+ * Client-visible GA4 Measurement ID for browser gtag / route guards / ga-disable.
+ *
+ * Uses only `NEXT_PUBLIC_GA_MEASUREMENT_ID` so SSR bootstrap, SPA bootstrap,
+ * ga4Events, and disable flags always target the same stream the browser loads.
+ *
+ * Server-only Measurement Protocol config (`GA4_MEASUREMENT_ID`) is separate —
+ * see `sendServerPurchaseConversions.ts`.
+ */
 export function getGa4MeasurementId(): string {
   const fromEnv =
-    (typeof process !== "undefined" && process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim()) ||
-    (typeof process !== "undefined" && process.env.GA4_MEASUREMENT_ID?.trim()) ||
-    "";
+    typeof process !== "undefined" ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() : "";
   if (fromEnv && (GA4_LEGACY_MEASUREMENT_IDS as readonly string[]).includes(fromEnv)) {
     return GA4_CANONICAL_MEASUREMENT_ID;
   }
-  return fromEnv || GA4_CANONICAL_MEASUREMENT_ID;
+  if (fromEnv && isGa4MeasurementId(fromEnv)) {
+    return fromEnv;
+  }
+  return GA4_CANONICAL_MEASUREMENT_ID;
 }
 
 /** True when pathname is an internal surface that must not receive GA4. */

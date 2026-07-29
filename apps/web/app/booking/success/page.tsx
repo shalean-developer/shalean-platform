@@ -13,6 +13,7 @@ import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { ANALYTICS_EVENTS, trackBookingAnalyticsEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { trackClientPurchase } from "@/lib/ads/trackClientPurchase";
+import { trackGa4BookingSubmitted } from "@/lib/analytics/ga4Events";
 import { clearStoredReferral } from "@/lib/referrals/client";
 import {
   clearBookingV2DraftStorage,
@@ -207,6 +208,20 @@ function SuccessContent() {
                 currency: okData.currency ?? "ZAR",
                 email: okData.customerEmail ?? completedSnapForAds?.customer?.email ?? null,
                 phone: completedSnapForAds?.customer?.phone ?? null,
+              });
+              const completedService =
+                completedLocked?.service_type ??
+                completedLocked?.service ??
+                completedSnap?.flat?.service ??
+                null;
+              trackGa4BookingSubmitted({
+                bookingId: okData.bookingId ?? "",
+                reference: okData.bookingReference ?? okData.reference ?? reference,
+                service: typeof completedService === "string" ? completedService : null,
+                value:
+                  typeof okData.amountCents === "number" && okData.amountCents > 0
+                    ? Math.round(okData.amountCents / 100)
+                    : (completedSnapForAds?.total_zar ?? null),
               });
             } catch {
               // non-fatal — confirmation already shown
