@@ -11,6 +11,7 @@ declare global {
   interface Window {
     __shaleanAnalyticsRouteEligible?: boolean;
     __shaleanDataLayerGuardInstalled?: boolean;
+    __shaleanDataLayerGuardPush?: (...items: unknown[]) => number;
   }
 }
 
@@ -47,20 +48,26 @@ function isAllowedDataLayerPushWhenBlocked(entry: unknown): boolean {
   return (entry as Record<string, unknown>).event === SHALEAN_ROUTE_POLICY_EVENT;
 }
 
+function isShaleanDataLayerGuard(pushFn: unknown): boolean {
+  return typeof window !== "undefined" && pushFn === window.__shaleanDataLayerGuardPush;
+}
+
 /**
  * Wrap `dataLayer.push` so an already-loaded GTM container cannot receive new
  * marketing events on excluded SPA routes. Policy updates always pass through.
+ * Re-wraps when deferred gtag/GTM loaders replace `push` after hydration.
  */
 export function installDataLayerGuard(): void {
   if (typeof window === "undefined") return;
-  if (window.__shaleanDataLayerGuardInstalled) return;
 
   const dl = (window.dataLayer = window.dataLayer || []) as unknown[] & {
     push: (...items: unknown[]) => number;
   };
-  const priorPush = dl.push.bind(dl);
+  if (isShaleanDataLayerGuard(dl.push)) return;
 
-  dl.push = (...items: unknown[]) => {
+  const currentPush = dl.push;
+  const priorPush = currentPush.bind(dl);
+  const guardedPush = (...items: unknown[]) => {
     const eligible = window.__shaleanAnalyticsRouteEligible !== false;
     if (eligible || isAllowedDataLayerPushWhenBlocked(items[0])) {
       return priorPush(...items);
@@ -68,6 +75,8 @@ export function installDataLayerGuard(): void {
     return dl.length;
   };
 
+  window.__shaleanDataLayerGuardPush = guardedPush;
+  dl.push = guardedPush;
   window.__shaleanDataLayerGuardInstalled = true;
 }
 

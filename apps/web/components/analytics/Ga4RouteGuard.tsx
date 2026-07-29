@@ -129,6 +129,7 @@ export function ensureGtmBootstrapped(): void {
   s.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(gtmId)}`;
   document.head.appendChild(s);
   window.__shaleanGtmBootstrapped = true;
+  applyAnalyticsRoutePolicy(window.location.pathname);
 }
 
 /**

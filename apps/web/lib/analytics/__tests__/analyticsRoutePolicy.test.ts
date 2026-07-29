@@ -100,4 +100,32 @@ describe("analyticsRoutePolicy", () => {
     process.env.NEXT_PUBLIC_GOOGLE_ADS_ID = "AW-1234567890";
     expect(getGoogleAdsMeasurementId()).toBe("AW-1234567890");
   });
+
+  it("re-wraps dataLayer.push when deferred GTM replaces the processor", () => {
+    const dataLayer: unknown[] = [];
+    vi.stubGlobal("window", {
+      dataLayer,
+      location: { pathname: "/book" },
+      __shaleanAnalyticsRouteEligible: true,
+    });
+    installDataLayerGuard();
+    const firstGuard = dataLayer.push;
+
+    const gtmProcessed: unknown[] = [];
+    dataLayer.push = (...items: unknown[]) => {
+      gtmProcessed.push(...items);
+      return Array.prototype.push.apply(dataLayer, items);
+    };
+
+    installDataLayerGuard();
+    expect(dataLayer.push).not.toBe(firstGuard);
+
+    window.__shaleanAnalyticsRouteEligible = false;
+    dataLayer.push({ event: "page_view", page_path: "/office" });
+    expect(gtmProcessed).toHaveLength(0);
+
+    window.__shaleanAnalyticsRouteEligible = true;
+    dataLayer.push({ event: "page_view", page_path: "/book" });
+    expect(gtmProcessed).toHaveLength(1);
+  });
 });
