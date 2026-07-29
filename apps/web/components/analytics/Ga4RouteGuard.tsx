@@ -45,6 +45,7 @@ function appendGa4LoaderScript(measurementId: string): void {
   s.async = true;
   s.dataset.shaleanGa4 = measurementId;
   s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
+  // Reapply route policy/guard after gtag.js may replace dataLayer.push.
   s.onload = () => notifyAnalyticsTagLoaded();
   document.head.appendChild(s);
   window.__shaleanGa4LoaderPresent = true;
@@ -134,6 +135,7 @@ export function ensureGtmBootstrapped(): void {
   s.async = true;
   s.dataset.shaleanGtm = gtmId;
   s.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(gtmId)}`;
+  // Reapply route policy/guard after gtm.js may replace dataLayer.push.
   s.onload = () => notifyAnalyticsTagLoaded();
   document.head.appendChild(s);
   window.__shaleanGtmBootstrapped = true;
@@ -153,9 +155,11 @@ export function syncGa4RoutePolicy(pathname: string | null): void {
 }
 
 /**
- * Client-route guard: when the SPA navigates onto /office|/cleaner|/jobs, disable GA4
- * (canonical + every legacy Measurement ID). When returning to a public route after a
- * hard-excluded first paint, bootstrap gtag / Ads / GTM if they were never loaded.
+ * Client-route guard: when the SPA navigates onto /office|/jobs|private /cleaner, disable
+ * GA4 (canonical + legacy), Google Ads (`AW-*`), and GTM dataLayer intake — including when
+ * those tags were already loaded on a public route. `/cleaner/apply` stays eligible.
+ * When returning to a public route after a hard-excluded first paint, bootstrap gtag / Ads /
+ * GTM if they were never loaded.
  *
  * Uses `useLayoutEffect` and must mount **before** `{children}` in the root layout so
  * booking funnel effects cannot race ahead of disable-clear / bootstrap.
@@ -166,6 +170,8 @@ export function Ga4RouteGuard() {
 
   useLayoutEffect(() => {
     const excluded = isGa4PathExcluded(pathname);
+    // Always silence (or restore) GA4 + Ads + GTM — including already-loaded destinations
+    // after public → /office|/jobs|private /cleaner SPA navigation.
     applyAnalyticsRoutePolicy(pathname);
     if (!excluded && (wasExcluded.current || typeof window.gtag !== "function" || !window.__shaleanGa4Bootstrapped)) {
       ensureGa4Bootstrapped();
@@ -176,6 +182,8 @@ export function Ga4RouteGuard() {
   }, [pathname]);
 
   useEffect(() => {
+    // Belt-and-suspenders: layout inline onload may only dispatch the event before the
+    // module hook is bound; keep a listener so late CustomEvents still reapply policy.
     const onTagLoaded = () => applyAnalyticsRoutePolicy(window.location.pathname);
     window.addEventListener(SHALEAN_ANALYTICS_TAG_LOADED_EVENT, onTagLoaded);
     return () => window.removeEventListener(SHALEAN_ANALYTICS_TAG_LOADED_EVENT, onTagLoaded);

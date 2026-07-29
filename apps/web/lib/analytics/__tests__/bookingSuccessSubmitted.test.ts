@@ -213,6 +213,143 @@ describe("booking_submitted success paths", () => {
     expect(store.size).toBe(1);
     expect(gtag.mock.calls.filter((c) => c[1] === GA4_FUNNEL_EVENTS.BOOKING_SUBMITTED)).toHaveLength(1);
   });
+
+  it("covered booking fetch that never resolves times out as retryable network", async () => {
+    vi.useFakeTimers();
+    const { gtag, store } = stubGa4Window();
+    const fetchImpl = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (!signal) return;
+        const onAbort = () => reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
+      });
+    });
+
+    const pending = finalizeCoveredBookingSubmitted({
+      bookingId: BOOKING_A,
+      accessToken: "tok",
+      fetchImpl: fetchImpl as unknown as typeof fetch,
+      timeoutMs: 50,
+    });
+
+    // Stalled request must terminate within the deadline
+    await vi.advanceTimersByTimeAsync(50);
+    const out = await pending;
+
+    expect(out.emitted).toBe(false);
+    expect(out.result).toEqual({ ok: false, reason: "network" });
+    expect(gtag).not.toHaveBeenCalled();
+    expect(store.size).toBe(0);
+
+    // AbortController was passed and aborted
+    const init = fetchImpl.mock.calls[0]?.[1] as RequestInit | undefined;
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+    expect(init?.signal?.aborted).toBe(true);
+
+    vi.useRealTimers();
+  });
+
+  it("AbortController timeout cleans up timer and leaves no unhandled rejection", async () => {
+    vi.useFakeTimers();
+    stubGa4Window();
+    const unhandled: unknown[] = [];
+    const onUnhandled = (reason: unknown) => {
+      unhandled.push(reason);
+    };
+    process.on("unhandledRejection", onUnhandled);
+
+    try {
+      const fetchImpl = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+        return new Promise<Response>((_resolve, reject) => {
+          const signal = init?.signal;
+          if (!signal) return;
+          const onAbort = () => reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+          if (signal.aborted) onAbort();
+          else signal.addEventListener("abort", onAbort, { once: true });
+        });
+      });
+
+      const pending = finalizeCoveredBookingSubmitted({
+        bookingId: BOOKING_A,
+        accessToken: "tok",
+        fetchImpl: fetchImpl as unknown as typeof fetch,
+        timeoutMs: 25,
+      });
+      await vi.advanceTimersByTimeAsync(25);
+      await expect(pending).resolves.toEqual({
+        emitted: false,
+        result: { ok: false, reason: "network" },
+      });
+      // Allow any stray microtasks
+      await Promise.resolve();
+      expect(unhandled).toHaveLength(0);
+    } finally {
+      process.off("unhandledRejection", onUnhandled);
+      vi.useRealTimers();
+    }
+  });
+
+  it("retry after timeout emits booking_submitted exactly once and writes dedupe only then", async () => {
+    vi.useFakeTimers();
+    const { gtag, store } = stubGa4Window();
+
+    const stalled = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+      return new Promise<Response>((_resolve, reject) => {
+        const signal = init?.signal;
+        if (!signal) return;
+        const onAbort = () => reject(Object.assign(new Error("Aborted"), { name: "AbortError" }));
+        if (signal.aborted) onAbort();
+        else signal.addEventListener("abort", onAbort, { once: true });
+      });
+    });
+
+    const firstPending = finalizeCoveredBookingSubmitted({
+      bookingId: BOOKING_B,
+      accessToken: "tok",
+      fetchImpl: stalled as unknown as typeof fetch,
+      timeoutMs: 30,
+    });
+    await vi.advanceTimersByTimeAsync(30);
+    const first = await firstPending;
+    expect(first.emitted).toBe(false);
+    expect(store.size).toBe(0);
+    expect(gtag).not.toHaveBeenCalled();
+
+    vi.useRealTimers();
+
+    const okFetch = vi.fn(async () =>
+      new Response(
+        JSON.stringify({
+          booking: {
+            id: BOOKING_B,
+            payment_status: "paid",
+            status: "confirmed",
+            service_slug: "regular-cleaning",
+            total_paid_zar: 0,
+          },
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
+      ),
+    );
+
+    const second = await finalizeCoveredBookingSubmitted({
+      bookingId: BOOKING_B,
+      accessToken: "tok",
+      fetchImpl: okFetch as unknown as typeof fetch,
+    });
+    const third = await finalizeCoveredBookingSubmitted({
+      bookingId: BOOKING_B,
+      accessToken: "tok",
+      fetchImpl: okFetch as unknown as typeof fetch,
+    });
+
+    expect(second.emitted).toBe(true);
+    expect(third.emitted).toBe(false);
+    expect(store.size).toBe(1);
+    expect(gtag.mock.calls.filter((c) => c[1] === GA4_FUNNEL_EVENTS.BOOKING_SUBMITTED)).toHaveLength(1);
+  });
 });
 
 describe("success page / Step4 wiring", () => {

@@ -8,18 +8,30 @@ export const SHALEAN_ANALYTICS_ROUTE_ELIGIBLE_KEY = "__shaleanAnalyticsRouteElig
 export const SHALEAN_ROUTE_POLICY_EVENT = "shalean_route_policy";
 export const SHALEAN_ANALYTICS_TAG_LOADED_EVENT = "shalean:analytics-tag-loaded";
 
-/** Deferred gtag/GTM loaders call this after replacing `dataLayer.push`. */
-export function notifyAnalyticsTagLoaded(): void {
-  if (typeof window === "undefined") return;
-  window.dispatchEvent(new CustomEvent(SHALEAN_ANALYTICS_TAG_LOADED_EVENT));
-}
-
 declare global {
   interface Window {
     __shaleanAnalyticsRouteEligible?: boolean;
     __shaleanDataLayerGuardInstalled?: boolean;
     __shaleanDataLayerGuardPush?: (...items: unknown[]) => number;
+    /** Invoked from gtag.js / gtm.js onload (SPA + layout loaders). */
+    __shaleanNotifyAnalyticsTagLoaded?: () => void;
   }
+}
+
+/**
+ * Deferred gtag/GTM loaders call this after replacing `dataLayer.push`.
+ * Reapplies route policy immediately (does not rely on a React listener being attached).
+ */
+export function notifyAnalyticsTagLoaded(): void {
+  if (typeof window === "undefined") return;
+  applyAnalyticsRoutePolicy(window.location.pathname);
+  window.dispatchEvent(new CustomEvent(SHALEAN_ANALYTICS_TAG_LOADED_EVENT));
+}
+
+/** Expose onload hook for inline layout scripts that cannot import this module. */
+export function bindAnalyticsTagLoadedHook(): void {
+  if (typeof window === "undefined") return;
+  window.__shaleanNotifyAnalyticsTagLoaded = notifyAnalyticsTagLoaded;
 }
 
 /** Valid Google Ads conversion ID (`AW-` prefix). */
@@ -101,6 +113,7 @@ export function setAnalyticsRouteEligible(eligible: boolean): void {
 
 /** Disable GA4 + Ads + GTM dataLayer intake on excluded routes; restore on public routes. */
 export function applyAnalyticsRoutePolicy(pathname: string | null): void {
+  bindAnalyticsTagLoadedHook();
   const excluded = isGa4PathExcluded(pathname);
   setGa4Disabled(excluded);
   setGoogleAdsDisabled(excluded);
