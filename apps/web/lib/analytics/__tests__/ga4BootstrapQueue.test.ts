@@ -544,6 +544,54 @@ describe("GTM noscript and path policy", () => {
   });
 });
 
+describe("GA4 debug_mode env gating", () => {
+  afterEach(() => {
+    delete process.env.NEXT_PUBLIC_GA4_DEBUG_MODE;
+  });
+
+  it("includes debug_mode:true in the initial config when env var is set", async () => {
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE = "true";
+    vi.resetModules();
+    const { GoogleAnalytics } = await import("@/components/analytics/GoogleAnalytics");
+    const el = GoogleAnalytics();
+    const html: string = el.props.dangerouslySetInnerHTML.__html;
+    expect(html).toContain("debug_mode:true");
+  });
+
+  it("omits debug_mode when env var is unset (production default)", async () => {
+    delete process.env.NEXT_PUBLIC_GA4_DEBUG_MODE;
+    vi.resetModules();
+    const { GoogleAnalytics } = await import("@/components/analytics/GoogleAnalytics");
+    const el = GoogleAnalytics();
+    const html: string = el.props.dangerouslySetInnerHTML.__html;
+    expect(html).not.toContain("debug_mode");
+  });
+
+  it("includes debug_mode when env var is '1'", async () => {
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE = "1";
+    vi.resetModules();
+    const { GoogleAnalytics } = await import("@/components/analytics/GoogleAnalytics");
+    const el = GoogleAnalytics();
+    const html: string = el.props.dangerouslySetInnerHTML.__html;
+    expect(html).toContain("debug_mode:true");
+  });
+
+  it("excluded routes still skip GA4 bootstrap even with debug_mode enabled", () => {
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE = "true";
+    expect(isGa4PathExcluded("/office")).toBe(true);
+    expect(isGa4PathExcluded("/jobs")).toBe(true);
+    expect(isGa4PathExcluded("/cleaner/dashboard")).toBe(true);
+    expect(isGa4PathExcluded("/cleaner/apply")).toBe(false);
+    expect(isGa4PathExcluded("/book")).toBe(false);
+  });
+
+  it("buildGoogleAnalyticsBootstrap (test helper) never includes debug_mode", () => {
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE = "true";
+    const bootstrap = buildGoogleAnalyticsBootstrap(GA4_CANONICAL_MEASUREMENT_ID);
+    expect(bootstrap).not.toContain("debug_mode");
+  });
+});
+
 describe("PII sanitisation", () => {
   it("strips PII from GA params", () => {
     const safe = sanitizeGa4Params({
