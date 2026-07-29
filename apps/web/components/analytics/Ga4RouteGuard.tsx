@@ -1,6 +1,6 @@
 "use client";
 
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import {
   GA4_PATH_EXCLUSION_SNIPPET,
@@ -8,7 +8,11 @@ import {
   getGa4MeasurementId,
   isGa4PathExcluded,
 } from "@/lib/analytics/ga4Config";
-import { applyAnalyticsRoutePolicy } from "@/lib/analytics/analyticsRoutePolicy";
+import {
+  applyAnalyticsRoutePolicy,
+  notifyAnalyticsTagLoaded,
+  SHALEAN_ANALYTICS_TAG_LOADED_EVENT,
+} from "@/lib/analytics/analyticsRoutePolicy";
 
 declare global {
   interface Window {
@@ -41,6 +45,7 @@ function appendGa4LoaderScript(measurementId: string): void {
   s.async = true;
   s.dataset.shaleanGa4 = measurementId;
   s.src = `https://www.googletagmanager.com/gtag/js?id=${encodeURIComponent(measurementId)}`;
+  s.onload = () => notifyAnalyticsTagLoaded();
   document.head.appendChild(s);
   window.__shaleanGa4LoaderPresent = true;
 }
@@ -109,6 +114,7 @@ export function ensureGtmBootstrapped(): void {
   if (!gtmId) return;
   if (document.querySelector(`script[data-shalean-gtm="${gtmId}"]`)) {
     window.__shaleanGtmBootstrapped = true;
+    applyAnalyticsRoutePolicy(window.location.pathname);
     return;
   }
   if (
@@ -119,6 +125,7 @@ export function ensureGtmBootstrapped(): void {
     )
   ) {
     window.__shaleanGtmBootstrapped = true;
+    applyAnalyticsRoutePolicy(window.location.pathname);
     return;
   }
   window.dataLayer = window.dataLayer || [];
@@ -127,9 +134,9 @@ export function ensureGtmBootstrapped(): void {
   s.async = true;
   s.dataset.shaleanGtm = gtmId;
   s.src = `https://www.googletagmanager.com/gtm.js?id=${encodeURIComponent(gtmId)}`;
+  s.onload = () => notifyAnalyticsTagLoaded();
   document.head.appendChild(s);
   window.__shaleanGtmBootstrapped = true;
-  applyAnalyticsRoutePolicy(window.location.pathname);
 }
 
 /**
@@ -167,6 +174,12 @@ export function Ga4RouteGuard() {
     }
     wasExcluded.current = excluded;
   }, [pathname]);
+
+  useEffect(() => {
+    const onTagLoaded = () => applyAnalyticsRoutePolicy(window.location.pathname);
+    window.addEventListener(SHALEAN_ANALYTICS_TAG_LOADED_EVENT, onTagLoaded);
+    return () => window.removeEventListener(SHALEAN_ANALYTICS_TAG_LOADED_EVENT, onTagLoaded);
+  }, []);
 
   return null;
 }

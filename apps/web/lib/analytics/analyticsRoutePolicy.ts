@@ -6,6 +6,13 @@ import { gaDisableKey, setGa4Disabled } from "@/lib/analytics/ga4Events";
 /** Synchronously readable by GTM exception triggers (`{{shalean_analytics_route_eligible}}`). */
 export const SHALEAN_ANALYTICS_ROUTE_ELIGIBLE_KEY = "__shaleanAnalyticsRouteEligible";
 export const SHALEAN_ROUTE_POLICY_EVENT = "shalean_route_policy";
+export const SHALEAN_ANALYTICS_TAG_LOADED_EVENT = "shalean:analytics-tag-loaded";
+
+/** Deferred gtag/GTM loaders call this after replacing `dataLayer.push`. */
+export function notifyAnalyticsTagLoaded(): void {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(new CustomEvent(SHALEAN_ANALYTICS_TAG_LOADED_EVENT));
+}
 
 declare global {
   interface Window {
