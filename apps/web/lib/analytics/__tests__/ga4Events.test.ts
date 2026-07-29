@@ -66,4 +66,46 @@ describe("trackGa4Event client helpers", () => {
     expect(params.notes).toBeUndefined();
     expect(params.service).toBe("deep-cleaning");
   });
+
+  it("booking_submitted marks dedupe only after a successful send", async () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal("window", {
+      location: { pathname: "/office" },
+      dataLayer: [] as unknown[],
+      gtag: vi.fn(),
+      localStorage: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => store.set(k, v),
+        removeItem: (k: string) => store.delete(k),
+        clear: () => store.clear(),
+        key: () => null,
+        length: 0,
+      },
+      sessionStorage: {
+        getItem: () => null,
+        setItem: () => undefined,
+        removeItem: () => undefined,
+        clear: () => undefined,
+        key: () => null,
+        length: 0,
+      },
+    });
+
+    const { trackGa4BookingSubmitted } = await import("@/lib/analytics/ga4Events");
+    const sent = trackGa4BookingSubmitted({
+      bookingId: "55555555-5555-4555-8555-555555555555",
+      service: "regular-cleaning",
+    });
+    expect(sent).toBe(false);
+    expect(store.size).toBe(0);
+
+    (window as unknown as { location: { pathname: string } }).location.pathname =
+      "/account/success";
+    const sentPublic = trackGa4BookingSubmitted({
+      bookingId: "55555555-5555-4555-8555-555555555555",
+      service: "regular-cleaning",
+    });
+    expect(sentPublic).toBe(true);
+    expect(store.size).toBe(1);
+  });
 });

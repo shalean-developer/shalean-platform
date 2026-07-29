@@ -63,15 +63,52 @@ function canSendGa4(): boolean {
   return true;
 }
 
+function bookingSubmittedDedupeKey(bookingId: string): string {
+  return `shalean_ga4_booking_submitted_${bookingId}`;
+}
+
+function hasBookingSubmittedDedupe(bookingId: string): boolean {
+  if (typeof window === "undefined") return false;
+  const key = bookingSubmittedDedupeKey(bookingId);
+  try {
+    if (window.localStorage.getItem(key)) return true;
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (window.sessionStorage.getItem(key)) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+function markBookingSubmittedDedupe(bookingId: string): void {
+  if (typeof window === "undefined") return;
+  const key = bookingSubmittedDedupeKey(bookingId);
+  try {
+    window.localStorage.setItem(key, "1");
+    return;
+  } catch {
+    /* fall through */
+  }
+  try {
+    window.sessionStorage.setItem(key, "1");
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Fire a GA4 event via gtag (and mirror to dataLayer for GTM listeners).
  * Params are PII-scrubbed. No-ops on excluded paths / when gtag is unavailable.
+ * Returns true when the event was queued for delivery.
  */
 export function trackGa4Event(
   eventName: string,
   params: Record<string, unknown> = {},
-): void {
-  if (!canSendGa4()) return;
+): boolean {
+  if (!canSendGa4()) return false;
 
   const safe = sanitizeGa4Params({
     branch: GA4_BRANCH,
@@ -85,7 +122,7 @@ export function trackGa4Event(
       ...safe,
     });
   } catch {
-    /* ignore */
+    return false;
   }
 
   try {
@@ -94,10 +131,13 @@ export function trackGa4Event(
         send_to: getGa4MeasurementId(),
         ...safe,
       });
+      return true;
     }
   } catch {
-    /* ignore */
+    return false;
   }
+
+  return false;
 }
 
 export type Ga4BookingContext = {
@@ -141,28 +181,22 @@ export function trackGa4BeginCheckout(ctx?: Ga4BookingContext): void {
 /** Secondary conversion — only after a real booking is accepted/created (once per booking id). */
 export function trackGa4BookingSubmitted(
   ctx: Ga4BookingContext & { bookingId: string; reference?: string | null },
-): void {
+): boolean {
   const bookingId = typeof ctx.bookingId === "string" ? ctx.bookingId.trim() : "";
-  if (!bookingId) return;
+  if (!bookingId) return false;
+  if (hasBookingSubmittedDedupe(bookingId)) return false;
 
-  if (typeof window !== "undefined") {
-    const key = `shalean_ga4_booking_submitted_${bookingId}`;
-    try {
-      // localStorage survives tabs/sessions on the same browser origin.
-      // Cross-device dedupe would need a server claim (out of scope for browser infra).
-      if (window.localStorage.getItem(key)) return;
-      window.localStorage.setItem(key, "1");
-    } catch {
-      try {
-        if (window.sessionStorage.getItem(key)) return;
-        window.sessionStorage.setItem(key, "1");
-      } catch {
-        /* still fire once for this call if storage unavailable */
-      }
-    }
+  const params = withBookingContext(ctx);
+  const reference =
+    typeof ctx.reference === "string" && ctx.reference.trim() ? ctx.reference.trim() : null;
+  if (reference) params.reference = reference;
+
+  const sent = trackGa4Event(GA4_FUNNEL_EVENTS.BOOKING_SUBMITTED, params);
+  if (sent) {
+    // Mark only after the event is queued — a blocked/skipped send must not suppress retries.
+    markBookingSubmittedDedupe(bookingId);
   }
-
-  trackGa4Event(GA4_FUNNEL_EVENTS.BOOKING_SUBMITTED, withBookingContext(ctx));
+  return sent;
 }
 
 export function trackGa4PhoneClick(): void {
