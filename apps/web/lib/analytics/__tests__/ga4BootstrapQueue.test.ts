@@ -4,6 +4,7 @@ import {
   GA4_CANONICAL_MEASUREMENT_ID,
   GA4_LEGACY_MEASUREMENT_IDS,
   GA4_PATH_EXCLUSION_SNIPPET,
+  getGa4ConfigOptions,
   getGa4MeasurementId,
   isGa4PathExcluded,
 } from "@/lib/analytics/ga4Config";
@@ -589,6 +590,144 @@ describe("GA4 debug_mode env gating", () => {
     process.env.NEXT_PUBLIC_GA4_DEBUG_MODE = "true";
     const bootstrap = buildGoogleAnalyticsBootstrap(GA4_CANONICAL_MEASUREMENT_ID);
     expect(bootstrap).not.toContain("debug_mode");
+  });
+
+  it("getGa4ConfigOptions returns debug_mode when env is set", () => {
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE = "true";
+    const opts = getGa4ConfigOptions();
+    expect(opts.debug_mode).toBe(true);
+    expect(opts.send_page_view).toBe(true);
+  });
+
+  it("getGa4ConfigOptions omits debug_mode when env is unset", () => {
+    delete process.env.NEXT_PUBLIC_GA4_DEBUG_MODE;
+    const opts = getGa4ConfigOptions();
+    expect(opts.debug_mode).toBeUndefined();
+    expect(opts.send_page_view).toBe(true);
+  });
+
+  it("SPA bootstrap (excluded → public) includes debug_mode when env is set", async () => {
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE = "true";
+    vi.resetModules();
+
+    const dataLayer: unknown[] = [];
+    const appendChild = vi.fn();
+    const createElement = vi.fn(() => ({ async: false, dataset: {} as Record<string, string>, src: "" }));
+    vi.stubGlobal("window", {
+      dataLayer,
+      location: { pathname: "/book" },
+      __shaleanGa4Bootstrapped: false,
+      __shaleanAdsBootstrapped: false,
+      __shaleanGtmBootstrapped: false,
+      sessionStorage: { getItem: () => null, setItem: () => undefined },
+    });
+    vi.stubGlobal("document", {
+      querySelector: vi.fn(() => null),
+      querySelectorAll: vi.fn(() => []),
+      createElement,
+      head: { appendChild },
+    });
+
+    const { ensureGa4Bootstrapped } = await import("@/components/analytics/Ga4RouteGuard");
+    ensureGa4Bootstrapped();
+
+    const configs = dataLayer.filter((e) => {
+      if (!e || typeof e !== "object") return false;
+      const a = e as { 0?: string; 1?: string };
+      return a[0] === "config" && a[1] === GA4_CANONICAL_MEASUREMENT_ID;
+    });
+    expect(configs).toHaveLength(1);
+    const configOpts = (configs[0] as { 2?: Record<string, unknown> })[2]!;
+    expect(configOpts.debug_mode).toBe(true);
+  });
+
+  it("SPA bootstrap (excluded → public) omits debug_mode when env is unset", async () => {
+    delete process.env.NEXT_PUBLIC_GA4_DEBUG_MODE;
+    vi.resetModules();
+
+    const dataLayer: unknown[] = [];
+    const appendChild = vi.fn();
+    const createElement = vi.fn(() => ({ async: false, dataset: {} as Record<string, string>, src: "" }));
+    vi.stubGlobal("window", {
+      dataLayer,
+      location: { pathname: "/book" },
+      __shaleanGa4Bootstrapped: false,
+      __shaleanAdsBootstrapped: false,
+      __shaleanGtmBootstrapped: false,
+      sessionStorage: { getItem: () => null, setItem: () => undefined },
+    });
+    vi.stubGlobal("document", {
+      querySelector: vi.fn(() => null),
+      querySelectorAll: vi.fn(() => []),
+      createElement,
+      head: { appendChild },
+    });
+
+    const { ensureGa4Bootstrapped } = await import("@/components/analytics/Ga4RouteGuard");
+    ensureGa4Bootstrapped();
+
+    const configs = dataLayer.filter((e) => {
+      if (!e || typeof e !== "object") return false;
+      const a = e as { 0?: string; 1?: string };
+      return a[0] === "config" && a[1] === GA4_CANONICAL_MEASUREMENT_ID;
+    });
+    expect(configs).toHaveLength(1);
+    const configOpts = (configs[0] as { 2?: Record<string, unknown> })[2]!;
+    expect(configOpts.debug_mode).toBeUndefined();
+  });
+
+  it("SPA bootstrap does not duplicate config or loader on second call", async () => {
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE = "true";
+    vi.resetModules();
+
+    const dataLayer: unknown[] = [];
+    const appendChild = vi.fn();
+    const existingGa = { dataset: { shaleanGa4: GA4_CANONICAL_MEASUREMENT_ID }, src: "" };
+    vi.stubGlobal("window", {
+      dataLayer,
+      location: { pathname: "/book" },
+      __shaleanGa4Bootstrapped: true,
+      __shaleanGa4LoaderPresent: true,
+    });
+    vi.stubGlobal("document", {
+      querySelector: vi.fn(() => existingGa),
+      querySelectorAll: vi.fn(() => [existingGa]),
+      createElement: vi.fn(),
+      head: { appendChild },
+    });
+
+    const { ensureGa4Bootstrapped } = await import("@/components/analytics/Ga4RouteGuard");
+    ensureGa4Bootstrapped();
+    ensureGa4Bootstrapped();
+
+    expect(appendChild).not.toHaveBeenCalled();
+    const configs = dataLayer.filter((e) => Array.isArray(e) && e[0] === "config");
+    expect(configs).toHaveLength(0);
+  });
+
+  it("excluded routes remain disabled even with debug_mode enabled", async () => {
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE = "true";
+    vi.resetModules();
+
+    const dataLayer: unknown[] = [];
+    vi.stubGlobal("window", {
+      dataLayer,
+      location: { pathname: "/office" },
+      __shaleanGa4Bootstrapped: false,
+    });
+    vi.stubGlobal("document", {
+      querySelector: vi.fn(() => null),
+      querySelectorAll: vi.fn(() => []),
+      createElement: vi.fn(),
+      head: { appendChild: vi.fn() },
+    });
+
+    const { ensureGa4Bootstrapped } = await import("@/components/analytics/Ga4RouteGuard");
+    ensureGa4Bootstrapped();
+
+    expect(window.__shaleanGa4Bootstrapped).toBe(false);
+    const configs = dataLayer.filter((e) => Array.isArray(e) && e[0] === "config");
+    expect(configs).toHaveLength(0);
   });
 });
 

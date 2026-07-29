@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef } from "react";
 import { usePathname } from "next/navigation";
 import {
   GA4_PATH_EXCLUSION_SNIPPET,
+  getGa4ConfigOptions,
   getGa4MeasurementId,
   isGa4PathExcluded,
 } from "@/lib/analytics/ga4Config";
@@ -73,10 +74,7 @@ export function ensureGa4Bootstrapped(): void {
   }
 
   window.gtag("js", new Date());
-  window.gtag("config", measurementId, {
-    send_page_view: true,
-    allow_enhanced_conversions: false,
-  });
+  window.gtag("config", measurementId, getGa4ConfigOptions());
 
   appendGa4LoaderScript(measurementId);
 

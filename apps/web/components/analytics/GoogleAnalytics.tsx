@@ -1,6 +1,7 @@
 import { scheduleThirdPartyScript } from "@/lib/analytics/deferThirdPartyScript";
 import {
   GA4_PATH_EXCLUSION_SNIPPET,
+  getGa4ConfigOptionsLiteral,
   getGa4MeasurementId,
 } from "@/lib/analytics/ga4Config";
 
@@ -24,12 +25,7 @@ declare global {
 export function GoogleAnalytics() {
   const measurementId = getGa4MeasurementId();
   const id = JSON.stringify(measurementId);
-  const debugMode =
-    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE === "true" ||
-    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE === "1";
-  const configOpts = debugMode
-    ? "{send_page_view:true,allow_enhanced_conversions:false,debug_mode:true}"
-    : "{send_page_view:true,allow_enhanced_conversions:false}";
+  const configOpts = getGa4ConfigOptionsLiteral();
   const bootstrap = [
     GA4_PATH_EXCLUSION_SNIPPET,
     "window.dataLayer=window.dataLayer||[];",
