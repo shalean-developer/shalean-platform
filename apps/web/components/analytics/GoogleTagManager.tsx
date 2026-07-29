@@ -8,6 +8,9 @@ const gtmId = process.env.NEXT_PUBLIC_GTM_ID?.trim();
  * Skips on `/office`, `/cleaner`, `/jobs` so GTM cannot re-introduce a second GA4 stream
  * on internal surfaces.
  *
+ * No noscript GTM iframe here: the root layout is shared and cannot path-gate
+ * fallback markup without per-request server pathname (middleware header).
+ *
  * Ops: ensure the GTM container's GA4 Configuration tag uses only `G-GEVTBDWTQW`
  * (apex shalean.co.za). Do not add `G-6JR2GPGPN3` or other www-linked Measurement IDs.
  */
@@ -27,17 +30,6 @@ export function GoogleTagManager() {
   );
 
   return (
-    <>
-      <script dangerouslySetInnerHTML={{ __html: `(function(){${bootstrap}})();` }} />
-      <noscript>
-        <iframe
-          src={`https://www.googletagmanager.com/ns.html?id=${encodeURIComponent(gtmId)}`}
-          height="0"
-          width="0"
-          style={{ display: "none", visibility: "hidden" }}
-          title="Google Tag Manager"
-        />
-      </noscript>
-    </>
+    <script dangerouslySetInnerHTML={{ __html: `(function(){${bootstrap}})();` }} />
   );
 }

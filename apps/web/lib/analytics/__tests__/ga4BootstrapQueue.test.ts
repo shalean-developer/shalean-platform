@@ -444,6 +444,106 @@ describe("booking_submitted once after confirm", () => {
   });
 });
 
+describe("GTM noscript and path policy", () => {
+  it("does not render a global noscript iframe (root layout cannot path-gate noscript)", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const src = await fs.readFile(
+      path.join(process.cwd(), "components/analytics/GoogleTagManager.tsx"),
+      "utf8",
+    );
+    expect(src).not.toContain("googletagmanager.com/ns.html");
+    expect(src).not.toMatch(/<noscript[\s>]/);
+    expect(src).not.toMatch(/return\s*\([\s\S]*<iframe/);
+  });
+
+  it("gates JS GTM bootstrap on excluded routes via GA4_PATH_EXCLUSION_SNIPPET", async () => {
+    const fs = await import("node:fs/promises");
+    const path = await import("node:path");
+    const src = await fs.readFile(
+      path.join(process.cwd(), "components/analytics/GoogleTagManager.tsx"),
+      "utf8",
+    );
+    expect(src).toContain("GA4_PATH_EXCLUSION_SNIPPET");
+    expect(isGa4PathExcluded("/office")).toBe(true);
+    expect(isGa4PathExcluded("/office/bookings")).toBe(true);
+    expect(isGa4PathExcluded("/jobs")).toBe(true);
+    expect(isGa4PathExcluded("/jobs/list")).toBe(true);
+    expect(isGa4PathExcluded("/cleaner/dashboard")).toBe(true);
+    expect(isGa4PathExcluded("/cleaner/jobs/1")).toBe(true);
+  });
+
+  it("keeps public cleaner application routes eligible for GTM", () => {
+    expect(isGa4PathExcluded("/cleaner/apply")).toBe(false);
+    expect(isGa4PathExcluded("/cleaner/apply/form")).toBe(false);
+  });
+
+  it("loads GTM once on a public route", async () => {
+    const appendChild = vi.fn();
+    const createElement = vi.fn(() => ({ async: false, dataset: {} as Record<string, string>, src: "" }));
+    vi.stubGlobal("window", {
+      dataLayer: [] as unknown[],
+      location: { pathname: "/" },
+      __shaleanGtmBootstrapped: false,
+    });
+    vi.stubGlobal("document", {
+      querySelector: vi.fn(() => null),
+      querySelectorAll: vi.fn(() => []),
+      createElement,
+      head: { appendChild },
+    });
+    process.env.NEXT_PUBLIC_GTM_ID = "GTM-TEST123";
+
+    const { ensureGtmBootstrapped } = await import("@/components/analytics/Ga4RouteGuard");
+    ensureGtmBootstrapped();
+    ensureGtmBootstrapped();
+
+    expect(appendChild).toHaveBeenCalledTimes(1);
+    expect(window.__shaleanGtmBootstrapped).toBe(true);
+
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    delete process.env.NEXT_PUBLIC_GTM_ID;
+  });
+
+  it("public → excluded → public does not duplicate GTM container", async () => {
+    const appendChild = vi.fn();
+    const existingGtm = { dataset: { shaleanGtm: "GTM-TEST123" }, src: "" };
+    vi.stubGlobal("window", {
+      dataLayer: [] as unknown[],
+      location: { pathname: "/book" },
+      __shaleanGtmBootstrapped: true,
+      __shaleanGa4Bootstrapped: true,
+      __shaleanGa4LoaderPresent: true,
+    });
+    vi.stubGlobal("document", {
+      querySelector: vi.fn((sel: string) => {
+        const s = String(sel);
+        if (s.includes("data-shalean-gtm")) return existingGtm;
+        if (s.includes("data-shalean-ga4")) return { dataset: { shaleanGa4: GA4_CANONICAL_MEASUREMENT_ID }, src: "" };
+        return null;
+      }),
+      querySelectorAll: vi.fn(() => [existingGtm]),
+      createElement: vi.fn(),
+      head: { appendChild },
+    });
+    process.env.NEXT_PUBLIC_GTM_ID = "GTM-TEST123";
+
+    const { ensureGtmBootstrapped } = await import("@/components/analytics/Ga4RouteGuard");
+    (window as unknown as { location: { pathname: string } }).location.pathname = "/office";
+    ensureGtmBootstrapped();
+    (window as unknown as { location: { pathname: string } }).location.pathname = "/book";
+    ensureGtmBootstrapped();
+
+    expect(appendChild).not.toHaveBeenCalled();
+    expect(window.__shaleanGtmBootstrapped).toBe(true);
+
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+    delete process.env.NEXT_PUBLIC_GTM_ID;
+  });
+});
+
 describe("PII sanitisation", () => {
   it("strips PII from GA params", () => {
     const safe = sanitizeGa4Params({
