@@ -24,6 +24,7 @@ import {
 import { useStoredReferralCheckoutDiscount } from "@/hooks/useStoredReferralCheckoutDiscount";
 import { getStoredReferral } from "@/lib/referrals/client";
 import {
+  bookingV2CoveredSuccessHref,
   bookingV2SuccessHref,
   clearBookingV2DraftStorage,
   consumeBookingV2SuccessRedirect,
@@ -606,14 +607,15 @@ function PaymentSection({
 
       if (!requiresPayment) {
         setConfirming(false);
-        const ref = paystackReference ?? bookingId ?? "";
         clearBookingV2DraftStorage();
         try {
           clearBooking();
         } catch {
           // non-fatal
         }
-        window.location.assign(bookingV2SuccessHref(ref));
+        // Land on success with bookingId — emit booking_submitted only after authoritative settle check.
+        // Do not emit here before navigation (SHL-BK-000097 abort risk).
+        window.location.assign(bookingV2CoveredSuccessHref(bookingId));
         return;
       }
 
