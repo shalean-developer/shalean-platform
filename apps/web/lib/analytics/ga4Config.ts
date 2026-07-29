@@ -51,5 +51,36 @@ export function isGa4PathExcluded(pathname: string | null | undefined): boolean 
  * Compact path-exclusion snippet for injected scripts (hard navigations / first paint).
  * Matches `/office`, `/cleaner`, `/jobs` and subpaths, but not `/cleaner/apply`.
  */
+/**
+ * Returns the GA4 config options object. Includes `debug_mode: true` when
+ * `NEXT_PUBLIC_GA4_DEBUG_MODE` is "true" or "1" (staging only).
+ * Used by both the SSR inline bootstrap (`GoogleAnalytics`) and the client
+ * SPA bootstrap (`Ga4RouteGuard`).
+ */
+export function getGa4ConfigOptions(): Record<string, unknown> {
+  const debugMode =
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE === "true" ||
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE === "1";
+  const opts: Record<string, unknown> = {
+    send_page_view: true,
+    allow_enhanced_conversions: false,
+  };
+  if (debugMode) opts.debug_mode = true;
+  return opts;
+}
+
+/**
+ * Serialised config options for use inside inline `<script>` tags.
+ * Returns a JS object literal string like `{send_page_view:true,...}`.
+ */
+export function getGa4ConfigOptionsLiteral(): string {
+  const debugMode =
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE === "true" ||
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE === "1";
+  return debugMode
+    ? "{send_page_view:true,allow_enhanced_conversions:false,debug_mode:true}"
+    : "{send_page_view:true,allow_enhanced_conversions:false}";
+}
+
 export const GA4_PATH_EXCLUSION_SNIPPET =
   'var __ga4p=(location.pathname||"").split("?")[0];if(/^\\/(office|jobs)(\\/|$)/.test(__ga4p)||(/^\\/cleaner(\\/|$)/.test(__ga4p)&&!/^\\/cleaner\\/apply(\\/|$)/.test(__ga4p)))return;';
