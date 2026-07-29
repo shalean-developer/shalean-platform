@@ -64,6 +64,13 @@ describe("analyticsRoutePolicy", () => {
 
   it("blocks new dataLayer marketing events when GTM is already loaded", () => {
     const dataLayer: unknown[] = [];
+    const gtmProcessed: unknown[] = [];
+    const gtmPush = (...items: unknown[]) => {
+      gtmProcessed.push(...items);
+      return Array.prototype.push.apply(dataLayer, items);
+    };
+    dataLayer.push = gtmPush as typeof dataLayer.push;
+
     vi.stubGlobal("window", {
       dataLayer,
       location: { pathname: "/book" },
@@ -72,16 +79,21 @@ describe("analyticsRoutePolicy", () => {
     installDataLayerGuard();
 
     dataLayer.push({ event: "page_view", page_path: "/book" });
-    expect(dataLayer).toHaveLength(1);
+    expect(gtmProcessed).toHaveLength(1);
 
     window.__shaleanAnalyticsRouteEligible = false;
     dataLayer.push({ event: "page_view", page_path: "/office" });
+    expect(gtmProcessed).toHaveLength(1);
     dataLayer.push({
       event: SHALEAN_ROUTE_POLICY_EVENT,
       shalean_analytics_route_eligible: false,
     });
-    expect(dataLayer).toHaveLength(2);
-    expect((dataLayer[1] as Record<string, unknown>).event).toBe(SHALEAN_ROUTE_POLICY_EVENT);
+    expect(gtmProcessed).toHaveLength(2);
+    expect((gtmProcessed[1] as Record<string, unknown>).event).toBe(SHALEAN_ROUTE_POLICY_EVENT);
+
+    window.__shaleanAnalyticsRouteEligible = true;
+    dataLayer.push({ event: "page_view", page_path: "/book" });
+    expect(gtmProcessed).toHaveLength(3);
   });
 
   it("defaults Google Ads destination from env", () => {

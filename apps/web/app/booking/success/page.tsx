@@ -133,10 +133,6 @@ function SuccessContent() {
           const okData = data as PaystackVerifyPostSuccess;
           setStatusData(mapVerifySuccessToStatus(okData));
           setErrorMessage(null);
-          markRetargetingCandidate(false);
-          clearStoredReferral("customer");
-          clearBookingV2DraftStorage();
-          consumeBookingV2SuccessRedirect();
 
           if (isBookingPersisted(okData)) {
             const completedSnap = isSnapshot(okData.bookingSnapshot)
@@ -167,6 +163,10 @@ function SuccessContent() {
             setPhase("success");
 
             try {
+              markRetargetingCandidate(false);
+              clearStoredReferral("customer");
+              clearBookingV2DraftStorage();
+              consumeBookingV2SuccessRedirect();
               trackGrowthEvent(ANALYTICS_EVENTS.COMPLETE_BOOKING, {
                 reference: okData.reference ?? null,
                 booking_id: okData.bookingId ?? null,
@@ -230,6 +230,15 @@ function SuccessContent() {
               // non-fatal — confirmation already shown
             }
             return true;
+          }
+
+          try {
+            markRetargetingCandidate(false);
+            clearStoredReferral("customer");
+            clearBookingV2DraftStorage();
+            consumeBookingV2SuccessRedirect();
+          } catch {
+            // non-fatal — payment succeeded; storage cleanup must not block UI
           }
 
           completedRef.current = true;
