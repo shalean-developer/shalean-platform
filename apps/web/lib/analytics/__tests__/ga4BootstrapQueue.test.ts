@@ -431,7 +431,7 @@ describe("booking_submitted once after confirm", () => {
       "utf8",
     );
     expect(telemetry).not.toContain("trackGa4BookingSubmitted");
-    expect(telemetry).toContain("trackGa4BeginCheckout");
+    expect(telemetry).toContain("trackBookingV2Step4Ga4First");
     expect(step4).not.toContain("trackGa4BookingSubmitted");
     expect(successPage).toContain("trackGa4BookingSubmitted");
     expect(successPage).toMatch(/isBookingPersisted[\s\S]*trackGa4BookingSubmitted[\s\S]*completedRef/);

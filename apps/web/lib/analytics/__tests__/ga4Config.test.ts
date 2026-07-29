@@ -35,6 +35,20 @@ describe("ga4Config", () => {
     expect(getGa4MeasurementId()).toBe(GA4_CANONICAL_MEASUREMENT_ID);
   });
 
+  it("rejects legacy Measurement IDs case-insensitively with whitespace", () => {
+    process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID = " g-6jr2gpgpn3 ";
+    expect(getGa4MeasurementId()).toBe(GA4_CANONICAL_MEASUREMENT_ID);
+    process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID = "G-6jr2GpGpN3";
+    expect(getGa4MeasurementId()).toBe(GA4_CANONICAL_MEASUREMENT_ID);
+  });
+
+  it("detects legacy Measurement IDs via isLegacyGa4MeasurementId", async () => {
+    const { isLegacyGa4MeasurementId } = await import("@/lib/analytics/ga4Config");
+    expect(isLegacyGa4MeasurementId("G-6JR2GPGPN3")).toBe(true);
+    expect(isLegacyGa4MeasurementId(" g-6jr2gpgpn3 ")).toBe(true);
+    expect(isLegacyGa4MeasurementId("G-STAGINGTEST1")).toBe(false);
+  });
+
   it("allows a non-legacy override (e.g. staging test stream)", () => {
     process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID = "G-STAGINGTEST1";
     expect(getGa4MeasurementId()).toBe("G-STAGINGTEST1");
