@@ -11,11 +11,12 @@ import {
 } from "@/lib/booking/bookingFlowAnalytics";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
 import {
-  trackGa4BeginCheckout,
+  trackBookingV2Step1Ga4First,
+  trackBookingV2Step4Ga4First,
+} from "@/lib/analytics/bookingV2FunnelGa4Isolation";
+import {
   trackGa4BookingReview,
-  trackGa4BookingStart,
   trackGa4ScheduleSelected,
-  trackGa4ServiceSelected,
 } from "@/lib/analytics/ga4Events";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingStep, BookingV2FormData } from "@/src/features/booking-v2/types";
@@ -61,7 +62,7 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
   const dateTracked = useRef(false);
   const timeTracked = useRef(false);
   const cleanerTracked = useRef(false);
-  const paymentStartedTracked = useRef(false);
+  const ga4Step1Tracked = useRef(false);
   const ga4ScheduleTracked = useRef(false);
   const ga4ReviewTracked = useRef(false);
   const ga4CheckoutTracked = useRef(false);
@@ -97,63 +98,43 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
       step: currentStep,
     });
 
-    if (stepTracked.current.has(currentStep)) return;
-    stepTracked.current.add(currentStep);
-
-    const base = { step: currentStep, service: serviceSlug, flow: "booking_v2" };
+    const base = { step: currentStep, service: serviceSlug, flow: "booking_v2" as const };
 
     if (currentStep === 1) {
-      trackGrowthEvent(ANALYTICS_EVENTS.START_BOOKING, base);
-      trackGrowthEvent(ANALYTICS_EVENTS.VIEW_PRICE, base);
-      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_STEP_DETAILS_STARTED, state, {
-        service_type: serviceSlug,
-        suburb: values.suburb ?? null,
-      });
-      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED, state, {
-        service_type: serviceSlug,
-        suburb: values.suburb ?? null,
-      });
-      trackGa4BookingStart({
-        service: serviceSlug,
-        value: state.finalPrice,
-      });
-      trackGa4ServiceSelected({
-        service: serviceSlug,
-        value: state.finalPrice,
-      });
+      if (!ga4Step1Tracked.current) {
+        trackBookingV2Step1Ga4First(serviceSlug, state, values, base);
+        ga4Step1Tracked.current = true;
+      }
       return;
     }
+
+    if (currentStep === 3) {
+      if (!ga4ReviewTracked.current) {
+        trackGa4BookingReview({
+          service: serviceSlug,
+          value: state.finalPrice,
+        });
+        ga4ReviewTracked.current = true;
+      }
+      return;
+    }
+
+    if (currentStep === 4) {
+      if (!ga4CheckoutTracked.current) {
+        trackBookingV2Step4Ga4First(serviceSlug, state, values);
+        ga4CheckoutTracked.current = true;
+      }
+      return;
+    }
+
+    if (stepTracked.current.has(currentStep)) return;
+    stepTracked.current.add(currentStep);
 
     if (currentStep === 2) {
       trackGrowthEvent(ANALYTICS_EVENTS.SELECT_TIME, base);
       trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_CONTINUE_SCHEDULE, state, {
         service_type: serviceSlug,
       });
-      return;
-    }
-
-    if (currentStep === 3 && !ga4ReviewTracked.current) {
-      ga4ReviewTracked.current = true;
-      trackGa4BookingReview({
-        service: serviceSlug,
-        value: state.finalPrice,
-      });
-    }
-
-    if (currentStep === 4 && !paymentStartedTracked.current) {
-      paymentStartedTracked.current = true;
-      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYMENT_STARTED, state, {
-        service_type: serviceSlug,
-        suburb: values.suburb ?? null,
-        estimated_price: state.finalPrice,
-      });
-      if (!ga4CheckoutTracked.current) {
-        ga4CheckoutTracked.current = true;
-        trackGa4BeginCheckout({
-          service: serviceSlug,
-          value: state.finalPrice,
-        });
-      }
     }
   }, [currentStep, serviceSlug, form]);
 

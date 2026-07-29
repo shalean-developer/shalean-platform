@@ -26,6 +26,19 @@ export function isGa4MeasurementId(value: string | null | undefined): boolean {
   return typeof value === "string" && /^G-[A-Z0-9]+$/i.test(value.trim());
 }
 
+function normalizePublicGa4MeasurementId(value: string | null | undefined): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+/** True when env value matches a legacy stream ID (case-insensitive). */
+export function isLegacyGa4MeasurementId(value: string | null | undefined): boolean {
+  const normalized = normalizePublicGa4MeasurementId(value).toUpperCase();
+  if (!normalized) return false;
+  return (GA4_LEGACY_MEASUREMENT_IDS as readonly string[]).some(
+    (legacy) => legacy.toUpperCase() === normalized,
+  );
+}
+
 /**
  * Client-visible GA4 Measurement ID for browser gtag / route guards / ga-disable.
  *
@@ -37,8 +50,10 @@ export function isGa4MeasurementId(value: string | null | undefined): boolean {
  */
 export function getGa4MeasurementId(): string {
   const fromEnv =
-    typeof process !== "undefined" ? process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID?.trim() : "";
-  if (fromEnv && (GA4_LEGACY_MEASUREMENT_IDS as readonly string[]).includes(fromEnv)) {
+    typeof process !== "undefined"
+      ? normalizePublicGa4MeasurementId(process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID)
+      : "";
+  if (fromEnv && isLegacyGa4MeasurementId(fromEnv)) {
     return GA4_CANONICAL_MEASUREMENT_ID;
   }
   if (fromEnv && isGa4MeasurementId(fromEnv)) {
