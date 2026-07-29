@@ -7,6 +7,7 @@ import {
 declare global {
   interface Window {
     __shaleanGa4Bootstrapped?: boolean;
+    __shaleanGa4LoaderPresent?: boolean;
   }
 }
 
