@@ -24,6 +24,12 @@ declare global {
 export function GoogleAnalytics() {
   const measurementId = getGa4MeasurementId();
   const id = JSON.stringify(measurementId);
+  const debugMode =
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE === "true" ||
+    process.env.NEXT_PUBLIC_GA4_DEBUG_MODE === "1";
+  const configOpts = debugMode
+    ? "{send_page_view:true,allow_enhanced_conversions:false,debug_mode:true}"
+    : "{send_page_view:true,allow_enhanced_conversions:false}";
   const bootstrap = [
     GA4_PATH_EXCLUSION_SNIPPET,
     "window.dataLayer=window.dataLayer||[];",
@@ -33,7 +39,7 @@ export function GoogleAnalytics() {
     "window.gtag('js',new Date());",
     // Queue destination config immediately so early funnel events (booking_start, …)
     // are associated with the Measurement ID before the deferred gtag.js load.
-    `window.gtag("config",${id},{send_page_view:true,allow_enhanced_conversions:false});`,
+    `window.gtag("config",${id},${configOpts});`,
     "window.__shaleanGa4Bootstrapped=true;",
     scheduleThirdPartyScript(
       [
@@ -60,7 +66,6 @@ export function buildGoogleAnalyticsBootstrap(measurementId: string): string {
     "window.dataLayer=window.dataLayer||[];",
     "window.gtag=window.gtag||function(){window.dataLayer.push(arguments);};",
     "window.gtag('js',new Date());",
-    // Tests stub script load — keep config call synchronous for delivery proof.
     `window.gtag("config",${id},{send_page_view:true,allow_enhanced_conversions:false});`,
     "window.__shaleanGa4Bootstrapped=true;",
   ].join("");
