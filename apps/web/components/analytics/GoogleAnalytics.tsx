@@ -45,7 +45,7 @@ export function GoogleAnalytics() {
         `s.async=true;`,
         `s.dataset.shaleanGa4=${id};`,
         `s.src="https://www.googletagmanager.com/gtag/js?id="+encodeURIComponent(${id});`,
-        `s.onload=function(){try{window.dispatchEvent(new CustomEvent("shalean:analytics-tag-loaded"));}catch(e){}};`,
+        `s.onload=function(){try{if(typeof window.__shaleanNotifyAnalyticsTagLoaded==="function"){window.__shaleanNotifyAnalyticsTagLoaded();}else{window.dispatchEvent(new CustomEvent("shalean:analytics-tag-loaded"));}}catch(e){}};`,
         `document.head.appendChild(s);`,
         `window.__shaleanGa4LoaderPresent=true;`,
       ].join(""),

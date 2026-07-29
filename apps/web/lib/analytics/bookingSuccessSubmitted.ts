@@ -1,5 +1,8 @@
 import { trackGa4BookingSubmitted } from "@/lib/analytics/ga4Events";
 
+/** Matches Paystack verify timeout on `/booking/success` — stalled covered lookups must not hang forever. */
+export const COVERED_BOOKING_FETCH_TIMEOUT_MS = 15_000;
+
 export type BookingSuccessPath = "paystack" | "covered" | "area_review" | "missing";
 
 /** Query-string routing for `/booking/success` / `/account/success`. */
@@ -86,22 +89,27 @@ export type CoveredFetchResult =
 
 /**
  * Load a covered booking and emit booking_submitted only when payment is settled.
- * Does not call Paystack verify.
+ * Does not call Paystack verify. Bounded with AbortController so a stalled GET
+ * returns the retryable `network` state instead of hanging the success page.
  */
 export async function finalizeCoveredBookingSubmitted(opts: {
   bookingId: string;
   accessToken: string;
   fetchImpl?: typeof fetch;
   emit?: typeof emitBookingSubmittedAfterConfirm;
+  timeoutMs?: number;
 }): Promise<{ emitted: boolean; result: CoveredFetchResult }> {
   const bookingId = opts.bookingId.trim();
   const emit = opts.emit ?? emitBookingSubmittedAfterConfirm;
   const fetchImpl = opts.fetchImpl ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? COVERED_BOOKING_FETCH_TIMEOUT_MS;
 
   if (!bookingId || !opts.accessToken.trim()) {
     return { emitted: false, result: { ok: false, reason: "unauthorized" } };
   }
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const res = await fetchImpl(`/api/customer/bookings/${encodeURIComponent(bookingId)}`, {
       method: "GET",
@@ -109,6 +117,7 @@ export async function finalizeCoveredBookingSubmitted(opts: {
         Authorization: `Bearer ${opts.accessToken}`,
         Accept: "application/json",
       },
+      signal: controller.signal,
     });
     if (res.status === 401 || res.status === 403) {
       return { emitted: false, result: { ok: false, reason: "unauthorized" } };
@@ -135,7 +144,10 @@ export async function finalizeCoveredBookingSubmitted(opts: {
     });
     return { emitted, result: { ok: true, booking } };
   } catch {
+    // AbortError / network failure — retryable; never emit or write dedupe.
     return { emitted: false, result: { ok: false, reason: "network" } };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
