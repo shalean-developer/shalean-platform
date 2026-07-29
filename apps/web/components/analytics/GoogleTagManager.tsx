@@ -13,6 +13,8 @@ const gtmId = process.env.NEXT_PUBLIC_GTM_ID?.trim();
  *
  * Ops: ensure the GTM container's GA4 Configuration tag uses only `G-GEVTBDWTQW`
  * (apex shalean.co.za). Do not add `G-6JR2GPGPN3` or other www-linked Measurement IDs.
+ * SPA route changes publish `shalean_analytics_route_eligible` on dataLayer; gate
+ * tags with an exception trigger when that value is false (see analyticsRoutePolicy.ts).
  */
 export function GoogleTagManager() {
   if (!gtmId) return null;

@@ -108,4 +108,52 @@ describe("trackGa4Event client helpers", () => {
     expect(sentPublic).toBe(true);
     expect(store.size).toBe(1);
   });
+
+  it("booking_submitted still sends when storage throws SecurityError", async () => {
+    const securityError = new DOMException("Access denied", "SecurityError");
+    vi.stubGlobal("window", {
+      location: { pathname: "/account/success" },
+      dataLayer: [] as unknown[],
+      gtag: vi.fn(),
+      localStorage: {
+        getItem: () => {
+          throw securityError;
+        },
+        setItem: () => {
+          throw securityError;
+        },
+        removeItem: () => {
+          throw securityError;
+        },
+        clear: () => undefined,
+        key: () => null,
+        length: 0,
+      },
+      sessionStorage: {
+        getItem: () => {
+          throw securityError;
+        },
+        setItem: () => {
+          throw securityError;
+        },
+        removeItem: () => {
+          throw securityError;
+        },
+        clear: () => undefined,
+        key: () => null,
+        length: 0,
+      },
+    });
+
+    const { trackGa4BookingSubmitted } = await import("@/lib/analytics/ga4Events");
+    const gtag = (window as unknown as { gtag: ReturnType<typeof vi.fn> }).gtag;
+
+    expect(
+      trackGa4BookingSubmitted({
+        bookingId: "66666666-6666-4666-8666-666666666666",
+        service: "regular-cleaning",
+      }),
+    ).toBe(true);
+    expect(gtag).toHaveBeenCalled();
+  });
 });

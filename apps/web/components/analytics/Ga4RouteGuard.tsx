@@ -8,7 +8,7 @@ import {
   getGa4MeasurementId,
   isGa4PathExcluded,
 } from "@/lib/analytics/ga4Config";
-import { setGa4Disabled } from "@/lib/analytics/ga4Events";
+import { applyAnalyticsRoutePolicy } from "@/lib/analytics/analyticsRoutePolicy";
 
 declare global {
   interface Window {
@@ -136,9 +136,8 @@ export function ensureGtmBootstrapped(): void {
  * in the same navigation commit see cleared disable flags and a queued gtag.
  */
 export function syncGa4RoutePolicy(pathname: string | null): void {
-  const excluded = isGa4PathExcluded(pathname);
-  setGa4Disabled(excluded);
-  if (!excluded) {
+  applyAnalyticsRoutePolicy(pathname);
+  if (!isGa4PathExcluded(pathname)) {
     ensureGa4Bootstrapped();
     ensureGoogleAdsBootstrapped();
     ensureGtmBootstrapped();
@@ -159,7 +158,7 @@ export function Ga4RouteGuard() {
 
   useLayoutEffect(() => {
     const excluded = isGa4PathExcluded(pathname);
-    setGa4Disabled(excluded);
+    applyAnalyticsRoutePolicy(pathname);
     if (!excluded && (wasExcluded.current || typeof window.gtag !== "function" || !window.__shaleanGa4Bootstrapped)) {
       ensureGa4Bootstrapped();
       ensureGoogleAdsBootstrapped();

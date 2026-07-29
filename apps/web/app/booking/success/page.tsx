@@ -139,7 +139,30 @@ function SuccessContent() {
           consumeBookingV2SuccessRedirect();
 
           if (isBookingPersisted(okData)) {
-            // Confirm UI first — analytics must not block leaving "Confirming…".
+            const completedSnap = isSnapshot(okData.bookingSnapshot)
+              ? (okData.bookingSnapshot as BookingSnapshotV1)
+              : null;
+            const completedLocked = completedSnap?.locked;
+            const completedService =
+              completedLocked?.service_type ??
+              completedLocked?.service ??
+              completedSnap?.flat?.service ??
+              null;
+
+            try {
+              trackGa4BookingSubmitted({
+                bookingId: okData.bookingId ?? "",
+                reference: okData.bookingReference ?? okData.reference ?? reference,
+                service: typeof completedService === "string" ? completedService : null,
+                value:
+                  typeof okData.amountCents === "number" && okData.amountCents > 0
+                    ? Math.round(okData.amountCents / 100)
+                    : (completedSnap?.total_zar ?? null),
+              });
+            } catch {
+              // GA4 booking_submitted must never block confirmation UI or auxiliary analytics.
+            }
+
             completedRef.current = true;
             setPhase("success");
 
@@ -153,10 +176,6 @@ function SuccessContent() {
                 assigned_cleaner_id: okData.assignedCleanerId ?? null,
                 selected_cleaner_id: okData.selectedCleanerId ?? null,
               });
-              const completedSnap = isSnapshot(okData.bookingSnapshot)
-                ? (okData.bookingSnapshot as BookingSnapshotV1)
-                : null;
-              const completedLocked = completedSnap?.locked;
               trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_COMPLETED, completedLocked, {
                 reference: okData.reference ?? null,
                 booking_id: okData.bookingId ?? null,
@@ -194,9 +213,7 @@ function SuccessContent() {
                   booking_saved: true,
                 });
               }
-              const completedSnapForAds = isSnapshot(okData.bookingSnapshot)
-                ? (okData.bookingSnapshot as BookingSnapshotV1)
-                : null;
+              const completedSnapForAds = completedSnap;
               trackClientPurchase({
                 reference: String(okData.reference ?? reference ?? "").trim(),
                 bookingId: okData.bookingId ?? null,
@@ -208,20 +225,6 @@ function SuccessContent() {
                 currency: okData.currency ?? "ZAR",
                 email: okData.customerEmail ?? completedSnapForAds?.customer?.email ?? null,
                 phone: completedSnapForAds?.customer?.phone ?? null,
-              });
-              const completedService =
-                completedLocked?.service_type ??
-                completedLocked?.service ??
-                completedSnap?.flat?.service ??
-                null;
-              trackGa4BookingSubmitted({
-                bookingId: okData.bookingId ?? "",
-                reference: okData.bookingReference ?? okData.reference ?? reference,
-                service: typeof completedService === "string" ? completedService : null,
-                value:
-                  typeof okData.amountCents === "number" && okData.amountCents > 0
-                    ? Math.round(okData.amountCents / 100)
-                    : (completedSnapForAds?.total_zar ?? null),
               });
             } catch {
               // non-fatal — confirmation already shown
