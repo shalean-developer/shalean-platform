@@ -32,6 +32,7 @@ export function resolveCleanerEarningsCents(row: {
  */
 export function resolveCleanerDashboardEarningsCents(
   booking: {
+    viewer_payout_cents?: unknown;
     earnings_summary?: unknown;
     cleaner_earnings_total_cents?: unknown;
     payout_frozen_cents?: unknown;
@@ -39,6 +40,8 @@ export function resolveCleanerDashboardEarningsCents(
   },
   cleanerId: string,
 ): number {
+  const viewerPayout = optionalCentsFromDb(booking.viewer_payout_cents);
+  if (viewerPayout !== null) return Math.max(0, Math.round(viewerPayout));
   const facing = resolveCleanerFacingEarnings(
     parseBookingEarningsSummary(booking.earnings_summary),
     cleanerId,
