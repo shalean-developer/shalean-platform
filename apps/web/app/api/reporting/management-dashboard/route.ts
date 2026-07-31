@@ -1,7 +1,10 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
-import { loadFinancialDashboard } from "@/lib/admin/expenses/loadFinancialDashboard";
+import { loadOfficePayoutPeriodReport } from "@/lib/admin/payouts/officePayoutPeriodReport";
+import { sumApprovedExpensesInRange } from "@/lib/admin/expenses/loadExpenses";
+import { loadReferralPromoCostTotals } from "@/lib/admin/referrals/loadReferralPromoCosts";
+import { computeProfitBreakdown } from "@/lib/admin/expenses/profitCalculations";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -44,11 +47,13 @@ export async function GET(request: NextRequest) {
   const { from, to } = monthRange(month);
 
   try {
-    const [finance, bookings, reviews, applications] = await Promise.all([
-      loadFinancialDashboard(admin, from, to),
+    const [payoutReport, operatingExpenses, promoCosts, bookings, reviews, applications] = await Promise.all([
+      loadOfficePayoutPeriodReport(admin, from, to),
+      sumApprovedExpensesInRange(admin, from, to),
+      loadReferralPromoCostTotals(admin, from, to),
       admin
         .from("bookings")
-        .select("status,booking_type,recurring_id,is_recurring_generated", { count: "exact" })
+        .select("status,booking_type,recurring_id,is_recurring_generated")
         .eq("is_test", false)
         .gte("date", from)
         .lte("date", to),
@@ -65,6 +70,14 @@ export async function GET(request: NextRequest) {
       throw bookings.error ?? reviews.error ?? applications.error;
     }
 
+    const profit = computeProfitBreakdown(
+      payoutReport.totals.total_revenue_cents,
+      payoutReport.totals.earned_cents,
+      operatingExpenses,
+      promoCosts.referral_discount_cost_cents,
+      promoCosts.cleaning_credit_cost_cents,
+    );
+
     const bookingRows = bookings.data ?? [];
     const completed = bookingRows.filter((row) => row.status === "completed").length;
     const cancelled = bookingRows.filter((row) => row.status === "cancelled").length;
@@ -73,7 +86,6 @@ export async function GET(request: NextRequest) {
       (row) => row.status === "completed" && (row.booking_type === "recurring" || row.recurring_id || row.is_recurring_generated),
     ).length;
 
-    const profit = finance.profit;
     const revenue = profit.customer_revenue_cents / 100;
     const netProfit = profit.net_profit_after_promo_cents / 100;
 
