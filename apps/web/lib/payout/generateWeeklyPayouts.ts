@@ -420,6 +420,19 @@ async function generateWeeklyPayoutsForPeriod(
       invoiceStatusById: invoiceMap,
     });
 
+    // A member allocation is authoritative when the same cleaner/visit is also
+    // present on bookings.cleaner_id (common after roster repairs). Do not link
+    // or total the lower-precedence direct snapshot as a second earning line.
+    const memberBookingIds = new Set([
+      ...rosterMemberCandidates.map((row) => row.booking_id),
+      ...teamJobMemberCandidates.map((row) => row.booking_id),
+    ]);
+    if (memberBookingIds.size > 0) {
+      const authoritativeDirect = bookings.filter((booking) => !memberBookingIds.has(booking.id));
+      bookings.length = 0;
+      bookings.push(...authoritativeDirect);
+    }
+
     if (!bookings.length && !rosterMemberCandidates.length && !teamJobMemberCandidates.length) continue;
 
     const total =

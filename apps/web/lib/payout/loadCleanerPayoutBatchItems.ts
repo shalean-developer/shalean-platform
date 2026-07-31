@@ -149,10 +149,29 @@ export async function loadCleanerPayoutBatchItems(
     });
   }
 
-  items.sort((a, b) => String(a.date ?? "").localeCompare(String(b.date ?? "")) || a.booking_id.localeCompare(b.booking_id));
+  // A repaired/team booking can retain the cleaner on bookings.cleaner_id while also
+  // carrying the cleaner's authoritative member allocation. Count that visit once.
+  // Member rails override the booking-level snapshot; team is the final authority.
+  const sourceRank: Record<CleanerPayoutBatchItemSource, number> = {
+    booking: 0,
+    roster_member: 1,
+    team_member: 2,
+  };
+  const itemByCleanerVisit = new Map<string, CleanerPayoutBatchItem>();
+  for (const item of items) {
+    const key = `${item.cleaner_id}:${item.booking_id}`;
+    const existing = itemByCleanerVisit.get(key);
+    if (!existing || sourceRank[item.source] > sourceRank[existing.source]) {
+      itemByCleanerVisit.set(key, item);
+    }
+  }
+  const deduplicatedItems = [...itemByCleanerVisit.values()];
+  deduplicatedItems.sort(
+    (a, b) => String(a.date ?? "").localeCompare(String(b.date ?? "")) || a.booking_id.localeCompare(b.booking_id),
+  );
   return {
-    items,
-    totalCents: items.reduce((sum, item) => sum + item.payout_cents + item.bonus_cents, 0),
+    items: deduplicatedItems,
+    totalCents: deduplicatedItems.reduce((sum, item) => sum + item.payout_cents + item.bonus_cents, 0),
     error: null,
   };
 }

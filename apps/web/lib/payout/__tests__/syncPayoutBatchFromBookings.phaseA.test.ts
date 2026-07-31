@@ -6,7 +6,7 @@ const CLEANER_ID = "ac73ea99-48b3-4c30-9d6b-5a8beab40f33";
 const BOOKING_ID = "8a798b9e-4998-48bd-88c8-afd563e9686b";
 
 describe("syncPayoutBatchFromBookings team member inclusion", () => {
-  it("adds team_job_member_payouts linked to the exact batch", async () => {
+  it("uses the exact team allocation once when the booking rail overlaps", async () => {
     const updates: Array<Record<string, unknown>> = [];
     const from = vi.fn((table: string) => {
       if (table === "cleaner_payouts") {
@@ -41,7 +41,25 @@ describe("syncPayoutBatchFromBookings team member inclusion", () => {
         return {
           select: vi.fn(() => ({
               eq: vi.fn((column: string, value: string) => {
-                if (column === "payout_id") return Promise.resolve({ data: [], error: null });
+                if (column === "payout_id") {
+                  return Promise.resolve({
+                    data: [
+                      {
+                        id: BOOKING_ID,
+                        cleaner_id: CLEANER_ID,
+                        customer_name: "Josh Kaplan",
+                        service: "Deep Cleaning",
+                        date: "2026-07-15",
+                        cleaner_payout_cents: 55000,
+                        cleaner_bonus_cents: 0,
+                        is_test: false,
+                        status: "completed",
+                        refunded_at: null,
+                      },
+                    ],
+                    error: null,
+                  });
+                }
                 throw new Error(`unexpected booking filter ${column}=${value}`);
               }),
               in: vi.fn(async () => ({
