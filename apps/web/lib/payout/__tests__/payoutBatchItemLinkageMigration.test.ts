@@ -26,9 +26,4 @@ describe("payout batch item linkage migration", () => {
     expect(sql).toContain("update public.team_job_member_payouts tj");
     expect(sql).toContain("grant execute on function public.mark_bookings_paid_for_cleaner_payout(uuid) to service_role");
   });
-
-  it("freezes before creating the Monday disbursement run", () => {
-    expect(sql).toContain("set schedule = '0 7 * * 1' where jobname = 'freeze-payouts'");
-    expect(sql).toContain("set schedule = '0 8 * * 1' where jobname = 'create-payout-run'");
-  });
 });

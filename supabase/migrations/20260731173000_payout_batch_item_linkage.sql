@@ -91,7 +91,3 @@ grant execute on function public.mark_bookings_paid_for_cleaner_payout(uuid) to 
 
 comment on function public.mark_bookings_paid_for_cleaner_payout(uuid) is
   'Service-role-only, idempotent completion of direct, roster-member, and team-member payout lines.';
-
--- Freeze before creating the disbursement run so newly generated rows do not wait a week.
-update cron.job set schedule = '0 7 * * 1' where jobname = 'freeze-payouts';
-update cron.job set schedule = '0 8 * * 1' where jobname = 'create-payout-run';
