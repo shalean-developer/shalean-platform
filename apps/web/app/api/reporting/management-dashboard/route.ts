@@ -11,6 +11,16 @@ export const revalidate = 0;
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
 
+type RecurringBookingRow = {
+  customer_id: string | null;
+  customer_email: string | null;
+  date: string | null;
+  status: string | null;
+  booking_type: string | null;
+  recurring_id: string | null;
+  is_recurring_generated: boolean | null;
+};
+
 function tokenMatches(provided: string, configured: string): boolean {
   const a = createHash("sha256").update(provided).digest();
   const b = createHash("sha256").update(configured).digest();
@@ -21,6 +31,16 @@ function monthRange(month: string): { from: string; to: string } {
   const [year, monthNumber] = month.split("-").map(Number);
   const lastDay = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10);
   return { from: `${month}-01`, to: lastDay };
+}
+
+function isRecurring(row: RecurringBookingRow): boolean {
+  return row.booking_type === "recurring" || Boolean(row.recurring_id) || Boolean(row.is_recurring_generated);
+}
+
+function customerKey(row: RecurringBookingRow): string | null {
+  if (row.customer_id) return `id:${row.customer_id}`;
+  if (row.customer_email) return `email:${row.customer_email.trim().toLowerCase()}`;
+  return null;
 }
 
 export async function GET(request: NextRequest) {
@@ -47,15 +67,21 @@ export async function GET(request: NextRequest) {
   const { from, to } = monthRange(month);
 
   try {
-    const [payoutReport, operatingExpenses, promoCosts, bookings, reviews, applications] = await Promise.all([
+    const [payoutReport, operatingExpenses, promoCosts, bookings, recurringHistory, reviews, applications] = await Promise.all([
       loadOfficePayoutPeriodReport(admin, from, to),
       sumApprovedExpensesInRange(admin, from, to),
       loadReferralPromoCostTotals(admin, from, to),
       admin
         .from("bookings")
-        .select("status,booking_type,recurring_id,is_recurring_generated")
+        .select("status,booking_type,recurring_id,is_recurring_generated,customer_id,customer_email,date")
         .eq("is_test", false)
         .gte("date", from)
+        .lte("date", to),
+      admin
+        .from("bookings")
+        .select("status,booking_type,recurring_id,is_recurring_generated,customer_id,customer_email,date")
+        .eq("is_test", false)
+        .eq("status", "completed")
         .lte("date", to),
       admin
         .from("reviews")
@@ -66,8 +92,8 @@ export async function GET(request: NextRequest) {
       admin.from("cleaner_applications").select("id", { count: "exact", head: true }).eq("status", "pending"),
     ]);
 
-    if (bookings.error || reviews.error || applications.error) {
-      throw bookings.error ?? reviews.error ?? applications.error;
+    if (bookings.error || recurringHistory.error || reviews.error || applications.error) {
+      throw bookings.error ?? recurringHistory.error ?? reviews.error ?? applications.error;
     }
 
     const profit = computeProfitBreakdown(
@@ -78,12 +104,22 @@ export async function GET(request: NextRequest) {
       promoCosts.cleaning_credit_cost_cents,
     );
 
-    const bookingRows = bookings.data ?? [];
+    const bookingRows = (bookings.data ?? []) as RecurringBookingRow[];
     const completed = bookingRows.filter((row) => row.status === "completed").length;
     const cancelled = bookingRows.filter((row) => row.status === "cancelled").length;
     const scheduled = completed + cancelled;
-    const recurringBookings = bookingRows.filter(
-      (row) => row.status === "completed" && (row.booking_type === "recurring" || row.recurring_id || row.is_recurring_generated),
+    const recurringBookings = bookingRows.filter((row) => row.status === "completed" && isRecurring(row)).length;
+
+    const firstRecurringDateByCustomer = new Map<string, string>();
+    for (const row of (recurringHistory.data ?? []) as RecurringBookingRow[]) {
+      if (!row.date || !isRecurring(row)) continue;
+      const key = customerKey(row);
+      if (!key) continue;
+      const previous = firstRecurringDateByCustomer.get(key);
+      if (!previous || row.date < previous) firstRecurringDateByCustomer.set(key, row.date);
+    }
+    const newRecurringCustomers = [...firstRecurringDateByCustomer.values()].filter(
+      (firstRecurringDate) => firstRecurringDate >= from && firstRecurringDate <= to,
     ).length;
 
     const revenue = profit.customer_revenue_cents / 100;
@@ -99,12 +135,13 @@ export async function GET(request: NextRequest) {
           { key: "completion_rate", label: "Completion Rate", value: scheduled ? completed / scheduled : 0, unit: "ratio", source: "bookings" },
           { key: "cancellation_rate", label: "Cancellation Rate", value: scheduled ? cancelled / scheduled : 0, unit: "ratio", source: "bookings" },
           { key: "net_profit_margin", label: "Net Profit Margin", value: revenue ? netProfit / revenue : 0, unit: "ratio", source: "Office source of truth" },
-          { key: "recurring_bookings", label: "Recurring Bookings", value: recurringBookings, unit: "count", source: "bookings" },
+          { key: "new_recurring_customers", label: "New Recurring Customers", value: newRecurringCustomers, unit: "count", source: "bookings" },
           { key: "verified_reviews", label: "Verified Reviews", value: reviews.count ?? 0, unit: "count", source: "reviews" },
           { key: "pending_applications", label: "Pending Applications", value: applications.count ?? 0, unit: "count", source: "cleaner_applications" },
           { key: "cleaner_earnings", label: "Cleaner Earnings", value: profit.cleaner_payouts_cents / 100, unit: "ZAR", source: "Office source of truth" },
           { key: "approved_expenses", label: "Approved Expenses", value: profit.operating_expenses_cents / 100, unit: "ZAR", source: "Office source of truth" },
           { key: "net_profit", label: "Net Profit", value: netProfit, unit: "ZAR", source: "Office source of truth" },
+          { key: "recurring_bookings", label: "Recurring Bookings", value: recurringBookings, unit: "count", source: "bookings" },
         ],
       },
       { headers: { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff" } },
