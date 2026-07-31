@@ -1,27 +1,17 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 
 const EDITABLE_BATCH_STATUSES = new Set(["pending", "frozen"]);
-
-function bookingLineTotalCents(row: {
-  cleaner_payout_cents?: number | null;
-  cleaner_bonus_cents?: number | null;
-}): number {
-  return (
-    Math.max(0, Math.floor(Number(row.cleaner_payout_cents) || 0)) +
-    Math.max(0, Math.floor(Number(row.cleaner_bonus_cents) || 0))
-  );
-}
 
 function ymdInInclusiveRange(ymd: string, from: string, to: string): boolean {
   return ymd >= from && ymd <= to;
 }
 
 /**
- * Re-sum linked bookings + roster member lines + batched team-member lines for a payout batch.
+ * Re-sum linked bookings + roster member lines + team-member lines for a payout batch.
  * Clears batch-level manual override.
  *
- * Team member rows have no `cleaner_payout_id` (schema); they are attributed by
- * `cleaner_id` + `status = batched` + booking date inside the batch period.
+ * Every rail is linked by the exact `cleaner_payout_id`.
  */
 export async function syncPayoutBatchFromBookings(
   admin: SupabaseClient,
@@ -40,77 +30,9 @@ export async function syncPayoutBatchFromBookings(
     return { ok: false, error: "Payout batch is no longer editable." };
   }
 
-  const { data: bookings, error: bookingsErr } = await admin
-    .from("bookings")
-    .select("cleaner_payout_cents, cleaner_bonus_cents")
-    .eq("payout_id", payoutId);
-  if (bookingsErr) return { ok: false, error: bookingsErr.message };
-
-  const bookingTotal = (bookings ?? []).reduce((sum, row) => sum + bookingLineTotalCents(row), 0);
-
-  const { data: memberRows, error: memberErr } = await admin
-    .from("booking_roster_member_payouts")
-    .select("payout_cents, bonus_cents")
-    .eq("cleaner_payout_id", payoutId);
-  if (memberErr) return { ok: false, error: memberErr.message };
-
-  const rosterTotal = (memberRows ?? []).reduce(
-    (sum, row) =>
-      sum +
-      Math.max(0, Math.floor(Number((row as { payout_cents?: number }).payout_cents) || 0)) +
-      Math.max(0, Math.floor(Number((row as { bonus_cents?: number }).bonus_cents) || 0)),
-    0,
-  );
-
-  let teamMemberTotal = 0;
-  const cleanerId = String((payout as { cleaner_id?: string | null }).cleaner_id ?? "").trim();
-  const periodStart = String((payout as { period_start?: string | null }).period_start ?? "").trim();
-  const periodEnd = String((payout as { period_end?: string | null }).period_end ?? "").trim();
-  if (cleanerId && /^\d{4}-\d{2}-\d{2}$/.test(periodStart) && /^\d{4}-\d{2}-\d{2}$/.test(periodEnd)) {
-    const { data: tjRows, error: tjErr } = await admin
-      .from("team_job_member_payouts")
-      .select("booking_id, payout_cents, status")
-      .eq("cleaner_id", cleanerId)
-      .eq("status", "batched");
-    if (tjErr) return { ok: false, error: tjErr.message };
-
-    const bookingIds = [
-      ...new Set(
-        (tjRows ?? [])
-          .map((row) => String((row as { booking_id?: string }).booking_id ?? "").trim())
-          .filter(Boolean),
-      ),
-    ];
-    const dateByBooking = new Map<string, string>();
-    if (bookingIds.length > 0) {
-      for (let i = 0; i < bookingIds.length; i += 120) {
-        const slice = bookingIds.slice(i, i + 120);
-        const { data: dateRows, error: dateErr } = await admin
-          .from("bookings")
-          .select("id, date")
-          .in("id", slice)
-          .eq("status", "completed")
-          .eq("is_test", false);
-        if (dateErr) return { ok: false, error: dateErr.message };
-        for (const raw of dateRows ?? []) {
-          const row = raw as { id?: string; date?: string | null };
-          const id = String(row.id ?? "").trim();
-          const date = String(row.date ?? "").trim();
-          if (id && date) dateByBooking.set(id, date);
-        }
-      }
-    }
-
-    for (const raw of tjRows ?? []) {
-      const row = raw as { booking_id?: string; payout_cents?: number | null };
-      const bookingId = String(row.booking_id ?? "").trim();
-      const date = dateByBooking.get(bookingId);
-      if (!date || !ymdInInclusiveRange(date, periodStart, periodEnd)) continue;
-      teamMemberTotal += Math.max(0, Math.floor(Number(row.payout_cents) || 0));
-    }
-  }
-
-  const totalCents = bookingTotal + rosterTotal + teamMemberTotal;
+  const loaded = await loadCleanerPayoutBatchItems(admin, payoutId);
+  if (loaded.error) return { ok: false, error: loaded.error };
+  const totalCents = loaded.totalCents;
 
   const { data: updated, error: upErr } = await admin
     .from("cleaner_payouts")
@@ -140,6 +62,7 @@ export async function syncOpenPayoutBatchesForVisitEdit(
     bookingPayoutId: string | null;
     bookingDate: string | null;
     rosterCleanerPayoutId?: string | null;
+    teamCleanerPayoutId?: string | null;
   },
 ): Promise<{ ok: true; batchTotalCents: number | null; syncedPayoutIds: string[] } | { ok: false; error: string }> {
   const ids = new Set<string>();
@@ -147,6 +70,8 @@ export async function syncOpenPayoutBatchesForVisitEdit(
   if (bookingPayoutId) ids.add(bookingPayoutId);
   const rosterPayoutId = String(params.rosterCleanerPayoutId ?? "").trim();
   if (rosterPayoutId) ids.add(rosterPayoutId);
+  const teamPayoutId = String(params.teamCleanerPayoutId ?? "").trim();
+  if (teamPayoutId) ids.add(teamPayoutId);
 
   const cleanerId = String(params.cleanerId ?? "").trim();
   const bookingDate = String(params.bookingDate ?? "").trim();

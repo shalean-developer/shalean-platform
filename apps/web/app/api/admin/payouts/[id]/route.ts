@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,16 +29,10 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const cleanerId = String(payoutRow.cleaner_id ?? "");
   const [
     { data: cleaner },
-    { data: bookings, error: bookingsErr },
     { data: transfers, error: transfersErr },
     { data: paymentDetails, error: paymentDetailsErr },
   ] = await Promise.all([
     cleanerId ? admin.from("cleaners").select("id, full_name, email, phone").eq("id", cleanerId).maybeSingle() : Promise.resolve({ data: null }),
-    admin
-      .from("bookings")
-      .select("id, customer_name, service, date, total_paid_zar, amount_paid_cents, cleaner_payout_cents, cleaner_bonus_cents, company_revenue_cents, is_test")
-      .eq("payout_id", id)
-      .order("date", { ascending: true }),
     admin
       .from("payout_transfers")
       .select("id, amount_cents, recipient_code, transfer_code, status, error, webhook_processed_at, created_at")
@@ -48,9 +43,11 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       : Promise.resolve({ data: null, error: null }),
   ]);
 
-  if (bookingsErr) return NextResponse.json({ error: bookingsErr.message }, { status: 500 });
   if (transfersErr) return NextResponse.json({ error: transfersErr.message }, { status: 500 });
   if (paymentDetailsErr) return NextResponse.json({ error: paymentDetailsErr.message }, { status: 500 });
+
+  const loadedItems = await loadCleanerPayoutBatchItems(admin, id);
+  if (loadedItems.error) return NextResponse.json({ error: loadedItems.error }, { status: 500 });
 
   const hasRecipientCode = Boolean((paymentDetails as { recipient_code?: string | null } | null)?.recipient_code?.trim());
 
@@ -61,7 +58,18 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       cleaner_email: (cleaner as { email?: string | null } | null)?.email ?? null,
       cleaner_phone: (cleaner as { phone?: string | null } | null)?.phone ?? null,
     },
-    bookings: bookings ?? [],
+    bookings: loadedItems.items.map((item) => ({
+      id: item.booking_id,
+      line_id: item.line_id,
+      source: item.source,
+      cleaner_id: item.cleaner_id,
+      customer_name: item.customer_name,
+      service: item.service,
+      date: item.date,
+      cleaner_payout_cents: item.payout_cents,
+      cleaner_bonus_cents: item.bonus_cents,
+      is_test: item.is_test,
+    })),
     transfers: transfers ?? [],
     paymentReadiness: {
       ready: hasRecipientCode,
