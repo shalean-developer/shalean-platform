@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import {
+  fetchBookingIdsWhereCleanerOnRoster,
   fetchCleanerVisibleBookingsMerged,
+  isExplicitCleanerBookingAttribution,
   sortBookingsByCompletedAtThenId,
 } from "@/lib/cleaner/cleanerBookingAccess";
 import {
@@ -41,6 +43,9 @@ type BookingEarningsRow = {
   service: string | null;
   date: string | null;
   completed_at: string | null;
+  cleaner_id: string | null;
+  payout_owner_cleaner_id: string | null;
+  viewer_payout_cents?: number | null;
   location: string | null;
   payout_id: string | null;
   payout_status: string | null;
@@ -184,7 +189,7 @@ export async function GET(request: Request) {
     await Promise.all([
       fetchCleanerVisibleBookingsMerged(admin, session.cleanerId, {
         select:
-          "id, status, service, date, completed_at, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, earnings_summary, admin_recurring_unpaid_completion_override_at",
+          "id, status, service, date, completed_at, cleaner_id, payout_owner_cleaner_id, location, payout_id, payout_status, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents, is_team_job, payout_paid_at, payout_run_id, total_paid_zar, amount_paid_cents, earnings_summary, admin_recurring_unpaid_completion_override_at",
         perBranchLimit: 300,
         applyEachBranch: (q) =>
           q
@@ -201,7 +206,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const bookings = sortBookingsByCompletedAtThenId((bookingsMerged ?? []) as Record<string, unknown>[]).slice(0, 300);
+  const explicitRosterBookingIds = new Set(
+    await fetchBookingIdsWhereCleanerOnRoster(admin, cleanerId, 10_000),
+  );
+  const attributedBookings = ((bookingsMerged ?? []) as Record<string, unknown>[]).filter((row) =>
+    isExplicitCleanerBookingAttribution(row, cleanerId, explicitRosterBookingIds),
+  );
+  const bookings = sortBookingsByCompletedAtThenId(attributedBookings).slice(0, 300);
   if (paymentDetailsError) {
     return NextResponse.json({ error: paymentDetailsError.message }, { status: 500 });
   }
@@ -215,7 +226,31 @@ export async function GET(request: Request) {
   /** Wall-clock when this response bundle was assembled (bookings + ledger queries already completed). */
   const as_of = new Date().toISOString();
 
-  const rows = bookings as BookingEarningsRow[];
+  const bookingIds = bookings.map((b) => String(b.id ?? "").trim()).filter(Boolean);
+  const viewerPayoutByBooking = new Map<string, number>();
+  if (bookingIds.length > 0) {
+    const { data: memberPayoutRows, error: memberPayoutError } = await admin
+      .from("team_job_member_payouts")
+      .select("booking_id, payout_cents")
+      .eq("cleaner_id", cleanerId)
+      .in("booking_id", bookingIds);
+    if (memberPayoutError) {
+      return NextResponse.json({ error: memberPayoutError.message }, { status: 500 });
+    }
+    for (const raw of memberPayoutRows ?? []) {
+      const row = raw as { booking_id?: string | null; payout_cents?: number | null };
+      const bookingId = String(row.booking_id ?? "").trim();
+      const payoutCents = Number(row.payout_cents);
+      if (bookingId && Number.isFinite(payoutCents) && !viewerPayoutByBooking.has(bookingId)) {
+        viewerPayoutByBooking.set(bookingId, Math.max(0, Math.round(payoutCents)));
+      }
+    }
+  }
+
+  const rows = bookings.map((booking) => ({
+    ...booking,
+    viewer_payout_cents: viewerPayoutByBooking.get(String(booking.id ?? "")) ?? null,
+  })) as BookingEarningsRow[];
 
   const now = new Date();
   const goalWire: CleanerDashboardEarningsWireRow[] = rows.map((r) => ({
@@ -223,6 +258,7 @@ export async function GET(request: Request) {
     status: "completed",
     date: r.date,
     completed_at: r.completed_at,
+    viewer_payout_cents: r.viewer_payout_cents,
     cleaner_earnings_total_cents: r.cleaner_earnings_total_cents,
     payout_frozen_cents: r.payout_frozen_cents,
     display_earnings_cents: r.display_earnings_cents,
@@ -317,6 +353,7 @@ export async function GET(request: Request) {
       booking_id: normalized.booking_id,
       date: normalized.date,
       completed_at: b.completed_at,
+      viewer_payout_cents: b.viewer_payout_cents,
       service: normalized.service,
       location: normalized.location,
       payout_status: dashboardWire.payout_status,
@@ -341,6 +378,7 @@ export async function GET(request: Request) {
       status: "completed",
       date: b.date,
       completed_at: b.completed_at,
+      viewer_payout_cents: b.viewer_payout_cents,
       cleaner_earnings_total_cents: b.cleaner_earnings_total_cents,
       payout_frozen_cents: b.payout_frozen_cents,
       display_earnings_cents: b.display_earnings_cents,
