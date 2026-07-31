@@ -320,7 +320,23 @@ export function perCleanerAllocationsForBooking(
     ),
   ];
   const primary = payrollCleanerId(booking);
-  const centsFor = (cleanerId: string) => resolveCleanerDashboardEarningsCents(booking, cleanerId);
+  const teamPayoutCentsByCleanerId = new Map(
+    (teamMemberPayouts ?? [])
+      .map((row) => {
+        const cleanerId = String(row.cleaner_id ?? "").trim();
+        const cents = Math.max(0, Math.round(Number(row.payout_cents) || 0));
+        return [cleanerId, cents] as const;
+      })
+      .filter(([cleanerId, cents]) => cleanerId && cents > 0),
+  );
+  const centsFor = (cleanerId: string) =>
+    resolveCleanerDashboardEarningsCents(
+      {
+        ...booking,
+        viewer_payout_cents: teamPayoutCentsByCleanerId.get(cleanerId),
+      },
+      cleanerId,
+    );
 
   if (summary?.per_cleaner_earnings?.length) {
     const out: CleanerVisitAllocation[] = [];
@@ -333,6 +349,7 @@ export function perCleanerAllocationsForBooking(
     }
     for (const cid of rosterIds) {
       if (seen.has(cid)) continue;
+      seen.add(cid);
       out.push({ cleaner_id: cid, cents: centsFor(cid) });
     }
     mergeTeamMemberPayoutAllocations(out, seen, teamMemberPayouts);
