@@ -4,7 +4,28 @@ import {
   bookingsVisibilityOrFilter,
   cleanerHasBookingAccess,
   fetchCleanerTeamIds,
+  isExplicitCleanerBookingAttribution,
 } from "@/lib/cleaner/cleanerBookingAccess";
+
+describe("isExplicitCleanerBookingAttribution", () => {
+  const roster = new Set(["booking-on-roster"]);
+
+  it("allows roster, direct, and payout-owner assignments", () => {
+    expect(isExplicitCleanerBookingAttribution({ id: "booking-on-roster" }, "c1", roster)).toBe(true);
+    expect(isExplicitCleanerBookingAttribution({ cleaner_id: "c1" }, "c1", roster)).toBe(true);
+    expect(isExplicitCleanerBookingAttribution({ payout_owner_cleaner_id: "c1" }, "c1", roster)).toBe(true);
+  });
+
+  it("rejects team-only visibility that has no booking-level assignment", () => {
+    expect(
+      isExplicitCleanerBookingAttribution(
+        { id: "other-booking", is_team_job: true, team_id: "current-team" },
+        "c1",
+        roster,
+      ),
+    ).toBe(false);
+  });
+});
 
 describe("appendRosterBookingIdsToOrFilter", () => {
   it("appends id.in when roster ids present", () => {
