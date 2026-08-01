@@ -6,6 +6,7 @@ import {
   immutableCleanerPayoutReference,
   submitPaystackTransferViaOutbox,
 } from "@/lib/payout/paystackTransferExecutor";
+import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 
 type PayoutRow = {
   id: string;
@@ -18,17 +19,6 @@ type PayoutRow = {
   calculated_amount_cents?: number | null;
   adjustment_note?: string | null;
   approved_by?: string | null;
-};
-
-type BookingPayoutRow = {
-  id: string;
-  cleaner_id: string | null;
-  cleaner_payout_cents: number | null;
-  cleaner_bonus_cents: number | null;
-  is_test: boolean | null;
-  payout_status?: string | null;
-  refunded_at?: string | null;
-  status?: string | null;
 };
 
 type PaystackTransferResult =
@@ -197,41 +187,35 @@ export async function payCleanerPayoutWithPaystack(
   if (claimErr) return { ok: false, error: claimErr.message };
   if (!claimed?.length) return { ok: false, error: "Payout payment is already in progress.", status: 409 };
 
-  const { data: bookings, error: bookingsErr } = await admin
-    .from("bookings")
-    .select("id, cleaner_id, cleaner_payout_cents, cleaner_bonus_cents, is_test, payout_status, refunded_at, status")
-    .eq("payout_id", payout.id);
-  if (bookingsErr) {
+  const loadedItems = await loadCleanerPayoutBatchItems(admin, payout.id);
+  if (loadedItems.error) {
     await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: bookingsErr.message };
+    return { ok: false, error: loadedItems.error };
   }
 
-  const bookingRows = (bookings ?? []) as BookingPayoutRow[];
-  if (bookingRows.length === 0) {
+  const batchItems = loadedItems.items;
+  if (batchItems.length === 0) {
     await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: "Payout has no linked bookings.", status: 400 };
+    return { ok: false, error: "Payout has no linked earning items.", status: 400 };
   }
-  if (bookingRows.some((row) => row.is_test)) {
+  if (batchItems.some((row) => row.is_test)) {
     await failPayoutExecution(admin, payout.id);
     return { ok: false, error: "Cannot pay a payout batch containing test bookings.", status: 400 };
   }
-  if (bookingRows.some((row) => row.cleaner_id !== payout.cleaner_id)) {
+  if (batchItems.some((row) => row.cleaner_id !== payout.cleaner_id)) {
     await failPayoutExecution(admin, payout.id);
-    return { ok: false, error: "Payout contains bookings for a different cleaner.", status: 400 };
+    return { ok: false, error: "Payout contains earning items for a different cleaner.", status: 400 };
   }
-  if (bookingRows.some((row) => row.refunded_at)) {
+  if (batchItems.some((row) => row.refunded_at)) {
     await failPayoutExecution(admin, payout.id);
     return { ok: false, error: "Payout contains refunded bookings.", status: 400 };
   }
-  if (bookingRows.some((row) => String(row.status ?? "").toLowerCase() !== "completed")) {
+  if (batchItems.some((row) => String(row.booking_status ?? "").toLowerCase() !== "completed")) {
     await failPayoutExecution(admin, payout.id);
     return { ok: false, error: "Payout contains non-completed bookings.", status: 400 };
   }
 
-  const bookingTotal = bookingRows.reduce(
-    (sum, row) => sum + cents(row.cleaner_payout_cents) + cents(row.cleaner_bonus_cents),
-    0,
-  );
+  const bookingTotal = loadedItems.totalCents;
   const payoutAmount = cents(payout.total_amount_cents);
   if (payoutAmount <= 0 || (!manuallyAdjusted && bookingTotal !== payoutAmount)) {
     await failPayoutExecution(admin, payout.id);
@@ -299,7 +283,8 @@ export async function payCleanerPayoutWithPaystack(
       paidBy: params.paidBy,
       transferCode: transfer.transferCode,
       transferReference: transfer.reference,
-      bookingIds: bookingRows.map((b) => b.id),
+      bookingIds: [...new Set(batchItems.map((item) => item.booking_id))],
+      earningItemCount: batchItems.length,
     },
   });
 

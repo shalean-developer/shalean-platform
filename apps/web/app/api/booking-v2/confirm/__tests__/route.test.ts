@@ -193,6 +193,51 @@ describe("POST /api/booking-v2/confirm", () => {
     vi.mocked(getEligibleCleaners).mockResolvedValue([]);
   });
 
+  it.each([null, "", "not-an-email", "missing-domain@"])(
+    "rejects an authenticated account without a valid email: %s",
+    async (email) => {
+      vi.mocked(resolveBookingRouteBearerAuth).mockResolvedValue({
+        kind: "authenticated",
+        userId: "00000000-0000-4000-8000-000000000001",
+        email,
+      });
+
+      const res = await POST(
+        new Request("http://localhost/api/booking-v2/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+          body: JSON.stringify(basePayload),
+        }),
+      );
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toMatchObject({ code: "CUSTOMER_EMAIL_REQUIRED" });
+      expect(getSupabaseAdmin).not.toHaveBeenCalled();
+    },
+  );
+
+  it("normalizes the authenticated email before persisting the booking", async () => {
+    vi.mocked(resolveBookingRouteBearerAuth).mockResolvedValue({
+      kind: "authenticated",
+      userId: "00000000-0000-4000-8000-000000000001",
+      email: "  Test.User@Example.COM  ",
+    });
+    const admin = mockAdminForConfirm();
+    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+
+    const res = await POST(
+      new Request("http://localhost/api/booking-v2/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+        body: JSON.stringify(basePayload),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const row = admin.insert.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.customer_email).toBe("test.user@example.com");
+  });
+
   it("returns 422 when suburb cannot be resolved to a service area", async () => {
     vi.mocked(resolveBookingV2LocationContext).mockResolvedValue(null);
     vi.mocked(loadBookingV2LocationContextById).mockResolvedValue(null);
