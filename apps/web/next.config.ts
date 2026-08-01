@@ -6,8 +6,9 @@ import { HTML_LIMITED_BOTS } from "./lib/seo/htmlLimitedBots";
 import { loadLocationSeoFeedbackJsonForNextEnv } from "./lib/seo/load-location-seo-feedback-env";
 import { programmaticBlogCleanupRedirects } from "./lib/seo/programmaticBlogCleanupRedirects";
 
-const turbopackRoot = path.dirname(fileURLToPath(import.meta.url));
-const locationSeoFeedbackJson = loadLocationSeoFeedbackJsonForNextEnv(turbopackRoot);
+const appRoot = path.dirname(fileURLToPath(import.meta.url));
+const workspaceRoot = path.resolve(appRoot, "../..");
+const locationSeoFeedbackJson = loadLocationSeoFeedbackJsonForNextEnv(appRoot);
 
 /** Fail closed on Vercel (or when explicitly enabled) if Paystack/DB env mapping is unsafe. */
 {
@@ -66,6 +67,9 @@ function portalCutoverRedirects() {
 }
 
 const nextConfig: NextConfig = {
+  // Keep Next's file tracing and bundler rooted at the same monorepo directory. Vercel
+  // traces from the repository root, and warns when Turbopack uses apps/web instead.
+  outputFileTracingRoot: workspaceRoot,
   // Local workspace packages ship TypeScript source; Next must transpile them.
   transpilePackages: ["@shalean/utils", "@shalean/types", "@shalean/validation", "@shalean/api-client"],
   serverExternalPackages: ["googleapis", "google-auth-library"],
@@ -80,6 +84,11 @@ const nextConfig: NextConfig = {
     // Types are enforced by `npm run typecheck` (CI + local). Skipping the second full-program
     // pass inside `next build` avoids OOM on large trees when the default ~4GB heap is exhausted.
     ignoreBuildErrors: true,
+  },
+  experimental: {
+    // The application is close to the 8 GB Vercel build-machine limit. Next.js 15+
+    // provides lower-memory Webpack behavior specifically for large production builds.
+    webpackMemoryOptimizations: true,
   },
   ...(locationSeoFeedbackJson
     ? {
@@ -309,7 +318,7 @@ const nextConfig: NextConfig = {
     minimumCacheTTL: 2678400,
   },
   turbopack: {
-    root: turbopackRoot,
+    root: workspaceRoot,
   },
 };
 
