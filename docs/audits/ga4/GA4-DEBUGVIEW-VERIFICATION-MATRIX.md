@@ -1,9 +1,9 @@
 # GA4 DebugView verification matrix (staging) — browser analytics infra (PR #113)
 
-Canonical stream: **G-GEVTBDWTQW** (`https://shalean.co.za` apex).  
+Canonical stream: **G-GEVTBDWTQW** (`https://shalean.co.za` apex).
 Do **not** load legacy **G-6JR2GPGPN3** via app bootstrap.
 
-**Scope:** browser GA/GTM/Ads loaders, path exclusions, funnel through `begin_checkout`, `booking_submitted` after confirm, PII scrub.  
+**Scope:** browser GA/GTM/Ads loaders, path exclusions, funnel through `begin_checkout`, `booking_submitted` after confirm, PII scrub.
 **Out of scope:** durable server Measurement Protocol purchase (follow-up PR).
 
 ## Path exclusion

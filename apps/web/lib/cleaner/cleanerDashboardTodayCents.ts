@@ -14,6 +14,7 @@ export type CleanerDashboardEarningsWireRow = {
   status?: string | null;
   date?: string | null;
   completed_at?: string | null;
+  viewer_payout_cents?: unknown;
   cleaner_earnings_total_cents?: unknown;
   payout_frozen_cents?: unknown;
   display_earnings_cents?: unknown;
@@ -44,6 +45,7 @@ const DAILY_GOAL_CEILING_CENTS = 500_000;
 function wireRowEarningsCents(row: CleanerDashboardEarningsWireRow, cleanerId: string): number {
   return resolveCleanerDashboardEarningsCents(
     {
+      viewer_payout_cents: row.viewer_payout_cents,
       earnings_summary: row.earnings_summary,
       cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
       payout_frozen_cents: row.payout_frozen_cents,

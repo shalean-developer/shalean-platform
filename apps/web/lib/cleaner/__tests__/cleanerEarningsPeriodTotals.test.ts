@@ -20,11 +20,11 @@ describe("earningsPeriodCentsFromRows", () => {
     expect(week_cents).toBeGreaterThanOrEqual(8_000);
   });
 
-  it("uses schedule_date when completed_at is null", () => {
+  it("uses schedule_date as the visit-day source of truth even when completed later", () => {
     const now = new Date("2026-06-10T12:00:00+02:00");
     const y = johannesburgCalendarYmd(now);
     const { today_cents } = earningsPeriodCentsFromRows(
-      [{ completed_at: null, schedule_date: y, amount_cents: 2_500 }],
+      [{ completed_at: "2026-07-05T12:30:06.184Z", schedule_date: y, amount_cents: 2_500 }],
       now,
     );
     expect(today_cents).toBe(2_500);

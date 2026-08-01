@@ -10,6 +10,7 @@ import {
 } from "@/lib/analytics/ga4Config";
 import {
   applyAnalyticsRoutePolicy,
+  installAnalyticsHistoryPolicyGuard,
   notifyAnalyticsTagLoaded,
   SHALEAN_ANALYTICS_TAG_LOADED_EVENT,
 } from "@/lib/analytics/analyticsRoutePolicy";
@@ -167,6 +168,10 @@ export function syncGa4RoutePolicy(pathname: string | null): void {
 export function Ga4RouteGuard() {
   const pathname = usePathname();
   const wasExcluded = useRef(isGa4PathExcluded(pathname));
+
+  useLayoutEffect(() => {
+    installAnalyticsHistoryPolicyGuard();
+  }, []);
 
   useLayoutEffect(() => {
     const excluded = isGa4PathExcluded(pathname);

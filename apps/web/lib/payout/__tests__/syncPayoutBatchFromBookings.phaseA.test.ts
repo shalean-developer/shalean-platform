@@ -6,7 +6,7 @@ const CLEANER_ID = "ac73ea99-48b3-4c30-9d6b-5a8beab40f33";
 const BOOKING_ID = "8a798b9e-4998-48bd-88c8-afd563e9686b";
 
 describe("syncPayoutBatchFromBookings team member inclusion", () => {
-  it("adds batched team_job_member_payouts in the batch period", async () => {
+  it("uses the exact team allocation once when the booking rail overlaps", async () => {
     const updates: Array<Record<string, unknown>> = [];
     const from = vi.fn((table: string) => {
       if (table === "cleaner_payouts") {
@@ -39,23 +39,47 @@ describe("syncPayoutBatchFromBookings team member inclusion", () => {
       }
       if (table === "bookings") {
         return {
-          select: vi.fn((cols: string) => {
-            if (cols.includes("cleaner_payout_cents")) {
-              return {
-                eq: vi.fn(async () => ({ data: [], error: null })),
-              };
-            }
-            return {
-              in: vi.fn(() => ({
-                eq: vi.fn(() => ({
-                  eq: vi.fn(async () => ({
-                    data: [{ id: BOOKING_ID, date: "2026-07-15" }],
+          select: vi.fn(() => ({
+              eq: vi.fn((column: string, value: string) => {
+                if (column === "payout_id") {
+                  return Promise.resolve({
+                    data: [
+                      {
+                        id: BOOKING_ID,
+                        cleaner_id: CLEANER_ID,
+                        customer_name: "Josh Kaplan",
+                        service: "Deep Cleaning",
+                        date: "2026-07-15",
+                        cleaner_payout_cents: 55000,
+                        cleaner_bonus_cents: 0,
+                        is_test: false,
+                        status: "completed",
+                        refunded_at: null,
+                      },
+                    ],
                     error: null,
-                  })),
-                })),
+                  });
+                }
+                throw new Error(`unexpected booking filter ${column}=${value}`);
+              }),
+              in: vi.fn(async () => ({
+                data: [
+                  {
+                    id: BOOKING_ID,
+                    cleaner_id: CLEANER_ID,
+                    customer_name: "Josh Kaplan",
+                    service: "Deep Cleaning",
+                    date: "2026-07-15",
+                    cleaner_payout_cents: 0,
+                    cleaner_bonus_cents: 0,
+                    is_test: false,
+                    status: "completed",
+                    refunded_at: null,
+                  },
+                ],
+                error: null,
               })),
-            };
-          }),
+            })),
         };
       }
       if (table === "booking_roster_member_payouts") {
@@ -68,12 +92,22 @@ describe("syncPayoutBatchFromBookings team member inclusion", () => {
       if (table === "team_job_member_payouts") {
         return {
           select: vi.fn(() => ({
-            eq: vi.fn(() => ({
-              eq: vi.fn(async () => ({
-                data: [{ booking_id: BOOKING_ID, payout_cents: 25000, status: "batched" }],
+            eq: vi.fn((column: string, value: string) => {
+              expect(column).toBe("cleaner_payout_id");
+              expect(value).toBe(PAYOUT_ID);
+              return Promise.resolve({
+                data: [
+                  {
+                    id: "team-line-1",
+                    booking_id: BOOKING_ID,
+                    cleaner_id: CLEANER_ID,
+                    payout_cents: 25000,
+                    status: "batched",
+                  },
+                ],
                 error: null,
-              })),
-            })),
+              });
+            }),
           })),
         };
       }

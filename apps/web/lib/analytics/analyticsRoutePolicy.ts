@@ -15,7 +15,47 @@ declare global {
     __shaleanDataLayerGuardPush?: (...items: unknown[]) => number;
     /** Invoked from gtag.js / gtm.js onload (SPA + layout loaders). */
     __shaleanNotifyAnalyticsTagLoaded?: () => void;
+    __shaleanAnalyticsHistoryGuardInstalled?: boolean;
   }
+}
+
+function policyPathFromHistoryUrl(url: string | URL | null | undefined): string | null {
+  if (url == null) return null;
+  try {
+    return new URL(String(url), window.location.href).pathname;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Apply destination policy before History API observers (including GTM History Change)
+ * process a soft navigation. This closes the interval between pushState/replaceState and
+ * React's pathname effect, where an excluded destination could otherwise still look public.
+ */
+export function installAnalyticsHistoryPolicyGuard(): void {
+  if (typeof window === "undefined" || window.__shaleanAnalyticsHistoryGuardInstalled) return;
+
+  const history = window.history;
+  const originalPushState = history.pushState.bind(history);
+  const originalReplaceState = history.replaceState.bind(history);
+
+  history.pushState = function shaleanPushState(data, unused, url) {
+    const path = policyPathFromHistoryUrl(url);
+    if (path) applyAnalyticsRoutePolicy(path);
+    return originalPushState(data, unused, url);
+  };
+  history.replaceState = function shaleanReplaceState(data, unused, url) {
+    const path = policyPathFromHistoryUrl(url);
+    if (path) applyAnalyticsRoutePolicy(path);
+    return originalReplaceState(data, unused, url);
+  };
+  window.addEventListener(
+    "popstate",
+    () => applyAnalyticsRoutePolicy(window.location.pathname),
+    true,
+  );
+  window.__shaleanAnalyticsHistoryGuardInstalled = true;
 }
 
 /**

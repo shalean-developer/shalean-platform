@@ -53,10 +53,38 @@ describe("payout amount override + maker-checker", () => {
         if (table === "bookings") {
           return {
             select: () => ({
+              eq: async () => ({
+                data: [
+                  {
+                    id: "booking-1",
+                    cleaner_id: "cleaner-1",
+                    customer_name: "Customer",
+                    service: "Standard Cleaning",
+                    date: "2026-07-01",
+                    cleaner_payout_cents: 25000,
+                    cleaner_bonus_cents: 0,
+                    is_test: false,
+                    status: "completed",
+                    refunded_at: null,
+                  },
+                ],
+                error: null,
+              }),
+            }),
+          };
+        }
+        if (table === "booking_roster_member_payouts" || table === "team_job_member_payouts") {
+          return {
+            select: () => ({
+              eq: async () => ({ data: [], error: null }),
+            }),
+          };
+        }
+        if (table === "cleaner_payment_details") {
+          return {
+            select: () => ({
               eq: () => ({
-                eq: () => ({
-                  limit: async () => ({ data: [], error: null }),
-                }),
+                maybeSingle: async () => ({ data: { recipient_code: "RCP_test" }, error: null }),
               }),
             }),
           };
@@ -66,7 +94,15 @@ describe("payout amount override + maker-checker", () => {
             select: () => ({
               eq: () => ({
                 maybeSingle: async () => ({
-                  data: { id: "p1", created_by: "admin-a", amount_adjusted_by: null },
+                  data: {
+                    id: "p1",
+                    cleaner_id: "cleaner-1",
+                    total_amount_cents: 25000,
+                    calculated_amount_cents: 25000,
+                    adjustment_note: null,
+                    created_by: "admin-a",
+                    amount_adjusted_by: null,
+                  },
                   error: null,
                 }),
               }),

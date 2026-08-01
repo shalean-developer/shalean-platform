@@ -9,6 +9,7 @@ import {
   SHALEAN_ROUTE_POLICY_EVENT,
   applyAnalyticsRoutePolicy,
   getGoogleAdsMeasurementId,
+  installAnalyticsHistoryPolicyGuard,
   installDataLayerGuard,
   notifyAnalyticsTagLoaded,
 } from "@/lib/analytics/analyticsRoutePolicy";
@@ -264,5 +265,35 @@ describe("analyticsRoutePolicy", () => {
     const before = gtmProcessed.length;
     dataLayer.push({ event: "page_view", page_path: "/book" });
     expect(gtmProcessed.length).toBe(before + 1);
+  });
+
+  it("applies excluded policy before History API observers process navigation", () => {
+    const calls: string[] = [];
+    const dataLayer: unknown[] = [];
+    const history = {
+      pushState: vi.fn((_data: unknown, _unused: string, _url?: string | URL | null) =>
+        calls.push(`push:${window.__shaleanAnalyticsRouteEligible}`),
+      ),
+      replaceState: vi.fn((_data: unknown, _unused: string, _url?: string | URL | null) =>
+        calls.push(`replace:${window.__shaleanAnalyticsRouteEligible}`),
+      ),
+    };
+    vi.stubGlobal("window", {
+      dataLayer,
+      history,
+      location: { href: "https://shalean.co.za/book", pathname: "/book" },
+      addEventListener: vi.fn(),
+      dispatchEvent: vi.fn(() => true),
+    });
+
+    applyAnalyticsRoutePolicy("/book");
+    installAnalyticsHistoryPolicyGuard();
+    history.pushState({}, "", "/office/bookings");
+    expect(calls).toEqual(["push:false"]);
+    expect(window.__shaleanAnalyticsRouteEligible).toBe(false);
+
+    history.replaceState({}, "", "/cleaner/apply");
+    expect(calls).toEqual(["push:false", "replace:true"]);
+    expect(window.__shaleanAnalyticsRouteEligible).toBe(true);
   });
 });

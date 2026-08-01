@@ -9,7 +9,7 @@ Do **not** delete the legacy stream in GA Admin — only stop sending.
 
 ## Path policy
 
-Excluded (no public GA/GTM/Ads init): `/office`, `/cleaner`, `/jobs` (+ subpaths).  
+Excluded (no public GA/GTM/Ads init): `/office`, `/cleaner`, `/jobs` (+ subpaths).
 Carve-out (still tracked): `/cleaner/apply`, `/cleaner/apply/form`.
 
 ## Follow-up (not this PR)
