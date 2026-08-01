@@ -302,6 +302,32 @@ export function patchEarningsSummaryForCleaner(
 }
 
 /**
+ * Remap a drifted snapshot/summary owner onto the authoritative cleaner without changing amounts.
+ * Returns null when no remap is needed or inputs are invalid.
+ */
+export function remapEarningsSummaryCleanerId(
+  summary: BookingEarningsSummary,
+  fromCleanerId: string,
+  toCleanerId: string,
+): BookingEarningsSummary | null {
+  const from = String(fromCleanerId ?? "").trim();
+  const to = String(toCleanerId ?? "").trim();
+  if (!from || !to || from === to) return null;
+  if (!summary.per_cleaner_earnings.some((row) => row.cleaner_id === from)) return null;
+  if (summary.per_cleaner_earnings.some((row) => row.cleaner_id === to)) return null;
+
+  const per_cleaner_earnings = summary.per_cleaner_earnings.map((row) =>
+    row.cleaner_id === from ? { ...row, cleaner_id: to } : row,
+  );
+  const next = rebuildSummaryTotals(summary, per_cleaner_earnings);
+  return {
+    ...next,
+    team_leader_id: summary.team_leader_id === from ? to : summary.team_leader_id,
+    assigned_cleaner_ids: per_cleaner_earnings.map((row) => row.cleaner_id),
+  };
+}
+
+/**
  * Patch an existing per-cleaner row, or insert one when the cleaner is only on TJ/roster rails.
  */
 export function upsertEarningsSummaryForCleaner(

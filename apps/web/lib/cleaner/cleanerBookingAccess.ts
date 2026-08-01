@@ -176,6 +176,24 @@ export type BookingAccessRow = {
   is_team_job?: boolean | null;
 };
 
+/**
+ * Earnings attribution is stricter than job visibility: a current team membership must not award
+ * earnings for a completed booking unless the cleaner was explicitly assigned to that booking.
+ */
+export function isExplicitCleanerBookingAttribution(
+  row: BookingAccessRow,
+  cleanerId: string,
+  rosterBookingIds: ReadonlySet<string>,
+): boolean {
+  const cid = cleanerId.trim();
+  const bookingId = String(row.id ?? "").trim();
+  return (
+    (bookingId !== "" && rosterBookingIds.has(bookingId)) ||
+    String(row.cleaner_id ?? "").trim() === cid ||
+    String(row.payout_owner_cleaner_id ?? "").trim() === cid
+  );
+}
+
 /** Distinct team IDs this cleaner belongs to (active membership rows). */
 export async function fetchCleanerTeamIds(admin: SupabaseClient, cleanerId: string): Promise<string[]> {
   const { data, error } = await admin

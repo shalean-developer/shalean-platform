@@ -73,6 +73,20 @@ describe("resolveCleanerEarningsCents", () => {
 });
 
 describe("resolveCleanerDashboardEarningsCents", () => {
+  it("prefers the viewer's authoritative team-member payout over booking aggregate fields", () => {
+    expect(
+      resolveCleanerDashboardEarningsCents(
+        {
+          viewer_payout_cents: 25_000,
+          cleaner_earnings_total_cents: 55_000,
+          payout_frozen_cents: 30_000,
+          display_earnings_cents: 30_000,
+        },
+        "member",
+      ),
+    ).toBe(25_000);
+  });
+
   it("uses per-cleaner earnings_summary total when present", () => {
     expect(
       resolveCleanerDashboardEarningsCents(

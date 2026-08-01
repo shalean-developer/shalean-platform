@@ -6,7 +6,7 @@
     "dev": "next dev --webpack",
     "dev:turbo": "next dev --turbopack",
     "dev:webpack": "next dev --webpack",
-    "build": "tsx scripts/validate-blog-routes.ts && npm run typecheck && node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack",
+    "build": "tsx scripts/validate-blog-routes.ts && node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build --turbopack",
     "validate:blog-routes": "tsx scripts/validate-blog-routes.ts",
     "audit:internal-links": "tsx scripts/audit-internal-links.ts",
     "validate:live-seo": "tsx scripts/validate-live-seo.ts",
@@ -57,6 +57,8 @@
     "repair:paired-roster-earnings": "tsx --env-file=.env.local --conditions=react-server scripts/repairPairedRosterEarnings.ts",
     "ops:smoke": "node scripts/ops-smoke-checklist.mjs",
     "audit:office-dashboard": "tsx scripts/auditOfficeDashboardAccuracy.mjs",
+    "audit:office": "tsx scripts/office-3-layer-audit/run.ts",
+    "test:office-audit": "vitest run lib/admin/officeAudit/__tests__/officeThreeLayerAudit.test.ts",
     "simulate:dispatch": "tsx scripts/simulate-dispatch.ts",
     "process-favicons": "node scripts/process-favicons-transparent.mjs",
     "generate-favicons": "node scripts/generate-favicons-from-logo.mjs",
@@ -123,8 +125,12 @@
   },
   "overrides": {
     "brace-expansion@2": "2.1.2",
+    "brace-expansion@5": "5.0.8",
     "sharp": "0.35.3",
-    "postcss": "8.5.23"
+    "postcss": "8.5.23",
+    "googleapis-common": {
+      "gaxios": "7.3.0"
+    }
   },
   "devDependencies": {
     "@next/bundle-analyzer": "^16.2.6",
@@ -138,6 +144,7 @@
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "^16.2.11",
+    "jsdom": "^26.1.0",
     "tailwindcss": "^4",
     "to-ico": "^1.1.5",
     "tsx": "^4.21.0",

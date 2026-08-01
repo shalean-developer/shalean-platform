@@ -27,6 +27,9 @@ type PayoutDetailRow = {
 
 type BookingLine = {
   id: string;
+  line_id: string;
+  source: "booking" | "roster_member" | "team_member";
+  cleaner_id: string;
   customer_name: string | null;
   service: string | null;
   date: string | null;
@@ -123,7 +126,7 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
     if (!detail) return;
     const initial: Record<string, string> = {};
     for (const b of detail.bookings) {
-      initial[b.id] = centsToZarInput(Number(b.cleaner_payout_cents ?? 0) + Number(b.cleaner_bonus_cents ?? 0));
+      initial[b.line_id] = centsToZarInput(Number(b.cleaner_payout_cents ?? 0) + Number(b.cleaner_bonus_cents ?? 0));
     }
     setVisitEdits(initial);
     setVisitEditMode(true);
@@ -138,7 +141,7 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
   async function handleSaveVisitEdits() {
     if (!detail) return;
     const changed = detail.bookings.filter((b) => {
-      const editZar = visitEdits[b.id];
+      const editZar = visitEdits[b.line_id];
       if (editZar == null) return false;
       const cents = zarInputToCents(editZar);
       const current = Number(b.cleaner_payout_cents ?? 0) + Number(b.cleaner_bonus_cents ?? 0);
@@ -156,7 +159,7 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
     let failed = 0;
     let lastError: string | null = null;
     for (const b of changed) {
-      const cents = zarInputToCents(visitEdits[b.id] ?? "");
+      const cents = zarInputToCents(visitEdits[b.line_id] ?? "");
       if (cents == null) {
         failed += 1;
         continue;
@@ -170,7 +173,7 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
         error?: string;
       }>(`/api/admin/bookings/${encodeURIComponent(b.id)}/adjust-payout-earnings`, {
         method: "PATCH",
-        body: JSON.stringify({ payout_cents: cents, bonus_cents: 0 }),
+        body: JSON.stringify({ payout_cents: cents, bonus_cents: 0, cleaner_id: b.cleaner_id }),
       });
       if (!res.ok) {
         failed += 1;
@@ -553,7 +556,7 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
             <tr className="border-b border-slate-100 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400">
               <th className="py-2 pr-3">Date</th>
               <th className="py-2 pr-3">Customer</th>
-              <th className="py-2 pr-3">Service</th>
+              <th className="py-2 pr-3">Service / source</th>
               <th className="py-2 text-right">Payout</th>
             </tr>
           </thead>
@@ -568,22 +571,27 @@ export function OfficePayoutDetailPanel({ payoutId, onBack, onChanged, onToast }
               detail.bookings.map((b) => {
                 const lineCents = Number(b.cleaner_payout_cents ?? 0) + Number(b.cleaner_bonus_cents ?? 0);
                 return (
-                <tr key={b.id}>
+                <tr key={`${b.source}:${b.line_id}`}>
                   <td className="py-2 pr-3 text-slate-600">{b.date ?? "—"}</td>
                   <td className="py-2 pr-3 font-medium text-slate-800">
                     <Link href={`/office/bookings/${encodeURIComponent(b.id)}`} className="hover:text-blue-700 hover:underline">
                       {b.customer_name ?? "—"}
                     </Link>
                   </td>
-                  <td className="py-2 pr-3 text-slate-600">{b.service ?? "—"}</td>
+                  <td className="py-2 pr-3 text-slate-600">
+                    {b.service ?? "—"}
+                    <span className="ml-2 rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+                      {b.source === "booking" ? "Direct" : b.source === "roster_member" ? "Roster" : "Team"}
+                    </span>
+                  </td>
                   <td className="py-2 text-right font-semibold tabular-nums text-slate-800">
                     {visitEditMode && canEdit ? (
                       <input
                         type="number"
                         min={0}
                         step={1}
-                        value={visitEdits[b.id] ?? centsToZarInput(lineCents)}
-                        onChange={(e) => setVisitEdits((prev) => ({ ...prev, [b.id]: e.target.value }))}
+                        value={visitEdits[b.line_id] ?? centsToZarInput(lineCents)}
+                        onChange={(e) => setVisitEdits((prev) => ({ ...prev, [b.line_id]: e.target.value }))}
                         className="w-24 rounded-md border border-blue-200 bg-white px-2 py-1 text-right text-sm font-bold tabular-nums"
                         aria-label={`Edit payout for ${b.customer_name ?? b.id}`}
                       />

@@ -32,16 +32,21 @@ function normalizeScheduleYmd(raw: string | null | undefined): string | null {
   return d;
 }
 
-/** Bucket key for period filters: completion instant in JHB, else `schedule_date`, else null. */
+/**
+ * Bucket key for job earnings period filters: service/visit day first, then completion instant.
+ * A late lifecycle update must not move a cleaner's booking into a different pay-performance month.
+ */
 export function earningsPeriodBucketYmd(row: EarningsPeriodBucketInput): string | null {
+  const fromSchedule = normalizeScheduleYmd(row.schedule_date ?? null);
+  if (fromSchedule) return fromSchedule;
   const fromCompletion = johannesburgYmdFromCompletionField(row.completed_at);
   if (fromCompletion) return fromCompletion;
-  return normalizeScheduleYmd(row.schedule_date ?? null);
+  return null;
 }
 
 /**
  * Sum `amount_cents` for completed earnings rows by Johannesburg calendar
- * (completion instant → local YMD vs today / ISO week / calendar month).
+ * (service/visit day → completion instant fallback → local YMD vs today / ISO week / calendar month).
  *
  * **Midnight behaviour (not data loss):** `today_cents` only includes rows whose bucket `YYYY-MM-DD`
  * equals **today in Africa/Johannesburg**, so it resets to **0** at local midnight unless new

@@ -77,7 +77,7 @@ export async function adjustBookingTeamMemberPayoutEarnings(
 
   const { data: memberRow, error: memberErr } = await admin
     .from("team_job_member_payouts")
-    .select("status, payout_cents")
+    .select("status, payout_cents, cleaner_payout_id")
     .eq("booking_id", params.bookingId)
     .eq("cleaner_id", cleanerId)
     .maybeSingle();
@@ -132,10 +132,16 @@ export async function adjustBookingTeamMemberPayoutEarnings(
     if (!/^\d{4}-\d{2}-\d{2}$/.test(bookingDate)) {
       return { ok: false, error: "Visit date missing for batched member payout edit.", code: "booking_date_required" };
     }
+    const memberPayoutId = String(
+      (memberRow as { cleaner_payout_id?: string | null } | null)?.cleaner_payout_id ??
+        (rosterPayRow as { cleaner_payout_id?: string | null } | null)?.cleaner_payout_id ??
+        "",
+    ).trim();
     const { data: openBatches, error: openErr } = await admin
       .from("cleaner_payouts")
       .select("id, period_start, period_end")
       .eq("cleaner_id", cleanerId)
+      .eq(memberPayoutId ? "id" : "cleaner_id", memberPayoutId || cleanerId)
       .in("status", ["pending", "frozen"]);
     if (openErr) return { ok: false, error: openErr.message, code: "payout_lookup_failed" };
     const openInPeriod = (openBatches ?? []).some((raw) => {
@@ -264,6 +270,7 @@ export async function adjustBookingTeamMemberPayoutEarnings(
     bookingPayoutId: editable.payoutId,
     bookingDate: row.date,
     rosterCleanerPayoutId: String((rosterPayRow as { cleaner_payout_id?: string | null } | null)?.cleaner_payout_id ?? "").trim() || null,
+    teamCleanerPayoutId: String((memberRow as { cleaner_payout_id?: string | null } | null)?.cleaner_payout_id ?? "").trim() || null,
   });
   if (!synced.ok) return { ok: false, error: synced.error, code: "batch_sync_failed" };
   const batchTotalCents = synced.batchTotalCents;

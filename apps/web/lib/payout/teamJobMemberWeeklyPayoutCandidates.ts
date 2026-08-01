@@ -30,6 +30,7 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
     .from("team_job_member_payouts")
     .select("id, booking_id, payout_cents")
     .eq("cleaner_id", cleanerId)
+    .is("cleaner_payout_id", null)
     .eq("status", "pending");
   if (memberErr || !memberRows?.length) return [];
 
@@ -47,8 +48,7 @@ export async function listTeamJobMemberWeeklyPayoutCandidates(params: {
     .select(BOOKING_SELECT_FIELDS_FOR_WEEKLY_BATCH_ELIGIBILITY)
     .in("id", bookingIds)
     .eq("status", "completed")
-    .eq("is_test", false)
-    .is("payout_id", null);
+    .eq("is_test", false);
   if (bErr || !bookingRows?.length) return [];
 
   const bookingById = new Map<string, BookingRowForWeeklyBatchEligibility & { id: string }>();
