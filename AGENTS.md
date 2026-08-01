@@ -26,14 +26,14 @@
   NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=...
   PAYSTACK_SECRET_KEY=...
   ```
-- **Dev DB is empty by default (schema only, no seed data).** The development Supabase project has migrations applied but no city/location/booking data. Suburb resolution (`/api/booking-v2/resolve-location`) returns "unresolved_suburb" for all suburbs until you seed rows into `cities` and `locations`. To unblock the full booking flow, seed at minimum one city and a few location rows (use the Supabase REST API or dashboard). There is one pre-seeded test cleaner (`TEST Development Cleaner`, id `dfdde545-77da-4ef9-81e4-8931630687e8`) — assign it to a location by setting `city_id` and `location_id` on the cleaner row.
+- Never assume a remote development database is empty. Inspect it read-only before testing or resetting data, and use the governed seed commands below instead of manually copying production data or writing ad-hoc rows through REST/Studio.
 
 ### Lint / test / build (see `apps/web/package.json` + `apps/web/README.md`)
-- CI gates (`.github/workflows/web-test.yml`) are the source of truth: `npm run test:critical`, `npm run lint:booking-core`, and `npm run typecheck` — all pass clean. `npm run build` (validate-blog-routes + typecheck + `next build --webpack`) also succeeds.
+- CI gates (`.github/workflows/web-test.yml`) are the source of truth: `npm run test:critical`, `npm run lint:booking-core`, and `npm run typecheck`. The package `npm run build` uses Turbopack; CI deliberately runs its own production Next.js build with Webpack. Do not describe one as the other.
 - Do NOT treat full `npm run lint` as a gate: it reports pre-existing errors/warnings and is not run in CI. Use `lint:booking-core` for the enforced lint gate.
 
 ### Development database seed
-- Dev DB (the development Supabase project whose URL is in `NEXT_PUBLIC_SUPABASE_URL`) has migrations applied but no data by default. Run the seed from repo root (requires `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` set in `apps/web/.env.local` or as env vars):
+- Run the governed seed from repo root only against an approved development or staging project. It requires `NEXT_PUBLIC_SUPABASE_URL` and the server-only `SUPABASE_SERVICE_ROLE_KEY` in `apps/web/.env.local` or the shell environment:
   ```
   npm run db:seed:dev        # seed / re-seed (idempotent)
   npm run db:seed:dev:reset  # wipe seed rows then re-seed
@@ -47,6 +47,8 @@
 - Seed script location: `scripts/seed-dev.mjs`. Reference pricing SQL: `supabase/seed/reference/pricing.sql`.
 - Unit tests for seed safety: `apps/web/lib/seed/__tests__/seedSafety.test.ts` (80 tests).
 - Recommended additional `.env.local` entries for maximum seed safety: `SUPABASE_PROD_REF=<prod-project-ref>` and `SEED_ALLOWED_PROJECT_REFS=<dev-ref>,<stg-ref>`.
+
+- Never commit, print, paste into chat, or expose `SUPABASE_SERVICE_ROLE_KEY`; any `NEXT_PUBLIC_*` variable is browser-visible and must never contain privileged credentials.
 
 ### Mobile apps
 - Not installed by the update script. Install on demand with `npm ci` inside `apps/mobile` or `apps/customer-mobile`, then `npm start` (Expo). See each app's own README/AGENTS.md.
