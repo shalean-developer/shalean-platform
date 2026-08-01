@@ -1,6 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { loadOfficePayoutPeriodReport } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { sumApprovedExpensesInRange } from "@/lib/admin/expenses/loadExpenses";
 import { loadReferralPromoCostTotals } from "@/lib/admin/referrals/loadReferralPromoCosts";
@@ -10,8 +10,10 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 const MONTH_RE = /^\d{4}-\d{2}$/;
+const PAGE_SIZE = 1_000;
 
 type RecurringBookingRow = {
+  id: string;
   customer_id: string | null;
   customer_email: string | null;
   date: string | null;
@@ -27,10 +29,55 @@ function tokenMatches(provided: string, configured: string): boolean {
   return timingSafeEqual(a, b);
 }
 
+function isValidMonth(month: string): boolean {
+  if (!MONTH_RE.test(month)) return false;
+  const monthNumber = Number(month.slice(5, 7));
+  return monthNumber >= 1 && monthNumber <= 12;
+}
+
 function monthRange(month: string): { from: string; to: string } {
   const [year, monthNumber] = month.split("-").map(Number);
   const lastDay = new Date(Date.UTC(year, monthNumber, 0)).toISOString().slice(0, 10);
   return { from: `${month}-01`, to: lastDay };
+}
+
+function johannesburgMonthBounds(month: string): { fromUtc: string; nextMonthUtc: string } {
+  const [year, monthNumber] = month.split("-").map(Number);
+  const offsetMs = 2 * 60 * 60 * 1_000;
+  return {
+    fromUtc: new Date(Date.UTC(year, monthNumber - 1, 1) - offsetMs).toISOString(),
+    nextMonthUtc: new Date(Date.UTC(year, monthNumber, 1) - offsetMs).toISOString(),
+  };
+}
+
+async function fetchBookingRows(
+  admin: SupabaseClient,
+  options: { from?: string; to: string; completedOnly?: boolean },
+): Promise<RecurringBookingRow[]> {
+  const rows: RecurringBookingRow[] = [];
+
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    let query = admin
+      .from("bookings")
+      .select("id,status,booking_type,recurring_id,is_recurring_generated,customer_id,customer_email,date")
+      .eq("is_test", false)
+      .lte("date", options.to)
+      .order("date", { ascending: true })
+      .order("id", { ascending: true })
+      .range(offset, offset + PAGE_SIZE - 1);
+
+    if (options.from) query = query.gte("date", options.from);
+    if (options.completedOnly) query = query.eq("status", "completed");
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const page = (data ?? []) as RecurringBookingRow[];
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+
+  return rows;
 }
 
 function isRecurring(row: RecurringBookingRow): boolean {
@@ -51,8 +98,8 @@ export async function GET(request: NextRequest) {
   }
 
   const month = request.nextUrl.searchParams.get("month") ?? new Date().toISOString().slice(0, 7);
-  if (!MONTH_RE.test(month)) {
-    return NextResponse.json({ error: "month must use YYYY-MM format" }, { status: 400 });
+  if (!isValidMonth(month)) {
+    return NextResponse.json({ error: "month must use YYYY-MM format with a month from 01 to 12" }, { status: 400 });
   }
 
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -65,35 +112,27 @@ export async function GET(request: NextRequest) {
     auth: { autoRefreshToken: false, persistSession: false },
   });
   const { from, to } = monthRange(month);
+  const { fromUtc, nextMonthUtc } = johannesburgMonthBounds(month);
 
   try {
-    const [payoutReport, operatingExpenses, promoCosts, bookings, recurringHistory, reviews, applications] = await Promise.all([
-      loadOfficePayoutPeriodReport(admin, from, to),
-      sumApprovedExpensesInRange(admin, from, to),
-      loadReferralPromoCostTotals(admin, from, to),
-      admin
-        .from("bookings")
-        .select("status,booking_type,recurring_id,is_recurring_generated,customer_id,customer_email,date")
-        .eq("is_test", false)
-        .gte("date", from)
-        .lte("date", to),
-      admin
-        .from("bookings")
-        .select("status,booking_type,recurring_id,is_recurring_generated,customer_id,customer_email,date")
-        .eq("is_test", false)
-        .eq("status", "completed")
-        .lte("date", to),
-      admin
-        .from("reviews")
-        .select("id", { count: "exact", head: true })
-        .eq("is_hidden", false)
-        .gte("created_at", `${from}T00:00:00Z`)
-        .lte("created_at", `${to}T23:59:59Z`),
-      admin.from("cleaner_applications").select("id", { count: "exact", head: true }).eq("status", "pending"),
-    ]);
+    const [payoutReport, operatingExpenses, promoCosts, bookingRows, recurringHistoryRows, reviews, applications] =
+      await Promise.all([
+        loadOfficePayoutPeriodReport(admin, from, to),
+        sumApprovedExpensesInRange(admin, from, to),
+        loadReferralPromoCostTotals(admin, from, to),
+        fetchBookingRows(admin, { from, to }),
+        fetchBookingRows(admin, { to, completedOnly: true }),
+        admin
+          .from("reviews")
+          .select("id", { count: "exact", head: true })
+          .eq("is_hidden", false)
+          .gte("created_at", fromUtc)
+          .lt("created_at", nextMonthUtc),
+        admin.from("cleaner_applications").select("id", { count: "exact", head: true }).eq("status", "pending"),
+      ]);
 
-    if (bookings.error || recurringHistory.error || reviews.error || applications.error) {
-      throw bookings.error ?? recurringHistory.error ?? reviews.error ?? applications.error;
+    if (reviews.error || applications.error) {
+      throw reviews.error ?? applications.error;
     }
 
     const profit = computeProfitBreakdown(
@@ -104,14 +143,13 @@ export async function GET(request: NextRequest) {
       promoCosts.cleaning_credit_cost_cents,
     );
 
-    const bookingRows = (bookings.data ?? []) as RecurringBookingRow[];
     const completed = bookingRows.filter((row) => row.status === "completed").length;
     const cancelled = bookingRows.filter((row) => row.status === "cancelled").length;
     const scheduled = completed + cancelled;
     const recurringBookings = bookingRows.filter((row) => row.status === "completed" && isRecurring(row)).length;
 
     const firstRecurringDateByCustomer = new Map<string, string>();
-    for (const row of (recurringHistory.data ?? []) as RecurringBookingRow[]) {
+    for (const row of recurringHistoryRows) {
       if (!row.date || !isRecurring(row)) continue;
       const key = customerKey(row);
       if (!key) continue;
