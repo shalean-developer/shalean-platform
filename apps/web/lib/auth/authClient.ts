@@ -1,7 +1,7 @@
 import type { Session, User } from "@supabase/supabase-js";
 import { clearAuthIntent } from "@/lib/auth/authRoleIntent";
 import { clearCachedUserRole } from "@/lib/auth/userRole";
-import { getSupabaseBrowser, getSupabaseSession } from "@/lib/supabase/browser";
+import { getSupabaseBrowser, getSupabaseSession, clearSupabaseSessionCache } from "@/lib/supabase/browser";
 import { linkBookingsToUserAfterAuth } from "@/lib/booking/clientLinkBookings";
 import {
   billingEmailFromLoginEmail,
@@ -32,6 +32,8 @@ export async function signIn(email: string, password: string) {
   });
 
   if (error) return { user: null as User | null, session: null as Session | null, error };
+
+  clearSupabaseSessionCache();
 
   const u = data.user;
   if (u?.id) {
@@ -73,6 +75,8 @@ export async function signUp(email: string, password: string, fullName: string, 
   });
 
   if (error) return { user: null as User | null, session: null as Session | null, error };
+
+  clearSupabaseSessionCache();
 
   const user = data.user;
   if (user?.id) {
