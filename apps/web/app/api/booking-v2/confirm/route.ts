@@ -197,16 +197,7 @@ export async function POST(request: Request) {
 
   const { userId, email } = auth;
   const customerEmailNormalized = typeof email === "string" ? email.trim().toLowerCase() : "";
-  if (!customerEmailNormalized || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmailNormalized)) {
-    return NextResponse.json(
-      {
-        error:
-          "Your account has no valid email address. Update your email in Account settings, then confirm this booking again.",
-        code: "CUSTOMER_EMAIL_REQUIRED",
-      },
-      { status: 400 },
-    );
-  }
+  const customerEmailIsValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmailNormalized);
 
   // ── 2. Validate payload ───────────────────────────────────────────────────────
   let body: unknown;
@@ -643,6 +634,19 @@ export async function POST(request: Request) {
   const creditToApplyCap = Math.min(Math.max(0, requestedCredit), payAmountZar);
   // Credit is spent after the booking row exists; snapshot assumes the capped amount.
   payAmountZar = Math.max(0, payAmountZar - creditToApplyCap);
+
+  // Only Paystack-bound bookings require email. Keep non-payment flows available
+  // to phone-only/legacy accounts (for example fully covered and area-review bookings).
+  if (payAmountZar > 0 && !customerEmailIsValid) {
+    return NextResponse.json(
+      {
+        error:
+          "Your account has no valid email address. Update your email in Account settings, then confirm this booking again.",
+        code: "CUSTOMER_EMAIL_REQUIRED",
+      },
+      { status: 400 },
+    );
+  }
 
   // Payable lives in total_price / price_snapshot; collected cash stays zero until settlement.
   const persistPricing = {

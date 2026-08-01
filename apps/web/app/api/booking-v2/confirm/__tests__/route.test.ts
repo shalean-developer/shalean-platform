@@ -194,13 +194,16 @@ describe("POST /api/booking-v2/confirm", () => {
   });
 
   it.each([null, "", "not-an-email", "missing-domain@"])(
-    "rejects an authenticated account without a valid email: %s",
+    "rejects a payment-required booking without a valid email: %s",
     async (email) => {
       vi.mocked(resolveBookingRouteBearerAuth).mockResolvedValue({
         kind: "authenticated",
         userId: "00000000-0000-4000-8000-000000000001",
         email,
       });
+
+      const admin = mockAdminForConfirm();
+      vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
 
       const res = await POST(
         new Request("http://localhost/api/booking-v2/confirm", {
@@ -212,7 +215,7 @@ describe("POST /api/booking-v2/confirm", () => {
 
       expect(res.status).toBe(400);
       await expect(res.json()).resolves.toMatchObject({ code: "CUSTOMER_EMAIL_REQUIRED" });
-      expect(getSupabaseAdmin).not.toHaveBeenCalled();
+      expect(admin.insert).not.toHaveBeenCalled();
     },
   );
 
@@ -258,6 +261,11 @@ describe("POST /api/booking-v2/confirm", () => {
   });
 
   it("returns AREA_REVIEW_REQUIRED when soft fulfillment finds no coverage", async () => {
+    vi.mocked(resolveBookingRouteBearerAuth).mockResolvedValue({
+      kind: "authenticated",
+      userId: "00000000-0000-4000-8000-000000000001",
+      email: null,
+    });
     vi.mocked(assessBookingV2SlotFulfillment).mockResolvedValue({
       mode: "area_review",
       reason: "no_active_cleaner_coverage",

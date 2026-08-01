@@ -423,22 +423,15 @@ function PaymentSection({
       setError(quoteReadiness.message ?? "Your quote is not ready. Please refresh pricing.");
       return;
     }
-    const checkoutEmail = String(user.email ?? "")
-      .trim()
-      .toLowerCase();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail)) {
-      setError(
-        "Your account has no valid email for payment. Update your email, then try again.",
-      );
-      return;
-    }
     setConfirming(true);
     setError(null);
 
     try {
       // 1. Confirm booking and get bookingId + paystackReference
       let session = await getSession();
-      if (!session?.access_token) {
+      const expiresSoon =
+        typeof session?.expires_at === "number" && session.expires_at <= Math.floor(Date.now() / 1000) + 30;
+      if (!session?.access_token || expiresSoon) {
         try {
           const { getSupabaseBrowser } = await import("@/lib/supabase/browser");
           const sb = getSupabaseBrowser();
@@ -475,6 +468,11 @@ function PaymentSection({
           message?: string;
           code?: string;
         };
+        if (sessRes.status === 401) {
+          onSessionLost("Your sign-in session expired. Please sign in again to complete payment.");
+          setConfirming(false);
+          return;
+        }
         if (sessJson.status === "paid") {
           const ref = (sessJson.reference ?? "").trim();
           clearBookingV2DraftStorage();
@@ -532,6 +530,12 @@ function PaymentSection({
         fulfillmentMode?: string;
         customerMessage?: string;
       };
+
+      if (confirmRes.status === 401) {
+        onSessionLost("Your sign-in session expired. Please sign in again to complete payment.");
+        setConfirming(false);
+        return;
+      }
 
       if (confirmRes.status === 409 && confirmJson.code === "AREA_REVIEW_REQUIRED") {
         const areaRes = await fetch("/api/booking-v2/area-review", {
@@ -616,6 +620,15 @@ function PaymentSection({
         return;
       }
 
+      const checkoutEmail = String(user.email ?? "")
+        .trim()
+        .toLowerCase();
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail)) {
+        setError("Your account has no valid email for payment. Update your email, then try again.");
+        setConfirming(false);
+        return;
+      }
+
       trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
         service: serviceSlug,
         service_type: serviceSlug,
@@ -647,6 +660,12 @@ function PaymentSection({
         message?: string;
       };
 
+      if (sessRes.status === 401) {
+        onSessionLost("Your sign-in session expired. Please sign in again to complete payment.");
+        setConfirming(false);
+        return;
+      }
+
       if (sessJson.status === "paid") {
         clearBookingV2DraftStorage();
         window.location.assign(bookingV2SuccessHref((sessJson.reference ?? paystackReference) || bookingId));
@@ -662,9 +681,6 @@ function PaymentSection({
       // Fallback: Inline popup only when we still have a Paystack-valid email.
       // Never open Paystack with "" — that surfaces Paystack's opaque
       // `"email" must be a valid email` modal instead of a recoverable UI error.
-      const checkoutEmail = String(user.email ?? "")
-        .trim()
-        .toLowerCase();
       const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail);
       const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY?.trim() ?? "";
       if (!emailLooksValid || !publicKey || !paystackReference) {
