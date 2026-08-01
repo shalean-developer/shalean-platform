@@ -13,6 +13,11 @@ import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { ANALYTICS_EVENTS, trackBookingAnalyticsEvent } from "@/lib/booking/bookingFlowAnalytics";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
 import { trackClientPurchase } from "@/lib/ads/trackClientPurchase";
+import {
+  emitBookingSubmittedAfterPaystackVerify,
+  finalizeCoveredBookingSubmitted,
+  resolveBookingSuccessPath,
+} from "@/lib/analytics/bookingSuccessSubmitted";
 import { clearStoredReferral } from "@/lib/referrals/client";
 import {
   clearBookingV2DraftStorage,
@@ -53,13 +58,16 @@ type StatusPayload = {
   attemptedCleanerId?: string | null;
   assignedCleanerId?: string | null;
   selectedCleanerId?: string | null;
+  /** Credit-covered / zero-balance success — no Paystack charge. */
+  coveredSettlement?: boolean;
 };
 
 function isSnapshot(v: unknown): v is Record<string, unknown> {
   return v !== null && typeof v === "object" && !Array.isArray(v);
 }
 
-/** Paystack paid and a `bookings` row exists — safe to show “booking confirmed” funnel and copy. */function isBookingPersisted(data: PaystackVerifyPostSuccess): boolean {
+/** Paystack paid and a `bookings` row exists — safe to show “booking confirmed” funnel and copy. */
+function isBookingPersisted(data: PaystackVerifyPostSuccess): boolean {
   return Boolean(data.bookingId?.trim()) && data.bookingInDatabase === true;
 }
 
@@ -77,7 +85,8 @@ function mapVerifySuccessToStatus(data: PaystackVerifyPostSuccess): StatusPayloa
     bookingInDatabase: data.bookingInDatabase,
     bookingId: data.bookingId,
     bookingReference: data.bookingReference ?? null,
-    upsertError: data.upsertError,    assignmentType: data.assignmentType ?? null,
+    upsertError: data.upsertError,
+    assignmentType: data.assignmentType ?? null,
     fallbackReason: data.fallbackReason ?? null,
     showCleanerSubstitutionNotice: Boolean(data.showCleanerSubstitutionNotice),
     attemptedCleanerId: data.attemptedCleanerId ?? null,
@@ -89,10 +98,27 @@ function mapVerifySuccessToStatus(data: PaystackVerifyPostSuccess): StatusPayloa
 function SuccessContent() {
   const searchParams = useSearchParams();
   const reference = searchParams.get("reference") ?? searchParams.get("trxref");
+  const bookingIdParam = searchParams.get("bookingId");
+  const successPath = resolveBookingSuccessPath({
+    areaReview: searchParams.get("areaReview"),
+    bookingId: bookingIdParam,
+    reference,
+    covered: searchParams.get("covered"),
+  });
 
   const [phase, setPhase] = useState<
-    "missing" | "finalizing" | "success" | "persist_pending" | "needs_retry" | "failed"
-  >(() => (reference ? "finalizing" : "missing"));
+    | "missing"
+    | "area_review"
+    | "finalizing"
+    | "success"
+    | "persist_pending"
+    | "needs_retry"
+    | "failed"
+  >(() => {
+    if (successPath === "area_review") return "area_review";
+    if (successPath === "missing") return "missing";
+    return "finalizing";
+  });
 
   const [statusData, setStatusData] = useState<StatusPayload | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -105,6 +131,96 @@ function SuccessContent() {
     if (!sb) return;
     void sb.auth.getSession().then(({ data }) => setHasSession(!!data.session));
   }, []);
+
+  const finalizeCoveredBooking = useCallback(async (): Promise<boolean> => {
+    const bookingId = bookingIdParam?.trim() ?? "";
+    if (!bookingId) return false;
+    if (completedRef.current) return true;
+
+    const runId = ++runIdRef.current;
+    setPhase("finalizing");
+
+    const sb = getSupabaseBrowser();
+    if (!sb) {
+      setErrorMessage("Could not load your session.");
+      setPhase("needs_retry");
+      return false;
+    }
+    const { data: sessionData } = await sb.auth.getSession();
+    const token = sessionData.session?.access_token?.trim() ?? "";
+    if (!token) {
+      setErrorMessage("Please sign in to view your booking confirmation.");
+      setPhase("needs_retry");
+      return false;
+    }
+    if (runId !== runIdRef.current) return false;
+
+    const { emitted, result } = await finalizeCoveredBookingSubmitted({
+      bookingId,
+      accessToken: token,
+    });
+    if (runId !== runIdRef.current) return false;
+
+    if (!result.ok) {
+      if (result.reason === "unsettled") {
+        setErrorMessage("Your booking is not fully confirmed yet.");
+        setPhase("needs_retry");
+        return false;
+      }
+      if (result.reason === "unauthorized") {
+        setErrorMessage("Please sign in to view your booking confirmation.");
+        setPhase("needs_retry");
+        return false;
+      }
+      setErrorMessage("Could not confirm your booking yet. You can try again.");
+      setPhase("needs_retry");
+      return false;
+    }
+
+    const booking = result.booking;
+    setStatusData({
+      verified: true,
+      paymentStatus: "success",
+      reference: booking.paystack_reference ?? booking.id,
+      amountCents: 0,
+      currency: "ZAR",
+      bookingInDatabase: true,
+      bookingId: booking.id,
+      bookingReference: booking.booking_reference ?? null,
+      bookingSnapshot: {
+        total_zar: booking.total_paid_zar ?? 0,
+        flat: { service: booking.service_slug ?? booking.service ?? null },
+      },
+      coveredSettlement: true,
+    });
+    setErrorMessage(null);
+    // emitted already handled inside finalizeCoveredBookingSubmitted (once-per-id)
+    void emitted;
+
+    completedRef.current = true;
+    setPhase("success");
+
+    try {
+      markRetargetingCandidate(false);
+      clearStoredReferral("customer");
+      clearBookingV2DraftStorage();
+      consumeBookingV2SuccessRedirect();
+      trackGrowthEvent(ANALYTICS_EVENTS.COMPLETE_BOOKING, {
+        reference: booking.paystack_reference ?? null,
+        booking_id: booking.id,
+        covered_settlement: true,
+      });
+      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_COMPLETED, null, {
+        reference: booking.paystack_reference ?? null,
+        booking_id: booking.id,
+        service_type: booking.service_slug ?? booking.service ?? null,
+        estimated_price: booking.total_paid_zar ?? 0,
+      });
+    } catch {
+      // non-fatal — confirmation already shown
+    }
+    return true;
+  }, [bookingIdParam]);
 
   const finalizeBooking = useCallback(async (): Promise<boolean> => {
     if (!reference) return false;
@@ -132,17 +248,37 @@ function SuccessContent() {
           const okData = data as PaystackVerifyPostSuccess;
           setStatusData(mapVerifySuccessToStatus(okData));
           setErrorMessage(null);
-          markRetargetingCandidate(false);
-          clearStoredReferral("customer");
-          clearBookingV2DraftStorage();
-          consumeBookingV2SuccessRedirect();
 
           if (isBookingPersisted(okData)) {
-            // Confirm UI first — analytics must not block leaving "Confirming…".
+            const completedSnap = isSnapshot(okData.bookingSnapshot)
+              ? (okData.bookingSnapshot as BookingSnapshotV1)
+              : null;
+            const completedLocked = completedSnap?.locked;
+            const completedService =
+              completedLocked?.service_type ??
+              completedLocked?.service ??
+              completedSnap?.flat?.service ??
+              null;
+
+            emitBookingSubmittedAfterPaystackVerify({
+              bookingPersisted: true,
+              bookingId: okData.bookingId,
+              reference: okData.bookingReference ?? okData.reference ?? reference,
+              service: typeof completedService === "string" ? completedService : null,
+              value:
+                typeof okData.amountCents === "number" && okData.amountCents > 0
+                  ? Math.round(okData.amountCents / 100)
+                  : (completedSnap?.total_zar ?? null),
+            });
+
             completedRef.current = true;
             setPhase("success");
 
             try {
+              markRetargetingCandidate(false);
+              clearStoredReferral("customer");
+              clearBookingV2DraftStorage();
+              consumeBookingV2SuccessRedirect();
               trackGrowthEvent(ANALYTICS_EVENTS.COMPLETE_BOOKING, {
                 reference: okData.reference ?? null,
                 booking_id: okData.bookingId ?? null,
@@ -152,10 +288,6 @@ function SuccessContent() {
                 assigned_cleaner_id: okData.assignedCleanerId ?? null,
                 selected_cleaner_id: okData.selectedCleanerId ?? null,
               });
-              const completedSnap = isSnapshot(okData.bookingSnapshot)
-                ? (okData.bookingSnapshot as BookingSnapshotV1)
-                : null;
-              const completedLocked = completedSnap?.locked;
               trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_COMPLETED, completedLocked, {
                 reference: okData.reference ?? null,
                 booking_id: okData.bookingId ?? null,
@@ -193,9 +325,7 @@ function SuccessContent() {
                   booking_saved: true,
                 });
               }
-              const completedSnapForAds = isSnapshot(okData.bookingSnapshot)
-                ? (okData.bookingSnapshot as BookingSnapshotV1)
-                : null;
+              const completedSnapForAds = completedSnap;
               trackClientPurchase({
                 reference: String(okData.reference ?? reference ?? "").trim(),
                 bookingId: okData.bookingId ?? null,
@@ -212,6 +342,15 @@ function SuccessContent() {
               // non-fatal — confirmation already shown
             }
             return true;
+          }
+
+          try {
+            markRetargetingCandidate(false);
+            clearStoredReferral("customer");
+            clearBookingV2DraftStorage();
+            consumeBookingV2SuccessRedirect();
+          } catch {
+            // non-fatal — payment succeeded; storage cleanup must not block UI
           }
 
           completedRef.current = true;
@@ -284,16 +423,39 @@ function SuccessContent() {
   }, [reference]);
 
   useEffect(() => {
-    if (!reference) return;
+    if (successPath === "area_review" || successPath === "missing") return;
     completedRef.current = false;
     const id = requestAnimationFrame(() => {
-      void finalizeBooking();
+      if (successPath === "covered") {
+        void finalizeCoveredBooking();
+      } else {
+        void finalizeBooking();
+      }
     });
     return () => {
       cancelAnimationFrame(id);
       runIdRef.current += 1;
     };
-  }, [reference, finalizeBooking]);
+  }, [successPath, finalizeBooking, finalizeCoveredBooking]);
+
+  if (phase === "area_review") {
+    return (
+      <PageShell>
+        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Request received</h1>
+          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+            We&apos;re reviewing coverage for your area. This is not a confirmed booking yet — we&apos;ll be in touch.
+          </p>
+          <Link
+            href={bookingFlowHref("entry")}
+            className="mt-6 inline-flex rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+          >
+            Back to booking
+          </Link>
+        </div>
+      </PageShell>
+    );
+  }
 
   if (phase === "missing") {
     return (
@@ -367,7 +529,8 @@ function SuccessContent() {
             type="button"
             onClick={() => {
               setPhase("finalizing");
-              void finalizeBooking();
+              if (successPath === "covered") void finalizeCoveredBooking();
+              else void finalizeBooking();
             }}
             className="mt-6 inline-flex w-full justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
           >
