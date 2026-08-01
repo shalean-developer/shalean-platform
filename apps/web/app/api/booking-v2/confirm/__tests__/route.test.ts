@@ -193,6 +193,54 @@ describe("POST /api/booking-v2/confirm", () => {
     vi.mocked(getEligibleCleaners).mockResolvedValue([]);
   });
 
+  it.each([null, "", "not-an-email", "missing-domain@"])(
+    "rejects a payment-required booking without a valid email: %s",
+    async (email) => {
+      vi.mocked(resolveBookingRouteBearerAuth).mockResolvedValue({
+        kind: "authenticated",
+        userId: "00000000-0000-4000-8000-000000000001",
+        email,
+      });
+
+      const admin = mockAdminForConfirm();
+      vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+
+      const res = await POST(
+        new Request("http://localhost/api/booking-v2/confirm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+          body: JSON.stringify(basePayload),
+        }),
+      );
+
+      expect(res.status).toBe(400);
+      await expect(res.json()).resolves.toMatchObject({ code: "CUSTOMER_EMAIL_REQUIRED" });
+      expect(admin.insert).not.toHaveBeenCalled();
+    },
+  );
+
+  it("normalizes the authenticated email before persisting the booking", async () => {
+    vi.mocked(resolveBookingRouteBearerAuth).mockResolvedValue({
+      kind: "authenticated",
+      userId: "00000000-0000-4000-8000-000000000001",
+      email: "  Test.User@Example.COM  ",
+    });
+    const admin = mockAdminForConfirm();
+    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+
+    const res = await POST(
+      new Request("http://localhost/api/booking-v2/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+        body: JSON.stringify(basePayload),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const row = admin.insert.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(row.customer_email).toBe("test.user@example.com");
+  });
+
   it("returns 422 when suburb cannot be resolved to a service area", async () => {
     vi.mocked(resolveBookingV2LocationContext).mockResolvedValue(null);
     vi.mocked(loadBookingV2LocationContextById).mockResolvedValue(null);
@@ -213,6 +261,11 @@ describe("POST /api/booking-v2/confirm", () => {
   });
 
   it("returns AREA_REVIEW_REQUIRED when soft fulfillment finds no coverage", async () => {
+    vi.mocked(resolveBookingRouteBearerAuth).mockResolvedValue({
+      kind: "authenticated",
+      userId: "00000000-0000-4000-8000-000000000001",
+      email: null,
+    });
     vi.mocked(assessBookingV2SlotFulfillment).mockResolvedValue({
       mode: "area_review",
       reason: "no_active_cleaner_coverage",

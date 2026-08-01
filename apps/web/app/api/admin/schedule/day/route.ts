@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import type { OfficeScheduleDayBooking } from "@/lib/admin/officeScheduleDayPresentation";
+import { computeOfficeVisitDayFinance } from "@/lib/admin/dashboardVisitDayFinance";
 import { computeOfficeTodayScheduleStats } from "@/lib/admin/officeTodayScheduleStats";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
@@ -11,14 +12,57 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const BOOKING_SELECT =
-  "id, date, time, status, cleaner_id, selected_cleaner_id, team_id, is_team_job, customer_name, service, service_slug, location, ignore_cleaner_conflict, cleaner_slot_override_reason, dispatch_status, duration_minutes, estimated_duration_minutes, estimated_finish_at, pricing_summary, booking_snapshot";
+  "id, date, time, status, cleaner_id, selected_cleaner_id, team_id, is_team_job, customer_name, service, service_slug, location, ignore_cleaner_conflict, cleaner_slot_override_reason, dispatch_status, duration_minutes, estimated_duration_minutes, estimated_finish_at, pricing_summary, booking_snapshot, payment_status, payment_completed_at, payment_method, total_paid_zar, amount_paid_cents, total_price, refunded_at, refund_status, billing_type, is_monthly_billing_booking, monthly_invoice_id";
 
 const ROSTER_CHUNK = 200;
+const BOOKING_PAGE_SIZE = 500;
+const MAX_DAY_BOOKINGS = 10_000;
 
 type ScheduleDayBookingRow = OfficeScheduleDayBooking & {
   ignore_cleaner_conflict?: boolean | null;
   cleaner_slot_override_reason?: string | null;
 };
+
+async function fetchAllScheduleDayBookings(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  date: string,
+  cleanerId: string,
+): Promise<{ bookings: ScheduleDayBookingRow[]; truncated: boolean }> {
+  const bookings: ScheduleDayBookingRow[] = [];
+  let from = 0;
+
+  for (;;) {
+    const to = from + BOOKING_PAGE_SIZE - 1;
+    let q = admin
+      .from("bookings")
+      .select(BOOKING_SELECT)
+      .eq("date", date)
+      .order("time", { ascending: true })
+      .order("id", { ascending: true })
+      .range(from, to);
+
+    if (/^[0-9a-f-]{36}$/i.test(cleanerId)) {
+      q = q.or(
+        `and(cleaner_id.is.null,selected_cleaner_id.is.null),cleaner_id.eq.${cleanerId},selected_cleaner_id.eq.${cleanerId}`,
+      );
+    }
+
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+
+    const chunk = (data ?? []) as ScheduleDayBookingRow[];
+    bookings.push(...chunk);
+
+    if (chunk.length < BOOKING_PAGE_SIZE) {
+      return { bookings, truncated: false };
+    }
+
+    from += BOOKING_PAGE_SIZE;
+    if (from >= MAX_DAY_BOOKINGS) {
+      return { bookings, truncated: true };
+    }
+  }
+}
 
 async function attachRosterToScheduleBookings(
   admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
@@ -106,31 +150,53 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
-  let q = admin.from("bookings").select(BOOKING_SELECT).eq("date", date).order("time", { ascending: true }).limit(800);
-  if (/^[0-9a-f-]{36}$/i.test(cleanerId)) {
-    q = q.or(
-      `and(cleaner_id.is.null,selected_cleaner_id.is.null),cleaner_id.eq.${cleanerId},selected_cleaner_id.eq.${cleanerId}`,
-    );
+  let dayBookings: ScheduleDayBookingRow[];
+  let bookingsTruncated = false;
+  try {
+    const fetched = await fetchAllScheduleDayBookings(admin, date, cleanerId);
+    dayBookings = fetched.bookings;
+    bookingsTruncated = fetched.truncated;
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Failed to load schedule bookings.";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 
-  const { data: bookings, error: bErr } = await q;
-  if (bErr) {
-    return NextResponse.json({ error: bErr.message }, { status: 500 });
-  }
+  const bookingsWithRoster = await attachRosterToScheduleBookings(admin, dayBookings);
 
-  const bookingsWithRoster = await attachRosterToScheduleBookings(admin, (bookings ?? []) as ScheduleDayBookingRow[]);
-
-  const cleanerSelectWithRoster = "id, full_name, phone, is_available, status, availability_weekdays";
-  const cleanerSelectBase = "id, full_name, phone, is_available, status";
+  const cleanerSelectWithRoster =
+    "id, full_name, phone, is_available, status, is_active, availability_weekdays";
+  const cleanerSelectBase = "id, full_name, phone, is_available, status, is_active";
   let { data: cleanerRows, error: cErr } = await admin
     .from("cleaners")
     .select(cleanerSelectWithRoster)
+    .or("is_active.is.null,is_active.eq.true")
     .order("full_name", { ascending: true });
 
   if (cErr && isUnknownColumnError(cErr, "availability_weekdays")) {
-    const fallback = await admin.from("cleaners").select(cleanerSelectBase).order("full_name", { ascending: true });
+    const fallback = await admin
+      .from("cleaners")
+      .select(cleanerSelectBase)
+      .or("is_active.is.null,is_active.eq.true")
+      .order("full_name", { ascending: true });
     cleanerRows = (fallback.data ?? []).map((row) => ({ ...row, availability_weekdays: null }));
     cErr = fallback.error;
+  }
+
+  if (cErr && isUnknownColumnError(cErr, "is_active")) {
+    const fallback = await admin
+      .from("cleaners")
+      .select("id, full_name, phone, is_available, status, availability_weekdays")
+      .order("full_name", { ascending: true });
+    if (fallback.error && isUnknownColumnError(fallback.error, "availability_weekdays")) {
+      const base = await admin.from("cleaners").select("id, full_name, phone, is_available, status").order("full_name", {
+        ascending: true,
+      });
+      cleanerRows = (base.data ?? []).map((row) => ({ ...row, availability_weekdays: null, is_active: true }));
+      cErr = base.error;
+    } else {
+      cleanerRows = (fallback.data ?? []).map((row) => ({ ...row, is_active: true }));
+      cErr = fallback.error;
+    }
   }
 
   if (cErr) {
@@ -142,5 +208,8 @@ export async function GET(request: Request) {
     bookings: bookingsWithRoster,
     cleaners: cleanerRows ?? [],
     summary: computeOfficeTodayScheduleStats(bookingsWithRoster),
+    finance: computeOfficeVisitDayFinance(bookingsWithRoster),
+    truncated: bookingsTruncated,
+    scannedBookings: bookingsWithRoster.length,
   });
 }

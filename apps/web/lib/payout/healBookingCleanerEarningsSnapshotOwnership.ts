@@ -102,7 +102,7 @@ export async function healBookingCleanerEarningsSnapshotOwnershipIfNeeded(params
 
   if (healed) {
     void reportOperationalIssue(
-      "info",
+      "warn",
       "healBookingCleanerEarningsSnapshotOwnership",
       "snapshot_cleaner_ownership_healed",
       {

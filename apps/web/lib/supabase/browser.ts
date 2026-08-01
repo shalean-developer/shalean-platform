@@ -13,6 +13,12 @@ let authListenerAttached = false;
 
 function clearSessionCache(): void {
   sessionCache = null;
+  sessionInflight = null;
+}
+
+/** Drop the short-lived browser session cache (call after explicit sign-in / sign-up). */
+export function clearSupabaseSessionCache(): void {
+  clearSessionCache();
 }
 
 function attachAuthListener(sb: SupabaseClient): void {

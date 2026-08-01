@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import { Suspense } from "react";
 import { AppNotificationProviders } from "@/components/ui/notifications/AppNotificationProviders";
 import { DeferredGrowthCtaTracking } from "@/components/analytics/DeferredGrowthCtaTracking";
+import { Ga4RouteGuard } from "@/components/analytics/Ga4RouteGuard";
 import { GoogleAnalytics } from "@/components/analytics/GoogleAnalytics";
 import { GoogleAds } from "@/components/analytics/GoogleAds";
 import { GoogleTagManager } from "@/components/analytics/GoogleTagManager";
@@ -50,6 +51,9 @@ export default function RootLayout({
           <NonProductionBanner />
           <SessionReplayProvider />
           <GlobalTopNav />
+          {/* Must run before {children} effects so SPA /office → /book clears ga-disable
+              and restores gtag before booking funnel telemetry fires. */}
+          <Ga4RouteGuard />
           {children}
         <Suspense fallback={null}>
           <ReferralCapture />

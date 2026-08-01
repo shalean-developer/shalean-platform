@@ -305,6 +305,54 @@ describe("M-18 generateWeeklyPayouts: 23505 unique-violation is handled idempote
     expect(db.tables.bookings[0]!.payout_id).toBe(db.tables.cleaner_payouts[0]!.id);
   });
 
+  it("appends a late eligible booking to the existing pending monthly batch", async () => {
+    const db = new StubDb();
+    seedSingleCleanerSinglePayableBooking(db);
+    db.tables.cleaner_payouts = [{
+      id: "existing-payout",
+      cleaner_id: "cleaner-1",
+      total_amount_cents: 25_000,
+      calculated_amount_cents: 25_000,
+      status: "pending",
+      payout_run_id: null,
+      period_start: "2026-07-01",
+      period_end: "2026-07-31",
+    }];
+
+    const { generateWeeklyPayouts } = await import("@/lib/payout/generateWeeklyPayouts");
+    const result = await generateWeeklyPayouts(db as unknown as never);
+
+    expect(result.payoutsCreated).toBe(0);
+    expect(result.bookingsLinked).toBe(1);
+    expect(db.tables.bookings[0]!.payout_id).toBe("existing-payout");
+    expect(db.tables.cleaner_payouts).toHaveLength(1);
+    expect(db.tables.cleaner_payouts[0]!.total_amount_cents).toBe(25_000);
+  });
+
+  it("links a team-only earning even when the booking belongs to another cleaner batch", async () => {
+    const db = new StubDb();
+    seedSingleCleanerSinglePayableBooking(db);
+    db.tables.bookings[0]!.cleaner_id = "lead-cleaner";
+    db.tables.bookings[0]!.payout_id = "lead-payout";
+    db.tables.team_job_member_payouts = [{
+      id: "team-line-1",
+      booking_id: "booking-1",
+      cleaner_id: "cleaner-1",
+      payout_cents: 25_000,
+      status: "pending",
+      cleaner_payout_id: null,
+    }];
+
+    const { generateWeeklyPayouts } = await import("@/lib/payout/generateWeeklyPayouts");
+    const result = await generateWeeklyPayouts(db as unknown as never);
+
+    expect(result.payoutsCreated).toBe(1);
+    expect(result.bookingsLinked).toBe(1);
+    expect(db.tables.team_job_member_payouts[0]!.status).toBe("batched");
+    expect(db.tables.team_job_member_payouts[0]!.cleaner_payout_id).toBe(db.tables.cleaner_payouts[0]!.id);
+    expect(db.tables.cleaner_payouts[0]!.total_amount_cents).toBe(25_000);
+  });
+
   it("23505 from the unique index is caught: skips cleaner, no throw, no booking-link", async () => {
     const db = new StubDb();
     seedSingleCleanerSinglePayableBooking(db);

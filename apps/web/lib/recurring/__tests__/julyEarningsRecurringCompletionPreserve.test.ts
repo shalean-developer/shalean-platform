@@ -34,9 +34,9 @@ describe("recurring propagate — completed visit lifecycle preservation", () =>
 
   it("identity-only patch never writes status=assigned", () => {
     const patch = recurringOccurrenceCleanerIdentityOnlyPatch(CLEANER);
-    expect(patch.status).toBeUndefined();
-    expect(patch.cleaner_response_status).toBeUndefined();
-    expect(patch.assigned_at).toBeUndefined();
+    expect("status" in patch).toBe(false);
+    expect("cleaner_response_status" in patch).toBe(false);
+    expect("assigned_at" in patch).toBe(false);
     expect(patch.cleaner_id).toBe(CLEANER);
   });
 

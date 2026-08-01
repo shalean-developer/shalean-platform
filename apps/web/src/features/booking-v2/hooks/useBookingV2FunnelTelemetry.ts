@@ -10,6 +10,14 @@ import {
   trackBookingFunnelEvent,
 } from "@/lib/booking/bookingFlowAnalytics";
 import { markRetargetingCandidate, trackGrowthEvent } from "@/lib/growth/trackEvent";
+import {
+  trackBookingV2Step1Ga4First,
+  trackBookingV2Step4Ga4First,
+} from "@/lib/analytics/bookingV2FunnelGa4Isolation";
+import {
+  trackGa4BookingReview,
+  trackGa4ScheduleSelected,
+} from "@/lib/analytics/ga4Events";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingStep, BookingV2FormData } from "@/src/features/booking-v2/types";
 
@@ -54,73 +62,74 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
   const dateTracked = useRef(false);
   const timeTracked = useRef(false);
   const cleanerTracked = useRef(false);
-  const paymentStartedTracked = useRef(false);
+  const ga4Step1Tracked = useRef(false);
+  const ga4ScheduleTracked = useRef(false);
+  const ga4ReviewTracked = useRef(false);
+  const ga4CheckoutTracked = useRef(false);
 
-  // Page-level growth + entry funnel view
+  // Page-level growth + entry funnel view (storage-safe — must never block GA4 step effects)
   useEffect(() => {
     if (pageViewTracked.current) return;
     pageViewTracked.current = true;
-    markRetargetingCandidate(true);
-    trackGrowthEvent(ANALYTICS_EVENTS.PAGE_VIEW, {
-      page_type: "booking_flow_v2",
-      service: serviceSlug,
-      flow: "booking_v2",
-    });
-    trackBookingFunnelEvent("entry", BOOKING_FUNNEL_ROW.VIEW, {
-      service: serviceSlug,
-      flow: "booking_v2",
-    });
+    try {
+      markRetargetingCandidate(true);
+      trackGrowthEvent(ANALYTICS_EVENTS.PAGE_VIEW, {
+        page_type: "booking_flow_v2",
+        service: serviceSlug,
+        flow: "booking_v2",
+      });
+      trackBookingFunnelEvent("entry", BOOKING_FUNNEL_ROW.VIEW, {
+        service: serviceSlug,
+        flow: "booking_v2",
+      });
+    } catch {
+      // Growth/storage telemetry must not escape this effect or suppress sibling GA4 effects
+    }
   }, [serviceSlug]);
 
   // Step views + semantic booking events
   useEffect(() => {
+    const values = form.getValues();
+    const state = bookingAnalyticsState(serviceSlug, values);
+    const base = { step: currentStep, service: serviceSlug, flow: "booking_v2" as const };
+
+    // GA4 funnel events first — independent of storage-backed growth / funnel telemetry
+    if (currentStep === 1 && !ga4Step1Tracked.current) {
+      trackBookingV2Step1Ga4First(serviceSlug, state, values, base);
+      ga4Step1Tracked.current = true;
+    } else if (currentStep === 3 && !ga4ReviewTracked.current) {
+      trackGa4BookingReview({
+        service: serviceSlug,
+        value: state.finalPrice,
+      });
+      ga4ReviewTracked.current = true;
+    } else if (currentStep === 4 && !ga4CheckoutTracked.current) {
+      trackBookingV2Step4Ga4First(serviceSlug, state, values);
+      ga4CheckoutTracked.current = true;
+    }
+
     if (funnelViewTracked.current.has(currentStep)) return;
     funnelViewTracked.current.add(currentStep);
 
-    const funnelStep = bookingV2StepToFunnelStep(currentStep);
-    const values = form.getValues();
-    const state = bookingAnalyticsState(serviceSlug, values);
-
-    trackBookingFunnelEvent(funnelStep, BOOKING_FUNNEL_ROW.VIEW, {
-      service: serviceSlug,
-      flow: "booking_v2",
-      step: currentStep,
-    });
-
-    if (stepTracked.current.has(currentStep)) return;
-    stepTracked.current.add(currentStep);
-
-    const base = { step: currentStep, service: serviceSlug, flow: "booking_v2" };
-
-    if (currentStep === 1) {
-      trackGrowthEvent(ANALYTICS_EVENTS.START_BOOKING, base);
-      trackGrowthEvent(ANALYTICS_EVENTS.VIEW_PRICE, base);
-      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_STEP_DETAILS_STARTED, state, {
-        service_type: serviceSlug,
-        suburb: values.suburb ?? null,
+    try {
+      const funnelStep = bookingV2StepToFunnelStep(currentStep);
+      trackBookingFunnelEvent(funnelStep, BOOKING_FUNNEL_ROW.VIEW, {
+        service: serviceSlug,
+        flow: "booking_v2",
+        step: currentStep,
       });
-      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED, state, {
-        service_type: serviceSlug,
-        suburb: values.suburb ?? null,
-      });
-      return;
-    }
 
-    if (currentStep === 2) {
-      trackGrowthEvent(ANALYTICS_EVENTS.SELECT_TIME, base);
-      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_CONTINUE_SCHEDULE, state, {
-        service_type: serviceSlug,
-      });
-      return;
-    }
+      if (stepTracked.current.has(currentStep)) return;
+      stepTracked.current.add(currentStep);
 
-    if (currentStep === 4 && !paymentStartedTracked.current) {
-      paymentStartedTracked.current = true;
-      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYMENT_STARTED, state, {
-        service_type: serviceSlug,
-        suburb: values.suburb ?? null,
-        estimated_price: state.finalPrice,
-      });
+      if (currentStep === 2) {
+        trackGrowthEvent(ANALYTICS_EVENTS.SELECT_TIME, base);
+        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_CONTINUE_SCHEDULE, state, {
+          service_type: serviceSlug,
+        });
+      }
+    } catch {
+      // storage-dependent telemetry must not suppress GA4 above
     }
   }, [currentStep, serviceSlug, form]);
 
@@ -172,13 +181,26 @@ export function useBookingV2FunnelTelemetry(currentStep: BookingStep, serviceSlu
         });
       }
 
-      if (name === "time" && values.time && !timeTracked.current) {
-        timeTracked.current = true;
-        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_TIME_SELECTED, state, {
-          ...payload,
-          date: values.date ?? null,
-          time: values.time,
-        });
+      if (name === "time" && values.time) {
+        if (!ga4ScheduleTracked.current && values.date) {
+          trackGa4ScheduleSelected({
+            service: serviceSlug,
+            value: state.finalPrice,
+          });
+          ga4ScheduleTracked.current = true;
+        }
+        if (!timeTracked.current) {
+          timeTracked.current = true;
+          try {
+            trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_TIME_SELECTED, state, {
+              ...payload,
+              date: values.date ?? null,
+              time: values.time,
+            });
+          } catch {
+            // storage-dependent telemetry must not suppress schedule_selected
+          }
+        }
       }
 
       if (name === "selectedCleanerIds" && values.selectedCleanerIds?.length && !cleanerTracked.current) {

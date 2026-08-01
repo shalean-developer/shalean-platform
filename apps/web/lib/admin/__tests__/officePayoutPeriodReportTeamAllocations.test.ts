@@ -37,4 +37,38 @@ describe("perCleanerAllocationsForBooking team_job_member_payouts fallback", () 
     });
     expect(allocs.some((a) => a.cleaner_id === LORRAINE)).toBe(true);
   });
+
+  it("uses one authoritative member payout for a roster cleaner missing from the summary", () => {
+    const allocs = perCleanerAllocationsForBooking(
+      {
+        earnings_summary: {
+          per_cleaner_earnings: [
+            {
+              cleaner_id: LORRAINE,
+              role: "lead",
+              base_earning_cents: 30000,
+              bonus_cents: 0,
+              deduction_cents: 0,
+              total_cents: 30000,
+            },
+          ],
+        },
+        cleaner_id: LORRAINE,
+        payout_owner_cleaner_id: LORRAINE,
+        display_earnings_cents: 30000,
+        cleaner_payout_cents: 30000,
+        cleaner_earnings_total_cents: 55000,
+        payout_frozen_cents: 30000,
+      },
+      [
+        { cleaner_id: LORRAINE, role: "lead" },
+        { cleaner_id: THANDEKA, role: "member" },
+      ],
+      [{ cleaner_id: THANDEKA, payout_cents: 25000 }],
+    );
+
+    expect(allocs.filter((a) => a.cleaner_id === THANDEKA)).toEqual([
+      { cleaner_id: THANDEKA, cents: 25000 },
+    ]);
+  });
 });

@@ -1,0 +1,1041 @@
+{
+  "title": "Office Dashboard Three-Layer Audit",
+  "generatedAt": "2026-07-25T13:27:57.969Z",
+  "auditDateYmd": "2026-07-25",
+  "timezone": "Africa/Johannesburg",
+  "target": "production",
+  "baseUrl": "https://shalean.co.za",
+  "readOnly": true,
+  "metrics": [
+    {
+      "metricId": "ops.total_bookings_today",
+      "uiLabel": "Total bookings today",
+      "pageSection": "todays_operations",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "ops.completed",
+      "uiLabel": "Completed",
+      "pageSection": "todays_operations",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "ops.in_progress",
+      "uiLabel": "In progress",
+      "pageSection": "todays_operations",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "ops.upcoming",
+      "uiLabel": "Upcoming",
+      "pageSection": "todays_operations",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "ops.unassigned",
+      "uiLabel": "Unassigned",
+      "pageSection": "todays_operations",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "ops.cancelled_excluded",
+      "uiLabel": "cancelled / expired excluded",
+      "pageSection": "todays_operations",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "ops.payments_received_today",
+      "uiLabel": "Payments received today",
+      "pageSection": "todays_operations",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "ops.paid_by_payment_time",
+      "uiLabel": "paid by payment time",
+      "pageSection": "todays_operations",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "ops.visit_paid_value",
+      "uiLabel": "Visit paid value",
+      "pageSection": "todays_operations",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "action.unassigned",
+      "uiLabel": "Unassigned bookings",
+      "pageSection": "needs_action",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 3,
+        "normalized": 3,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 3,
+        "normalized": 3,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "action.starting_within_2h",
+      "uiLabel": "Starting within 2 hours",
+      "pageSection": "needs_action",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "action.sla_breaches",
+      "uiLabel": "SLA breaches",
+      "pageSection": "needs_action",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 6,
+        "normalized": 6,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 6,
+        "normalized": 6,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "action.unassignable",
+      "uiLabel": "Unassignable",
+      "pageSection": "needs_action",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "schedule.total",
+      "uiLabel": "Total",
+      "pageSection": "todays_schedule",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "schedule.completed",
+      "uiLabel": "Completed",
+      "pageSection": "todays_schedule",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "schedule.in_progress",
+      "uiLabel": "In progress",
+      "pageSection": "todays_schedule",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "schedule.upcoming",
+      "uiLabel": "Upcoming",
+      "pageSection": "todays_schedule",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "schedule.unassigned",
+      "uiLabel": "Unassigned",
+      "pageSection": "todays_schedule",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "schedule.row_status_rules",
+      "uiLabel": "booking status shown on each row",
+      "pageSection": "todays_schedule",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "schedule.row_assignment_rules",
+      "uiLabel": "cleaner or team assignment shown on each row",
+      "pageSection": "todays_schedule",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "capacity.active_workforce",
+      "uiLabel": "Active workforce",
+      "pageSection": "cleaner_capacity",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 6,
+        "normalized": 6,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 6,
+        "normalized": 6,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "capacity.available_now",
+      "uiLabel": "Available now",
+      "pageSection": "cleaner_capacity",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 4,
+        "normalized": 4,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 4,
+        "normalized": 4,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "capacity.available",
+      "uiLabel": "Available",
+      "pageSection": "cleaner_capacity",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 4,
+        "normalized": 4,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 4,
+        "normalized": 4,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "capacity.booked_or_in_job",
+      "uiLabel": "Booked / in job",
+      "pageSection": "cleaner_capacity",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "capacity.off_today",
+      "uiLabel": "Off today",
+      "pageSection": "cleaner_capacity",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 2,
+        "normalized": 2,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 2,
+        "normalized": 2,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "capacity.offline_or_paused",
+      "uiLabel": "Offline / paused",
+      "pageSection": "cleaner_capacity",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "revenue.receivables_exposure",
+      "uiLabel": "Receivables exposure",
+      "pageSection": "revenue_and_receivables",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "revenue.payments_received_today",
+      "uiLabel": "Payments received today",
+      "pageSection": "revenue_and_receivables",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "revenue.pending_bookings",
+      "uiLabel": "Pending bookings",
+      "pageSection": "revenue_and_receivables",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "revenue.overdue_invoices",
+      "uiLabel": "Overdue invoices",
+      "pageSection": "revenue_and_receivables",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "summary.bookings_30d",
+      "uiLabel": "Bookings (30d)",
+      "pageSection": "summary_cards",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "summary.avg_booking_value",
+      "uiLabel": "Avg booking value",
+      "pageSection": "summary_cards",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "summary.pending_payments",
+      "uiLabel": "Pending payments",
+      "pageSection": "summary_cards",
+      "status": "BLOCKED",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "application-helpers+service-role-read"
+      },
+      "database": {
+        "available": true,
+        "value": 0,
+        "normalized": 0,
+        "source": "independent-db-calculation"
+      },
+      "finding": "Missing layer evidence: ui=false app=true db=true",
+      "mismatchSource": "unavailable evidence",
+      "proposedFix": "Provide OFFICE_AUDIT_ADMIN credentials / base URL / DB access so all three layers can be captured."
+    },
+    {
+      "metricId": "summary.system_health",
+      "uiLabel": "System health",
+      "pageSection": "summary_cards",
+      "status": "NOT AUTHORITATIVE",
+      "ui": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "playwright:/office",
+        "error": "UI capture blocked: set OFFICE_AUDIT_ADMIN_EMAIL/PASSWORD or OFFICE_AUDIT_STORAGE_STATE"
+      },
+      "application": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "dashboard-stats systemStatus",
+        "error": "system health HTTP/app signals unavailable",
+        "notes": "NOT AUTHORITATIVE"
+      },
+      "database": {
+        "available": false,
+        "value": null,
+        "normalized": null,
+        "source": "independent-db-calculation",
+        "error": "cannot reproduce production health scanner from SQL alone",
+        "notes": "NOT AUTHORITATIVE"
+      },
+      "finding": "Missing layer evidence: ui=false app=false db=false",
+      "mismatchSource": "unavailable evidence"
+    }
+  ],
+  "schemaNotes": [
+    "bookings.date is the schedule/start date column (text YYYY-MM-DD); bookings.booking_date does not exist",
+    "public.payments does not exist; home revenue uses booking payment columns",
+    "payment_transactions exists as ledger but is not the home dashboard revenue SoT",
+    "Needs Action uses cleaner_id/team_id only (not booking_cleaners); schedule assignment includes roster",
+    "public.payments unavailable: Could not find the table 'public.payments' in the schema cache"
+  ],
+  "safety": {
+    "officeAuditReadOnly": true,
+    "officeAuditTarget": "production",
+    "writeAttemptsBlocked": 0
+  },
+  "decision": "NO-GO",
+  "decisionText": "NO-GO — OFFICE DASHBOARD NOT YET VERIFIED 100% ACCURATE",
+  "counts": {
+    "PASS": 0,
+    "FAIL": 0,
+    "BLOCKED": 33,
+    "NOT IMPLEMENTED": 0,
+    "NOT AUTHORITATIVE": 1,
+    "SKIPPED WITH JUSTIFICATION": 0
+  },
+  "blockers": [
+    "ops.total_bookings_today: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "ops.completed: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "ops.in_progress: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "ops.upcoming: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "ops.unassigned: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "ops.cancelled_excluded: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "ops.payments_received_today: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "ops.paid_by_payment_time: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "ops.visit_paid_value: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "action.unassigned: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "action.starting_within_2h: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "action.sla_breaches: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "action.unassignable: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "schedule.total: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "schedule.completed: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "schedule.in_progress: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "schedule.upcoming: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "schedule.unassigned: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "schedule.row_status_rules: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "schedule.row_assignment_rules: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "capacity.active_workforce: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "capacity.available_now: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "capacity.available: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "capacity.booked_or_in_job: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "capacity.off_today: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "capacity.offline_or_paused: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "revenue.receivables_exposure: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "revenue.payments_received_today: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "revenue.pending_bookings: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "revenue.overdue_invoices: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "summary.bookings_30d: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "summary.avg_booking_value: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "summary.pending_payments: BLOCKED — Missing layer evidence: ui=false app=true db=true",
+    "summary.system_health: NOT AUTHORITATIVE — Missing layer evidence: ui=false app=false db=false"
+  ],
+  "privacy": {
+    "redactionApplied": true,
+    "prohibitedFieldsStripped": [
+      "customer names",
+      "customer emails",
+      "phone numbers",
+      "addresses",
+      "booking IDs",
+      "cleaner IDs",
+      "access tokens",
+      "refresh tokens",
+      "Supabase keys",
+      "project references",
+      "service-role credentials",
+      "payment references"
+    ]
+  }
+}

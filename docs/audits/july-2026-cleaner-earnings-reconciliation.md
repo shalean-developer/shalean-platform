@@ -1,11 +1,11 @@
 # July 2026 cleaner-earnings reconciliation — engineering report
 
-**Status:** code + idempotent migration ready · **staging apply / prod GO pending**  
-**Branch:** `cursor/july-cleaner-earnings-reconcile-e29f`  
-**Production project:** `tchayecuvzssixyxlvfu`  
+**Status:** application safeguards ready; production records verified reconciled on 2026-08-02
+**Branch:** `cursor/july-cleaner-earnings-reconcile-e29f`
+**Production project:** `tchayecuvzssixyxlvfu`
 **Staging project:** `gbgnemlpyykyhpqqbgru`
 
-This agent environment has **no Supabase service-role credentials**. Live before/after matrices and `/office/payouts` screenshots require staging secrets + apply. Precheck script is included.
+The production verification was performed read-only. The proposed historical data migration was removed because the target records are already reconciled and the migration had never been applied. Deploying stale UPDATE/DELETE statements would create unnecessary risk.
 
 ---
 
@@ -43,39 +43,37 @@ No automatic repair. Completion requires lifecycle evidence (`bookings.completed
 | `apps/web/lib/payout/healBookingCleanerEarningsSnapshotOwnership.ts` | New — heal snapshot + summary owner drift |
 | `apps/web/lib/payout/persistCleanerPayout.ts` | Call ownership heal on early-skip |
 | `apps/web/lib/payout/bookingEarningsSummary.ts` | `remapEarningsSummaryCleanerId` |
-| `supabase/migrations/20260724150000_july_cleaner_earnings_reconciliation_repair.sql` | Narrow idempotent data repair + audit table |
 | Tests + `scripts/julyEarningsReconciliationPrecheck.ts` | Regression + read-only precheck |
 
 ---
 
-## 3. Before/after matrix (expected after staging apply)
+## 3. Production verification (2026-08-02)
 
-| Booking | Cleaner | Before | After |
+| Booking | Cleaner | Verified production state |
 |---------|---------|--------|-------|
-| SHL-BK-000412/413/414 | Nyasha (lead) + Ethel (roster) | `assigned` + `completed_at` set → excluded | `status=completed`, `payment_status=pending_monthly` preserved → included in July earnings |
-| SHL-BK-000359 | Lucia | Snapshot/summary Magaret | Snapshot/summary Lucia; ~R271.20 |
-| SHL-BK-000360 | Lucia (future) | Premature Magaret snapshot | Magaret snapshot removed; finalize only after completion |
-| SHL-BK-000540 | Lorraine | `in_progress` | **Unchanged** |
+| SHL-BK-000412/413/414 | Nyasha (lead) + Ethel (roster) | `status=completed`; `payment_status=pending_monthly` preserved |
+| SHL-BK-000359 | Lucia | Snapshot, summary, payout owner, and pending earnings attributed to Lucia |
+| SHL-BK-000360 | Lucia | Completed with Lucia snapshot and pending earnings; no Magaret ownership remains |
+| SHL-BK-000540 | Lorraine | No automated mutation performed |
 
 ---
 
-## 4–7. Staging/prod verification checklist
+## 4–7. Verification checklist
 
-Run with service role (staging first):
+The included precheck remains read-only and can be rerun for regression evidence:
 
 ```bash
 cd apps/web
 npx tsx --env-file=.env.local scripts/julyEarningsReconciliationPrecheck.ts
-# staging migrate, then re-run precheck
 ALLOW_PROD_PRECHECK=1 npx tsx --env-file=.env.local scripts/julyEarningsReconciliationPrecheck.ts  # read-only only
 ```
 
-Prove after apply:
+Verify after application deployment:
 
 1. Lynne trio: `status=completed`, same `completed_at`, `payment_status=pending_monthly`.
 2. Magaret snapshot count on 359/360 = 0.
-3. Payment/invoice fields unchanged (`july_2026_cleaner_earnings_repair_audit` payment_drift=0).
-4. No new `cleaner_payouts` / transfers / `paid` mutations from this migration.
+3. Payment/invoice fields remain unchanged.
+4. No new `cleaner_payouts`, transfers, or `paid` mutations are caused by these application safeguards.
 5. Office `/office/payouts` July totals for Ethel, Nyasha, Lucia, Magaret, Lorraine.
 6. `/office/payouts/approvals` unchanged (no batch generation).
 
@@ -95,13 +93,13 @@ db:migrations:validate PASS
 | Gate | Result |
 |------|--------|
 | Code root-cause fixes + regression tests | **GO** |
-| Idempotent migration (narrow IDs/refs) | **GO for staging apply** |
-| Staging live verify + office UI | **BLOCKED** — no service-role in this agent |
-| Production apply | **NO-GO** until explicit production GO after staging proof |
+| Historical data migration | **REMOVED** — production is already reconciled |
+| Read-only production state verification | **GO** |
+| Application deployment | **GO after CI and Preview verification** |
 
 ### Rollback / forward-repair
 
-- **Rollback:** restore `status`/`snapshot`/`earnings_summary`/`cleaner_earnings.cleaner_id` from `july_2026_cleaner_earnings_repair_audit` phase=`before` (do not delete audit rows).
-- **Forward:** re-run migration (idempotent); for earnings amount refresh use `persistCleanerPayoutIfUnset({ forceDisplayRecompute: true })` per booking — never manual “Edit earnings” to hide root cause.
+- **Rollback:** revert the application commit; no database rollback is required because this PR no longer ships a data migration.
+- **Forward:** use the canonical booking completion and payout persistence paths. Do not manually edit earnings to hide ownership drift.
 
-**Recommendation:** Merge to staging → apply migration on `gbgnemlpyykyhpqqbgru` → run precheck + office UI → then issue production GO for `tchayecuvzssixyxlvfu`.
+**Recommendation:** pass focused tests and Preview verification, then merge the application safeguards to `main`.

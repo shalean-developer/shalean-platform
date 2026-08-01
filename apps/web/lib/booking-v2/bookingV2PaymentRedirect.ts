@@ -40,6 +40,11 @@ export function bookingV2SuccessHref(reference: string): string {
   return `/account/success?reference=${encodeURIComponent(reference.trim())}`;
 }
 
+/** Credit-covered / zero-balance bookings — no Paystack transaction to verify. */
+export function bookingV2CoveredSuccessHref(bookingId: string): string {
+  return `/account/success?bookingId=${encodeURIComponent(bookingId.trim())}&covered=1`;
+}
+
 /** Persist ref then hard-navigate. Prefer over soft router during Paystack callbacks. */
 export function redirectToBookingV2Success(reference: string): void {
   const ref = reference.trim();

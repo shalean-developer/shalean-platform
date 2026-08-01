@@ -36,6 +36,7 @@ import {
   listTeamJobMemberWeeklyPayoutCandidates,
   teamJobMemberWeeklyPayoutTotalCents,
 } from "@/lib/payout/teamJobMemberWeeklyPayoutCandidates";
+import { syncPayoutBatchFromBookings } from "@/lib/payout/syncPayoutBatchFromBookings";
 
 export type GenerateWeeklyPayoutsResult = {
   period: { start: string; end: string };
@@ -178,6 +179,43 @@ async function listUnbatchedCompletionMonths(admin: SupabaseClient): Promise<Arr
     const ymd = weeklyBatchDayYmd(row as Parameters<typeof weeklyBatchDayYmd>[0]);
     if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) continue;
     monthStarts.add(getJohannesburgMonthBoundsContainingYmd(ymd).periodStart);
+  }
+
+  const [{ data: rosterRows, error: rosterErr }, { data: teamRows, error: teamErr }] = await Promise.all([
+    admin
+      .from("booking_roster_member_payouts")
+      .select("booking_id")
+      .eq("status", "pending")
+      .is("cleaner_payout_id", null),
+    admin
+      .from("team_job_member_payouts")
+      .select("booking_id")
+      .eq("status", "pending")
+      .is("cleaner_payout_id", null),
+  ]);
+  if (rosterErr) throw new Error(rosterErr.message);
+  if (teamErr) throw new Error(teamErr.message);
+
+  const memberBookingIds = [
+    ...new Set(
+      [...(rosterRows ?? []), ...(teamRows ?? [])]
+        .map((row) => String((row as { booking_id?: string }).booking_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  for (let i = 0; i < memberBookingIds.length; i += 120) {
+    const { data: memberBookings, error: memberBookingsErr } = await admin
+      .from("bookings")
+      .select("id, completed_at, date, billing_type, is_monthly_billing_booking, payment_status, monthly_invoice_id")
+      .in("id", memberBookingIds.slice(i, i + 120))
+      .eq("status", "completed")
+      .eq("is_test", false);
+    if (memberBookingsErr) throw new Error(memberBookingsErr.message);
+    for (const row of memberBookings ?? []) {
+      const ymd = weeklyBatchDayYmd(row as Parameters<typeof weeklyBatchDayYmd>[0]);
+      if (!ymd || ymd < MONTHLY_PAYOUT_START_YMD) continue;
+      monthStarts.add(getJohannesburgMonthBoundsContainingYmd(ymd).periodStart);
+    }
   }
 
   return [...monthStarts]
@@ -382,6 +420,19 @@ async function generateWeeklyPayoutsForPeriod(
       invoiceStatusById: invoiceMap,
     });
 
+    // A member allocation is authoritative when the same cleaner/visit is also
+    // present on bookings.cleaner_id (common after roster repairs). Do not link
+    // or total the lower-precedence direct snapshot as a second earning line.
+    const memberBookingIds = new Set([
+      ...rosterMemberCandidates.map((row) => row.booking_id),
+      ...teamJobMemberCandidates.map((row) => row.booking_id),
+    ]);
+    if (memberBookingIds.size > 0) {
+      const authoritativeDirect = bookings.filter((booking) => !memberBookingIds.has(booking.id));
+      bookings.length = 0;
+      bookings.push(...authoritativeDirect);
+    }
+
     if (!bookings.length && !rosterMemberCandidates.length && !teamJobMemberCandidates.length) continue;
 
     const total =
@@ -396,19 +447,53 @@ async function generateWeeklyPayoutsForPeriod(
       teamJobMemberWeeklyPayoutTotalCents(teamJobMemberCandidates);
     if (total <= 0) continue;
 
-    const { data: payout, error: insErr } = await admin
+    const { data: existingBatch, error: existingErr } = await admin
       .from("cleaner_payouts")
-      .insert({
-        cleaner_id: cleanerId,
-        total_amount_cents: total,
-        calculated_amount_cents: total,
-        status: "pending",
-        period_start: periodStart,
-        period_end: periodEnd,
-        ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
-      })
-      .select("id")
+      .select("id, status, payout_run_id")
+      .eq("cleaner_id", cleanerId)
+      .eq("period_start", periodStart)
+      .eq("period_end", periodEnd)
+      .in("status", ["pending", "frozen", "approved", "paid"])
       .maybeSingle();
+    if (existingErr) {
+      await reportOperationalIssue("error", "generateWeeklyPayouts", existingErr.message, { cleanerId });
+      skippedCleaners += 1;
+      continue;
+    }
+
+    const existingStatus = String((existingBatch as { status?: string } | null)?.status ?? "").toLowerCase();
+    const existingRunId = String((existingBatch as { payout_run_id?: string | null } | null)?.payout_run_id ?? "").trim();
+    if (existingBatch && (existingStatus !== "pending" || existingRunId)) {
+      await reportOperationalIssue(
+        "warn",
+        "generateWeeklyPayouts",
+        "Eligible earnings found after the monthly payout batch was locked",
+        { cleanerId, periodStart, periodEnd, payoutId: (existingBatch as { id?: string }).id, existingStatus },
+      );
+      skippedCleaners += 1;
+      continue;
+    }
+
+    let payout = existingBatch as { id?: string } | null;
+    let insErr: { code?: string; message?: string } | null = null;
+    const createdNewBatch = !payout;
+    if (!payout) {
+      const inserted = await admin
+        .from("cleaner_payouts")
+        .insert({
+          cleaner_id: cleanerId,
+          total_amount_cents: total,
+          calculated_amount_cents: total,
+          status: "pending",
+          period_start: periodStart,
+          period_end: periodEnd,
+          ...(opts?.createdBy ? { created_by: opts.createdBy } : {}),
+        })
+        .select("id")
+        .maybeSingle();
+      payout = inserted.data as { id?: string } | null;
+      insErr = inserted.error;
+    }
 
     if (insErr || !payout || typeof (payout as { id?: string }).id !== "string") {
       /**
@@ -474,7 +559,7 @@ async function generateWeeklyPayoutsForPeriod(
           cleanerId,
           payoutId,
         });
-        await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+        if (createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
         skippedCleaners += 1;
         continue;
       }
@@ -497,7 +582,7 @@ async function generateWeeklyPayoutsForPeriod(
           payoutId,
         });
         if (linkedCount === 0) {
-          await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+          if (createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
         }
         skippedCleaners += 1;
         continue;
@@ -509,9 +594,10 @@ async function generateWeeklyPayoutsForPeriod(
       const teamMemberIds = teamJobMemberCandidates.map((row) => row.id);
       const { data: linkedTeamMembers, error: teamMemberUpErr } = await admin
         .from("team_job_member_payouts")
-        .update({ status: "batched" })
+        .update({ status: "batched", cleaner_payout_id: payoutId })
         .in("id", teamMemberIds)
         .eq("cleaner_id", cleanerId)
+        .is("cleaner_payout_id", null)
         .eq("status", "pending")
         .select("id");
       if (teamMemberUpErr) {
@@ -520,7 +606,7 @@ async function generateWeeklyPayoutsForPeriod(
           payoutId,
         });
         if (linkedCount === 0) {
-          await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+          if (createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
         }
         skippedCleaners += 1;
         continue;
@@ -529,18 +615,30 @@ async function generateWeeklyPayoutsForPeriod(
     }
 
     if (linkedCount === 0) {
-      await admin.from("cleaner_payouts").delete().eq("id", payoutId);
+      if (createdNewBatch) await admin.from("cleaner_payouts").delete().eq("id", payoutId);
       skippedCleaners += 1;
       continue;
     }
 
-    payoutsCreated += 1;
+    const synced = await syncPayoutBatchFromBookings(admin, payoutId);
+    if (!synced.ok) {
+      await reportOperationalIssue("error", "generateWeeklyPayouts", `batch total sync failed: ${synced.error}`, {
+        cleanerId,
+        payoutId,
+      });
+      skippedCleaners += 1;
+      continue;
+    }
+
+    if (createdNewBatch) payoutsCreated += 1;
     bookingsLinked += linkedCount;
 
     void logSystemEvent({
       level: "info",
-      source: "MONTHLY_PAYOUT_CREATED",
-      message: "Cleaner monthly payout batch created",
+      source: createdNewBatch ? "MONTHLY_PAYOUT_CREATED" : "MONTHLY_PAYOUT_UPDATED",
+      message: createdNewBatch
+        ? "Cleaner monthly payout batch created"
+        : "Eligible earnings appended to pending cleaner monthly payout batch",
       context: {
         cleanerId,
         payoutId,
