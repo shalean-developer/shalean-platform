@@ -2,7 +2,6 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { buildRepairCompletionCoherencePatch } from "@/lib/booking/bookingCompletionIntegrity";
-import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
 import { ensureCleanerEarningsLedgerRow } from "@/lib/payout/ensureCleanerEarningsLedger";
 
 type CompletionRow = {
@@ -11,9 +10,19 @@ type CompletionRow = {
   dispatch_status?: string | null;
 };
 
+function statusIsCompleted(status: string | null | undefined): boolean {
+  return String(status ?? "")
+    .trim()
+    .toLowerCase() === "completed";
+}
+
 /**
- * Heals `completed_at` + non-terminal `status` drift (e.g. cron completed, roster continuity
- * rewrote status to assigned). Optionally inserts the solo `cleaner_earnings` ledger row.
+ * Heals `completed_at` + non-terminal `status` drift (e.g. cron completed, then recurring
+ * propagate rewrote status to assigned). Optionally inserts the solo `cleaner_earnings` ledger row.
+ *
+ * Important: do **not** early-return on {@link isAuthoritativeBookingCompleted} — that helper
+ * treats a lone `completed_at` as completed, which would skip the exact status heal this
+ * function exists to perform.
  */
 export async function repairBookingCompletionCoherenceIfNeeded(params: {
   admin: SupabaseClient;
@@ -24,7 +33,7 @@ export async function repairBookingCompletionCoherenceIfNeeded(params: {
   const { admin, bookingId } = params;
   const row = params.row;
 
-  if (isAuthoritativeBookingCompleted(row)) {
+  if (statusIsCompleted(row.status)) {
     if (params.ensureLedger) {
       await ensureCleanerEarningsLedgerRow({ admin, bookingId });
     }

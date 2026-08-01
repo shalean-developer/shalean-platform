@@ -16,7 +16,9 @@ import {
 } from "@/lib/recurring/reconcileRecurringPlanOccurrences";
 import { cloneSnapshotTemplate } from "@/lib/recurring/insertRecurringOccurrenceBooking";
 import {
+  recurringOccurrenceCleanerIdentityOnlyPatch,
   recurringOccurrenceCleanerPatch,
+  recurringOccurrenceMustPreserveLifecycle,
   recurringPropagateCleanerOperationalStatus,
 } from "@/lib/recurring/resolveRecurringPreferredCleanerId";
 import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
@@ -51,6 +53,7 @@ type GeneratedBookingRow = {
   id: string;
   date: string | null;
   status: string | null;
+  completed_at: string | null;
   cleaner_line_earnings_finalized_at: string | null;
   monthly_invoice_id: string | null;
   cleaner_id: string | null;
@@ -145,7 +148,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
   const { data: rows, error } = await admin
     .from("bookings")
     .select(
-      "id, date, status, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
+      "id, date, status, completed_at, cleaner_line_earnings_finalized_at, monthly_invoice_id, cleaner_id, payout_owner_cleaner_id, is_team_job, monthly_invoices(status)",
     )
     .eq("recurring_id", plan.id)
     .neq("status", "cancelled");
@@ -161,6 +164,7 @@ export async function propagateRecurringPlanToGeneratedBookings(
       id: String(row.id ?? ""),
       date: row.date != null ? String(row.date) : null,
       status: row.status != null ? String(row.status) : null,
+      completed_at: row.completed_at != null ? String(row.completed_at) : null,
       cleaner_line_earnings_finalized_at:
         row.cleaner_line_earnings_finalized_at != null ? String(row.cleaner_line_earnings_finalized_at) : null,
       monthly_invoice_id: row.monthly_invoice_id != null ? String(row.monthly_invoice_id) : null,
@@ -182,7 +186,10 @@ export async function propagateRecurringPlanToGeneratedBookings(
     }
 
     const earningsFinalized = Boolean(booking.cleaner_line_earnings_finalized_at);
-    const bookingCompleted = (booking.status ?? "").trim().toLowerCase() === "completed";
+    const bookingCompleted =
+      (booking.status ?? "").trim().toLowerCase() === "completed" ||
+      Boolean(String(booking.completed_at ?? "").trim());
+    const preserveLifecycle = recurringOccurrenceMustPreserveLifecycle(booking);
 
     const dateYmd = booking.date?.trim() ?? "";
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) {
@@ -218,9 +225,11 @@ export async function propagateRecurringPlanToGeneratedBookings(
     if (preferredCleanerId) {
       Object.assign(
         bookingUpdate,
-        recurringOccurrenceCleanerPatch(preferredCleanerId, {
-          operationalStatus: recurringPropagateCleanerOperationalStatus(booking.status),
-        }),
+        preserveLifecycle
+          ? recurringOccurrenceCleanerIdentityOnlyPatch(preferredCleanerId)
+          : recurringOccurrenceCleanerPatch(preferredCleanerId, {
+              operationalStatus: recurringPropagateCleanerOperationalStatus(booking.status),
+            }),
       );
     }
 
