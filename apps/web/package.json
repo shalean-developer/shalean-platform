@@ -6,7 +6,7 @@
     "dev": "next dev --webpack",
     "dev:turbo": "next dev --turbopack",
     "dev:webpack": "next dev --webpack",
-    "build": "tsx scripts/validate-blog-routes.ts && node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build --webpack",
+    "build": "tsx scripts/validate-blog-routes.ts && node --max-old-space-size=4096 ./node_modules/next/dist/bin/next build --turbopack",
     "validate:blog-routes": "tsx scripts/validate-blog-routes.ts",
     "audit:internal-links": "tsx scripts/audit-internal-links.ts",
     "validate:live-seo": "tsx scripts/validate-live-seo.ts",
