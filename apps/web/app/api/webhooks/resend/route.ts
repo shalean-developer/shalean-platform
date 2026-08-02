@@ -54,7 +54,7 @@ export async function POST(request: Request) {
         signature: svixSignature,
       },
       webhookSecret: secret,
-    }) as ResendWebhookEvent;
+    }) as unknown as ResendWebhookEvent;
   } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
@@ -77,7 +77,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to record event" }, { status: 500 });
   }
 
-  // Duplicate webhook delivery: already processed successfully.
   if (eventError?.code === "23505") {
     return NextResponse.json({ ok: true, duplicate: true });
   }
