@@ -7,6 +7,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type ResendTag = { name?: string; value?: string };
+type ResendTags = ResendTag[] | Record<string, string> | undefined;
 type ResendWebhookEvent = {
   type: string;
   created_at?: string;
@@ -15,7 +16,7 @@ type ResendWebhookEvent = {
     to?: string[];
     subject?: string;
     bounce?: unknown;
-    tags?: ResendTag[] | Record<string, string>;
+    tags?: ResendTags;
     [key: string]: unknown;
   };
 };
@@ -27,7 +28,7 @@ function getAdmin() {
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
 
-function normalizeTags(input: ResendWebhookEvent["data"] extends infer D ? D extends { tags?: infer T } ? T : never : never) {
+function normalizeTags(input: ResendTags): Record<string, string> {
   const tags: Record<string, string> = {};
   if (Array.isArray(input)) {
     for (const tag of input) {
