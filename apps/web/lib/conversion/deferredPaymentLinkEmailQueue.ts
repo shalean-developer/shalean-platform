@@ -68,6 +68,7 @@ type DeferredRow = {
   phone: string | null;
   wa_payload: CustomerPaymentLinkWhatsAppPayload | null;
   delivery_context: Record<string, unknown>;
+  processing_token: string;
 };
 
 /**
@@ -93,20 +94,50 @@ async function mergeDeferredEmailCompletion(
   }
 }
 
+async function completeClaim(
+  admin: SupabaseClient,
+  row: DeferredRow,
+  patch: { last_error: string | null },
+): Promise<boolean> {
+  const { data, error } = await admin
+    .from("conversion_deferred_payment_link_emails")
+    .update({
+      sent_at: new Date().toISOString(),
+      last_error: patch.last_error,
+      processing_started_at: null,
+      processing_token: null,
+    })
+    .eq("id", row.id)
+    .eq("processing_token", row.processing_token)
+    .is("sent_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) {
+    await reportOperationalIssue(
+      "error",
+      "deferred_payment_link_email/complete_claim",
+      error?.message ?? "claim_lost_before_completion",
+      { bookingId: row.booking_id, deferredId: row.id },
+    );
+    return false;
+  }
+  return true;
+}
+
 export async function processDueDeferredPaymentLinkEmails(
   admin: SupabaseClient,
   params?: { limit?: number },
 ): Promise<{ processed: number; emailed: number; smsFallback: number; errors: number }> {
   const limit = Math.min(50, Math.max(1, params?.limit ?? 25));
-  const nowIso = new Date().toISOString();
 
-  const { data: rows, error } = await admin
-    .from("conversion_deferred_payment_link_emails")
-    .select("id, booking_id, email_payload, phone, wa_payload, delivery_context")
-    .is("sent_at", null)
-    .lte("run_at", nowIso)
-    .order("run_at", { ascending: true })
-    .limit(limit);
+  // The SQL function selects with FOR UPDATE SKIP LOCKED and stamps a unique
+  // processing token in the same transaction. Parallel cron invocations therefore
+  // cannot receive the same queue row.
+  const { data: rows, error } = await admin.rpc("claim_due_deferred_payment_link_emails", {
+    p_limit: limit,
+    p_stale_after: "15 minutes",
+  });
 
   if (error) {
     await reportOperationalIssue("error", "deferred_payment_link_email/process", error.message);
@@ -119,14 +150,26 @@ export async function processDueDeferredPaymentLinkEmails(
 
   for (const raw of rows ?? []) {
     const row = raw as DeferredRow;
+    if (!row.processing_token) {
+      errors++;
+      await reportOperationalIssue(
+        "error",
+        "deferred_payment_link_email/process",
+        "claimed_row_missing_processing_token",
+        { bookingId: row.booking_id, deferredId: row.id },
+      );
+      continue;
+    }
+
     const ctx = (row.delivery_context ?? {}) as Record<string, unknown>;
     const em = await sendPaymentLinkEmail(row.email_payload);
     if (em.sent) {
+      const completed = await completeClaim(admin, row, { last_error: null });
+      if (!completed) {
+        errors++;
+        continue;
+      }
       emailed++;
-      await admin
-        .from("conversion_deferred_payment_link_emails")
-        .update({ sent_at: new Date().toISOString(), last_error: null })
-        .eq("id", row.id);
       await mergeDeferredEmailCompletion(admin, row.booking_id, {
         email: "sent",
         email_deferred_until: null,
@@ -156,10 +199,11 @@ export async function processDueDeferredPaymentLinkEmails(
     }
 
     if (!smsOk) errors++;
-    await admin
-      .from("conversion_deferred_payment_link_emails")
-      .update({ sent_at: new Date().toISOString(), last_error: em.error ?? "email_failed" })
-      .eq("id", row.id);
+    const completed = await completeClaim(admin, row, { last_error: em.error ?? "email_failed" });
+    if (!completed) {
+      errors++;
+      continue;
+    }
     await mergeDeferredEmailCompletion(admin, row.booking_id, {
       email: "failed",
       sms: smsOk ? "sent" : "skipped",
