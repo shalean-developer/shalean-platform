@@ -11,14 +11,7 @@ type ResendTags = ResendTag[] | Record<string, string> | undefined;
 type ResendWebhookEvent = {
   type: string;
   created_at?: string;
-  data?: {
-    email_id?: string;
-    to?: string[];
-    subject?: string;
-    bounce?: unknown;
-    tags?: ResendTags;
-    [key: string]: unknown;
-  };
+  data?: { email_id?: string; to?: string[]; subject?: string; bounce?: unknown; tags?: ResendTags; [key: string]: unknown };
 };
 
 function getAdmin() {
@@ -27,25 +20,14 @@ function getAdmin() {
   if (!url || !key) return null;
   return createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
 }
-
 function normalizeTags(input: ResendTags): Record<string, string> {
   const tags: Record<string, string> = {};
-  if (Array.isArray(input)) {
-    for (const tag of input) {
-      if (tag?.name && tag.value) tags[tag.name] = tag.value;
-    }
-  } else if (input && typeof input === "object") {
-    for (const [name, value] of Object.entries(input)) {
-      if (typeof value === "string") tags[name] = value;
-    }
-  }
+  if (Array.isArray(input)) for (const tag of input) { if (tag?.name && tag.value) tags[tag.name] = tag.value; }
+  else if (input && typeof input === "object") for (const [name, value] of Object.entries(input)) { if (typeof value === "string") tags[name] = value; }
   return tags;
 }
-
 function uuidOrNull(value: string | undefined): string | null {
-  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value)
-    ? value
-    : null;
+  return value && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value : null;
 }
 
 export async function POST(request: Request) {
@@ -63,11 +45,7 @@ export async function POST(request: Request) {
   let event: ResendWebhookEvent;
   try {
     const resend = new Resend(apiKey);
-    event = resend.webhooks.verify({
-      payload,
-      headers: { id: svixId, timestamp: svixTimestamp, signature: svixSignature },
-      webhookSecret: secret,
-    }) as unknown as ResendWebhookEvent;
+    event = resend.webhooks.verify({ payload, headers: { id: svixId, timestamp: svixTimestamp, signature: svixSignature }, webhookSecret: secret }) as unknown as ResendWebhookEvent;
   } catch {
     return NextResponse.json({ error: "Invalid signature" }, { status: 400 });
   }
@@ -76,38 +54,36 @@ export async function POST(request: Request) {
   const recipientResult = validateEmailRecipient(firstRecipient);
   const recipientEmail = recipientResult.allowed ? recipientResult.normalized : null;
   const tags = normalizeTags(event.data?.tags);
+  const resendEmailId = event.data?.email_id ?? null;
 
   const { error: eventError } = await admin.from("email_delivery_events").insert({
-    svix_id: svixId,
-    event_type: event.type,
-    resend_email_id: event.data?.email_id ?? null,
-    recipient_email: recipientEmail,
-    subject: event.data?.subject ?? null,
-    event_created_at: event.created_at ?? null,
-    booking_id: uuidOrNull(tags.booking_id),
-    customer_id: uuidOrNull(tags.customer_id),
-    message_type: tags.message_type ?? null,
-    campaign_id: tags.campaign_id ?? null,
-    tags,
-    payload: event,
+    svix_id: svixId, event_type: event.type, resend_email_id: resendEmailId, recipient_email: recipientEmail,
+    subject: event.data?.subject ?? null, event_created_at: event.created_at ?? null,
+    booking_id: uuidOrNull(tags.booking_id), customer_id: uuidOrNull(tags.customer_id),
+    message_type: tags.message_type ?? null, campaign_id: tags.campaign_id ?? null, tags, payload: event,
   });
-
   if (eventError && eventError.code !== "23505") return NextResponse.json({ error: "Failed to record event" }, { status: 500 });
   if (eventError?.code === "23505") return NextResponse.json({ ok: true, duplicate: true });
+
+  if (resendEmailId) {
+    const terminalSuccess = event.type === "email.delivered";
+    const temporaryFailure = event.type === "email.failed" || event.type === "email.delivery_delayed";
+    const permanentFailure = event.type === "email.bounced" || event.type === "email.complained" || event.type === "email.suppressed";
+    const update: Record<string, unknown> = { delivery_status: event.type.replace("email.", ""), updated_at: new Date().toISOString() };
+    if (terminalSuccess) Object.assign(update, { retry_status: "recovered", next_retry_at: null, retry_locked_at: null, retry_lock_token: null, failure_reason: null });
+    if (temporaryFailure) Object.assign(update, { retry_status: "queued", next_retry_at: new Date(Date.now() + 5 * 60_000).toISOString(), failure_reason: JSON.stringify(event.data ?? {}) });
+    if (permanentFailure) Object.assign(update, { retry_status: "blocked", next_retry_at: null, failure_reason: JSON.stringify(event.data ?? {}) });
+    await admin.from("email_outbound_messages").update(update).eq("resend_email_id", resendEmailId);
+  }
 
   const suppressionReason = event.type === "email.bounced" ? "bounced" : event.type === "email.complained" ? "complained" : event.type === "email.suppressed" ? "suppressed" : null;
   if (suppressionReason && recipientEmail) {
     const { error: suppressionError } = await admin.from("email_suppressions").upsert({
-      email: recipientEmail,
-      reason: suppressionReason,
-      resend_email_id: event.data?.email_id ?? null,
-      source_event_type: event.type,
-      details: event.data?.bounce ?? {},
-      suppressed_at: event.created_at ?? new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+      email: recipientEmail, reason: suppressionReason, resend_email_id: resendEmailId,
+      source_event_type: event.type, details: event.data?.bounce ?? {},
+      suppressed_at: event.created_at ?? new Date().toISOString(), updated_at: new Date().toISOString(),
     }, { onConflict: "email" });
     if (suppressionError) return NextResponse.json({ error: "Failed to update suppression" }, { status: 500 });
   }
-
   return NextResponse.json({ ok: true });
 }
