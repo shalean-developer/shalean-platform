@@ -1,4 +1,5 @@
 import { getResend } from "@/lib/email/resendFrom";
+import { validateEmailRecipients } from "@/lib/email/recipientSafety";
 import {
   applyOutboundSubjectPrefix,
   decideOutboundEmail,
@@ -17,13 +18,21 @@ type SafeResendPayload = {
 };
 
 /**
- * Resend send wrapper with non-production allowlist + subject marker.
- * Production behaviour is unchanged when allowlist vars are unset.
+ * Resend send wrapper with recipient validation, non-production allowlist,
+ * and subject markers. Synthetic auth aliases are never valid inboxes.
  */
 export async function safeResendSend(payload: SafeResendPayload): Promise<{
   data: { id: string } | null;
   error: { message: string; name?: string } | null;
 }> {
+  const recipientSafety = validateEmailRecipients(payload.to);
+  if (!recipientSafety.allowed) {
+    return {
+      data: null,
+      error: { message: recipientSafety.reason, name: "recipient_blocked" },
+    };
+  }
+
   const resend = getResend();
   if (!resend) {
     return { data: null, error: { message: "Email not configured", name: "resend_unconfigured" } };

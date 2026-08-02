@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { validateEmailRecipient } from "@/lib/email/recipientSafety";
 import { evaluateCustomerRetentionState } from "@/lib/growth/customerRetention";
 import { segmentCustomer } from "@/lib/growth/customerSegment";
 
@@ -16,6 +17,18 @@ export type CustomerGrowthContext = {
   lastBookingActivityAt: string | null;
   cityActive: boolean | null;
 };
+
+function safeCustomerEmail(raw: string | null | undefined): string | null {
+  const value = raw?.trim() ?? "";
+  if (!value) return null;
+  try {
+    const normalized = normalizeEmail(value);
+    const safety = validateEmailRecipient(normalized);
+    return safety.allowed ? safety.normalized : null;
+  } catch {
+    return null;
+  }
+}
 
 export async function loadCustomerGrowthContext(
   admin: SupabaseClient,
@@ -46,8 +59,7 @@ export async function loadCustomerGrowthContext(
   let email: string | null = null;
   try {
     const { data: authUser } = await admin.auth.admin.getUserById(userId);
-    const emailRaw = authUser?.user?.email?.trim() ?? "";
-    if (emailRaw) email = normalizeEmail(emailRaw);
+    email = safeCustomerEmail(authUser?.user?.email);
   } catch {
     email = null;
   }
@@ -76,14 +88,7 @@ export async function loadCustomerGrowthContext(
     const ph = (lastBooking as { customer_phone?: string | null }).customer_phone;
     phone = typeof ph === "string" && ph.trim() ? ph.trim() : null;
     if (!email) {
-      const ce = (lastBooking as { customer_email?: string | null }).customer_email;
-      if (typeof ce === "string" && ce.trim()) {
-        try {
-          email = normalizeEmail(ce.trim());
-        } catch {
-          email = null;
-        }
-      }
+      email = safeCustomerEmail((lastBooking as { customer_email?: string | null }).customer_email);
     }
   }
 
