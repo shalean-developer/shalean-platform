@@ -1,7 +1,8 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { Resend } from "resend";
 import { getDefaultFromAddress } from "@/lib/email/sendBookingEmail";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
+import { safeResendSend } from "@/lib/email/safeResendSend";
+import { validateEmailRecipient } from "@/lib/email/recipientSafety";
 import { isCustomerOutboundPaused } from "@/lib/notifications/customerOutboundPause";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getReferralProgramSettings } from "@/lib/referrals/settings";
@@ -18,10 +19,7 @@ export type EmailCampaignPlaceholderContext = {
   companyName: string;
 };
 
-export function applyEmailPlaceholders(
-  template: string,
-  ctx: EmailCampaignPlaceholderContext,
-): string {
+export function applyEmailPlaceholders(template: string, ctx: EmailCampaignPlaceholderContext): string {
   return template
     .replace(/\{\{first_name\}\}/gi, ctx.firstName)
     .replace(/\{\{referral_link\}\}/gi, ctx.referralLink)
@@ -39,12 +37,13 @@ function brandShell(inner: string): string {
 </div>`;
 }
 
+function currentUtcMonthKey(): string {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
 export async function loadReferralEmailCampaign(admin: SupabaseClient) {
-  const { data } = await admin
-    .from("email_campaigns")
-    .select("*")
-    .eq("id", REFERRAL_CAMPAIGN_ID)
-    .maybeSingle();
+  const { data } = await admin.from("email_campaigns").select("*").eq("id", REFERRAL_CAMPAIGN_ID).maybeSingle();
   return data;
 }
 
@@ -56,6 +55,10 @@ export async function sendReferralCampaignEmail(params: {
   campaignId?: string;
   isTest?: boolean;
 }): Promise<{ sent: boolean; error?: string; sendId?: string }> {
+  const recipient = validateEmailRecipient(params.email);
+  if (!recipient.allowed) return { sent: false, error: recipient.reason };
+  const email = recipient.normalized;
+
   const { paused } = await isCustomerOutboundPaused();
   if (paused && !params.isTest) return { sent: false, error: "customer_outbound_paused" };
 
@@ -70,10 +73,8 @@ export async function sendReferralCampaignEmail(params: {
   if (!settings.enabled && !params.isTest) return { sent: false, error: "Referral program disabled." };
 
   const code = await getOrCreateCustomerReferralCode(params.admin, params.userId);
-  const base = getPublicAppUrlBase();
-  const referralLink = `${base}/refer?ref=${encodeURIComponent(code)}`;
+  const referralLink = `${getPublicAppUrlBase()}/refer?ref=${encodeURIComponent(code)}`;
   const credit = await getCreditSummary(params.admin, params.userId);
-
   const ctx: EmailCampaignPlaceholderContext = {
     firstName: params.firstName?.trim() || "there",
     referralLink,
@@ -86,60 +87,49 @@ export async function sendReferralCampaignEmail(params: {
     String((campaign as { subject_template?: string } | null)?.subject_template ?? "Refer a friend & earn Cleaning Credit!"),
     ctx,
   );
-  const bodyInner = applyEmailPlaceholders(
-    String(
-      (campaign as { body_html_template?: string } | null)?.body_html_template ??
-        "<p>Hi {{first_name}}, refer a friend and earn R{{reward_amount}} Cleaning Credit!</p>",
+  const html = brandShell(
+    applyEmailPlaceholders(
+      String(
+        (campaign as { body_html_template?: string } | null)?.body_html_template ??
+          "<p>Hi {{first_name}}, refer a friend and earn R{{reward_amount}} Cleaning Credit!</p>",
+      ),
+      ctx,
     ),
-    ctx,
   );
-  const html = brandShell(bodyInner);
 
-  const resendKey = process.env.RESEND_API_KEY;
-  if (!resendKey) return { sent: false, error: "Email not configured." };
-  const resend = new Resend(resendKey);
-
-  if (!params.isTest) {
-    const monthStart = new Date();
-    monthStart.setUTCDate(1);
-    monthStart.setUTCHours(0, 0, 0, 0);
-    const { data: existingSend } = await params.admin
-      .from("email_campaign_sends")
-      .select("id")
-      .eq("campaign_id", campaignId)
-      .eq("recipient_email", params.email)
-      .gte("created_at", monthStart.toISOString())
-      .in("status", ["pending", "sent"])
-      .limit(1)
-      .maybeSingle();
-    if (existingSend) return { sent: false, error: "Already sent this month." };
-  }
+  const idempotencyKey = params.isTest
+    ? null
+    : `${campaignId}:${email}:${currentUtcMonthKey()}`;
 
   const { data: sendRow, error: insertErr } = await params.admin
     .from("email_campaign_sends")
     .insert({
       campaign_id: campaignId,
       user_id: params.userId,
-      recipient_email: params.email,
+      recipient_email: email,
       status: "pending",
+      idempotency_key: idempotencyKey,
       metadata: { is_test: params.isTest ?? false },
     })
     .select("id")
     .single();
 
   if (insertErr) {
-    if (insertErr.code === "23505" && !params.isTest) {
-      return { sent: false, error: "Already sent this month." };
-    }
+    if (insertErr.code === "23505" && !params.isTest) return { sent: false, error: "Already sent this month." };
     return { sent: false, error: insertErr.message };
   }
 
   try {
-    const { error } = await resend.emails.send({
+    const { error } = await safeResendSend({
       from: getDefaultFromAddress(),
-      to: params.email,
+      to: email,
       subject,
       html,
+      headers: idempotencyKey ? { "Idempotency-Key": idempotencyKey } : undefined,
+      tags: [
+        { name: "message_type", value: "referral_campaign" },
+        { name: "campaign_id", value: campaignId },
+      ],
     });
     if (error) {
       await params.admin
@@ -168,9 +158,7 @@ export async function processMonthlyReferralCampaign(
   admin: SupabaseClient,
 ): Promise<{ sent: number; skipped: number; failed: number }> {
   const campaign = await loadReferralEmailCampaign(admin);
-  if (!campaign || !(campaign as { enabled?: boolean }).enabled) {
-    return { sent: 0, skipped: 0, failed: 0 };
-  }
+  if (!campaign || !(campaign as { enabled?: boolean }).enabled) return { sent: 0, skipped: 0, failed: 0 };
 
   const settings = await getReferralProgramSettings(admin);
   if (!settings.enabled) return { sent: 0, skipped: 0, failed: 0 };
@@ -193,21 +181,25 @@ export async function processMonthlyReferralCampaign(
     };
 
     let email = String(r.billing_email ?? "").trim();
-    if (!email) {
+    let recipient = validateEmailRecipient(email);
+    if (!recipient.allowed) {
       const { data: authUser } = await admin.auth.admin.getUserById(r.id);
       email = String(authUser?.user?.email ?? "").trim();
+      recipient = validateEmailRecipient(email);
     }
-    if (!email) { skipped++; continue; }
-    if (r.marketing_emails_unsubscribed_at) { skipped++; continue; }
+    if (!recipient.allowed || r.marketing_emails_unsubscribed_at) {
+      skipped++;
+      continue;
+    }
 
     const result = await sendReferralCampaignEmail({
       admin,
       userId: r.id,
-      email,
+      email: recipient.normalized,
       firstName: r.full_name?.split(/\s+/)[0] ?? null,
     });
     if (result.sent) sent++;
-    else if (result.error === "Already sent this month.") skipped++;
+    else if (result.error === "Already sent this month." || result.error?.startsWith("recipient_")) skipped++;
     else failed++;
   }
 
