@@ -1,5 +1,6 @@
 import { getResend } from "@/lib/email/resendFrom";
 import { validateEmailRecipients } from "@/lib/email/recipientSafety";
+import { syncResendAudienceContact } from "@/lib/email/syncResendAudienceContact";
 import { applyOutboundSubjectPrefix, decideOutboundEmail } from "@/lib/env/outboundMessagingSafety";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -37,7 +38,7 @@ function firstRecipient(to: string | string[]): string {
   return (Array.isArray(to) ? to[0] : to)?.trim().toLowerCase() ?? "";
 }
 
-/** Resend wrapper with recipient validation, context tags and durable recovery records. */
+/** Resend wrapper with recipient validation, context tags, Audience sync and durable recovery records. */
 export async function safeResendSend(payload: SafeResendPayload): Promise<{
   data: { id: string } | null;
   error: { message: string; name?: string } | null;
@@ -58,12 +59,25 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
   const subject = applyOutboundSubjectPrefix(payload.subject, decision.subjectPrefix);
   const result = await resend.emails.send({ ...sendPayload, subject, tags: mergedTags } as Parameters<typeof resend.emails.send>[0]);
 
+  const recipientEmail = firstRecipient(payload.to);
+  if (result.data?.id && context?.customerId && recipientEmail) {
+    await syncResendAudienceContact({
+      email: recipientEmail,
+      customerId: context.customerId,
+    }).catch((error) => {
+      console.warn("Resend Audience sync raised an unexpected error", {
+        email: recipientEmail,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+
   const admin = getSupabaseAdmin();
   if (admin) {
     const retryable = !payload.attachments?.length;
     await admin.from("email_outbound_messages").insert({
       resend_email_id: result.data?.id ?? null,
-      recipient_email: firstRecipient(payload.to),
+      recipient_email: recipientEmail,
       sender_email: payload.from,
       subject,
       html_body: retryable ? payload.html ?? null : null,
