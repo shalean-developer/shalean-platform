@@ -136,6 +136,7 @@ export const OFFICE_NAV_MODULES: NavModule[] = [
     children: [
       { label: "Notifications", href: "/office/notifications", icon: Bell },
       { label: "Delivery logs", href: "/office/notification-logs", icon: Mail },
+      { label: "Email operations", href: "/office/email-operations", icon: Mail },
       { label: "Lifecycle emails", href: "/office/lifecycle-emails", icon: Send },
       { label: "Ops Health", href: "/office/ops-health", icon: Activity },
       { label: "Launch check", href: "/office/launch-check", icon: CheckCircle },
