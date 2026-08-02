@@ -1,6 +1,7 @@
 import { getResend } from "@/lib/email/resendFrom";
 import { validateEmailRecipients } from "@/lib/email/recipientSafety";
 import { applyOutboundSubjectPrefix, decideOutboundEmail } from "@/lib/env/outboundMessagingSafety";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 type EmailContext = {
   bookingId?: string | null;
@@ -32,7 +33,11 @@ function contextTags(context: EmailContext | undefined): { name: string; value: 
   ].flatMap(([name, value]) => value ? [{ name: String(name), value: String(value).slice(0, 256) }] : []);
 }
 
-/** Resend wrapper with recipient validation, environment safety and standard business-context tags. */
+function firstRecipient(to: string | string[]): string {
+  return (Array.isArray(to) ? to[0] : to)?.trim().toLowerCase() ?? "";
+}
+
+/** Resend wrapper with recipient validation, context tags and durable recovery records. */
 export async function safeResendSend(payload: SafeResendPayload): Promise<{
   data: { id: string } | null;
   error: { message: string; name?: string } | null;
@@ -52,6 +57,31 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
   );
   const subject = applyOutboundSubjectPrefix(payload.subject, decision.subjectPrefix);
   const result = await resend.emails.send({ ...sendPayload, subject, tags: mergedTags } as Parameters<typeof resend.emails.send>[0]);
+
+  const admin = getSupabaseAdmin();
+  if (admin) {
+    const retryable = !payload.attachments?.length;
+    await admin.from("email_outbound_messages").insert({
+      resend_email_id: result.data?.id ?? null,
+      recipient_email: firstRecipient(payload.to),
+      sender_email: payload.from,
+      subject,
+      html_body: retryable ? payload.html ?? null : null,
+      text_body: retryable ? payload.text ?? null : null,
+      reply_to: payload.replyTo ? (Array.isArray(payload.replyTo) ? payload.replyTo : [payload.replyTo]) : [],
+      headers: payload.headers ?? {},
+      tags: mergedTags,
+      booking_id: context?.bookingId ?? null,
+      customer_id: context?.customerId ?? null,
+      message_type: context?.messageType ?? null,
+      campaign_id: context?.campaignId ?? null,
+      delivery_status: result.error ? "send_failed" : "sent",
+      failure_reason: result.error?.message ?? null,
+      retry_status: retryable && result.error ? "queued" : retryable ? "none" : "blocked",
+      next_retry_at: retryable && result.error ? new Date(Date.now() + 5 * 60_000).toISOString() : null,
+    });
+  }
+
   return {
     data: result.data ? { id: result.data.id } : null,
     error: result.error ? { message: result.error.message, name: result.error.name } : null,
