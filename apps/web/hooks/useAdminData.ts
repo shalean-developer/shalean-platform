@@ -3,6 +3,49 @@
 import { useEffect, useState, useCallback } from "react";
 import { getSupabaseAccessToken } from "@/lib/supabase/browser";
 
+function scopedAdminReadEndpoint(endpoint: string): string {
+  return endpoint === "/api/admin/bookings" ? "/api/admin/bookings/scoped" : endpoint;
+}
+
+function johannesburgCurrentMonthRange(): { from: string; to: string } {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const year = Number(parts.find((part) => part.type === "year")?.value ?? 0);
+  const month = Number(parts.find((part) => part.type === "month")?.value ?? 0);
+  if (!year || !month) return { from: "", to: "" };
+  const mm = String(month).padStart(2, "0");
+  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
+  return {
+    from: `${year}-${mm}-01`,
+    to: `${year}-${mm}-${String(lastDay).padStart(2, "0")}`,
+  };
+}
+
+/**
+ * The Office bookings page historically initialized its date inputs to the
+ * current Johannesburg month while also marking the semantic filter as
+ * "All dates". Until the page state is fully separated, remove only that exact
+ * implicit current-month pair. User-selected custom ranges remain intact.
+ */
+export function normalizedAdminReadParams(
+  endpoint: string,
+  params?: Record<string, string>,
+): Record<string, string> | undefined {
+  if (!params || endpoint !== "/api/admin/bookings" || params.filter !== "all") return params;
+
+  const currentMonth = johannesburgCurrentMonthRange();
+  if (params.from !== currentMonth.from || params.to !== currentMonth.to) return params;
+
+  const next = { ...params };
+  delete next.from;
+  delete next.to;
+  return next;
+}
+
 /**
  * Shared hook for authenticated admin API fetches.
  * Automatically attaches Bearer token from the active Supabase session.
@@ -14,8 +57,9 @@ export function useAdminData<T>(
   const [data, setData] = useState<T | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const paramsKey = options?.params
-    ? new URLSearchParams(Object.entries(options.params).sort(([a], [b]) => a.localeCompare(b))).toString()
+  const normalizedParams = normalizedAdminReadParams(endpoint, options?.params);
+  const paramsKey = normalizedParams
+    ? new URLSearchParams(Object.entries(normalizedParams).sort(([a], [b]) => a.localeCompare(b))).toString()
     : "";
   const enabled = options?.enabled !== false;
 
@@ -37,9 +81,10 @@ export function useAdminData<T>(
         return;
       }
 
-      let url = endpoint;
+      const resolvedEndpoint = scopedAdminReadEndpoint(endpoint);
+      let url = resolvedEndpoint;
       if (paramsKey) {
-        url = `${endpoint}?${paramsKey}`;
+        url = `${resolvedEndpoint}?${paramsKey}`;
       }
 
       const res = await globalThis.fetch(url, {
