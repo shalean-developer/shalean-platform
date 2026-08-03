@@ -7,9 +7,7 @@ import { useCleanerNavBadges } from "@/components/cleaner-dashboard/CleanerNavBa
 import { CleanerPageHeader } from "@/components/cleaner/CleanerPageHeader";
 import { AvailabilityCard } from "@/components/cleaner/AvailabilityCard";
 import { NextJobCard } from "@/components/cleaner/NextJobCard";
-import { CleanerEarningsCard } from "@/components/cleaner/EarningsCard";
 import { QuickActionCard } from "@/components/cleaner/QuickActionCard";
-import { ActivityFeed } from "@/components/cleaner/ActivityFeed";
 import { JobOffersSection } from "@/components/cleaner-dashboard/JobOffersSection";
 import { PendingOffersDashboardHero } from "@/components/cleaner-dashboard/PendingOffersDashboardHero";
 import { ActiveJobHero } from "@/components/cleaner-dashboard/ActiveJobHero";
@@ -47,7 +45,6 @@ export default function JobsHomePage() {
     goAvailable,
     goOffline,
     availabilityBusy,
-    activityFeedDisplay,
     offerCards,
     upcomingJobs,
     nextHighlightedJob,
@@ -213,8 +210,6 @@ export default function JobsHomePage() {
         />
       ) : null}
 
-      <CleanerEarningsCard earnings={earningsSnapshot} />
-
       {upcomingForHome.length > 0 ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -252,7 +247,6 @@ export default function JobsHomePage() {
       ) : null}
 
       <QuickActionCard />
-      <ActivityFeed entries={activityFeedDisplay} maxVisible={5} />
 
       {!hasPendingOffers ? (
         <JobOffersSection
