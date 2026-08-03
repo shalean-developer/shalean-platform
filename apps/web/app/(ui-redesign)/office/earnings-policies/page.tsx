@@ -1,11 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { adminFetch } from "@/hooks/useAdminData";
 
 type Policy = "legacy_july" | "current_v1";
 type Customer = { email: string | null; name: string | null } | null;
 type RecurringRow = { id: string; customer_id: string; status: string; frequency: string; start_date: string | null; end_date: string | null; price: number | string; earnings_policy: Policy; legacy_earnings_cents: number | null; earnings_policy_locked_at: string | null; customer: Customer };
 type CustomerRow = { customer_id: string; earnings_policy: Policy; legacy_earnings_cents: number | null; applies_to_services: string[]; reason: string | null; customer: Customer };
+type Payload = { recurring?: RecurringRow[]; customers?: CustomerRow[] };
 
 const money = (cents: number | null) => cents == null ? "Not set" : `R${(cents / 100).toFixed(0)}`;
 
@@ -18,20 +20,29 @@ export default function EarningsPoliciesPage() {
   const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
-    setLoading(true); setError("");
-    const response = await fetch("/api/admin/earnings-policies", { cache: "no-store" });
-    const json = await response.json();
-    if (!response.ok) setError(json.error ?? "Could not load earnings policies.");
-    else { setRecurring(json.recurring ?? []); setCustomers(json.customers ?? []); }
+    setLoading(true);
+    setError("");
+    const result = await adminFetch<Payload>("/api/admin/earnings-policies", { method: "GET", cache: "no-store" });
+    if (!result.ok) setError(result.error ?? "Could not load earnings policies.");
+    else {
+      setRecurring(result.data?.recurring ?? []);
+      setCustomers(result.data?.customers ?? []);
+    }
     setLoading(false);
   }, []);
+
   useEffect(() => { void load(); }, [load]);
 
   const update = async (kind: "recurring" | "customer", id: string, policy: Policy, cents: number | null) => {
-    const key = `${kind}:${id}`; setSaving(key); setError("");
-    const response = await fetch("/api/admin/earnings-policies", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ kind, id, earnings_policy: policy, legacy_earnings_rand: cents == null ? null : cents / 100 }) });
-    const json = await response.json();
-    if (!response.ok) setError(json.error ?? "Could not save policy."); else await load();
+    const key = `${kind}:${id}`;
+    setSaving(key);
+    setError("");
+    const result = await adminFetch("/api/admin/earnings-policies", {
+      method: "PATCH",
+      body: JSON.stringify({ kind, id, earnings_policy: policy, legacy_earnings_rand: cents == null ? null : cents / 100 }),
+    });
+    if (!result.ok) setError(result.error ?? "Could not save policy.");
+    else await load();
     setSaving("");
   };
 
