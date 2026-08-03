@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Calendar, MapPin, Phone } from "lucide-react";
+import { Calendar, ChevronRight, MapPin, Phone } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { CleanerBookingRow } from "@/lib/cleaner/cleanerBookingRow";
 import { CleanerJobPrimaryActionButton } from "@/components/cleaner/CleanerJobPrimaryActionButton";
@@ -34,17 +34,21 @@ type NextJobCardProps = {
 function statusChipClass(variant: StatusVariant | undefined): string {
   switch (variant) {
     case "in-progress":
-      return "bg-sky-100 text-sky-700 border border-sky-200";
+      return "border-sky-200 bg-sky-50 text-sky-700";
     case "starting-soon":
-      return "bg-red-100 text-red-700 border border-red-200";
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "accepted":
-      return "bg-green-100 text-green-700 border border-green-200";
+      return "border-green-200 bg-green-50 text-green-700";
     default:
-      return "bg-blue-100 text-blue-700 border border-blue-200";
+      return "border-blue-200 bg-blue-50 text-blue-700";
   }
 }
 
 function formatCountdown(msUntil: number): string {
+  if (msUntil <= -60_000) {
+    const lateMinutes = Math.max(1, Math.floor(Math.abs(msUntil) / 60_000));
+    return `${lateMinutes} min late`;
+  }
   if (msUntil <= 0) return "Starting now";
   const totalMin = Math.floor(msUntil / 60000);
   if (totalMin < 1) return "Starts in under a minute";
@@ -57,9 +61,8 @@ function formatCountdown(msUntil: number): string {
 
 function urgencyClass(msUntil: number | null): string {
   if (msUntil == null) return "text-slate-500";
-  if (msUntil <= 15 * 60_000) return "font-bold text-red-600";
-  if (msUntil <= 45 * 60_000) return "font-semibold text-red-500";
-  if (msUntil <= 2 * 60 * 60_000) return "font-semibold text-amber-600";
+  if (msUntil < 0) return "font-bold text-red-600";
+  if (msUntil <= 45 * 60_000) return "font-semibold text-amber-600";
   return "font-semibold text-green-600";
 }
 
@@ -96,96 +99,63 @@ export function NextJobCard({
 
   const msUntil = startsAtMs != null ? startsAtMs - nowMs : null;
   const countdownText = msUntil != null ? formatCountdown(msUntil) : null;
-
   const scopeParts = [serviceLabel, durationLabel, roomsLabel].filter(Boolean);
 
   return (
-    <div
-      className={cn(
-        "overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm",
-        className,
-      )}
-    >
-      {/* Header row */}
-      <div className="flex items-center justify-between gap-2 px-4 pt-4 pb-3 border-b border-gray-50">
-        <div className="flex items-center gap-2">
-          <span className="rounded-full bg-blue-600 px-2.5 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
-            Next Job
-          </span>
-          <span
-            className={cn(
-              "rounded-full px-2.5 py-0.5 text-xs font-semibold uppercase tracking-wide",
-              statusChipClass(statusVariant),
-            )}
-          >
-            {statusLabel}
-          </span>
-        </div>
-        {countdownText ? (
-          <span className={cn("text-xs tabular-nums", urgencyClass(msUntil))}>
-            {countdownText}
-          </span>
-        ) : null}
+    <section className={cn("rounded-2xl border border-slate-200 bg-white p-4 shadow-sm", className)}>
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs font-bold uppercase tracking-[0.16em] text-slate-500">Next job</p>
+        <span className={cn("rounded-full border px-2.5 py-1 text-xs font-semibold", statusChipClass(statusVariant))}>
+          {statusLabel}
+        </span>
       </div>
 
-      {/* Body */}
-      <div className="px-4 py-3 space-y-3">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1 space-y-1.5">
-            <div className="flex items-center gap-1.5">
-              <Calendar className="mt-0.5 size-3.5 shrink-0 text-blue-500" aria-hidden />
-              <p className="text-base font-bold text-slate-900">
-                {dateLabel} • {timeLabel}
-              </p>
-            </div>
-            <div className="flex items-start gap-1.5">
-              <MapPin className="mt-0.5 size-3.5 shrink-0 text-slate-400" aria-hidden />
-              <p className="text-sm text-slate-600 leading-tight">{address}</p>
-            </div>
-            {scopeParts.length > 0 ? (
-              <p className="pl-5 text-xs text-slate-400">{scopeParts.join(" • ")}</p>
-            ) : null}
-          </div>
-
-          <div className="shrink-0 rounded-2xl bg-green-50 border border-green-100 px-3 py-2 text-center min-w-[90px]">
-            <p className="text-xs font-semibold uppercase tracking-wider text-green-600">
-              Job Earning
-            </p>
-            <p className="mt-0.5 text-base font-extrabold tabular-nums text-green-700 leading-none">
-              {earningsLabel}
-            </p>
+      <div className="mt-4 flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <Calendar className="mt-0.5 size-4 shrink-0 text-blue-600" aria-hidden />
+          <div>
+            <p className="text-lg font-bold text-slate-900">{dateLabel}, {timeLabel}</p>
+            {countdownText ? <p className={cn("mt-0.5 text-xs tabular-nums", urgencyClass(msUntil))}>{countdownText}</p> : null}
           </div>
         </div>
+      </div>
 
-        {/* Actions */}
-        <div className="flex items-start gap-2">
-          <CleanerJobPrimaryActionButton
-            bookingId={bookingId}
-            row={bookingRow}
-            mapsQuery={mapsQuery}
-            clockOffsetMs={clockOffsetMs}
-            onRowPatched={onRowPatched}
-            onRefresh={onRefresh}
-          />
-          {contactHref ? (
-            <a
-              href={contactHref}
-              className="flex h-9 min-w-0 flex-1 items-center justify-center gap-1.5 rounded-xl border border-gray-200 bg-white text-sm font-medium text-slate-700 transition-colors hover:bg-gray-50 active:scale-95"
-            >
-              <Phone className="size-3.5 text-blue-500" aria-hidden />
-              Contact client
+      <div className="mt-4 flex items-start gap-2">
+        <MapPin className="mt-0.5 size-4 shrink-0 text-slate-400" aria-hidden />
+        <div className="min-w-0">
+          <p className="text-sm font-semibold leading-snug text-slate-800">{address}</p>
+          {scopeParts.length > 0 ? <p className="mt-1 text-xs text-slate-500">{scopeParts.join(" • ")}</p> : null}
+          {mapsQuery ? (
+            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(mapsQuery)}`} target="_blank" rel="noreferrer" className="mt-1 inline-flex text-xs font-semibold text-blue-600 hover:underline">
+              Open in Maps
             </a>
           ) : null}
         </div>
       </div>
 
-      <Link
-        href={jobHref}
-        className="flex h-12 w-full items-center justify-between gap-2 bg-blue-600 px-4 text-sm font-semibold text-white transition-colors hover:bg-blue-700 active:bg-blue-800"
-      >
-        <span>View job details</span>
-        <span aria-hidden className="text-blue-200">›</span>
-      </Link>
-    </div>
+      <div className="mt-4 rounded-xl bg-slate-50 px-4 py-3">
+        <p className="text-xs font-medium text-slate-500">Expected earnings</p>
+        <p className="mt-0.5 text-2xl font-extrabold tabular-nums text-slate-900">{earningsLabel}</p>
+      </div>
+
+      <div className="mt-4 space-y-2">
+        <CleanerJobPrimaryActionButton
+          bookingId={bookingId}
+          row={bookingRow}
+          mapsQuery={mapsQuery}
+          clockOffsetMs={clockOffsetMs}
+          onRowPatched={onRowPatched}
+          onRefresh={onRefresh}
+        />
+        <Link href={jobHref} className="flex h-11 w-full items-center justify-center gap-1.5 rounded-xl border border-slate-200 bg-white text-sm font-semibold text-slate-700 hover:bg-slate-50">
+          View job details <ChevronRight className="size-4" aria-hidden />
+        </Link>
+        {contactHref ? (
+          <a href={contactHref} className="flex h-10 w-full items-center justify-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900">
+            <Phone className="size-4" aria-hidden /> Contact client
+          </a>
+        ) : null}
+      </div>
+    </section>
   );
 }
