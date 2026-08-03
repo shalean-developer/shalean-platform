@@ -1,7 +1,10 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Loader2, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
+import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 
 type AvailabilityCardProps = {
   receivingOffers: boolean;
@@ -42,6 +45,39 @@ export function AvailabilityCard({
   idle = false,
   className,
 }: AvailabilityCardProps) {
+  const [completedJobsThisMonth, setCompletedJobsThisMonth] = useState<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCompletedJobs = async () => {
+      const headers = await getCleanerAuthHeaders();
+      if (!headers || cancelled) return;
+
+      const response = await cleanerAuthenticatedFetch("/api/cleaner/completed-jobs-month", {
+        headers,
+        cache: "no-store",
+      });
+      const json = (await response.json().catch(() => ({}))) as {
+        completed_jobs_month?: number;
+      };
+
+      if (
+        !cancelled &&
+        response.ok &&
+        typeof json.completed_jobs_month === "number" &&
+        Number.isFinite(json.completed_jobs_month)
+      ) {
+        setCompletedJobsThisMonth(Math.max(0, Math.round(json.completed_jobs_month)));
+      }
+    };
+
+    void loadCompletedJobs();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   const isOnline = browserOnline && receivingOffers;
   const statusLabel = !browserOnline
     ? "Offline"
@@ -99,10 +135,11 @@ export function AvailabilityCard({
 
       <div className="mt-3.5 grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100 pt-3">
         <div className="flex flex-col items-center gap-0.5 px-2 first:pl-0 last:pr-0">
-          <p className="text-xs font-medium text-slate-400">Jobs</p>
+          <p className="text-center text-xs font-medium leading-tight text-slate-400">Completed Jobs</p>
           <p className="text-lg font-bold text-slate-900 tabular-nums">
-            {jobsCount ?? 0}
+            {completedJobsThisMonth ?? jobsCount ?? 0}
           </p>
+          <p className="text-[10px] text-slate-400">This month</p>
         </div>
         <div className="flex flex-col items-center gap-0.5 px-2">
           <div className="flex items-center gap-0.5">
