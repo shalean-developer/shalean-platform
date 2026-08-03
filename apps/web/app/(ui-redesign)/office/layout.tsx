@@ -3,6 +3,7 @@ import { AppMonoFontScope } from "@/components/fonts/AppMonoFontScope";
 import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
 import { OfficeShell } from "@/src/features/office/OfficeShell";
 import { OfficePermissionBoundary } from "@/src/features/office/OfficePermissionBoundary";
+import { OfficePermissionNavigationGate } from "@/src/features/office/OfficePermissionNavigationGate";
 
 export const metadata = {
   title: "Office | Shalean Admin",
@@ -27,9 +28,11 @@ export default function OfficeLayout({ children }: { children: ReactNode }) {
   return (
     <AppMonoFontScope>
       <OfficeEnvironmentIndicator />
-      <OfficeShell>
-        <OfficePermissionBoundary>{children}</OfficePermissionBoundary>
-      </OfficeShell>
+      <OfficePermissionNavigationGate>
+        <OfficeShell>
+          <OfficePermissionBoundary>{children}</OfficePermissionBoundary>
+        </OfficeShell>
+      </OfficePermissionNavigationGate>
     </AppMonoFontScope>
   );
 }
