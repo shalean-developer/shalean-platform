@@ -1,26 +1,30 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { applyEffectiveBranchScope } from "@/lib/admin/applyEffectiveBranchScope";
 import { getEffectiveAdminScope } from "@/lib/admin/effectiveAdminScope";
+import { GET as getLegacyAdminBookings } from "../route";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const NO_BRANCH_SENTINEL = "00000000-0000-0000-0000-000000000000";
 
 function bearerToken(request: Request): string {
   return request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
 }
 
-function positiveInt(raw: string | null, fallback: number): number {
-  const value = Number(raw);
-  return Number.isFinite(value) && value > 0 ? Math.floor(value) : fallback;
-}
-
 /**
- * Phase 3B branch-scoped booking read model.
+ * Phase 3B branch-scoped adapter for the real Office bookings read model.
  *
- * This endpoint is intentionally read-only. It establishes the secure query
- * pattern before the larger legacy admin bookings route is migrated in smaller,
- * reviewable slices.
+ * The legacy bookings endpoint owns the complete filtering, pagination,
+ * metrics and response shape used by `/office/bookings`. This adapter resolves
+ * the signed-in admin's effective branch scope first, then forwards the request
+ * to that endpoint with an enforced city filter.
+ *
+ * Owner / wildcard scope remains unfiltered. A restricted admin with exactly
+ * one branch is pinned to that branch, regardless of any cityId supplied by the
+ * browser. No branch assignment fails closed by using a UUID that cannot match
+ * an operational city. Multi-branch support remains explicit rather than
+ * silently widening access.
  */
 export async function GET(request: Request) {
   const token = bearerToken(request);
@@ -40,7 +44,10 @@ export async function GET(request: Request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data: { user }, error: userError } = await publicClient.auth.getUser(token);
+  const {
+    data: { user },
+    error: userError,
+  } = await publicClient.auth.getUser(token);
   if (userError || !user?.id) {
     return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
   }
@@ -54,39 +61,31 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Access restricted." }, { status: 403 });
   }
 
-  const requestUrl = new URL(request.url);
-  const page = positiveInt(requestUrl.searchParams.get("page"), 1);
-  const pageSize = Math.min(100, positiveInt(requestUrl.searchParams.get("pageSize"), 25));
-  const from = (page - 1) * pageSize;
-  const to = from + pageSize - 1;
+  const forwardedUrl = new URL(request.url);
+  forwardedUrl.pathname = "/api/admin/bookings";
 
-  let query = adminClient
-    .from("bookings")
-    .select(
-      "id, booking_reference, customer_name, customer_email, service, service_slug, date, time, location, city_id, status, payment_status, cleaner_id, team_id, total_paid_zar, amount_paid_cents, created_at",
-      { count: "exact" },
-    );
-
-  query = applyEffectiveBranchScope({ query, scope, column: "city_id" }) as typeof query;
-  query = query.order("created_at", { ascending: false }).range(from, to);
-
-  const { data, error, count } = await query;
-  if (error) {
-    console.error("Scoped bookings query failed", { userId: user.id, error: error.message });
-    return NextResponse.json({ error: "Could not load bookings." }, { status: 500 });
+  const wildcard = scope.isOwner || scope.branches.includes("*");
+  if (!wildcard) {
+    if (scope.branches.length === 0) {
+      forwardedUrl.searchParams.set("cityId", NO_BRANCH_SENTINEL);
+    } else if (scope.branches.length === 1) {
+      forwardedUrl.searchParams.set("cityId", scope.branches[0]);
+    } else {
+      return NextResponse.json(
+        {
+          error:
+            "Multi-branch booking scope is not yet enabled for this read model. Assign one branch or use the Owner role.",
+        },
+        { status: 503 },
+      );
+    }
   }
 
-  return NextResponse.json({
-    data: data ?? [],
-    pagination: {
-      page,
-      pageSize,
-      total: count ?? 0,
-      totalPages: Math.max(1, Math.ceil((count ?? 0) / pageSize)),
-    },
-    scope: {
-      isOwner: scope.isOwner,
-      branches: scope.branches,
-    },
+  const forwardedRequest = new Request(forwardedUrl, {
+    method: "GET",
+    headers: request.headers,
+    cache: "no-store",
   });
+
+  return getLegacyAdminBookings(forwardedRequest);
 }
