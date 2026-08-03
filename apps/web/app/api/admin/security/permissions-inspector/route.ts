@@ -4,6 +4,26 @@ import { requireAdminPermissionFromRequest } from "@/lib/admin/requirePermission
 
 export const dynamic = "force-dynamic";
 
+type PermissionSnapshotRow = {
+  permission_code: string;
+  role_code: string;
+  role_name: string;
+  branch_id: string | null;
+  team_id: string | null;
+  starts_at: string;
+  expires_at: string | null;
+};
+
+type RoleSnapshot = {
+  key: string;
+  code: string;
+  name: string;
+  branchId: string | null;
+  teamId: string | null;
+  startsAt: string;
+  expiresAt: string | null;
+};
+
 function adminClient() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -43,9 +63,11 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Permission snapshot unavailable." }, { status: 503 });
   }
 
-  const rows = data ?? [];
-  const permissions = [...new Set(rows.map((row: { permission_code: string }) => row.permission_code))].sort();
-  const roles = rows.reduce<Array<Record<string, unknown>>>((result, row: Record<string, unknown>) => {
+  const rows: PermissionSnapshotRow[] = Array.isArray(data)
+    ? (data as PermissionSnapshotRow[])
+    : [];
+  const permissions = [...new Set(rows.map((row) => row.permission_code))].sort();
+  const roles = rows.reduce<RoleSnapshot[]>((result, row) => {
     const key = `${row.role_code}:${row.branch_id ?? "global"}:${row.team_id ?? "global"}`;
     if (!result.some((item) => item.key === key)) {
       result.push({
