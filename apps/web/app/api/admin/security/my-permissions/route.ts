@@ -1,4 +1,4 @@
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
@@ -10,9 +10,13 @@ type AssignmentRow = {
   expires_at: string | null;
   revoked_at: string | null;
 };
+type RoleRow = { id: string };
 type RolePermissionRow = {
   role_id: string;
-  admin_permissions: { code?: string | null; is_active?: boolean | null } | Array<{ code?: string | null; is_active?: boolean | null }> | null;
+  admin_permissions:
+    | { code?: string | null; is_active?: boolean | null }
+    | Array<{ code?: string | null; is_active?: boolean | null }>
+    | null;
 };
 
 function bearerToken(request: Request): string {
@@ -27,7 +31,7 @@ function permissionFromRelation(
 }
 
 async function loadPermissionsFromTables(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: SupabaseClient<any, any, any>,
   userId: string,
 ): Promise<{ permissions: string[]; error: unknown | null }> {
   const now = Date.now();
@@ -39,16 +43,18 @@ async function loadPermissionsFromTables(
   if (assignmentsError) return { permissions: [], error: assignmentsError };
 
   const assignments = (assignmentsData ?? []) as AssignmentRow[];
-  const candidateRoleIds = [...new Set(
-    assignments
-      .filter((row) => {
-        if (row.revoked_at) return false;
-        const startsAt = Date.parse(row.starts_at);
-        const expiresAt = row.expires_at ? Date.parse(row.expires_at) : null;
-        return startsAt <= now && (expiresAt === null || expiresAt > now);
-      })
-      .map((row) => row.role_id),
-  )];
+  const candidateRoleIds = [
+    ...new Set(
+      assignments
+        .filter((row) => {
+          if (row.revoked_at) return false;
+          const startsAt = Date.parse(row.starts_at);
+          const expiresAt = row.expires_at ? Date.parse(row.expires_at) : null;
+          return startsAt <= now && (expiresAt === null || expiresAt > now);
+        })
+        .map((row) => row.role_id),
+    ),
+  ];
 
   if (candidateRoleIds.length === 0) return { permissions: [], error: null };
 
@@ -59,7 +65,7 @@ async function loadPermissionsFromTables(
     .eq("is_active", true);
 
   if (rolesError) return { permissions: [], error: rolesError };
-  const activeRoleIds = (rolesData ?? []).map((row) => String(row.id));
+  const activeRoleIds = ((rolesData ?? []) as RoleRow[]).map((row) => row.id);
   if (activeRoleIds.length === 0) return { permissions: [], error: null };
 
   const { data: permissionData, error: permissionError } = await adminClient
@@ -69,11 +75,13 @@ async function loadPermissionsFromTables(
 
   if (permissionError) return { permissions: [], error: permissionError };
 
-  const permissions = [...new Set(
-    ((permissionData ?? []) as unknown as RolePermissionRow[])
-      .map((row) => permissionFromRelation(row.admin_permissions))
-      .filter((code): code is string => Boolean(code)),
-  )].sort();
+  const permissions = [
+    ...new Set(
+      ((permissionData ?? []) as unknown as RolePermissionRow[])
+        .map((row) => permissionFromRelation(row.admin_permissions))
+        .filter((code): code is string => Boolean(code)),
+    ),
+  ].sort();
 
   return { permissions, error: null };
 }
@@ -91,12 +99,17 @@ export async function GET(request: Request) {
 
   const publicClient = createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } });
   const adminClient = createClient(url, serviceRole, { auth: { persistSession: false, autoRefreshToken: false } });
-  const { data: { user }, error: userError } = await publicClient.auth.getUser(token);
+  const {
+    data: { user },
+    error: userError,
+  } = await publicClient.auth.getUser(token);
   if (userError || !user?.id) {
     return NextResponse.json({ error: "Invalid or expired session." }, { status: 401 });
   }
 
-  const { data, error } = await adminClient.rpc("admin_permission_snapshot", { p_target_user_id: user.id });
+  const { data, error } = await adminClient.rpc("admin_permission_snapshot", {
+    p_target_user_id: user.id,
+  });
   if (!error) {
     const rows = Array.isArray(data) ? (data as PermissionRow[]) : [];
     const permissions = [...new Set(rows.map((row) => row.permission_code).filter(Boolean))].sort();
@@ -113,5 +126,9 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Authorization unavailable." }, { status: 503 });
   }
 
-  return NextResponse.json({ userId: user.id, permissions: fallback.permissions, source: "tables" });
+  return NextResponse.json({
+    userId: user.id,
+    permissions: fallback.permissions,
+    source: "tables",
+  });
 }
