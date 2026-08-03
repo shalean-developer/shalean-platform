@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useCleanerDashboardData } from "@/hooks/useCleanerDashboardData";
 import { useCleanerNavBadges } from "@/components/cleaner-dashboard/CleanerNavBadgesContext";
 import { CleanerPageHeader } from "@/components/cleaner/CleanerPageHeader";
@@ -14,6 +14,8 @@ import { JobOffersSection } from "@/components/cleaner-dashboard/JobOffersSectio
 import { PendingOffersDashboardHero } from "@/components/cleaner-dashboard/PendingOffersDashboardHero";
 import { ActiveJobHero } from "@/components/cleaner-dashboard/ActiveJobHero";
 import { formatCleanerJobEarningDisplay } from "@/lib/cleaner/cleanerJobEarning";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
+import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { Button } from "@/components/ui/button";
 
 function HomeLoadingSkeleton() {
@@ -31,6 +33,7 @@ function HomeLoadingSkeleton() {
 
 export default function JobsHomePage() {
   const { setOpenJobsCount, setPendingOffersCount } = useCleanerNavBadges();
+  const [completedJobsThisMonth, setCompletedJobsThisMonth] = useState(0);
 
   const {
     loading,
@@ -69,6 +72,26 @@ export default function JobsHomePage() {
   useEffect(() => { setOpenJobsCount(openJobCount); }, [openJobCount, setOpenJobsCount]);
   useEffect(() => { setPendingOffersCount(offerCards.length); }, [offerCards.length, setPendingOffersCount]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const loadCompletedJobs = async () => {
+      const headers = await getCleanerAuthHeaders();
+      if (!headers) return;
+      const response = await cleanerAuthenticatedFetch("/api/cleaner/completed-jobs-month", {
+        headers,
+        cache: "no-store",
+      });
+      const json = (await response.json().catch(() => ({}))) as { completed_jobs?: number };
+      if (!cancelled && response.ok && typeof json.completed_jobs === "number") {
+        setCompletedJobsThisMonth(Math.max(0, Math.round(json.completed_jobs)));
+      }
+    };
+    void loadCompletedJobs();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (loading) return <HomeLoadingSkeleton />;
 
   if (error) {
@@ -93,13 +116,11 @@ export default function JobsHomePage() {
 
   return (
     <div className="mx-auto w-full max-w-lg px-4 pb-6 space-y-4">
-      {/* Greeting */}
       <CleanerPageHeader
         firstName={firstName || "there"}
         subline="You're online and ready to go."
       />
 
-      {/* Availability + stats */}
       <AvailabilityCard
         receivingOffers={receivingOffers}
         rosterIncludesToday={rosterIncludesToday}
@@ -107,13 +128,13 @@ export default function JobsHomePage() {
         onGoAvailable={() => void goAvailable()}
         onGoOffline={() => void goOffline()}
         availabilityBusy={availabilityBusy}
-        jobsCount={openJobCount}
+        jobsCount={completedJobsThisMonth}
+        jobsLabel="Completed Jobs"
         ratingDisplay={ratingLabel}
         todayEarningsLabel={earningsSnapshot.todayZarLabel}
         idle={isIdle && confirmedIdle}
       />
 
-      {/* Per-surface errors (non-blocking) */}
       {offersError ? (
         <p className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
           Couldn&apos;t refresh offers — showing last loaded.
@@ -133,7 +154,6 @@ export default function JobsHomePage() {
         </div>
       ) : null}
 
-      {/* Pending offers */}
       {hasPendingOffers ? (
         <>
           <PendingOffersDashboardHero pendingOffersCount={offerCards.length} sticky />
@@ -147,7 +167,6 @@ export default function JobsHomePage() {
         </>
       ) : null}
 
-      {/* Active job hero */}
       {activeJob && activeJobRow ? (
         <ActiveJobHero
           job={activeJob}
@@ -163,7 +182,6 @@ export default function JobsHomePage() {
         />
       ) : null}
 
-      {/* Next job card */}
       {!activeJob && nextHighlightedJob && nextHighlightedJobRow ? (
         <NextJobCard
           jobHref={nextHighlightedJob.href}
@@ -190,10 +208,8 @@ export default function JobsHomePage() {
         />
       ) : null}
 
-      {/* Today's earnings */}
       <CleanerEarningsCard earnings={earningsSnapshot} />
 
-      {/* Upcoming jobs */}
       {upcomingForHome.length > 0 ? (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -230,13 +246,9 @@ export default function JobsHomePage() {
         </div>
       ) : null}
 
-      {/* Quick actions */}
       <QuickActionCard />
-
-      {/* Activity feed */}
       <ActivityFeed entries={activityFeedDisplay} maxVisible={5} />
 
-      {/* Empty state for offers section (accessibility anchor) */}
       {!hasPendingOffers ? (
         <JobOffersSection
           offers={offerCards}
