@@ -11,6 +11,7 @@ type AvailabilityCardProps = {
   onGoOffline: () => void;
   availabilityBusy?: boolean;
   jobsCount?: number | null;
+  jobsLabel?: string;
   ratingDisplay?: string | null;
   todayEarningsLabel?: string | null;
   idle?: boolean;
@@ -37,6 +38,7 @@ export function AvailabilityCard({
   onGoOffline,
   availabilityBusy = false,
   jobsCount,
+  jobsLabel = "Jobs",
   ratingDisplay,
   todayEarningsLabel,
   idle = false,
@@ -99,7 +101,7 @@ export function AvailabilityCard({
 
       <div className="mt-3.5 grid grid-cols-3 divide-x divide-gray-100 border-t border-gray-100 pt-3">
         <div className="flex flex-col items-center gap-0.5 px-2 first:pl-0 last:pr-0">
-          <p className="text-xs font-medium text-slate-400">Jobs</p>
+          <p className="text-center text-xs font-medium leading-tight text-slate-400">{jobsLabel}</p>
           <p className="text-lg font-bold text-slate-900 tabular-nums">
             {jobsCount ?? 0}
           </p>
