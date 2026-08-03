@@ -1,11 +1,13 @@
 "use client";
 
-import { Bell } from "lucide-react";
+import { Bell, Star, ThumbsUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type CleanerPageHeaderProps = {
   firstName: string;
   subline?: string;
+  ratingDisplay?: string | null;
+  reliabilityDisplay?: string | null;
   notificationCount?: number;
   onNotificationClick?: () => void;
   className?: string;
@@ -14,17 +16,32 @@ type CleanerPageHeaderProps = {
 export function CleanerPageHeader({
   firstName,
   subline,
+  ratingDisplay,
+  reliabilityDisplay,
   notificationCount = 0,
   onNotificationClick,
   className,
 }: CleanerPageHeaderProps) {
+  const showPerformance = Boolean(ratingDisplay || reliabilityDisplay);
+
   return (
     <div className={cn("flex items-start justify-between pt-4 pb-2", className)}>
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">
           Hi, {firstName} {"\u{1F44B}"}
         </h1>
-        {subline ? (
+        {showPerformance ? (
+          <div className="mt-1 flex items-center gap-3 text-sm font-semibold text-slate-600">
+            <span className="inline-flex items-center gap-1">
+              <Star className="size-4 fill-amber-400 text-amber-400" aria-hidden />
+              <span>{ratingDisplay ?? "—"}</span>
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <ThumbsUp className="size-4 text-blue-600" aria-hidden />
+              <span>{reliabilityDisplay ?? "—"}</span>
+            </span>
+          </div>
+        ) : subline ? (
           <p className="mt-0.5 text-sm text-slate-400">{subline}</p>
         ) : null}
       </div>
