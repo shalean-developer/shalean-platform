@@ -107,7 +107,11 @@ export default function JobsHomePage() {
   const isIdle = !activeJob && !nextHighlightedJob && !hasPendingOffers;
   const ratingLabel =
     typeof performanceMetrics?.rating === "number"
-      ? performanceMetrics.rating.toFixed(1)
+      ? performanceMetrics.rating.toFixed(2)
+      : null;
+  const reliabilityLabel =
+    typeof performanceMetrics?.completionPct === "number"
+      ? `${Math.max(0, Math.min(100, Math.round(performanceMetrics.completionPct)))}%`
       : null;
 
   const upcomingForHome = upcomingJobs
@@ -118,7 +122,8 @@ export default function JobsHomePage() {
     <div className="mx-auto w-full max-w-lg px-4 pb-6 space-y-4">
       <CleanerPageHeader
         firstName={firstName || "there"}
-        subline="You're online and ready to go."
+        ratingDisplay={ratingLabel}
+        reliabilityDisplay={reliabilityLabel}
       />
 
       <AvailabilityCard
