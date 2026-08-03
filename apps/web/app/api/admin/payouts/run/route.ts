@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { requireAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import {
   executeAllCleanersApprovedEarningsPaystack,
   executeCleanerApprovedEarningsPaystack,
@@ -16,8 +16,8 @@ type Body = { cleaner_id?: string | null };
  * Weekly `cleaner_payouts` batches use other routes (`/api/admin/payouts/[id]/pay`, payout runs).
  */
 export async function POST(request: Request) {
-  const auth = await requireAdminApi(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireAdminPermissionFromRequest(request, "payout.release");
+  if (!auth.ok) return auth.response;
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -34,7 +34,7 @@ export async function POST(request: Request) {
     if (!/^[0-9a-f-]{36}$/i.test(cleanerId)) {
       return NextResponse.json({ error: "Provide a valid cleaner_id or omit for all cleaners." }, { status: 400 });
     }
-    const r = await executeCleanerApprovedEarningsPaystack(admin, { cleanerId, initiatedBy: auth.userId });
+    const r = await executeCleanerApprovedEarningsPaystack(admin, { cleanerId, initiatedBy: auth.user.id });
     if (!r.ok) {
       return NextResponse.json(
         { error: r.error, code: r.code },
@@ -52,7 +52,7 @@ export async function POST(request: Request) {
     });
   }
 
-  const batch = await executeAllCleanersApprovedEarningsPaystack(admin, { initiatedBy: auth.userId });
+  const batch = await executeAllCleanersApprovedEarningsPaystack(admin, { initiatedBy: auth.user.id });
   return NextResponse.json({
     ok: true,
     scope: "all_cleaners_with_approved_earnings",
