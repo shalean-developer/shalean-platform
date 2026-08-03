@@ -5,20 +5,31 @@ import {
 } from "@/lib/payout/bookingEarningsSummary";
 
 /**
- * Single cleaner-facing earnings amount for jobs and offers: line-ledger total when set,
- * else positive frozen (settlement lock) then display. `payout_frozen_cents = 0` does not
- * override a positive `display_earnings_cents` (legacy / inconsistent rows); 0/0 remains zero.
+ * Single cleaner-facing earnings amount for jobs and offers.
+ *
+ * Legacy July bookings are locked to their historical persisted display amount.
+ * They must never be overridden by a stale line total or a Current V1 earnings
+ * summary. For all other policies, line-ledger total remains authoritative,
+ * followed by frozen settlement and display earnings.
  */
 export function resolveCleanerEarningsCents(row: {
+  earnings_policy?: unknown;
   cleaner_earnings_total_cents?: unknown;
   payout_frozen_cents?: unknown;
   display_earnings_cents?: unknown;
 }): number | null {
+  const policy = String(row.earnings_policy ?? "").trim().toLowerCase();
+  const frozen = optionalCentsFromDb(row.payout_frozen_cents);
+  const display = optionalCentsFromDb(row.display_earnings_cents);
+
+  if (policy === "legacy_july") {
+    if (frozen !== null && frozen > 0) return frozen;
+    if (display !== null) return display;
+  }
+
   const lineTotal = optionalCentsFromDb(row.cleaner_earnings_total_cents);
   if (lineTotal !== null && lineTotal > 0) return lineTotal;
 
-  const frozen = optionalCentsFromDb(row.payout_frozen_cents);
-  const display = optionalCentsFromDb(row.display_earnings_cents);
   if (frozen !== null && frozen > 0) return frozen;
   if (frozen === 0 && display !== null && display > 0) return display;
   if (frozen !== null) return frozen;
@@ -28,10 +39,11 @@ export function resolveCleanerEarningsCents(row: {
 
 /**
  * Per-cleaner amount shown on the cleaner dashboard earnings screen and matched in office payouts.
- * Uses `earnings_summary` per-cleaner totals when present, else {@link resolveCleanerEarningsCents}.
+ * Legacy July bookings use the locked booking amount before considering any stale earnings summary.
  */
 export function resolveCleanerDashboardEarningsCents(
   booking: {
+    earnings_policy?: unknown;
     viewer_payout_cents?: unknown;
     earnings_summary?: unknown;
     cleaner_earnings_total_cents?: unknown;
@@ -42,6 +54,13 @@ export function resolveCleanerDashboardEarningsCents(
 ): number {
   const viewerPayout = optionalCentsFromDb(booking.viewer_payout_cents);
   if (viewerPayout !== null) return Math.max(0, Math.round(viewerPayout));
+
+  const policy = String(booking.earnings_policy ?? "").trim().toLowerCase();
+  if (policy === "legacy_july") {
+    const locked = resolveCleanerEarningsCents(booking);
+    return Math.max(0, Math.round(locked ?? 0));
+  }
+
   const facing = resolveCleanerFacingEarnings(
     parseBookingEarningsSummary(booking.earnings_summary),
     cleanerId,
