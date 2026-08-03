@@ -31,7 +31,7 @@ function johannesburgCurrentMonthRange(): { from: string; to: string } {
  * "All dates". Until the page state is fully separated, remove only that exact
  * implicit current-month pair. User-selected custom ranges remain intact.
  */
-function normalizedAdminReadParams(
+export function normalizedAdminReadParams(
   endpoint: string,
   params?: Record<string, string>,
 ): Record<string, string> | undefined {
