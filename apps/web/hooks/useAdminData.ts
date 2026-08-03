@@ -3,6 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { getSupabaseAccessToken } from "@/lib/supabase/browser";
 
+function scopedAdminReadEndpoint(endpoint: string): string {
+  return endpoint === "/api/admin/bookings" ? "/api/admin/bookings/scoped" : endpoint;
+}
+
 /**
  * Shared hook for authenticated admin API fetches.
  * Automatically attaches Bearer token from the active Supabase session.
@@ -37,9 +41,10 @@ export function useAdminData<T>(
         return;
       }
 
-      let url = endpoint;
+      const resolvedEndpoint = scopedAdminReadEndpoint(endpoint);
+      let url = resolvedEndpoint;
       if (paramsKey) {
-        url = `${endpoint}?${paramsKey}`;
+        url = `${resolvedEndpoint}?${paramsKey}`;
       }
 
       const res = await globalThis.fetch(url, {
