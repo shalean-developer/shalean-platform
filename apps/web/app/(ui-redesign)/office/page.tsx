@@ -10,6 +10,8 @@ import {
   buildOfficeScheduleCleanersById,
   computeOfficeScheduleCleanerStats,
   officeScheduleAssignedCleanerLabel,
+  rosterIncludesWeekdayForSchedule,
+  weekdayIndexForScheduleYmd,
   type OfficeScheduleDayResponse,
 } from "@/lib/admin/officeScheduleDayPresentation";
 import {
@@ -29,11 +31,11 @@ import {
   Shield,
   TrendingUp,
   UserCheck,
+  Users,
   Zap,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-// ─── Types ─────────────────────────────────────────────────────────────────
 type DashboardStats = {
   fetchedAt?: string;
   revenueTodayZar?: number;
@@ -59,35 +61,10 @@ type DashboardStats = {
     refunds30dZar: number;
     refunds30dCount: number;
   };
-  recentActivity?: Array<{
-    createdAt: string;
-    type: string;
-    details: string;
-    user: string;
-    severity: "success" | "info" | "warning" | "error" | string;
-  }>;
   systemStatus?: {
     website?: "operational" | "degraded" | "down" | "warning";
     bookingEngine?: "operational" | "degraded" | "down" | "warning";
     paymentGateway?: "operational" | "degraded" | "down" | "warning";
-    productionHealth?: {
-      generatedAt?: string;
-      totals?: {
-        critical: number;
-        high: number;
-        medium: number;
-        low: number;
-        info: number;
-      };
-      totalFindings?: number;
-      topFindings?: Array<{
-        code: string;
-        severity: string;
-        count: number;
-        message: string;
-      }>;
-      error?: string;
-    };
     cronErrorsLast24h?: number;
   };
 };
@@ -115,8 +92,6 @@ type StatusAlert = {
   tone: "ok" | "warning" | "critical";
   href?: string;
 };
-
-// ─── Helpers ───────────────────────────────────────────────────────────────
 
 function zar(value: number): string {
   return `R ${Math.round(value).toLocaleString("en-ZA")}`;
@@ -149,8 +124,6 @@ function pct(part: number, total: number): number {
   return Math.round((part / total) * 1000) / 10;
 }
 
-// ─── Zoho-style sub-components ─────────────────────────────────────────────
-
 function ZohoPanel({
   title,
   href,
@@ -180,8 +153,7 @@ function ZohoPanel({
 }
 
 function HorizontalBreakdownBar({ segments, total }: { segments: BreakdownSegment[]; total: number }) {
-  const safeTotal = Math.max(total, segments.reduce((sum, s) => sum + s.value, 0), 1);
-
+  const safeTotal = Math.max(total, segments.reduce((sum, segment) => sum + segment.value, 0), 1);
   return (
     <div>
       <div className="flex h-3 overflow-hidden rounded-full bg-slate-100">
@@ -217,8 +189,7 @@ function HorizontalBreakdownBar({ segments, total }: { segments: BreakdownSegmen
 }
 
 function StatusStrip({ alerts }: { alerts: StatusAlert[] }) {
-  const hasIssues = alerts.some((a) => a.tone !== "ok");
-
+  const hasIssues = alerts.some((alert) => alert.tone !== "ok");
   return (
     <div
       className={cn(
@@ -234,7 +205,6 @@ function StatusStrip({ alerts }: { alerts: StatusAlert[] }) {
             : alert.tone === "warning"
               ? "border-amber-200 bg-white text-amber-800"
               : "border-emerald-200 bg-white text-emerald-700";
-
         const content = (
           <span className={cn("inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 font-medium", toneClass)}>
             <span
@@ -246,15 +216,13 @@ function StatusStrip({ alerts }: { alerts: StatusAlert[] }) {
             {alert.label}
           </span>
         );
-
-        if (alert.href) {
-          return (
-            <Link key={alert.key} href={alert.href} className="hover:opacity-80">
-              {content}
-            </Link>
-          );
-        }
-        return <span key={alert.key}>{content}</span>;
+        return alert.href ? (
+          <Link key={alert.key} href={alert.href} className="hover:opacity-80">
+            {content}
+          </Link>
+        ) : (
+          <span key={alert.key}>{content}</span>
+        );
       })}
     </div>
   );
@@ -279,15 +247,11 @@ function ActionQueueRow({ item }: { item: ActionItem }) {
     sla: "office-metric-action-sla",
     unassignable: "office-metric-action-unassignable",
   };
-
   return (
     <Link
       href={item.href}
       data-testid={testIdByKey[item.key]}
-      className={cn(
-        "group flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors",
-        toneStyles[item.tone],
-      )}
+      className={cn("group flex items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors", toneStyles[item.tone])}
     >
       <p
         data-testid={testIdByKey[item.key] ? `${testIdByKey[item.key]}-count` : undefined}
@@ -313,17 +277,12 @@ function QuickLinkFooter() {
     { label: "Notification logs", href: "/office/notification-logs" },
     { label: "Cleaners", href: "/office/cleaners" },
   ];
-
   return (
     <footer className="rounded-lg border border-slate-200 bg-white px-5 py-4 shadow-sm">
       <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">Quick links</p>
       <div className="flex flex-wrap gap-x-5 gap-y-2">
         {links.map((link) => (
-          <Link
-            key={link.href}
-            href={link.href}
-            className="inline-flex items-center gap-1 text-sm font-medium text-[#2c79ff] hover:underline"
-          >
+          <Link key={link.href} href={link.href} className="inline-flex items-center gap-1 text-sm font-medium text-[#2c79ff] hover:underline">
             {link.label}
             <ExternalLink className="h-3 w-3 opacity-60" />
           </Link>
@@ -333,8 +292,6 @@ function QuickLinkFooter() {
   );
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
-
 export default function OfficeDashboardPage() {
   const [stats, setStats] = useState<DashboardStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -342,7 +299,6 @@ export default function OfficeDashboardPage() {
   const [selectedYmd, setSelectedYmd] = useState(() => johannesburgTodayYmd());
 
   const { data: opsData, refetch: refetchOps } = useAdminData<OpsSnapshot>("/api/admin/ops-snapshot");
-
   const todayYmd = johannesburgTodayYmd();
   const isViewingToday = selectedYmd === todayYmd;
   const { data: scheduleData, refetch: refetchSchedule } = useAdminData<OfficeScheduleDayResponse>(
@@ -353,21 +309,43 @@ export default function OfficeDashboardPage() {
   const todayBookings = useMemo(() => scheduleData?.bookings ?? [], [scheduleData?.bookings]);
   const todayStats = scheduleData?.summary ?? computeOfficeTodayScheduleStats(todayBookings);
   const visitFinance = scheduleData?.finance;
+  const cleaners = useMemo(() => scheduleData?.cleaners ?? [], [scheduleData?.cleaners]);
 
   const cleanerStats = useMemo(
-    () =>
-      computeOfficeScheduleCleanerStats({
-        bookings: todayBookings,
-        cleaners: scheduleData?.cleaners ?? [],
-        dateYmd: selectedYmd,
-      }),
-    [todayBookings, scheduleData?.cleaners, selectedYmd],
+    () => computeOfficeScheduleCleanerStats({ bookings: todayBookings, cleaners, dateYmd: selectedYmd }),
+    [todayBookings, cleaners, selectedYmd],
   );
 
-  const cleanersById = useMemo(
-    () => buildOfficeScheduleCleanersById(scheduleData?.cleaners ?? []),
-    [scheduleData?.cleaners],
-  );
+  const availableCleaners = useMemo(() => {
+    const unavailableStatuses = new Set(["assigned", "confirmed", "in_progress", "en_route"]);
+    const bookedCleanerIds = new Set<string>();
+    for (const booking of todayBookings) {
+      const status = String(booking.status ?? "").trim().toLowerCase();
+      if (!unavailableStatuses.has(status)) continue;
+      const rosterIds = (booking.booking_cleaners ?? [])
+        .map((member) => String(member.cleaner_id ?? "").trim())
+        .filter(Boolean);
+      if (rosterIds.length > 0) {
+        rosterIds.forEach((id) => bookedCleanerIds.add(id));
+      } else {
+        const directId = String(booking.cleaner_id ?? "").trim();
+        if (directId) bookedCleanerIds.add(directId);
+      }
+    }
+
+    const weekday = weekdayIndexForScheduleYmd(selectedYmd);
+    return cleaners
+      .filter((cleaner) => {
+        const status = String(cleaner.status ?? "").trim().toLowerCase();
+        const active = cleaner.is_active !== false;
+        const online = status !== "offline" && status !== "paused" && status !== "suspended";
+        const rosterDay = rosterIncludesWeekdayForSchedule(cleaner.availability_weekdays, weekday);
+        return active && online && cleaner.is_available === true && rosterDay && !bookedCleanerIds.has(cleaner.id);
+      })
+      .sort((a, b) => String(a.full_name ?? "").localeCompare(String(b.full_name ?? "")));
+  }, [cleaners, selectedYmd, todayBookings]);
+
+  const cleanersById = useMemo(() => buildOfficeScheduleCleanersById(cleaners), [cleaners]);
 
   useEffect(() => {
     let cancelled = false;
@@ -381,8 +359,6 @@ export default function OfficeDashboardPage() {
           const data = (await res.json()) as DashboardStats;
           if (!cancelled) setStats(data);
         }
-      } catch {
-        // dashboard remains usable with schedule + ops data
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -411,10 +387,8 @@ export default function OfficeDashboardPage() {
   const systemStatus = stats?.systemStatus;
   const overdueZar = paymentsSnapshot?.overdueZar ?? 0;
   const pendingZar = paymentsSnapshot?.pendingZar ?? 0;
-
   const smsFailed = stats?.notificationsToday?.sms.failed ?? 0;
   const cronErrors = systemStatus?.cronErrorsLast24h ?? 0;
-
   const allSystemsOperational =
     stats != null &&
     systemStatus?.website === "operational" &&
@@ -431,20 +405,8 @@ export default function OfficeDashboardPage() {
   const cleanerSegments: BreakdownSegment[] = [
     { key: "available", label: "Available", value: cleanerStats.availableIdle, color: "bg-emerald-500", legendColor: "bg-emerald-500" },
     { key: "busy", label: "Booked / in job", value: cleanerStats.busy, color: "bg-blue-500", legendColor: "bg-blue-500" },
-    {
-      key: "off-today",
-      label: "Off today",
-      value: cleanerStats.offToday,
-      color: "bg-amber-300",
-      legendColor: "bg-amber-300",
-    },
-    {
-      key: "unavailable",
-      label: "Offline / paused",
-      value: cleanerStats.manuallyUnavailable,
-      color: "bg-slate-300",
-      legendColor: "bg-slate-300",
-    },
+    { key: "off-today", label: "Off today", value: cleanerStats.offToday, color: "bg-amber-300", legendColor: "bg-amber-300" },
+    { key: "unavailable", label: "Offline / paused", value: cleanerStats.manuallyUnavailable, color: "bg-slate-300", legendColor: "bg-slate-300" },
   ];
 
   const cashSegments: BreakdownSegment[] = [
@@ -463,7 +425,6 @@ export default function OfficeDashboardPage() {
           : unassignedTodayFleet > 0
             ? `${unassignedTodayFleet} today · ${unassignedUpcoming} upcoming`
             : `${unassignedUpcoming} upcoming visits need cleaners`;
-
     const items: ActionItem[] = [
       {
         key: "unassigned",
@@ -505,100 +466,56 @@ export default function OfficeDashboardPage() {
     ];
     return items.sort((a, b) => {
       const toneRank = { critical: 0, warning: 1, info: 2, clear: 3 };
-      const rankDiff = toneRank[a.tone] - toneRank[b.tone];
-      if (rankDiff !== 0) return rankDiff;
-      return b.count - a.count;
+      return toneRank[a.tone] - toneRank[b.tone] || b.count - a.count;
     });
-  }, [unassignedCount, unassignedTodayFleet, unassignedPastDue, unassignedUpcoming, startingSoonCount, slaBreachCount, unassignableCount, oldestBreachMinutes]);
+  }, [oldestBreachMinutes, slaBreachCount, startingSoonCount, unassignableCount, unassignedCount, unassignedPastDue, unassignedTodayFleet, unassignedUpcoming]);
 
   const statusAlerts: StatusAlert[] = useMemo(() => {
     const alerts: StatusAlert[] = [];
-
-    if (allSystemsOperational) {
-      alerts.push({ key: "ops", label: "Ops healthy", tone: "ok" });
-    } else if (systemStatus?.website === "down" || systemStatus?.bookingEngine === "down") {
+    if (allSystemsOperational) alerts.push({ key: "ops", label: "Ops healthy", tone: "ok" });
+    else if (systemStatus?.website === "down" || systemStatus?.bookingEngine === "down") {
       alerts.push({ key: "ops", label: "Ops degraded", tone: "critical", href: "/office/ops-health" });
-    } else if (stats != null) {
-      alerts.push({ key: "ops", label: "Ops needs attention", tone: "warning", href: "/office/ops-health" });
-    }
+    } else if (stats != null) alerts.push({ key: "ops", label: "Ops needs attention", tone: "warning", href: "/office/ops-health" });
 
     if (unassignedCount > 0) {
-      const unassignedLabel =
-        unassignedPastDue > 0
-          ? `${unassignedCount} unassigned (${unassignedPastDue} overdue)`
-          : unassignedTodayFleet > 0
-            ? `${unassignedTodayFleet} unassigned today`
-            : `${unassignedCount} unassigned upcoming`;
       alerts.push({
         key: "unassigned",
-        label: unassignedLabel,
+        label:
+          unassignedPastDue > 0
+            ? `${unassignedCount} unassigned (${unassignedPastDue} overdue)`
+            : unassignedTodayFleet > 0
+              ? `${unassignedTodayFleet} unassigned today`
+              : `${unassignedCount} unassigned upcoming`,
         tone: unassignedPastDue > 0 ? "critical" : "warning",
         href: "/office/bookings?filter=unassigned",
       });
     }
-
-    if (overdueZar > 0) {
-      alerts.push({
-        key: "overdue",
-        label: `${zar(overdueZar)} overdue`,
-        tone: "critical",
-        href: "/office/invoices",
-      });
-    }
-
-    if (startingSoonCount > 0) {
-      alerts.push({
-        key: "starting",
-        label: `${startingSoonCount} starting soon`,
-        tone: "critical",
-        href: "/office/bookings?filter=starting-soon",
-      });
-    }
-
-    if (smsFailed > 0) {
-      alerts.push({
-        key: "sms",
-        label: "SMS failing",
-        tone: "warning",
-        href: "/office/notification-logs",
-      });
-    }
-
-    if (cronErrors > 0) {
-      alerts.push({
-        key: "cron",
-        label: `${cronErrors} cron errors (24h)`,
-        tone: "warning",
-        href: "/office/ops-health",
-      });
-    }
-
-    if (alerts.length === 0) {
-      alerts.push({ key: "all-clear", label: "All clear today", tone: "ok" });
-    }
-
+    if (overdueZar > 0) alerts.push({ key: "overdue", label: `${zar(overdueZar)} overdue`, tone: "critical", href: "/office/invoices" });
+    if (startingSoonCount > 0) alerts.push({ key: "starting", label: `${startingSoonCount} starting soon`, tone: "critical", href: "/office/bookings?filter=starting-soon" });
+    if (smsFailed > 0) alerts.push({ key: "sms", label: "SMS failing", tone: "warning", href: "/office/notification-logs" });
+    if (cronErrors > 0) alerts.push({ key: "cron", label: `${cronErrors} cron errors (24h)`, tone: "warning", href: "/office/ops-health" });
+    if (alerts.length === 0) alerts.push({ key: "all-clear", label: "All clear today", tone: "ok" });
     return alerts;
-  }, [allSystemsOperational, systemStatus, stats, unassignedCount, unassignedPastDue, unassignedTodayFleet, overdueZar, startingSoonCount, smsFailed, cronErrors]);
+  }, [allSystemsOperational, cronErrors, overdueZar, smsFailed, startingSoonCount, stats, systemStatus, unassignedCount, unassignedPastDue, unassignedTodayFleet]);
 
   const sortedBookings = [...todayBookings].sort((a, b) => String(a.time ?? "").localeCompare(String(b.time ?? "")));
 
   return (
     <div className="space-y-5">
-      {/* ── Zoho-style greeting header ─────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-200 pb-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Hello, Shalean Cleaning Services</h1>
           <p className="mt-0.5 text-sm text-slate-500">Command center — today&apos;s operations at a glance.</p>
         </div>
         <div className="flex items-center gap-2">
-          <label className="relative flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 transition-colors hover:bg-slate-50">
+          <label className="relative flex cursor-pointer items-center gap-2 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50">
             <Calendar className="h-4 w-4 text-slate-400" aria-hidden />
             <span>{selectedDateLabel}</span>
             <input
               type="date"
               value={selectedYmd}
-              onChange={(e) => {
-                const next = e.target.value.trim();
+              onChange={(event) => {
+                const next = event.target.value.trim();
                 if (/^\d{4}-\d{2}-\d{2}$/.test(next)) setSelectedYmd(next);
               }}
               className="absolute inset-0 cursor-pointer opacity-0"
@@ -621,54 +538,29 @@ export default function OfficeDashboardPage() {
         </div>
       </div>
 
-      {/* ── Slim status strip (Option C) ───────────────────────────────── */}
       <StatusStrip alerts={statusAlerts} />
 
-      {/* ── Top row: Today's ops + Needs action (Zoho receivables/payables) ─ */}
       <div className="grid gap-4 lg:grid-cols-2">
         <ZohoPanel title={dayOpsTitle} href="/office/schedule" linkLabel="View schedule">
           <div className="mb-4 flex items-end justify-between gap-4">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">{bookingsCountLabel}</p>
-              <p
-                data-testid="office-metric-ops-total"
-                className="mt-1 text-3xl font-bold tabular-nums text-slate-900"
-              >
-                {todayStats.total}
-              </p>
+              <p data-testid="office-metric-ops-total" className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{todayStats.total}</p>
               {todayStats.cancelled > 0 ? (
-                <p data-testid="office-metric-ops-cancelled-excluded" className="mt-0.5 text-[11px] text-slate-400">
-                  {todayStats.cancelled} cancelled / expired excluded
-                </p>
-              ) : (
-                <p data-testid="office-metric-ops-cancelled-excluded" className="sr-only">
-                  0 cancelled / expired excluded
-                </p>
-              )}
+                <p data-testid="office-metric-ops-cancelled-excluded" className="mt-0.5 text-[11px] text-slate-400">{todayStats.cancelled} cancelled / expired excluded</p>
+              ) : null}
             </div>
             <div className="text-right">
               <p className="text-xs text-slate-400">Payments received today</p>
-              <p
-                data-testid="office-metric-ops-payments-received-today"
-                className="text-lg font-bold tabular-nums text-emerald-700"
-              >
+              <p data-testid="office-metric-ops-payments-received-today" className="text-lg font-bold tabular-nums text-emerald-700">
                 {stats != null ? zar(revenueToday) : loading ? "…" : "—"}
               </p>
-              <p data-testid="office-metric-ops-paid-by-payment-time" className="text-[11px] text-slate-400">
-                {stats?.paidBookingsToday ?? 0} paid by payment time
-              </p>
-              {visitFinance != null ? (
+              <p data-testid="office-metric-ops-paid-by-payment-time" className="text-[11px] text-slate-400">{stats?.paidBookingsToday ?? 0} paid by payment time</p>
+              {visitFinance ? (
                 <p data-testid="office-metric-ops-visit-paid-value" className="mt-1 text-[11px] text-slate-500">
-                  Visit paid value {zar(visitFinance.paidValueZar)}
-                  {visitFinance.unpaidCompletedCount > 0
-                    ? ` · ${visitFinance.unpaidCompletedCount} completed unpaid`
-                    : ""}
+                  Visit paid value {zar(visitFinance.paidValueZar)}{visitFinance.unpaidCompletedCount > 0 ? ` · ${visitFinance.unpaidCompletedCount} completed unpaid` : ""}
                 </p>
-              ) : (
-                <p data-testid="office-metric-ops-visit-paid-value" className="sr-only">
-                  Visit paid value —
-                </p>
-              )}
+              ) : null}
             </div>
           </div>
           <div className="sr-only" aria-hidden>
@@ -685,15 +577,10 @@ export default function OfficeDashboardPage() {
             <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Priority queue</p>
             <p className="mt-1 text-sm text-slate-500">All open bookings — ranked by urgency. Today&apos;s schedule counts are separate.</p>
           </div>
-          <div className="space-y-2">
-            {actionItems.map((item) => (
-              <ActionQueueRow key={item.key} item={item} />
-            ))}
-          </div>
+          <div className="space-y-2">{actionItems.map((item) => <ActionQueueRow key={item.key} item={item} />)}</div>
         </ZohoPanel>
       </div>
 
-      {/* ── Full-width schedule (Zoho cash flow anchor) ─────────────────── */}
       <ZohoPanel title={dayScheduleTitle} href="/office/schedule" linkLabel="Full schedule">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap gap-4">
@@ -702,33 +589,22 @@ export default function OfficeDashboardPage() {
               { label: "Completed", value: todayStats.completed, testId: "office-metric-schedule-completed" },
               { label: "In progress", value: todayStats.inProgress, testId: "office-metric-schedule-in-progress" },
               { label: "Upcoming", value: todayStats.upcoming, testId: "office-metric-schedule-upcoming" },
-              {
-                label: "Unassigned",
-                value: todayStats.unassigned,
-                alert: todayStats.unassigned > 0,
-                testId: "office-metric-schedule-unassigned",
-              },
+              { label: "Unassigned", value: todayStats.unassigned, testId: "office-metric-schedule-unassigned" },
             ].map((stat) => (
               <div key={stat.label} className="min-w-[72px]">
-                <p
-                  data-testid={stat.testId}
-                  className={cn("text-lg font-bold tabular-nums", stat.alert ? "text-amber-700" : "text-slate-900")}
-                >
-                  {stat.value}
-                </p>
+                <p data-testid={stat.testId} className={cn("text-lg font-bold tabular-nums", stat.label === "Unassigned" && stat.value > 0 ? "text-amber-700" : "text-slate-900")}>{stat.value}</p>
                 <p className="text-[11px] text-slate-500">{stat.label}</p>
               </div>
             ))}
           </div>
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-emerald-700">
-            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" />
-            Live
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500" /> Live
           </span>
         </div>
 
         <div className="divide-y divide-slate-100 rounded-lg border border-slate-100">
           {sortedBookings.length === 0 ? (
-            <p className="px-4 py-8 text-center text-sm text-slate-400">No bookings scheduled for today.</p>
+            <p className="px-4 py-8 text-center text-sm text-slate-400">No bookings scheduled for this date.</p>
           ) : (
             sortedBookings.slice(0, 8).map((booking) => {
               const { label: statusLabel, tone } = officeScheduleStatusPresentation(booking);
@@ -743,31 +619,19 @@ export default function OfficeDashboardPage() {
                       : tone === "assigned"
                         ? "bg-blue-100 text-blue-800"
                         : "bg-slate-100 text-slate-700";
-
               return (
-                <Link
-                  key={booking.id}
-                  href={`/office/bookings/${booking.id}`}
-                  className="group flex items-center gap-4 px-4 py-3 hover:bg-slate-50"
-                >
-                  <span className="w-14 shrink-0 text-sm font-semibold tabular-nums text-slate-700">
-                    {booking.time?.slice(0, 5) ?? "—"}
-                  </span>
+                <Link key={booking.id} href={`/office/bookings/${booking.id}`} className="group flex items-center gap-4 px-4 py-3 hover:bg-slate-50">
+                  <span className="w-14 shrink-0 text-sm font-semibold tabular-nums text-slate-700">{booking.time?.slice(0, 5) ?? "—"}</span>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium capitalize text-slate-900">
-                      {(booking.service ?? "Service").replace(/-/g, " ")}
-                    </p>
+                    <p className="truncate text-sm font-medium capitalize text-slate-900">{(booking.service ?? "Service").replace(/-/g, " ")}</p>
                     <p className="truncate text-xs text-slate-500">{booking.location ?? "No location"}</p>
                     {assignedCleaner ? (
                       <p className="mt-0.5 flex items-center gap-1 truncate text-xs font-medium text-slate-600">
-                        <UserCheck className="h-3 w-3 shrink-0 text-slate-400" />
-                        {assignedCleaner}
+                        <UserCheck className="h-3 w-3 shrink-0 text-slate-400" /> {assignedCleaner}
                       </p>
                     ) : null}
                   </div>
-                  <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold", statusColor)}>
-                    {statusLabel}
-                  </span>
+                  <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold", statusColor)}>{statusLabel}</span>
                   <ChevronRight className="h-4 w-4 shrink-0 text-slate-300 opacity-0 transition-opacity group-hover:opacity-100" />
                 </Link>
               );
@@ -775,62 +639,84 @@ export default function OfficeDashboardPage() {
           )}
         </div>
         {sortedBookings.length > 8 ? (
-          <Link
-            href="/office/schedule"
-            className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#2c79ff] hover:underline"
-          >
-            + {sortedBookings.length - 8} more bookings
-            <ArrowUpRight className="h-3.5 w-3.5" />
+          <Link href="/office/schedule" className="mt-3 inline-flex items-center gap-1 text-sm font-medium text-[#2c79ff] hover:underline">
+            + {sortedBookings.length - 8} more bookings <ArrowUpRight className="h-3.5 w-3.5" />
           </Link>
         ) : null}
       </ZohoPanel>
 
-      {/* ── Second row: Cleaner capacity + Revenue & cash ───────────────── */}
       <div className="grid gap-4 lg:grid-cols-2">
         <ZohoPanel title="Cleaner capacity" href="/office/cleaners" linkLabel="Manage cleaners">
           <div className="mb-4 flex items-end justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Active workforce</p>
-              <p
-                data-testid="office-metric-capacity-active"
-                className="mt-1 text-3xl font-bold tabular-nums text-slate-900"
-              >
-                {cleanerStats.total}
-              </p>
+              <p data-testid="office-metric-capacity-active" className="mt-1 text-3xl font-bold tabular-nums text-slate-900">{cleanerStats.total}</p>
               <p className="text-xs text-slate-500">active cleaners on roster</p>
             </div>
             <div className="rounded-lg bg-emerald-50 px-3 py-2 text-right">
-              <p className="text-xs text-emerald-700">Available now</p>
-              <p
-                data-testid="office-metric-capacity-available-now"
-                className="text-xl font-bold tabular-nums text-emerald-800"
-              >
-                {cleanerStats.availableIdle}
-              </p>
+              <p className="text-xs text-emerald-700">Available for this date</p>
+              <p data-testid="office-metric-capacity-available-now" className="text-xl font-bold tabular-nums text-emerald-800">{availableCleaners.length}</p>
             </div>
           </div>
           <div className="sr-only" aria-hidden>
-            <span data-testid="office-metric-capacity-available">{cleanerStats.availableIdle}</span>
+            <span data-testid="office-metric-capacity-available">{availableCleaners.length}</span>
             <span data-testid="office-metric-capacity-busy">{cleanerStats.busy}</span>
             <span data-testid="office-metric-capacity-off-today">{cleanerStats.offToday}</span>
             <span data-testid="office-metric-capacity-offline">{cleanerStats.manuallyUnavailable}</span>
           </div>
-          <HorizontalBreakdownBar segments={cleanerSegments} total={cleanerStats.total} />
+          <HorizontalBreakdownBar
+            segments={cleanerSegments.map((segment) => segment.key === "available" ? { ...segment, value: availableCleaners.length } : segment)}
+            total={cleanerStats.total}
+          />
+
+          <div className="mt-5 border-t border-slate-100 pt-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Available cleaners</p>
+                <p className="mt-0.5 text-xs text-slate-500">Online, rostered and not allocated on {selectedDateLabel}.</p>
+              </div>
+              <Users className="h-4 w-4 text-emerald-600" />
+            </div>
+
+            {availableCleaners.length === 0 ? (
+              <p className="rounded-lg border border-slate-100 bg-slate-50 px-3 py-4 text-center text-sm text-slate-500">
+                No cleaners are currently available for this date.
+              </p>
+            ) : (
+              <div className="divide-y divide-slate-100 rounded-lg border border-slate-100">
+                {availableCleaners.slice(0, 8).map((cleaner) => (
+                  <div key={cleaner.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-slate-800">{cleaner.full_name?.trim() || "Unnamed cleaner"}</p>
+                        <p className="text-[11px] text-emerald-700">Available</p>
+                      </div>
+                    </div>
+                    <Link href="/office/bookings?filter=unassigned" className="shrink-0 text-xs font-semibold text-[#2c79ff] hover:underline">
+                      Assign
+                    </Link>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {availableCleaners.length > 8 ? (
+              <Link href="/office/cleaners" className="mt-3 inline-flex items-center gap-1 text-xs font-semibold text-[#2c79ff] hover:underline">
+                View all {availableCleaners.length} available cleaners <ChevronRight className="h-3.5 w-3.5" />
+              </Link>
+            ) : null}
+          </div>
         </ZohoPanel>
 
         <ZohoPanel title="Revenue & receivables" href="/office/payment-reconciliation" linkLabel="Reconcile payments">
           <div className="mb-4 flex items-end justify-between">
             <div>
               <p className="text-xs font-medium uppercase tracking-wide text-slate-400">Receivables exposure</p>
-              <p
-                data-testid="office-metric-revenue-receivables-exposure"
-                className="mt-1 text-3xl font-bold tabular-nums text-slate-900"
-              >
+              <p data-testid="office-metric-revenue-receivables-exposure" className="mt-1 text-3xl font-bold tabular-nums text-slate-900">
                 {stats != null ? zar(cashTotal) : loading ? "…" : "—"}
               </p>
-              <p className="mt-0.5 text-[11px] text-slate-400">
-                Payments received today + pending bookings + overdue invoices (not bank cash)
-              </p>
+              <p className="mt-0.5 text-[11px] text-slate-400">Payments received today + pending bookings + overdue invoices (not bank cash)</p>
             </div>
             {overdueZar > 0 ? (
               <div className="rounded-lg bg-amber-50 px-3 py-2 text-right">
@@ -845,89 +731,34 @@ export default function OfficeDashboardPage() {
             <span data-testid="office-metric-revenue-overdue-invoices">{stats != null ? zar(overdueZar) : "—"}</span>
           </div>
           <HorizontalBreakdownBar segments={cashSegments} total={cashTotal} />
-
           <div className="mt-5 flex flex-wrap gap-2 border-t border-slate-100 pt-4">
-            <Link
-              href="/office/cleaners"
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-            >
-              <UserCheck className="h-3.5 w-3.5 text-[#2c79ff]" />
-              Assign cleaners
+            <Link href="/office/cleaners" className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+              <UserCheck className="h-3.5 w-3.5 text-[#2c79ff]" /> Assign cleaners
             </Link>
-            <Link
-              href="/office/bookings/create"
-              className="inline-flex items-center gap-1.5 rounded-md bg-[#2c79ff] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1a68ee]"
-            >
-              <TrendingUp className="h-3.5 w-3.5" />
-              Create booking
+            <Link href="/office/bookings/create" className="inline-flex items-center gap-1.5 rounded-md bg-[#2c79ff] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#1a68ee]">
+              <TrendingUp className="h-3.5 w-3.5" /> Create booking
             </Link>
-            <Link
-              href="/office/notifications"
-              className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100"
-            >
-              <Send className="h-3.5 w-3.5 text-[#2c79ff]" />
-              Notify
+            <Link href="/office/notifications" className="inline-flex items-center gap-1.5 rounded-md border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-100">
+              <Send className="h-3.5 w-3.5 text-[#2c79ff]" /> Notify
             </Link>
           </div>
         </ZohoPanel>
       </div>
 
-      {/* ── Compact KPI strip (Zoho income/expense row) ───────────────────── */}
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          {
-            label: "Bookings (30d)",
-            value: stats != null ? String(stats.totalBookingsWindow ?? 0) : loading ? "…" : "—",
-            sub: "Paid, revenue-eligible",
-            icon: BarChart3,
-            href: "/office/analytics",
-            testId: "office-metric-summary-bookings-30d",
-          },
-          {
-            label: "Avg booking value",
-            value: stats != null ? zar(stats.avgBookingValueZar ?? 0) : loading ? "…" : "—",
-            sub: "30-day window",
-            icon: Zap,
-            href: "/office/analytics",
-            testId: "office-metric-summary-avg-booking-value",
-          },
-          {
-            label: "Pending payments",
-            value: stats != null ? zar(pendingZar) : loading ? "…" : "—",
-            sub: `${paymentsSnapshot?.pendingCount ?? 0} awaiting payment`,
-            icon: Clock,
-            href: "/office/bookings",
-            testId: "office-metric-summary-pending-payments",
-          },
-          {
-            label: "System health",
-            value: allSystemsOperational ? "Healthy" : cronErrors > 0 ? `${cronErrors} errors` : "Attention",
-            sub: allSystemsOperational ? "All services operational" : "View ops health",
-            icon: allSystemsOperational ? CheckCircle2 : Shield,
-            href: "/office/ops-health",
-            tone: allSystemsOperational ? "ok" : "warn",
-            testId: "office-metric-summary-system-health",
-          },
+          { label: "Bookings (30d)", value: stats != null ? String(stats.totalBookingsWindow ?? 0) : loading ? "…" : "—", sub: "Paid, revenue-eligible", icon: BarChart3, href: "/office/analytics", testId: "office-metric-summary-bookings-30d" },
+          { label: "Avg booking value", value: stats != null ? zar(stats.avgBookingValueZar ?? 0) : loading ? "…" : "—", sub: "30-day window", icon: Zap, href: "/office/analytics", testId: "office-metric-summary-avg-booking-value" },
+          { label: "Pending payments", value: stats != null ? zar(pendingZar) : loading ? "…" : "—", sub: `${paymentsSnapshot?.pendingCount ?? 0} awaiting payment`, icon: Clock, href: "/office/bookings", testId: "office-metric-summary-pending-payments" },
+          { label: "System health", value: allSystemsOperational ? "Healthy" : cronErrors > 0 ? `${cronErrors} errors` : "Attention", sub: allSystemsOperational ? "All services operational" : "View ops health", icon: allSystemsOperational ? CheckCircle2 : Shield, href: "/office/ops-health", tone: allSystemsOperational ? "ok" : "warn", testId: "office-metric-summary-system-health" },
         ].map((kpi) => {
           const KpiIcon = kpi.icon;
           return (
-            <Link
-              key={kpi.label}
-              href={kpi.href}
-              className="group rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md"
-            >
+            <Link key={kpi.label} href={kpi.href} className="group rounded-lg border border-slate-200 bg-white p-4 shadow-sm transition-shadow hover:shadow-md">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-xs font-medium text-slate-500">{kpi.label}</p>
-                  <p
-                    data-testid={kpi.testId}
-                    className={cn(
-                      "mt-1 text-xl font-bold tabular-nums",
-                      kpi.tone === "ok" ? "text-emerald-700" : kpi.tone === "warn" ? "text-amber-700" : "text-slate-900",
-                    )}
-                  >
-                    {kpi.value}
-                  </p>
+                  <p data-testid={kpi.testId} className={cn("mt-1 text-xl font-bold tabular-nums", kpi.tone === "ok" ? "text-emerald-700" : kpi.tone === "warn" ? "text-amber-700" : "text-slate-900")}>{kpi.value}</p>
                   <p className="mt-0.5 text-[11px] text-slate-400">{kpi.sub}</p>
                 </div>
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-slate-50 text-slate-500 group-hover:bg-blue-50 group-hover:text-[#2c79ff]">
