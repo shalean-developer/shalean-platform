@@ -10,6 +10,7 @@ import {
   type OfficeRoleKey,
 } from "@/lib/admin/officeExperience";
 import { OFFICE_NAV_ALL_ITEMS, OFFICE_NAV_MODULES, OFFICE_NAV_SECTIONS } from "./OfficeNav";
+import { OfficeMyWorkPanel } from "./OfficeMyWorkPanel";
 import { OfficeRoleDashboard, type OfficeAccessProfile } from "./OfficeRoleDashboard";
 
 type PermissionResponse = OfficeAccessProfile & { permissions?: string[] };
@@ -177,6 +178,11 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
   }
 
   applyNavigationPermissions(permissions, roleFromProfile(profile));
-  if (pathname === "/office") return <OfficeRoleDashboard permissions={permissions} profile={profile} />;
+  if (pathname === "/office") {
+    return <div className="space-y-7">
+      <OfficeRoleDashboard permissions={permissions} profile={profile} />
+      <OfficeMyWorkPanel />
+    </div>;
+  }
   return children;
 }
