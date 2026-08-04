@@ -8,6 +8,27 @@ export const dynamic = "force-dynamic";
 
 const NO_BRANCH_SENTINEL = "00000000-0000-0000-0000-000000000000";
 
+const CUSTOMER_REVENUE_FIELDS = [
+  "total_paid_zar",
+  "amount_paid_cents",
+  "total_price",
+  "base_amount_cents",
+  "service_fee_cents",
+  "company_revenue_cents",
+  "payout_percentage",
+] as const;
+
+const CLEANER_EARNINGS_FIELDS = [
+  "cleaner_payout_cents",
+  "cleaner_bonus_cents",
+  "display_earnings_cents",
+  "cleaner_earnings_total_cents",
+  "payout_id",
+  "payout_status",
+  "payout_paid_at",
+  "payout_frozen_cents",
+] as const;
+
 function bearerToken(request: Request): string {
   return request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
 }
@@ -17,7 +38,7 @@ function positiveInt(value: string | null, fallback: number): number {
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-type BookingWire = {
+type BookingWire = Record<string, unknown> & {
   id?: string;
   team_id?: string | null;
   status?: string | null;
@@ -35,6 +56,10 @@ type LegacyPayload = {
   failedJobs?: unknown[];
   cities?: unknown[];
   selectedCityId?: string | null;
+  capabilities?: {
+    customerRevenue: boolean;
+    cleanerEarnings: boolean;
+  };
 };
 
 function johannesburgYmd(): string {
@@ -65,7 +90,7 @@ function teamScopedPayload(payload: LegacyPayload, teamId: string, requestUrl: U
   const todayRows = allRows.filter((row) => row.date === today);
   const revenueTodayZar = todayRows.reduce((sum, row) => {
     if (typeof row.total_paid_zar === "number") return sum + row.total_paid_zar;
-    return sum + Math.round((row.amount_paid_cents ?? 0) / 100);
+    return sum + Math.round((typeof row.amount_paid_cents === "number" ? row.amount_paid_cents : 0) / 100);
   }, 0);
 
   return {
@@ -93,14 +118,47 @@ function teamScopedPayload(payload: LegacyPayload, teamId: string, requestUrl: U
   };
 }
 
-/**
- * Scope-aware adapter for the Office bookings read model.
- *
- * Owners and globally assigned roles retain company-wide access. Branch-scoped
- * roles are pinned to their assigned branch. A role with one assigned team and
- * no branch (Supervisor) receives only bookings whose `team_id` matches that
- * team. Team-only access never falls back to an all-company response.
- */
+function redactFinancialData(
+  payload: LegacyPayload,
+  permissions: readonly string[],
+): LegacyPayload {
+  const canViewCustomerRevenue = permissions.includes("finance.customer_revenue.view");
+  const canViewCleanerEarnings = permissions.includes("workforce.cleaner_earnings.view");
+
+  const bookings = (payload.bookings ?? []).map((row) => {
+    const next: BookingWire = { ...row };
+    if (!canViewCustomerRevenue) {
+      for (const field of CUSTOMER_REVENUE_FIELDS) delete next[field];
+    }
+    if (!canViewCleanerEarnings) {
+      for (const field of CLEANER_EARNINGS_FIELDS) delete next[field];
+    }
+    return next;
+  });
+
+  const metrics = { ...(payload.metrics ?? {}) };
+  if (!canViewCustomerRevenue) {
+    delete metrics.revenueTodayZar;
+    delete metrics.averageOrderValueTodayZar;
+    delete metrics.customerRevenueZar;
+  }
+  if (!canViewCleanerEarnings) {
+    delete metrics.cleanerEarningsZar;
+    delete metrics.cleanerPayoutsZar;
+  }
+
+  return {
+    ...payload,
+    bookings,
+    metrics,
+    capabilities: {
+      customerRevenue: canViewCustomerRevenue,
+      cleanerEarnings: canViewCleanerEarnings,
+    },
+  };
+}
+
+/** Scope-aware and finance-redacted adapter for the Office bookings read model. */
 export async function GET(request: Request) {
   const token = bearerToken(request);
   if (!token) return NextResponse.json({ error: "Missing authorization." }, { status: 401 });
@@ -132,9 +190,6 @@ export async function GET(request: Request) {
   const forwardedUrl = new URL(request.url);
   forwardedUrl.pathname = "/api/admin/bookings";
 
-  // An assignment with neither a branch nor a team is the global role scope.
-  // Team-scoped Supervisors always have at least one team id, so this does not
-  // widen their access.
   const globalAssignment = scope.branches.length === 0 && scope.teams.length === 0;
   const wildcard = scope.isOwner || scope.branches.includes("*") || globalAssignment;
   const teamOnly = !wildcard && scope.branches.length === 0 && scope.teams.length > 0;
@@ -162,10 +217,13 @@ export async function GET(request: Request) {
     cache: "no-store",
   });
   const response = await getLegacyAdminBookings(forwardedRequest);
-  if (!teamOnly || !response.ok) return response;
+  if (!response.ok) return response;
 
-  const payload = (await response.json()) as LegacyPayload;
-  return NextResponse.json(teamScopedPayload(payload, scope.teams[0], requestUrl), {
+  let payload = (await response.json()) as LegacyPayload;
+  if (teamOnly) payload = teamScopedPayload(payload, scope.teams[0], requestUrl);
+  payload = redactFinancialData(payload, scope.permissions);
+
+  return NextResponse.json(payload, {
     headers: { "Cache-Control": "private, no-store" },
   });
 }
