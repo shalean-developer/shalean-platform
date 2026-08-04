@@ -5,13 +5,56 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getSupabaseSession } from "@/lib/supabase/browser";
-import { hasAnyOfficePermission, policyForOfficePath } from "@/lib/admin/officeExperience";
+import {
+  hasAnyOfficePermission,
+  policyForOfficePath,
+  type OfficeRoleKey,
+} from "@/lib/admin/officeExperience";
+
+type RoleAssignment = { code?: string };
+type PermissionPayload = { permissions?: string[]; roles?: RoleAssignment[] };
 
 type State =
   | { status: "checking" }
   | { status: "allowed" }
   | { status: "denied"; permissions: string[] }
   | { status: "error"; message: string };
+
+const ROLE_CODE_MAP: Record<string, OfficeRoleKey> = {
+  owner: "owner",
+  general_manager: "manager",
+  operations_admin: "operations",
+  finance_admin: "finance",
+  customer_care: "customer-care",
+  workforce_admin: "workforce",
+  marketing_admin: "marketing",
+  supervisor: "supervisor",
+};
+
+const SUPERVISOR_TEAM_SCOPE_PENDING = [
+  "/office/recurring",
+  "/office/sla-breaches",
+  "/office/ops-queue",
+  "/office/operations",
+  "/office/cleaners",
+  "/office/cleaner-report-feedback",
+  "/office/cleaner-performance",
+] as const;
+
+function roleFromAssignments(roles: RoleAssignment[]): OfficeRoleKey {
+  for (const assignment of roles) {
+    const code = String(assignment.code ?? "");
+    const mapped = ROLE_CODE_MAP[code];
+    if (mapped) return mapped;
+  }
+  return "restricted";
+}
+
+function supervisorScopePending(pathname: string, role: OfficeRoleKey): boolean {
+  return role === "supervisor" && SUPERVISOR_TEAM_SCOPE_PENDING.some(
+    (path) => pathname === path || pathname.startsWith(`${path}/`),
+  );
+}
 
 export function OfficePermissionBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();
@@ -44,10 +87,15 @@ export function OfficePermissionBoundary({ children }: { children: ReactNode }) 
           setState({ status: "error", message: "Permission verification is temporarily unavailable." });
           return;
         }
-        const payload = (await response.json()) as { permissions?: string[] };
+        const payload = (await response.json()) as PermissionPayload;
         const permissions = new Set(Array.isArray(payload.permissions) ? payload.permissions : []);
+        const role = roleFromAssignments(Array.isArray(payload.roles) ? payload.roles : []);
+        const allowed =
+          policy.audience.includes(role) &&
+          !supervisorScopePending(pathname, role) &&
+          hasAnyOfficePermission(permissions, policy.anyOf);
         setState(
-          hasAnyOfficePermission(permissions, policy.anyOf)
+          allowed
             ? { status: "allowed" }
             : { status: "denied", permissions: policy.anyOf },
         );
@@ -57,7 +105,7 @@ export function OfficePermissionBoundary({ children }: { children: ReactNode }) 
     });
 
     return () => { active = false; };
-  }, [policy]);
+  }, [pathname, policy]);
 
   if (state.status === "allowed") return <>{children}</>;
 
