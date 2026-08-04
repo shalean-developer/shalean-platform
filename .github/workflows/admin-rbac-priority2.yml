@@ -9,6 +9,7 @@ on:
       - "apps/web/lib/admin/officeExperience.ts"
       - "apps/web/lib/admin/routePermissions.ts"
       - "apps/web/lib/admin/__tests__/officeExperience.test.ts"
+      - "apps/web/lib/admin/__tests__/routePermissions.test.ts"
       - "apps/web/src/features/office/**"
       - ".github/workflows/admin-rbac-priority2.yml"
   workflow_dispatch:
@@ -23,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - name: Install web dependencies
