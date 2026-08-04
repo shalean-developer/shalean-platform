@@ -96,10 +96,7 @@ const EXPERIENCES: Record<OfficeRoleKey, Experience> = {
     { label: "Schedule", description: "See assigned bookings and team coverage.", href: "/office/schedule", metric: "Daily schedule" },
     { label: "Bookings", description: "Review bookings within your permitted scope.", href: "/office/bookings", metric: "Booking queue" },
     { label: "Teams", description: "View and coordinate assigned teams.", href: "/office/teams", metric: "Team view" },
-    { label: "Cleaner performance", description: "Monitor quality within your team scope.", href: "/office/cleaner-performance", metric: "Quality KPI" },
-  ], reports: [
-    { label: "Cleaner feedback", description: "Submit and review permitted feedback.", href: "/office/cleaner-report-feedback", metric: "Feedback report" },
-  ] },
+  ], reports: [] },
   restricted: { title: "Office workspace", subtitle: "Your account has limited Office access.", workspaces: [], reports: [] },
 };
 
