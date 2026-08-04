@@ -71,6 +71,13 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     return ["cleaner.documents.view"];
   }
 
+  if (
+    path === "/api/admin/cleaners" ||
+    path.includes("/cleaner-report-feedback") ||
+    path.includes("/cleaner-performance")
+  ) {
+    return method === "GET" || method === "HEAD" ? ["cleaner.view"] : ["cleaner.edit"];
+  }
   if (path.includes("/reviews") || path.includes("/review-funnel")) {
     return ["customer.view", "marketing.view"];
   }
