@@ -5,22 +5,22 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getSupabaseSession } from "@/lib/supabase/browser";
-import { permissionForOfficePath } from "@/lib/admin/routePermissions";
+import { hasAnyOfficePermission, policyForOfficePath } from "@/lib/admin/officeExperience";
 
 type State =
   | { status: "checking" }
   | { status: "allowed" }
-  | { status: "denied"; permission: string }
+  | { status: "denied"; permissions: string[] }
   | { status: "error"; message: string };
 
 export function OfficePermissionBoundary({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const requiredPermission = useMemo(() => permissionForOfficePath(pathname), [pathname]);
+  const policy = useMemo(() => policyForOfficePath(pathname), [pathname]);
   const [state, setState] = useState<State>({ status: "checking" });
 
   useEffect(() => {
     let active = true;
-    if (!requiredPermission) {
+    if (!policy) {
       setState({ status: "allowed" });
       return () => { active = false; };
     }
@@ -45,11 +45,11 @@ export function OfficePermissionBoundary({ children }: { children: ReactNode }) 
           return;
         }
         const payload = (await response.json()) as { permissions?: string[] };
-        const permissions = Array.isArray(payload.permissions) ? payload.permissions : [];
+        const permissions = new Set(Array.isArray(payload.permissions) ? payload.permissions : []);
         setState(
-          permissions.includes(requiredPermission)
+          hasAnyOfficePermission(permissions, policy.anyOf)
             ? { status: "allowed" }
-            : { status: "denied", permission: requiredPermission },
+            : { status: "denied", permissions: policy.anyOf },
         );
       } catch {
         if (active) setState({ status: "error", message: "Permission verification is temporarily unavailable." });
@@ -57,7 +57,7 @@ export function OfficePermissionBoundary({ children }: { children: ReactNode }) 
     });
 
     return () => { active = false; };
-  }, [requiredPermission]);
+  }, [policy]);
 
   if (state.status === "allowed") return <>{children}</>;
 
@@ -70,14 +70,14 @@ export function OfficePermissionBoundary({ children }: { children: ReactNode }) 
       <h1 className="text-xl font-semibold text-slate-900">Access Restricted</h1>
       <p className="mt-3 text-sm text-slate-600">
         {state.status === "denied"
-          ? "You do not have permission to access this page. Contact the Owner if you believe this is incorrect."
+          ? "This page is not included in your assigned Office role. Contact the Owner if your responsibilities have changed."
           : state.message}
       </p>
       {state.status === "denied" ? (
-        <p className="mt-2 font-mono text-xs text-slate-400">Required: {state.permission}</p>
+        <p className="mt-2 font-mono text-xs text-slate-400">Requires any of: {state.permissions.join(", ")}</p>
       ) : null}
       <Link href="/office" className="mt-6 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
-        Return to dashboard
+        Return to your dashboard
       </Link>
     </section>
   );
