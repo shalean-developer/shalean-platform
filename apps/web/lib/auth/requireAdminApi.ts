@@ -1,7 +1,7 @@
 import "server-only";
 
-import { requireAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
-import { priorityOnePermissionForRequest } from "@/lib/admin/requireAdmin";
+import { requireAnyAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
+import { priorityPermissionsForRequest } from "@/lib/admin/requireAdmin";
 
 /**
  * Shared Office API gate backed by granular deny-by-default RBAC.
@@ -9,9 +9,9 @@ import { priorityOnePermissionForRequest } from "@/lib/admin/requireAdmin";
 export async function requireAdminApi(
   request: Request,
 ): Promise<{ ok: true; userId: string; email: string } | { ok: false; status: number; error: string }> {
-  const auth = await requireAdminPermissionFromRequest(
+  const auth = await requireAnyAdminPermissionFromRequest(
     request,
-    priorityOnePermissionForRequest(request),
+    priorityPermissionsForRequest(request),
   );
   if (!auth.ok) {
     const body = (await auth.response.clone().json().catch(() => null)) as { error?: string } | null;

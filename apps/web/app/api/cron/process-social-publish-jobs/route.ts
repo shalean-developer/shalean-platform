@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
@@ -15,6 +16,37 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function requestCronCredential(request: Request): string | null {
+  const headerSecret = request.headers.get("x-cron-secret")?.trim();
+  if (headerSecret) return headerSecret;
+  const authorization = request.headers.get("authorization")?.trim() ?? "";
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match?.[1]?.trim() || null;
+}
+
+function secretsMatch(left: string, right: string): boolean {
+  const a = Buffer.from(left, "utf8");
+  const b = Buffer.from(right, "utf8");
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+async function verifyConfiguredCronTargetSecret(request: Request): Promise<boolean> {
+  const supplied = requestCronCredential(request);
+  if (!supplied) return false;
+
+  const admin = getSupabaseAdmin();
+  if (!admin) return false;
+
+  const { data, error } = await admin
+    .from("cron_http_targets")
+    .select("cron_secret")
+    .eq("singleton", true)
+    .maybeSingle();
+
+  if (error || !data?.cron_secret) return false;
+  return secretsMatch(supplied, String(data.cron_secret).trim());
+}
+
 /**
  * MKT-001B.2 — Process durable social publish jobs.
  *
@@ -25,9 +57,9 @@ export const dynamic = "force-dynamic";
 export async function POST(request: Request) {
   bootstrapProviderRegistry();
 
-  const auth = verifyCronSecret(request);
-  if (!auth.ok) {
-    return NextResponse.json(auth.body, { status: auth.status });
+  const envAuth = verifyCronSecret(request);
+  if (!envAuth.ok && !(await verifyConfiguredCronTargetSecret(request))) {
+    return NextResponse.json(envAuth.body, { status: envAuth.status });
   }
 
   const admin = getSupabaseAdmin();

@@ -1,0 +1,38 @@
+name: Admin RBAC Priority 2
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/app/(ui-redesign)/office/**"
+      - "apps/web/app/office/**"
+      - "apps/web/app/api/admin/security/my-permissions/**"
+      - "apps/web/lib/admin/officeExperience.ts"
+      - "apps/web/lib/admin/routePermissions.ts"
+      - "apps/web/lib/admin/__tests__/officeExperience.test.ts"
+      - "apps/web/lib/admin/__tests__/routePermissions.test.ts"
+      - "apps/web/src/features/office/**"
+      - ".github/workflows/admin-rbac-priority2.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  priority-2-office-experience:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+      - name: Run role and page policy matrix
+        working-directory: apps/web
+        run: npx vitest run lib/admin/__tests__/officeExperience.test.ts lib/admin/__tests__/routePermissions.test.ts
+      - name: Typecheck
+        working-directory: apps/web
+        run: npm run typecheck

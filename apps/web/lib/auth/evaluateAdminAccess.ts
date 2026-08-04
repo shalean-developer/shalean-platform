@@ -4,18 +4,15 @@ import { isAdmin, isAdminAllowlistConfigured } from "@/lib/auth/admin";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export type AdminAccessDecision =
-  | { ok: true; via: "allowlist" | "profile_role" }
+  | { ok: true; via: "allowlist" | "profile_role" | "rbac_assignment" }
   | { ok: false; status: 403 | 503; error: string };
 
 /**
  * Authorize Office admin API access.
  *
- * Source of truth for ongoing admin accounts: `user_profiles.role === "admin"`.
- * `ADMIN_EMAILS` / `ADMIN_EMAIL` remain an optional bootstrap / ops allowlist so
- * existing deployments keep working without a profile row update.
- *
- * Creating a new admin only requires setting `user_profiles.role = 'admin'`
- * (no Vercel env redeploy).
+ * Active granular RBAC assignments are the primary source of truth. The
+ * legacy `user_profiles.role === "admin"` value and ADMIN_EMAILS allowlist are
+ * retained only for backwards-compatible bootstrap and recovery access.
  */
 export async function evaluateAdminAccess(params: {
   userId: string;
@@ -44,6 +41,23 @@ export async function evaluateAdminAccess(params: {
     return { ok: false, status: 403, error: "Forbidden." };
   }
 
+  const now = new Date().toISOString();
+  const { data: activeAssignments, error: assignmentError } = await admin
+    .from("admin_user_roles")
+    .select("id")
+    .eq("user_id", userId)
+    .is("revoked_at", null)
+    .lte("starts_at", now)
+    .or(`expires_at.is.null,expires_at.gt.${now}`)
+    .limit(1);
+
+  if (assignmentError) {
+    return { ok: false, status: 503, error: "Unable to verify admin access." };
+  }
+  if ((activeAssignments ?? []).length > 0) {
+    return { ok: true, via: "rbac_assignment" };
+  }
+
   const { data: profile, error } = await admin
     .from("user_profiles")
     .select("role")
@@ -65,7 +79,8 @@ export async function evaluateAdminAccess(params: {
 }
 
 /**
- * After `auth.getUser`, authorize an Office admin via profile role or email allowlist.
+ * After `auth.getUser`, authorize an Office admin via active RBAC assignment,
+ * legacy profile role, or emergency email allowlist.
  */
 export async function requireAdminUser(
   user: { id: string; email?: string | null } | null | undefined,
