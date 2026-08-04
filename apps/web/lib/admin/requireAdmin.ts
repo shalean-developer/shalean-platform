@@ -1,7 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import {
-  requireAdminPermissionFromRequest,
+  requireAnyAdminPermissionFromRequest,
   type AdminPermission,
 } from "@/lib/admin/requirePermission";
 
@@ -35,20 +35,19 @@ function payoutPermission(pathname: string, method: string): AdminPermission {
 }
 
 /**
- * Priority 1 compatibility map for legacy Office routes.
+ * Priority 1/2 compatibility map for legacy Office routes.
  *
- * Existing routes can keep calling `requireAdminFromRequest` while critical
- * resources are migrated to granular deny-by-default permissions. Unknown
- * non-critical routes deliberately retain the temporary `booking.view`
- * compatibility floor until the full route-by-route migration is complete.
+ * The returned list mirrors the page policy: mixed-purpose pages may be used
+ * by more than one legitimate role, while critical resources remain protected
+ * by their dedicated permission.
  */
-export function priorityOnePermissionForRequest(request: Request): AdminPermission {
+export function priorityPermissionsForRequest(request: Request): AdminPermission[] {
   const { pathname } = new URL(request.url);
   const path = pathname.toLowerCase();
   const method = request.method.toUpperCase();
 
   if (path.includes("/api/admin/security/") || path.includes("/api/admin/roles") || path.includes("/api/admin/admin-users")) {
-    return "role.manage";
+    return ["role.manage"];
   }
   if (
     path.includes("/financial-dashboard") ||
@@ -61,28 +60,54 @@ export function priorityOnePermissionForRequest(request: Request): AdminPermissi
     path.includes("/expense-reports") ||
     path.includes("/payment-reconciliation") ||
     path.includes("/booking-profitability")
-  ) return "finance.full.view";
+  ) return ["finance.full.view"];
   if (path.includes("/payout") || path.includes("/earnings") || path.includes("/disbursement")) {
-    return payoutPermission(path, method);
+    return [payoutPermission(path, method)];
   }
   if (path.includes("/cleaners/") && (path.includes("/bank") || path.includes("/payment-details"))) {
-    return "cleaner.bank.view";
+    return ["cleaner.bank.view"];
   }
   if (path.includes("/cleaners/") && (path.includes("/identity") || path.includes("/documents"))) {
-    return "cleaner.documents.view";
+    return ["cleaner.documents.view"];
   }
 
-  return "booking.view";
+  if (path.includes("/reviews") || path.includes("/review-funnel")) {
+    return ["customer.view", "marketing.view"];
+  }
+  if (path.includes("/blog/")) {
+    return method === "GET" || method === "HEAD"
+      ? ["content.draft", "content.publish", "marketing.view"]
+      : ["content.draft", "content.publish"];
+  }
+  if (path.includes("/campaign-template")) {
+    return ["template.manage", "content.draft", "marketing.view"];
+  }
+  if (
+    path.includes("/promotions") ||
+    path.includes("/marketing-automation") ||
+    path.includes("/social-accounts") ||
+    path.includes("/memberships") ||
+    path.includes("/referrals/") ||
+    path.includes("/marketing/")
+  ) {
+    return method === "GET" || method === "HEAD"
+      ? ["marketing.view", "content.draft", "content.publish"]
+      : ["content.publish", "marketing.view"];
+  }
+
+  return ["booking.view"];
 }
 
-/**
- * Validates a bearer session and resolves a granular permission. Critical
- * Priority 1 route groups no longer use an admin email allow-list.
- */
+/** Backwards-compatible single-permission accessor used by existing tests. */
+export function priorityOnePermissionForRequest(request: Request): AdminPermission {
+  return priorityPermissionsForRequest(request)[0];
+}
+
+/** Validates a bearer session against any permission allowed for the route. */
 export async function requireAdminFromRequest(request: Request): Promise<AdminAuthResult> {
-  const auth = await requireAdminPermissionFromRequest(
+  const auth = await requireAnyAdminPermissionFromRequest(
     request,
-    priorityOnePermissionForRequest(request),
+    priorityPermissionsForRequest(request),
   );
   if (!auth.ok) return auth;
   return { ok: true, user: auth.user, email: auth.email };
