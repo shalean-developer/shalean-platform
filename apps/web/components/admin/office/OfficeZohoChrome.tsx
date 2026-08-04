@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useRef, type ReactNode } from "react";
 import { ChevronDown, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAdminData } from "@/hooks/useAdminData";
 
 export function OfficeZohoPageHeader({
   title,
@@ -260,8 +261,43 @@ export function OfficeZohoToggle({
   );
 }
 
+type PermissionPayload = { permissions?: string[] };
+
 export function OfficeZohoTableShell({ children }: { children: ReactNode }) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const { data } = useAdminData<PermissionPayload>("/api/admin/security/my-permissions");
+  const canViewCustomerRevenue = data?.permissions?.includes("finance.customer_revenue.view") === true;
+
+  useEffect(() => {
+    const root = rootRef.current;
+    if (!root) return;
+
+    const applyVisibility = () => {
+      root.querySelectorAll("table").forEach((table) => {
+        const headers = Array.from(table.querySelectorAll("thead th"));
+        const amountIndex = headers.findIndex((header) => {
+          const label = header.textContent?.trim().toLowerCase();
+          return label === "amount" || label === "customer amount" || label === "customer revenue";
+        });
+        if (amountIndex < 0) return;
+
+        table.querySelectorAll("tr").forEach((row) => {
+          const cells = row.querySelectorAll<HTMLElement>("th, td");
+          const cell = cells.item(amountIndex);
+          if (cell) cell.style.display = canViewCustomerRevenue ? "" : "none";
+        });
+      });
+    };
+
+    applyVisibility();
+    const observer = new MutationObserver(applyVisibility);
+    observer.observe(root, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [canViewCustomerRevenue]);
+
   return (
-    <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">{children}</div>
+    <div ref={rootRef} className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+      {children}
+    </div>
   );
 }
