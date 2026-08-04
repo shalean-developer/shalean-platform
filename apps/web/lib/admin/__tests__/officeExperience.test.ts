@@ -64,6 +64,12 @@ describe("role-based Office experience", () => {
     }
   });
 
+  it("keeps company-wide operations pages outside the Supervisor audience", () => {
+    for (const path of ["/office/operations", "/office/ops-queue", "/office/sla-breaches"]) {
+      expect(policyForOfficePath(path)?.audience, path).not.toContain("supervisor");
+    }
+  });
+
   it("keeps Marketing away from customer PII and company finance", () => {
     const marketing = new Set(ROLE_PERMISSIONS.marketing);
     expect(hasAnyOfficePermission(marketing, policyForOfficePath("/office/blog")!.anyOf)).toBe(true);
