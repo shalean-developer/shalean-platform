@@ -179,9 +179,15 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
 
   applyNavigationPermissions(permissions, roleFromProfile(profile));
   if (pathname === "/office") {
-    return <div className="space-y-7">
-      <OfficeRoleDashboard permissions={permissions} profile={profile} />
-      <OfficeMyWorkPanel />
+    return <div className="min-h-full bg-slate-50/60">
+      <div className="mx-auto w-full max-w-[1600px] space-y-7 px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
+        <OfficeRoleDashboard permissions={permissions} profile={profile} />
+        <OfficeMyWorkPanel />
+        <footer className="flex flex-col gap-2 border-t border-slate-200 px-1 pt-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+          <span>© 2026 Shalean Cleaning Services. All rights reserved.</span>
+          <span>Staging Environment</span>
+        </footer>
+      </div>
     </div>;
   }
   return children;
