@@ -1,0 +1,46 @@
+---
+description: Mandatory Shalean engineering, deployment, testing and Vercel cost-control rules
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Shalean Engineering Standard
+
+Read and follow `docs/engineering/SHALEAN_ENGINEERING_STANDARD.md` and the repository `AGENTS.md` before changing code.
+
+## Mandatory workflow
+
+- Work only on the current approved feature, fix, chore, docs or audit branch.
+- Do not create another branch unless necessary; explain why first.
+- Never develop directly on `main` or `staging`.
+- Keep related changes together. Do not add unrelated refactors.
+- Run local and relevant repository tests before pushing.
+- Do not push or merge to `staging` after every commit.
+- Do not merge to `main` unless the user explicitly authorizes it after required checks and staging verification.
+- Create or update one final PR only when the task is materially complete.
+- Minimize Vercel builds. Feature branches are intentionally ignored; use `staging` for completed acceptance testing and `main` for approved production releases.
+
+## Safety
+
+- Server-side authorization is the source of truth.
+- Preserve least privilege and fail closed for unknown roles, permissions and scopes.
+- Never expose secrets, service-role keys, payment credentials, customer data, cleaner identity documents or bank details.
+- Do not weaken maker-checker, audit, payout, earnings, payment or booking-integrity controls.
+- Never edit an applied production migration; create a forward migration.
+- Prefer idempotent handling for payments, invoices, recurring bookings, notifications and payouts.
+- Use integer cents for money calculations unless the approved domain model requires otherwise.
+- Treat `Africa/Johannesburg` as the operational timezone unless an integration explicitly requires UTC.
+
+## Before review
+
+Report:
+
+- Branch used
+- Files changed
+- Behaviour implemented
+- Tests run and results
+- Security, financial and database impact
+- Environment changes
+- Staging verification required or completed
+- Risks and remaining work
