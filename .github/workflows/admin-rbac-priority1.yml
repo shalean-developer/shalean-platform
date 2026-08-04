@@ -1,0 +1,35 @@
+name: Admin RBAC Priority 1
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/app/office/**"
+      - "apps/web/app/api/**"
+      - "apps/web/lib/admin/**"
+      - "apps/web/lib/auth/**"
+      - "apps/web/lib/payout/**"
+      - "apps/web/scripts/admin-rbac-priority1-inventory.mjs"
+      - "supabase/migrations/**"
+      - ".github/workflows/admin-rbac-priority1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  static-priority-1-inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Generate inventory and enforce critical route permissions
+        run: node apps/web/scripts/admin-rbac-priority1-inventory.mjs
+      - name: Upload generated inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-rbac-priority-1-inventory
+          path: docs/security/admin-rbac-priority-1-inventory.generated.md
+          if-no-files-found: error
