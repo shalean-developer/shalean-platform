@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { AppMonoFontScope } from "@/components/fonts/AppMonoFontScope";
+import { OfficeBookingFinancialVisibilityGate } from "@/components/admin/office/OfficeBookingFinancialVisibilityGate";
 import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
 import { OfficeShell } from "@/src/features/office/OfficeShell";
 import { OfficePermissionBoundary } from "@/src/features/office/OfficePermissionBoundary";
@@ -28,6 +29,7 @@ export default function OfficeLayout({ children }: { children: ReactNode }) {
   return (
     <AppMonoFontScope>
       <OfficeEnvironmentIndicator />
+      <OfficeBookingFinancialVisibilityGate />
       <OfficePermissionNavigationGate>
         <OfficeShell>
           <OfficePermissionBoundary>{children}</OfficePermissionBoundary>
