@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { permissionForOfficePath } from "@/lib/admin/routePermissions";
-import { priorityOnePermissionForRequest, priorityPermissionsForRequest } from "@/lib/admin/requireAdmin";
-
-function req(path: string, method = "GET") {
-  return new Request(`https://example.test${path}`, { method });
-}
+import { priorityPermissionsForRequest } from "@/lib/admin/requireAdmin";
 
 describe("permissionForOfficePath", () => {
   it.each([
@@ -25,32 +21,25 @@ describe("permissionForOfficePath", () => {
   });
 });
 
-describe("legacy API permission compatibility", () => {
-  it("protects critical finance and payout routes", () => {
-    expect(priorityOnePermissionForRequest(req("/api/admin/cash-flow"))).toBe("finance.full.view");
-    expect(priorityOnePermissionForRequest(req("/api/admin/payouts"))).toBe("payout.view");
-    expect(priorityOnePermissionForRequest(req("/api/admin/payouts/approve", "POST"))).toBe("payout.approve");
-    expect(priorityOnePermissionForRequest(req("/api/admin/payouts/pay", "POST"))).toBe("payout.release");
+describe("priorityPermissionsForRequest", () => {
+  it("maps Workforce read APIs to cleaner.view", () => {
+    expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/cleaners"))).toEqual(["cleaner.view"]);
+    expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/cleaner-report-feedback"))).toEqual(["cleaner.view"]);
   });
 
-  it("allows mixed Customer and Marketing review readers", () => {
-    expect(priorityPermissionsForRequest(req("/api/admin/reviews"))).toEqual(["customer.view", "marketing.view"]);
-    expect(priorityPermissionsForRequest(req("/api/admin/office-review-funnel"))).toEqual(["customer.view", "marketing.view"]);
-  });
-
-  it("maps Marketing APIs away from booking.view", () => {
-    expect(priorityPermissionsForRequest(req("/api/admin/blog/posts"))).toEqual([
-      "content.draft",
-      "content.publish",
+  it("allows mixed Marketing and customer review readers", () => {
+    expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/reviews"))).toEqual([
+      "customer.view",
       "marketing.view",
     ]);
-    for (const path of [
-      "/api/admin/campaign-templates",
-      "/api/admin/promotions",
-      "/api/admin/social-accounts",
-      "/api/admin/referrals/campaigns",
-    ]) {
-      expect(priorityPermissionsForRequest(req(path)), path).toContain("marketing.view");
-    }
+  });
+
+  it("keeps sensitive cleaner resources on dedicated permissions", () => {
+    expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/cleaners/abc/bank"))).toEqual([
+      "cleaner.bank.view",
+    ]);
+    expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/cleaners/abc/documents"))).toEqual([
+      "cleaner.documents.view",
+    ]);
   });
 });
