@@ -49,6 +49,6 @@ export async function markCleanerPayoutPaid(
   if (bookingSyncErr) return { ok: false, error: bookingSyncErr.message };
 
   void logSystemEvent({ level: "info", source: "PAYOUT_MARKED_PAID", message: "Cleaner payout batch marked paid", context: { payoutId, actorUserId: actor } });
-  void logPayoutAuditEvent(admin, { eventType: "payout_marked_paid", actorUserId: actor, payoutId, newValues: { status: "paid", payment_status: "success" } });
+  void logPayoutAuditEvent(admin, { eventType: "payout_manual_mark_paid", actorUserId: actor, payoutId, newValues: { status: "paid", payment_status: "success" } });
   return { ok: true };
 }
