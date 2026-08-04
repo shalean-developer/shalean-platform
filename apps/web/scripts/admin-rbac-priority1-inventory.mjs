@@ -6,25 +6,8 @@ import { fileURLToPath } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const webRoot = resolve(here, "..");
 const repoRoot = resolve(webRoot, "../..");
-const checkOnly = process.argv.includes("--check");
 const outputPath = resolve(repoRoot, "docs/security/admin-rbac-priority-1-inventory.generated.md");
-
-const textExt = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".sql"]);
-const criticalFinance = [
-  "financial-dashboard",
-  "business-health",
-  "cash-flow",
-  "expenses",
-  "recurring-expenses",
-  "budgets",
-  "expense-vendors",
-  "expense-reports",
-  "payment-reconciliation",
-  "booking-profitability",
-];
-const criticalPayout = ["payout", "payouts", "earning", "earnings", "disbursement", "transfer"];
-const criticalIdentity = ["bank", "payment-details", "identity", "document", "documents", "id-document"];
-const criticalAdmin = ["role", "roles", "permission", "permissions", "admin-user", "admin-users"];
+const financeSegments = ["financial-dashboard", "business-health", "cash-flow", "expenses", "recurring-expenses", "budgets", "expense-vendors", "expense-reports", "payment-reconciliation", "booking-profitability"];
 
 function walk(root) {
   if (!existsSync(root)) return [];
@@ -33,121 +16,107 @@ function walk(root) {
     if (["node_modules", ".next", ".git", "coverage"].includes(name)) continue;
     const path = join(root, name);
     const stat = statSync(path);
-    if (stat.isDirectory()) out.push(...walk(path));
-    else out.push(path);
+    if (stat.isDirectory()) out.push(...walk(path)); else out.push(path);
   }
   return out;
 }
 function posix(path) { return relative(repoRoot, path).split(sep).join("/"); }
 function source(path) { return readFileSync(path, "utf8"); }
-function lowerPath(path) { return posix(path).toLowerCase(); }
-function hasAny(path, needles) { const p = lowerPath(path); return needles.some((n) => p.includes(n)); }
-function routeOperation(src) {
+function normalized(path) { return posix(path).toLowerCase(); }
+function isAdminApi(path) { return normalized(path).includes("apps/web/app/api/admin/"); }
+function isFinance(path) { const p = normalized(path); return financeSegments.some((s) => p.includes(`/${s}`)); }
+function isPayout(path) {
+  const p = normalized(path);
+  return p.includes("/payout") || p.includes("/cleaners/earnings") || p.includes("/earnings-policies") || p.includes("/adjust-payout-earnings") || p.includes("/fix-earnings") || p.includes("/reset-earnings") || p.includes("/remove-cleaner-payout");
+}
+function isSensitiveCleaner(path) {
+  const p = normalized(path);
+  return p.includes("/api/admin/cleaners/") && (p.includes("/bank") || p.includes("/payment-details") || p.includes("/identity") || p.includes("/documents"));
+}
+function isRoleAdmin(path) {
+  const p = normalized(path);
+  return p.includes("/api/admin/security/permissions-inspector") || p.includes("/api/admin/roles") || p.includes("/api/admin/admin-users");
+}
+function criticalKind(path) {
+  if (!isAdminApi(path)) return null;
+  if (isFinance(path)) return "finance";
+  if (isPayout(path)) return "payout";
+  if (isSensitiveCleaner(path)) return "cleaner-sensitive";
+  if (isRoleAdmin(path)) return "role-admin";
+  return null;
+}
+function operation(src) {
   const methods = ["GET", "POST", "PUT", "PATCH", "DELETE"].filter((m) => new RegExp(`export\\s+async\\s+function\\s+${m}\\b`).test(src));
   return methods.join(", ") || "route";
 }
-function currentGuard(src) {
-  const match = src.match(/(requireAdminPermissionFromRequest|requireFinanceApi|requireAdminFromRequest|requireAdminUser|requireAdminSession|isAdmin)\b/);
-  return match?.[1] ?? "none detected";
+function guard(src) {
+  return src.match(/(requireAdminPermissionFromRequest|requireFinanceApi|requireAdminFromRequest|requireAdminSession|requireAdminUser|isAdmin)\b/)?.[1] ?? "none detected";
 }
-function permission(src) {
-  const direct = src.match(/requireAdminPermissionFromRequest\s*\([^,]+,\s*["'`]([^"'`]+)["'`]/s);
-  if (direct) return direct[1];
-  if (src.includes("requireFinanceApi")) return "finance.full.view (shared gate)";
-  return "unmapped";
+function directPermission(src) {
+  return src.match(/requireAdminPermissionFromRequest\s*\([^,]+,\s*["'`]([^"'`]+)["'`]/s)?.[1] ?? null;
 }
-function proposed(path) {
-  if (hasAny(path, criticalPayout)) {
-    if (lowerPath(path).includes("approve")) return "payout.approve";
-    if (/(pay|release|run|transfer)/.test(lowerPath(path))) return "payout.release";
-    return "payout.prepare or payout.view";
+function proposed(path, src) {
+  const kind = criticalKind(path);
+  const p = normalized(path);
+  const op = operation(src);
+  if (kind === "finance") return "finance.full.view";
+  if (kind === "role-admin") return "role.manage";
+  if (kind === "cleaner-sensitive") return p.includes("document") || p.includes("identity") ? "cleaner.documents.view" : "cleaner.bank.view";
+  if (kind === "payout") {
+    if (p.includes("/approve")) return "payout.approve";
+    if (p.includes("/pay") || p.includes("/process") || p.includes("/disburse") || p.includes("/mark-paid") || p.includes("/retry")) return "payout.release";
+    if (op === "GET") return "payout.view";
+    return "payout.prepare";
   }
-  if (hasAny(path, criticalIdentity)) {
-    if (/(download|document|identity)/.test(lowerPath(path))) return "cleaner.documents.view";
-    return "cleaner.bank.view";
-  }
-  if (hasAny(path, criticalFinance)) return "finance.full.view";
-  if (hasAny(path, criticalAdmin)) return "role.manage";
   return "inventory review";
 }
+function protectedCritical(path, src) {
+  const kind = criticalKind(path);
+  if (!kind) return true;
+  const sharedMapped = src.includes("requireAdminFromRequest") || src.includes("requireAdminSession");
+  if (sharedMapped) return true;
+  if (kind === "finance") return src.includes("requireFinanceApi") || /finance\.(full|summary)\.view/.test(src);
+  if (kind === "payout") return /payout\.(view|prepare|approve|release)/.test(src);
+  if (kind === "cleaner-sensitive") return /cleaner\.(bank|documents)\.view/.test(src);
+  if (kind === "role-admin") return /role\.manage|user\.manage/.test(src);
+  return false;
+}
 function sensitivity(path) {
-  if (hasAny(path, criticalIdentity)) return "highly sensitive";
-  if (hasAny(path, criticalFinance) || hasAny(path, criticalPayout)) return "financial";
-  if (hasAny(path, criticalAdmin)) return "highly sensitive";
+  const kind = criticalKind(path);
+  if (kind === "finance" || kind === "payout") return "financial";
+  if (kind === "cleaner-sensitive" || kind === "role-admin") return "highly sensitive";
   return "internal";
 }
-function protectedCritical(path, src) {
-  if (hasAny(path, criticalFinance)) return src.includes("requireFinanceApi") || /finance\.(full|summary)\.view/.test(src);
-  if (hasAny(path, criticalPayout)) return /payout\.(view|prepare|approve|release)/.test(src);
-  if (hasAny(path, criticalIdentity)) return /cleaner\.(bank|documents)\.view/.test(src);
-  if (hasAny(path, criticalAdmin)) return /role\.manage|user\.manage/.test(src);
-  return true;
-}
 
-const officePages = walk(resolve(webRoot, "app")).filter((p) => /\/office\//.test(p.split(sep).join("/")) && /\/(page|layout)\.(tsx|ts)$/.test(p.split(sep).join("/")));
-const apiRoutes = walk(resolve(webRoot, "app/api")).filter((p) => /\/route\.(ts|js)$/.test(p.split(sep).join("/")));
-const sourceFiles = walk(webRoot).filter((p) => textExt.has(p.slice(p.lastIndexOf("."))));
+const appFiles = walk(resolve(webRoot, "app"));
+const officePages = appFiles.filter((p) => /\/office\//.test(p.split(sep).join("/")) && /\/(page|layout)\.(tsx|ts)$/.test(p.split(sep).join("/")));
+const apiRoutes = appFiles.filter((p) => /\/api\/.*\/route\.(ts|js)$/.test(p.split(sep).join("/")));
+const sourceFiles = walk(webRoot).filter((p) => /\.(ts|tsx|js|jsx|mjs|sql)$/.test(p));
 const migrations = walk(resolve(repoRoot, "supabase/migrations")).filter((p) => p.endsWith(".sql"));
 
-const apiRows = apiRoutes.map((path) => {
+const rows = apiRoutes.map((path) => {
   const src = source(path);
-  const isCritical = hasAny(path, [...criticalFinance, ...criticalPayout, ...criticalIdentity, ...criticalAdmin]);
-  return {
-    resource: posix(path), operation: routeOperation(src), guard: currentGuard(src), permission: permission(src),
-    proposed: proposed(path), sensitivity: sensitivity(path), critical: isCritical, protected: protectedCritical(path, src),
-  };
+  const kind = criticalKind(path);
+  return { resource: posix(path), operation: operation(src), guard: guard(src), permission: directPermission(src) ?? (src.includes("requireFinanceApi") ? "finance.full.view (shared)" : src.includes("requireAdminFromRequest") || src.includes("requireAdminSession") ? "Priority 1 mapped shared gate" : "unmapped"), proposed: proposed(path, src), sensitivity: sensitivity(path), critical: Boolean(kind), protected: protectedCritical(path, src) };
 });
 const rpcNames = new Set();
-for (const path of sourceFiles) {
-  const src = source(path);
-  for (const match of src.matchAll(/\.rpc\(\s*["'`]([^"'`]+)["'`]/g)) rpcNames.add(match[1]);
-}
-for (const path of migrations) {
-  const src = source(path);
-  for (const match of src.matchAll(/create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?([a-zA-Z0-9_]+)/gi)) rpcNames.add(match[1]);
-}
-const failures = apiRows.filter((r) => r.critical && !r.protected);
+for (const path of sourceFiles) for (const match of source(path).matchAll(/\.rpc\(\s*["'`]([^"'`]+)["'`]/g)) rpcNames.add(match[1]);
+for (const path of migrations) for (const match of source(path).matchAll(/create\s+(?:or\s+replace\s+)?function\s+(?:public\.)?([a-zA-Z0-9_]+)/gi)) rpcNames.add(match[1]);
+const failures = rows.filter((r) => r.critical && !r.protected);
 
 const lines = [
-  "# Admin RBAC Priority 1 — Generated Inventory",
-  "",
-  `Generated: ${new Date().toISOString()}`,
-  "",
-  `- Office page/layout files: **${officePages.length}**`,
-  `- API route files: **${apiRows.length}**`,
-  `- RPC/database functions referenced or defined: **${rpcNames.size}**`,
-  `- Unprotected critical API routes: **${failures.length}**`,
-  "",
-  "## Office pages and layouts",
-  "",
-  "| Resource | Proposed permission | Sensitivity |",
-  "|---|---|---|",
-  ...officePages.sort().map((p) => `| \`${posix(p)}\` | \`${proposed(p)}\` | ${sensitivity(p)} |`),
-  "",
-  "## API routes",
-  "",
-  "| Resource | Operation | Current guard | Current permission | Proposed permission | Sensitivity | Critical status |",
-  "|---|---|---|---|---|---|---|",
-  ...apiRows.sort((a,b) => a.resource.localeCompare(b.resource)).map((r) => `| \`${r.resource}\` | ${r.operation} | \`${r.guard}\` | \`${r.permission}\` | \`${r.proposed}\` | ${r.sensitivity} | ${r.critical ? (r.protected ? "PASS" : "FAIL") : "review"} |`),
-  "",
-  "## RPC and database functions",
-  "",
-  ...[...rpcNames].sort().map((name) => `- \`${name}\``),
-  "",
-  "## Priority 1 failures",
-  "",
-  ...(failures.length ? failures.map((r) => `- \`${r.resource}\` requires \`${r.proposed}\`; detected guard: \`${r.guard}\`.`) : ["No unprotected critical API routes detected by the static policy audit."]),
-  "",
-  "## Scope note",
-  "",
-  "This inventory is generated from the repository filesystem. The static audit fails CI when a critical finance, payout, cleaner identity/bank, or role-administration route lacks a matching granular RBAC permission. Runtime authorization tests remain responsible for proving 401/403 behavior and record scope.",
-  "",
+  "# Admin RBAC Priority 1 — Generated Inventory", "", `Generated: ${new Date().toISOString()}`, "",
+  `- Office page/layout files: **${officePages.length}**`, `- API route files: **${rows.length}**`, `- RPC/database functions referenced or defined: **${rpcNames.size}**`, `- Unprotected critical admin API routes: **${failures.length}**`, "",
+  "## Office pages and layouts", "", "| Resource | Proposed permission | Sensitivity |", "|---|---|---|",
+  ...officePages.sort().map((p) => `| \`${posix(p)}\` | \`${proposed(p, "") }\` | ${sensitivity(p)} |`), "",
+  "## API routes", "", "| Resource | Operation | Current guard | Current permission | Proposed permission | Sensitivity | Critical status |", "|---|---|---|---|---|---|---|",
+  ...rows.sort((a,b) => a.resource.localeCompare(b.resource)).map((r) => `| \`${r.resource}\` | ${r.operation} | \`${r.guard}\` | \`${r.permission}\` | \`${r.proposed}\` | ${r.sensitivity} | ${r.critical ? (r.protected ? "PASS" : "FAIL") : "review"} |`), "",
+  "## RPC and database functions", "", ...[...rpcNames].sort().map((n) => `- \`${n}\``), "",
+  "## Priority 1 failures", "", ...(failures.length ? failures.map((r) => `- \`${r.resource}\` requires \`${r.proposed}\`; detected guard: \`${r.guard}\`.`) : ["No unprotected critical admin API routes detected by the static policy audit."]), "",
+  "## Scope note", "", "Public, customer, cleaner self-service and cron routes are inventoried but are not incorrectly required to use Office-admin permissions. Their own session, signature or cron-secret controls remain separate security boundaries.", ""
 ];
-const output = lines.join("\n");
-if (!checkOnly) {
-  mkdirSync(dirname(outputPath), { recursive: true });
-  writeFileSync(outputPath, output);
-  console.log(`Wrote ${relative(repoRoot, outputPath)}`);
-}
-console.log(JSON.stringify({ officePages: officePages.length, apiRoutes: apiRows.length, rpcFunctions: rpcNames.size, failures: failures.map((r) => r.resource) }, null, 2));
+mkdirSync(dirname(outputPath), { recursive: true });
+writeFileSync(outputPath, lines.join("\n"));
+console.log(`Wrote ${relative(repoRoot, outputPath)}`);
+console.log(JSON.stringify({ officePages: officePages.length, apiRoutes: rows.length, rpcFunctions: rpcNames.size, failures: failures.map((r) => r.resource) }, null, 2));
 if (failures.length) process.exitCode = 1;
