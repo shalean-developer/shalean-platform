@@ -79,23 +79,26 @@ function configuredClients() {
   };
 }
 
-/**
- * Central, server-only authorization gate.
- *
- * Behaviour is intentionally deny-by-default:
- * - no token => 401
- * - invalid session => 401
- * - missing configuration => 503
- * - unknown, missing, expired or out-of-scope assignment => 403
- */
 export async function requireAdminPermissionFromRequest(
   request: Request,
   permission: AdminPermission,
   scope: PermissionScope = {},
 ): Promise<PermissionAuthResult> {
+  return requireAnyAdminPermissionFromRequest(request, [permission], scope);
+}
+
+/** Authorize when at least one listed permission resolves in the requested scope. */
+export async function requireAnyAdminPermissionFromRequest(
+  request: Request,
+  permissions: readonly AdminPermission[],
+  scope: PermissionScope = {},
+): Promise<PermissionAuthResult> {
   const token = bearerToken(request);
   if (!token) {
     return { ok: false, response: NextResponse.json({ error: "Missing authorization." }, { status: 401 }) };
+  }
+  if (permissions.length === 0) {
+    return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
   }
 
   const clients = configuredClients();
@@ -111,36 +114,36 @@ export async function requireAdminPermissionFromRequest(
     return { ok: false, response: NextResponse.json({ error: "Invalid or expired session." }, { status: 401 }) };
   }
 
-  const { data: allowed, error: permissionError } = await clients.adminClient.rpc("admin_has_permission", {
-    p_user_id: user.id,
-    p_permission: permission,
-    p_branch_id: scope.branchId ?? null,
-    p_team_id: scope.teamId ?? null,
-  });
-
-  if (permissionError) {
-    console.error("RBAC permission evaluation failed", {
-      permission,
-      userId: user.id,
-      code: permissionError.code,
+  for (const permission of permissions) {
+    const { data: allowed, error: permissionError } = await clients.adminClient.rpc("admin_has_permission", {
+      p_user_id: user.id,
+      p_permission: permission,
+      p_branch_id: scope.branchId ?? null,
+      p_team_id: scope.teamId ?? null,
     });
-    return { ok: false, response: NextResponse.json({ error: "Authorization unavailable." }, { status: 503 }) };
+
+    if (permissionError) {
+      console.error("RBAC permission evaluation failed", {
+        permission,
+        userId: user.id,
+        code: permissionError.code,
+      });
+      return { ok: false, response: NextResponse.json({ error: "Authorization unavailable." }, { status: 503 }) };
+    }
+    if (allowed === true) {
+      return { ok: true, user, email: user.email, permission };
+    }
   }
 
-  if (allowed !== true) {
-    return {
-      ok: false,
-      response: NextResponse.json(
-        { error: "Forbidden.", requiredPermission: permission },
-        { status: 403 },
-      ),
-    };
-  }
-
-  return { ok: true, user, email: user.email, permission };
+  return {
+    ok: false,
+    response: NextResponse.json(
+      { error: "Forbidden.", requiredAnyPermission: permissions },
+      { status: 403 },
+    ),
+  };
 }
 
-/** Use in server services that already have a trusted authenticated user id. */
 export async function adminUserHasPermission(
   userId: string,
   permission: AdminPermission,
