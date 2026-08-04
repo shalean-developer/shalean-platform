@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { requireAnyAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import {
   loadOfficePayoutPeriodReport,
   normalizeOfficePayoutPeriodRange,
@@ -65,8 +65,15 @@ async function correctUniqueBatchBookingCounts(
 }
 
 export async function GET(request: Request) {
-  const auth = await requireAdminApi(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  // Cleaner payout reporting is available to roles that can view payouts,
+  // prepare payout batches, or view management finance summaries.
+  // Keep this explicit rather than relying on the generic legacy route classifier.
+  const auth = await requireAnyAdminPermissionFromRequest(request, [
+    "payout.view",
+    "payout.prepare",
+    "finance.summary.view",
+  ]);
+  if (!auth.ok) return auth.response;
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
