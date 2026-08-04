@@ -11,8 +11,8 @@ export type OfficeBookingsExportRow = {
   date: string | null;
   time: string | null;
   location: string | null;
-  total_paid_zar: number | null;
-  amount_paid_cents: number | null;
+  total_paid_zar?: number | null;
+  amount_paid_cents?: number | null;
   status: string | null;
   team_id?: string | null;
   team?: { id: string; name: string | null } | null;
@@ -32,7 +32,7 @@ const CSV_HEADERS = [
   "status",
 ] as const;
 
-function formatExportAmountZar(cents: number | null, zar: number | null): string {
+function formatExportAmountZar(cents: number | null | undefined, zar: number | null | undefined): string {
   const val = zar ?? (cents != null ? cents / 100 : null);
   if (val == null) return "";
   return String(Math.round(val));
@@ -81,7 +81,7 @@ export async function fetchAllOfficeBookingsForExport(
 
   while (page <= totalPages) {
     const query = new URLSearchParams({ ...params, page: String(page), pageSize: "100" });
-    const res = await globalThis.fetch(`/api/admin/bookings?${query.toString()}`, {
+    const res = await globalThis.fetch(`/api/admin/bookings/scoped?${query.toString()}`, {
       headers: { Authorization: `Bearer ${token}` },
       cache: "no-store",
     });

@@ -1,0 +1,35 @@
+name: Admin RBAC Priority 3
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/app/api/admin/my-work/**"
+      - "apps/web/lib/admin/officeWorkItems.ts"
+      - "apps/web/lib/admin/__tests__/officeWorkItems.test.ts"
+      - "apps/web/src/features/office/OfficeMyWorkPanel.tsx"
+      - "apps/web/src/features/office/OfficePermissionNavigationGate.tsx"
+      - ".github/workflows/admin-rbac-priority3.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  priority-3-my-work:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+      - name: Run Priority 3 policy tests
+        working-directory: apps/web
+        run: npx vitest run lib/admin/__tests__/officeWorkItems.test.ts lib/admin/__tests__/officeExperience.test.ts lib/admin/__tests__/routePermissions.test.ts
+      - name: Typecheck
+        working-directory: apps/web
+        run: npm run typecheck

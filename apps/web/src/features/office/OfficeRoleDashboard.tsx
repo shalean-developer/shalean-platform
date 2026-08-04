@@ -96,10 +96,7 @@ const EXPERIENCES: Record<OfficeRoleKey, Experience> = {
     { label: "Schedule", description: "See assigned bookings and team coverage.", href: "/office/schedule", metric: "Daily schedule" },
     { label: "Bookings", description: "Review bookings within your permitted scope.", href: "/office/bookings", metric: "Booking queue" },
     { label: "Teams", description: "View and coordinate assigned teams.", href: "/office/teams", metric: "Team view" },
-    { label: "Cleaner performance", description: "Monitor quality within your team scope.", href: "/office/cleaner-performance", metric: "Quality KPI" },
-  ], reports: [
-    { label: "Cleaner feedback", description: "Submit and review permitted feedback.", href: "/office/cleaner-report-feedback", metric: "Feedback report" },
-  ] },
+  ], reports: [] },
   restricted: { title: "Office workspace", subtitle: "Your account has limited Office access.", workspaces: [], reports: [] },
 };
 
@@ -110,12 +107,40 @@ function allowed(items: Workspace[], permissions: ReadonlySet<string>): Workspac
   });
 }
 
-function Grid({ items }: { items: Workspace[] }) {
-  return <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">{items.map((item) => (
-    <Link key={item.href} href={item.href} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-300 hover:shadow-md">
-      <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-500">{item.metric}</span>
-      <h3 className="mt-4 text-base font-semibold text-slate-900">{item.label}</h3>
-      <p className="mt-1 text-sm text-slate-500">{item.description}</p>
+function CardIcon({ href }: { href: string }) {
+  const common = "h-5 w-5";
+  if (href.includes("cash") || href.includes("financial") || href.includes("payout")) {
+    return <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="8"/><path d="M15.5 8.5c-.7-.7-1.8-1-3.2-1-1.8 0-3.1.9-3.1 2.2 0 3.4 6.4 1.5 6.4 5 0 1.4-1.4 2.3-3.4 2.3-1.5 0-2.7-.4-3.6-1.2M12 5.8v12.4"/></svg>;
+  }
+  if (href.includes("security")) {
+    return <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 3 19 6v5c0 4.6-2.9 7.8-7 10-4.1-2.2-7-5.4-7-10V6l7-3Z"/></svg>;
+  }
+  if (href.includes("ops") || href.includes("operations") || href.includes("metrics")) {
+    return <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg>;
+  }
+  if (href.includes("schedule") || href.includes("booking")) {
+    return <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg>;
+  }
+  return <svg className={common} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M4 19V9M10 19V5M16 19v-7M22 19V3"/></svg>;
+}
+
+function iconTone(href: string): string {
+  if (href.includes("cash") || href.includes("financial")) return "bg-emerald-50 text-emerald-700";
+  if (href.includes("payout")) return "bg-violet-50 text-violet-700";
+  if (href.includes("security")) return "bg-amber-50 text-amber-700";
+  if (href.includes("ops") || href.includes("operations")) return "bg-blue-50 text-blue-700";
+  return "bg-sky-50 text-sky-700";
+}
+
+function Grid({ items, reports = false }: { items: Workspace[]; reports?: boolean }) {
+  return <div className={`grid gap-4 ${reports ? "md:grid-cols-2" : "sm:grid-cols-2 xl:grid-cols-4"}`}>{items.map((item) => (
+    <Link key={item.href} href={item.href} className="group flex min-h-[138px] items-start justify-between gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_2px_10px_rgba(15,23,42,0.035)] transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_10px_28px_rgba(15,23,42,0.08)]">
+      <div className="min-w-0">
+        <span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-blue-700">{item.metric}</span>
+        <h3 className="mt-4 text-base font-semibold text-slate-950">{item.label}</h3>
+        <p className="mt-1.5 text-sm leading-5 text-slate-500">{item.description}</p>
+      </div>
+      <span className={`mt-7 flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${iconTone(item.href)} transition group-hover:scale-105`}><CardIcon href={item.href} /></span>
     </Link>
   ))}</div>;
 }
@@ -128,19 +153,19 @@ export function OfficeRoleDashboard({ permissions, profile }: OfficeRoleDashboar
   const roleNames = profile.roles.map((assignment) => assignment.name).join(", ") || role;
 
   return <main className="space-y-7" data-office-role={role}>
-    <header className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white to-slate-50 p-6 shadow-sm">
-      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Role-based Office experience</p>
-      <h1 className="mt-2 text-2xl font-bold text-slate-950">{experience.title}</h1>
-      <p className="mt-2 max-w-3xl text-sm text-slate-600">{experience.subtitle}</p>
-      <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-500">
-        <span className="rounded-full border bg-white px-3 py-1.5">Role: {roleNames}</span>
-        <span className="rounded-full border bg-white px-3 py-1.5">Permissions: {permissions.size}</span>
-        <span className="rounded-full border bg-white px-3 py-1.5">Branches: {profile.branchIds.length || "Global"}</span>
-        <span className="rounded-full border bg-white px-3 py-1.5">Teams: {profile.teamIds.length || "None"}</span>
+    <header className="rounded-3xl border border-slate-200/80 bg-gradient-to-br from-white via-white to-slate-50 p-6 shadow-[0_4px_22px_rgba(15,23,42,0.045)] sm:p-8">
+      <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Role-based Office experience</p>
+      <h1 className="mt-2 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{experience.title}</h1>
+      <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">{experience.subtitle}</p>
+      <div className="mt-5 flex flex-wrap gap-2 text-xs text-slate-600">
+        <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">Role: {roleNames}</span>
+        <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">Permissions: {permissions.size}</span>
+        <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">Branches: {profile.branchIds.length || "Global"}</span>
+        <span className="rounded-full border border-slate-200 bg-white px-3 py-1.5 shadow-sm">Teams: {profile.teamIds.length || "None"}</span>
       </div>
-      {role === "supervisor" && profile.teamIds.length === 0 ? <p className="mt-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Supervisor access has no assigned team scope. Team data must remain unavailable until the Owner assigns a team.</p> : null}
+      {role === "supervisor" && profile.teamIds.length === 0 ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Supervisor access has no assigned team scope. Team data must remain unavailable until the Owner assigns a team.</p> : null}
     </header>
-    {workspaces.length ? <section><h2 className="mb-3 text-lg font-semibold">Your priority workspace</h2><Grid items={workspaces} /></section> : <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">No Office modules are assigned to this account.</section>}
-    {reports.length ? <section><h2 className="mb-3 text-lg font-semibold">Role reports and KPIs</h2><Grid items={reports} /></section> : null}
+    {workspaces.length ? <section><h2 className="mb-4 text-lg font-semibold tracking-tight text-slate-950">Your priority workspace</h2><Grid items={workspaces} /></section> : <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">No Office modules are assigned to this account.</section>}
+    {reports.length ? <section><h2 className="mb-4 text-lg font-semibold tracking-tight text-slate-950">Role reports and KPIs</h2><Grid items={reports} reports /></section> : null}
   </main>;
 }
