@@ -1,4 +1,5 @@
 import type { AdminPermission } from "@/lib/admin/requirePermission";
+import { OFFICE_ACCESS_POLICIES, policyForOfficePath } from "@/lib/admin/officeExperience";
 
 export type OfficeRoutePolicy = {
   path: string;
@@ -7,27 +8,38 @@ export type OfficeRoutePolicy = {
 };
 
 /**
- * Central registry for Phase 2 Office route enforcement.
- * More-specific paths must appear before broader prefixes.
+ * Compatibility registry for server code that expects a single primary permission.
+ * Client page visibility and navigation use the complete any-of policy in officeExperience.ts.
  */
-export const HIGH_RISK_OFFICE_ROUTES: OfficeRoutePolicy[] = [
-  { path: "/office/payouts", permission: "payout.view", risk: "critical" },
-  { path: "/office/payout-batches", permission: "payout.view", risk: "critical" },
-  { path: "/office/cash-flow", permission: "finance.full.view", risk: "critical" },
-  { path: "/office/budgets", permission: "finance.full.view", risk: "critical" },
-  { path: "/office/booking-profitability", permission: "profit.view", risk: "critical" },
-  { path: "/office/expenses", permission: "expense.manage", risk: "high" },
-  { path: "/office/invoices", permission: "invoice.manage", risk: "high" },
-  { path: "/office/reporting", permission: "finance.summary.view", risk: "high" },
-  { path: "/office/pricing", permission: "pricing.manage", risk: "critical" },
-  { path: "/office/integrations", permission: "integration.manage", risk: "critical" },
-  { path: "/office/security", permission: "role.manage", risk: "critical" },
-  { path: "/office/admin-users", permission: "user.manage", risk: "critical" },
-];
+export const HIGH_RISK_OFFICE_ROUTES: OfficeRoutePolicy[] = OFFICE_ACCESS_POLICIES
+  .filter((policy) =>
+    policy.anyOf.some((permission) =>
+      [
+        "payout.view",
+        "payout.approve",
+        "finance.full.view",
+        "finance.summary.view",
+        "expense.manage",
+        "invoice.manage",
+        "payment.reconcile",
+        "profit.view",
+        "pricing.manage",
+        "integration.manage",
+        "role.manage",
+        "user.manage",
+      ].includes(permission),
+    ),
+  )
+  .map((policy) => ({
+    path: policy.path,
+    permission: policy.anyOf[0]!,
+    risk: policy.anyOf.some((permission) =>
+      ["payout.approve", "finance.full.view", "profit.view", "pricing.manage", "integration.manage", "role.manage", "user.manage"].includes(permission),
+    )
+      ? "critical"
+      : "high",
+  }));
 
 export function permissionForOfficePath(pathname: string): AdminPermission | null {
-  const match = HIGH_RISK_OFFICE_ROUTES.find(
-    ({ path }) => pathname === path || pathname.startsWith(`${path}/`),
-  );
-  return match?.permission ?? null;
+  return policyForOfficePath(pathname)?.anyOf[0] ?? null;
 }
