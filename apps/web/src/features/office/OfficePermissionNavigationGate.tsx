@@ -4,7 +4,11 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { getSupabaseSession } from "@/lib/supabase/browser";
-import { hasAnyOfficePermission, policyForOfficePath } from "@/lib/admin/officeExperience";
+import {
+  hasAnyOfficePermission,
+  policyForOfficePath,
+  type OfficeRoleKey,
+} from "@/lib/admin/officeExperience";
 import { OFFICE_NAV_ALL_ITEMS, OFFICE_NAV_MODULES, OFFICE_NAV_SECTIONS } from "./OfficeNav";
 import { OfficeRoleDashboard, type OfficeAccessProfile } from "./OfficeRoleDashboard";
 
@@ -17,13 +21,62 @@ const originalModules = OFFICE_NAV_MODULES.map((module) => ({
 const originalSections = OFFICE_NAV_SECTIONS.map((section) => ({ ...section, items: [...section.items] }));
 const originalAllItems = [...OFFICE_NAV_ALL_ITEMS];
 
-function isAllowed(href: string, permissions: ReadonlySet<string>): boolean {
-  if (href === "/office") return permissions.size > 0;
-  const policy = policyForOfficePath(href);
-  return policy ? hasAnyOfficePermission(permissions, policy.anyOf) : false;
+const ROLE_CODE_MAP: Record<string, OfficeRoleKey> = {
+  owner: "owner",
+  general_manager: "manager",
+  operations_admin: "operations",
+  finance_admin: "finance",
+  customer_care: "customer-care",
+  workforce_admin: "workforce",
+  marketing_admin: "marketing",
+  supervisor: "supervisor",
+};
+
+/**
+ * These company-wide read models do not yet accept a team scope. Keep them out
+ * of the Supervisor experience until their APIs enforce the assigned team_id.
+ */
+const SUPERVISOR_TEAM_SCOPE_PENDING = [
+  "/office/recurring",
+  "/office/sla-breaches",
+  "/office/ops-queue",
+  "/office/operations",
+  "/office/cleaners",
+  "/office/cleaner-report-feedback",
+  "/office/cleaner-performance",
+] as const;
+
+function roleFromProfile(profile: OfficeAccessProfile): OfficeRoleKey {
+  for (const assignment of profile.roles) {
+    const mapped = ROLE_CODE_MAP[assignment.code];
+    if (mapped) return mapped;
+  }
+  return "restricted";
 }
 
-function applyNavigationPermissions(permissions: ReadonlySet<string>) {
+function isSupervisorScopePending(href: string, role: OfficeRoleKey): boolean {
+  return role === "supervisor" && SUPERVISOR_TEAM_SCOPE_PENDING.some(
+    (path) => href === path || href.startsWith(`${path}/`),
+  );
+}
+
+function isAllowed(
+  href: string,
+  permissions: ReadonlySet<string>,
+  role: OfficeRoleKey,
+): boolean {
+  if (href === "/office") return permissions.size > 0;
+  if (isSupervisorScopePending(href, role)) return false;
+  const policy = policyForOfficePath(href);
+  return policy
+    ? policy.audience.includes(role) && hasAnyOfficePermission(permissions, policy.anyOf)
+    : false;
+}
+
+function applyNavigationPermissions(
+  permissions: ReadonlySet<string>,
+  role: OfficeRoleKey,
+) {
   OFFICE_NAV_MODULES.splice(0, OFFICE_NAV_MODULES.length, ...originalModules.map((module) => ({
     ...module,
     children: module.children ? [...module.children] : undefined,
@@ -37,20 +90,32 @@ function applyNavigationPermissions(permissions: ReadonlySet<string>) {
     const original = originalModules.find((candidate) => candidate.id === module.id);
     if (!original) continue;
     if (original.href) {
-      module.href = isAllowed(original.href, permissions) ? original.href : undefined;
+      module.href = isAllowed(original.href, permissions, role) ? original.href : undefined;
       module.children = undefined;
       continue;
     }
-    module.children = (original.children ?? []).filter((item) => isAllowed(item.href, permissions));
+    module.children = (original.children ?? []).filter((item) => isAllowed(item.href, permissions, role));
   }
-  OFFICE_NAV_MODULES.splice(0, OFFICE_NAV_MODULES.length, ...OFFICE_NAV_MODULES.filter((module) => Boolean(module.href) || (module.children?.length ?? 0) > 0));
+  OFFICE_NAV_MODULES.splice(
+    0,
+    OFFICE_NAV_MODULES.length,
+    ...OFFICE_NAV_MODULES.filter((module) => Boolean(module.href) || (module.children?.length ?? 0) > 0),
+  );
 
   for (const section of OFFICE_NAV_SECTIONS) {
     const original = originalSections.find((candidate) => candidate.title === section.title);
-    section.items = (original?.items ?? []).filter((item) => isAllowed(item.href, permissions));
+    section.items = (original?.items ?? []).filter((item) => isAllowed(item.href, permissions, role));
   }
-  OFFICE_NAV_SECTIONS.splice(0, OFFICE_NAV_SECTIONS.length, ...OFFICE_NAV_SECTIONS.filter((section) => section.items.length > 0));
-  OFFICE_NAV_ALL_ITEMS.splice(0, OFFICE_NAV_ALL_ITEMS.length, ...originalAllItems.filter((item) => isAllowed(item.href, permissions)));
+  OFFICE_NAV_SECTIONS.splice(
+    0,
+    OFFICE_NAV_SECTIONS.length,
+    ...OFFICE_NAV_SECTIONS.filter((section) => section.items.length > 0),
+  );
+  OFFICE_NAV_ALL_ITEMS.splice(
+    0,
+    OFFICE_NAV_ALL_ITEMS.length,
+    ...originalAllItems.filter((item) => isAllowed(item.href, permissions, role)),
+  );
 }
 
 const EMPTY_PROFILE: OfficeAccessProfile = { roles: [], branchIds: [], teamIds: [] };
@@ -94,7 +159,7 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
     return <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">Loading Office permissions…</div>;
   }
 
-  applyNavigationPermissions(permissions);
+  applyNavigationPermissions(permissions, roleFromProfile(profile));
   if (pathname === "/office") return <OfficeRoleDashboard permissions={permissions} profile={profile} />;
   return children;
 }
