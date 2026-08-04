@@ -96,10 +96,10 @@ function teamScopedPayload(payload: LegacyPayload, teamId: string, requestUrl: U
 /**
  * Scope-aware adapter for the Office bookings read model.
  *
- * Owners retain company-wide access. Branch-scoped roles are pinned to their
- * assigned branch. A role with one assigned team and no branch (Supervisor)
- * receives only bookings whose `team_id` matches that team. Team-only access
- * never falls back to an all-company response.
+ * Owners and globally assigned roles retain company-wide access. Branch-scoped
+ * roles are pinned to their assigned branch. A role with one assigned team and
+ * no branch (Supervisor) receives only bookings whose `team_id` matches that
+ * team. Team-only access never falls back to an all-company response.
  */
 export async function GET(request: Request) {
   const token = bearerToken(request);
@@ -131,16 +131,18 @@ export async function GET(request: Request) {
   const requestUrl = new URL(request.url);
   const forwardedUrl = new URL(request.url);
   forwardedUrl.pathname = "/api/admin/bookings";
-  const wildcard = scope.isOwner || scope.branches.includes("*");
+
+  // An assignment with neither a branch nor a team is the global role scope.
+  // Team-scoped Supervisors always have at least one team id, so this does not
+  // widen their access.
+  const globalAssignment = scope.branches.length === 0 && scope.teams.length === 0;
+  const wildcard = scope.isOwner || scope.branches.includes("*") || globalAssignment;
   const teamOnly = !wildcard && scope.branches.length === 0 && scope.teams.length > 0;
 
   if (teamOnly) {
     if (scope.teams.length !== 1) {
       return NextResponse.json({ error: "Exactly one team assignment is required for Supervisor booking access." }, { status: 503 });
     }
-    // Fetch the complete filtered legacy read model once, then return only the
-    // assigned team's rows and derived team metrics. Removing pagination here
-    // avoids dropping matching team rows that occur after an unrelated page.
     forwardedUrl.searchParams.delete("page");
     forwardedUrl.searchParams.delete("pageSize");
     forwardedUrl.searchParams.delete("cityId");
