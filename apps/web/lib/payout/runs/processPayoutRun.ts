@@ -49,12 +49,16 @@ export async function processPayoutRun(
         "Manual mark-paid is disabled. Set ALLOW_MANUAL_PAYOUT=true for emergency use, or use Paystack mode.",
       );
     }
-    return processPayoutRunManual(admin, runId);
+    return processPayoutRunManual(admin, runId, opts.paidBy);
   }
   return processPayoutRunPaystack(admin, runId, opts.paidBy);
 }
 
-async function processPayoutRunManual(admin: SupabaseClient, runId: string): Promise<ProcessPayoutRunResult> {
+async function processPayoutRunManual(
+  admin: SupabaseClient,
+  runId: string,
+  paidBy: string,
+): Promise<ProcessPayoutRunResult> {
   const run = await loadRun(admin, runId);
   if (!run) throw new Error("Run not found.");
   const runStatus = run.status;
@@ -94,7 +98,7 @@ async function processPayoutRunManual(admin: SupabaseClient, runId: string): Pro
       errors.push(`${id}: expected approved, got ${st}`);
       continue;
     }
-    const res = await markCleanerPayoutPaid(admin, id);
+    const res = await markCleanerPayoutPaid(admin, id, { actorUserId: paidBy });
     if (!res.ok) errors.push(`${id}: ${res.error}`);
     else successCount += 1;
   }
@@ -104,7 +108,7 @@ async function processPayoutRunManual(admin: SupabaseClient, runId: string): Pro
       level: "error",
       source: "payout_run_process_partial",
       message: "cleaner_payout_runs manual processing failed for one or more child payouts",
-      context: { runId, errors, successCount },
+      context: { runId, paidBy, errors, successCount },
     });
     throw new Error(`Processing incomplete: ${errors.slice(0, 5).join("; ")}${errors.length > 5 ? "…" : ""}`);
   }
@@ -121,7 +125,7 @@ async function processPayoutRunManual(admin: SupabaseClient, runId: string): Pro
     level: "info",
     source: "payout_run_processed_manual",
     message: "Processed cleaner_payout_runs batch (manual mark paid)",
-    context: { runId, successCount },
+    context: { runId, paidBy, successCount },
   });
 
   return { runId, mode: "manual", successCount, skippedInFlightCount: 0, failedCount: 0, errors: [] };
