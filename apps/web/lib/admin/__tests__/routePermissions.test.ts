@@ -9,11 +9,13 @@ describe("permissionForOfficePath", () => {
     ["/office/booking-profitability", "profit.view"],
     ["/office/security/permissions", "role.manage"],
     ["/office/pricing/services", "pricing.manage"],
+    ["/office/bookings", "booking.view"],
+    ["/office/customers/example", "customer.view"],
   ])("maps %s to %s", (path, permission) => {
     expect(permissionForOfficePath(path)).toBe(permission);
   });
 
   it("does not invent a permission for an unregistered route", () => {
-    expect(permissionForOfficePath("/office/bookings")).toBeNull();
+    expect(permissionForOfficePath("/office/not-a-real-module")).toBeNull();
   });
 });
