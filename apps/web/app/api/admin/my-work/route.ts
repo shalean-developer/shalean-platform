@@ -9,7 +9,15 @@ import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const ENTRY_PERMISSIONS: readonly AdminPermission[] = ["booking.view", "booking.assign", "ops.health.view", "system.logs"];
+const ENTRY_PERMISSIONS: readonly AdminPermission[] = [
+  "booking.view",
+  "booking.assign",
+  "ops.health.view",
+  "system.logs",
+  "finance.summary.view",
+  "cleaner.view",
+  "marketing.view",
+];
 
 type PermissionPayload = { permissions?: string[] };
 type BookingRow = {
