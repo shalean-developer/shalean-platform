@@ -2,73 +2,62 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
-import type { AdminPermission } from "@/lib/admin/requirePermission";
+import { usePathname } from "next/navigation";
 import { getSupabaseSession } from "@/lib/supabase/browser";
-import {
-  OFFICE_NAV_ALL_ITEMS,
-  OFFICE_NAV_MODULES,
-  OFFICE_NAV_SECTIONS,
-} from "./OfficeNav";
+import { hasAnyOfficePermission, policyForOfficePath } from "@/lib/admin/officeExperience";
+import { OFFICE_NAV_ALL_ITEMS, OFFICE_NAV_MODULES, OFFICE_NAV_SECTIONS } from "./OfficeNav";
+import { OfficeRoleDashboard } from "./OfficeRoleDashboard";
 
 type PermissionResponse = {
   permissions?: string[];
 };
 
-const FINANCE_PERMISSION_BY_PATH: Record<string, AdminPermission> = {
-  "/office/financial-dashboard": "finance.summary.view",
-  "/office/business-health": "finance.summary.view",
-  "/office/cash-flow": "finance.full.view",
-  "/office/expenses": "expense.manage",
-  "/office/recurring-expenses": "expense.manage",
-  "/office/budgets": "finance.full.view",
-  "/office/expense-vendors": "expense.manage",
-  "/office/expense-reports": "finance.summary.view",
-  "/office/payment-reconciliation": "payment.reconcile",
-  "/office/booking-profitability": "profit.view",
-  "/office/referral-finance": "finance.full.view",
-  "/office/referral-reconciliation": "payment.reconcile",
-  "/office/referral-fraud": "finance.full.view",
-  "/office/payouts": "payout.view",
-  "/office/payouts/approvals": "payout.approve",
-  "/office/pricing": "pricing.manage",
-  "/office/invoices": "invoice.manage",
-  "/office/billing": "invoice.manage",
-  "/office/zoho-integration": "integration.manage",
-};
-
-const financeModule = OFFICE_NAV_MODULES.find((module) => module.id === "finance");
-const originalFinanceChildren = [...(financeModule?.children ?? [])];
-const financeSection = OFFICE_NAV_SECTIONS.find((section) => section.title === "FINANCE");
-const originalFinanceSectionItems = [...(financeSection?.items ?? [])];
+const originalModules = OFFICE_NAV_MODULES.map((module) => ({
+  ...module,
+  children: module.children ? [...module.children] : undefined,
+}));
+const originalSections = OFFICE_NAV_SECTIONS.map((section) => ({ ...section, items: [...section.items] }));
 const originalAllItems = [...OFFICE_NAV_ALL_ITEMS];
 
-function requiredPermission(href: string): AdminPermission | null {
-  if (href === "/office/payouts/approvals") return "payout.approve";
-  return FINANCE_PERMISSION_BY_PATH[href] ?? null;
-}
-
 function isAllowed(href: string, permissions: ReadonlySet<string>): boolean {
-  const permission = requiredPermission(href);
-  return permission ? permissions.has(permission) : false;
+  if (href === "/office") return permissions.size > 0;
+  const policy = policyForOfficePath(href);
+  return policy ? hasAnyOfficePermission(permissions, policy.anyOf) : false;
 }
 
-function applyFinanceNavigationPermissions(permissions: ReadonlySet<string>) {
-  if (financeModule) {
-    financeModule.children = originalFinanceChildren.filter((item) => isAllowed(item.href, permissions));
+function applyNavigationPermissions(permissions: ReadonlySet<string>) {
+  for (const module of OFFICE_NAV_MODULES) {
+    const original = originalModules.find((candidate) => candidate.id === module.id);
+    if (!original) continue;
+    if (original.href) {
+      module.href = isAllowed(original.href, permissions) ? original.href : undefined;
+      module.children = undefined;
+      continue;
+    }
+    module.children = (original.children ?? []).filter((item) => isAllowed(item.href, permissions));
   }
 
-  if (financeSection) {
-    financeSection.items = originalFinanceSectionItems.filter((item) => isAllowed(item.href, permissions));
+  OFFICE_NAV_MODULES.splice(
+    0,
+    OFFICE_NAV_MODULES.length,
+    ...OFFICE_NAV_MODULES.filter((module) => Boolean(module.href) || (module.children?.length ?? 0) > 0),
+  );
+
+  for (const section of OFFICE_NAV_SECTIONS) {
+    const original = originalSections.find((candidate) => candidate.title === section.title);
+    section.items = (original?.items ?? []).filter((item) => isAllowed(item.href, permissions));
   }
+  OFFICE_NAV_SECTIONS.splice(0, OFFICE_NAV_SECTIONS.length, ...OFFICE_NAV_SECTIONS.filter((section) => section.items.length > 0));
 
   OFFICE_NAV_ALL_ITEMS.splice(
     0,
     OFFICE_NAV_ALL_ITEMS.length,
-    ...originalAllItems.filter((item) => item.section !== "Finance" || isAllowed(item.href, permissions)),
+    ...originalAllItems.filter((item) => isAllowed(item.href, permissions)),
   );
 }
 
 export function OfficePermissionNavigationGate({ children }: { children: ReactNode }) {
+  const pathname = usePathname();
   const [permissions, setPermissions] = useState<Set<string> | null>(null);
 
   useEffect(() => {
@@ -112,6 +101,7 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
     );
   }
 
-  applyFinanceNavigationPermissions(permissions);
+  applyNavigationPermissions(permissions);
+  if (pathname === "/office") return <OfficeRoleDashboard permissions={permissions} />;
   return children;
 }
