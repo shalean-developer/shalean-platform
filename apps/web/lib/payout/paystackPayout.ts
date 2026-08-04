@@ -18,6 +18,8 @@ type PayoutRow = {
   amount_adjusted_at?: string | null;
   calculated_amount_cents?: number | null;
   adjustment_note?: string | null;
+  created_by?: string | null;
+  amount_adjusted_by?: string | null;
   approved_by?: string | null;
 };
 
@@ -41,18 +43,6 @@ function cents(value: unknown): number {
   return Math.max(0, Math.round(Number(value)));
 }
 
-function makerCheckerEnabled(): boolean {
-  return String(process.env.PAYOUT_MAKER_CHECKER ?? "")
-    .trim()
-    .toLowerCase() === "true";
-}
-
-function allowSelfApprovePay(): boolean {
-  return String(process.env.PAYOUT_ALLOW_SELF_APPROVE_PAY ?? "")
-    .trim()
-    .toLowerCase() === "true";
-}
-
 async function failPayoutExecution(
   admin: SupabaseClient,
   payoutId: string,
@@ -72,7 +62,7 @@ export async function payCleanerPayoutWithPaystack(
   const { data: payoutData, error: payoutErr } = await admin
     .from("cleaner_payouts")
     .select(
-      "id, cleaner_id, total_amount_cents, status, payment_status, payment_reference, amount_adjusted_at, calculated_amount_cents, adjustment_note, approved_by",
+      "id, cleaner_id, total_amount_cents, status, payment_status, payment_reference, amount_adjusted_at, calculated_amount_cents, adjustment_note, created_by, amount_adjusted_by, approved_by",
     )
     .eq("id", params.payoutId)
     .maybeSingle();
@@ -84,15 +74,29 @@ export async function payCleanerPayoutWithPaystack(
     return { ok: false, error: "Only approved payout batches can be paid.", status: 400 };
   }
 
-  if (makerCheckerEnabled() && !allowSelfApprovePay()) {
-    const approvedBy = String(payout.approved_by ?? "").trim();
-    if (approvedBy && approvedBy === params.paidBy) {
-      return {
-        ok: false,
-        error: "Maker–checker: the admin who approved this payout cannot also initiate payment.",
-        status: 403,
-      };
-    }
+  const createdBy = String(payout.created_by ?? "").trim();
+  const adjustedBy = String(payout.amount_adjusted_by ?? "").trim();
+  const approvedBy = String(payout.approved_by ?? "").trim();
+  if (!createdBy || !approvedBy) {
+    return {
+      ok: false,
+      error: "Maker–checker: payout preparer or approver is missing. Recreate and approve the batch before release.",
+      status: 403,
+    };
+  }
+  if (createdBy === approvedBy) {
+    return {
+      ok: false,
+      error: "Maker–checker: the payout preparer and approver must be different users.",
+      status: 403,
+    };
+  }
+  if (createdBy === params.paidBy || adjustedBy === params.paidBy || approvedBy === params.paidBy) {
+    return {
+      ok: false,
+      error: "Maker–checker: payout release must be performed by a user who did not prepare, adjust, or approve the batch.",
+      status: 403,
+    };
   }
 
   const manuallyAdjusted = Boolean(payout.amount_adjusted_at);
@@ -149,7 +153,6 @@ export async function payCleanerPayoutWithPaystack(
     };
   }
 
-  // If already processing with an outbox/transfer, resume via shared executor (same reference) — do not re-claim.
   const paymentStatus = String(payout.payment_status ?? "")
     .trim()
     .toLowerCase();
@@ -169,7 +172,7 @@ export async function payCleanerPayoutWithPaystack(
     await admin
       .from("cleaner_payouts")
       .update({
-        payment_status: resumed.needsReconcile ? "processing" : "processing",
+        payment_status: "processing",
         payment_reference: resumed.transferCode ?? payout.payment_reference ?? null,
       })
       .eq("id", payout.id)
@@ -240,7 +243,6 @@ export async function payCleanerPayoutWithPaystack(
   });
 
   if (!transfer.ok) {
-    // Uncertain network: keep processing for reconcile — do NOT mark failed (prevents double-pay on retry).
     if (transfer.needsReconcile) {
       void logSystemEvent({
         level: "warn",
@@ -264,7 +266,6 @@ export async function payCleanerPayoutWithPaystack(
     .eq("id", payout.id)
     .eq("status", "approved");
   if (updateErr) {
-    // Transfer may already be submitted — leave processing; do not fail the batch.
     void logSystemEvent({
       level: "error",
       source: "PAYOUT_PAYSTACK_STATUS_UPDATE",

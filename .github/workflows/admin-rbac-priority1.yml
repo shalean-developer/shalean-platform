@@ -1,0 +1,48 @@
+name: Admin RBAC Priority 1
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/app/office/**"
+      - "apps/web/app/api/**"
+      - "apps/web/lib/admin/**"
+      - "apps/web/lib/auth/**"
+      - "apps/web/lib/payout/**"
+      - "apps/web/package.json"
+      - "apps/web/package-lock.json"
+      - "apps/web/scripts/admin-rbac-priority1-inventory.mjs"
+      - "supabase/migrations/**"
+      - ".github/workflows/admin-rbac-priority1.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  priority-1-security:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Generate inventory and enforce critical route permissions
+        run: node apps/web/scripts/admin-rbac-priority1-inventory.mjs
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+      - name: Run Priority 1 regression tests
+        working-directory: apps/web
+        run: npx vitest run lib/admin/__tests__/adminRbacPriority1Static.test.ts
+      - name: Typecheck
+        working-directory: apps/web
+        run: npm run typecheck
+      - name: Upload generated inventory
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-rbac-priority-1-inventory
+          path: docs/security/admin-rbac-priority-1-inventory.generated.md
+          if-no-files-found: error
