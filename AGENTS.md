@@ -1,5 +1,31 @@
 # AGENTS.md
 
+## Shalean Engineering Standard — mandatory
+
+The governing standard for ChatGPT, Codex, Cursor and all automated contributors is [`docs/engineering/SHALEAN_ENGINEERING_STANDARD.md`](docs/engineering/SHALEAN_ENGINEERING_STANDARD.md). Read and follow it before making changes.
+
+Required workflow:
+
+1. Work only on the current approved feature, fix, chore, docs or audit branch.
+2. Do not create another branch unless necessary; explain why first.
+3. Never develop directly on `main` or `staging`.
+4. Keep related changes together and avoid unrelated refactors.
+5. Run local and relevant repository tests before pushing.
+6. Do not push or merge to `staging` after every commit.
+7. Do not merge to `main` unless the user explicitly authorizes it after checks and required staging verification.
+8. Create or update one final PR when the complete task is ready.
+9. Minimize Vercel builds. Feature branches are intentionally ignored; use `staging` only for completed acceptance testing and `main` only for approved production releases.
+10. Report changed files, tests, results, security/financial/database impact, environment changes, risks and remaining verification accurately.
+
+Safety boundaries:
+
+- Server-side authorization is the source of truth.
+- Preserve least privilege and fail closed for unknown roles or scopes.
+- Never expose secrets, service-role keys, payment credentials, customer data, cleaner identity documents or bank details.
+- Do not weaken maker-checker, audit, payout, earnings, payment or booking-integrity controls.
+- Never edit an applied production migration; add a forward migration.
+- Prefer idempotent handling for payments, invoices, recurring bookings, notifications and payouts.
+
 ## Cursor Cloud specific instructions
 
 ### Repo shape
