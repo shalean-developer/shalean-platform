@@ -22,6 +22,38 @@ const originalModules = OFFICE_NAV_MODULES.map((module) => ({
 const originalSections = OFFICE_NAV_SECTIONS.map((section) => ({ ...section, items: [...section.items] }));
 const originalAllItems = [...OFFICE_NAV_ALL_ITEMS];
 
+// The Earnings Policies route existed before the RBAC navigation rewrite, but
+// its Finance menu entry was accidentally omitted. Reuse the Pricing icon so
+// the page is restored without duplicating icon imports or weakening access.
+const financeModule = originalModules.find((module) => module.id === "finance");
+const pricingItem = financeModule?.children?.find((item) => item.href === "/office/pricing");
+if (financeModule?.children && pricingItem && !financeModule.children.some((item) => item.href === "/office/earnings-policies")) {
+  const pricingIndex = financeModule.children.findIndex((item) => item.href === "/office/pricing");
+  financeModule.children.splice(pricingIndex + 1, 0, {
+    ...pricingItem,
+    label: "Earnings Policies",
+    href: "/office/earnings-policies",
+  });
+
+  const financeSection = originalSections.find((section) => section.title === "FINANCE");
+  if (financeSection && !financeSection.items.some((item) => item.href === "/office/earnings-policies")) {
+    const sectionPricingIndex = financeSection.items.findIndex((item) => item.href === "/office/pricing");
+    financeSection.items.splice(sectionPricingIndex + 1, 0, {
+      ...pricingItem,
+      label: "Earnings Policies",
+      href: "/office/earnings-policies",
+    });
+  }
+
+  const allPricingIndex = originalAllItems.findIndex((item) => item.href === "/office/pricing");
+  originalAllItems.splice(allPricingIndex + 1, 0, {
+    ...pricingItem,
+    label: "Earnings Policies",
+    href: "/office/earnings-policies",
+    section: "Finance",
+  });
+}
+
 const ROLE_CODE_MAP: Record<string, OfficeRoleKey> = {
   owner: "owner",
   general_manager: "manager",
