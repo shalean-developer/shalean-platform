@@ -4,55 +4,38 @@ import {
   resolveCleanerFacingEarnings,
 } from "@/lib/payout/bookingEarningsSummary";
 
-function isLegacyJulyPolicy(row: {
-  earnings_policy?: unknown;
-  earnings_model_version?: unknown;
-}): boolean {
-  const policy = String(row.earnings_policy ?? "").trim().toLowerCase();
-  const model = String(row.earnings_model_version ?? "").trim().toLowerCase();
-  return policy === "legacy_july" || model.startsWith("legacy_july");
-}
-
 /**
- * Single cleaner-facing earnings amount for jobs and offers.
+ * Single policy-controlled cleaner earnings amount.
  *
- * Legacy July bookings are policy-locked: positive frozen/display values are
- * authoritative and must win over stale line-ledger totals from Current V1.
- * Other policies keep the normal line-ledger -> frozen -> display precedence.
+ * A positive settlement freeze is final. Otherwise the booking's display
+ * earning is the policy lock written by the earnings-policy trigger. Stale
+ * line-ledger totals are only a fallback and must not override that lock.
  */
 export function resolveCleanerEarningsCents(row: {
-  earnings_policy?: unknown;
-  earnings_model_version?: unknown;
   cleaner_earnings_total_cents?: unknown;
   payout_frozen_cents?: unknown;
   display_earnings_cents?: unknown;
 }): number | null {
   const frozen = optionalCentsFromDb(row.payout_frozen_cents);
   const display = optionalCentsFromDb(row.display_earnings_cents);
-
-  if (isLegacyJulyPolicy(row)) {
-    if (frozen !== null && frozen > 0) return frozen;
-    if (display !== null) return display;
-  }
-
   const lineTotal = optionalCentsFromDb(row.cleaner_earnings_total_cents);
-  if (lineTotal !== null && lineTotal > 0) return lineTotal;
 
   if (frozen !== null && frozen > 0) return frozen;
-  if (frozen === 0 && display !== null && display > 0) return display;
+  if (display !== null && display > 0) return display;
+  if (lineTotal !== null && lineTotal > 0) return lineTotal;
   if (frozen !== null) return frozen;
   if (display !== null) return display;
+  if (lineTotal !== null) return lineTotal;
   return null;
 }
 
 /**
- * Per-cleaner amount shown on the cleaner dashboard earnings screen and matched in office payouts.
- * Legacy July uses the policy lock before any potentially stale earnings summary.
+ * Per-cleaner amount shown on the cleaner dashboard and Office payout report.
+ * Team-member payout rows remain the highest-priority per-cleaner source.
+ * For individual jobs, the booking policy lock wins over stale earnings JSON.
  */
 export function resolveCleanerDashboardEarningsCents(
   booking: {
-    earnings_policy?: unknown;
-    earnings_model_version?: unknown;
     viewer_payout_cents?: unknown;
     earnings_summary?: unknown;
     cleaner_earnings_total_cents?: unknown;
@@ -64,18 +47,15 @@ export function resolveCleanerDashboardEarningsCents(
   const viewerPayout = optionalCentsFromDb(booking.viewer_payout_cents);
   if (viewerPayout !== null) return Math.max(0, Math.round(viewerPayout));
 
-  if (isLegacyJulyPolicy(booking)) {
-    const locked = resolveCleanerEarningsCents(booking);
-    return Math.max(0, Math.round(locked ?? 0));
-  }
+  const locked = resolveCleanerEarningsCents(booking);
+  if (locked !== null) return Math.max(0, Math.round(locked));
 
   const facing = resolveCleanerFacingEarnings(
     parseBookingEarningsSummary(booking.earnings_summary),
     cleanerId,
   );
   if (facing) return Math.max(0, Math.round(facing.total_cents));
-  const fallback = resolveCleanerEarningsCents(booking);
-  return Math.max(0, Math.round(fallback ?? 0));
+  return 0;
 }
 
 /** Basis used when moving a booking to `payout_status = eligible` (cleaner cents only). */
