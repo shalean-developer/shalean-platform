@@ -3,18 +3,6 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 
-function makerCheckerEnabled(): boolean {
-  return String(process.env.PAYOUT_MAKER_CHECKER ?? "")
-    .trim()
-    .toLowerCase() === "true";
-}
-
-function allowSelfApprove(): boolean {
-  return String(process.env.PAYOUT_ALLOW_SELF_APPROVE ?? "")
-    .trim()
-    .toLowerCase() === "true";
-}
-
 export async function approveCleanerPayout(
   admin: SupabaseClient,
   params: { payoutId: string; approvedBy: string },
@@ -57,21 +45,22 @@ export async function approveCleanerPayout(
     return { ok: false, error: "Cleaner bank details are incomplete; Paystack recipient is missing." };
   }
 
-  if (makerCheckerEnabled() && !allowSelfApprove()) {
-    const createdBy = String((payout as { created_by?: string | null }).created_by ?? "").trim();
-    const adjustedBy = String((payout as { amount_adjusted_by?: string | null }).amount_adjusted_by ?? "").trim();
-    if (createdBy && createdBy === params.approvedBy) {
-      return {
-        ok: false,
-        error: "Maker–checker: the admin who generated this payout cannot also approve it.",
-      };
-    }
-    if (adjustedBy && adjustedBy === params.approvedBy) {
-      return {
-        ok: false,
-        error: "Maker–checker: the admin who adjusted the amount cannot also approve it.",
-      };
-    }
+  const createdBy = String((payout as { created_by?: string | null }).created_by ?? "").trim();
+  const adjustedBy = String((payout as { amount_adjusted_by?: string | null }).amount_adjusted_by ?? "").trim();
+  if (!createdBy) {
+    return { ok: false, error: "Maker–checker: payout preparer is missing. Regenerate the batch before approval." };
+  }
+  if (createdBy === params.approvedBy) {
+    return {
+      ok: false,
+      error: "Maker–checker: the admin who generated this payout cannot also approve it.",
+    };
+  }
+  if (adjustedBy && adjustedBy === params.approvedBy) {
+    return {
+      ok: false,
+      error: "Maker–checker: the admin who adjusted the amount cannot also approve it.",
+    };
   }
 
   const patch = {
