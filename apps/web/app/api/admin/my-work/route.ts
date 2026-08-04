@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
+import { GET as getScopedBookings } from "@/app/api/admin/bookings/scoped/route";
+import { GET as getCronHealth } from "@/app/api/admin/cron-health/route";
+import { GET as getMyPermissions } from "@/app/api/admin/security/my-permissions/route";
 import { requireAnyAdminPermissionFromRequest, type AdminPermission } from "@/lib/admin/requirePermission";
 import {
   canReceiveOfficeWorkItem,
   sortOfficeWorkItems,
   type OfficeWorkItem,
 } from "@/lib/admin/officeWorkItems";
+import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -28,19 +32,29 @@ type CronJob = {
 };
 type CronPayload = { jobs?: CronJob[] };
 
-function authHeaders(request: Request): HeadersInit {
-  const authorization = request.headers.get("authorization") ?? "";
-  return { authorization, "Content-Type": "application/json" };
-}
-
 async function jsonFrom<T>(response: Response): Promise<T | null> {
   if (!response.ok) return null;
-  try { return (await response.json()) as T; } catch { return null; }
+  try {
+    return (await response.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
+function derivedRequest(request: Request, pathname: string, search = ""): Request {
+  const url = new URL(request.url);
+  url.pathname = pathname;
+  url.search = search;
+  return new Request(url, {
+    method: "GET",
+    headers: request.headers,
+    cache: "no-store",
+  });
 }
 
 function bookingItems(rows: BookingRow[], permissions: ReadonlySet<string>): OfficeWorkItem[] {
   if (!permissions.has("booking.assign")) return [];
-  const today = new Date().toISOString().slice(0, 10);
+  const today = todayJohannesburg();
   return rows
     .filter((row) => row.id && !row.team_id && row.status !== "completed" && row.status !== "cancelled")
     .slice(0, 25)
@@ -95,28 +109,37 @@ export async function GET(request: Request) {
   const auth = await requireAnyAdminPermissionFromRequest(request, ENTRY_PERMISSIONS);
   if (!auth.ok) return auth.response;
 
-  const base = new URL(request.url).origin;
-  const headers = authHeaders(request);
-  const permissionResponse = await fetch(`${base}/api/admin/security/my-permissions`, { headers, cache: "no-store" });
+  const permissionResponse = await getMyPermissions(
+    derivedRequest(request, "/api/admin/security/my-permissions"),
+  );
   const permissionPayload = await jsonFrom<PermissionPayload>(permissionResponse);
-  if (!permissionPayload) return NextResponse.json({ error: "Unable to resolve Office permissions." }, { status: 503 });
+  if (!permissionPayload) {
+    return NextResponse.json({ error: "Unable to resolve Office permissions." }, { status: 503 });
+  }
 
   const permissions = new Set(permissionPayload.permissions ?? []);
   const items: OfficeWorkItem[] = [];
 
   if (permissions.has("booking.view") || permissions.has("booking.assign")) {
-    const bookingResponse = await fetch(`${base}/api/admin/bookings/scoped?page=1&pageSize=100`, { headers, cache: "no-store" });
+    const bookingResponse = await getScopedBookings(
+      derivedRequest(request, "/api/admin/bookings/scoped", "?page=1&pageSize=100"),
+    );
     const bookingPayload = await jsonFrom<BookingPayload>(bookingResponse);
     if (bookingPayload?.bookings) items.push(...bookingItems(bookingPayload.bookings, permissions));
   }
 
   if (permissions.has("ops.health.view")) {
-    const cronResponse = await fetch(`${base}/api/admin/cron-health`, { headers, cache: "no-store" });
+    const cronResponse = await getCronHealth(
+      derivedRequest(request, "/api/admin/cron-health"),
+    );
     const cronPayload = await jsonFrom<CronPayload>(cronResponse);
     if (cronPayload?.jobs) items.push(...cronItems(cronPayload.jobs, permissions));
   }
 
-  const safeItems = sortOfficeWorkItems(items.filter((item) => canReceiveOfficeWorkItem(item, permissions))).slice(0, 30);
+  const safeItems = sortOfficeWorkItems(
+    items.filter((item) => canReceiveOfficeWorkItem(item, permissions)),
+  ).slice(0, 30);
+
   return NextResponse.json({
     ok: true,
     generatedAt: new Date().toISOString(),
