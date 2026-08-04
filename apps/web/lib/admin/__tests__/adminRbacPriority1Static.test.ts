@@ -12,13 +12,14 @@ describe("Admin RBAC Priority 1 static contracts", () => {
     const source = read("lib/auth/requireFinanceApi.ts");
     expect(source).toContain('requireAdminPermissionFromRequest(request, "finance.full.view")');
     expect(source).not.toContain("FINANCE_EMAILS");
-    expect(source).not.toContain("finance_access");
+    expect(source).not.toContain('.from("user_profiles")');
     expect(source).not.toContain("canAccessFinance");
   });
 
   it("payout approval has mandatory record-level maker-checker", () => {
     const source = read("lib/payout/approvePayout.ts");
-    expect(source).toContain("Payout preparer identity is missing");
+    expect(source).toContain("if (!createdBy)");
+    expect(source).toContain("payout preparer is missing");
     expect(source).toContain("the admin who generated this payout cannot also approve it");
     expect(source).toContain("the admin who adjusted the amount cannot also approve it");
     expect(source).not.toContain("PAYOUT_ALLOW_SELF_APPROVE");
@@ -27,13 +28,25 @@ describe("Admin RBAC Priority 1 static contracts", () => {
 
   it("payout release is separate from preparation, adjustment and approval", () => {
     const source = read("lib/payout/paystackPayout.ts");
-    expect(source).toContain("Payout preparer identity is missing");
-    expect(source).toContain("Payout approver identity is missing");
-    expect(source).toContain("the admin who prepared this payout cannot also release it");
-    expect(source).toContain("the admin who adjusted this payout cannot also release it");
-    expect(source).toContain("the admin who approved this payout cannot also initiate payment");
+    expect(source).toContain("created_by");
+    expect(source).toContain("amount_adjusted_by");
+    expect(source).toContain("approved_by");
+    expect(source).toContain("payout preparer or approver is missing");
+    expect(source).toContain("createdBy === approvedBy");
+    expect(source).toContain("createdBy === params.paidBy || adjustedBy === params.paidBy || approvedBy === params.paidBy");
+    expect(source).toContain("did not prepare, adjust, or approve the batch");
     expect(source).not.toContain("PAYOUT_ALLOW_SELF_APPROVE_PAY");
     expect(source).not.toContain("PAYOUT_MAKER_CHECKER");
+  });
+
+  it("manual payout completion also enforces maker-checker", () => {
+    const route = read("app/api/admin/payouts/[id]/mark-paid/route.ts");
+    const service = read("lib/payout/markPayoutPaid.ts");
+    expect(route).toContain('requireAdminPermissionFromRequest(request, "payout.release")');
+    expect(route).toContain("actorUserId: auth.user.id");
+    expect(service).toContain("the admin who prepared this payout cannot also mark it paid");
+    expect(service).toContain("the admin who adjusted this payout cannot also mark it paid");
+    expect(service).toContain("the admin who approved this payout cannot also mark it paid");
   });
 
   it("Owner recovery migration verifies critical permissions", () => {
