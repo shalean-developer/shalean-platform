@@ -12,8 +12,11 @@ export type ResolveUserRoleResult =
   | { kind: "invalid_role"; raw: string };
 
 /**
- * Resolve `user_profiles.role` for routing. When the column is unset, infer from admin allowlist
- * and cleaner linkage, then persist best-effort so subsequent requests are fast.
+ * Resolve the primary app role used for post-login routing.
+ *
+ * Active granular RBAC assignments take precedence over `user_profiles.role` so Office users
+ * are routed to `/office` even when their legacy product profile is still marked `customer`.
+ * When no RBAC assignment exists, fall back to the legacy profile / allow-list / cleaner logic.
  */
 export async function resolveUserRoleServer(
   admin: SupabaseClient,
@@ -21,6 +24,25 @@ export async function resolveUserRoleServer(
 ): Promise<ResolveUserRoleResult> {
   const userId = params.userId.trim();
   if (!userId) return { kind: "missing_profile" };
+
+  const nowIso = new Date().toISOString();
+  const { data: activeAdminAssignments, error: adminRoleError } = await admin
+    .from("admin_user_roles")
+    .select("id, role:admin_roles!inner(id, is_active)")
+    .eq("user_id", userId)
+    .is("revoked_at", null)
+    .lte("starts_at", nowIso)
+    .or(`expires_at.is.null,expires_at.gt.${nowIso}`)
+    .eq("admin_roles.is_active", true)
+    .limit(1);
+
+  if (adminRoleError) {
+    throw new Error(adminRoleError.message);
+  }
+
+  if (Array.isArray(activeAdminAssignments) && activeAdminAssignments.length > 0) {
+    return { kind: "ok", role: "admin" };
+  }
 
   const { data: profile, error } = await admin
     .from("user_profiles")
