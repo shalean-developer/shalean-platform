@@ -9,17 +9,15 @@ export type AdminAuthResult =
   | { ok: true; user: User; email: string }
   | { ok: false; response: NextResponse };
 
+function hasReleaseActionSegment(path: string): boolean {
+  return /(?:^|\/)(?:pay|process|disburse|mark-paid|retry)(?:\/|$)/.test(path);
+}
+
 function payoutPermission(pathname: string, method: string): AdminPermission {
   const path = pathname.toLowerCase();
   const write = method !== "GET" && method !== "HEAD";
   if (path.includes("/approve")) return "payout.approve";
-  if (
-    path.includes("/pay") ||
-    path.includes("/process") ||
-    path.includes("/disburse") ||
-    path.includes("/mark-paid") ||
-    path.includes("/retry")
-  ) return "payout.release";
+  if (hasReleaseActionSegment(path)) return "payout.release";
   if (
     write ||
     path.includes("/generate") ||
