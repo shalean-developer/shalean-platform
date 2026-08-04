@@ -32,10 +32,7 @@ const ROLE_CODE_MAP: Record<string, OfficeRoleKey> = {
   supervisor: "supervisor",
 };
 
-/**
- * These company-wide read models do not yet accept a team scope. Keep them out
- * of the Supervisor experience until their APIs enforce the assigned team_id.
- */
+/** Company-wide read models that do not yet accept a team scope. */
 const SUPERVISOR_TEAM_SCOPE_PENDING = [
   "/office/recurring",
   "/office/sla-breaches",
@@ -60,11 +57,7 @@ function isSupervisorScopePending(href: string, role: OfficeRoleKey): boolean {
   );
 }
 
-function isAllowed(
-  href: string,
-  permissions: ReadonlySet<string>,
-  role: OfficeRoleKey,
-): boolean {
+function isAllowed(href: string, permissions: ReadonlySet<string>, role: OfficeRoleKey): boolean {
   if (href === "/office") return permissions.size > 0;
   if (isSupervisorScopePending(href, role)) return false;
   const policy = policyForOfficePath(href);
@@ -73,10 +66,7 @@ function isAllowed(
     : false;
 }
 
-function applyNavigationPermissions(
-  permissions: ReadonlySet<string>,
-  role: OfficeRoleKey,
-) {
+function applyNavigationPermissions(permissions: ReadonlySet<string>, role: OfficeRoleKey) {
   OFFICE_NAV_MODULES.splice(0, OFFICE_NAV_MODULES.length, ...originalModules.map((module) => ({
     ...module,
     children: module.children ? [...module.children] : undefined,
@@ -118,6 +108,24 @@ function applyNavigationPermissions(
   );
 }
 
+function applyPageActionPermissions(pathname: string, permissions: ReadonlySet<string>) {
+  if (pathname !== "/office/bookings") return;
+  const canCreate = permissions.has("booking.create");
+  const canExport = permissions.has("booking.export");
+
+  for (const element of document.querySelectorAll<HTMLElement>('a[href="/office/bookings/create"], a[href="/admin/bookings/create"]')) {
+    element.hidden = !canCreate;
+    element.setAttribute("aria-hidden", String(!canCreate));
+  }
+  for (const button of document.querySelectorAll<HTMLButtonElement>("button")) {
+    const label = button.textContent?.trim().toLowerCase() ?? "";
+    if (label === "export") {
+      button.hidden = !canExport;
+      button.setAttribute("aria-hidden", String(!canExport));
+    }
+  }
+}
+
 const EMPTY_PROFILE: OfficeAccessProfile = { roles: [], branchIds: [], teamIds: [] };
 
 export function OfficePermissionNavigationGate({ children }: { children: ReactNode }) {
@@ -154,6 +162,15 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
     void loadPermissions();
     return () => { active = false; };
   }, []);
+
+  useEffect(() => {
+    if (!permissions) return;
+    const apply = () => applyPageActionPermissions(pathname, permissions);
+    apply();
+    const observer = new MutationObserver(apply);
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [pathname, permissions]);
 
   if (permissions === null) {
     return <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">Loading Office permissions…</div>;
