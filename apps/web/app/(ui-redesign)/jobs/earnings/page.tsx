@@ -5,9 +5,17 @@ import Link from "next/link";
 import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
-import { EarningsBreakdown } from "@/components/cleaner/EarningsBreakdown";
 import { johannesburgCalendarYmd } from "@/lib/dashboard/johannesburgMonth";
-import { cn } from "@/lib/utils";
+
+type EarningsRow = {
+  booking_id: string;
+  date?: string;
+  service?: string;
+  payout_status?: string;
+  amount_cents?: number;
+  payout_paid_at?: string | null;
+  payout_run_id?: string | null;
+};
 
 type EarningsJson = {
   error?: string;
@@ -16,101 +24,112 @@ type EarningsJson = {
     week_cents?: number;
     month_cents?: number;
     pending_cents?: number;
+    eligible_cents?: number;
     paid_cents?: number;
-    bonus_total_cents?: number;
-    suggested_daily_goal_cents?: number;
   };
-  rows?: Array<{
-    booking_id: string;
-    date?: string;
-    service?: string;
-    location?: string;
-    payout_status?: string;
-    amount_cents?: number;
-    payout_paid_at?: string | null;
-  }>;
-  cleaner?: { full_name?: string | null };
+  total_pending?: number;
+  total_approved?: number;
+  total_paid?: number;
+  total_all_time?: number;
+  rows?: EarningsRow[];
 };
 
-function earningsPeriodFilter(rows: NonNullable<EarningsJson["rows"]>, period: "today" | "week" | "month", todayYmd: string): typeof rows {
-  if (period === "today") return rows.filter((r) => r.date === todayYmd);
-  if (period === "week") {
-    const d = new Date(todayYmd);
-    const day = d.getDay(); // 0 = Sun, 1 = Mon ...
-    const monday = new Date(d);
-    monday.setDate(d.getDate() - ((day === 0 ? 7 : day) - 1));
-    const mondayYmd = monday.toISOString().slice(0, 10);
-    return rows.filter((r) => (r.date ?? "") >= mondayYmd);
-  }
-  const monthYmd = todayYmd.slice(0, 7);
-  return rows.filter((r) => (r.date ?? "").startsWith(monthYmd));
+function formatDate(value?: string | null): string {
+  if (!value) return "—";
+  const date = new Date(`${value.slice(0, 10)}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("en-ZA", { day: "numeric", month: "short", year: "numeric" }).format(date);
 }
 
-function statusChip(status: string | undefined): string {
-  const s = (status ?? "").toLowerCase();
-  if (s === "paid") return "bg-green-50 border border-green-100 text-green-700";
-  if (s === "pending") return "bg-amber-50 border border-amber-100 text-amber-700";
-  return "bg-gray-50 border border-gray-100 text-gray-500";
+function sectionTitle(title: string) {
+  return <h2 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-widest text-slate-400">{title}</h2>;
+}
+
+function MoneyCard({ label, amount }: { label: string; amount: number }) {
+  return (
+    <div className="rounded-2xl border border-gray-100 bg-white px-3 py-4 shadow-sm">
+      <p className="text-xs font-medium leading-4 text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-extrabold tabular-nums text-slate-900">{formatZarFromCents(amount)}</p>
+    </div>
+  );
+}
+
+function EmptyState({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-7 text-center">
+      <p className="font-semibold text-slate-700">{title}</p>
+      <p className="mt-1 text-sm text-slate-400">{text}</p>
+    </div>
+  );
 }
 
 function EarningsPageContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [payload, setPayload] = useState<EarningsJson | null>(null);
-  const [period, setPeriod] = useState<"today" | "week" | "month">("today");
 
   const todayYmd = useMemo(() => {
-    try { return johannesburgCalendarYmd(new Date()); } catch { return new Date().toISOString().slice(0, 10); }
+    try {
+      return johannesburgCalendarYmd(new Date());
+    } catch {
+      return new Date().toISOString().slice(0, 10);
+    }
   }, []);
 
   const load = useCallback(async () => {
     const headers = await getCleanerAuthHeaders();
-    if (!headers) { setError("Not signed in."); setLoading(false); return; }
+    if (!headers) {
+      setError("Not signed in.");
+      setLoading(false);
+      return;
+    }
     try {
-      const res = await cleanerAuthenticatedFetch("/api/cleaner/earnings", { headers });
-      const j = (await res.json().catch(() => ({}))) as EarningsJson;
-      if (!res.ok) throw new Error(j.error ?? "Could not load earnings.");
-      setPayload(j);
+      const response = await cleanerAuthenticatedFetch("/api/cleaner/earnings", { headers });
+      const json = (await response.json().catch(() => ({}))) as EarningsJson;
+      if (!response.ok) throw new Error(json.error ?? "Could not load earnings.");
+      setPayload(json);
       setError(null);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Could not load earnings.");
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Could not load earnings.");
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
-  const todayCents = payload?.summary?.today_cents ?? 0;
-  const weekCents = payload?.summary?.week_cents ?? 0;
-  const monthCents = payload?.summary?.month_cents ?? 0;
-  const goalCents = payload?.summary?.suggested_daily_goal_cents ?? 40_000;
-  const pendingCents = payload?.summary?.pending_cents ?? 0;
-  const paidCents = payload?.summary?.paid_cents ?? 0;
-  const bonusTotalCents = payload?.summary?.bonus_total_cents ?? 0;
+  const rows = useMemo(
+    () => (payload?.rows ?? []).slice().sort((a, b) => (b.date ?? "").localeCompare(a.date ?? "")),
+    [payload?.rows],
+  );
+  const recent = rows.slice(0, 5);
+  const paidRows = rows
+    .filter((row) => String(row.payout_status ?? "").toLowerCase() === "paid")
+    .sort((a, b) => (b.payout_paid_at ?? b.date ?? "").localeCompare(a.payout_paid_at ?? a.date ?? ""))
+    .slice(0, 20);
 
-  const goalProgress =
-    goalCents > 0
-      ? Math.min(100, Math.round((todayCents / goalCents) * 100))
-      : 0;
+  const monthPrefix = todayYmd.slice(0, 7);
+  const paidThisMonth = paidRows.reduce((sum, row) => {
+    if (!row.payout_paid_at?.slice(0, 10).startsWith(monthPrefix)) return sum;
+    return sum + Math.max(0, row.amount_cents ?? 0);
+  }, 0);
 
-  const visibleRows = useMemo(() => {
-    if (!payload?.rows) return [];
-    return earningsPeriodFilter(payload.rows, period, todayYmd)
-      .slice()
-      .sort((a, b) => (b.date ?? "").localeCompare(a.date ?? ""))
-      .slice(0, 50);
-  }, [payload?.rows, period, todayYmd]);
+  const today = payload?.summary?.today_cents ?? 0;
+  const week = payload?.summary?.week_cents ?? 0;
+  const month = payload?.summary?.month_cents ?? 0;
+  const pending = payload?.summary?.pending_cents ?? payload?.total_pending ?? 0;
+  const eligible = payload?.summary?.eligible_cents ?? payload?.total_approved ?? 0;
+  const lifetime = payload?.total_all_time ?? payload?.total_paid ?? payload?.summary?.paid_cents ?? 0;
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-lg px-4 pt-4 space-y-3 animate-pulse">
+      <div className="mx-auto w-full max-w-lg space-y-3 px-4 pt-4 animate-pulse">
         <div className="h-8 w-40 rounded-xl bg-gray-200" />
-        <div className="grid grid-cols-3 gap-3">
-          {[1, 2, 3].map((i) => <div key={i} className="h-20 rounded-2xl bg-gray-200" />)}
-        </div>
-        <div className="h-24 rounded-2xl bg-gray-200" />
-        <div className="h-32 rounded-2xl bg-gray-200" />
+        <div className="grid grid-cols-3 gap-2">{[1, 2, 3].map((item) => <div key={item} className="h-24 rounded-2xl bg-gray-200" />)}</div>
+        <div className="h-40 rounded-2xl bg-gray-200" />
+        <div className="h-52 rounded-2xl bg-gray-200" />
       </div>
     );
   }
@@ -118,113 +137,86 @@ function EarningsPageContent() {
   if (error) {
     return (
       <div className="mx-auto w-full max-w-lg px-4 pt-4">
-        <p className="rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>
+        <div className="rounded-2xl border border-red-100 bg-red-50 px-4 py-4">
+          <p className="text-sm text-red-700">{error}</p>
+          <button type="button" onClick={() => { setLoading(true); void load(); }} className="mt-3 rounded-xl bg-red-600 px-3 py-2 text-sm font-semibold text-white">Try again</button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="mx-auto w-full max-w-lg px-4 pt-4 pb-6 space-y-4">
-      {/* Page header */}
-      <div>
+    <main className="mx-auto w-full max-w-lg px-4 pb-8 pt-4">
+      <header>
         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Earnings</h1>
         <p className="mt-0.5 text-sm text-slate-400">Your income overview.</p>
+      </header>
+
+      {sectionTitle("Earnings summary")}
+      <div className="grid grid-cols-3 gap-2">
+        <MoneyCard label="Today's earnings" amount={today} />
+        <MoneyCard label="This week" amount={week} />
+        <MoneyCard label="This month" amount={month} />
       </div>
 
-      {/* Period tabs */}
-      <div className="flex gap-2" role="tablist">
-        {(["today", "week", "month"] as const).map((p) => (
-          <button
-            key={p}
-            type="button"
-            role="tab"
-            aria-selected={period === p}
-            className={cn(
-              "h-9 flex-1 rounded-full border text-sm font-medium transition-colors",
-              period === p
-                ? "border-blue-600 bg-blue-600 text-white"
-                : "border-gray-200 bg-white text-slate-500 hover:text-slate-700",
-            )}
-            onClick={() => setPeriod(p)}
-          >
-            {p === "today" ? "Today" : p === "week" ? "Weekly" : "Monthly"}
-          </button>
+      {sectionTitle("Payout summary")}
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm divide-y divide-gray-100">
+        {[
+          ["Pending approval", pending, "text-amber-600"],
+          ["Eligible for payout", eligible, "text-blue-600"],
+          ["Paid this month", paidThisMonth, "text-emerald-600"],
+        ].map(([label, amount, colour]) => (
+          <div key={String(label)} className="flex items-center justify-between gap-3 px-4 py-3.5">
+            <span className="text-sm font-medium text-slate-700">{String(label)}</span>
+            <span className={`text-sm font-bold tabular-nums ${String(colour)}`}>{formatZarFromCents(Number(amount))}</span>
+          </div>
         ))}
       </div>
 
-      {/* Breakdown + payout */}
-      <EarningsBreakdown
-        today={{ label: "Today", value: formatZarFromCents(todayCents) }}
-        thisWeek={{ label: "Weekly", value: formatZarFromCents(weekCents) }}
-        thisMonth={{ label: "Monthly", value: formatZarFromCents(monthCents) }}
-        goalProgress={goalProgress}
-        goalLabel={`${goalProgress}% of ${formatZarFromCents(goalCents)} daily goal`}
-        pendingPayout={pendingCents > 0 ? formatZarFromCents(pendingCents) : undefined}
-        paidPayout={paidCents > 0 ? formatZarFromCents(paidCents) : undefined}
-        bonusTotal={bonusTotalCents > 0 ? formatZarFromCents(bonusTotalCents) : undefined}
-      />
-
-      {/* Expense claim CTA */}
-      <div className="rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm flex items-center justify-between gap-3">
-        <div>
-          <p className="text-sm font-semibold text-slate-800">Claim an expense</p>
-          <p className="mt-0.5 text-xs text-slate-400">Submit cleaning supplies or travel costs.</p>
+      {sectionTitle("Recent earnings")}
+      {recent.length ? (
+        <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm divide-y divide-gray-100">
+          {recent.map((row) => (
+            <Link key={row.booking_id} href={`/jobs/${row.booking_id}`} className="flex items-center justify-between gap-3 px-4 py-3.5 hover:bg-slate-50">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-semibold text-slate-800">{row.service || "Cleaning job"}</p>
+                <p className="mt-0.5 text-xs text-slate-400">{formatDate(row.date)}</p>
+              </div>
+              <span className="shrink-0 text-sm font-bold tabular-nums text-slate-900">{formatZarFromCents(row.amount_cents ?? 0)}</span>
+            </Link>
+          ))}
         </div>
-        <Link
-          href="/jobs/profile"
-          className="rounded-xl bg-blue-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-blue-700 transition-colors active:scale-95 shrink-0"
-        >
-          Claim
-        </Link>
-      </div>
+      ) : <EmptyState title="No recent earnings" text="Completed jobs will appear here." />}
 
-      {/* History */}
-      {visibleRows.length > 0 ? (
-        <div className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-widest text-slate-400">
-            Earnings history
-          </h2>
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm divide-y divide-gray-50 overflow-hidden">
-            {visibleRows.map((row) => (
-              <div
-                key={row.booking_id}
-                className="flex items-center justify-between gap-3 px-4 py-3"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-slate-800 leading-tight truncate">
-                    {row.service || "Cleaning job"}
-                  </p>
-                  <p className="mt-0.5 text-xs text-slate-400 truncate">
-                    {row.date ?? "—"}
-                    {row.location ? ` · ${row.location.split(/\r?\n/)[0]?.trim() ?? ""}` : ""}
-                  </p>
+      {sectionTitle("Payment history")}
+      {paidRows.length ? (
+        <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm divide-y divide-gray-100">
+          {paidRows.map((row) => (
+            <Link key={`${row.booking_id}-${row.payout_paid_at ?? "paid"}`} href={`/jobs/${row.booking_id}`} className="block px-4 py-3.5 hover:bg-slate-50">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">{formatDate(row.payout_paid_at ?? row.date)}</p>
+                  <p className="mt-0.5 text-xs text-slate-400">Batch {row.payout_run_id ?? "reference unavailable"}</p>
                 </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  <span className="text-sm font-bold tabular-nums text-slate-900">
-                    {typeof row.amount_cents === "number"
-                      ? formatZarFromCents(row.amount_cents)
-                      : "—"}
-                  </span>
-                  <span
-                    className={cn(
-                      "rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide",
-                      statusChip(row.payout_status),
-                    )}
-                  >
-                    {row.payout_status ?? "pending"}
-                  </span>
+                <div className="text-right">
+                  <p className="text-sm font-bold tabular-nums text-slate-900">{formatZarFromCents(row.amount_cents ?? 0)}</p>
+                  <p className="mt-0.5 text-xs font-semibold text-emerald-600">Paid</p>
                 </div>
               </div>
-            ))}
-          </div>
+            </Link>
+          ))}
         </div>
-      ) : (
-        <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-4 py-8 text-center">
-          <p className="font-semibold text-slate-700">No earnings for this period</p>
-          <p className="mt-1 text-sm text-slate-400">Complete jobs to see your earnings here.</p>
+      ) : <EmptyState title="No payment history" text="Paid earnings will appear here." />}
+
+      {sectionTitle("Performance summary")}
+      <div className="grid grid-cols-2 gap-2">
+        <MoneyCard label="Total lifetime earnings" amount={lifetime} />
+        <div className="rounded-2xl border border-gray-100 bg-white px-3 py-4 shadow-sm">
+          <p className="text-xs font-medium leading-4 text-slate-500">Bookings completed</p>
+          <p className="mt-1 text-lg font-extrabold tabular-nums text-slate-900">{rows.length}</p>
         </div>
-      )}
-    </div>
+      </div>
+    </main>
   );
 }
 
