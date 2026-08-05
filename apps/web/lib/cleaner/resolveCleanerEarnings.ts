@@ -5,30 +5,34 @@ import {
 } from "@/lib/payout/bookingEarningsSummary";
 
 /**
- * Single cleaner-facing earnings amount for jobs and offers: line-ledger total when set,
- * else positive frozen (settlement lock) then display. `payout_frozen_cents = 0` does not
- * override a positive `display_earnings_cents` (legacy / inconsistent rows); 0/0 remains zero.
+ * Single policy-controlled cleaner earnings amount.
+ *
+ * A positive settlement freeze is final. Otherwise the booking's display
+ * earning is the policy lock written by the earnings-policy trigger. Stale
+ * line-ledger totals are only a fallback and must not override that lock.
  */
 export function resolveCleanerEarningsCents(row: {
   cleaner_earnings_total_cents?: unknown;
   payout_frozen_cents?: unknown;
   display_earnings_cents?: unknown;
 }): number | null {
-  const lineTotal = optionalCentsFromDb(row.cleaner_earnings_total_cents);
-  if (lineTotal !== null && lineTotal > 0) return lineTotal;
-
   const frozen = optionalCentsFromDb(row.payout_frozen_cents);
   const display = optionalCentsFromDb(row.display_earnings_cents);
+  const lineTotal = optionalCentsFromDb(row.cleaner_earnings_total_cents);
+
   if (frozen !== null && frozen > 0) return frozen;
-  if (frozen === 0 && display !== null && display > 0) return display;
+  if (display !== null && display > 0) return display;
+  if (lineTotal !== null && lineTotal > 0) return lineTotal;
   if (frozen !== null) return frozen;
   if (display !== null) return display;
+  if (lineTotal !== null) return lineTotal;
   return null;
 }
 
 /**
- * Per-cleaner amount shown on the cleaner dashboard earnings screen and matched in office payouts.
- * Uses `earnings_summary` per-cleaner totals when present, else {@link resolveCleanerEarningsCents}.
+ * Per-cleaner amount shown on the cleaner dashboard and Office payout report.
+ * Team-member payout rows remain the highest-priority per-cleaner source.
+ * For individual jobs, the booking policy lock wins over stale earnings JSON.
  */
 export function resolveCleanerDashboardEarningsCents(
   booking: {
@@ -42,13 +46,16 @@ export function resolveCleanerDashboardEarningsCents(
 ): number {
   const viewerPayout = optionalCentsFromDb(booking.viewer_payout_cents);
   if (viewerPayout !== null) return Math.max(0, Math.round(viewerPayout));
+
+  const locked = resolveCleanerEarningsCents(booking);
+  if (locked !== null) return Math.max(0, Math.round(locked));
+
   const facing = resolveCleanerFacingEarnings(
     parseBookingEarningsSummary(booking.earnings_summary),
     cleanerId,
   );
   if (facing) return Math.max(0, Math.round(facing.total_cents));
-  const fallback = resolveCleanerEarningsCents(booking);
-  return Math.max(0, Math.round(fallback ?? 0));
+  return 0;
 }
 
 /** Basis used when moving a booking to `payout_status = eligible` (cleaner cents only). */
