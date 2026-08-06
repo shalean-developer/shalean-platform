@@ -22,9 +22,6 @@ const originalModules = OFFICE_NAV_MODULES.map((module) => ({
 const originalSections = OFFICE_NAV_SECTIONS.map((section) => ({ ...section, items: [...section.items] }));
 const originalAllItems = [...OFFICE_NAV_ALL_ITEMS];
 
-// The Earnings Policies route existed before the RBAC navigation rewrite, but
-// its Finance menu entry was accidentally omitted. Reuse the Pricing icon so
-// the page is restored without duplicating icon imports or weakening access.
 const financeModule = originalModules.find((module) => module.id === "finance");
 const pricingItem = financeModule?.children?.find((item) => item.href === "/office/pricing");
 if (financeModule?.children && pricingItem && !financeModule.children.some((item) => item.href === "/office/earnings-policies")) {
@@ -65,7 +62,6 @@ const ROLE_CODE_MAP: Record<string, OfficeRoleKey> = {
   supervisor: "supervisor",
 };
 
-/** Company-wide read models that do not yet accept a team scope. */
 const SUPERVISOR_TEAM_SCOPE_PENDING = [
   "/office/recurring",
   "/office/sla-breaches",
@@ -209,8 +205,18 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
     return <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">Loading Office permissions…</div>;
   }
 
-  applyNavigationPermissions(permissions, roleFromProfile(profile));
+  const role = roleFromProfile(profile);
+  applyNavigationPermissions(permissions, role);
+
   if (pathname === "/office") {
+    // The existing Office dashboard already contains live schedule, workforce,
+    // allocation, SLA, action-queue and system-health data. General Managers
+    // should use that operational command centre instead of the static role
+    // navigation workspace. Owner and specialist roles keep the RBAC dashboard.
+    if (role === "manager" || role === "operations") {
+      return <>{children}</>;
+    }
+
     return <div className="min-h-full bg-slate-50/60">
       <div className="mx-auto w-full max-w-[1600px] space-y-7 px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
         <OfficeRoleDashboard permissions={permissions} profile={profile} />
