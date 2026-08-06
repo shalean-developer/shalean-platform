@@ -12,6 +12,7 @@ import {
 import { OFFICE_NAV_ALL_ITEMS, OFFICE_NAV_MODULES, OFFICE_NAV_SECTIONS } from "./OfficeNav";
 import { OfficeMyWorkPanel } from "./OfficeMyWorkPanel";
 import { OfficeRoleDashboard, type OfficeAccessProfile } from "./OfficeRoleDashboard";
+import { SupervisorModeSwitcher } from "./SupervisorModeSwitcher";
 
 type PermissionResponse = OfficeAccessProfile & { permissions?: string[] };
 
@@ -209,12 +210,19 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
   applyNavigationPermissions(permissions, role);
 
   if (pathname === "/office") {
-    // The existing Office dashboard already contains live schedule, workforce,
-    // allocation, SLA, action-queue and system-health data. General Managers
-    // should use that operational command centre instead of the static role
-    // navigation workspace. Owner and specialist roles keep the RBAC dashboard.
     if (role === "manager" || role === "operations") {
       return <>{children}</>;
+    }
+
+    if (role === "supervisor") {
+      return (
+        <div className="min-h-full bg-slate-50/60">
+          <div className="mx-auto w-full max-w-[1600px] space-y-4 px-4 py-4 sm:px-6 lg:px-8 xl:px-10">
+            <SupervisorModeSwitcher activeMode="supervisor" forceVisible />
+            {children}
+          </div>
+        </div>
+      );
     }
 
     return <div className="min-h-full bg-slate-50/60">
