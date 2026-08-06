@@ -145,14 +145,6 @@ export function recurringGeneratorCronWarning(
     };
   }
 
-  if (job.errors_last_24h > 0) {
-    return {
-      show: true,
-      severity: "amber",
-      message: `Generator cron reported ${job.errors_last_24h} error run(s) in the last 24h. Last success ${formatTs(job.last_success_at)}.`,
-    };
-  }
-
   if (job.last_run_status === "error") {
     return {
       show: true,
@@ -169,5 +161,7 @@ export function recurringGeneratorCronWarning(
     };
   }
 
+  // Historical failures are retained for reporting, but a fresh successful latest run means
+  // the generator has recovered. Do not keep the current-outage banner visible for 24 hours.
   return null;
 }
