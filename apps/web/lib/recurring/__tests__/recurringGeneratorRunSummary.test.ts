@@ -152,4 +152,25 @@ describe("recurringGeneratorCronWarning", () => {
     );
     expect(w).toBeNull();
   });
+
+  it("clears the outage warning after a fresh successful run even when older failures remain in 24h history", () => {
+    const w = recurringGeneratorCronWarning(
+      {
+        job_name: "generate-recurring-bookings",
+        last_success_at: new Date(Date.now() - 5 * 60_000).toISOString(),
+        last_run_at: new Date().toISOString(),
+        last_run_status: "success",
+        last_run_message: JSON.stringify({
+          scanned: 15,
+          generated: 0,
+          skipped_duplicate: 103,
+          failed: 0,
+          skipped_plans: 0,
+        }),
+        errors_last_24h: 60,
+      },
+      fmt,
+    );
+    expect(w).toBeNull();
+  });
 });
