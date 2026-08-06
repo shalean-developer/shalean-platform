@@ -1,0 +1,80 @@
+"use client";
+
+import Link from "next/link";
+import { useEffect, useState } from "react";
+import { getSupabaseSession } from "@/lib/supabase/browser";
+
+type ActiveMode = "supervisor" | "cleaner";
+
+type PermissionResponse = {
+  roles?: Array<{ code?: string }>;
+};
+
+export function SupervisorModeSwitcher({
+  activeMode,
+  forceVisible = false,
+}: {
+  activeMode: ActiveMode;
+  forceVisible?: boolean;
+}) {
+  const [visible, setVisible] = useState(forceVisible);
+
+  useEffect(() => {
+    if (forceVisible) return;
+    let active = true;
+
+    void (async () => {
+      const session = await getSupabaseSession();
+      const token = session?.access_token;
+      if (!token) return;
+
+      const response = await fetch("/api/admin/security/my-permissions", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      }).catch(() => null);
+      if (!response?.ok) return;
+
+      const payload = (await response.json().catch(() => ({}))) as PermissionResponse;
+      if (active) {
+        setVisible((payload.roles ?? []).some((role) => role.code === "supervisor"));
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [forceVisible]);
+
+  if (!visible) return null;
+
+  const optionClass = (mode: ActiveMode) =>
+    `rounded-lg px-3 py-2 text-xs font-semibold transition ${
+      activeMode === mode
+        ? "bg-blue-600 text-white shadow-sm"
+        : "bg-white text-slate-700 hover:bg-slate-50"
+    }`;
+
+  return (
+    <section
+      aria-label="Switch between Supervisor and Cleaner accounts"
+      className="rounded-xl border border-blue-100 bg-blue-50/70 p-3 shadow-sm"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Account view</p>
+          <p className="mt-0.5 text-xs text-slate-600">
+            Use one login to manage your team or view only your personal cleaner work and earnings.
+          </p>
+        </div>
+        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
+          <Link href="/office" className={optionClass("supervisor")} aria-current={activeMode === "supervisor" ? "page" : undefined}>
+            Supervisor
+          </Link>
+          <Link href="/jobs" className={optionClass("cleaner")} aria-current={activeMode === "cleaner" ? "page" : undefined}>
+            My Cleaner Account
+          </Link>
+        </div>
+      </div>
+    </section>
+  );
+}
