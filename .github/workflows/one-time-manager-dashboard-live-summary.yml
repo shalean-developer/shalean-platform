@@ -1,0 +1,172 @@
+name: One-time Manager dashboard live summary
+
+on:
+  push:
+    branches: [staging]
+
+permissions:
+  contents: write
+
+jobs:
+  apply-manager-dashboard:
+    if: ${{ !contains(github.event.head_commit.message, '[manager-dashboard-live]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: staging
+          fetch-depth: 0
+
+      - name: Apply Manager dashboard improvements
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('apps/web/src/features/office/OfficeRoleDashboard.tsx')
+          text = path.read_text()
+
+          text = text.replace(
+              'title: "Operations workspace",\n    subtitle: "Today\'s bookings, allocation, incidents and service-delivery health.",',
+              'title: "General Manager command centre",\n    subtitle: "Live operational control across bookings, allocation, incidents, teams and service delivery.",',
+              1,
+          )
+
+          marker = 'function NavGrid({ items, reports = false }: { items: Workspace[]; reports?: boolean }) {'
+          if 'function ManagerOperationsOverview' not in text:
+              component = r'''
+function ManagerOperationsOverview({ permissions }: { permissions: ReadonlySet<string> }) {
+  const [counts, setCounts] = useState({ total: 0, critical: 0, high: 0, medium: 0, system: 0, overdue: 0 });
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const token = await getSupabaseAccessToken();
+      if (!token) {
+        if (!cancelled) {
+          setError("Office session unavailable.");
+          setLoading(false);
+        }
+        return;
+      }
+      try {
+        const response = await fetch("/api/admin/my-work", {
+          headers: { Authorization: `Bearer ${token}` },
+          cache: "no-store",
+        });
+        const payload = (await response.json().catch(() => ({}))) as {
+          items?: Array<{ priority?: string; category?: string; status?: string; title?: string }>;
+          error?: string;
+        };
+        if (!response.ok) throw new Error(payload.error || "Could not load manager operations summary.");
+        const items = payload.items ?? [];
+        if (!cancelled) {
+          setCounts({
+            total: items.length,
+            critical: items.filter((item) => item.priority === "critical").length,
+            high: items.filter((item) => item.priority === "high").length,
+            medium: items.filter((item) => item.priority === "medium").length,
+            system: items.filter((item) => item.category === "system_health").length,
+            overdue: items.filter((item) => item.status === "overdue" || item.title?.toLowerCase().startsWith("overdue booking")).length,
+          });
+        }
+      } catch (cause) {
+        if (!cancelled) setError(cause instanceof Error ? cause.message : "Could not load manager operations summary.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const cards = [
+    { label: "Open actions", value: counts.total, href: "/office/ops-queue", note: "Permission-scoped work queue" },
+    { label: "Overdue", value: counts.overdue, href: "/office/sla-breaches", note: "Past-due operational actions" },
+    { label: "Critical", value: counts.critical, href: "/office/ops-queue", note: "Immediate manager attention" },
+    { label: "High priority", value: counts.high, href: "/office/ops-queue", note: "Resolve next" },
+  ];
+
+  const actions = [
+    { label: "Create booking", href: "/office/bookings/new", permission: "booking.create" },
+    { label: "Assign teams", href: "/office/schedule", permission: "booking.assign" },
+    { label: "Review SLA breaches", href: "/office/sla-breaches", permission: "ops.sla.view" },
+    { label: "Open operations queue", href: "/office/ops-queue", permission: "ops.queue.view" },
+    { label: "Review cleaner performance", href: "/office/cleaner-performance", permission: "cleaner.performance.view" },
+  ].filter((action) => permissions.has(action.permission) || Boolean(policyForOfficePath(action.href)?.anyOf.some((permission) => permissions.has(permission))));
+
+  return (
+    <div className="space-y-5" data-testid="manager-operations-overview">
+      <section>
+        <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+          <div>
+            <h2 className="text-lg font-semibold tracking-tight text-slate-950">Today&apos;s operations summary</h2>
+            <p className="text-sm text-slate-500">Live, permission-scoped operational workload for the General Manager.</p>
+          </div>
+          {error ? <p className="text-xs text-amber-700">{error}</p> : null}
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {cards.map((card) => (
+            <Link key={card.label} href={card.href} className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.035)] transition hover:border-blue-200">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{card.label}</p>
+              <p className={`mt-2 text-2xl font-bold tabular-nums ${card.label === "Critical" && card.value > 0 ? "text-red-700" : card.label === "Overdue" && card.value > 0 ? "text-amber-700" : "text-slate-950"}`}>
+                {loading ? "…" : card.value}
+              </p>
+              <p className="mt-1 text-xs text-slate-500">{card.note}</p>
+            </Link>
+          ))}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-slate-200/80 bg-white p-4 shadow-[0_2px_10px_rgba(15,23,42,0.035)]">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-semibold text-slate-950">Queue breakdown</h2>
+            <p className="text-xs text-slate-500">Current severity and system-health workload.</p>
+          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-semibold">
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700">Medium {loading ? "…" : counts.medium}</span>
+            <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700">System {loading ? "…" : counts.system}</span>
+          </div>
+        </div>
+      </section>
+
+      {actions.length ? (
+        <section>
+          <h2 className="mb-3 text-lg font-semibold tracking-tight text-slate-950">Manager quick actions</h2>
+          <div className="flex flex-wrap gap-2">
+            {actions.map((action) => (
+              <Link key={action.href} href={action.href} className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm transition hover:border-blue-200 hover:text-blue-800">
+                {action.label}
+              </Link>
+            ))}
+          </div>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+'''
+              if marker not in text:
+                  raise SystemExit('NavGrid marker not found')
+              text = text.replace(marker, component + marker, 1)
+
+          old_render = '      {isOwner ? <OwnerLiveCommandCentre permissions={permissions} /> : null}\n\n      {!isOwner ? ('
+          new_render = '      {isOwner ? <OwnerLiveCommandCentre permissions={permissions} /> : null}\n      {role === "operations" ? <ManagerOperationsOverview permissions={permissions} /> : null}\n\n      {!isOwner ? ('
+          if old_render not in text:
+              raise SystemExit('Owner render marker not found')
+          text = text.replace(old_render, new_render, 1)
+
+          path.write_text(text)
+          PY
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/web/src/features/office/OfficeRoleDashboard.tsx
+          git commit -m "feat(office): add live General Manager command centre [manager-dashboard-live]"
+          git push origin staging
