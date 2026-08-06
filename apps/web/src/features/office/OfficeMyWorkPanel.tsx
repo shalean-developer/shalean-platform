@@ -1,13 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getSupabaseAccessToken } from "@/lib/supabase/browser";
-import type { OfficeWorkItem } from "@/lib/admin/officeWorkItems";
+import {
+  groupOfficeWorkItems,
+  type OfficeWorkItem,
+} from "@/lib/admin/officeWorkItems";
 
 type MyWorkResponse = {
   items?: OfficeWorkItem[];
   counts?: Partial<Record<OfficeWorkItem["priority"], number>>;
+  groups?: { operational?: number; systemHealth?: number };
   generatedAt?: string;
   error?: string;
 };
@@ -18,13 +22,108 @@ function priorityClass(priority: OfficeWorkItem["priority"]): string {
   return "border-slate-200 bg-slate-50 text-slate-700";
 }
 
-function WorkMeta({ summary }: { summary: string }) {
-  const parts = summary.split(" • ");
-  return <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs leading-5 text-slate-500">
-    {parts.map((part, index) => <span key={`${part}-${index}`} className="inline-flex items-center gap-1.5">
-      <span className="h-1.5 w-1.5 rounded-full bg-slate-300" aria-hidden="true" />{part}
-    </span>)}
-  </div>;
+function formatWhen(iso: string | null): string | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  return new Date(ms).toLocaleString("en-ZA", {
+    day: "numeric",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function WorkItemCard({ item }: { item: OfficeWorkItem }) {
+  const [openTech, setOpenTech] = useState(false);
+  const lastSuccess = formatWhen(item.lastSuccessAt);
+  const occurred = formatWhen(item.occurredAt);
+
+  return (
+    <article className="rounded-xl border border-slate-200/80 bg-white p-3.5 shadow-[0_1px_4px_rgba(15,23,42,0.025)] transition hover:border-blue-200">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase ${priorityClass(item.severity ?? item.priority)}`}>
+              {item.severity ?? item.priority}
+            </span>
+            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">
+              {item.category === "system_health" ? "System" : "Operations"}
+            </span>
+          </div>
+          <h3 className="mt-2 text-sm font-semibold leading-5 text-slate-950">{item.title}</h3>
+          <p className="mt-1 text-xs leading-5 text-slate-500">{item.summary}</p>
+          <p className="mt-1.5 text-xs leading-5 text-slate-600">
+            <span className="font-medium text-slate-700">Impact:</span> {item.businessImpact}
+          </p>
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-500">
+            {item.affectedRecordCount != null ? <span>{item.affectedRecordCount} record{item.affectedRecordCount === 1 ? "" : "s"}</span> : null}
+            {lastSuccess ? <span>Last success {lastSuccess}</span> : null}
+            {occurred && !lastSuccess ? <span>Last run {occurred}</span> : null}
+          </div>
+        </div>
+      </div>
+
+      {item.technicalDetails ? (
+        <div className="mt-2">
+          <button
+            type="button"
+            className="text-[11px] font-semibold text-slate-500 hover:text-slate-800"
+            onClick={() => setOpenTech((value) => !value)}
+            aria-expanded={openTech}
+          >
+            {openTech ? "Hide technical details" : "Technical details"}
+          </button>
+          {openTech ? (
+            <pre className="mt-1.5 max-h-40 overflow-auto rounded-lg bg-slate-50 p-2 text-[10px] leading-4 text-slate-600">
+              {item.technicalDetails}
+            </pre>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-2.5 text-xs font-semibold">
+        <Link href={item.href} className="text-blue-700 transition hover:text-blue-900">
+          {item.actionLabel} →
+        </Link>
+      </div>
+    </article>
+  );
+}
+
+function WorkGroup({
+  title,
+  subtitle,
+  items,
+  emptyLabel,
+}: {
+  title: string;
+  subtitle: string;
+  items: OfficeWorkItem[];
+  emptyLabel: string;
+}) {
+  return (
+    <div>
+      <div className="mb-3 flex items-end justify-between gap-3">
+        <div>
+          <h3 className="text-sm font-semibold text-slate-900">{title}</h3>
+          <p className="text-xs text-slate-500">{subtitle}</p>
+        </div>
+        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600">
+          {items.length}
+        </span>
+      </div>
+      {items.length === 0 ? (
+        <p className="rounded-xl border border-emerald-200 bg-emerald-50/80 px-3 py-3 text-xs text-emerald-900">{emptyLabel}</p>
+      ) : (
+        <div className="grid gap-2.5 lg:grid-cols-2">
+          {items.map((item) => (
+            <WorkItemCard key={item.id} item={item} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function OfficeMyWorkPanel() {
@@ -38,7 +137,10 @@ export function OfficeMyWorkPanel() {
     (async () => {
       const token = await getSupabaseAccessToken();
       if (!token) {
-        if (!cancelled) { setError("Office session unavailable."); setLoading(false); }
+        if (!cancelled) {
+          setError("Office session unavailable.");
+          setLoading(false);
+        }
         return;
       }
       const response = await fetch("/api/admin/my-work", {
@@ -54,42 +156,59 @@ export function OfficeMyWorkPanel() {
       }
       setLoading(false);
     })();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  return <section aria-labelledby="my-work-heading" className="rounded-3xl border border-slate-200/80 bg-white p-5 shadow-[0_4px_22px_rgba(15,23,42,0.045)] sm:p-6">
-    <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
-      <div>
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-blue-600">Priority 3</p>
-        <h2 id="my-work-heading" className="mt-1 text-xl font-semibold tracking-tight text-slate-950">My Work</h2>
-        <p className="mt-1 text-sm text-slate-500">Live, permission-scoped actions requiring your attention.</p>
-      </div>
-      {!loading && !error ? <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
-        <span className="rounded-full bg-slate-100 px-3 py-1.5 text-slate-700">{items.length} open</span>
-        {(counts?.critical ?? 0) > 0 ? <span className="rounded-full border border-red-200 bg-red-50 px-3 py-1.5 text-red-700">Critical {counts?.critical}</span> : null}
-        {(counts?.high ?? 0) > 0 ? <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-amber-700">High {counts?.high}</span> : null}
-        {(counts?.medium ?? 0) > 0 ? <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-slate-700">Medium {counts?.medium}</span> : null}
-      </div> : null}
-    </div>
+  const grouped = useMemo(() => groupOfficeWorkItems(items), [items]);
 
-    {loading ? <div className="mt-5 grid gap-3 lg:grid-cols-2">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-2xl bg-slate-100" />)}</div> : null}
-    {error ? <p className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{error}</p> : null}
-    {!loading && !error && items.length === 0 ? <p className="mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">No urgent work is currently assigned to your permissions and scope.</p> : null}
-
-    {items.length > 0 ? <div className="mt-5 grid gap-3 lg:grid-cols-2">{items.slice(0, 8).map((item) => (
-      <article key={item.id} className="group rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_1px_4px_rgba(15,23,42,0.025)] transition duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_8px_24px_rgba(15,23,42,0.07)]">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold leading-5 text-slate-950">{item.title}</h3>
-            <WorkMeta summary={item.summary} />
+  return (
+    <section aria-labelledby="my-work-heading" className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_4px_22px_rgba(15,23,42,0.045)] sm:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 pb-4">
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-blue-600">Work queue</p>
+          <h2 id="my-work-heading" className="mt-1 text-lg font-semibold tracking-tight text-slate-950">My Work</h2>
+          <p className="mt-0.5 text-sm text-slate-500">Permission-scoped operational actions and system health.</p>
+        </div>
+        {!loading && !error ? (
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold">
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-700">{items.length} open</span>
+            {(counts?.critical ?? 0) > 0 ? (
+              <span className="rounded-full border border-red-200 bg-red-50 px-2.5 py-1 text-red-700">Critical {counts?.critical}</span>
+            ) : null}
+            {(counts?.high ?? 0) > 0 ? (
+              <span className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-amber-700">High {counts?.high}</span>
+            ) : null}
           </div>
-          <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase ${priorityClass(item.priority)}`}>{item.priority}</span>
+        ) : null}
+      </div>
+
+      {loading ? (
+        <div className="mt-4 grid gap-3 lg:grid-cols-2">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div key={index} className="h-24 animate-pulse rounded-xl bg-slate-100" />
+          ))}
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-5 border-t border-slate-100 pt-3 text-xs font-semibold">
-          <Link href={item.href} className="text-blue-700 transition hover:text-blue-900">{item.actionLabel} →</Link>
-          <Link href={item.href} className="text-slate-600 transition hover:text-slate-950">View booking</Link>
+      ) : null}
+      {error ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">{error}</p> : null}
+
+      {!loading && !error ? (
+        <div className="mt-5 space-y-6">
+          <WorkGroup
+            title="Operational actions"
+            subtitle="Team allocations, booking exceptions, customer issues and approval tasks."
+            items={grouped.operational}
+            emptyLabel="No operational actions need your attention."
+          />
+          <WorkGroup
+            title="System health"
+            subtitle="Recurring failures, invoice scheduler, payout integrity and notification queues."
+            items={grouped.systemHealth}
+            emptyLabel="No stale or failed system jobs in your scope."
+          />
         </div>
-      </article>
-    ))}</div> : null}
-  </section>;
+      ) : null}
+    </section>
+  );
 }
