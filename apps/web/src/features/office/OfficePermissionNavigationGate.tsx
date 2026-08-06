@@ -12,6 +12,7 @@ import {
 import { OFFICE_NAV_ALL_ITEMS, OFFICE_NAV_MODULES, OFFICE_NAV_SECTIONS } from "./OfficeNav";
 import { OfficeMyWorkPanel } from "./OfficeMyWorkPanel";
 import { OfficeRoleDashboard, type OfficeAccessProfile } from "./OfficeRoleDashboard";
+import { SupervisorModeSwitcher } from "./SupervisorModeSwitcher";
 
 type PermissionResponse = OfficeAccessProfile & { permissions?: string[] };
 
@@ -209,12 +210,19 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
   applyNavigationPermissions(permissions, role);
 
   if (pathname === "/office") {
-    // Manager, operations and supervisor roles are operational roles. Reuse the
-    // live Office dashboard instead of reducing them to static navigation cards.
-    // Supervisor API responses remain permission/team scoped by the existing
-    // RBAC layer, so they get useful day-of-work data without owner/finance access.
-    if (role === "manager" || role === "operations" || role === "supervisor") {
+    if (role === "manager" || role === "operations") {
       return <>{children}</>;
+    }
+
+    if (role === "supervisor") {
+      return (
+        <div className="min-h-full bg-slate-50/60">
+          <div className="mx-auto w-full max-w-[1600px] space-y-4 px-4 py-4 sm:px-6 lg:px-8 xl:px-10">
+            <SupervisorModeSwitcher activeMode="supervisor" forceVisible />
+            {children}
+          </div>
+        </div>
+      );
     }
 
     return <div className="min-h-full bg-slate-50/60">
