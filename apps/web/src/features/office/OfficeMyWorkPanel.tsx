@@ -152,7 +152,7 @@ function WorkGroup({
                   onClick={onShowMore}
                   className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-2 text-xs font-semibold text-blue-700 hover:bg-blue-100"
                 >
-                  Show {Math.min(PAGE_SIZE, items.length - visibleCount)} more
+                  Load {Math.min(PAGE_SIZE, items.length - visibleCount)} more
                 </button>
               ) : null}
               {canCollapse ? (

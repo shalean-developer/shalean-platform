@@ -422,21 +422,21 @@ function OwnerLiveCommandCentre({ permissions }: { permissions: ReadonlySet<stri
       <section>
         <h2 className="mb-3 text-lg font-semibold tracking-tight text-slate-950">Owner summaries</h2>
         <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <SummaryPanel title="Customers" href="/office/customers">
+          <SummaryPanel title="Customers · Current window" href="/office/customers">
             <dl className="space-y-1.5 text-xs">
               <div className="flex justify-between gap-2"><dt className="text-slate-500">Retention</dt><dd className="font-semibold tabular-nums">{loading ? "…" : pct(summaries?.customers.retentionPct ?? null)}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-slate-500">Bookings (window)</dt><dd className="font-semibold tabular-nums">{loading ? "…" : count(summaries?.customers.totalBookingsWindow ?? null)}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-slate-500">Avg booking value</dt><dd className="font-semibold tabular-nums">{loading ? "…" : zar(summaries?.customers.avgBookingValueZar ?? null)}</dd></div>
             </dl>
           </SummaryPanel>
-          <SummaryPanel title="Workforce" href="/office/cleaners">
+          <SummaryPanel title="Workforce · Today" href="/office/cleaners">
             <dl className="space-y-1.5 text-xs">
               <div className="flex justify-between gap-2"><dt className="text-slate-500">Active cleaners</dt><dd className="font-semibold tabular-nums">{loading ? "…" : count(summaries?.workforce.activeCleaners ?? null)}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-slate-500">Available today</dt><dd className="font-semibold tabular-nums">{loading ? "…" : count(summaries?.workforce.availableToday ?? null)}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-slate-500">Pending applications</dt><dd className="font-semibold tabular-nums">{loading ? "…" : count(summaries?.workforce.pendingApplications ?? null)}</dd></div>
             </dl>
           </SummaryPanel>
-          <SummaryPanel title="Booking services" href="/office/analytics">
+          <SummaryPanel title="Booking services · Current window" href="/office/analytics">
             {loading ? <p className="text-xs text-slate-400">Loading…</p> : null}
             {!loading && (summaries?.bookingServices.length ?? 0) === 0 ? (
               <p className="text-xs text-slate-500">No service breakdown available.</p>
@@ -451,7 +451,7 @@ function OwnerLiveCommandCentre({ permissions }: { permissions: ReadonlySet<stri
               </ul>
             )}
           </SummaryPanel>
-          <SummaryPanel title="Financial" href="/office/financial-dashboard">
+          <SummaryPanel title="Financial · This month" href="/office/financial-dashboard">
             <dl className="space-y-1.5 text-xs">
               <div className="flex justify-between gap-2"><dt className="text-slate-500">Customer revenue</dt><dd className="font-semibold tabular-nums">{loading ? "…" : zarCents(summaries?.financial.customerRevenueCents ?? null)}</dd></div>
               <div className="flex justify-between gap-2"><dt className="text-slate-500">Gross margin</dt><dd className="font-semibold tabular-nums">{loading ? "…" : zarCents(summaries?.financial.grossMarginCents ?? null)}</dd></div>
