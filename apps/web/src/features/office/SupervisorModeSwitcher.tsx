@@ -74,7 +74,7 @@ export function SupervisorModeSwitcher({
         <div>
           <p className="text-xs font-semibold uppercase tracking-wide text-blue-700">Account view</p>
           <p className="mt-0.5 text-xs text-slate-600">
-            Use one login to manage your team or view only your personal cleaner work and earnings.
+            Use one login to manage your assigned team or view only your own cleaner jobs, earnings and profile.
           </p>
         </div>
         <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1">
