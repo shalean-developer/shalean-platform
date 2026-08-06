@@ -10,6 +10,10 @@ type PermissionResponse = {
   roles?: Array<{ code?: string }>;
 };
 
+type CleanerMeResponse = {
+  cleaner?: { id?: string | null } | null;
+};
+
 export function SupervisorModeSwitcher({
   activeMode,
   forceVisible = false,
@@ -17,10 +21,9 @@ export function SupervisorModeSwitcher({
   activeMode: ActiveMode;
   forceVisible?: boolean;
 }) {
-  const [visible, setVisible] = useState(forceVisible);
+  const [visible, setVisible] = useState(false);
 
   useEffect(() => {
-    if (forceVisible) return;
     let active = true;
 
     void (async () => {
@@ -28,16 +31,24 @@ export function SupervisorModeSwitcher({
       const token = session?.access_token;
       if (!token) return;
 
-      const response = await fetch("/api/admin/security/my-permissions", {
-        headers: { Authorization: `Bearer ${token}` },
-        cache: "no-store",
-      }).catch(() => null);
-      if (!response?.ok) return;
+      const headers = { Authorization: `Bearer ${token}` };
+      const [permissionResponse, cleanerResponse] = await Promise.all([
+        fetch("/api/admin/security/my-permissions", { headers, cache: "no-store" }).catch(() => null),
+        fetch("/api/cleaner/me", { headers, cache: "no-store" }).catch(() => null),
+      ]);
 
-      const payload = (await response.json().catch(() => ({}))) as PermissionResponse;
-      if (active) {
-        setVisible((payload.roles ?? []).some((role) => role.code === "supervisor"));
+      if (!active || !cleanerResponse?.ok) return;
+      const cleanerPayload = (await cleanerResponse.json().catch(() => ({}))) as CleanerMeResponse;
+      if (!cleanerPayload.cleaner?.id) return;
+
+      if (forceVisible) {
+        setVisible(true);
+        return;
       }
+
+      if (!permissionResponse?.ok) return;
+      const permissionPayload = (await permissionResponse.json().catch(() => ({}))) as PermissionResponse;
+      setVisible((permissionPayload.roles ?? []).some((role) => role.code === "supervisor"));
     })();
 
     return () => {
