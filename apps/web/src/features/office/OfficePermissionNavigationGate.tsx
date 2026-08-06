@@ -209,11 +209,11 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
   applyNavigationPermissions(permissions, role);
 
   if (pathname === "/office") {
-    // The existing Office dashboard already contains live schedule, workforce,
-    // allocation, SLA, action-queue and system-health data. General Managers
-    // should use that operational command centre instead of the static role
-    // navigation workspace. Owner and specialist roles keep the RBAC dashboard.
-    if (role === "manager" || role === "operations") {
+    // Manager, operations and supervisor roles are operational roles. Reuse the
+    // live Office dashboard instead of reducing them to static navigation cards.
+    // Supervisor API responses remain permission/team scoped by the existing
+    // RBAC layer, so they get useful day-of-work data without owner/finance access.
+    if (role === "manager" || role === "operations" || role === "supervisor") {
       return <>{children}</>;
     }
 
