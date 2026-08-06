@@ -27,6 +27,12 @@ describe("priorityPermissionsForRequest", () => {
     expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/cleaner-report-feedback"))).toEqual(["cleaner.view"]);
   });
 
+  it("maps Owner Command Centre API to role.manage", () => {
+    expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/owner-command-centre"))).toEqual([
+      "role.manage",
+    ]);
+  });
+
   it("allows mixed Marketing and customer review readers", () => {
     expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/reviews"))).toEqual([
       "customer.view",

@@ -44,7 +44,7 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   const path = pathname.toLowerCase();
   const method = request.method.toUpperCase();
 
-  if (path.includes("/api/admin/security/") || path.includes("/api/admin/roles") || path.includes("/api/admin/admin-users")) {
+  if (path.includes("/api/admin/security/") || path.includes("/api/admin/roles") || path.includes("/api/admin/admin-users") || path.includes("/owner-command-centre")) {
     return ["role.manage"];
   }
   if (

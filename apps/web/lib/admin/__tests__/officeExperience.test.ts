@@ -83,4 +83,12 @@ describe("role-based Office experience", () => {
     expect(hasAnyOfficePermission(care, policyForOfficePath("/office/cleaners")!.anyOf)).toBe(false);
     expect(hasAnyOfficePermission(care, policyForOfficePath("/office/expenses")!.anyOf)).toBe(false);
   });
+
+  it("keeps permission-scoped navigation unchanged for Owner Command Centre destinations", () => {
+    expect(policyForOfficePath("/office/business-health")?.anyOf).toEqual(["finance.summary.view", "finance.full.view"]);
+    expect(policyForOfficePath("/office/cash-flow")?.anyOf).toEqual(["finance.full.view"]);
+    expect(policyForOfficePath("/office/payouts/approvals")?.anyOf).toEqual(["payout.approve"]);
+    expect(policyForOfficePath("/office/security")?.anyOf).toEqual(["role.manage", "audit.view"]);
+    expect(policyForOfficePath("/office/security")?.audience).toEqual(["owner"]);
+  });
 });

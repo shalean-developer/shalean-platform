@@ -217,7 +217,14 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
         <OfficeMyWorkPanel />
         <footer className="flex flex-col gap-2 border-t border-slate-200 px-1 pt-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 Shalean Cleaning Services. All rights reserved.</span>
-          <span>Staging Environment</span>
+          <span className="flex flex-wrap items-center gap-2">
+            <span>Staging Environment</span>
+            {process.env.NEXT_PUBLIC_APP_VERSION ? (
+              <span className="rounded-full border border-slate-200 bg-white px-2 py-0.5 text-[10px] text-slate-500">
+                v{process.env.NEXT_PUBLIC_APP_VERSION}
+              </span>
+            ) : null}
+          </span>
         </footer>
       </div>
     </div>;
