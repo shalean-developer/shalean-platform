@@ -1,0 +1,35 @@
+---
+description: Mandatory Shalean engineering, testing, production-safety and release-control rules
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# Shalean Engineering Standard
+
+Read and follow `AGENTS.md`, `docs/engineering/SHALEAN_ENGINEERING_STANDARD.md`, and the current release-control standard before changing code.
+
+## Workflow
+
+- Work on the approved feature, fix, chore, docs or audit branch; never develop directly on `main` or `staging`.
+- Keep the requested scope together and avoid unrelated refactors.
+- If an old branch is badly stale, do not force-merge it over newer production controls; salvage still-valid changes onto current `main`.
+- Run the relevant local tests and rely on required GitHub checks for merge readiness.
+- Use staging when runtime acceptance is required; docs/governance-only work normally does not require staging.
+- Merge to `main` only after explicit authorization and green required checks.
+- Minimize unnecessary Vercel builds and redeployments.
+
+## Safety
+
+- Server-side authorization is the source of truth.
+- Preserve least privilege and fail closed for unknown roles, permissions and scopes.
+- Never expose secrets, service-role keys, payment credentials, customer PII, cleaner identity documents or bank details.
+- Do not weaken maker-checker, audit, payout, earnings, payment or booking-integrity controls.
+- Never edit an applied production migration; create a forward migration.
+- Prefer idempotent handling for payments, invoices, recurring bookings, notifications and payouts.
+- Use integer cents for monetary logic where the approved domain model supports it.
+- Treat `Africa/Johannesburg` as the operational timezone unless an integration explicitly requires UTC.
+
+## Before review
+
+Report the branch, files changed, behaviour implemented, tests and results, security/financial/database impact, environment changes, staging status, risks and remaining verification. Never claim a check or production verification that was not performed.
