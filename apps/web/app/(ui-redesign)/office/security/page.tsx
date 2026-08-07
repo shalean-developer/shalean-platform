@@ -1,20 +1,24 @@
 import { ShieldCheck, Users, KeyRound, ScrollText } from "lucide-react";
+import { OfficeSecurityAuditLog } from "@/src/features/office/OfficeSecurityAuditLog";
 
 const cards = [
   {
     title: "Admin roles",
     description: "Review role assignments, access scope, start dates, expiry dates and revocations.",
     icon: Users,
+    status: "Next slice",
   },
   {
     title: "Permissions",
     description: "Inspect the effective permissions granted through active role assignments.",
     icon: KeyRound,
+    status: "Next slice",
   },
   {
     title: "Audit log",
     description: "Review immutable security and sensitive-action audit events.",
     icon: ScrollText,
+    status: "Live below",
   },
 ];
 
@@ -37,15 +41,17 @@ export default function OfficeSecurityPage() {
       </section>
 
       <section className="grid gap-4 md:grid-cols-3">
-        {cards.map(({ title, description, icon: Icon }) => (
+        {cards.map(({ title, description, icon: Icon, status }) => (
           <article key={title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <Icon className="h-5 w-5 text-slate-700" />
             <h2 className="mt-4 font-semibold text-slate-950">{title}</h2>
             <p className="mt-2 text-sm leading-6 text-slate-600">{description}</p>
-            <p className="mt-4 text-xs font-medium text-amber-700">Management interface coming in the next security slice.</p>
+            <p className={`mt-4 text-xs font-medium ${status === "Live below" ? "text-emerald-700" : "text-amber-700"}`}>{status}</p>
           </article>
         ))}
       </section>
+
+      <OfficeSecurityAuditLog />
     </div>
   );
 }
