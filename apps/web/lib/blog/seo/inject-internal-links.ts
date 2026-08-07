@@ -21,7 +21,8 @@ export type InjectInternalLinksContext = {
 
 const MIN_LOCATION = 2;
 const MIN_SERVICE = 2;
-const MIN_BLOG = 2;
+const MIN_BLOG = 4;
+const MIN_TOTAL_INTERNAL_LINKS = 8;
 
 /** Money page — neighbourhood hubs (`cleaning-services-*-cape-town`) should inject twice for contextual equity. */
 const STANDARD_CLEANING_MONEY_PATH = "/services/standard-cleaning-cape-town";
@@ -187,7 +188,7 @@ export function injectInternalLinks(
   }
 
   const related = (context.relatedBlogPosts ?? []).filter((p) => p.slug?.trim());
-  const blogTarget = related.length >= MIN_BLOG ? MIN_BLOG : related.length;
+  const blogTarget = Math.min(MIN_BLOG, related.length);
   let ri = 0;
   while (countBlogPosts(simulated) < blogTarget && ri < related.length) {
     const p = related[ri]!;
@@ -224,6 +225,16 @@ export function injectInternalLinks(
         STANDARD_CLEANING_MONEY_PATH,
       );
     }
+  }
+
+  const evergreenLinks = [
+    { label: "View all cleaning services", url: "/services" },
+    { label: "Explore cleaning advice", url: "/blog" },
+    { label: "Contact Shalean", url: "/contact" },
+  ];
+  for (const evergreen of evergreenLinks) {
+    if (simulated.length >= MIN_TOTAL_INTERNAL_LINKS) break;
+    push(evergreen.label, evergreen.url);
   }
 
   if (toAdd.length === 0) return { ...content_json, blocks: baseBlocks };
