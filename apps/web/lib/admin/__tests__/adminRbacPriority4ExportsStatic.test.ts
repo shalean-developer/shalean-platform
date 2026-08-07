@@ -26,6 +26,22 @@ describe("Admin RBAC Priority 4 governed exports", () => {
     expect(source).toContain('event_type: "admin_export_completed"');
   });
 
+  it("customer list independently redacts revenue and exposes a capability flag", () => {
+    const source = read("app/api/admin/customers/scoped/route.ts");
+    expect(source).toContain('scope.permissions.includes("finance.customer_revenue.view")');
+    expect(source).toContain("delete next.total_spend_zar");
+    expect(source).toContain("capabilities: { customerRevenue: canViewCustomerRevenue }");
+  });
+
+  it("customer UI hides revenue and export actions when permissions are absent", () => {
+    const source = read("app/(ui-redesign)/office/customers/page.tsx");
+    expect(source).toContain('permissionsData?.permissions?.includes("customer.export")');
+    expect(source).toContain("data?.capabilities?.customerRevenue === true");
+    expect(source).toContain('fetch("/api/admin/customers/export"');
+    expect(source).toContain("{canExport ? (");
+    expect(source).toContain("{canViewCustomerRevenue ? (");
+  });
+
   it("bookings UI export helper no longer reads scoped booking pages directly", () => {
     const source = read("lib/admin/officeBookingsListExport.ts");
     expect(source).toContain("/api/admin/bookings/export?");
