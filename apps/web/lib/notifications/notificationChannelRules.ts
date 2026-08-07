@@ -1,13 +1,15 @@
 /**
- * Declarative channel fallback policy (Stripe-style).
+ * Declarative channel policy.
  *
- * Implemented in code today (`communicationPolicy.ts`):
- * - **SMS:** disabled globally unless `SMS_OUTBOUND_ENABLED=true`. When enabled, **cleaners only** (no admin/customer SMS).
- * - **Email:** **admin and customers only** — cleaner profile emails are synthetic auth addresses and must not receive mail.
- * - **Customer** `payment_confirmed`: email first; SMS paths remain in code but are blocked by policy; no customer WhatsApp.
- * - **Cleaner** `assigned` / `reminder_2h` / dispatch: SMS when re-enabled; WhatsApp where configured.
+ * Current production direction:
+ * - **WhatsApp:** primary phone notification channel for customers and cleaners when an approved template exists.
+ * - **SMS:** globally disabled by `communicationPolicy.ts`; there is no automatic SMS fallback.
+ * - **Email:** retained for customers/admin where existing flows already depend on it.
+ * - **Cleaner email:** disabled because cleaner profile emails are synthetic auth addresses.
  *
- * Future: mirror rows in a `notification_rules` table (event_type, primary_channel, fallback_channel) and hydrate here.
+ * Templates that are not Meta-approved remain fail-closed. Do not fall back to SMS
+ * simply because a WhatsApp template is pending/rejected; surface the delivery gap
+ * in notification monitoring instead.
  */
 export type NotificationChannel = "email" | "whatsapp" | "sms";
 
