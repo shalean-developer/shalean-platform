@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Search,
   Send,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import { adminFetch, useAdminData } from "@/hooks/useAdminData";
@@ -243,6 +244,13 @@ export default function TemplatesPage() {
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
             Refresh
           </button>
+          <Link
+            href="/office/templates/whatsapp"
+            className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-bold text-emerald-700 shadow-sm hover:bg-emerald-100"
+          >
+            <ShieldCheck className="h-4 w-4" />
+            WhatsApp readiness
+          </Link>
           <Link
             href="/office/templates/editor"
             className="flex items-center gap-2 rounded-xl bg-blue-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-blue-700"
