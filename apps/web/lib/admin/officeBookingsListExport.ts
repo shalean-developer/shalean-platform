@@ -66,34 +66,26 @@ export function downloadOfficeBookingsCsv(filename: string, csv: string): void {
 
 type ExportApiResponse = {
   bookings?: OfficeBookingsExportRow[];
-  pagination?: { totalPages: number };
+  error?: string;
 };
 
+/**
+ * Fetch export-safe booking rows through the dedicated permission-gated export
+ * endpoint. The server preserves branch/team scope, strips unauthorized finance
+ * fields, enforces bulk-export approval, and records the export audit event.
+ */
 export async function fetchAllOfficeBookingsForExport(
   params: Record<string, string>,
 ): Promise<OfficeBookingsExportRow[]> {
   const token = (await getSupabaseAccessToken()) ?? undefined;
   if (!token) throw new Error("Not authenticated");
 
-  const all: OfficeBookingsExportRow[] = [];
-  let page = 1;
-  let totalPages = 1;
-
-  while (page <= totalPages) {
-    const query = new URLSearchParams({ ...params, page: String(page), pageSize: "100" });
-    const res = await globalThis.fetch(`/api/admin/bookings/scoped?${query.toString()}`, {
-      headers: { Authorization: `Bearer ${token}` },
-      cache: "no-store",
-    });
-    if (!res.ok) {
-      const j = (await res.json().catch(() => ({}))) as { error?: string };
-      throw new Error(j.error ?? `Error ${res.status}`);
-    }
-    const json = (await res.json()) as ExportApiResponse;
-    all.push(...(json.bookings ?? []));
-    totalPages = Math.max(1, json.pagination?.totalPages ?? 1);
-    page += 1;
-  }
-
-  return all;
+  const query = new URLSearchParams({ ...params, format: "json" });
+  const res = await globalThis.fetch(`/api/admin/bookings/export?${query.toString()}`, {
+    headers: { Authorization: `Bearer ${token}` },
+    cache: "no-store",
+  });
+  const json = (await res.json().catch(() => ({}))) as ExportApiResponse;
+  if (!res.ok) throw new Error(json.error ?? `Error ${res.status}`);
+  return json.bookings ?? [];
 }
