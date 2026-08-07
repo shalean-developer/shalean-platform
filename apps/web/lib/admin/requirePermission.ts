@@ -64,6 +64,13 @@ export type PermissionAuthResult =
   | { ok: true; user: User; email: string; permission: AdminPermission }
   | { ok: false; response: NextResponse };
 
+type AuditInsertResult = { error: { code?: string } | null };
+type AuditInsertClient = {
+  from: (table: string) => {
+    insert: (values: Record<string, unknown>) => PromiseLike<AuditInsertResult>;
+  };
+};
+
 const AUDITED_ACCESS_PERMISSIONS = new Set<AdminPermission>([
   "cleaner.documents.view",
   "cleaner.bank.view",
@@ -88,7 +95,7 @@ function configuredClients() {
 }
 
 async function recordAuditedPermissionAccess(
-  adminClient: ReturnType<typeof createClient>,
+  adminClient: AuditInsertClient,
   request: Request,
   userId: string,
   permission: AdminPermission,
@@ -178,7 +185,7 @@ export async function requireAnyAdminPermissionFromRequest(
     }
     if (allowed === true) {
       const auditRecorded = await recordAuditedPermissionAccess(
-        clients.adminClient,
+        clients.adminClient as unknown as AuditInsertClient,
         request,
         user.id,
         permission,
