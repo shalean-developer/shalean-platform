@@ -18,6 +18,8 @@ type OverdueInvoiceRow = { id: string; due_date: string | null; balance_cents: n
 type CleanerApplicationRow = { id: string; name: string | null; location: string | null; city_id: string | null; status: string | null; created_at: string | null };
 type WhatsAppEventRow = { id: string; phone: string | null; direction: string | null; event_type: string | null; created_at: string | null };
 type CustomerBookingScopeRow = { normalized_phone: string | null; customer_phone: string | null; city_id: string | null; created_at: string | null };
+type BlogDraftRow = { id: string; slug: string | null; title: string | null; status: string | null; created_at: string | null; updated_at: string | null };
+type CampaignContentRow = { id: string; title: string | null; channel: string | null; status: string | null; created_at: string | null; updated_at: string | null };
 
 async function jsonFrom<T>(response: Response): Promise<T | null> {
   if (!response.ok) return null;
@@ -119,13 +121,7 @@ async function customerCareItems(permissions: ReadonlySet<string>, branchIds: re
   if (!admin) return [];
 
   const since = new Date(Date.now() - 7 * 24 * 60 * 60_000).toISOString();
-  const { data: eventData, error: eventError } = await admin
-    .from("whatsapp_provider_events")
-    .select("id,phone,direction,event_type,created_at")
-    .gte("created_at", since)
-    .in("event_type", ["message", "admin_reply"])
-    .order("created_at", { ascending: false })
-    .limit(250);
+  const { data: eventData, error: eventError } = await admin.from("whatsapp_provider_events").select("id,phone,direction,event_type,created_at").gte("created_at", since).in("event_type", ["message", "admin_reply"]).order("created_at", { ascending: false }).limit(250);
   if (eventError) {
     console.error("[my-work] WhatsApp Customer Care query failed", eventError.message);
     return [];
@@ -142,12 +138,7 @@ async function customerCareItems(permissions: ReadonlySet<string>, branchIds: re
   if (pending.length === 0) return [];
 
   const phoneKeys = pending.map(([phone]) => phone);
-  const { data: bookingData, error: bookingError } = await admin
-    .from("bookings")
-    .select("normalized_phone,customer_phone,city_id,created_at")
-    .or(phoneKeys.map((phone) => `normalized_phone.eq.${phone},customer_phone.eq.${phone}`).join(","))
-    .order("created_at", { ascending: false })
-    .limit(250);
+  const { data: bookingData, error: bookingError } = await admin.from("bookings").select("normalized_phone,customer_phone,city_id,created_at").or(phoneKeys.map((phone) => `normalized_phone.eq.${phone},customer_phone.eq.${phone}`).join(",")).order("created_at", { ascending: false }).limit(250);
   if (bookingError) console.error("[my-work] Customer Care booking scope query failed", bookingError.message);
 
   const cityByPhone = new Map<string, string | null>();
@@ -170,22 +161,70 @@ async function customerCareItems(permissions: ReadonlySet<string>, branchIds: re
     const overdue = waitMs >= 60 * 60_000;
     const critical = waitMs >= 4 * 60 * 60_000;
     const dueAt = Number.isFinite(occurredAtMs) ? new Date(occurredAtMs + 60 * 60_000).toISOString() : null;
-    return [{
-      id: `customer_care.whatsapp_reply:${event.id}`,
-      type: "customer_care.whatsapp_reply",
-      title: critical ? `WhatsApp customer ${maskedPhone(phone)} has waited over 4 hours` : `WhatsApp customer ${maskedPhone(phone)} needs a reply`,
-      summary: event.created_at ? `Latest inbound message received ${event.created_at}` : "Latest inbound WhatsApp message has no admin reply.",
-      priority: critical ? "critical" : overdue ? "high" : "medium",
-      status: overdue ? "overdue" : "open",
-      href: `/office/notifications?conversation=${encodeURIComponent(phone)}`,
-      actionLabel: "Reply on WhatsApp",
-      requiredPermission: "customer.contact",
-      occurredAt: event.created_at,
-      dueAt,
-      branchId,
-      teamId: null,
-    } satisfies OfficeWorkItem];
+    return [{ id: `customer_care.whatsapp_reply:${event.id}`, type: "customer_care.whatsapp_reply", title: critical ? `WhatsApp customer ${maskedPhone(phone)} has waited over 4 hours` : `WhatsApp customer ${maskedPhone(phone)} needs a reply`, summary: event.created_at ? `Latest inbound message received ${event.created_at}` : "Latest inbound WhatsApp message has no admin reply.", priority: critical ? "critical" : overdue ? "high" : "medium", status: overdue ? "overdue" : "open", href: `/office/notifications?conversation=${encodeURIComponent(phone)}`, actionLabel: "Reply on WhatsApp", requiredPermission: "customer.contact", occurredAt: event.created_at, dueAt, branchId, teamId: null } satisfies OfficeWorkItem];
   });
+}
+
+async function marketingItems(permissions: ReadonlySet<string>): Promise<OfficeWorkItem[]> {
+  const admin = getSupabaseAdmin();
+  if (!admin) return [];
+  const items: OfficeWorkItem[] = [];
+  const now = Date.now();
+
+  if (permissions.has("content.draft")) {
+    const { data, error } = await admin.from("blog_posts").select("id,slug,title,status,created_at,updated_at").eq("status", "draft").order("updated_at", { ascending: true }).limit(12);
+    if (error) console.error("[my-work] marketing blog draft query failed", error.message);
+    else for (const raw of data ?? []) {
+      const draft = raw as BlogDraftRow;
+      const touchedAt = draft.updated_at ?? draft.created_at;
+      const touchedMs = touchedAt ? Date.parse(touchedAt) : Number.NaN;
+      const overdue = Number.isFinite(touchedMs) && now - touchedMs >= 7 * 24 * 60 * 60_000;
+      items.push({
+        id: `marketing.blog_draft:${draft.id}`,
+        type: "marketing.blog_draft",
+        title: overdue ? `Blog draft needs attention: ${draft.title?.trim() || "Untitled draft"}` : `Blog draft ready to continue: ${draft.title?.trim() || "Untitled draft"}`,
+        summary: draft.slug ? `/blog/${draft.slug}` : "Draft blog post",
+        priority: overdue ? "high" : "medium",
+        status: overdue ? "overdue" : "open",
+        href: `/office/blog?post=${encodeURIComponent(draft.id)}`,
+        actionLabel: "Continue draft",
+        requiredPermission: "content.draft",
+        occurredAt: touchedAt,
+        dueAt: Number.isFinite(touchedMs) ? new Date(touchedMs + 7 * 24 * 60 * 60_000).toISOString() : null,
+        branchId: null,
+        teamId: null,
+      });
+    }
+  }
+
+  if (permissions.has("content.publish")) {
+    const { data, error } = await admin.from("campaign_content").select("id,title,channel,status,created_at,updated_at").eq("status", "ready").order("updated_at", { ascending: true }).limit(12);
+    if (error) console.error("[my-work] marketing campaign-ready query failed", error.message);
+    else for (const raw of data ?? []) {
+      const content = raw as CampaignContentRow;
+      const touchedAt = content.updated_at ?? content.created_at;
+      const touchedMs = touchedAt ? Date.parse(touchedAt) : Number.NaN;
+      const overdue = Number.isFinite(touchedMs) && now - touchedMs >= 3 * 24 * 60 * 60_000;
+      const channel = cleanLabel(content.channel) || "Campaign";
+      items.push({
+        id: `marketing.campaign_ready:${content.id}`,
+        type: "marketing.campaign_ready",
+        title: `${channel} content ready for publishing review`,
+        summary: content.title?.trim() || "Campaign content is ready for review.",
+        priority: overdue ? "high" : "medium",
+        status: overdue ? "overdue" : "open",
+        href: `/office/marketing?content=${encodeURIComponent(content.id)}`,
+        actionLabel: "Review campaign",
+        requiredPermission: "content.publish",
+        occurredAt: touchedAt,
+        dueAt: Number.isFinite(touchedMs) ? new Date(touchedMs + 3 * 24 * 60 * 60_000).toISOString() : null,
+        branchId: null,
+        teamId: null,
+      });
+    }
+  }
+
+  return items;
 }
 
 export async function GET(request: Request) {
@@ -207,6 +246,7 @@ export async function GET(request: Request) {
   if (permissions.has("finance.full.view") || permissions.has("payout.prepare")) items.push(...(await financeItems(permissions)));
   if (permissions.has("application.decide")) items.push(...(await workforceItems(permissions)));
   if (permissions.has("customer.contact")) items.push(...(await customerCareItems(permissions, permissionPayload.branchIds ?? [])));
+  if (permissions.has("content.draft") || permissions.has("content.publish")) items.push(...(await marketingItems(permissions)));
 
   const safeItems = sortOfficeWorkItems(items.filter((item) => canReceiveOfficeWorkItem(item, permissions))).slice(0, 30);
   const counts = safeItems.reduce<Record<string, number>>((acc, item) => { acc[item.priority] = (acc[item.priority] ?? 0) + 1; return acc; }, {});
