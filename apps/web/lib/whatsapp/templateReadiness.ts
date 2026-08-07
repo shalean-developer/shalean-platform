@@ -9,6 +9,8 @@ export type WhatsAppTemplateReadiness = {
   audience: "customer" | "cleaner";
   category: "UTILITY" | "MARKETING";
   language: "en";
+  variables: readonly string[];
+  body: string;
   metaTemplateName: string;
   mappingSource: "env" | "default";
   approvalStatus: MetaTemplateApprovalStatus;
@@ -43,6 +45,8 @@ export function getWhatsAppTemplateReadiness(): WhatsAppTemplateReadiness[] {
       audience: spec.audience,
       category: spec.category,
       language: spec.language,
+      variables: spec.variables,
+      body: spec.body,
       metaTemplateName,
       mappingSource: envName ? "env" : "default",
       approvalStatus,
