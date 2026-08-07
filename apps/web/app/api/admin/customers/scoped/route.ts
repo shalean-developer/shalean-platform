@@ -47,6 +47,9 @@ async function customerIdsForBranches(
  * branch assignments retain full access. Restricted admins see customers with
  * at least one booking in an assigned branch. A restricted admin with no branch
  * assignment fails closed to an empty customer list.
+ *
+ * Customer revenue is independently redacted unless the signed-in account has
+ * `finance.customer_revenue.view`; customer-list access alone never grants it.
  */
 export async function GET(request: Request) {
   const token = bearerToken(request);
@@ -86,6 +89,7 @@ export async function GET(request: Request) {
   try {
     const rows = await loadAdminCustomersList(adminClient);
     const wildcard = scope.isOwner || scope.branches.includes("*");
+    const canViewCustomerRevenue = scope.permissions.includes("finance.customer_revenue.view");
 
     let scopedRows = rows;
     if (!wildcard) {
@@ -97,17 +101,22 @@ export async function GET(request: Request) {
       }
     }
 
-    const customers = scopedRows.map((customer) => ({
-      ...customer,
-      totalBookings: customer.total_bookings,
-      totalSpendZar: customer.total_spend_zar,
-      lastBookingAt: customer.last_booking_at,
-    }));
+    const customers = scopedRows.map((customer) => {
+      const next = {
+        ...customer,
+        totalBookings: customer.total_bookings,
+        totalSpendZar: canViewCustomerRevenue ? customer.total_spend_zar : undefined,
+        lastBookingAt: customer.last_booking_at,
+      } as Record<string, unknown>;
+      if (!canViewCustomerRevenue) delete next.total_spend_zar;
+      return next;
+    });
 
     return NextResponse.json(
       {
         customers,
         scope: { isOwner: scope.isOwner, branches: scope.branches },
+        capabilities: { customerRevenue: canViewCustomerRevenue },
       },
       { headers: { "Cache-Control": "private, no-store" } },
     );
