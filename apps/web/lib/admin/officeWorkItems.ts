@@ -4,7 +4,8 @@ export type OfficeWorkItemType =
   | "booking.assignment"
   | "system.cron"
   | "finance.invoice_overdue"
-  | "finance.payout_prepare";
+  | "finance.payout_prepare"
+  | "workforce.application";
 export type OfficeWorkItemPriority = "critical" | "high" | "medium" | "low";
 export type OfficeWorkItemStatus = "open" | "overdue" | "blocked";
 
@@ -34,6 +35,7 @@ export const OFFICE_WORK_ITEM_POLICIES: Record<OfficeWorkItemType, WorkItemPolic
   "system.cron": { permission: "ops.health.view", hrefPrefix: "/office/ops-health" },
   "finance.invoice_overdue": { permission: "finance.full.view", hrefPrefix: "/office/invoices" },
   "finance.payout_prepare": { permission: "payout.prepare", hrefPrefix: "/office/payouts" },
+  "workforce.application": { permission: "application.decide", hrefPrefix: "/office/cleaner-applications" },
 };
 
 export function isKnownOfficeWorkItemType(value: string): value is OfficeWorkItemType {
