@@ -1,0 +1,52 @@
+name: Admin RBAC Priority 4
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/app/api/admin/bookings/export/**"
+      - "apps/web/app/api/admin/customers/export/**"
+      - "apps/web/app/api/admin/customers/scoped/**"
+      - "apps/web/app/api/admin/cleaner-applications/**"
+      - "apps/web/app/api/admin/my-work/**"
+      - "apps/web/lib/admin/officeBookingsListExport.ts"
+      - "apps/web/lib/admin/officeExperience.ts"
+      - "apps/web/lib/admin/officeWorkItems.ts"
+      - "apps/web/lib/admin/__tests__/adminRbacPriority4*.test.ts"
+      - "apps/web/lib/admin/__tests__/officeExperience.test.ts"
+      - "apps/web/lib/admin/__tests__/officeWorkItems.test.ts"
+      - "apps/web/src/features/office/OfficePermissionNavigationGate.tsx"
+      - "apps/web/src/features/office/OfficeMyWorkPanel.tsx"
+      - ".github/workflows/admin-rbac-priority4.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  priority-4-definition-of-done:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci --ignore-scripts
+      - name: Run Priority 4 regression and role-matrix tests
+        working-directory: apps/web
+        run: >-
+          npx vitest run
+          lib/admin/__tests__/adminRbacPriority4ExportsStatic.test.ts
+          lib/admin/__tests__/adminRbacPriority4FinanceQueueStatic.test.ts
+          lib/admin/__tests__/adminRbacPriority4WorkforceMyWork.test.ts
+          lib/admin/__tests__/adminRbacPriority4CustomerCareMyWork.test.ts
+          lib/admin/__tests__/adminRbacPriority4MarketingMyWork.test.ts
+          lib/admin/__tests__/adminRbacPriority4DefinitionOfDone.test.ts
+          lib/admin/__tests__/officeExperience.test.ts
+          lib/admin/__tests__/officeWorkItems.test.ts
+      - name: Typecheck
+        working-directory: apps/web
+        run: npm run typecheck

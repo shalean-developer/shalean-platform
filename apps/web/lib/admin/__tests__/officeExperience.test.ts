@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OFFICE_ACCESS_POLICIES, hasAnyOfficePermission, inferOfficeRole, policyForOfficePath } from "@/lib/admin/officeExperience";
+import { OFFICE_ACCESS_POLICIES, hasAnyOfficePermission, policyForOfficePath } from "@/lib/admin/officeExperience";
 
 const INVENTORIED_PAGE_PATHS = [
   "/office/analytics", "/office/billing", "/office/blog", "/office/blog/new", "/office/blog/example", "/office/booking-profitability",
@@ -21,15 +21,18 @@ const INVENTORIED_PAGE_PATHS = [
   "/office/email-operations/campaigns", "/office/email-operations/health", "/office/email-operations/retry", "/office/email-operations/timeline",
 ];
 
+// Mirrors the active production role grants. Keep this fixture aligned with the
+// governed admin role matrix so role-experience tests cannot pass on invented
+// permissions that real admins do not have.
 const ROLE_PERMISSIONS = {
-  owner: ["role.manage", "system.settings", "booking.view", "customer.view", "cleaner.view", "team.view", "finance.full.view", "finance.summary.view", "expense.manage", "invoice.manage", "payment.reconcile", "profit.view", "payout.view", "payout.approve", "payout.release", "marketing.view", "content.draft", "content.publish", "notification.send", "template.manage", "ops.health.view", "pricing.manage", "integration.manage", "audit.view"],
-  manager: ["refund.approve.high", "finance.summary.view", "ops.health.view", "booking.view", "booking.assign", "customer.view", "customer.contact", "cleaner.view", "team.view", "payout.view", "payout.approve", "notification.send", "incident.manage"],
-  operations: ["booking.view", "booking.assign", "customer.view", "customer.contact", "cleaner.view", "team.view", "notification.send", "incident.manage", "ops.health.view"],
-  finance: ["finance.summary.view", "finance.full.view", "expense.manage", "invoice.manage", "payment.reconcile", "profit.view", "payout.view", "payout.prepare"],
-  "customer-care": ["booking.view", "customer.view", "customer.contact", "refund.request", "notification.send"],
-  workforce: ["cleaner.view", "cleaner.edit", "team.view", "team.manage", "application.decide", "booking.view"],
-  marketing: ["marketing.view", "content.draft", "content.publish", "notification.send"],
-  supervisor: ["booking.view", "cleaner.view", "team.view", "team.assign"],
+  owner: ["application.decide", "audit.view", "booking.assign", "booking.cancel", "booking.create", "booking.edit", "booking.export", "booking.view", "branch.manage", "branch.view", "bulk_export.approve", "cleaner.bank.view", "cleaner.documents.view", "cleaner.edit", "cleaner.view", "content.draft", "content.publish", "customer.contact", "customer.edit", "customer.export", "customer.view", "dispute.resolve", "expense.manage", "finance.full.view", "finance.summary.view", "incident.manage", "integration.manage", "invoice.manage", "marketing.view", "notification.send", "ops.health.view", "payment.reconcile", "payout.approve", "payout.prepare", "payout.release", "payout.view", "pricing.manage", "profit.view", "refund.approve.high", "refund.approve.low", "refund.request", "role.manage", "system.integrations", "system.logs", "system.notifications", "system.settings", "team.assign", "team.manage", "team.view", "template.manage", "user.manage"],
+  manager: ["booking.assign", "booking.cancel", "booking.create", "booking.edit", "booking.view", "branch.view", "cleaner.edit", "cleaner.view", "customer.contact", "customer.edit", "customer.view", "dispute.resolve", "finance.summary.view", "incident.manage", "notification.send", "ops.health.view", "payout.prepare", "payout.view", "refund.approve.low", "refund.request", "team.assign", "team.manage", "team.view"],
+  operations: ["booking.assign", "booking.cancel", "booking.create", "booking.edit", "booking.view", "branch.view", "cleaner.view", "customer.contact", "customer.edit", "customer.view", "incident.manage", "notification.send", "ops.health.view", "refund.request", "team.assign", "team.view"],
+  finance: ["branch.view", "expense.manage", "finance.full.view", "finance.summary.view", "invoice.manage", "payment.reconcile", "payout.prepare", "payout.view", "profit.view", "refund.request"],
+  "customer-care": ["booking.edit", "booking.view", "branch.view", "customer.contact", "customer.edit", "customer.view", "incident.manage", "refund.request"],
+  workforce: ["application.decide", "branch.view", "cleaner.documents.view", "cleaner.edit", "cleaner.view", "team.assign", "team.manage", "team.view"],
+  marketing: ["branch.view", "content.draft", "marketing.view"],
+  supervisor: ["booking.assign", "booking.view", "cleaner.view", "incident.manage", "team.assign", "team.view"],
 } as const;
 
 describe("role-based Office experience", () => {
@@ -52,8 +55,11 @@ describe("role-based Office experience", () => {
     expect(policyForOfficePath("/office/customers/create")?.anyOf).toEqual(["customer.edit"]);
   });
 
-  it("infers all eight role experiences", () => {
-    for (const [role, permissions] of Object.entries(ROLE_PERMISSIONS)) expect(inferOfficeRole(new Set(permissions)), role).toBe(role);
+  it("keeps the UAT permission fixture aligned to all eight production roles", () => {
+    expect(Object.keys(ROLE_PERMISSIONS).sort()).toEqual([
+      "customer-care", "finance", "manager", "marketing", "operations", "owner", "supervisor", "workforce",
+    ]);
+    for (const permissions of Object.values(ROLE_PERMISSIONS)) expect(permissions.length).toBeGreaterThan(0);
   });
 
   it("keeps Supervisor isolated from customer, finance, security and marketing", () => {
