@@ -63,16 +63,46 @@ export function WhatsAppInbox() {
   }
 
   useEffect(() => {
-    void load();
-    const interval = globalThis.setInterval(() => {
-      if (document.visibilityState === "visible") void load({ silent: true });
-    }, 3000);
-    const onVisibility = () => {
-      if (document.visibilityState === "visible") void load({ silent: true });
+    let cancelled = false;
+    let timer: ReturnType<typeof globalThis.setTimeout> | null = null;
+    let pollInFlight = false;
+
+    const schedule = () => {
+      if (cancelled) return;
+      timer = globalThis.setTimeout(() => { void poll(); }, 3000);
     };
+
+    const poll = async () => {
+      if (cancelled || pollInFlight) return;
+      if (document.visibilityState !== "visible") {
+        schedule();
+        return;
+      }
+      pollInFlight = true;
+      try {
+        await load({ silent: true });
+      } finally {
+        pollInFlight = false;
+        schedule();
+      }
+    };
+
+    void (async () => {
+      await load();
+      schedule();
+    })();
+
+    const onVisibility = () => {
+      if (document.visibilityState !== "visible") return;
+      if (timer) globalThis.clearTimeout(timer);
+      timer = null;
+      void poll();
+    };
+
     document.addEventListener("visibilitychange", onVisibility);
     return () => {
-      globalThis.clearInterval(interval);
+      cancelled = true;
+      if (timer) globalThis.clearTimeout(timer);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
