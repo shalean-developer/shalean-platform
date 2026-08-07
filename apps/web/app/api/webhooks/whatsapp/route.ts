@@ -74,9 +74,11 @@ export async function POST(request: Request) {
     const from = normalizePhone(inbound.from);
 
     // Persist every real inbound message before business-specific cleaner reply handling.
-    // The provider_event_id unique index makes Meta webhook retries idempotent.
+    // The table uses a partial unique index for provider + provider_event_id, so use
+    // insert-and-ignore-duplicate rather than PostgREST upsert(onConflict), which requires
+    // a matching non-partial unique constraint.
     if (from && inbound.messageId) {
-      await admin.from("whatsapp_provider_events").upsert({
+      const { error: persistError } = await admin.from("whatsapp_provider_events").insert({
         provider: "meta",
         provider_event_id: inbound.messageId,
         provider_message_id: inbound.messageId,
@@ -90,7 +92,22 @@ export async function POST(request: Request) {
           context_message_id: inbound.contextMessageId ?? null,
         },
         processed_at: new Date().toISOString(),
-      }, { onConflict: "provider,provider_event_id", ignoreDuplicates: true });
+      });
+
+      if (persistError && persistError.code !== "23505") {
+        await logSystemEvent({
+          level: "error",
+          source: "whatsapp_inbox_persist",
+          message: "Failed to persist inbound WhatsApp message",
+          context: {
+            provider: "meta",
+            message_id: inbound.messageId,
+            phone_tail: from.replace(/\D/g, "").slice(-4),
+            error: persistError.message,
+            code: persistError.code,
+          },
+        });
+      }
     }
 
     const reply = normalizeCleanerReplyText(inbound.body);
