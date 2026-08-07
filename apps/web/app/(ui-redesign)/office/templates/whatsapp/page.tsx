@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import {
   AlertCircle,
   ArrowLeft,
@@ -18,6 +18,7 @@ import { cn } from "@/lib/utils";
 
 type ApprovalStatus = "unknown" | "pending" | "approved" | "rejected";
 type Audience = "customer" | "cleaner";
+type ReadinessIcon = ComponentType<{ className?: string }>;
 
 type ReadinessItem = {
   key: string;
@@ -43,7 +44,7 @@ type ReadinessResponse = {
   templates: ReadinessItem[];
 };
 
-const STATUS_CONFIG: Record<ApprovalStatus, { label: string; className: string; icon: typeof CheckCircle2 }> = {
+const STATUS_CONFIG: Record<ApprovalStatus, { label: string; className: string; icon: ReadinessIcon }> = {
   approved: { label: "Approved", className: "bg-emerald-100 text-emerald-700", icon: CheckCircle2 },
   pending: { label: "Pending", className: "bg-amber-100 text-amber-700", icon: Clock3 },
   rejected: { label: "Rejected", className: "bg-red-100 text-red-700", icon: XCircle },
@@ -59,7 +60,7 @@ function SummaryCard({
   label: string;
   value: number;
   helper: string;
-  icon: typeof CheckCircle2;
+  icon: ReadinessIcon;
 }) {
   return (
     <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
