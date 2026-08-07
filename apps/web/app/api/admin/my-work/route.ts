@@ -4,6 +4,7 @@ import { GET as getCronHealth } from "@/app/api/admin/cron-health/route";
 import { GET as getMyPermissions } from "@/app/api/admin/security/my-permissions/route";
 import { canReceiveOfficeWorkItem, sortOfficeWorkItems, type OfficeWorkItem } from "@/lib/admin/officeWorkItems";
 import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,6 +31,14 @@ type CronJob = {
   last_run_message?: string | null;
 };
 type CronPayload = { jobs?: CronJob[] };
+type OverdueInvoiceRow = {
+  id: string;
+  due_date: string | null;
+  balance_cents: number | null;
+  total_amount_cents: number | null;
+  currency_code: string | null;
+  updated_at: string | null;
+};
 
 async function jsonFrom<T>(response: Response): Promise<T | null> {
   if (!response.ok) return null;
@@ -54,6 +63,10 @@ function cleanLabel(value: string | null | undefined): string | null {
 
 function shortReference(id: string): string {
   return id.length > 8 ? id.slice(0, 8).toUpperCase() : id.toUpperCase();
+}
+
+function formatZar(cents: number | null | undefined): string {
+  return `R ${Math.round(Number(cents ?? 0) / 100).toLocaleString("en-ZA")}`;
 }
 
 function bookingItems(rows: BookingRow[], permissions: ReadonlySet<string>): OfficeWorkItem[] {
@@ -119,6 +132,89 @@ function cronItems(jobs: CronJob[], permissions: ReadonlySet<string>): OfficeWor
   });
 }
 
+async function financeItems(permissions: ReadonlySet<string>): Promise<OfficeWorkItem[]> {
+  const admin = getSupabaseAdmin();
+  if (!admin) return [];
+
+  const items: OfficeWorkItem[] = [];
+
+  if (permissions.has("finance.full.view")) {
+    const { data, error } = await admin
+      .from("monthly_invoices")
+      .select("id,due_date,balance_cents,total_amount_cents,currency_code,updated_at")
+      .eq("is_overdue", true)
+      .eq("is_closed", false)
+      .gt("balance_cents", 0)
+      .order("due_date", { ascending: true })
+      .limit(12);
+
+    if (error) {
+      console.error("[my-work] overdue invoice query failed", error.message);
+    } else {
+      for (const raw of data ?? []) {
+        const invoice = raw as OverdueInvoiceRow;
+        items.push({
+          id: `finance.invoice_overdue:${invoice.id}`,
+          type: "finance.invoice_overdue",
+          title: `Invoice ${shortReference(invoice.id)} is overdue`,
+          summary: `${formatZar(invoice.balance_cents)} outstanding${invoice.due_date ? ` · due ${invoice.due_date}` : ""}`,
+          priority: "high",
+          status: "overdue",
+          href: `/office/invoices/${invoice.id}`,
+          actionLabel: "Review invoice",
+          requiredPermission: "finance.full.view",
+          occurredAt: invoice.updated_at,
+          dueAt: invoice.due_date ? `${invoice.due_date}T23:59:59+02:00` : null,
+          branchId: null,
+          teamId: null,
+        });
+      }
+    }
+  }
+
+  if (permissions.has("payout.prepare")) {
+    const { data, error } = await admin
+      .from("cleaner_earnings")
+      .select("id,amount_cents,approved_at")
+      .eq("status", "approved")
+      .is("disbursement_id", null)
+      .order("approved_at", { ascending: true })
+      .limit(500);
+
+    if (error) {
+      console.error("[my-work] payout preparation query failed", error.message);
+    } else {
+      const earnings = data ?? [];
+      if (earnings.length > 0) {
+        const totalCents = earnings.reduce(
+          (sum, row) => sum + Number((row as { amount_cents?: number | null }).amount_cents ?? 0),
+          0,
+        );
+        const firstApprovedAt = String(
+          (earnings[0] as { approved_at?: string | null }).approved_at ?? "",
+        ) || null;
+        items.push({
+          id: "finance.payout_prepare:approved-unbatched",
+          type: "finance.payout_prepare",
+          title: `${earnings.length} approved earning${earnings.length === 1 ? "" : "s"} ready for payout`,
+          summary: `${formatZar(totalCents)} approved and not yet batched`,
+          priority: "high",
+          status: "open",
+          href: "/office/payouts",
+          actionLabel: "Prepare payouts",
+          requiredPermission: "payout.prepare",
+          occurredAt: firstApprovedAt,
+          dueAt: null,
+          branchId: null,
+          teamId: null,
+        });
+      }
+    }
+  }
+
+  return items;
+}
+
 export async function GET(request: Request) {
   const permissionResponse = await getMyPermissions(
     derivedRequest(request, "/api/admin/security/my-permissions"),
@@ -147,6 +243,10 @@ export async function GET(request: Request) {
       await getCronHealth(derivedRequest(request, "/api/admin/cron-health")),
     );
     if (cronPayload?.jobs) items.push(...cronItems(cronPayload.jobs, permissions));
+  }
+
+  if (permissions.has("finance.full.view") || permissions.has("payout.prepare")) {
+    items.push(...(await financeItems(permissions)));
   }
 
   const safeItems = sortOfficeWorkItems(

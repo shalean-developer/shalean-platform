@@ -1,6 +1,10 @@
 import type { AdminPermission } from "@/lib/admin/requirePermission";
 
-export type OfficeWorkItemType = "booking.assignment" | "system.cron";
+export type OfficeWorkItemType =
+  | "booking.assignment"
+  | "system.cron"
+  | "finance.invoice_overdue"
+  | "finance.payout_prepare";
 export type OfficeWorkItemPriority = "critical" | "high" | "medium" | "low";
 export type OfficeWorkItemStatus = "open" | "overdue" | "blocked";
 
@@ -28,6 +32,8 @@ type WorkItemPolicy = {
 export const OFFICE_WORK_ITEM_POLICIES: Record<OfficeWorkItemType, WorkItemPolicy> = {
   "booking.assignment": { permission: "booking.assign", hrefPrefix: "/office/bookings" },
   "system.cron": { permission: "ops.health.view", hrefPrefix: "/office/ops-health" },
+  "finance.invoice_overdue": { permission: "finance.full.view", hrefPrefix: "/office/invoices" },
+  "finance.payout_prepare": { permission: "payout.prepare", hrefPrefix: "/office/payouts" },
 };
 
 export function isKnownOfficeWorkItemType(value: string): value is OfficeWorkItemType {
