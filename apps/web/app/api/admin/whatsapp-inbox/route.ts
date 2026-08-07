@@ -54,23 +54,43 @@ export async function GET(request: Request) {
   });
 
   const phones = [...new Set(messages.map((m) => String(m.phone ?? "").replace(/\D/g, "")).filter(Boolean))];
-  const contacts: Record<string, { name: string | null; bookingId: string | null; bookingReference: string | null }> = {};
-  for (const phone of phones.slice(0, 100)) {
-    const variants = southAfricaPhoneLookupVariants(phone);
-    const { data: booking } = await admin
+  const contactPhones = phones.slice(0, 100);
+  const contacts: Record<string, { name: string | null; bookingId: string | null; bookingReference: string | null }> = Object.fromEntries(
+    contactPhones.map((phone) => [phone, { name: null, bookingId: null, bookingReference: null }]),
+  );
+
+  // Resolve customer identities in one booking query rather than one query per conversation.
+  // This endpoint is polled by the live inbox, so avoiding an N+1 lookup is important.
+  const variantOwner = new Map<string, string>();
+  const allVariants = new Set<string>();
+  for (const phone of contactPhones) {
+    for (const variant of southAfricaPhoneLookupVariants(phone)) {
+      if (!variant) continue;
+      allVariants.add(variant);
+      if (!variantOwner.has(variant)) variantOwner.set(variant, phone);
+    }
+  }
+
+  if (allVariants.size > 0) {
+    const { data: bookings, error: bookingError } = await admin
       .from("bookings")
-      .select("id,booking_reference,customer_name,customer_phone")
-      .in("customer_phone", variants)
+      .select("id,booking_reference,customer_name,customer_phone,created_at")
+      .in("customer_phone", [...allVariants])
       .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    contacts[phone] = booking
-      ? {
+      .limit(500);
+
+    if (!bookingError) {
+      for (const booking of bookings ?? []) {
+        const customerPhone = String((booking as { customer_phone?: string | null }).customer_phone ?? "");
+        const ownerPhone = variantOwner.get(customerPhone);
+        if (!ownerPhone || contacts[ownerPhone]?.bookingId) continue;
+        contacts[ownerPhone] = {
           name: String((booking as { customer_name?: string | null }).customer_name ?? "").trim() || null,
           bookingId: String((booking as { id?: string | null }).id ?? "").trim() || null,
           bookingReference: String((booking as { booking_reference?: string | null }).booking_reference ?? "").trim() || null,
-        }
-      : { name: null, bookingId: null, bookingReference: null };
+        };
+      }
+    }
   }
 
   const latestInboundByPhone: Record<string, string> = {};
