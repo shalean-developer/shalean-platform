@@ -1,0 +1,81 @@
+{
+  "at": "2026-07-17T16:05:00Z",
+  "program": "MKT-001G",
+  "decision": "CONDITIONAL / INCOMPLETE — operator Instagram I1–I9 + Facebook regression smoke pending",
+  "pr": {
+    "number": 55,
+    "url": "https://github.com/shalean-developer/shalean-platform/pull/55",
+    "mergedAt": "2026-07-17T15:51:15Z",
+    "mergeCommit": "b692b4dc6dd77b45d23f94bfa5ee762979e9f616",
+    "base": "staging"
+  },
+  "ci": {
+    "vitestJob": "RED — only Live internal link crawl (OPS-CI-001 / issue #49)",
+    "productGates": "PASS — critical, revenue-path, typecheck, migration governance, GitGuardian, Vercel preview",
+    "classification": "Same as MKT-001C/D/E/F staging merges; staging not under main required-checks ruleset"
+  },
+  "migration": {
+    "project": "gbgnemlpyykyhpqqbgru",
+    "name": "mkt_001g_instagram_ledger_provider",
+    "remoteVersion": "20260717155135",
+    "constraints": {
+      "marketing_publish_idempotency_provider_check": "facebook|google_business|instagram",
+      "social_publish_jobs_provider_check": "facebook|google_business|instagram"
+    },
+    "scope": "staging only — production untouched"
+  },
+  "providerFlags": {
+    "scope": "Vercel Preview + gitBranch=staging",
+    "MARKETING_PROVIDER_FACEBOOK": "1",
+    "MARKETING_PROVIDER_INSTAGRAM": "1",
+    "MARKETING_PROVIDER_GOOGLE_BUSINESS": "0",
+    "productionScopeChanged": false
+  },
+  "deployment": {
+    "mergeDeploy": "dpl_C9fGbGnfDyqsY2RvprP6dd2mrg3Y",
+    "envRedeploy": "dpl_AtCM1tpr1TcDcrkdRuJWEbzkSZpX",
+    "sha": "b692b4dc6dd77b45d23f94bfa5ee762979e9f616",
+    "exactMatch": true,
+    "readyState": "READY",
+    "branchAlias": "https://shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+    "inspector": "https://vercel.com/shalean-cleaning-services/shalean-platform/AtCM1tpr1TcDcrkdRuJWEbzkSZpX"
+  },
+  "health": {
+    "path": "/api/health/environment",
+    "timestamp": "2026-07-17T16:03:05.108Z",
+    "status": "ok",
+    "deployment": "staging",
+    "gitBranch": "staging",
+    "shaleanAppEnv": "staging",
+    "supabaseConfiguredRef": "gbgnemlpyykyhpqqbgru",
+    "issues": []
+  },
+  "queue": {
+    "queuedOrLeased": 0,
+    "byProviderStatus": {
+      "facebook": { "succeeded": 2, "retryable": 1, "dead_letter": 4 },
+      "instagram": {}
+    },
+    "note": "Facebook DLQ rows are pre-existing MKT-001B.2 smoke (expired session tokens). No Instagram jobs yet."
+  },
+  "socialAccounts": {
+    "facebook": 0,
+    "instagram": 0,
+    "note": "No Page-linked Instagram (or Facebook) social_accounts rows on staging — connect smoke required"
+  },
+  "runtimeLogs": {
+    "deploymentId": "dpl_AtCM1tpr1TcDcrkdRuJWEbzkSZpX",
+    "window": "6h",
+    "errorFatalCount": 0
+  },
+  "operatorPending": {
+    "instagramSmoke": ["I1", "I2", "I3", "I4", "I5", "I6", "I7", "I8", "I9"],
+    "facebookRegression": ["F-S1"],
+    "blocker": "Admin session + Facebook Login / Page-linked Instagram Professional account required; diagnose routes return 401 without admin auth"
+  },
+  "production": {
+    "authorized": false,
+    "mergeShaIsAncestorOfMain": false,
+    "mainTip": "ad5b4ccb242f2e1a3c4a98edf421820324a8e18e"
+  }
+}
