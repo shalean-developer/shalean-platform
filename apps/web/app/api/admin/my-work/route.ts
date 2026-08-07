@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { GET as getScopedBookings } from "@/app/api/admin/bookings/scoped/route";
 import { GET as getCronHealth } from "@/app/api/admin/cron-health/route";
+import { GET as getCleanerApplications } from "@/app/api/admin/cleaner-applications/route";
 import { GET as getMyPermissions } from "@/app/api/admin/security/my-permissions/route";
 import { canReceiveOfficeWorkItem, sortOfficeWorkItems, type OfficeWorkItem } from "@/lib/admin/officeWorkItems";
 import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
@@ -30,6 +31,14 @@ type CronJob = {
   last_run_message?: string | null;
 };
 type CronPayload = { jobs?: CronJob[] };
+type CleanerApplication = {
+  id?: string;
+  name?: string | null;
+  location?: string | null;
+  status?: string | null;
+  created_at?: string | null;
+};
+type CleanerApplicationsPayload = { applications?: CleanerApplication[] };
 
 async function jsonFrom<T>(response: Response): Promise<T | null> {
   if (!response.ok) return null;
@@ -73,9 +82,7 @@ function bookingItems(rows: BookingRow[], permissions: ReadonlySet<string>): Off
       return {
         id: `booking.assignment:${id}`,
         type: "booking.assignment",
-        title: overdue
-          ? `Overdue booking ${shortReference(id)} needs a team`
-          : `Booking ${shortReference(id)} needs team allocation`,
+        title: overdue ? `Overdue booking ${shortReference(id)} needs a team` : `Booking ${shortReference(id)} needs team allocation`,
         summary: context,
         priority: overdue ? "critical" : row.date === today ? "high" : "medium",
         status: overdue ? "overdue" : "open",
@@ -99,59 +106,84 @@ function cronItems(jobs: CronJob[], permissions: ReadonlySet<string>): OfficeWor
     const stale = !last || now - last > 30 * 60_000;
     const failed = job.last_run_status === "error";
     if (!stale && !failed) return [];
-    return [
-      {
-        id: `system.cron:${job.job_name}`,
-        type: "system.cron",
-        title: failed ? `${job.job_name} failed` : `${job.job_name} is stale`,
-        summary: job.last_run_message || "The scheduled process needs operational review.",
-        priority: failed ? "critical" : "high",
-        status: failed ? "blocked" : "overdue",
-        href: "/office/ops-health",
-        actionLabel: "Review system health",
-        requiredPermission: "ops.health.view",
-        occurredAt: job.last_run_at ?? null,
-        dueAt: null,
-        branchId: null,
-        teamId: null,
-      } satisfies OfficeWorkItem,
-    ];
+    return [{
+      id: `system.cron:${job.job_name}`,
+      type: "system.cron",
+      title: failed ? `${job.job_name} failed` : `${job.job_name} is stale`,
+      summary: job.last_run_message || "The scheduled process needs operational review.",
+      priority: failed ? "critical" : "high",
+      status: failed ? "blocked" : "overdue",
+      href: "/office/ops-health",
+      actionLabel: "Review system health",
+      requiredPermission: "ops.health.view",
+      occurredAt: job.last_run_at ?? null,
+      dueAt: null,
+      branchId: null,
+      teamId: null,
+    } satisfies OfficeWorkItem];
   });
 }
 
+function workforceApplicationItems(rows: CleanerApplication[], permissions: ReadonlySet<string>): OfficeWorkItem[] {
+  if (!permissions.has("application.decide")) return [];
+  const now = Date.now();
+  return rows
+    .filter((row) => row.id && String(row.status ?? "").toLowerCase() === "pending")
+    .slice(0, 25)
+    .map((row) => {
+      const createdAt = row.created_at ?? null;
+      const ageMs = createdAt ? Math.max(0, now - Date.parse(createdAt)) : 0;
+      const overdue = ageMs >= 2 * 24 * 60 * 60_000;
+      const name = row.name?.trim() || "Cleaner applicant";
+      const location = row.location?.trim() || "Location not recorded";
+      return {
+        id: `workforce.application:${row.id}`,
+        type: "workforce.application",
+        title: overdue ? `${name} application needs review` : `New cleaner application from ${name}`,
+        summary: `${location}${createdAt ? ` • Applied ${createdAt.slice(0, 10)}` : ""}`,
+        priority: overdue ? "high" : "medium",
+        status: overdue ? "overdue" : "open",
+        href: `/office/cleaner-applications?application=${encodeURIComponent(row.id as string)}`,
+        actionLabel: "Review application",
+        requiredPermission: "application.decide",
+        occurredAt: createdAt,
+        dueAt: createdAt ? new Date(Date.parse(createdAt) + 2 * 24 * 60 * 60_000).toISOString() : null,
+        branchId: null,
+        teamId: null,
+      } satisfies OfficeWorkItem;
+    });
+}
+
 export async function GET(request: Request) {
-  const permissionResponse = await getMyPermissions(
-    derivedRequest(request, "/api/admin/security/my-permissions"),
-  );
+  const permissionResponse = await getMyPermissions(derivedRequest(request, "/api/admin/security/my-permissions"));
   if (!permissionResponse.ok) return permissionResponse;
 
   const permissionPayload = await jsonFrom<PermissionPayload>(permissionResponse);
-  if (!permissionPayload) {
-    return NextResponse.json({ error: "Unable to resolve Office permissions." }, { status: 503 });
-  }
+  if (!permissionPayload) return NextResponse.json({ error: "Unable to resolve Office permissions." }, { status: 503 });
 
   const permissions = new Set(permissionPayload.permissions ?? []);
   const items: OfficeWorkItem[] = [];
 
   if (permissions.has("booking.view") || permissions.has("booking.assign")) {
     const bookingPayload = await jsonFrom<BookingPayload>(
-      await getScopedBookings(
-        derivedRequest(request, "/api/admin/bookings/scoped", "?page=1&pageSize=100"),
-      ),
+      await getScopedBookings(derivedRequest(request, "/api/admin/bookings/scoped", "?page=1&pageSize=100")),
     );
     if (bookingPayload?.bookings) items.push(...bookingItems(bookingPayload.bookings, permissions));
   }
 
   if (permissions.has("ops.health.view")) {
-    const cronPayload = await jsonFrom<CronPayload>(
-      await getCronHealth(derivedRequest(request, "/api/admin/cron-health")),
-    );
+    const cronPayload = await jsonFrom<CronPayload>(await getCronHealth(derivedRequest(request, "/api/admin/cron-health")));
     if (cronPayload?.jobs) items.push(...cronItems(cronPayload.jobs, permissions));
   }
 
-  const safeItems = sortOfficeWorkItems(
-    items.filter((item) => canReceiveOfficeWorkItem(item, permissions)),
-  ).slice(0, 30);
+  if (permissions.has("application.decide")) {
+    const applicationsPayload = await jsonFrom<CleanerApplicationsPayload>(
+      await getCleanerApplications(derivedRequest(request, "/api/admin/cleaner-applications")),
+    );
+    if (applicationsPayload?.applications) items.push(...workforceApplicationItems(applicationsPayload.applications, permissions));
+  }
+
+  const safeItems = sortOfficeWorkItems(items.filter((item) => canReceiveOfficeWorkItem(item, permissions))).slice(0, 30);
   const counts = safeItems.reduce<Record<string, number>>((acc, item) => {
     acc[item.priority] = (acc[item.priority] ?? 0) + 1;
     return acc;
