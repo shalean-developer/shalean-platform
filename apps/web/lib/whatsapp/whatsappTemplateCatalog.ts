@@ -16,9 +16,9 @@ export type WhatsAppTemplateSpec = {
 /**
  * Canonical Shalean WhatsApp template catalogue.
  *
- * These definitions are internal product contracts. A row existing here or in
- * Supabase does NOT mean Meta has approved the template. Production sends must
- * only use templates that exist and are approved in WhatsApp Manager.
+ * Meta does not allow a template body to begin or end with a variable. Keep
+ * fixed text before the first variable and after the final variable. A row
+ * existing here or in Supabase does NOT mean Meta has approved the template.
  */
 export const WHATSAPP_TEMPLATE_CATALOG: readonly WhatsAppTemplateSpec[] = [
   {
@@ -27,7 +27,7 @@ export const WHATSAPP_TEMPLATE_CATALOG: readonly WhatsAppTemplateSpec[] = [
     category: "UTILITY",
     language: "en",
     variables: ["customer_name", "date", "time", "price"],
-    body: "Hi {{1}}, your Shalean cleaning is confirmed for {{2}} at {{3}}. Total: {{4}}.",
+    body: "Hi {{1}}, your Shalean cleaning is confirmed for {{2}} at {{3}}. Total: {{4}}. Thank you for choosing Shalean Cleaning Services.",
     envVar: "WHATSAPP_TEMPLATE_BOOKING_CONFIRMED",
   },
   {
@@ -36,7 +36,7 @@ export const WHATSAPP_TEMPLATE_CATALOG: readonly WhatsAppTemplateSpec[] = [
     category: "UTILITY",
     language: "en",
     variables: ["customer_name", "booking_id", "amount", "payment_link"],
-    body: "Hi {{1}}, payment is required for booking {{2}}. Amount: {{3}}. Pay securely here: {{4}}",
+    body: "Hi {{1}}, payment is required for booking {{2}}. Amount: {{3}}. Pay securely here: {{4}}. Thank you.",
     envVar: "WHATSAPP_TEMPLATE_PAYMENT_REQUEST",
   },
   {
@@ -63,7 +63,7 @@ export const WHATSAPP_TEMPLATE_CATALOG: readonly WhatsAppTemplateSpec[] = [
     category: "UTILITY",
     language: "en",
     variables: ["customer_name", "cleaner_name", "date", "time"],
-    body: "Hi {{1}}, {{2}} has been assigned to your Shalean booking on {{3}} at {{4}}.",
+    body: "Hi {{1}}, {{2}} has been assigned to your Shalean booking on {{3}} at {{4}}. Your booking is ready.",
     envVar: "WHATSAPP_TEMPLATE_CUSTOMER_BOOKING_ASSIGNED",
   },
   {
@@ -72,7 +72,7 @@ export const WHATSAPP_TEMPLATE_CATALOG: readonly WhatsAppTemplateSpec[] = [
     category: "UTILITY",
     language: "en",
     variables: ["customer_name", "booking_id", "date", "time"],
-    body: "Hi {{1}}, booking {{2}} has been rescheduled to {{3}} at {{4}}.",
+    body: "Hi {{1}}, booking {{2}} has been rescheduled to {{3}} at {{4}}. Please contact Shalean if you need help.",
     envVar: "WHATSAPP_TEMPLATE_BOOKING_RESCHEDULED",
   },
   {
@@ -99,7 +99,7 @@ export const WHATSAPP_TEMPLATE_CATALOG: readonly WhatsAppTemplateSpec[] = [
     category: "UTILITY",
     language: "en",
     variables: ["customer_name", "review_link"],
-    body: "Hi {{1}}, thank you for choosing Shalean. Please share your feedback here: {{2}}",
+    body: "Hi {{1}}, thank you for choosing Shalean. Please share your feedback here: {{2}}. Thank you for your time.",
     envVar: "WHATSAPP_TEMPLATE_REVIEW_PROMPT",
   },
   {
@@ -117,7 +117,7 @@ export const WHATSAPP_TEMPLATE_CATALOG: readonly WhatsAppTemplateSpec[] = [
     category: "UTILITY",
     language: "en",
     variables: ["line"],
-    body: "{{1}}",
+    body: "Shalean update: {{1}}. Please check the Shalean app for details.",
     envVar: "WHATSAPP_TEMPLATE_OFFER_ACK",
   },
   {
@@ -153,7 +153,7 @@ export const WHATSAPP_TEMPLATE_CATALOG: readonly WhatsAppTemplateSpec[] = [
     category: "UTILITY",
     language: "en",
     variables: ["line"],
-    body: "{{1}}",
+    body: "Welcome to Shalean. {{1}}. Please keep this message for your records.",
     envVar: "WHATSAPP_TEMPLATE_CLEANER_WELCOME",
   },
   {
@@ -162,7 +162,7 @@ export const WHATSAPP_TEMPLATE_CATALOG: readonly WhatsAppTemplateSpec[] = [
     category: "UTILITY",
     language: "en",
     variables: ["line"],
-    body: "{{1}}",
+    body: "Your Shalean cleaner account has been approved. {{1}}. Please open the Shalean app for next steps.",
     envVar: "WHATSAPP_TEMPLATE_CLEANER_APPROVED",
   },
   {
