@@ -80,7 +80,8 @@ export async function POST(request: Request) {
 
   if (!result.ok) return NextResponse.json({ error: result.error ?? "WhatsApp send failed." }, { status: 502 });
 
-  await admin.from("whatsapp_provider_events").insert({
+  const createdAt = new Date().toISOString();
+  const { data: inserted, error: insertError } = await admin.from("whatsapp_provider_events").insert({
     provider: providerName,
     provider_event_id: result.messageId ?? null,
     provider_message_id: result.messageId ?? null,
@@ -93,8 +94,23 @@ export async function POST(request: Request) {
       admin_email: auth.email,
       conversation_window_open: conversationOpen,
     },
-    processed_at: new Date().toISOString(),
-  });
+    processed_at: createdAt,
+  }).select("id,created_at").single();
 
-  return NextResponse.json({ ok: true, messageId: result.messageId ?? null, conversationOpen });
+  if (insertError) {
+    return NextResponse.json({
+      error: "WhatsApp was sent, but Shalean could not save the outbound chat history.",
+      code: "history_persist_failed",
+      messageId: result.messageId ?? null,
+    }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    ok: true,
+    messageId: result.messageId ?? null,
+    conversationOpen,
+    adminEmail: auth.email,
+    createdAt: inserted?.created_at ?? createdAt,
+    eventId: inserted?.id ?? null,
+  });
 }
