@@ -6,7 +6,9 @@ export type OfficeWorkItemType =
   | "finance.invoice_overdue"
   | "finance.payout_prepare"
   | "workforce.application"
-  | "customer_care.whatsapp_reply";
+  | "customer_care.whatsapp_reply"
+  | "marketing.blog_draft"
+  | "marketing.campaign_ready";
 export type OfficeWorkItemPriority = "critical" | "high" | "medium" | "low";
 export type OfficeWorkItemStatus = "open" | "overdue" | "blocked";
 
@@ -38,6 +40,8 @@ export const OFFICE_WORK_ITEM_POLICIES: Record<OfficeWorkItemType, WorkItemPolic
   "finance.payout_prepare": { permission: "payout.prepare", hrefPrefix: "/office/payouts" },
   "workforce.application": { permission: "application.decide", hrefPrefix: "/office/cleaner-applications" },
   "customer_care.whatsapp_reply": { permission: "customer.contact", hrefPrefix: "/office/notifications" },
+  "marketing.blog_draft": { permission: "content.draft", hrefPrefix: "/office/blog" },
+  "marketing.campaign_ready": { permission: "content.publish", hrefPrefix: "/office/marketing" },
 };
 
 export function isKnownOfficeWorkItemType(value: string): value is OfficeWorkItemType {
