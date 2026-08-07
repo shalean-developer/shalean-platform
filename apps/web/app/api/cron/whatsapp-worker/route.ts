@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { processWhatsAppPendingBatch } from "@/lib/whatsapp/queue";
+import { processWhatsAppPendingBatchViaProvider } from "@/lib/whatsapp/providerQueue";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -8,10 +8,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
- * Suggested schedule: every 15–30 seconds (or up to 1 min) — POST /api/cron/whatsapp-worker
- * Optional: `?metrics=1` attaches {@link getWhatsAppQueueStatusCounts} (metrics RPC + fallback).
- *
- * Drains `whatsapp_queue` pending rows (Meta Cloud API outbound).
+ * Drains `whatsapp_queue` through the configured WhatsApp provider.
+ * Set `WHATSAPP_PROVIDER=flaxxa` for the FlaxxaWapi migration.
  */
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -32,11 +30,11 @@ export async function POST(request: Request) {
     const limitRaw = Number(sp.get("limit") ?? "15");
     const limit = Number.isFinite(limitRaw) ? limitRaw : 15;
     const includeQueueMetrics = sp.get("metrics") === "1";
-    const result = await processWhatsAppPendingBatch({ admin, limit, includeQueueMetrics });
+    const result = await processWhatsAppPendingBatchViaProvider({ admin, limit, includeQueueMetrics });
     await logSystemEvent({
       level: "info",
       source: "cron/whatsapp-worker",
-      message: `Processed ${result.processed} queue job(s)`,
+      message: `Processed ${result.processed} queue job(s) via ${result.worker_meta.provider}`,
       context: result,
     });
     return NextResponse.json({
