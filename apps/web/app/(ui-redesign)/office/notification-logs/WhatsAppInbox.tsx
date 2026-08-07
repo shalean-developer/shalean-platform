@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Inbox, RefreshCw, MessageSquare, Send, Search, UserRound, Clock3 } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Inbox, RefreshCw, Send, Search, UserRound, Clock3 } from "lucide-react";
 import { adminFetch } from "@/hooks/useAdminData";
 
 type InboxMessage = {
@@ -39,25 +39,43 @@ export function WhatsAppInbox() {
   const [templateParams, setTemplateParams] = useState("");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const selectedPhoneRef = useRef("");
 
-  async function load() {
-    setLoading(true);
-    setError(null);
-    const result = await adminFetch<InboxResponse>("/api/admin/whatsapp-inbox?limit=200");
-    setLoading(false);
+  useEffect(() => { selectedPhoneRef.current = selectedPhone; }, [selectedPhone]);
+
+  async function load(options?: { silent?: boolean }) {
+    const silent = options?.silent === true;
+    if (!silent) setLoading(true);
+    if (!silent) setError(null);
+    const result = await adminFetch<InboxResponse>("/api/admin/whatsapp-inbox?limit=1000");
+    if (!silent) setLoading(false);
     if (!result.ok) {
-      setError(result.error ?? "Failed to load WhatsApp inbox.");
+      if (!silent) setError(result.error ?? "Failed to load WhatsApp inbox.");
       return;
     }
     const next = result.data ?? { messages: [], contacts: {}, conversationState: {}, approvedCustomerTemplates: [] };
     setData(next);
-    if (!selectedPhone) {
+    if (!selectedPhoneRef.current) {
       const first = next.messages.map((m) => digits(m.phone)).find(Boolean);
       if (first) setSelectedPhone(first);
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+    const interval = globalThis.setInterval(() => {
+      if (document.visibilityState === "visible") void load({ silent: true });
+    }, 3000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") void load({ silent: true });
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => {
+      globalThis.clearInterval(interval);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, []);
 
   const conversations = useMemo(() => {
     const map = new Map<string, InboxMessage[]>();
@@ -69,7 +87,11 @@ export function WhatsAppInbox() {
       map.set(phone, list);
     }
     return [...map.entries()]
-      .map(([phone, messages]) => ({ phone, messages: messages.sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt)), latest: messages[0] }))
+      .map(([phone, rawMessages]) => {
+        const messages = [...rawMessages].sort((a, b) => +new Date(a.createdAt) - +new Date(b.createdAt));
+        return { phone, messages, latest: messages[messages.length - 1] };
+      })
+      .filter((item) => Boolean(item.latest))
       .sort((a, b) => +new Date(b.latest.createdAt) - +new Date(a.latest.createdAt));
   }, [data.messages]);
 
@@ -84,26 +106,51 @@ export function WhatsAppInbox() {
   const state = selectedPhone ? data.conversationState[selectedPhone] : null;
   const chosenTemplate = data.approvedCustomerTemplates.find((t) => t.metaTemplateName === templateName) ?? null;
 
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ block: "end" });
+  }, [selectedPhone, selected?.messages.length]);
+
   async function sendReply() {
     if (!selectedPhone) return;
     setSending(true);
     setSendError(null);
     const isText = Boolean(state?.conversationOpen);
-    const result = await adminFetch<{ ok: boolean }>("/api/admin/whatsapp-inbox/reply", {
+    const textBody = reply.trim();
+    const templateValues = templateParams.split("\n").map((v) => v.trim()).filter(Boolean);
+    const result = await adminFetch<{ ok: boolean; messageId?: string | null; adminEmail?: string | null; createdAt?: string }>("/api/admin/whatsapp-inbox/reply", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(isText
-        ? { phone: selectedPhone, mode: "text", message: reply }
-        : { phone: selectedPhone, mode: "template", templateName, language: chosenTemplate?.language ?? "en", bodyParams: templateParams.split("\n").map((v) => v.trim()).filter(Boolean) }),
+        ? { phone: selectedPhone, mode: "text", message: textBody }
+        : { phone: selectedPhone, mode: "template", templateName, language: chosenTemplate?.language ?? "en", bodyParams: templateValues }),
     });
     setSending(false);
     if (!result.ok) {
       setSendError(result.error ?? "WhatsApp reply failed.");
       return;
     }
+
+    const sentAt = result.data?.createdAt ?? new Date().toISOString();
+    const sentBody = isText
+      ? textBody
+      : chosenTemplate
+        ? chosenTemplate.body.replace(/\{\{(\d+)\}\}/g, (_match, n: string) => templateValues[Number(n) - 1] ?? `{{${n}}}`)
+        : "[Template message]";
+    const optimistic: InboxMessage = {
+      id: result.data?.messageId ? `outbound:${result.data.messageId}` : `outbound:${Date.now()}`,
+      provider: "meta",
+      phone: selectedPhone,
+      direction: "outbound",
+      body: sentBody,
+      templateName: isText ? null : (chosenTemplate?.metaTemplateName ?? templateName),
+      messageId: result.data?.messageId ?? null,
+      adminEmail: result.data?.adminEmail ?? null,
+      createdAt: sentAt,
+    };
+    setData((current) => ({ ...current, messages: [optimistic, ...current.messages.filter((m) => m.messageId !== optimistic.messageId || !optimistic.messageId)] }));
     setReply("");
     setTemplateParams("");
-    await load();
+    globalThis.setTimeout(() => void load({ silent: true }), 600);
   }
 
   return (
@@ -113,7 +160,7 @@ export function WhatsAppInbox() {
           <div className="rounded-xl bg-emerald-50 p-2 text-emerald-600"><Inbox className="h-5 w-5" /></div>
           <div>
             <h2 className="text-sm font-bold text-slate-900">WhatsApp Inbox</h2>
-            <p className="text-xs text-slate-500">Read and reply to customer conversations through Meta.</p>
+            <p className="text-xs text-slate-500">Live customer conversations through Meta. New messages appear automatically.</p>
           </div>
         </div>
         <button type="button" onClick={() => void load()} disabled={loading} className="flex items-center gap-2 rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-50">
@@ -177,11 +224,12 @@ export function WhatsAppInbox() {
                       {message.templateName ? <p className={`mb-1 text-[10px] font-semibold ${message.direction === "outbound" ? "text-emerald-100" : "text-slate-400"}`}>Template: {message.templateName}</p> : null}
                       <p className="whitespace-pre-wrap break-words text-sm">{message.body || "[Non-text WhatsApp message]"}</p>
                       <div className={`mt-1 flex items-center justify-end gap-2 text-[10px] ${message.direction === "outbound" ? "text-emerald-100" : "text-slate-400"}`}>
-                        {message.adminEmail ? <span>{message.adminEmail}</span> : null}<span>{new Date(message.createdAt).toLocaleString()}</span>
+                        {message.direction === "outbound" ? <span>{message.adminEmail ? `Sent by ${message.adminEmail}` : "Sent by Shalean"}</span> : null}<span>{new Date(message.createdAt).toLocaleString()}</span>
                       </div>
                     </div>
                   </div>
                 ))}
+                <div ref={threadEndRef} />
               </div>
 
               <div className="border-t border-slate-100 p-4">
