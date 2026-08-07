@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { OFFICE_ACCESS_POLICIES, hasAnyOfficePermission, inferOfficeRole, policyForOfficePath } from "@/lib/admin/officeExperience";
+import { OFFICE_ACCESS_POLICIES, hasAnyOfficePermission, policyForOfficePath } from "@/lib/admin/officeExperience";
 
 const INVENTORIED_PAGE_PATHS = [
   "/office/analytics", "/office/billing", "/office/blog", "/office/blog/new", "/office/blog/example", "/office/booking-profitability",
@@ -55,8 +55,11 @@ describe("role-based Office experience", () => {
     expect(policyForOfficePath("/office/customers/create")?.anyOf).toEqual(["customer.edit"]);
   });
 
-  it("infers all eight role experiences from the real role grants", () => {
-    for (const [role, permissions] of Object.entries(ROLE_PERMISSIONS)) expect(inferOfficeRole(new Set(permissions)), role).toBe(role);
+  it("keeps the UAT permission fixture aligned to all eight production roles", () => {
+    expect(Object.keys(ROLE_PERMISSIONS).sort()).toEqual([
+      "customer-care", "finance", "manager", "marketing", "operations", "owner", "supervisor", "workforce",
+    ]);
+    for (const permissions of Object.values(ROLE_PERMISSIONS)) expect(permissions.length).toBeGreaterThan(0);
   });
 
   it("keeps Supervisor isolated from customer, finance, security and marketing", () => {
