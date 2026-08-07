@@ -35,7 +35,10 @@ type CustomersResponse = {
       status?: "active" | "inactive";
     }
   >;
+  capabilities?: { customerRevenue?: boolean };
 };
+
+type PermissionsResponse = { permissions?: string[] };
 
 function normalizeCustomer(
   c: CustomersResponse["customers"][number],
@@ -114,12 +117,17 @@ export default function CustomersPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [bulkDeleting, setBulkDeleting] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const { data, loading, error, refetch } = useAdminData<CustomersResponse>("/api/admin/customers");
+  const { data: permissionsData } = useAdminData<PermissionsResponse>("/api/admin/security/my-permissions");
 
   const customers = (data?.customers ?? []).map(normalizeCustomer);
+  const canViewCustomerRevenue = data?.capabilities?.customerRevenue === true;
+  const canExport = permissionsData?.permissions?.includes("customer.export") === true;
+  const tableColumnCount = canViewCustomerRevenue ? 8 : 7;
 
   const filtered = customers.filter(
     (c) =>
@@ -163,7 +171,41 @@ export default function CustomersPage() {
 
   const vipCount = customers.filter((c) => c.total_bookings >= 10 || c.tier === "gold" || c.tier === "platinum").length;
   const activeCount = customers.filter((c) => c.status === "active" || c.has_active_recurring_plan).length;
-  const totalSpend = customers.reduce((s, c) => s + (c.total_spend_zar ?? 0), 0);
+  const totalSpend = canViewCustomerRevenue ? customers.reduce((s, c) => s + (c.total_spend_zar ?? 0), 0) : 0;
+
+  async function exportCustomers() {
+    setExporting(true);
+    setActionError(null);
+    try {
+      const token = await getSupabaseAccessToken();
+      if (!token) {
+        setActionError("Not signed in.");
+        return;
+      }
+      const res = await fetch("/api/admin/customers/export", {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      });
+      if (!res.ok) {
+        const payload = (await res.json().catch(() => ({}))) as { error?: string };
+        setActionError(payload.error ?? "Customer export failed.");
+        return;
+      }
+      const blob = await res.blob();
+      const disposition = res.headers.get("content-disposition") ?? "";
+      const filename = disposition.match(/filename="([^"]+)"/)?.[1] ?? "shalean-customers.csv";
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Customer export failed.");
+    } finally {
+      setExporting(false);
+    }
+  }
 
   async function deleteCustomer(c: CustomerRow) {
     if (!/^[0-9a-f-]{36}$/i.test(c.id)) return;
@@ -280,6 +322,15 @@ export default function CustomersPage() {
     }
   }
 
+  const summaryCards = [
+    { label: "Total customers", value: loading ? "—" : customers.length, color: "text-slate-800" },
+    { label: "Active", value: loading ? "—" : activeCount, color: "text-emerald-600" },
+    { label: "VIP", value: loading ? "—" : vipCount, color: "text-yellow-600" },
+    ...(canViewCustomerRevenue
+      ? [{ label: "Total revenue", value: loading ? "—" : formatZar(totalSpend), color: "text-blue-600" }]
+      : []),
+  ];
+
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -303,12 +354,16 @@ export default function CustomersPage() {
           >
             <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
           </button>
-          <button
-            type="button"
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm"
-          >
-            <Download className="h-4 w-4" /> Export
-          </button>
+          {canExport ? (
+            <button
+              type="button"
+              disabled={exporting}
+              onClick={() => void exportCustomers()}
+              className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm disabled:opacity-50"
+            >
+              <Download className="h-4 w-4" /> {exporting ? "Exporting…" : "Export"}
+            </button>
+          ) : null}
         </div>
       </div>
 
@@ -346,12 +401,7 @@ export default function CustomersPage() {
       )}
 
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-        {[
-          { label: "Total customers", value: loading ? "—" : customers.length,  color: "text-slate-800" },
-          { label: "Active",          value: loading ? "—" : activeCount,        color: "text-emerald-600" },
-          { label: "VIP",             value: loading ? "—" : vipCount,           color: "text-yellow-600" },
-          { label: "Total revenue",   value: loading ? "—" : formatZar(totalSpend), color: "text-blue-600" },
-        ].map((k) => (
+        {summaryCards.map((k) => (
           <div key={k.label} className="rounded-2xl bg-white border border-slate-100 p-4 shadow-sm">
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
             <p className={cn("mt-1 text-2xl font-bold", k.color)}>{k.value}</p>
@@ -404,7 +454,15 @@ export default function CustomersPage() {
                     className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
                   />
                 </th>
-                {["Customer", "Area", "Bookings", "Total spend", "Last booking", "Status", "Actions"].map((h) => (
+                {[
+                  "Customer",
+                  "Area",
+                  "Bookings",
+                  ...(canViewCustomerRevenue ? ["Total spend"] : []),
+                  "Last booking",
+                  "Status",
+                  "Actions",
+                ].map((h) => (
                   <th
                     key={h}
                     className="px-4 py-3 text-left text-[11px] font-bold uppercase tracking-wide text-slate-400"
@@ -418,14 +476,14 @@ export default function CustomersPage() {
               {loading ? (
                 Array.from({ length: 6 }).map((_, i) => (
                   <tr key={i}>
-                    <td colSpan={8} className="px-4 py-3">
+                    <td colSpan={tableColumnCount} className="px-4 py-3">
                       <div className="h-5 animate-pulse rounded-lg bg-slate-100" />
                     </td>
                   </tr>
                 ))
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="py-12 text-center text-sm text-slate-400">
+                  <td colSpan={tableColumnCount} className="py-12 text-center text-sm text-slate-400">
                     {error ? "Failed to load customers." : "No customers found."}
                   </td>
                 </tr>
@@ -474,9 +532,11 @@ export default function CustomersPage() {
                       <td className="px-4 py-3 text-sm font-semibold text-slate-700">
                         {c.total_bookings}
                       </td>
-                      <td className="px-4 py-3 text-sm font-bold text-emerald-600">
-                        {formatZar(c.total_spend_zar)}
-                      </td>
+                      {canViewCustomerRevenue ? (
+                        <td className="px-4 py-3 text-sm font-bold text-emerald-600">
+                          {formatZar(c.total_spend_zar)}
+                        </td>
+                      ) : null}
                       <td className="px-4 py-3 text-xs text-slate-500">
                         {formatRelativeDate(c.last_booking_at)}
                       </td>
