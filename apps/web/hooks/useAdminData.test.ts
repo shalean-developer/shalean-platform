@@ -1,5 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { normalizedAdminReadParams } from "./useAdminData";
+import { normalizedAdminReadParams, scopedAdminReadEndpoint } from "./useAdminData";
+
+describe("scopedAdminReadEndpoint", () => {
+  it("routes bookings through the scoped endpoint", () => {
+    expect(scopedAdminReadEndpoint("/api/admin/bookings")).toBe("/api/admin/bookings/scoped");
+  });
+
+  it("routes customers through the scoped endpoint", () => {
+    expect(scopedAdminReadEndpoint("/api/admin/customers")).toBe("/api/admin/customers/scoped");
+  });
+
+  it("leaves unrelated endpoints unchanged", () => {
+    expect(scopedAdminReadEndpoint("/api/admin/expenses")).toBe("/api/admin/expenses");
+  });
+});
 
 describe("normalizedAdminReadParams", () => {
   afterEach(() => vi.useRealTimers());
