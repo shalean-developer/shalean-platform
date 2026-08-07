@@ -22,10 +22,27 @@ const bookingItem: OfficeWorkItem = {
   teamId: null,
 };
 
+const applicationItem: OfficeWorkItem = {
+  id: "workforce.application:1",
+  type: "workforce.application",
+  title: "Cleaner application needs review",
+  summary: "Cape Town",
+  priority: "medium",
+  status: "open",
+  href: "/office/cleaner-applications?application=1",
+  actionLabel: "Review application",
+  requiredPermission: "application.decide",
+  occurredAt: "2026-08-07T10:00:00Z",
+  dueAt: "2026-08-09T10:00:00Z",
+  branchId: null,
+  teamId: null,
+};
+
 describe("Office work item policy", () => {
   it("fails closed for unknown workflow types", () => {
     expect(isKnownOfficeWorkItemType("booking.assignment")).toBe(true);
-    expect(isKnownOfficeWorkItemType("finance.secret" )).toBe(false);
+    expect(isKnownOfficeWorkItemType("workforce.application")).toBe(true);
+    expect(isKnownOfficeWorkItemType("finance.secret")).toBe(false);
   });
 
   it("requires the registry permission and safe destination", () => {
@@ -37,6 +54,17 @@ describe("Office work item policy", () => {
   it("prevents Supervisors without booking.assign from receiving allocation work", () => {
     const supervisorPermissions = new Set(["booking.view", "team.view", "cleaner.view"]);
     expect(canReceiveOfficeWorkItem(bookingItem, supervisorPermissions)).toBe(false);
+  });
+
+  it("requires application.decide for cleaner application work", () => {
+    expect(canReceiveOfficeWorkItem(applicationItem, new Set(["application.decide"]))).toBe(true);
+    expect(canReceiveOfficeWorkItem(applicationItem, new Set(["cleaner.view"]))).toBe(false);
+    expect(
+      canReceiveOfficeWorkItem(
+        { ...applicationItem, href: "/office/cleaners" },
+        new Set(["application.decide"]),
+      ),
+    ).toBe(false);
   });
 
   it("sorts critical and overdue work first", () => {
