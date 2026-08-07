@@ -18,18 +18,22 @@ const metaWhatsAppProvider: WhatsAppProvider = {
     const result = await sendViaMetaWhatsAppTemplateBody({
       phone: input.phone,
       templateName: input.templateName,
-      language: input.language || "en",
-      bodyParams: input.bodyParams || [],
+      languageCode: input.language || "en",
+      bodyParameters: input.bodyParams || [],
       recipientRole: input.recipientRole,
     });
     return { ...result, provider: "meta" as const };
   },
 };
 
+export function getWhatsAppProviderName(): "meta" | "flaxxa" {
+  return (process.env.WHATSAPP_PROVIDER || "meta").trim().toLowerCase() === "flaxxa"
+    ? "flaxxa"
+    : "meta";
+}
+
 export function getWhatsAppProvider(): WhatsAppProvider {
-  const provider = (process.env.WHATSAPP_PROVIDER || "meta").trim().toLowerCase();
-  if (provider === "flaxxa") return flaxxaWhatsAppProvider;
-  return metaWhatsAppProvider;
+  return getWhatsAppProviderName() === "flaxxa" ? flaxxaWhatsAppProvider : metaWhatsAppProvider;
 }
 
 export type { WhatsAppProvider, WhatsAppTemplateInput, WhatsAppTextInput } from "./types";
