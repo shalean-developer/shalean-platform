@@ -18,7 +18,29 @@ export type WhatsAppTemplateReadiness = {
   sendReady: boolean;
 };
 
-const VERIFIED_META_APPROVED_TEMPLATES = new Set(["booking_confirmed", "payment_request"]);
+// Verified manually in WhatsApp Manager on 2026-08-07.
+// booking_assigned and booking_cancelled remain in Meta review and are intentionally
+// excluded until their status changes to approved. Environment status lists can
+// still override these values if Meta later changes a template state.
+const VERIFIED_META_APPROVED_TEMPLATES = new Set([
+  "booking_confirmed",
+  "payment_request",
+  "payment_confirmed",
+  "booking_reminder_24h",
+  "customer_booking_assigned",
+  "booking_rescheduled",
+  "job_completed",
+  "review_prompt",
+  "booking_offer",
+  "offer_ack",
+  "reminder",
+  "escalation",
+  "cleaner_welcome",
+  "cleaner_approved",
+  "cleaner_booking_changed",
+  "cleaner_booking_cancelled",
+  "once_off_to_recurring_offer",
+]);
 
 function csvSet(value: string | undefined): Set<string> {
   return new Set(String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean));
