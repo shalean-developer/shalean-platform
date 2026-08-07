@@ -1,0 +1,59 @@
+{
+  "audit": "MKT-001H",
+  "phase": "post-meta-config-redeploy",
+  "recordedAt": "2026-07-17T18:31:46.666Z",
+  "decision": "CONDITIONAL_PASS",
+  "decisionText": "CONDITIONAL PASS — live staging OAuth and publishing smoke still pending. Production and main remain NO-GO.",
+  "mergeSha": "2af18dc307d745918cbf6cab3d7f6184204633ef",
+  "deployment": {
+    "id": "dpl_BPebLMddKtAxcyGaY3bVcyWBjy4v",
+    "readyState": "READY",
+    "gitBranch": "staging",
+    "gitSha": "2af18dc307d745918cbf6cab3d7f6184204633ef",
+    "source": "redeploy",
+    "originalDeploymentId": "dpl_92Ph3z6DucAV8kEa6gDM5vM67Xwj",
+    "target": "preview",
+    "branchAlias": "shalean-platform-git-staging-shalean-cleaning-services.vercel.app",
+    "deploymentHost": "shalean-platform-fhur97qfd-shalean-cleaning-services.vercel.app",
+    "inspectorUrl": "https://vercel.com/shalean-cleaning-services/shalean-platform/BPebLMddKtAxcyGaY3bVcyWBjy4v"
+  },
+  "supersededForEnvEvidence": {
+    "id": "dpl_92Ph3z6DucAV8kEa6gDM5vM67Xwj",
+    "reason": "Created before Meta env configuration checkpoint; must not be cited as post-config evidence"
+  },
+  "health": {
+    "path": "/api/health/environment",
+    "exactDeploy": {
+      "status": "ok",
+      "deployment": "staging",
+      "gitBranch": "staging",
+      "vercelEnv": "preview",
+      "shaleanAppEnv": "staging",
+      "issues": [],
+      "timestamp": "2026-07-17T18:31:46.666Z"
+    },
+    "branchAlias": {
+      "status": "ok",
+      "deployment": "staging",
+      "gitBranch": "staging",
+      "vercelEnv": "preview",
+      "shaleanAppEnv": "staging",
+      "issues": [],
+      "timestamp": "2026-07-17T18:32:34.740Z"
+    }
+  },
+  "configCheckpoint": {
+    "status": "PASS",
+    "note": "Operator reported staging Meta configuration checkpoint complete prior to this redeploy"
+  },
+  "smoke": {
+    "status": "PENDING",
+    "blocker": "Admin interactive sign-in required at /auth/login for Connected Accounts OAuth and publish matrix",
+    "pathAttempted": "/office/marketing/connected-accounts"
+  },
+  "redaction": {
+    "included": ["deployment identity", "health identity fields", "SHA", "READY state"],
+    "excluded": ["app secret", "encryption key", "access tokens", "OAuth code", "raw Meta responses"]
+  },
+  "historicalOnly": true
+}
