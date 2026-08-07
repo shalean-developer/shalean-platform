@@ -1,11 +1,15 @@
 /**
- * Outbound communication policy (email + SMS).
+ * Outbound communication policy.
  *
- * **Email:** admin and customers only. Cleaner profile emails are synthetic login
- * addresses — never send marketing or operational mail to cleaners.
+ * Current production policy (Aug 2026):
+ * - WhatsApp is the primary phone notification channel.
+ * - SMS is intentionally disabled for every recipient type.
+ * - Email remains available for customers/admin where existing flows use it.
+ * - Cleaner profile emails are synthetic login addresses and must not receive outbound mail.
  *
- * **SMS:** disabled globally for now (`SMS_OUTBOUND_ENABLED` unset / not `true`).
- * When re-enabled, SMS is **cleaners only** — admin and customer SMS stay blocked.
+ * Important: SMS stays blocked even if an old deployment/environment still has
+ * SMS_OUTBOUND_ENABLED=true. Re-enabling SMS must be an explicit code change so
+ * we cannot accidentally start charging/sending through Twilio again.
  */
 export type CommunicationRecipientKind = "customer" | "cleaner" | "admin";
 
@@ -17,19 +21,9 @@ export function isCleanerEmailOutboundAllowed(): boolean {
 }
 
 /**
- * Returns whether an SMS may be sent for `recipientKind`.
- * Unknown / omitted kind is treated as customer (blocked when SMS is enabled).
+ * SMS is globally disabled while Shalean operates WhatsApp-first notifications.
+ * Keep all Twilio call sites behind this function so old code paths fail closed.
  */
-export function getSmsOutboundDecision(recipientKind?: CommunicationRecipientKind): SmsOutboundDecision {
-  const enabled = process.env.SMS_OUTBOUND_ENABLED === "true";
-  if (!enabled) {
-    return { allowed: false, reason: "sms_outbound_disabled" };
-  }
-  if (recipientKind === "admin") {
-    return { allowed: false, reason: "admin_sms_disabled_by_policy" };
-  }
-  if (recipientKind !== "cleaner") {
-    return { allowed: false, reason: "customer_sms_disabled_by_policy" };
-  }
-  return { allowed: true };
+export function getSmsOutboundDecision(_recipientKind?: CommunicationRecipientKind): SmsOutboundDecision {
+  return { allowed: false, reason: "sms_outbound_disabled_whatsapp_primary" };
 }
