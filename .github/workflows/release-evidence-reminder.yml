@@ -1,0 +1,56 @@
+name: release-evidence-reminder
+
+# Manual release helper only. This workflow never deploys, promotes, or migrates production.
+on:
+  workflow_dispatch:
+    inputs:
+      change_id:
+        description: "Change / release identifier"
+        required: true
+        type: string
+      git_sha:
+        description: "Approved release Git SHA"
+        required: true
+        type: string
+      deployment_id:
+        description: "Candidate deployment ID or N/A"
+        required: true
+        type: string
+        default: "N/A"
+      migrations:
+        description: "Migration versions or N/A"
+        required: true
+        type: string
+        default: "N/A"
+
+jobs:
+  print-evidence-checklist:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit release evidence checklist
+        shell: bash
+        run: |
+          cat <<'EOF'
+          ## Release evidence checklist
+          EOF
+          echo "Change ID: ${{ inputs.change_id }}"
+          echo "Git SHA: ${{ inputs.git_sha }}"
+          echo "Deployment: ${{ inputs.deployment_id }}"
+          echo "Migrations: ${{ inputs.migrations }}"
+          cat <<'EOF'
+
+          Required evidence, as applicable:
+          - [ ] Required GitHub checks green
+          - [ ] Preview/staging verification complete
+          - [ ] Migration filenames and order verified
+          - [ ] Migration approval recorded before production schema change
+          - [ ] Known-good rollback target identified
+          - [ ] Production deployment approval recorded
+          - [ ] Production smoke results captured after release
+          - [ ] Customer-impacting notifications/payments tested where relevant
+
+          This workflow is evidence-only and must not:
+          - deploy or promote Vercel production
+          - run Supabase production migrations
+          - mutate production data
+          EOF
