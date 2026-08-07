@@ -1,5 +1,6 @@
 import "server-only";
 
+import { ONCE_OFF_RECURRING_TEMPLATE } from "@/lib/growth/onceOffRecurringTemplate";
 import { WHATSAPP_TEMPLATE_CATALOG, resolveConfiguredMetaTemplateName } from "@/lib/whatsapp/whatsappTemplateCatalog";
 
 export type MetaTemplateApprovalStatus = "unknown" | "pending" | "approved" | "rejected";
@@ -17,30 +18,23 @@ export type WhatsAppTemplateReadiness = {
   sendReady: boolean;
 };
 
-// Verified manually in WhatsApp Manager on 2026-08-07.
-// Environment status lists can still override these if Meta later changes state.
 const VERIFIED_META_APPROVED_TEMPLATES = new Set(["booking_confirmed", "payment_request"]);
 
 function csvSet(value: string | undefined): Set<string> {
-  return new Set(
-    String(value ?? "")
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean),
-  );
+  return new Set(String(value ?? "").split(",").map((item) => item.trim()).filter(Boolean));
 }
 
 export function getWhatsAppTemplateReadiness(): WhatsAppTemplateReadiness[] {
   const approved = csvSet(process.env.WHATSAPP_META_APPROVED_TEMPLATES);
   const pending = csvSet(process.env.WHATSAPP_META_PENDING_TEMPLATES);
   const rejected = csvSet(process.env.WHATSAPP_META_REJECTED_TEMPLATES);
+  const specs = [...WHATSAPP_TEMPLATE_CATALOG, ONCE_OFF_RECURRING_TEMPLATE];
 
-  return WHATSAPP_TEMPLATE_CATALOG.map((spec) => {
-    const metaTemplateName = resolveConfiguredMetaTemplateName(spec.key);
-    const envName = spec.envVar ? process.env[spec.envVar]?.trim() : "";
+  return specs.map((spec) => {
+    const configured = spec.envVar ? process.env[spec.envVar]?.trim() : "";
+    const metaTemplateName = configured || (spec.key === ONCE_OFF_RECURRING_TEMPLATE.key ? spec.key : resolveConfiguredMetaTemplateName(spec.key));
     let approvalStatus: MetaTemplateApprovalStatus = "unknown";
 
-    // Explicit environment state wins, so an approval can be revoked without a code deploy.
     if (rejected.has(metaTemplateName) || rejected.has(spec.key)) approvalStatus = "rejected";
     else if (pending.has(metaTemplateName) || pending.has(spec.key)) approvalStatus = "pending";
     else if (approved.has(metaTemplateName) || approved.has(spec.key) || VERIFIED_META_APPROVED_TEMPLATES.has(metaTemplateName) || VERIFIED_META_APPROVED_TEMPLATES.has(spec.key)) approvalStatus = "approved";
@@ -53,7 +47,7 @@ export function getWhatsAppTemplateReadiness(): WhatsAppTemplateReadiness[] {
       variables: spec.variables,
       body: spec.body,
       metaTemplateName,
-      mappingSource: envName ? "env" : "default",
+      mappingSource: configured ? "env" : "default",
       approvalStatus,
       sendReady: approvalStatus === "approved",
     };
