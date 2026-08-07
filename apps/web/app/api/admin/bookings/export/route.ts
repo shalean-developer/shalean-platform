@@ -38,6 +38,7 @@ type ScopedPayload = {
 function derivedRequest(request: Request, page: number): Request {
   const url = new URL(request.url);
   url.pathname = "/api/admin/bookings/scoped";
+  url.searchParams.delete("format");
   url.searchParams.delete("download");
   url.searchParams.set("page", String(page));
   url.searchParams.set("pageSize", String(PAGE_SIZE));
@@ -81,6 +82,25 @@ export async function GET(request: Request) {
     }
   }
 
+  const safeRows = rows.map((row) => ({
+    id: row.id,
+    customer_name: row.customer_name ?? null,
+    customer_email: row.customer_email ?? null,
+    service: row.service ?? null,
+    service_slug: row.service_slug ?? null,
+    date: row.date ?? null,
+    time: row.time ?? null,
+    location: row.location ?? null,
+    ...(canViewRevenue ? {
+      total_paid_zar: typeof row.total_paid_zar === "number" ? row.total_paid_zar : null,
+      amount_paid_cents: typeof row.amount_paid_cents === "number" ? row.amount_paid_cents : null,
+    } : {}),
+    status: row.status ?? null,
+    team_id: row.team_id ?? null,
+    team: row.team ?? null,
+    booking_cleaners: row.booking_cleaners ?? [],
+  }));
+
   const headers = [
     "booking_reference",
     "customer_name",
@@ -94,19 +114,6 @@ export async function GET(request: Request) {
     "status",
   ];
 
-  const csvRows = rows.map((row) => ({
-    booking_reference: row.id,
-    customer_name: row.customer_name ?? "",
-    customer_email: row.customer_email ?? "",
-    service: (row.service_slug ?? row.service ?? "").replace(/-/g, " "),
-    date: row.date ?? "",
-    time: row.time ? row.time.slice(0, 5) : "",
-    location: row.location ?? "",
-    assignment: adminBookingAssignmentDisplay(row).label,
-    ...(canViewRevenue ? { amount_zar: amountZar(row) } : {}),
-    status: row.status ?? "",
-  }));
-
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Audit service unavailable." }, { status: 503 });
   const { error: auditError } = await admin.from("admin_audit_events").insert({
@@ -115,7 +122,7 @@ export async function GET(request: Request) {
     target_type: "booking_export",
     target_id: "bookings",
     permission_code: "booking.export",
-    reason: "Governed booking CSV export",
+    reason: "Governed booking export",
     old_value: null,
     new_value: null,
     metadata: {
@@ -129,6 +136,27 @@ export async function GET(request: Request) {
     console.error("Booking export completion audit failed", { userId: auth.user.id, code: auditError.code });
     return NextResponse.json({ error: "Export audit unavailable. Export was not released." }, { status: 503 });
   }
+
+  const requestUrl = new URL(request.url);
+  if (requestUrl.searchParams.get("format") === "json") {
+    return NextResponse.json(
+      { ok: true, bookings: safeRows, capabilities: { customerRevenue: canViewRevenue }, rowCount: safeRows.length },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
+  }
+
+  const csvRows = rows.map((row) => ({
+    booking_reference: row.id,
+    customer_name: row.customer_name ?? "",
+    customer_email: row.customer_email ?? "",
+    service: (row.service_slug ?? row.service ?? "").replace(/-/g, " "),
+    date: row.date ?? "",
+    time: row.time ? row.time.slice(0, 5) : "",
+    location: row.location ?? "",
+    assignment: adminBookingAssignmentDisplay(row).label,
+    ...(canViewRevenue ? { amount_zar: amountZar(row) } : {}),
+    status: row.status ?? "",
+  }));
 
   const csv = rowsToCsv(headers, csvRows);
   const date = new Intl.DateTimeFormat("en-CA", { timeZone: "Africa/Johannesburg" }).format(new Date());
