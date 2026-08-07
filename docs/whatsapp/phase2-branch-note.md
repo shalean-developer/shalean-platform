@@ -1,0 +1,1 @@
+Phase 2 implementation work will continue on a dedicated stacked branch after this catalogue PR. This note documents that dependency only; it does not change runtime behavior.
