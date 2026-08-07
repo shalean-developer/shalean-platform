@@ -4,6 +4,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { enqueueProviderWhatsApp, flushWhatsAppJobViaProvider } from "@/lib/whatsapp/providerQueue";
 import { getWhatsAppProviderName } from "@/lib/whatsapp/providers";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import type { WhatsAppQueuePayload } from "@/lib/whatsapp/types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -39,27 +40,24 @@ export async function POST(request: Request) {
   const mode = text(body.mode) === "template" ? "template" : "text";
   if (!phone) return NextResponse.json({ error: "Phone number is required." }, { status: 400 });
 
+  let payload: WhatsAppQueuePayload;
+  if (mode === "template") {
+    const templateName = text(body.templateName);
+    if (!templateName) return NextResponse.json({ error: "Template name is required." }, { status: 400 });
+    payload = {
+      kind: "template",
+      templateName,
+      language: text(body.language) || "en",
+      bodyParams: Array.isArray(body.bodyParams) ? body.bodyParams.map(String) : [],
+    };
+  } else {
+    const message = text(body.message);
+    if (!message) return NextResponse.json({ error: "Message is required." }, { status: 400 });
+    payload = { kind: "text", text: message.slice(0, 1000) };
+  }
+
   const provider = getWhatsAppProviderName();
   const idempotencyKey = `admin-test:${provider}:${Date.now()}:${Math.random().toString(36).slice(2, 10)}`;
-
-  const payload = mode === "template"
-    ? {
-        kind: "template" as const,
-        templateName: text(body.templateName),
-        language: text(body.language) || "en",
-        bodyParams: Array.isArray(body.bodyParams) ? body.bodyParams.map(String) : [],
-      }
-    : {
-        kind: "text" as const,
-        text: text(body.message),
-      };
-
-  if (mode === "text" && !payload.text) {
-    return NextResponse.json({ error: "Message is required." }, { status: 400 });
-  }
-  if (mode === "template" && !payload.templateName) {
-    return NextResponse.json({ error: "Template name is required." }, { status: 400 });
-  }
 
   const queued = await enqueueProviderWhatsApp({
     admin,
