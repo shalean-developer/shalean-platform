@@ -64,6 +64,14 @@ export type PermissionAuthResult =
   | { ok: true; user: User; email: string; permission: AdminPermission }
   | { ok: false; response: NextResponse };
 
+const AUDITED_ACCESS_PERMISSIONS = new Set<AdminPermission>([
+  "cleaner.documents.view",
+  "cleaner.bank.view",
+  "booking.export",
+  "customer.export",
+  "bulk_export.approve",
+]);
+
 function bearerToken(request: Request): string {
   return request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
 }
@@ -77,6 +85,44 @@ function configuredClients() {
     publicClient: createClient(url, anon, { auth: { persistSession: false, autoRefreshToken: false } }),
     adminClient: createClient(url, serviceRole, { auth: { persistSession: false, autoRefreshToken: false } }),
   };
+}
+
+async function recordAuditedPermissionAccess(
+  adminClient: ReturnType<typeof createClient>,
+  request: Request,
+  userId: string,
+  permission: AdminPermission,
+  scope: PermissionScope,
+): Promise<boolean> {
+  if (!AUDITED_ACCESS_PERMISSIONS.has(permission)) return true;
+  const url = new URL(request.url);
+  const method = request.method.toUpperCase();
+  const eventType = method === "GET" || method === "HEAD" ? "sensitive_read" : "sensitive_action";
+  const { error } = await adminClient.from("admin_audit_events").insert({
+    actor_user_id: userId,
+    event_type: eventType,
+    target_type: "admin_route",
+    target_id: url.pathname,
+    permission_code: permission,
+    reason: "Permission-gated sensitive access",
+    old_value: null,
+    new_value: null,
+    metadata: {
+      method,
+      branch_id: scope.branchId ?? null,
+      team_id: scope.teamId ?? null,
+    },
+  });
+  if (error) {
+    console.error("Sensitive admin access audit failed", {
+      permission,
+      userId,
+      path: url.pathname,
+      code: error.code,
+    });
+    return false;
+  }
+  return true;
 }
 
 export async function requireAdminPermissionFromRequest(
@@ -131,6 +177,22 @@ export async function requireAnyAdminPermissionFromRequest(
       return { ok: false, response: NextResponse.json({ error: "Authorization unavailable." }, { status: 503 }) };
     }
     if (allowed === true) {
+      const auditRecorded = await recordAuditedPermissionAccess(
+        clients.adminClient,
+        request,
+        user.id,
+        permission,
+        scope,
+      );
+      if (!auditRecorded) {
+        return {
+          ok: false,
+          response: NextResponse.json(
+            { error: "Sensitive access audit unavailable. Access was not granted." },
+            { status: 503 },
+          ),
+        };
+      }
       return { ok: true, user, email: user.email, permission };
     }
   }
