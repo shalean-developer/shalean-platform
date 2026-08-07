@@ -9,13 +9,15 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-type PermissionPayload = { permissions?: string[] };
+type PermissionPayload = { permissions?: string[]; branchIds?: string[]; teamIds?: string[] };
 type BookingRow = { id?: string; customer_name?: string | null; service?: string | null; service_slug?: string | null; date?: string | null; time?: string | null; location?: string | null; status?: string | null; team_id?: string | null; city_id?: string | null };
 type BookingPayload = { bookings?: BookingRow[] };
 type CronJob = { job_name?: string; last_success_at?: string | null; last_run_at?: string | null; last_run_status?: "success" | "error" | null; last_run_message?: string | null };
 type CronPayload = { jobs?: CronJob[] };
 type OverdueInvoiceRow = { id: string; due_date: string | null; balance_cents: number | null; total_amount_cents: number | null; currency_code: string | null; updated_at: string | null };
 type CleanerApplicationRow = { id: string; name: string | null; location: string | null; city_id: string | null; status: string | null; created_at: string | null };
+type WhatsAppEventRow = { id: string; phone: string | null; direction: string | null; event_type: string | null; created_at: string | null };
+type CustomerBookingScopeRow = { normalized_phone: string | null; customer_phone: string | null; city_id: string | null; created_at: string | null };
 
 async function jsonFrom<T>(response: Response): Promise<T | null> {
   if (!response.ok) return null;
@@ -36,6 +38,8 @@ function cleanLabel(value: string | null | undefined): string | null {
 
 function shortReference(id: string): string { return id.length > 8 ? id.slice(0, 8).toUpperCase() : id.toUpperCase(); }
 function formatZar(cents: number | null | undefined): string { return `R ${Math.round(Number(cents ?? 0) / 100).toLocaleString("en-ZA")}`; }
+function normalizePhone(value: string | null | undefined): string { return String(value ?? "").replace(/\D/g, "").replace(/^0/, "27"); }
+function maskedPhone(value: string): string { const digits = normalizePhone(value); return digits.length >= 4 ? `••••${digits.slice(-4)}` : "customer number"; }
 
 function bookingItems(rows: BookingRow[], permissions: ReadonlySet<string>): OfficeWorkItem[] {
   if (!permissions.has("booking.assign")) return [];
@@ -109,6 +113,81 @@ async function workforceItems(permissions: ReadonlySet<string>): Promise<OfficeW
   });
 }
 
+async function customerCareItems(permissions: ReadonlySet<string>, branchIds: readonly string[]): Promise<OfficeWorkItem[]> {
+  if (!permissions.has("customer.contact")) return [];
+  const admin = getSupabaseAdmin();
+  if (!admin) return [];
+
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60_000).toISOString();
+  const { data: eventData, error: eventError } = await admin
+    .from("whatsapp_provider_events")
+    .select("id,phone,direction,event_type,created_at")
+    .gte("created_at", since)
+    .in("event_type", ["message", "admin_reply"])
+    .order("created_at", { ascending: false })
+    .limit(250);
+  if (eventError) {
+    console.error("[my-work] WhatsApp Customer Care query failed", eventError.message);
+    return [];
+  }
+
+  const latestByPhone = new Map<string, WhatsAppEventRow>();
+  for (const raw of eventData ?? []) {
+    const event = raw as WhatsAppEventRow;
+    const phoneKey = normalizePhone(event.phone);
+    if (!phoneKey || latestByPhone.has(phoneKey)) continue;
+    latestByPhone.set(phoneKey, event);
+  }
+  const pending = [...latestByPhone.entries()].filter(([, event]) => event.direction === "inbound" && event.event_type === "message");
+  if (pending.length === 0) return [];
+
+  const phoneKeys = pending.map(([phone]) => phone);
+  const { data: bookingData, error: bookingError } = await admin
+    .from("bookings")
+    .select("normalized_phone,customer_phone,city_id,created_at")
+    .or(phoneKeys.map((phone) => `normalized_phone.eq.${phone},customer_phone.eq.${phone}`).join(","))
+    .order("created_at", { ascending: false })
+    .limit(250);
+  if (bookingError) console.error("[my-work] Customer Care booking scope query failed", bookingError.message);
+
+  const cityByPhone = new Map<string, string | null>();
+  for (const raw of bookingData ?? []) {
+    const booking = raw as CustomerBookingScopeRow;
+    for (const candidate of [booking.normalized_phone, booking.customer_phone]) {
+      const key = normalizePhone(candidate);
+      if (key && !cityByPhone.has(key)) cityByPhone.set(key, booking.city_id ?? null);
+    }
+  }
+
+  const allowedBranches = new Set(branchIds);
+  const globallyScoped = branchIds.length === 0;
+  const now = Date.now();
+  return pending.flatMap(([phone, event]) => {
+    const branchId = cityByPhone.get(phone) ?? null;
+    if (!globallyScoped && (!branchId || !allowedBranches.has(branchId))) return [];
+    const occurredAtMs = event.created_at ? Date.parse(event.created_at) : Number.NaN;
+    const waitMs = Number.isFinite(occurredAtMs) ? Math.max(0, now - occurredAtMs) : 0;
+    const overdue = waitMs >= 60 * 60_000;
+    const critical = waitMs >= 4 * 60 * 60_000;
+    const dueAt = Number.isFinite(occurredAtMs) ? new Date(occurredAtMs + 60 * 60_000).toISOString() : null;
+    return [{
+      id: `customer_care.whatsapp_reply:${event.id}`,
+      type: "customer_care.whatsapp_reply",
+      title: critical ? `WhatsApp customer ${maskedPhone(phone)} has waited over 4 hours` : `WhatsApp customer ${maskedPhone(phone)} needs a reply`,
+      summary: event.created_at ? `Latest inbound message received ${event.created_at}` : "Latest inbound WhatsApp message has no admin reply.",
+      priority: critical ? "critical" : overdue ? "high" : "medium",
+      status: overdue ? "overdue" : "open",
+      href: `/office/notifications?conversation=${encodeURIComponent(phone)}`,
+      actionLabel: "Reply on WhatsApp",
+      requiredPermission: "customer.contact",
+      occurredAt: event.created_at,
+      dueAt,
+      branchId,
+      teamId: null,
+    } satisfies OfficeWorkItem];
+  });
+}
+
 export async function GET(request: Request) {
   const permissionResponse = await getMyPermissions(derivedRequest(request, "/api/admin/security/my-permissions"));
   if (!permissionResponse.ok) return permissionResponse;
@@ -127,6 +206,7 @@ export async function GET(request: Request) {
   }
   if (permissions.has("finance.full.view") || permissions.has("payout.prepare")) items.push(...(await financeItems(permissions)));
   if (permissions.has("application.decide")) items.push(...(await workforceItems(permissions)));
+  if (permissions.has("customer.contact")) items.push(...(await customerCareItems(permissions, permissionPayload.branchIds ?? [])));
 
   const safeItems = sortOfficeWorkItems(items.filter((item) => canReceiveOfficeWorkItem(item, permissions))).slice(0, 30);
   const counts = safeItems.reduce<Record<string, number>>((acc, item) => { acc[item.priority] = (acc[item.priority] ?? 0) + 1; return acc; }, {});
