@@ -5,7 +5,9 @@ import type {
   WhatsAppTextInput,
 } from "./types";
 
-const DEFAULT_BASE_URL = "https://wapi.flaxxa.com/api";
+const DEFAULT_BASE_URL = "https://wapi.flaxxa.com";
+const DEFAULT_TEXT_PATH = "/api/v1/sendmessage";
+const DEFAULT_TEMPLATE_PATH = "/api/v1/sendtemplatemessage";
 const REQUEST_TIMEOUT_MS = 12_000;
 
 function requiredEnv(name: string): string {
@@ -15,17 +17,11 @@ function requiredEnv(name: string): string {
 }
 
 function apiBaseUrl(): string {
-  return process.env.FLAXXA_WAPI_BASE_URL?.trim() || DEFAULT_BASE_URL;
+  return (process.env.FLAXXA_WAPI_BASE_URL?.trim() || DEFAULT_BASE_URL).replace(/\/$/, "");
 }
 
-function headers(): Record<string, string> {
-  const token = requiredEnv("FLAXXA_WAPI_API_KEY");
-  const authHeader = process.env.FLAXXA_WAPI_AUTH_HEADER?.trim() || "Authorization";
-  const authScheme = process.env.FLAXXA_WAPI_AUTH_SCHEME?.trim() || "Bearer";
-  return {
-    "Content-Type": "application/json",
-    [authHeader]: authScheme ? `${authScheme} ${token}` : token,
-  };
+function jsonHeaders(): Record<string, string> {
+  return { "Content-Type": "application/json" };
 }
 
 function normalizePhone(phone: string): string {
@@ -35,24 +31,32 @@ function normalizePhone(phone: string): string {
 function extractMessageId(payload: unknown): string | undefined {
   if (!payload || typeof payload !== "object") return undefined;
   const obj = payload as Record<string, unknown>;
-  const candidates = [
-    obj.message_id,
-    obj.messageId,
-    obj.id,
-    (obj.data as Record<string, unknown> | undefined)?.message_id,
-    (obj.data as Record<string, unknown> | undefined)?.messageId,
-    (obj.data as Record<string, unknown> | undefined)?.id,
-  ];
-  const found = candidates.find((v) => typeof v === "string" && v.trim());
-  return typeof found === "string" ? found.trim() : undefined;
+  const data = obj.data && typeof obj.data === "object" ? obj.data as Record<string, unknown> : undefined;
+  const candidates = [obj.message_wamid, obj.message_id, obj.messageId, obj.id, data?.message_wamid, data?.message_id, data?.messageId, data?.id];
+  for (const value of candidates) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return undefined;
+}
+
+function payloadError(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object") return undefined;
+  const obj = payload as Record<string, unknown>;
+  const status = typeof obj.status === "string" ? obj.status.toLowerCase() : "";
+  if (status !== "error") return undefined;
+  if (typeof obj.message === "string" && obj.message.trim()) return obj.message.trim();
+  if (typeof obj.msg === "string" && obj.msg.trim()) return obj.msg.trim();
+  return "Flaxxa API returned status=error";
 }
 
 async function post(path: string, body: Record<string, unknown>): Promise<WhatsAppSendResult> {
   try {
+    const token = requiredEnv("FLAXXA_WAPI_API_KEY");
     const res = await fetch(`${apiBaseUrl()}${path}`, {
       method: "POST",
-      headers: headers(),
-      body: JSON.stringify(body),
+      headers: jsonHeaders(),
+      body: JSON.stringify({ token, ...body }),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     const raw = await res.text();
@@ -62,13 +66,16 @@ async function post(path: string, body: Record<string, unknown>): Promise<WhatsA
     } catch {
       payload = raw;
     }
-    if (!res.ok) {
+
+    const apiError = payloadError(payload);
+    if (!res.ok || apiError) {
       return {
         ok: false,
         provider: "flaxxa",
-        error: `Flaxxa HTTP ${res.status}: ${raw.slice(0, 500)}`,
+        error: apiError || `Flaxxa HTTP ${res.status}: ${raw.slice(0, 500)}`,
       };
     }
+
     const messageId = extractMessageId(payload);
     return { ok: true, provider: "flaxxa", messageId };
   } catch (error) {
@@ -81,42 +88,46 @@ async function post(path: string, body: Record<string, unknown>): Promise<WhatsA
 }
 
 function textEndpoint(): string {
-  return process.env.FLAXXA_WAPI_SEND_TEXT_PATH?.trim() || "/messages/send";
+  return process.env.FLAXXA_WAPI_SEND_TEXT_PATH?.trim() || DEFAULT_TEXT_PATH;
 }
 
 function templateEndpoint(): string {
-  return process.env.FLAXXA_WAPI_SEND_TEMPLATE_PATH?.trim() || "/messages/template";
+  return process.env.FLAXXA_WAPI_SEND_TEMPLATE_PATH?.trim() || DEFAULT_TEMPLATE_PATH;
+}
+
+function templateComponents(bodyParams: string[]): Array<Record<string, unknown>> {
+  if (!bodyParams.length) return [];
+  return [
+    {
+      type: "body",
+      parameters: bodyParams.map((text) => ({ type: "text", text: String(text ?? "") })),
+    },
+  ];
 }
 
 export const flaxxaWhatsAppProvider: WhatsAppProvider = {
   async sendText(input: WhatsAppTextInput): Promise<WhatsAppSendResult> {
     const phone = normalizePhone(input.phone);
-    if (phone.length < 10 || phone.length > 15) {
+    if (phone.length < 7 || phone.length > 15) {
       return { ok: false, provider: "flaxxa", error: "invalid_phone" };
     }
     return post(textEndpoint(), {
       phone,
-      to: phone,
       message: input.message,
-      text: input.message,
-      recipient_role: input.recipientRole,
     });
   },
 
   async sendTemplate(input: WhatsAppTemplateInput): Promise<WhatsAppSendResult> {
     const phone = normalizePhone(input.phone);
-    if (phone.length < 10 || phone.length > 15) {
+    if (phone.length < 7 || phone.length > 15) {
       return { ok: false, provider: "flaxxa", error: "invalid_phone" };
     }
+    const bodyParams = input.bodyParams || [];
     return post(templateEndpoint(), {
       phone,
-      to: phone,
       template_name: input.templateName,
-      templateName: input.templateName,
-      language: input.language || "en",
-      body_params: input.bodyParams || [],
-      bodyParams: input.bodyParams || [],
-      recipient_role: input.recipientRole,
+      template_language: input.language || "en_US",
+      components: templateComponents(bodyParams),
     });
   },
 };
