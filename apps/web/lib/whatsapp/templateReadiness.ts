@@ -17,6 +17,10 @@ export type WhatsAppTemplateReadiness = {
   sendReady: boolean;
 };
 
+// Verified manually in WhatsApp Manager on 2026-08-07.
+// Environment status lists can still override these if Meta later changes state.
+const VERIFIED_META_APPROVED_TEMPLATES = new Set(["booking_confirmed", "payment_request"]);
+
 function csvSet(value: string | undefined): Set<string> {
   return new Set(
     String(value ?? "")
@@ -36,9 +40,10 @@ export function getWhatsAppTemplateReadiness(): WhatsAppTemplateReadiness[] {
     const envName = spec.envVar ? process.env[spec.envVar]?.trim() : "";
     let approvalStatus: MetaTemplateApprovalStatus = "unknown";
 
-    if (approved.has(metaTemplateName) || approved.has(spec.key)) approvalStatus = "approved";
-    else if (rejected.has(metaTemplateName) || rejected.has(spec.key)) approvalStatus = "rejected";
+    // Explicit environment state wins, so an approval can be revoked without a code deploy.
+    if (rejected.has(metaTemplateName) || rejected.has(spec.key)) approvalStatus = "rejected";
     else if (pending.has(metaTemplateName) || pending.has(spec.key)) approvalStatus = "pending";
+    else if (approved.has(metaTemplateName) || approved.has(spec.key) || VERIFIED_META_APPROVED_TEMPLATES.has(metaTemplateName) || VERIFIED_META_APPROVED_TEMPLATES.has(spec.key)) approvalStatus = "approved";
 
     return {
       key: spec.key,
