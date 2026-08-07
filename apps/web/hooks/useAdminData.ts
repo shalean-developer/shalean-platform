@@ -3,8 +3,10 @@
 import { useEffect, useState, useCallback } from "react";
 import { getSupabaseAccessToken } from "@/lib/supabase/browser";
 
-function scopedAdminReadEndpoint(endpoint: string): string {
-  return endpoint === "/api/admin/bookings" ? "/api/admin/bookings/scoped" : endpoint;
+export function scopedAdminReadEndpoint(endpoint: string): string {
+  if (endpoint === "/api/admin/bookings") return "/api/admin/bookings/scoped";
+  if (endpoint === "/api/admin/customers") return "/api/admin/customers/scoped";
+  return endpoint;
 }
 
 function johannesburgCurrentMonthRange(): { from: string; to: string } {
