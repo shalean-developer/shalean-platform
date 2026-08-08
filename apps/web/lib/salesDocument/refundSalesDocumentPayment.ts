@@ -28,12 +28,23 @@ async function resolveChargeReference(
   admin: SupabaseClient,
   documentId: string,
   paystackReference: string | null,
-): Promise<{ chargeRef: string | null; chargeAmount: number }> {
-  const { data: chargeRows } = await admin
+): Promise<
+  | { ok: true; chargeRef: string | null; chargeAmount: number }
+  | { ok: false; error: string }
+> {
+  const { data: chargeRows, error, count } = await admin
     .from("sales_document_paystack_charge_dedup")
-    .select("charge_reference, amount_cents")
-    .eq("document_id", documentId)
-    .limit(1);
+    .select("charge_reference, amount_cents", { count: "exact" })
+    .eq("document_id", documentId);
+
+  if (error) return { ok: false, error: error.message };
+
+  // P3 finance integrity: a sales document can have more than one captured charge.
+  // Refunding only the first row can leave cash and accounting state inconsistent,
+  // so fail closed until the unified refund ledger can walk every charge safely.
+  if ((count ?? chargeRows?.length ?? 0) > 1) {
+    return { ok: false, error: "multi_charge_refund_unsupported" };
+  }
 
   const dedup = (chargeRows?.[0] ?? null) as {
     charge_reference?: string;
@@ -46,7 +57,7 @@ async function resolveChargeReference(
 
   const chargeAmount = Math.max(0, Math.round(Number(dedup?.amount_cents ?? 0)));
 
-  return { chargeRef, chargeAmount };
+  return { ok: true, chargeRef, chargeAmount };
 }
 
 async function markSalesDocumentRefunded(
@@ -159,7 +170,9 @@ export async function refundSalesDocumentPayment(
   if (paid <= 0 && total <= 0) return { ok: false, error: "nothing_to_refund" };
 
   const amountCents = paid > 0 ? paid : total;
-  const { chargeRef, chargeAmount } = await resolveChargeReference(admin, row.id, row.paystack_reference);
+  const resolved = await resolveChargeReference(admin, row.id, row.paystack_reference);
+  if (!resolved.ok) return { ok: false, error: resolved.error };
+  const { chargeRef, chargeAmount } = resolved;
   const refundAmount = chargeAmount > 0 ? chargeAmount : amountCents;
   const pastedRefundRef = params.refundReference?.trim() || null;
 
