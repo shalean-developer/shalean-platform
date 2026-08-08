@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { recordUnifiedRefundAccounting } from "@/lib/accounting/recordUnifiedRefundAccounting";
+import { recordGatewayRefund } from "@/lib/booking/refund/recordGatewayRefund";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { refundPaystackTransaction } from "@/lib/paystack/refundPaystackTransaction";
@@ -38,8 +40,6 @@ async function resolveChargeReference(
     .eq("invoice_id", invoiceId);
 
   if (error) return { ok: false, error: error.message };
-
-  // BILL-INV-002 Phase A (H02 stopgap): multi-charge refunds are unsafe until all rows are walked.
   if ((count ?? chargeRows?.length ?? 0) > 1) {
     return { ok: false, error: "multi_charge_refund_unsupported" };
   }
@@ -54,8 +54,43 @@ async function resolveChargeReference(
     (paystackReference?.trim() || null);
 
   const chargeAmount = Math.max(0, Math.round(Number(dedup?.amount_cents ?? 0)));
-
   return { ok: true, chargeRef, chargeAmount };
+}
+
+async function recordRefundLedger(
+  admin: SupabaseClient,
+  params: {
+    invoiceId: string;
+    chargeRef: string | null;
+    refundReference: string;
+    amountCents: number;
+    refundedAtIso: string;
+    note?: string;
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (params.chargeRef) {
+    const ledger = await recordGatewayRefund(admin, {
+      chargeReference: params.chargeRef,
+      refundId: params.refundReference,
+      entityType: "monthly_invoice",
+      entityId: params.invoiceId,
+      amountCents: params.amountCents,
+      refundedAtIso: params.refundedAtIso,
+      reason: params.note,
+    });
+    return ledger.ok ? { ok: true } : ledger;
+  }
+
+  const manual = await recordUnifiedRefundAccounting(admin, {
+    entityType: "monthly_invoice",
+    entityId: params.invoiceId,
+    provider: "manual",
+    refundReference: params.refundReference,
+    amountCents: params.amountCents,
+    refundedAtIso: params.refundedAtIso,
+    reason: params.note,
+  });
+  return manual.ok ? { ok: true } : manual;
 }
 
 async function reverseMonthlyInvoiceChildBookings(
@@ -137,7 +172,7 @@ export async function refundMonthlyInvoicePayment(
   let recordedOnly = Boolean(params.recordOnly);
 
   if (params.recordOnly) {
-    refundReference = pastedRefundRef ?? chargeRef;
+    refundReference = pastedRefundRef ?? chargeRef ?? `manual:${row.id}`;
   } else if (chargeRef) {
     const refundRes = await refundPaystackTransaction({
       transactionReference: chargeRef,
@@ -147,11 +182,22 @@ export async function refundMonthlyInvoicePayment(
     if (!refundRes.ok) return { ok: false, error: refundRes.error };
     paystackRefunded = !refundRes.alreadyReversed;
     alreadyReversedOnPaystack = Boolean(refundRes.alreadyReversed);
-    refundReference = pastedRefundRef ?? refundRes.refundReference;
+    refundReference = pastedRefundRef ?? refundRes.refundReference ?? chargeRef;
     recordedOnly = false;
   } else {
+    refundReference = pastedRefundRef ?? `manual:${row.id}`;
     recordedOnly = true;
   }
+
+  const ledger = await recordRefundLedger(admin, {
+    invoiceId: row.id,
+    chargeRef,
+    refundReference,
+    amountCents,
+    refundedAtIso: nowIso,
+    note: params.note,
+  });
+  if (!ledger.ok) return ledger;
 
   const { error: updErr } = await admin
     .from("monthly_invoices")
@@ -180,11 +226,11 @@ export async function refundMonthlyInvoicePayment(
       total_amount_cents: total,
       balance_cents_after: total,
       paystack_charge_reference: chargeRef ?? "",
-      refund_reference: refundReference ?? "",
+      refund_reference: refundReference,
       recorded_only: recordedOnly,
       paystack_refunded: paystackRefunded,
       actor: "admin",
-      reference: refundReference ?? chargeRef ?? "refund",
+      reference: refundReference,
       ...(params.note?.trim() ? { note: params.note.trim().slice(0, 2000) } : {}),
     },
     { source: "monthly_invoice/refund" },
