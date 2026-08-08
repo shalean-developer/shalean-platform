@@ -91,7 +91,7 @@ export function hasAnyOfficePermission(permissions: ReadonlySet<string> | readon
 export function inferOfficeRole(permissions: ReadonlySet<string> | readonly string[]): OfficeRoleKey {
   const set = permissions instanceof Set ? permissions : new Set(permissions);
   if (set.has("role.manage") && set.has("system.settings")) return "owner";
-  if (set.has("refund.approve.high") && set.has("finance.summary.view") && set.has("ops.health.view")) return "manager";
+  if (set.has("refund.approve.low") && set.has("finance.summary.view") && set.has("ops.health.view")) return "manager";
   if (set.has("finance.full.view") || set.has("expense.manage") || set.has("payment.reconcile")) return "finance";
   if (set.has("booking.assign") && set.has("ops.health.view")) return "operations";
   if (set.has("application.decide") || (set.has("cleaner.edit") && set.has("team.manage"))) return "workforce";
