@@ -1,5 +1,6 @@
 import type { PostgrestError, SupabaseClient } from "@supabase/supabase-js";
 import { CLEANER_RESPONSE } from "@/lib/dispatch/cleanerResponseStatus";
+import { isTeamMemberActiveOnBookingDate } from "@/lib/cleaner/teamMemberAvailability";
 
 /**
  * Columns callers should include on `bookings` selects when using {@link cleanerJobsListRowPostFilter}
@@ -45,7 +46,6 @@ export function recurringPendingPaymentVisibilityReason(row: Record<string, unkn
  * Cleaner jobs/dashboard list policy: hide terminal payment failures; hide one-time `pending_payment`;
  * allow recurring / invoice-backed `pending_payment` for assigned/roster/team rows (assignment enforced by queries).
  */
-/** List-only gate after merged queries — documented with {@link explainCleanerJobsListPostFilter}. */
 export function cleanerJobsListRowPostFilter(row: Record<string, unknown>): boolean {
   const st = String(row.status ?? "").trim().toLowerCase();
   if (st === "failed" || st === "payment_expired") return false;
@@ -96,39 +96,76 @@ export function sortBookingsByCompletedAtThenId(rows: Record<string, unknown>[])
   });
 }
 
+type CleanerTeamMembershipRow = {
+  team_id?: string | null;
+  cleaner_id?: string | null;
+  active_from?: string | null;
+  active_to?: string | null;
+};
+
 /**
- * Loads bookings visible to a cleaner using **separate** queries per visibility rule, then merges.
- * Avoids PostgREST `.or(and(is_team_job…, team_id.in.(…)), …)` parsing quirks that can drop team rows.
- *
- * **List policy:** after merge, rows are filtered with {@link cleanerJobsListRowPostFilter} — include
- * {@link CLEANER_JOBS_LIST_RECURRING_VISIBILITY_COLUMNS} in `select` so recurring `pending_payment` jobs
- * are not dropped when they should remain visible.
+ * Team-scope visibility must match the cleaner's membership on the booking date.
+ * A historical/future membership on the same team is not enough by itself.
+ */
+export function cleanerTeamMembershipMatchesBookingDate(
+  booking: { team_id?: unknown; date?: unknown },
+  memberships: readonly CleanerTeamMembershipRow[],
+): boolean {
+  const teamId = String(booking.team_id ?? "").trim();
+  const dateYmd = String(booking.date ?? "").trim().slice(0, 10);
+  if (!teamId || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return false;
+  return memberships.some(
+    (membership) =>
+      String(membership.team_id ?? "").trim() === teamId &&
+      isTeamMemberActiveOnBookingDate(membership, dateYmd),
+  );
+}
+
+export async function fetchCleanerTeamMemberships(
+  admin: SupabaseClient,
+  cleanerId: string,
+): Promise<CleanerTeamMembershipRow[]> {
+  const { data, error } = await admin
+    .from("team_members")
+    .select("team_id, cleaner_id, active_from, active_to")
+    .eq("cleaner_id", cleanerId)
+    .not("team_id", "is", null);
+  if (error || !data?.length) return [];
+  return data as CleanerTeamMembershipRow[];
+}
+
+/**
+ * Loads bookings visible to a cleaner using separate queries per visibility rule, then merges.
+ * Direct assignment and explicit `booking_cleaners` roster membership remain authoritative.
+ * Team-scope visibility is additionally constrained to membership active on the booking date.
  */
 export async function fetchCleanerVisibleBookingsMerged(
   admin: SupabaseClient,
   cleanerId: string,
   params: {
     select: string;
-    /** Applied to each branch builder before `.limit` (status excludes, orders, extra `.eq`, …). */
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- Supabase query builder chain
     applyEachBranch?: (q: any) => any;
-    /** Soft cap per branch before dedupe (merged list may be shorter after dedupe). */
     perBranchLimit: number;
   },
 ): Promise<{ data: Record<string, unknown>[] | null; error: PostgrestError | null }> {
   const cid = cleanerId.trim();
-  if (!cid) {
-    return { data: [], error: null };
-  }
+  if (!cid) return { data: [], error: null };
 
-  const [teamIds, rosterBookingIds] = await Promise.all([
-    fetchCleanerTeamIds(admin, cid),
+  const [teamMemberships, rosterBookingIds] = await Promise.all([
+    fetchCleanerTeamMemberships(admin, cid),
     fetchBookingIdsWhereCleanerOnRoster(admin, cid),
   ]);
+  const teamIds = [
+    ...new Set(
+      teamMemberships
+        .map((membership) => String(membership.team_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
 
   const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   const safeRoster = rosterBookingIds.filter((id) => uuidRe.test(id));
-
   const dedupe = new Map<string, Record<string, unknown>>();
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const apply = params.applyEachBranch ?? ((q: any) => q);
@@ -146,15 +183,42 @@ export async function fetchCleanerVisibleBookingsMerged(
     const q = apply(seed).limit(lim);
     const { data, error } = await q;
     if (error) return error;
-    consume(data as Record<string, unknown>[]);
+    consume((data ?? []) as Record<string, unknown>[]);
     return null;
   };
 
-  let err = await exec(admin.from("bookings").select(params.select).or(`cleaner_id.eq.${cid},payout_owner_cleaner_id.eq.${cid}`));
+  const execTeamDateAware = async (): Promise<PostgrestError | null> => {
+    const pageSize = Math.min(1000, Math.max(lim, 100));
+    let offset = 0;
+    let accepted = 0;
+    while (accepted < lim) {
+      const seed = admin.from("bookings").select(params.select).eq("is_team_job", true).in("team_id", teamIds);
+      const applied = apply(seed);
+      const supportsRange = typeof applied?.range === "function";
+      const q = supportsRange
+        ? applied.range(offset, offset + pageSize - 1)
+        : applied.limit(pageSize);
+      const { data, error } = await q;
+      if (error) return error;
+      const rows = (data ?? []) as Record<string, unknown>[];
+      const eligible = rows.filter((row) => cleanerTeamMembershipMatchesBookingDate(row, teamMemberships));
+      const remaining = lim - accepted;
+      const acceptedRows = eligible.slice(0, remaining);
+      consume(acceptedRows);
+      accepted += acceptedRows.length;
+      if (!supportsRange || rows.length < pageSize) break;
+      offset += pageSize;
+    }
+    return null;
+  };
+
+  let err = await exec(
+    admin.from("bookings").select(params.select).or(`cleaner_id.eq.${cid},payout_owner_cleaner_id.eq.${cid}`),
+  );
   if (err) return { data: null, error: err };
 
   if (teamIds.length > 0) {
-    err = await exec(admin.from("bookings").select(params.select).eq("is_team_job", true).in("team_id", teamIds));
+    err = await execTeamDateAware();
     if (err) return { data: null, error: err };
   }
 
@@ -168,8 +232,8 @@ export async function fetchCleanerVisibleBookingsMerged(
 }
 
 export type BookingAccessRow = {
-  /** Booking id — enables roster membership checks via `booking_cleaners`. */
   id?: string | null;
+  date?: string | null;
   cleaner_id?: string | null;
   payout_owner_cleaner_id?: string | null;
   team_id?: string | null;
@@ -194,29 +258,19 @@ export function isExplicitCleanerBookingAttribution(
   );
 }
 
-/** Distinct team IDs this cleaner belongs to (active membership rows). */
+/** Distinct team IDs represented in this cleaner's membership history. */
 export async function fetchCleanerTeamIds(admin: SupabaseClient, cleanerId: string): Promise<string[]> {
-  const { data, error } = await admin
-    .from("team_members")
-    .select("team_id")
-    .eq("cleaner_id", cleanerId)
-    .not("team_id", "is", null);
-  if (error || !data?.length) return [];
-  const ids = new Set<string>();
-  for (const raw of data) {
-    const tid = String((raw as { team_id?: string | null }).team_id ?? "").trim();
-    if (tid) ids.add(tid);
-  }
-  return [...ids];
+  const memberships = await fetchCleanerTeamMemberships(admin, cleanerId);
+  return [
+    ...new Set(
+      memberships
+        .map((membership) => String(membership.team_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
 }
 
-/**
- * PostgREST `.or()` expression for bookings the cleaner may see:
- * assigned solo cleaner, payroll owner (team / admin paths), OR team job on a team they belong to.
- */
-/**
- * Booking ids where the cleaner appears on `booking_cleaners` (for PostgREST `.or()` visibility).
- */
+/** Booking ids where the cleaner appears explicitly on `booking_cleaners`. */
 export async function fetchBookingIdsWhereCleanerOnRoster(
   admin: SupabaseClient,
   cleanerId: string,
@@ -257,8 +311,9 @@ export function bookingsVisibilityOrFilter(cleanerId: string, teamIds: string[])
 }
 
 /**
- * PostgREST `.or(...)` filter for every booking a cleaner may see (solo, payout owner, team, roster).
- * Use from `/api/cleaner/jobs`, `/api/cleaner/dashboard`, and anywhere else visibility must stay aligned.
+ * Compatibility filter for callers that cannot use the merged loader yet.
+ * Team membership in this string is not date-aware, so new cleaner job/dashboard reads should use
+ * {@link fetchCleanerVisibleBookingsMerged}; explicit access checks below are date-aware.
  */
 export async function getCleanerVisibleBookingsOrFilter(
   admin: SupabaseClient,
@@ -275,8 +330,10 @@ export async function cleanerHasBookingAccess(
   cleanerId: string,
   row: BookingAccessRow,
 ): Promise<boolean> {
-  if (String(row.cleaner_id ?? "").trim() === cleanerId.trim()) return true;
-  if (String(row.payout_owner_cleaner_id ?? "").trim() === cleanerId.trim()) return true;
+  const cid = cleanerId.trim();
+  if (String(row.cleaner_id ?? "").trim() === cid) return true;
+  if (String(row.payout_owner_cleaner_id ?? "").trim() === cid) return true;
+
   const bid = String(row.id ?? "").trim();
   if (bid) {
     const { data: rosterHit, error: rosterErr } = await admin
@@ -287,14 +344,32 @@ export async function cleanerHasBookingAccess(
       .maybeSingle();
     if (!rosterErr && rosterHit) return true;
   }
-  if (row.is_team_job !== true) return false;
-  const teamId = String(row.team_id ?? "").trim();
-  if (!teamId) return false;
+
+  let isTeamJob = row.is_team_job === true;
+  let teamId = String(row.team_id ?? "").trim();
+  let dateYmd = String(row.date ?? "").trim().slice(0, 10);
+  if (bid && (!isTeamJob || !teamId || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd))) {
+    const { data: bookingHead, error: bookingHeadError } = await admin
+      .from("bookings")
+      .select("date, team_id, is_team_job")
+      .eq("id", bid)
+      .maybeSingle();
+    if (bookingHeadError || !bookingHead) return false;
+    isTeamJob = bookingHead.is_team_job === true;
+    teamId = String(bookingHead.team_id ?? "").trim();
+    dateYmd = String(bookingHead.date ?? "").trim().slice(0, 10);
+  }
+
+  if (!isTeamJob || !teamId || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd)) return false;
+
   const { data, error } = await admin
     .from("team_members")
-    .select("team_id")
+    .select("team_id, cleaner_id, active_from, active_to")
     .eq("team_id", teamId)
-    .eq("cleaner_id", cleanerId)
-    .maybeSingle();
-  return !error && data != null;
+    .eq("cleaner_id", cleanerId);
+  if (error || !data?.length) return false;
+  return cleanerTeamMembershipMatchesBookingDate(
+    { team_id: teamId, date: dateYmd },
+    data as CleanerTeamMembershipRow[],
+  );
 }
