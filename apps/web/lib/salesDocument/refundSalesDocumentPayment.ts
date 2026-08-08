@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordUnifiedRefundAccounting } from "@/lib/accounting/recordUnifiedRefundAccounting";
 import { recordGatewayRefund } from "@/lib/booking/refund/recordGatewayRefund";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { sendRefundConfirmationEmail } from "@/lib/notifications/sendRefundConfirmationEmail";
 import { refundPaystackTransaction } from "@/lib/paystack/refundPaystackTransaction";
 
 export type RefundSalesDocumentPaymentResult =
@@ -30,44 +31,25 @@ async function resolveChargeReference(
   admin: SupabaseClient,
   documentId: string,
   paystackReference: string | null,
-): Promise<
-  | { ok: true; chargeRef: string | null; chargeAmount: number }
-  | { ok: false; error: string }
-> {
+): Promise<| { ok: true; chargeRef: string | null; chargeAmount: number } | { ok: false; error: string }> {
   const { data: chargeRows, error, count } = await admin
     .from("sales_document_paystack_charge_dedup")
     .select("charge_reference, amount_cents", { count: "exact" })
     .eq("document_id", documentId);
-
   if (error) return { ok: false, error: error.message };
+  if ((count ?? chargeRows?.length ?? 0) > 1) return { ok: false, error: "multi_charge_refund_unsupported" };
 
-  if ((count ?? chargeRows?.length ?? 0) > 1) {
-    return { ok: false, error: "multi_charge_refund_unsupported" };
-  }
-
-  const dedup = (chargeRows?.[0] ?? null) as {
-    charge_reference?: string;
-    amount_cents?: number;
-  } | null;
-
+  const dedup = (chargeRows?.[0] ?? null) as { charge_reference?: string; amount_cents?: number } | null;
   const chargeRef =
     (typeof dedup?.charge_reference === "string" && dedup.charge_reference.trim()) ||
     (paystackReference?.trim() || null);
-
   const chargeAmount = Math.max(0, Math.round(Number(dedup?.amount_cents ?? 0)));
-
   return { ok: true, chargeRef, chargeAmount };
 }
 
 async function recordRefundLedger(
   admin: SupabaseClient,
-  params: {
-    documentId: string;
-    chargeRef: string | null;
-    refundReference: string;
-    amountCents: number;
-    note?: string;
-  },
+  params: { documentId: string; chargeRef: string | null; refundReference: string; amountCents: number; note?: string },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (params.chargeRef) {
     const ledger = await recordGatewayRefund(admin, {
@@ -94,11 +76,7 @@ async function recordRefundLedger(
 
 async function markSalesDocumentRefunded(
   admin: SupabaseClient,
-  row: {
-    id: string;
-    total_cents: number | null;
-    notes: string | null;
-  },
+  row: { id: string; total_cents: number | null; notes: string | null },
   params: {
     note?: string;
     refundReference: string | null;
@@ -116,19 +94,12 @@ async function markSalesDocumentRefunded(
   let noteLine = params.note?.trim()
     ? `Refund (${nowIso.slice(0, 10)}): ${params.note.trim()}`
     : `Refund recorded ${nowIso.slice(0, 10)}`;
-
-  if (params.recordedOnly) {
-    noteLine += " (recorded in Shalean — refunded on Paystack dashboard)";
-  } else if (params.alreadyReversedOnPaystack) {
-    noteLine += " (already reversed on Paystack)";
-  } else if (params.paystackRefunded) {
-    noteLine += " via Paystack";
-  } else {
-    noteLine += " (manual payment)";
-  }
+  if (params.recordedOnly) noteLine += " (recorded in Shalean — refunded on Paystack dashboard)";
+  else if (params.alreadyReversedOnPaystack) noteLine += " (already reversed on Paystack)";
+  else if (params.paystackRefunded) noteLine += " via Paystack";
+  else noteLine += " (manual payment)";
 
   const mergedNotes = [row.notes?.trim(), noteLine].filter(Boolean).join("\n\n");
-
   const { error: updErr } = await admin
     .from("sales_documents")
     .update({
@@ -141,7 +112,6 @@ async function markSalesDocumentRefunded(
       updated_at: nowIso,
     })
     .eq("id", row.id);
-
   if (updErr) return { ok: false, error: updErr.message };
 
   await logSystemEvent({
@@ -160,6 +130,15 @@ async function markSalesDocumentRefunded(
     },
   });
 
+  if (params.refundReference) {
+    await sendRefundConfirmationEmail(admin, {
+      entityType: "sales_document",
+      entityId: row.id,
+      refundReference: params.refundReference,
+      amountCents: params.amountCents,
+      currencyCode: "ZAR",
+    }).catch(() => undefined);
+  }
   return { ok: true };
 }
 
@@ -169,30 +148,18 @@ export async function refundSalesDocumentPayment(
 ): Promise<RefundSalesDocumentPaymentResult> {
   const { data, error } = await admin
     .from("sales_documents")
-    .select(
-      "id, document_type, status, total_cents, amount_paid_cents, balance_cents, paystack_reference, customer_name, customer_email, notes",
-    )
+    .select("id, document_type, status, total_cents, amount_paid_cents, balance_cents, paystack_reference, customer_name, customer_email, notes")
     .eq("id", params.documentId)
     .maybeSingle();
-
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: "document_not_found" };
 
   const row = data as {
-    id: string;
-    document_type: string;
-    status: string | null;
-    total_cents: number | null;
-    amount_paid_cents: number | null;
-    balance_cents: number | null;
-    paystack_reference: string | null;
-    customer_name: string;
-    customer_email: string;
-    notes: string | null;
+    id: string; document_type: string; status: string | null; total_cents: number | null;
+    amount_paid_cents: number | null; balance_cents: number | null; paystack_reference: string | null;
+    customer_name: string; customer_email: string; notes: string | null;
   };
-
   if (row.document_type !== "invoice") return { ok: false, error: "not_an_invoice" };
-
   const st = String(row.status ?? "").toLowerCase();
   if (st === "refunded") return { ok: false, error: "already_refunded" };
   if (st !== "paid") return { ok: false, error: "not_paid" };
@@ -211,14 +178,9 @@ export async function refundSalesDocumentPayment(
   if (params.recordOnly) {
     const refundReference = pastedRefundRef ?? chargeRef ?? `manual:${row.id}`;
     const ledger = await recordRefundLedger(admin, {
-      documentId: row.id,
-      chargeRef,
-      refundReference,
-      amountCents,
-      note: params.note,
+      documentId: row.id, chargeRef, refundReference, amountCents, note: params.note,
     });
     if (!ledger.ok) return ledger;
-
     const marked = await markSalesDocumentRefunded(admin, row, {
       note: params.note,
       refundReference,
@@ -230,19 +192,12 @@ export async function refundSalesDocumentPayment(
       customerEmail: row.customer_email,
     });
     if (!marked.ok) return marked;
-    return {
-      ok: true,
-      paystackRefunded: false,
-      recordedOnly: true,
-      alreadyReversedOnPaystack: Boolean(chargeRef),
-      refundReference,
-    };
+    return { ok: true, paystackRefunded: false, recordedOnly: true, alreadyReversedOnPaystack: Boolean(chargeRef), refundReference };
   }
 
   let paystackRefunded = false;
   let alreadyReversedOnPaystack = false;
   let refundReference: string | null = pastedRefundRef;
-
   if (chargeRef) {
     const refundRes = await refundPaystackTransaction({
       transactionReference: chargeRef,
@@ -258,14 +213,9 @@ export async function refundSalesDocumentPayment(
   }
 
   const ledger = await recordRefundLedger(admin, {
-    documentId: row.id,
-    chargeRef,
-    refundReference,
-    amountCents,
-    note: params.note,
+    documentId: row.id, chargeRef, refundReference, amountCents, note: params.note,
   });
   if (!ledger.ok) return ledger;
-
   const marked = await markSalesDocumentRefunded(admin, row, {
     note: params.note,
     refundReference,
@@ -278,11 +228,5 @@ export async function refundSalesDocumentPayment(
   });
   if (!marked.ok) return marked;
 
-  return {
-    ok: true,
-    paystackRefunded,
-    recordedOnly: false,
-    alreadyReversedOnPaystack,
-    refundReference,
-  };
+  return { ok: true, paystackRefunded, recordedOnly: false, alreadyReversedOnPaystack, refundReference };
 }
