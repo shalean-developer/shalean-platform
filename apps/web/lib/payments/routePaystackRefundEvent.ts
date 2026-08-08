@@ -2,11 +2,53 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordGatewayRefund } from "@/lib/booking/refund/recordGatewayRefund";
+import { sendRefundConfirmationEmail } from "@/lib/notifications/sendRefundConfirmationEmail";
 
 export type PaystackRefundRouteResult =
   | { kind: "booking" | "monthly_invoice" | "sales_document"; entityId: string }
   | { kind: "not_found" }
-  | { kind: "ignored"; reason: string };
+  | { kind: "ignored"; reason: string }
+  | { kind: "error"; error: string };
+
+async function recordAndNotify(
+  admin: SupabaseClient,
+  params: {
+    entityType: "booking" | "monthly_invoice" | "sales_document";
+    entityId: string;
+    chargeReference: string;
+    refundReference: string;
+    amountCents: number;
+    currencyCode?: string;
+    refundedAtIso?: string | null;
+    note?: string | null;
+    bookingId?: string | null;
+  },
+): Promise<PaystackRefundRouteResult> {
+  const recorded = await recordGatewayRefund(admin, {
+    chargeReference: params.chargeReference,
+    refundId: params.refundReference,
+    entityType: params.entityType,
+    entityId: params.entityId,
+    amountCents: params.amountCents,
+    currencyCode: params.currencyCode,
+    bookingId: params.bookingId,
+    refundedAtIso: params.refundedAtIso,
+    reason: params.note,
+  });
+  if (!recorded.ok) return { kind: "error", error: recorded.error };
+
+  // Notification is intentionally non-blocking for the financial truth. Delivery has its own
+  // idempotency/retry rail, while the refund ledger remains authoritative.
+  await sendRefundConfirmationEmail(admin, {
+    entityType: params.entityType,
+    entityId: params.entityId,
+    refundReference: params.refundReference,
+    amountCents: params.amountCents,
+    currencyCode: params.currencyCode,
+  }).catch(() => undefined);
+
+  return { kind: params.entityType, entityId: params.entityId };
+}
 
 /**
  * Route a successful Paystack refund by the original charge reference.
@@ -37,18 +79,17 @@ export async function routeSuccessfulPaystackRefund(
       Math.round(Number(params.amountCents ?? booking.amount_paid_cents ?? booking.total_paid_cents ?? 0)),
     );
     if (amountCents <= 0) return { kind: "ignored", reason: "missing_amount" };
-    await recordGatewayRefund(admin, {
+    return recordAndNotify(admin, {
       chargeReference,
-      refundId: refundReference,
+      refundReference,
       entityType: "booking",
       entityId: String(booking.id),
       amountCents,
       currencyCode: String(booking.currency ?? "ZAR"),
       bookingId: String(booking.id),
       refundedAtIso: params.refundedAtIso,
-      reason: params.note,
+      note: params.note,
     });
-    return { kind: "booking", entityId: String(booking.id) };
   }
 
   const { data: monthly } = await admin
@@ -59,16 +100,15 @@ export async function routeSuccessfulPaystackRefund(
   if (monthly?.invoice_id) {
     const amountCents = Math.max(0, Math.round(Number(params.amountCents ?? monthly.amount_cents ?? 0)));
     if (amountCents <= 0) return { kind: "ignored", reason: "missing_amount" };
-    await recordGatewayRefund(admin, {
+    return recordAndNotify(admin, {
       chargeReference,
-      refundId: refundReference,
+      refundReference,
       entityType: "monthly_invoice",
       entityId: String(monthly.invoice_id),
       amountCents,
       refundedAtIso: params.refundedAtIso,
-      reason: params.note,
+      note: params.note,
     });
-    return { kind: "monthly_invoice", entityId: String(monthly.invoice_id) };
   }
 
   const { data: sales } = await admin
@@ -79,16 +119,15 @@ export async function routeSuccessfulPaystackRefund(
   if (sales?.document_id) {
     const amountCents = Math.max(0, Math.round(Number(params.amountCents ?? sales.amount_cents ?? 0)));
     if (amountCents <= 0) return { kind: "ignored", reason: "missing_amount" };
-    await recordGatewayRefund(admin, {
+    return recordAndNotify(admin, {
       chargeReference,
-      refundId: refundReference,
+      refundReference,
       entityType: "sales_document",
       entityId: String(sales.document_id),
       amountCents,
       refundedAtIso: params.refundedAtIso,
-      reason: params.note,
+      note: params.note,
     });
-    return { kind: "sales_document", entityId: String(sales.document_id) };
   }
 
   return { kind: "not_found" };
