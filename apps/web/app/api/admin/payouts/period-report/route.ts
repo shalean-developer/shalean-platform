@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { requireAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import {
   loadOfficePayoutPeriodReport,
   normalizeOfficePayoutPeriodRange,
@@ -65,8 +65,8 @@ async function correctUniqueBatchBookingCounts(
 }
 
 export async function GET(request: Request) {
-  const auth = await requireAdminApi(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireAdminPermissionFromRequest(request, "payout.view");
+  if (!auth.ok) return auth.response;
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });

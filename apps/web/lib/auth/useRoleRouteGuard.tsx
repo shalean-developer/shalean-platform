@@ -20,13 +20,44 @@ type Options = {
   requiredRole: AppUserRole;
   /** When cached role matches, render immediately without waiting for network. */
   trustCache?: boolean;
+  /**
+   * Cleaner routes may be opened by any authenticated user whose Auth user is
+   * linked to a cleaner record, even when their primary app role is Supervisor
+   * or another Office role. This enables one-login portal switching without
+   * widening access for accounts that are not linked to a cleaner profile.
+   */
+  allowLinkedCleaner?: boolean;
 };
+
+type CleanerMeResponse = { cleaner?: { id?: string | null } | null };
+
+export function canUseLinkedCleanerAccess(
+  requiredRole: AppUserRole,
+  allowLinkedCleaner: boolean,
+  linkedCleaner: boolean,
+): boolean {
+  return requiredRole === "cleaner" && allowLinkedCleaner && linkedCleaner;
+}
+
+async function hasLinkedCleaner(token: string): Promise<boolean> {
+  try {
+    const response = await fetch("/api/cleaner/me", {
+      headers: { Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+    if (!response.ok) return false;
+    const payload = (await response.json().catch(() => ({}))) as CleanerMeResponse;
+    return Boolean(payload.cleaner?.id);
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Lightweight role guard — no full-page "Checking access" spinner.
  * Redirects unauthenticated users to `/login`; wrong role to the correct dashboard.
  */
-export function useRoleRouteGuard({ requiredRole, trustCache = true }: Options): {
+export function useRoleRouteGuard({ requiredRole, trustCache = true, allowLinkedCleaner = false }: Options): {
   state: RoleRouteGuardState;
   retry: () => void;
 } {
@@ -71,6 +102,14 @@ export function useRoleRouteGuard({ requiredRole, trustCache = true }: Options):
           setState({ status: "ready" });
           return;
         }
+
+        const linkedCleaner =
+          requiredRole === "cleaner" && allowLinkedCleaner ? await hasLinkedCleaner(token) : false;
+        if (canUseLinkedCleanerAccess(requiredRole, allowLinkedCleaner, linkedCleaner)) {
+          if (runId.current === id) setState({ status: "ready" });
+          return;
+        }
+
         setState({
           status: "wrong_role",
           actualRole: result.role,
@@ -99,7 +138,7 @@ export function useRoleRouteGuard({ requiredRole, trustCache = true }: Options):
     } catch {
       if (runId.current === id) setState({ status: "timeout" });
     }
-  }, [requiredRole, trustCache]);
+  }, [requiredRole, trustCache, allowLinkedCleaner]);
 
   useEffect(() => {
     void verify();

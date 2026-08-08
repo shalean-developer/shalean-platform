@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireFinanceApi } from "@/lib/auth/requireFinanceApi";
+import { requireAnyAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import { loadFinancialDashboard } from "@/lib/admin/expenses/loadFinancialDashboard";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -7,8 +7,11 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = await requireFinanceApi(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireAnyAdminPermissionFromRequest(request, [
+    "finance.summary.view",
+    "finance.full.view",
+  ]);
+  if (!auth.ok) return auth.response;
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
