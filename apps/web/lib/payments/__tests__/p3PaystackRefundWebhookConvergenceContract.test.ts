@@ -35,13 +35,17 @@ describe("P3 Paystack refund webhook convergence", () => {
     expect(src).toContain("recordAndNotify");
   });
 
-  it("sends refund confirmation through notification idempotency, not raw webhook count", () => {
-    const src = read("apps/web/lib/notifications/sendRefundConfirmationEmail.ts");
-    expect(src).toContain("tryClaimNotificationIdempotency");
-    expect(src).toContain('eventType: "refund_succeeded"');
-    expect(src).toContain("releaseNotificationIdempotencyClaim");
-    expect(src).toContain("safeResendSend");
-    expect(src).toContain("refund:${refundReference}");
+  it("sends refund confirmation through notification idempotency for webhook and direct refund paths", () => {
+    const notification = read("apps/web/lib/notifications/sendRefundConfirmationEmail.ts");
+    expect(notification).toContain("tryClaimNotificationIdempotency");
+    expect(notification).toContain('eventType: "refund_succeeded"');
+    expect(notification).toContain("releaseNotificationIdempotencyClaim");
+    expect(notification).toContain("safeResendSend");
+    expect(notification).toContain("refund:${refundReference}");
+
+    expect(read("apps/web/lib/booking/refund/recordGatewayRefund.ts")).toContain("notifyBookingRefund");
+    expect(read("apps/web/lib/monthlyInvoice/refundMonthlyInvoicePayment.ts")).toContain("sendRefundConfirmationEmail");
+    expect(read("apps/web/lib/salesDocument/refundSalesDocumentPayment.ts")).toContain("sendRefundConfirmationEmail");
   });
 
   it("allows refund records through the existing accounting retry queue at the database boundary", () => {
@@ -49,6 +53,15 @@ describe("P3 Paystack refund webhook convergence", () => {
     expect(sql).toContain("accounting_sync_records_entity_type_check");
     expect(sql).toContain("'payment_transaction'::text");
     expect(sql).toContain("'refund'::text");
+  });
+
+  it("preserves already-paid cleaner payout history during monthly invoice refunds", () => {
+    const src = read("apps/web/lib/monthlyInvoice/refundMonthlyInvoicePayment.ts");
+    expect(src).toContain('if (ps === "paid")');
+    expect(src).toContain('payment_status: "pending_monthly", amount_paid_cents: 0');
+    expect(src).toContain('payout_status: "pending"');
+    expect(src).toContain("payout_frozen_cents: null");
+    expect(src).toContain("balance_cents: total");
   });
 
   it("fails closed before mutating a sales document when Paystack amount differs from invoice total", () => {
