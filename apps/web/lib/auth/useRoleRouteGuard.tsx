@@ -31,6 +31,14 @@ type Options = {
 
 type CleanerMeResponse = { cleaner?: { id?: string | null } | null };
 
+export function canUseLinkedCleanerAccess(
+  requiredRole: AppUserRole,
+  allowLinkedCleaner: boolean,
+  linkedCleaner: boolean,
+): boolean {
+  return requiredRole === "cleaner" && allowLinkedCleaner && linkedCleaner;
+}
+
 async function hasLinkedCleaner(token: string): Promise<boolean> {
   try {
     const response = await fetch("/api/cleaner/me", {
@@ -95,7 +103,9 @@ export function useRoleRouteGuard({ requiredRole, trustCache = true, allowLinked
           return;
         }
 
-        if (allowLinkedCleaner && requiredRole === "cleaner" && (await hasLinkedCleaner(token))) {
+        const linkedCleaner =
+          requiredRole === "cleaner" && allowLinkedCleaner ? await hasLinkedCleaner(token) : false;
+        if (canUseLinkedCleanerAccess(requiredRole, allowLinkedCleaner, linkedCleaner)) {
           if (runId.current === id) setState({ status: "ready" });
           return;
         }
