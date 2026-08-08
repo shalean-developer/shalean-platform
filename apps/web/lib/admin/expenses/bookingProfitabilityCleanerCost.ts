@@ -1,4 +1,5 @@
 import { optionalCentsFromDb } from "@/lib/cleaner/cleanerJobDisplayEarningsResolve";
+import { resolveBookingWideCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import {
   computeBookingProfit,
   type BookingProfitBreakdown,
@@ -25,34 +26,18 @@ export function isCompleteTeamEarningsTotalCents(value: unknown): value is numbe
 }
 
 /**
- * Canonical booking-level cleaner cost for profitability.
- * Explicit team jobs require a booking-wide total. Non-team bookings normally use
- * the per-cleaner display lock, but paired/multi-cleaner Standard jobs can be stored
- * as non-team operationally. For those, a positive total that is an exact multiple
- * of the display lock is treated as the booking-wide cleaner cost.
+ * Finance/profitability adapter for the canonical booking-wide cleaner earnings policy.
+ * The policy itself lives with cleaner/payout earnings resolution so finance does not
+ * independently reinterpret booking earnings fields.
  */
 export function resolveBookingProfitabilityCleanerCost(
   booking: BookingProfitabilityCleanerCostInput,
 ): BookingProfitabilityCleanerCost {
-  const total = optionalCentsFromDb(booking.cleaner_earnings_total_cents);
-  const display = optionalCentsFromDb(booking.display_earnings_cents);
-
-  if (booking.is_team_job === true) {
-    if (total === null || total <= 0) {
-      return {
-        cleaner_cost_cents: null,
-        incomplete_team_earnings: true,
-        warning: INCOMPLETE_TEAM_EARNINGS_WARNING,
-        included_in_trusted_totals: false,
-      };
-    }
-    return { cleaner_cost_cents: total, incomplete_team_earnings: false, warning: null, included_in_trusted_totals: true };
-  }
-
-  const looksLikeMultiCleanerTotal =
-    total !== null && display !== null && display > 0 && total > display && total % display === 0;
-  const cleanerCost = looksLikeMultiCleanerTotal ? total : (display ?? total ?? 0);
-  return { cleaner_cost_cents: cleanerCost, incomplete_team_earnings: false, warning: null, included_in_trusted_totals: true };
+  const resolved = resolveBookingWideCleanerEarningsCents(booking);
+  return {
+    ...resolved,
+    warning: resolved.incomplete_team_earnings ? INCOMPLETE_TEAM_EARNINGS_WARNING : null,
+  };
 }
 
 export type TrustedBookingRollupContribution =
