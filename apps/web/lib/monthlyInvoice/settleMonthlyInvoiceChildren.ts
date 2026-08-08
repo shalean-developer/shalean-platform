@@ -78,7 +78,6 @@ export async function settleMonthlyInvoiceChildren(
         .maybeSingle();
       frozen = resolveCleanerEarningsCents({
         display_earnings_cents: b.display_earnings_cents,
-        cleaner_payout_cents: b.cleaner_payout_cents,
         cleaner_earnings_total_cents: basisRow?.cleaner_earnings_total_cents,
       });
     }
