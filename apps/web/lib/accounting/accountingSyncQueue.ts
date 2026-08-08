@@ -11,7 +11,8 @@ export type AccountingSyncEntityType =
   | "booking"
   | "invoice"
   | "vendor"
-  | "payment_transaction";
+  | "payment_transaction"
+  | "refund";
 
 /**
  * Enqueue or refresh a pending sync record. Idempotent per (entity_type, entity_id).
