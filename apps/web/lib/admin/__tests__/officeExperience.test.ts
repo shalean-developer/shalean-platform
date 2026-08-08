@@ -21,15 +21,16 @@ const INVENTORIED_PAGE_PATHS = [
   "/office/email-operations/campaigns", "/office/email-operations/health", "/office/email-operations/retry", "/office/email-operations/timeline",
 ];
 
+// Representative subsets of the live role grants. Do not add permissions here only to make a role experience pass.
 const ROLE_PERMISSIONS = {
   owner: ["role.manage", "system.settings", "booking.view", "customer.view", "cleaner.view", "team.view", "finance.full.view", "finance.summary.view", "expense.manage", "invoice.manage", "payment.reconcile", "profit.view", "payout.view", "payout.approve", "payout.release", "marketing.view", "content.draft", "content.publish", "notification.send", "template.manage", "ops.health.view", "pricing.manage", "integration.manage", "audit.view"],
-  manager: ["refund.approve.high", "finance.summary.view", "ops.health.view", "booking.view", "booking.assign", "customer.view", "customer.contact", "cleaner.view", "team.view", "payout.view", "payout.approve", "notification.send", "incident.manage"],
+  manager: ["refund.approve.low", "finance.summary.view", "ops.health.view", "booking.view", "booking.assign", "customer.view", "customer.contact", "cleaner.view", "team.view", "payout.view", "payout.prepare", "notification.send", "incident.manage"],
   operations: ["booking.view", "booking.assign", "customer.view", "customer.contact", "cleaner.view", "team.view", "notification.send", "incident.manage", "ops.health.view"],
   finance: ["finance.summary.view", "finance.full.view", "expense.manage", "invoice.manage", "payment.reconcile", "profit.view", "payout.view", "payout.prepare"],
-  "customer-care": ["booking.view", "customer.view", "customer.contact", "refund.request", "notification.send"],
-  workforce: ["cleaner.view", "cleaner.edit", "team.view", "team.manage", "application.decide", "booking.view"],
-  marketing: ["marketing.view", "content.draft", "content.publish", "notification.send"],
-  supervisor: ["booking.view", "cleaner.view", "team.view", "team.assign"],
+  "customer-care": ["booking.view", "customer.view", "customer.contact", "refund.request", "incident.manage"],
+  workforce: ["cleaner.view", "cleaner.edit", "team.view", "team.manage", "team.assign", "application.decide"],
+  marketing: ["marketing.view", "content.draft"],
+  supervisor: ["booking.view", "booking.assign", "cleaner.view", "team.view", "team.assign", "incident.manage"],
 } as const;
 
 describe("role-based Office experience", () => {
@@ -52,7 +53,7 @@ describe("role-based Office experience", () => {
     expect(policyForOfficePath("/office/customers/create")?.anyOf).toEqual(["customer.edit"]);
   });
 
-  it("infers all eight role experiences", () => {
+  it("infers all eight live role experiences without synthetic grants", () => {
     for (const [role, permissions] of Object.entries(ROLE_PERMISSIONS)) expect(inferOfficeRole(new Set(permissions)), role).toBe(role);
   });
 
