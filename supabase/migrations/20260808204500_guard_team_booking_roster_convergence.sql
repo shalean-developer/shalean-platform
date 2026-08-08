@@ -2,7 +2,7 @@
 -- Prevent a team booking header from committing with a booking_cleaners roster
 -- that belongs to a different team/membership window.
 --
--- The trigger is DEFERRABLE so assign_team_and_sync_roster can update the booking
+-- The triggers are DEFERRABLE so assign_team_and_sync_roster can update the booking
 -- header first and rebuild booking_cleaners later in the same transaction.
 
 create or replace function public.assert_team_booking_roster_converged()
@@ -21,9 +21,13 @@ begin
     return new;
   end if;
 
-  -- Only team-shape changes need the deferred convergence check.
-  if new.team_id is not distinct from old.team_id
-     and coalesce(new.is_team_job, false) = coalesce(old.is_team_job, false) then
+  -- For UPDATE, only writes that can change team membership scope need re-checking.
+  -- INSERT is always checked when the row is team-shaped.
+  if tg_op = 'UPDATE'
+     and new.team_id is not distinct from old.team_id
+     and coalesce(new.is_team_job, false) = coalesce(old.is_team_job, false)
+     and new.date is not distinct from old.date
+     and new.assigned_at is not distinct from old.assigned_at then
     return new;
   end if;
 
@@ -77,13 +81,24 @@ $fn$;
 
 revoke all on function public.assert_team_booking_roster_converged() from public;
 
--- Constraint trigger fires at transaction end, after atomic roster-sync RPC work.
-drop trigger if exists bookings_team_roster_convergence_guard on public.bookings;
-create constraint trigger bookings_team_roster_convergence_guard
-after update of team_id, is_team_job on public.bookings
+-- Constraint triggers fire at transaction end, after atomic roster-sync RPC work.
+drop trigger if exists bookings_team_roster_convergence_guard_insert on public.bookings;
+create constraint trigger bookings_team_roster_convergence_guard_insert
+after insert on public.bookings
 deferrable initially deferred
 for each row
 execute function public.assert_team_booking_roster_converged();
 
+drop trigger if exists bookings_team_roster_convergence_guard_update on public.bookings;
+create constraint trigger bookings_team_roster_convergence_guard_update
+after update of team_id, is_team_job, date, assigned_at on public.bookings
+deferrable initially deferred
+for each row
+execute function public.assert_team_booking_roster_converged();
+
+-- Remove the earlier single-trigger name if this migration is re-run in an environment
+-- where a draft version was applied during testing.
+drop trigger if exists bookings_team_roster_convergence_guard on public.bookings;
+
 comment on function public.assert_team_booking_roster_converged() is
-  'P2 guard: team_id/is_team_job changes must finish with a non-empty booking_cleaners roster whose cleaners belong to the assigned team on the effective membership date.';
+  'P2 guard: team-shaped inserts and team_id/is_team_job/date/assigned_at changes must finish with a non-empty booking_cleaners roster whose cleaners belong to the assigned team on the effective membership date.';
