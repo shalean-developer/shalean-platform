@@ -1,8 +1,43 @@
 /**
- * Normalizes assignment metadata when a dispatch offer is accepted (individual cleaner).
+ * Normalizes assignment metadata around the dispatch-offer lifecycle.
  *
  * Lifecycle semantics: `assignmentLifecycleContract.ts` (booking `status` vs `dispatch_status` vs offers).
  * Both checkout-selected-cleaner offers and auto/smart dispatch offers converge on {@link acceptDispatchOffer}.
+ */
+
+/**
+ * Canonical booking patch when an individual-cleaner offer starts.
+ *
+ * Important: this patch intentionally preserves both `selected_cleaner_id` and `assignment_type`.
+ * `selected_cleaner_id` is customer intent, while `assignment_type='user_selected'` is required by
+ * the existing rejection/expiry recovery flows until the offer actually resolves. Clearing either
+ * one at offer start can make a customer-selected booking skip fallback recovery.
+ *
+ * The patch clears only concrete assignment outcome fields, ensuring the booking cannot remain
+ * simultaneously assigned and offered. Team assignment removal is NOT hidden inside this patch;
+ * team jobs must go through the explicit team-management flow before entering an individual-cleaner
+ * offer path.
+ */
+export function assignmentTruthPatchForOfferStart(): {
+  cleaner_id: null;
+  status: "offered";
+  dispatch_status: "offered";
+  assigned_at: null;
+  accepted_at: null;
+  fallback_reason: null;
+} {
+  return {
+    cleaner_id: null,
+    status: "offered",
+    dispatch_status: "offered",
+    assigned_at: null,
+    accepted_at: null,
+    fallback_reason: null,
+  };
+}
+
+/**
+ * Normalizes assignment metadata when a dispatch offer is accepted (individual cleaner).
  *
  * Contract (minimal):
  * - `cleaner_id` + `status=assigned` + `dispatch_status=assigned` are set by the caller.

@@ -36,10 +36,37 @@ export async function performAdminAssignToCleaner(
   params: { bookingId: string; cleanerId: string; force: boolean },
 ): Promise<AdminAssignOneResult> {
   const { bookingId, force } = params;
+
+  // Preserve the established eligibility/override contract first. This keeps account-state,
+  // slot, city and workload failures authoritative and avoids a separate preflight query
+  // changing their public error semantics.
   const validation = await validateAdminManualAssignToCleaner(admin, params);
   if (!validation.ok) return validation;
 
   const { booking: b, resolvedCleanerId, prevCleaner, workloadWarning, warnings } = validation;
+
+  // Fail fast on an existing team assignment for a clear admin-facing error. The actual
+  // transition below also repeats this constraint atomically in its UPDATE predicates, so a
+  // team assignment that races in after this read is still blocked safely.
+  const { data: assignmentHead, error: assignmentHeadError } = await admin
+    .from("bookings")
+    .select("team_id, is_team_job")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (assignmentHeadError) {
+    return { ok: false, httpStatus: 500, error: assignmentHeadError.message };
+  }
+  if (
+    assignmentHead &&
+    ((assignmentHead as { is_team_job?: boolean | null }).is_team_job === true ||
+      Boolean(String((assignmentHead as { team_id?: string | null }).team_id ?? "").trim()))
+  ) {
+    return {
+      ok: false,
+      httpStatus: 409,
+      error: "Booking has a team assignment. Remove or replace the team before offering the booking to an individual cleaner.",
+    };
+  }
 
   const dispatchWasUnassignable = String(b.dispatch_status ?? "").toLowerCase() === "unassignable";
   const nowIsoForPending = new Date().toISOString();
@@ -52,7 +79,11 @@ export async function performAdminAssignToCleaner(
   });
 
   if (!offered.ok) {
-    return { ok: false, httpStatus: 500, error: offered.error };
+    return {
+      ok: false,
+      httpStatus: offered.code === "team_assignment_conflict" ? 409 : 500,
+      error: offered.error,
+    };
   }
 
   await admin
