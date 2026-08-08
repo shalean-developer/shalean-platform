@@ -60,6 +60,9 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     path.includes("/payment-reconciliation") ||
     path.includes("/booking-profitability")
   ) return ["finance.full.view"];
+  if (path.includes("/cleaner-earnings-disputes") || path.includes("/disputes")) {
+    return ["dispute.resolve"];
+  }
   if (path.includes("/payout") || path.includes("/earnings") || path.includes("/disbursement")) {
     return [payoutPermission(path, method)];
   }
@@ -94,18 +97,18 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   }
   if (
     path.includes("/ops-health") ||
+    path.includes("/office-ops-health") ||
     path.includes("/launch-check") ||
     path.includes("/sla-breaches") ||
     path.includes("/ops-queue") ||
     path.includes("/metrics") ||
-    path.includes("/operations")
+    path.includes("/operations") ||
+    path.includes("/office-operations") ||
+    path.includes("/ops-snapshot")
   ) {
     return read
       ? ["ops.health.view", "incident.manage"]
       : ["incident.manage", "ops.health.view"];
-  }
-  if (path.includes("/disputes")) {
-    return ["dispute.resolve"];
   }
 
   if (
