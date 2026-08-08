@@ -8,6 +8,7 @@ import {
 } from "@/lib/accounting/accountingSyncQueue";
 import { syncExpenseToZoho } from "@/lib/accounting/syncExpenseToZoho";
 import { syncVendorToZoho } from "@/lib/accounting/syncVendorToZoho";
+import { syncRefundCreditNoteToZoho } from "@/lib/accounting/syncRefundCreditNoteToZoho";
 import {
   isZohoConfigured,
   loadZohoIntegrationSettings,
@@ -126,6 +127,9 @@ async function processSyncRecord(
       break;
     case "payment_transaction":
       result = await processPaymentTransactionSync(admin, record.entity_id);
+      break;
+    case "refund":
+      result = await syncRefundCreditNoteToZoho(admin, record.entity_id);
       break;
     default:
       result = { ok: false, error: `unsupported_entity_type:${record.entity_type}` };
