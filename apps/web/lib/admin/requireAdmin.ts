@@ -43,6 +43,7 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   const { pathname } = new URL(request.url);
   const path = pathname.toLowerCase();
   const method = request.method.toUpperCase();
+  const read = method === "GET" || method === "HEAD";
 
   if (path.includes("/api/admin/security/") || path.includes("/api/admin/roles") || path.includes("/api/admin/admin-users")) {
     return ["role.manage"];
@@ -70,17 +71,55 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   }
 
   if (
+    path.includes("/office-notifications") ||
+    path.includes("/notification-logs") ||
+    path.includes("/notifications/")
+  ) {
+    return read
+      ? ["system.notifications", "notification.send", "system.logs"]
+      : ["notification.send"];
+  }
+  if (path.includes("/email-operations")) {
+    return read
+      ? ["system.notifications", "notification.send"]
+      : ["notification.send"];
+  }
+  if (path.includes("/lifecycle-email")) {
+    return read
+      ? ["notification.send", "template.manage"]
+      : ["notification.send", "template.manage"];
+  }
+  if (path.includes("/templates")) {
+    return ["template.manage"];
+  }
+  if (
+    path.includes("/ops-health") ||
+    path.includes("/launch-check") ||
+    path.includes("/sla-breaches") ||
+    path.includes("/ops-queue") ||
+    path.includes("/metrics") ||
+    path.includes("/operations")
+  ) {
+    return read
+      ? ["ops.health.view", "incident.manage"]
+      : ["incident.manage", "ops.health.view"];
+  }
+  if (path.includes("/disputes")) {
+    return ["dispute.resolve"];
+  }
+
+  if (
     path === "/api/admin/cleaners" ||
     path.includes("/cleaner-report-feedback") ||
     path.includes("/cleaner-performance")
   ) {
-    return method === "GET" || method === "HEAD" ? ["cleaner.view"] : ["cleaner.edit"];
+    return read ? ["cleaner.view"] : ["cleaner.edit"];
   }
   if (path.includes("/reviews") || path.includes("/review-funnel")) {
     return ["customer.view", "marketing.view"];
   }
   if (path.includes("/blog/")) {
-    return method === "GET" || method === "HEAD"
+    return read
       ? ["content.draft", "content.publish", "marketing.view"]
       : ["content.draft", "content.publish"];
   }
@@ -95,7 +134,7 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     path.includes("/referrals/") ||
     path.includes("/marketing/")
   ) {
-    return method === "GET" || method === "HEAD"
+    return read
       ? ["marketing.view", "content.draft", "content.publish"]
       : ["content.publish", "marketing.view"];
   }
