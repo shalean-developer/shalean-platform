@@ -12,6 +12,7 @@ import {
 import { OFFICE_NAV_ALL_ITEMS, OFFICE_NAV_MODULES, OFFICE_NAV_SECTIONS } from "./OfficeNav";
 import { OfficeMyWorkPanel } from "./OfficeMyWorkPanel";
 import { OfficeRoleDashboard, type OfficeAccessProfile } from "./OfficeRoleDashboard";
+import { SupervisorModeSwitcher } from "./SupervisorModeSwitcher";
 
 type PermissionResponse = OfficeAccessProfile & { permissions?: string[] };
 
@@ -209,15 +210,32 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
     return <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">Loading Office permissions…</div>;
   }
 
-  applyNavigationPermissions(permissions, roleFromProfile(profile));
+  const role = roleFromProfile(profile);
+  applyNavigationPermissions(permissions, role);
   if (pathname === "/office") {
+    if (role === "supervisor") {
+      return (
+        <div className="min-h-full bg-slate-50/60">
+          <div className="mx-auto w-full max-w-[1600px] space-y-5 px-4 py-5 sm:px-6 lg:px-8 xl:px-10">
+            <SupervisorModeSwitcher activeMode="supervisor" forceVisible />
+            <OfficeRoleDashboard permissions={permissions} profile={profile} />
+            <OfficeMyWorkPanel />
+            <footer className="flex flex-col gap-2 border-t border-slate-200 px-1 pt-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+              <span>© 2026 Shalean Cleaning Services. All rights reserved.</span>
+              <span>Supervisor workspace</span>
+            </footer>
+          </div>
+        </div>
+      );
+    }
+
     return <div className="min-h-full bg-slate-50/60">
       <div className="mx-auto w-full max-w-[1600px] space-y-7 px-4 py-6 sm:px-6 lg:px-8 xl:px-10">
         <OfficeRoleDashboard permissions={permissions} profile={profile} />
         <OfficeMyWorkPanel />
         <footer className="flex flex-col gap-2 border-t border-slate-200 px-1 pt-5 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
           <span>© 2026 Shalean Cleaning Services. All rights reserved.</span>
-          <span>Staging Environment</span>
+          <span>Shalean Office</span>
         </footer>
       </div>
     </div>;
