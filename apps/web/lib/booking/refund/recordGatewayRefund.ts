@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { recordUnifiedRefundAccounting } from "@/lib/accounting/recordUnifiedRefundAccounting";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { refundGatewayReference } from "@/lib/booking/refund/refundReconciliation";
+import { sendRefundConfirmationEmail } from "@/lib/notifications/sendRefundConfirmationEmail";
 
 export type RecordGatewayRefundResult =
   | { ok: true; created: boolean; paymentTransactionId: string }
@@ -53,9 +54,6 @@ async function ensureUnifiedAccounting(
       });
     }
   } catch (error) {
-    // The provider reversal + immutable payment_transactions row are authoritative.
-    // Accounting/Zoho convergence is asynchronous and must never make a completed
-    // refund look failed after money has already been returned to the customer.
     await logSystemEvent({
       level: "warn",
       source: "payments/recordGatewayRefund",
@@ -71,11 +69,32 @@ async function ensureUnifiedAccounting(
   }
 }
 
+async function notifyBookingRefund(
+  admin: SupabaseClient,
+  params: {
+    entityType: "booking" | "monthly_invoice" | "sales_document";
+    entityId: string;
+    refundId: string;
+    amountCents: number;
+    currencyCode?: string;
+  },
+): Promise<void> {
+  if (params.entityType !== "booking") return;
+  await sendRefundConfirmationEmail(admin, {
+    entityType: "booking",
+    entityId: params.entityId,
+    refundReference: params.refundId,
+    amountCents: params.amountCents,
+    currencyCode: params.currencyCode,
+  }).catch(() => undefined);
+}
+
 /**
  * Idempotent refund ledger row keyed by refund:{chargeRef}:{refundId}.
  * Original capture rows remain immutable; refunds are separate lines with settlement_status=reversed.
  * The same retry-safe path also attempts to ensure the unified accounting record and Zoho queue entry.
  * Accounting convergence is intentionally non-blocking after the reversal ledger exists.
+ * Booking refunds notify only after this writer is called; booking local refund state is persisted before callers reach this boundary.
  */
 export async function recordGatewayRefund(
   admin: SupabaseClient,
@@ -119,12 +138,18 @@ export async function recordGatewayRefund(
       refundedAtIso: params.refundedAtIso,
       reason: params.reason,
     });
+    await notifyBookingRefund(admin, {
+      entityType: params.entityType,
+      entityId: params.entityId,
+      refundId: params.refundId,
+      amountCents,
+      currencyCode: params.currencyCode,
+    });
     return { ok: true, created: false, paymentTransactionId };
   }
 
   const now = params.refundedAtIso ?? new Date().toISOString();
-  const bookingId =
-    params.bookingId ?? (params.entityType === "booking" ? params.entityId : null);
+  const bookingId = params.bookingId ?? (params.entityType === "booking" ? params.entityId : null);
 
   const { data: inserted, error } = await admin
     .from("payment_transactions")
@@ -156,7 +181,6 @@ export async function recordGatewayRefund(
     .single();
 
   if (error) {
-    // Unique race — converge through the same existing-row retry path.
     if (String(error.message).toLowerCase().includes("duplicate") || error.code === "23505") {
       const { data: again } = await admin
         .from("payment_transactions")
@@ -176,6 +200,13 @@ export async function recordGatewayRefund(
           currencyCode: params.currencyCode,
           refundedAtIso: params.refundedAtIso,
           reason: params.reason,
+        });
+        await notifyBookingRefund(admin, {
+          entityType: params.entityType,
+          entityId: params.entityId,
+          refundId: params.refundId,
+          amountCents,
+          currencyCode: params.currencyCode,
         });
         return { ok: true, created: false, paymentTransactionId };
       }
@@ -209,9 +240,13 @@ export async function recordGatewayRefund(
     },
   });
 
-  return {
-    ok: true,
-    created: true,
-    paymentTransactionId,
-  };
+  await notifyBookingRefund(admin, {
+    entityType: params.entityType,
+    entityId: params.entityId,
+    refundId: params.refundId,
+    amountCents,
+    currencyCode: params.currencyCode,
+  });
+
+  return { ok: true, created: true, paymentTransactionId };
 }
