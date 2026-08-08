@@ -43,4 +43,15 @@ describe("P3 Paystack refund webhook convergence", () => {
     expect(src).toContain("safeResendSend");
     expect(src).toContain("refund:${refundReference}");
   });
+
+  it("fails closed before mutating a sales document when Paystack amount differs from invoice total", () => {
+    const src = read("apps/web/lib/salesDocument/applySalesDocumentPayment.ts");
+    const mismatch = src.indexOf("if (paidIn !== total)");
+    const dedup = src.indexOf('from("sales_document_paystack_charge_dedup")');
+    const paidUpdate = src.indexOf('status: "paid"');
+    expect(mismatch).toBeGreaterThan(-1);
+    expect(dedup).toBeGreaterThan(mismatch);
+    expect(paidUpdate).toBeGreaterThan(mismatch);
+    expect(src).toContain("sales_document.payment_amount_mismatch");
+  });
 });
