@@ -22,6 +22,27 @@ function cents(value: unknown): number {
   return Math.max(0, Math.round(Number(value)));
 }
 
+/**
+ * Direct booking amount carried into a payout batch.
+ *
+ * Once a booking reaches settlement (`eligible` / `paid`), a positive
+ * `payout_frozen_cents` is the immutable earnings lock and must win over an
+ * older `cleaner_payout_cents` snapshot. Before settlement, keep the editable
+ * cleaner payout value so legitimate pre-freeze adjustments continue to work.
+ */
+export function resolveDirectPayoutBatchCents(row: {
+  payout_status?: unknown;
+  payout_frozen_cents?: unknown;
+  cleaner_payout_cents?: unknown;
+}): number {
+  const status = String(row.payout_status ?? "")
+    .trim()
+    .toLowerCase();
+  const frozen = cents(row.payout_frozen_cents);
+  if ((status === "eligible" || status === "paid") && frozen > 0) return frozen;
+  return cents(row.cleaner_payout_cents);
+}
+
 type BookingMeta = {
   id: string;
   cleaner_id: string | null;
@@ -30,6 +51,8 @@ type BookingMeta = {
   date: string | null;
   cleaner_payout_cents: number | null;
   cleaner_bonus_cents: number | null;
+  payout_status: string | null;
+  payout_frozen_cents: number | null;
   is_test: boolean | null;
   status: string | null;
   refunded_at: string | null;
@@ -44,7 +67,7 @@ export async function loadCleanerPayoutBatchItems(
       admin
         .from("bookings")
         .select(
-          "id, cleaner_id, customer_name, service, date, cleaner_payout_cents, cleaner_bonus_cents, is_test, status, refunded_at",
+          "id, cleaner_id, customer_name, service, date, cleaner_payout_cents, cleaner_bonus_cents, payout_status, payout_frozen_cents, is_test, status, refunded_at",
         )
         .eq("payout_id", payoutId),
       admin
@@ -72,7 +95,9 @@ export async function loadCleanerPayoutBatchItems(
     for (let i = 0; i < memberBookingIds.length; i += 120) {
       const { data, error } = await admin
         .from("bookings")
-        .select("id, cleaner_id, customer_name, service, date, cleaner_payout_cents, cleaner_bonus_cents, is_test, status, refunded_at")
+        .select(
+          "id, cleaner_id, customer_name, service, date, cleaner_payout_cents, cleaner_bonus_cents, payout_status, payout_frozen_cents, is_test, status, refunded_at",
+        )
         .in("id", memberBookingIds.slice(i, i + 120));
       if (error) return { items: [], totalCents: 0, error: error.message };
       for (const raw of data ?? []) {
@@ -93,7 +118,7 @@ export async function loadCleanerPayoutBatchItems(
       customer_name: row.customer_name ?? null,
       service: row.service ?? null,
       date: row.date ?? null,
-      payout_cents: cents(row.cleaner_payout_cents),
+      payout_cents: resolveDirectPayoutBatchCents(row),
       bonus_cents: cents(row.cleaner_bonus_cents),
       is_test: row.is_test === true,
       booking_status: row.status ?? null,
