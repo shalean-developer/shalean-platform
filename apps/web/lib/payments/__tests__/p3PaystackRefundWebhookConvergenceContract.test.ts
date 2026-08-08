@@ -22,8 +22,25 @@ describe("P3 Paystack refund webhook convergence", () => {
     expect(src).toContain("recordGatewayRefund");
   });
 
-  it("keeps provider refund routing idempotent through the canonical reversal writer", () => {
+  it("wires the authoritative webhook to the shared refund router", () => {
+    const route = read("apps/web/app/api/paystack/webhook/route.ts");
+    expect(route).toContain("routeSuccessfulPaystackRefund");
+    expect(route).toContain('providerState === "succeeded"');
+    expect(route).toContain("refund.unified_route_failed");
+  });
+
+  it("keeps provider refund routing idempotent through one canonical reversal writer", () => {
     const src = read("apps/web/lib/payments/routePaystackRefundEvent.ts");
-    expect(src.match(/recordGatewayRefund\(/g)?.length).toBe(3);
+    expect(src.match(/recordGatewayRefund\(/g)?.length).toBe(1);
+    expect(src).toContain("recordAndNotify");
+  });
+
+  it("sends refund confirmation through notification idempotency, not raw webhook count", () => {
+    const src = read("apps/web/lib/notifications/sendRefundConfirmationEmail.ts");
+    expect(src).toContain("tryClaimNotificationIdempotency");
+    expect(src).toContain('eventType: "refund_succeeded"');
+    expect(src).toContain("releaseNotificationIdempotencyClaim");
+    expect(src).toContain("safeResendSend");
+    expect(src).toContain("refund:${refundReference}");
   });
 });
