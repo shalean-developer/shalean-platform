@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { inferOfficeRole, policyForOfficePath, hasAnyOfficePermission, type OfficeRoleKey } from "@/lib/admin/officeExperience";
+import { OwnerCommandCentrePanel } from "@/src/features/office/OwnerCommandCentrePanel";
 
 export type OfficeRoleAssignment = {
   assignmentId: string;
@@ -165,6 +166,7 @@ export function OfficeRoleDashboard({ permissions, profile }: OfficeRoleDashboar
       </div>
       {role === "supervisor" && profile.teamIds.length === 0 ? <p className="mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">Supervisor access has no assigned team scope. Team data must remain unavailable until the Owner assigns a team.</p> : null}
     </header>
+    {role === "owner" ? <OwnerCommandCentrePanel permissions={permissions} /> : null}
     {workspaces.length ? <section><h2 className="mb-4 text-lg font-semibold tracking-tight text-slate-950">Your priority workspace</h2><Grid items={workspaces} /></section> : <section className="rounded-xl border border-amber-200 bg-amber-50 p-6 text-sm text-amber-900">No Office modules are assigned to this account.</section>}
     {reports.length ? <section><h2 className="mb-4 text-lg font-semibold tracking-tight text-slate-950">Role reports and KPIs</h2><Grid items={reports} reports /></section> : null}
   </main>;
