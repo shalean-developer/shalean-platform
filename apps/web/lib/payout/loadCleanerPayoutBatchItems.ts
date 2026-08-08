@@ -26,21 +26,37 @@ function cents(value: unknown): number {
  * Direct booking amount carried into a payout batch.
  *
  * Once a booking reaches settlement (`eligible` / `paid`), a positive
- * `payout_frozen_cents` is the immutable earnings lock and must win over an
- * older `cleaner_payout_cents` snapshot. Before settlement, keep the editable
- * cleaner payout value so legitimate pre-freeze adjustments continue to work.
+ * `payout_frozen_cents` is the immutable earnings lock and already represents
+ * the full settled cleaner amount, including any bonus that existed when the
+ * earning was frozen. Before settlement, keep payout and bonus separate so
+ * legitimate pre-freeze adjustments continue to work.
  */
+export function resolveDirectPayoutBatchAmounts(row: {
+  payout_status?: unknown;
+  payout_frozen_cents?: unknown;
+  cleaner_payout_cents?: unknown;
+  cleaner_bonus_cents?: unknown;
+}): { payout_cents: number; bonus_cents: number } {
+  const status = String(row.payout_status ?? "")
+    .trim()
+    .toLowerCase();
+  const frozen = cents(row.payout_frozen_cents);
+  if ((status === "eligible" || status === "paid") && frozen > 0) {
+    return { payout_cents: frozen, bonus_cents: 0 };
+  }
+  return {
+    payout_cents: cents(row.cleaner_payout_cents),
+    bonus_cents: cents(row.cleaner_bonus_cents),
+  };
+}
+
+/** Backwards-compatible scalar helper for callers/tests that only need payout cents. */
 export function resolveDirectPayoutBatchCents(row: {
   payout_status?: unknown;
   payout_frozen_cents?: unknown;
   cleaner_payout_cents?: unknown;
 }): number {
-  const status = String(row.payout_status ?? "")
-    .trim()
-    .toLowerCase();
-  const frozen = cents(row.payout_frozen_cents);
-  if ((status === "eligible" || status === "paid") && frozen > 0) return frozen;
-  return cents(row.cleaner_payout_cents);
+  return resolveDirectPayoutBatchAmounts(row).payout_cents;
 }
 
 type BookingMeta = {
@@ -110,6 +126,7 @@ export async function loadCleanerPayoutBatchItems(
   const items: CleanerPayoutBatchItem[] = [];
   for (const raw of direct ?? []) {
     const row = raw as BookingMeta;
+    const directAmounts = resolveDirectPayoutBatchAmounts(row);
     items.push({
       source: "booking",
       line_id: row.id,
@@ -118,8 +135,8 @@ export async function loadCleanerPayoutBatchItems(
       customer_name: row.customer_name ?? null,
       service: row.service ?? null,
       date: row.date ?? null,
-      payout_cents: resolveDirectPayoutBatchCents(row),
-      bonus_cents: cents(row.cleaner_bonus_cents),
+      payout_cents: directAmounts.payout_cents,
+      bonus_cents: directAmounts.bonus_cents,
       is_test: row.is_test === true,
       booking_status: row.status ?? null,
       refunded_at: row.refunded_at ?? null,
