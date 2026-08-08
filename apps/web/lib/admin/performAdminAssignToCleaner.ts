@@ -37,10 +37,19 @@ export async function performAdminAssignToCleaner(
 ): Promise<AdminAssignOneResult> {
   const { bookingId, force } = params;
 
+  // Preserve the established eligibility/override contract first. This keeps account-state,
+  // slot, city and workload failures authoritative and avoids a separate preflight query
+  // changing their public error semantics.
+  const validation = await validateAdminManualAssignToCleaner(admin, params);
+  if (!validation.ok) return validation;
+
+  const { booking: b, resolvedCleanerId, prevCleaner, workloadWarning, warnings } = validation;
+
   // Individual-cleaner offers must never silently dismantle a team assignment. Team jobs
   // have roster/member payout state outside the booking row, so clearing only booking.team_id
   // would create split assignment truth and could later duplicate earnings. Require the
-  // explicit team-management flow to remove/replace the team first.
+  // explicit team-management flow to remove/replace the team first. This check runs after
+  // canonical validation but before any booking or offer write.
   const { data: assignmentHead, error: assignmentHeadError } = await admin
     .from("bookings")
     .select("team_id, is_team_job")
@@ -60,11 +69,6 @@ export async function performAdminAssignToCleaner(
       error: "Booking has a team assignment. Remove or replace the team before offering the booking to an individual cleaner.",
     };
   }
-
-  const validation = await validateAdminManualAssignToCleaner(admin, params);
-  if (!validation.ok) return validation;
-
-  const { booking: b, resolvedCleanerId, prevCleaner, workloadWarning, warnings } = validation;
 
   const dispatchWasUnassignable = String(b.dispatch_status ?? "").toLowerCase() === "unassignable";
   const nowIsoForPending = new Date().toISOString();
