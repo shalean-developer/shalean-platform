@@ -34,7 +34,7 @@ export function MarketingHomeHeroSection() {
 
           {/* Supporting paragraph */}
           <p className="marketing-hero-lead max-w-lg text-base leading-relaxed text-slate-600">
-            Professional, reliable and affordable cleaning services for homes, apartments and offices. Book in minutes online.
+            Professional, reliable and affordable cleaning services for homes, apartments and offices. See your price and book online in minutes.
           </p>
 
           {/* Benefit icons */}
@@ -60,14 +60,14 @@ export function MarketingHomeHeroSection() {
             </Link>
           </p>
 
-          {/* CTAs — plain links keep this section free of client JS for faster LCP */}
+          {/* CTAs — distinguish instant self-service pricing from assisted quoting. */}
           <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
             <Link
               href={bookHref}
-              data-growth-cta-source="marketing_hero_book_cleaning"
+              data-growth-cta-source="marketing_hero_see_price"
               className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto sm:text-sm"
             >
-              Book a cleaning
+              See instant price
               <span aria-hidden className="ml-0.5">→</span>
             </Link>
             <Link
@@ -75,9 +75,12 @@ export function MarketingHomeHeroSection() {
               data-quote-cta-source="marketing_hero"
               className={`${getFreeQuoteButtonClass.outline} w-full sm:w-auto`}
             >
-              Get Free Quote
+              Request a quote
             </Link>
           </div>
+          <p className="-mt-2 text-xs text-slate-500">
+            Instant price is self-service. Request a quote for custom or unusual jobs.
+          </p>
 
           {/* Google rating row */}
           <div className="flex flex-wrap items-center justify-center gap-2.5 sm:justify-start">
