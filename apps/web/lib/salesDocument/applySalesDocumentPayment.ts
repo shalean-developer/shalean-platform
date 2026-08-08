@@ -33,19 +33,22 @@ export async function applySalesDocumentPayment(
     return { ok: false, error: err instanceof Error ? err.message : "lookup_failed" };
   }
 
-  if (!row) {
-    return { ok: true, skipped: true, reason: "not_found" };
-  }
+  if (!row) return { ok: true, skipped: true, reason: "not_found" };
+  if (row.document_type !== "invoice") return { ok: false, error: "not_an_invoice" };
 
-  if (row.document_type !== "invoice") {
-    return { ok: false, error: "not_an_invoice" };
+  const total = Math.max(0, Math.round(Number(row.total_cents ?? 0)));
+  if (paidIn !== total) {
+    await logSystemEvent({
+      level: "error",
+      source: "sales_document/payment",
+      message: "sales_document.payment_amount_mismatch",
+      context: { documentId: row.id, reference: ref, paidInCents: paidIn, expectedCents: total },
+    });
+    return { ok: false, error: `amount_mismatch:${paidIn}:${total}` };
   }
 
   const st = String(row.status ?? "").toLowerCase();
-  if (st === "paid") {
-    return { ok: true, skipped: true, reason: "already_paid" };
-  }
-
+  if (st === "paid") return { ok: true, skipped: true, reason: "already_paid" };
   if (!["sent", "accepted"].includes(st)) {
     return { ok: false, error: `document_not_payable_status:${st || "unknown"}` };
   }
@@ -67,20 +70,13 @@ export async function applySalesDocumentPayment(
 
   if (dedupErr) {
     const code = (dedupErr as { code?: string }).code;
-    if (code === "23505") {
-      if (st === "paid") {
-        return { ok: true, skipped: true, reason: "duplicate_charge" };
-      }
-    } else {
-      return { ok: false, error: dedupErr.message };
-    }
+    if (code === "23505") return { ok: true, skipped: true, reason: "duplicate_charge" };
+    return { ok: false, error: dedupErr.message };
   } else {
     dedupInserted = true;
   }
 
-  const total = Math.max(0, Math.round(Number(row.total_cents ?? 0)));
   const nowIso = new Date().toISOString();
-
   const { error: updErr } = await admin
     .from("sales_documents")
     .update({
@@ -91,7 +87,6 @@ export async function applySalesDocumentPayment(
       updated_at: nowIso,
     })
     .eq("id", row.id);
-
   if (updErr) return { ok: false, error: updErr.message };
 
   const zohoId = String(row.zoho_invoice_id ?? "").trim();
