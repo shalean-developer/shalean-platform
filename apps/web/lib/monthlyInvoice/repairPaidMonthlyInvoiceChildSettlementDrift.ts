@@ -41,6 +41,7 @@ type CandidateRow = MonthlyInvoiceSettlementChildRow & {
   payment_status: string | null;
   payout_status: string | null;
   payout_frozen_cents: number | null;
+  cleaner_earnings_total_cents?: number | null;
   refund_status?: string | null;
   refunded_at?: string | null;
   is_team_job?: boolean | null;
@@ -69,7 +70,11 @@ function isFullySettled(row: CandidateRow): boolean {
 }
 
 function hasPositiveEarningsBasis(row: CandidateRow): boolean {
-  return positiveCents(row.display_earnings_cents) != null || positiveCents(row.cleaner_payout_cents) != null;
+  return (
+    positiveCents(row.display_earnings_cents) != null ||
+    positiveCents(row.cleaner_payout_cents) != null ||
+    positiveCents(row.cleaner_earnings_total_cents) != null
+  );
 }
 
 function refundOrDisputeBlocked(row: CandidateRow): boolean {
@@ -112,7 +117,7 @@ export async function repairPaidMonthlyInvoiceChildSettlementDrift(
   const { data: candidateRows, error: scanErr } = await admin
     .from("bookings")
     .select(
-      "id, monthly_invoice_id, status, payment_status, payout_status, payout_frozen_cents, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents, refund_status, refunded_at, is_team_job, team_id",
+      "id, monthly_invoice_id, status, payment_status, payout_status, payout_frozen_cents, total_paid_zar, amount_paid_cents, display_earnings_cents, cleaner_payout_cents, cleaner_earnings_total_cents, refund_status, refunded_at, is_team_job, team_id",
     )
     .not("monthly_invoice_id", "is", null)
     .order("updated_at", { ascending: false })
