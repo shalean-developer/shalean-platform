@@ -210,7 +210,7 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
   applyNavigationPermissions(permissions, role);
 
   if (pathname === "/office") {
-    if (role === "manager" || role === "operations") {
+    if (role === "operations") {
       return <>{children}</>;
     }
 

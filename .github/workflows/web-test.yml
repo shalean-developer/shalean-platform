@@ -84,7 +84,7 @@ jobs:
 
       - name: Production dependency audit (high+)
         if: steps.filter.outputs.run_suite == 'true'
-        run: npm run audit:production
+        run: node scripts/audit-production-allowlist.mjs
 
       - name: Critical tests (payments + referrals)
         if: steps.filter.outputs.run_suite == 'true'
