@@ -14,26 +14,41 @@ This is the final acceptance matrix for the Admin Roles implementation plan. Aut
 - My Work only exposes items whose exact permission and destination policy match.
 - No role receives customer, cleaner, finance or message-body data outside its approved scope.
 
-## Role acceptance journeys
+## Role acceptance journeys — live grant aligned
 
 | Role | Must be able to | Must be denied |
 | --- | --- | --- |
-| Owner | Security/audit, access reviews, company finance, payouts, operations, workforce, customer, marketing | Unknown/unregistered Office routes |
-| General Manager | Operational oversight, payout approvals, customers, workforce visibility, system health | Owner security/role administration, pricing/integration owner-only controls |
-| Operations Administrator | Booking/team operations, operational customer contact, system health | Company finance, Owner security, marketing publishing |
-| Finance Administrator | Full finance, invoices, reconciliation, payout preparation | Customer administration, cleaner sensitive documents unless separately granted, marketing publishing |
-| Customer Care | Customers, bookings required for support, WhatsApp/customer replies | Cleaner administration, finance, Owner security, marketing publishing |
-| Workforce Administrator | Cleaner applications, cleaner/team management, scheduling visibility | Finance, customer administration, Owner security, marketing publishing |
-| Marketing Administrator | Blog drafting, campaign publishing review, marketing analytics/content | Customer PII administration, finance, cleaner administration, Owner security |
-| Supervisor | Assigned-team schedule/bookings and team workflow only | Company-wide customers, finance, payouts, security, marketing, unrelated teams |
+| Owner | Security/audit, access reviews, company finance, payout preparation/approval/release, operations, workforce, customer, marketing | Unknown/unregistered Office routes |
+| General Manager | Operational oversight, customers, cleaner/team management, system health, payout viewing/preparation, low-level refund approval | Owner security/role administration, payout approval/release, full finance, pricing/integration owner-only controls |
+| Operations Administrator | Booking/team operations, operational customer contact, system health, workforce earnings visibility | Company finance, payout administration, Owner security, marketing publishing |
+| Finance Administrator | Full finance, invoices, reconciliation, payout preparation, workforce earnings visibility | Payout approval/release, customer administration, cleaner sensitive documents unless separately granted, marketing publishing |
+| Customer Care | Customers, support bookings, WhatsApp/customer replies, refund requests | Cleaner administration, finance, payout administration, Owner security, marketing publishing |
+| Workforce Administrator | Cleaner applications, cleaner documents, cleaner/team management, workforce earnings visibility | Booking scheduling/administration unless separately granted, finance, customer administration, Owner security, marketing publishing |
+| Marketing Administrator | Blog drafting and marketing read/analytics workflows | Campaign publishing requiring `content.publish`, customer PII administration, finance, cleaner administration, Owner security |
+| Supervisor | Assigned-team schedule/bookings, team assignment and workforce earnings visibility only within scope | Unscoped/company-wide bookings, unrelated teams, company-wide customers, finance, payouts, security, marketing |
 
 ## My Work acceptance
 
 - Finance: overdue invoices and approved-unbatched earnings only with their exact permissions.
 - Workforce: pending cleaner applications only with `application.decide`.
 - Customer Care: unanswered WhatsApp conversations only with `customer.contact`; phone is masked on the card and message body is not copied into My Work.
-- Marketing: draft blog work only with `content.draft`; ready campaign work only with `content.publish`.
-- Supervisor: must not receive Finance, Workforce, Customer Care or Marketing work items without those exact permissions.
+- Marketing: draft blog work only with `content.draft`; ready campaign work requires `content.publish` and must remain hidden from the current live Marketing Administrator role unless that permission is explicitly granted later.
+- Supervisor: must not receive Finance, Workforce, Customer Care or Marketing work items without those exact permissions; team-scoped booking work must remain limited to the assigned team.
+
+## Live/staging evidence recorded 2026-08-08
+
+- Priority 4, Priority 2, Priority 1, migration-governance and `web-test` CI were all green on the live-role-alignment change merged in PR #228.
+- Staging and production RBAC tables contain the same eight active roles with matching permission sets.
+- All eight staging UAT accounts are active; the Supervisor account is team-scoped.
+- Representative staging permission checks passed fail-closed expectations:
+  - Owner: `role.manage` and `payout.release` allowed.
+  - General Manager: `finance.summary.view` allowed; `payout.approve` denied.
+  - Operations: `booking.assign` allowed; `finance.full.view` denied.
+  - Finance: `finance.full.view` allowed; `payout.release` denied.
+  - Customer Care: `customer.contact` allowed; `cleaner.view` denied.
+  - Workforce: `application.decide` allowed; `booking.view` denied.
+  - Marketing: `content.draft` allowed; `content.publish` denied.
+  - Supervisor: unscoped `booking.assign` denied; assigned-team `booking.assign` and `booking.view` allowed; unrelated-team assignment and finance access denied.
 
 ## Manual staging sign-off
 
@@ -48,6 +63,11 @@ For each of the eight staging role accounts:
 7. For scoped roles, verify records outside assigned branch/team are absent or denied.
 8. Sign out and record PASS/FAIL plus evidence link/screenshot.
 
-## Final closeout
+## Remaining closeout gates
 
-Priority 4 can be marked complete only when the Priority 4 CI gate is green and the eight staging role journeys above have been signed off. Production closeout should then include a seven-day review of authorization failures, sensitive-access audit events, role changes, exports and payout maker-checker events before the implementation plan is marked fully complete.
+Priority 4 is not yet fully closed until both of these are complete:
+
+1. **Eight manual staging journeys:** browser-level sign-off for all eight role accounts using the steps above. Database and automated policy checks do not replace this user-interface acceptance step.
+2. **Seven-day production observation:** review authorization failures, sensitive-access audit events, role changes, exports and payout maker-checker events for seven consecutive days after the final RBAC changes are in production.
+
+If both gates pass with no unresolved high-risk findings, Priority 4 can be marked complete and the Admin Roles implementation plan can move to governance-only operation.
