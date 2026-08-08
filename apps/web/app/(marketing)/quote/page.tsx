@@ -14,12 +14,12 @@ import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 const PATH = "/quote";
 const CANONICAL = absoluteCanonicalUrl(PATH);
 
-const QUOTE_TITLE = "Get a Free Cleaning Quote | Shalean Cape Town";
+const QUOTE_TITLE = "Request a Cleaning Quote | Shalean Cape Town";
 const QUOTE_META_DESC = clampMetaDescription(
-  "Request a free, no-obligation cleaning quote for your home or office in Cape Town. Tell us what you need — we'll email your personalised quote.",
+  "Request a personalised, no-obligation cleaning quote for a custom home, office or recurring cleaning job in Cape Town. Shalean will review your scope and reply by email.",
 );
 const QUOTE_OG_DESC = clampMetaDescription(
-  "Free cleaning quotes for Cape Town homes and offices — personalised pricing from Shalean.",
+  "Personalised cleaning quotes for custom Cape Town homes, offices and recurring cleaning requirements.",
 );
 
 export const metadata: Metadata = {
@@ -29,9 +29,9 @@ export const metadata: Metadata = {
   alternates: { canonical: CANONICAL },
   ...buildMarketingSocialMetadata({
     url: CANONICAL,
-    title: "Get a Free Cleaning Quote | Shalean",
+    title: "Request a Cleaning Quote | Shalean",
     description: QUOTE_OG_DESC,
-    imageAlt: "Request a free cleaning quote from Shalean Cape Town",
+    imageAlt: "Request a personalised cleaning quote from Shalean Cape Town",
   }),
 };
 
@@ -39,7 +39,7 @@ const JSON_LD = buildMarketingWebPageJsonLd({
   path: PATH,
   name: QUOTE_TITLE,
   description: QUOTE_META_DESC,
-  breadcrumbLabel: "Get a Quote",
+  breadcrumbLabel: "Request a Quote",
   includeLocalBusinessNode: true,
 });
 
@@ -54,20 +54,22 @@ export default function QuoteRequestPage() {
       <QuotePageHeader />
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
         <div className="mb-8 text-center">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Free quote</p>
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Personalised quote</p>
           <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Get your free cleaning quote
+            Request a cleaning quote
           </h1>
           <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-slate-600">
-            Tell us about your home or office and we&apos;ll send a personalised quote by email. No account
-            required — accept and pay online when you&apos;re ready.
+            Use this form for unusual properties, offices, recurring schedules or jobs that need a custom scope. We&apos;ll review your requirements and email a personalised quote.
           </p>
+          <div className="mx-auto mt-5 max-w-xl rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+            Need a standard price immediately?{" "}
+            <Link href="/book" className="font-bold text-blue-700 hover:underline">
+              See your instant online price instead
+            </Link>
+            .
+          </div>
         </div>
         <QuoteRequestForm />
-        <p className="mt-8 text-center text-sm text-slate-500">
-          Need a price right now?{" "}
-          <Link href="/book" className="font-semibold text-blue-600 hover:underline">Get an instant price online</Link>
-        </p>
       </main>
       <QuotePageFooter />
     </div>
