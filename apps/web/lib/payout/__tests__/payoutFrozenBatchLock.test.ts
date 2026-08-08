@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { resolveDirectPayoutBatchCents } from "@/lib/payout/loadCleanerPayoutBatchItems";
+import {
+  resolveDirectPayoutBatchAmounts,
+  resolveDirectPayoutBatchCents,
+} from "@/lib/payout/loadCleanerPayoutBatchItems";
 
 describe("resolveDirectPayoutBatchCents", () => {
   it("uses the frozen settlement lock for eligible bookings", () => {
@@ -40,5 +43,29 @@ describe("resolveDirectPayoutBatchCents", () => {
         cleaner_payout_cents: 25_000,
       }),
     ).toBe(25_000);
+  });
+});
+
+describe("resolveDirectPayoutBatchAmounts", () => {
+  it("does not add bonus again after the frozen total already includes it", () => {
+    expect(
+      resolveDirectPayoutBatchAmounts({
+        payout_status: "eligible",
+        payout_frozen_cents: 27_000,
+        cleaner_payout_cents: 25_000,
+        cleaner_bonus_cents: 2_000,
+      }),
+    ).toEqual({ payout_cents: 27_000, bonus_cents: 0 });
+  });
+
+  it("keeps base and bonus separate before settlement is frozen", () => {
+    expect(
+      resolveDirectPayoutBatchAmounts({
+        payout_status: "pending",
+        payout_frozen_cents: 27_000,
+        cleaner_payout_cents: 25_000,
+        cleaner_bonus_cents: 2_000,
+      }),
+    ).toEqual({ payout_cents: 25_000, bonus_cents: 2_000 });
   });
 });
