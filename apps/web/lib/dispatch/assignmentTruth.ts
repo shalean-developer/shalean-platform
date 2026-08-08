@@ -8,13 +8,15 @@
 /**
  * Canonical booking patch when an individual-cleaner offer starts.
  *
- * Important: this patch intentionally preserves `selected_cleaner_id` so customer intent can still
- * be evaluated when an offer is accepted. It clears only assignment *outcome* fields, ensuring the
- * booking cannot remain simultaneously assigned and offered.
+ * Important: this patch intentionally preserves both `selected_cleaner_id` and `assignment_type`.
+ * `selected_cleaner_id` is customer intent, while `assignment_type='user_selected'` is required by
+ * the existing rejection/expiry recovery flows until the offer actually resolves. Clearing either
+ * one at offer start can make a customer-selected booking skip fallback recovery.
  *
- * Team assignment removal is NOT hidden inside this patch. Team jobs must go through the explicit
- * team-management flow before entering an individual-cleaner offer path; the admin solo validator
- * fails closed when a team assignment is present.
+ * The patch clears only concrete assignment outcome fields, ensuring the booking cannot remain
+ * simultaneously assigned and offered. Team assignment removal is NOT hidden inside this patch;
+ * team jobs must go through the explicit team-management flow before entering an individual-cleaner
+ * offer path.
  */
 export function assignmentTruthPatchForOfferStart(): {
   cleaner_id: null;
@@ -22,7 +24,6 @@ export function assignmentTruthPatchForOfferStart(): {
   dispatch_status: "offered";
   assigned_at: null;
   accepted_at: null;
-  assignment_type: null;
   fallback_reason: null;
 } {
   return {
@@ -31,7 +32,6 @@ export function assignmentTruthPatchForOfferStart(): {
     dispatch_status: "offered",
     assigned_at: null,
     accepted_at: null,
-    assignment_type: null,
     fallback_reason: null,
   };
 }
