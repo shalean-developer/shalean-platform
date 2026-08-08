@@ -21,9 +21,7 @@ import { replayPaymentConfirmedNotifyForPersistedBooking } from "@/lib/booking/p
 import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
 import { routePaystackChargeForMonthlyInvoice } from "@/lib/booking/routePaystackChargeForMonthlyInvoice";
 import { monthlyInvoiceIdFromPaystackMetadata } from "@/lib/monthlyInvoice/monthlyInvoicePaystackReference";
-import {
-  routePaystackChargeForSalesDocument,
-} from "@/lib/salesDocument/routePaystackChargeForSalesDocument";
+import { routePaystackChargeForSalesDocument } from "@/lib/salesDocument/routePaystackChargeForSalesDocument";
 import { salesDocumentIdFromPaystackMetadata } from "@/lib/salesDocument/salesDocumentPaystackReference";
 import { metrics } from "@/lib/metrics/counters";
 import {
@@ -41,6 +39,7 @@ import {
   recordPaystackMonthlyInvoicePayment,
   recordPaystackSalesDocumentPayment,
 } from "@/lib/payments/recordPaystackSettlement";
+import { routeSuccessfulPaystackRefund } from "@/lib/payments/routePaystackRefundEvent";
 import { isCheckoutCurrencyZar, maskPaystackReference } from "@/lib/payments/paymentAmountMismatch";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 
@@ -49,13 +48,10 @@ export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   const secret = process.env.PAYSTACK_SECRET_KEY;
-  if (!secret) {
-    return NextResponse.json({ error: "Paystack not configured." }, { status: 503 });
-  }
+  if (!secret) return NextResponse.json({ error: "Paystack not configured." }, { status: 503 });
 
   const rawBody = await request.text();
   const signature = request.headers.get("x-paystack-signature");
-
   const hash = crypto.createHmac("sha512", secret).update(rawBody).digest("hex");
 
   if (!signature || !timingSafeEqualString(hash, signature)) {
@@ -91,16 +87,10 @@ export async function POST(request: Request) {
 
   if (event.event === "charge.failed" && event.data) {
     const d = event.data as Record<string, unknown>;
-    const reference =
-      typeof d.reference === "string"
-        ? d.reference
-        : typeof (d as { reference?: unknown }).reference === "string"
-          ? String((d as { reference: string }).reference)
-          : "";
-    const gateway =
-      typeof d.gateway_response === "string"
-        ? d.gateway_response.slice(0, 500)
-        : JSON.stringify(d.gateway_response ?? d.message ?? "").slice(0, 500);
+    const reference = typeof d.reference === "string" ? d.reference : "";
+    const gateway = typeof d.gateway_response === "string"
+      ? d.gateway_response.slice(0, 500)
+      : JSON.stringify(d.gateway_response ?? d.message ?? "").slice(0, 500);
     await reportOperationalIssue("error", "paystack/webhook", "Paystack charge.failed (customer payment not completed)", {
       reference: reference || null,
       gateway_response: gateway || null,
@@ -120,21 +110,17 @@ export async function POST(request: Request) {
         }
       }
     }
-    await postDispatchControlAlert(
-      {
-        errorType: "payment_charge_failed",
-        message: "Paystack charge.failed (customer payment not completed)",
-        bookingId,
-        dedupeKey: reference ? `payment_charge_failed:${reference}` : "payment_charge_failed:unknown",
-        dedupeWindowMinutes: 30,
-        extra: { reference: reference || null, gateway_response: gateway || null },
-      },
-      { supabase: admin },
-    );
+    await postDispatchControlAlert({
+      errorType: "payment_charge_failed",
+      message: "Paystack charge.failed (customer payment not completed)",
+      bookingId,
+      dedupeKey: reference ? `payment_charge_failed:${reference}` : "payment_charge_failed:unknown",
+      dedupeWindowMinutes: 30,
+      extra: { reference: reference || null, gateway_response: gateway || null },
+    }, { supabase: admin });
     return NextResponse.json({ received: true });
   }
 
-  // Phase 2: dispute / chargeback events — mark booking refund_status without Paystack refund call.
   const disputeEvents = new Set([
     "charge.dispute.create",
     "charge.dispute.remind",
@@ -144,22 +130,16 @@ export async function POST(request: Request) {
   ]);
   if (event.event && disputeEvents.has(event.event) && event.data) {
     const d = event.data as Record<string, unknown>;
-    const reference =
-      typeof d.reference === "string"
-        ? d.reference
-        : typeof (d as { transaction?: { reference?: string } }).transaction?.reference === "string"
-          ? String((d as { transaction: { reference: string } }).transaction.reference)
-          : "";
+    const reference = typeof d.reference === "string"
+      ? d.reference
+      : typeof (d as { transaction?: { reference?: string } }).transaction?.reference === "string"
+        ? String((d as { transaction: { reference: string } }).transaction.reference)
+        : "";
     const admin = getSupabaseAdmin();
     if (admin && reference) {
       const { markBookingChargeback } = await import("@/lib/booking/refundBookingPayment");
-      let bookingId: string | null = null;
-      const { data: b } = await admin
-        .from("bookings")
-        .select("id")
-        .eq("paystack_reference", reference)
-        .maybeSingle();
-      if (b && typeof (b as { id?: string }).id === "string") bookingId = (b as { id: string }).id;
+      const { data: b } = await admin.from("bookings").select("id").eq("paystack_reference", reference).maybeSingle();
+      const bookingId = b && typeof (b as { id?: string }).id === "string" ? (b as { id: string }).id : null;
       if (bookingId) {
         await markBookingChargeback(admin, {
           bookingId,
@@ -176,47 +156,33 @@ export async function POST(request: Request) {
     return NextResponse.json({ received: true });
   }
 
-  // Princess PR D: refund lifecycle events — confirm pending/submitted local refunds.
-  const refundEvents = new Set([
-    "refund.processed",
-    "refund.failed",
-    "refund.pending",
-    "charge.refunded",
-  ]);
+  const refundEvents = new Set(["refund.processed", "refund.failed", "refund.pending", "charge.refunded"]);
   if (event.event && refundEvents.has(event.event) && event.data) {
     const d = event.data as Record<string, unknown>;
-    const reference =
-      typeof d.transaction_reference === "string"
-        ? d.transaction_reference
-        : typeof (d as { transaction?: { reference?: string } }).transaction?.reference === "string"
-          ? String((d as { transaction: { reference: string } }).transaction.reference)
-          : typeof d.reference === "string"
-            ? d.reference
-            : "";
+    const reference = typeof d.transaction_reference === "string"
+      ? d.transaction_reference
+      : typeof (d as { transaction?: { reference?: string } }).transaction?.reference === "string"
+        ? String((d as { transaction: { reference: string } }).transaction.reference)
+        : typeof d.reference === "string" ? d.reference : "";
     const statusRaw = String(d.status ?? event.event).toLowerCase();
-    const providerState =
-      event.event === "refund.failed" || statusRaw.includes("fail")
-        ? ("failed" as const)
-        : event.event === "refund.pending" || statusRaw.includes("pending")
-          ? ("pending" as const)
-          : ("succeeded" as const);
-    const amountCents =
-      typeof d.amount === "number" && Number.isFinite(d.amount) ? Math.round(d.amount) : null;
-    const providerReference =
-      d.id != null ? String(d.id) : typeof d.refund_reference === "string" ? d.refund_reference : null;
+    const providerState = event.event === "refund.failed" || statusRaw.includes("fail")
+      ? ("failed" as const)
+      : event.event === "refund.pending" || statusRaw.includes("pending")
+        ? ("pending" as const)
+        : ("succeeded" as const);
+    const amountCents = typeof d.amount === "number" && Number.isFinite(d.amount) ? Math.round(d.amount) : null;
+    const providerReference = d.id != null
+      ? String(d.id)
+      : typeof d.refund_reference === "string" ? d.refund_reference : null;
 
     const admin = getSupabaseAdmin();
+    let bookingId: string | null = null;
     if (admin && reference) {
       const { applyBookingRefundProviderUpdate } = await import("@/lib/booking/refundBookingPayment");
-      const { data: b } = await admin
-        .from("bookings")
-        .select("id")
-        .eq("paystack_reference", reference)
-        .maybeSingle();
-      const bookingId =
-        b && typeof (b as { id?: string }).id === "string" ? (b as { id: string }).id : null;
+      const { data: b } = await admin.from("bookings").select("id").eq("paystack_reference", reference).maybeSingle();
+      bookingId = b && typeof (b as { id?: string }).id === "string" ? (b as { id: string }).id : null;
       if (bookingId) {
-        await applyBookingRefundProviderUpdate(admin, {
+        const bookingUpdate = await applyBookingRefundProviderUpdate(admin, {
           bookingId,
           paystackReference: reference,
           providerState,
@@ -224,7 +190,34 @@ export async function POST(request: Request) {
           amountCents,
           note: `Paystack event ${event.event}`,
         });
+        if (!bookingUpdate.ok) {
+          await reportOperationalIssue("error", "paystack/webhook", "refund.booking_update_failed", {
+            bookingId,
+            reference,
+            event: event.event,
+            error: bookingUpdate.error,
+          });
+        }
       }
+
+      if (providerState === "succeeded" && providerReference) {
+        const routed = await routeSuccessfulPaystackRefund(admin, {
+          chargeReference: reference,
+          refundReference: providerReference,
+          amountCents,
+          refundedAtIso: typeof d.refunded_at === "string" ? d.refunded_at : null,
+          note: `Paystack event ${event.event}`,
+        });
+        if (routed.kind === "error" || routed.kind === "not_found") {
+          await reportOperationalIssue("error", "paystack/webhook", "refund.unified_route_failed", {
+            reference,
+            event: event.event,
+            route: routed.kind,
+            error: routed.kind === "error" ? routed.error : null,
+          });
+        }
+      }
+
       logPaymentStructured("payment_refund_webhook", {
         event: event.event,
         booking_id: bookingId,
@@ -247,16 +240,10 @@ export async function POST(request: Request) {
   }
 
   const data = event.data;
-  const reference =
-    typeof data.reference === "string"
-      ? data.reference
-      : typeof (data as { reference?: unknown }).reference === "string"
-        ? String((data as { reference: string }).reference)
-        : "";
-  const gatewayEventId =
-    data.id != null && (typeof data.id === "number" || typeof data.id === "string")
-      ? String(data.id)
-      : null;
+  const reference = typeof data.reference === "string" ? data.reference : "";
+  const gatewayEventId = data.id != null && (typeof data.id === "number" || typeof data.id === "string")
+    ? String(data.id)
+    : null;
 
   if (!reference) {
     await reportOperationalIssue("warn", "paystack/webhook", "charge.success missing reference");
@@ -274,48 +261,27 @@ export async function POST(request: Request) {
     level: "info",
     source: "paystack/webhook",
     message: "paystack.webhook.received",
-    context: {
-      reference_masked: maskPaystackReference(reference),
-      gateway_event_id: gatewayEventId,
-    },
+    context: { reference_masked: maskPaystackReference(reference), gateway_event_id: gatewayEventId },
   });
 
   const supabase = getSupabaseAdmin();
   if (supabase) {
-    /**
-     * M-5: route via the shared `routePaystackChargeForMonthlyInvoice` so this webhook and every
-     * verify route make the **same** monthly-invoice routing decision for the same reference.
-     * Behaviour preserved from pre-M-5:
-     *   - `monthly_settled` → log + `{ received: true }` ack.
-     *   - `monthly_already_processed` → 200 plain-text "Already processed" ack.
-     *   - `monthly_error` (rare) AND `not_monthly` → fall through to booking-finalize pipeline.
-     */
-    const monthlyInvoiceIdHint = monthlyInvoiceIdFromPaystackMetadata(
-      normalizePaystackMetadata(data.metadata) as unknown as Record<string, unknown>,
-    );
+    const normalizedMetadata = normalizePaystackMetadata(data.metadata) as unknown as Record<string, unknown>;
+    const monthlyInvoiceIdHint = monthlyInvoiceIdFromPaystackMetadata(normalizedMetadata);
     const monthlyRouting = await routePaystackChargeForMonthlyInvoice(supabase, {
       reference,
       amountCents: typeof data.amount === "number" ? data.amount : 0,
       invoiceIdHint: monthlyInvoiceIdHint,
     });
     if (monthlyRouting.kind === "monthly_settled") {
-      const partialCtx =
-        monthlyRouting.settled === "partial"
-          ? {
-              amount_paid_cents: monthlyRouting.amount_paid_cents,
-              total_amount_cents: monthlyRouting.total_amount_cents,
-            }
-          : {};
+      const partialCtx = monthlyRouting.settled === "partial"
+        ? { amount_paid_cents: monthlyRouting.amount_paid_cents, total_amount_cents: monthlyRouting.total_amount_cents }
+        : {};
       await logSystemEvent({
         level: "info",
         source: "paystack/webhook",
         message: "monthly_invoice.charge.success",
-        context: {
-          reference,
-          invoiceId: monthlyRouting.invoiceId,
-          settled: monthlyRouting.settled,
-          ...partialCtx,
-        },
+        context: { reference, invoiceId: monthlyRouting.invoiceId, settled: monthlyRouting.settled, ...partialCtx },
       });
       await recordPaystackMonthlyInvoicePayment(supabase, {
         reference,
@@ -327,15 +293,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ received: true });
     }
     if (monthlyRouting.kind === "monthly_already_processed") {
-      const invoiceIdHint = monthlyInvoiceIdFromPaystackMetadata(
-        normalizePaystackMetadata(data.metadata) as unknown as Record<string, unknown>,
-      );
-      // Do not write ledger for amount-mismatch quarantine — charge was not applied to the invoice.
-      if (invoiceIdHint && monthlyRouting.reason !== "amount_mismatch_quarantined") {
+      if (monthlyInvoiceIdHint && monthlyRouting.reason !== "amount_mismatch_quarantined") {
         await recordPaystackMonthlyInvoicePayment(supabase, {
           reference,
           amountCents: typeof data.amount === "number" ? data.amount : 0,
-          invoiceId: invoiceIdHint,
+          invoiceId: monthlyInvoiceIdHint,
           paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
           chargeData: paystackChargeDataFromRecord(data),
         });
@@ -345,21 +307,13 @@ export async function POST(request: Request) {
           level: "error",
           source: "paystack/webhook",
           message: "monthly_invoice.charge.amount_mismatch_quarantined",
-          context: {
-            reference_masked: maskPaystackReference(reference),
-            invoiceId: invoiceIdHint,
-          },
+          context: { reference_masked: maskPaystackReference(reference), invoiceId: monthlyInvoiceIdHint },
         });
       }
-      return new Response("Already processed", {
-        status: 200,
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      });
+      return new Response("Already processed", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
 
-    const salesDocIdHint = salesDocumentIdFromPaystackMetadata(
-      normalizePaystackMetadata(data.metadata) as unknown as Record<string, unknown>,
-    );
+    const salesDocIdHint = salesDocumentIdFromPaystackMetadata(normalizedMetadata);
     const salesRouting = await routePaystackChargeForSalesDocument(supabase, {
       reference,
       amountCents: typeof data.amount === "number" ? data.amount : 0,
@@ -391,10 +345,7 @@ export async function POST(request: Request) {
           chargeData: paystackChargeDataFromRecord(data),
         });
       }
-      return new Response("Already processed", {
-        status: 200,
-        headers: { "Content-Type": "text/plain; charset=utf-8" },
-      });
+      return new Response("Already processed", { status: 200, headers: { "Content-Type": "text/plain; charset=utf-8" } });
     }
     if (salesRouting.kind === "sales_doc_error") {
       await logSystemEvent({
@@ -412,9 +363,7 @@ export async function POST(request: Request) {
 
   if (!isCheckoutCurrencyZar(currency)) {
     await reportOperationalIssue("critical", "paystack/webhook", "charge.success currency_mismatch", {
-      reference_masked: maskPaystackReference(reference),
-      currency,
-      errorType: "payment_currency_mismatch",
+      reference_masked: maskPaystackReference(reference), currency, errorType: "payment_currency_mismatch",
     });
     logPaymentStructured("payment_webhook_outcome", {
       outcome: "rejected",
@@ -424,25 +373,17 @@ export async function POST(request: Request) {
       gateway_event_id: gatewayEventId,
       currency,
     });
-    // Still run finalize so upsert quarantines the pending_payment row (idempotent).
   }
 
   const customerBlock = data.customer as { email?: string } | undefined;
   const emailFromCustomer = typeof customerBlock?.email === "string" ? customerBlock.email.trim() : "";
-
   const metadata = normalizePaystackMetadata(data.metadata);
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: amount });
-
   const expectedZar = expectedCheckoutZarFromVerify(snapshot, metadata);
   let bookingIdForTrace = resolveInternalBookingIdFromPaystackReference(reference, metadata);
   if (!bookingIdForTrace && supabase) {
     bookingIdForTrace = await bookingIdForPaystackReference(supabase, reference);
-    if (bookingIdForTrace) {
-      metrics.increment("checkout.paystack_booking_id_db_fallback", {
-        bookingId: bookingIdForTrace,
-        reference,
-      });
-    }
+    if (bookingIdForTrace) metrics.increment("checkout.paystack_booking_id_db_fallback", { bookingId: bookingIdForTrace, reference });
   }
   if (expectedZar != null) {
     recordPaystackPricingMismatch({
@@ -454,24 +395,15 @@ export async function POST(request: Request) {
     });
   }
 
-  const emailRaw =
-    emailFromCustomer ||
-    (typeof metadata.customer_email === "string" ? metadata.customer_email : "") ||
-    "";
+  const emailRaw = emailFromCustomer || (typeof metadata.customer_email === "string" ? metadata.customer_email : "") || "";
   const email = emailRaw ? normalizeEmail(emailRaw) : "";
-
-  if (!email) {
-    await reportOperationalIssue("warn", "paystack/webhook", "No customer email on charge.success", { reference });
-  }
+  if (!email) await reportOperationalIssue("warn", "paystack/webhook", "No customer email on charge.success", { reference });
 
   try {
     assertDecoupledPaystackMetadataAllowsFinalize(reference, metadata);
   } catch (e) {
     if (e instanceof PaystackDecoupledMetadataError) {
-      await reportOperationalIssue("critical", "paystack/webhook", e.message, {
-        reference,
-        errorType: "paystack_decoupled_metadata_missing",
-      });
+      await reportOperationalIssue("critical", "paystack/webhook", e.message, { reference, errorType: "paystack_decoupled_metadata_missing" });
       return NextResponse.json({ received: true });
     }
     throw e;
@@ -485,10 +417,8 @@ export async function POST(request: Request) {
         bookingId: persistedHead.bookingId,
         paystackReference: reference,
         amountCents: amount,
-        metadata:
-          data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
-            ? (data.metadata as Record<string, unknown>)
-            : undefined,
+        metadata: data.metadata && typeof data.metadata === "object" && !Array.isArray(data.metadata)
+          ? (data.metadata as Record<string, unknown>) : undefined,
         snapshot,
         customerEmailHint: email || undefined,
       });
@@ -516,10 +446,6 @@ export async function POST(request: Request) {
         gateway_event_id: gatewayEventId,
         idempotency_result: "already_persisted",
       });
-      // Backfill Zoho + recurring even when finalize was already done by the verify
-      // path — both are idempotent (zoho_invoice_id guard + recurring plan dedup).
-      // Do not await: Paystack retries webhooks when the handler is slow; Zoho can
-      // stall for minutes on OAuth / rate-limit backoff.
       void syncPaidBookingSideEffects(supabase, {
         bookingId: persistedHead.bookingId,
         reference,
@@ -545,22 +471,17 @@ export async function POST(request: Request) {
     customerEmail: email,
     snapshot,
     paystackMetadata: metadata,
-    paystackAuthorizationCode:
-      data.authorization && typeof data.authorization === "object"
-        ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null
-        : null,
-    paystackCustomerCode:
-      customerBlock && typeof customerBlock === "object"
-        ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null
-        : null,
+    paystackAuthorizationCode: data.authorization && typeof data.authorization === "object"
+      ? String((data.authorization as { authorization_code?: string }).authorization_code ?? "") || null : null,
+    paystackCustomerCode: customerBlock && typeof customerBlock === "object"
+      ? String((customerBlock as { customer_code?: string }).customer_code ?? "") || null : null,
     paidAtIso: typeof data.paid_at === "string" ? data.paid_at : null,
   });
   const result = upsertResultFromFinalizePaidBookingOp(finalizeOp);
 
   if (result.error) {
     await reportOperationalIssue("critical", "paystack/webhook", `charge.success: booking upsert failed: ${result.error}`, {
-      reference_masked: maskPaystackReference(reference),
-      gateway_event_id: gatewayEventId,
+      reference_masked: maskPaystackReference(reference), gateway_event_id: gatewayEventId,
     });
   }
 
@@ -598,15 +519,8 @@ export async function POST(request: Request) {
       idempotency_result: result.skipped ? "skipped_finalize" : "settled",
       settlement_at: new Date().toISOString(),
     });
-
-    // Idempotent: Zoho invoice + recurring plan provisioning.
-    // Fire-and-forget — same reason as verify pipeline / admin mark-paid.
     if (supabase) {
-      void syncPaidBookingSideEffects(supabase, {
-        bookingId: result.bookingId,
-        reference,
-        amountCents: amount,
-      });
+      void syncPaidBookingSideEffects(supabase, { bookingId: result.bookingId, reference, amountCents: amount });
       await recordPaystackBookingPayment(supabase, {
         reference,
         amountCents: amount,
