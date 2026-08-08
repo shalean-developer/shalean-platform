@@ -21,11 +21,12 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
   // accidentally suppress work/messages for a booking that stayed active.
   const convergence = await orchestrateCustomerBookingCancellation(auth.admin, bookingId);
   if (!convergence.ok) {
-    void reportOperationalIssue({
-      source: "customer_booking_cancel",
-      message: "customer_cancellation_side_effect_convergence_failed",
-      context: { bookingId, error: convergence.error },
-    });
+    void reportOperationalIssue(
+      "error",
+      "customer_booking_cancel",
+      "customer_cancellation_side_effect_convergence_failed",
+      { bookingId, error: convergence.error },
+    );
   }
 
   return response;
