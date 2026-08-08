@@ -36,7 +36,7 @@ export function GrowthCtaLink({
   source: string;
   /** When set, marks the link for `BlogEngagementAnalytics` (placement label). */
   blogAnalyticsPlacement?: string;
-  /** Fires immediately before `start_booking` (e.g. SEO `seo_cta_click`). */
+  /** Fires immediately before booking navigation (e.g. SEO `seo_cta_click`). */
   beforeNavigate?: () => void;
 }) {
   const pathname = usePathname();
@@ -52,11 +52,13 @@ export function GrowthCtaLink({
         : {})}
       onClick={() => {
         beforeNavigate?.();
-        trackGrowthEvent(ANALYTICS_EVENTS.START_BOOKING, {
-          source,
-          destination: resolvedHref,
-          landing_path: pathname,
-        });
+        if (!resolvedHref.startsWith("/quote")) {
+          trackGrowthEvent(ANALYTICS_EVENTS.START_BOOKING, {
+            source,
+            destination: resolvedHref,
+            landing_path: pathname,
+          });
+        }
       }}
     >
       {children}
