@@ -6,6 +6,7 @@ import { recordUnifiedRefundAccounting } from "@/lib/accounting/recordUnifiedRef
 import { recordGatewayRefund } from "@/lib/booking/refund/recordGatewayRefund";
 import { appendMonthlyInvoiceSnapshotEvent } from "@/lib/monthlyInvoice/invoiceSnapshotEvents";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { sendRefundConfirmationEmail } from "@/lib/notifications/sendRefundConfirmationEmail";
 import { refundPaystackTransaction } from "@/lib/paystack/refundPaystackTransaction";
 
 export type RefundMonthlyInvoicePaymentResult =
@@ -19,40 +20,23 @@ export type RefundMonthlyInvoicePaymentResult =
     }
   | { ok: false; error: string };
 
-type RefundParams = {
-  invoiceId: string;
-  note?: string;
-  recordOnly?: boolean;
-  refundReference?: string;
-};
+type RefundParams = { invoiceId: string; note?: string; recordOnly?: boolean; refundReference?: string };
 
 async function resolveChargeReference(
   admin: SupabaseClient,
   invoiceId: string,
   paystackReference: string | null,
-): Promise<
-  | { ok: true; chargeRef: string | null; chargeAmount: number }
-  | { ok: false; error: string }
-> {
+): Promise<| { ok: true; chargeRef: string | null; chargeAmount: number } | { ok: false; error: string }> {
   const { data: chargeRows, error, count } = await admin
     .from("monthly_invoice_paystack_charge_dedup")
     .select("charge_reference, amount_cents", { count: "exact" })
     .eq("invoice_id", invoiceId);
-
   if (error) return { ok: false, error: error.message };
-  if ((count ?? chargeRows?.length ?? 0) > 1) {
-    return { ok: false, error: "multi_charge_refund_unsupported" };
-  }
-
-  const dedup = (chargeRows?.[0] ?? null) as {
-    charge_reference?: string;
-    amount_cents?: number;
-  } | null;
-
+  if ((count ?? chargeRows?.length ?? 0) > 1) return { ok: false, error: "multi_charge_refund_unsupported" };
+  const dedup = (chargeRows?.[0] ?? null) as { charge_reference?: string; amount_cents?: number } | null;
   const chargeRef =
     (typeof dedup?.charge_reference === "string" && dedup.charge_reference.trim()) ||
     (paystackReference?.trim() || null);
-
   const chargeAmount = Math.max(0, Math.round(Number(dedup?.amount_cents ?? 0)));
   return { ok: true, chargeRef, chargeAmount };
 }
@@ -60,12 +44,8 @@ async function resolveChargeReference(
 async function recordRefundLedger(
   admin: SupabaseClient,
   params: {
-    invoiceId: string;
-    chargeRef: string | null;
-    refundReference: string;
-    amountCents: number;
-    refundedAtIso: string;
-    note?: string;
+    invoiceId: string; chargeRef: string | null; refundReference: string; amountCents: number;
+    refundedAtIso: string; note?: string;
   },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (params.chargeRef) {
@@ -80,7 +60,6 @@ async function recordRefundLedger(
     });
     return ledger.ok ? { ok: true } : ledger;
   }
-
   const manual = await recordUnifiedRefundAccounting(admin, {
     entityType: "monthly_invoice",
     entityId: params.invoiceId,
@@ -102,7 +81,6 @@ async function reverseMonthlyInvoiceChildBookings(
     .select("id, payout_status")
     .eq("monthly_invoice_id", invoiceId)
     .neq("status", "cancelled");
-
   if (error || !bookings?.length) return { payoutEligible: 0 };
 
   let payoutEligible = 0;
@@ -111,16 +89,24 @@ async function reverseMonthlyInvoiceChildBookings(
     const ps = String(row.payout_status ?? "").toLowerCase();
     if (ps === "eligible" || ps === "paid") payoutEligible += 1;
 
-    await admin
-      .from("bookings")
-      .update({
-        payment_status: "pending_monthly",
-        amount_paid_cents: 0,
-        payout_status: null,
-      })
-      .eq("id", row.id);
+    if (ps === "paid") {
+      // A customer refund must not erase a cleaner payout that was already settled.
+      await admin
+        .from("bookings")
+        .update({ payment_status: "pending_monthly", amount_paid_cents: 0 })
+        .eq("id", row.id);
+    } else {
+      await admin
+        .from("bookings")
+        .update({
+          payment_status: "pending_monthly",
+          amount_paid_cents: 0,
+          payout_status: "pending",
+          payout_frozen_cents: null,
+        })
+        .eq("id", row.id);
+    }
   }
-
   return { payoutEligible };
 }
 
@@ -130,26 +116,16 @@ export async function refundMonthlyInvoicePayment(
 ): Promise<RefundMonthlyInvoicePaymentResult> {
   const { data, error } = await admin
     .from("monthly_invoices")
-    .select(
-      "id, status, total_amount_cents, amount_paid_cents, balance_cents, paystack_reference, refunded_at, refund_reference",
-    )
+    .select("id, status, total_amount_cents, amount_paid_cents, balance_cents, paystack_reference, refunded_at, refund_reference")
     .eq("id", params.invoiceId)
     .maybeSingle();
-
   if (error) return { ok: false, error: error.message };
   if (!data) return { ok: false, error: "invoice_not_found" };
 
   const row = data as {
-    id: string;
-    status: string | null;
-    total_amount_cents: number | null;
-    amount_paid_cents: number | null;
-    balance_cents: number | null;
-    paystack_reference: string | null;
-    refunded_at: string | null;
-    refund_reference: string | null;
+    id: string; status: string | null; total_amount_cents: number | null; amount_paid_cents: number | null;
+    balance_cents: number | null; paystack_reference: string | null; refunded_at: string | null; refund_reference: string | null;
   };
-
   const st = String(row.status ?? "").toLowerCase();
   if (st === "refunded") return { ok: false, error: "already_refunded" };
   if (st !== "paid") return { ok: false, error: "not_paid" };
@@ -204,37 +180,31 @@ export async function refundMonthlyInvoicePayment(
     .update({
       status: "refunded",
       amount_paid_cents: 0,
+      balance_cents: total,
       is_overdue: false,
       refunded_at: nowIso,
       refund_reference: refundReference,
       updated_at: nowIso,
     })
     .eq("id", row.id);
-
   if (updErr) return { ok: false, error: updErr.message };
 
   const reversal = await reverseMonthlyInvoiceChildBookings(admin, row.id);
-
-  await appendMonthlyInvoiceSnapshotEvent(
-    admin,
-    row.id,
-    {
-      kind: "payment_refunded",
-      at: nowIso,
-      amount_cents: amountCents,
-      amount_paid_cents_after: 0,
-      total_amount_cents: total,
-      balance_cents_after: total,
-      paystack_charge_reference: chargeRef ?? "",
-      refund_reference: refundReference,
-      recorded_only: recordedOnly,
-      paystack_refunded: paystackRefunded,
-      actor: "admin",
-      reference: refundReference,
-      ...(params.note?.trim() ? { note: params.note.trim().slice(0, 2000) } : {}),
-    },
-    { source: "monthly_invoice/refund" },
-  );
+  await appendMonthlyInvoiceSnapshotEvent(admin, row.id, {
+    kind: "payment_refunded",
+    at: nowIso,
+    amount_cents: amountCents,
+    amount_paid_cents_after: 0,
+    total_amount_cents: total,
+    balance_cents_after: total,
+    paystack_charge_reference: chargeRef ?? "",
+    refund_reference: refundReference,
+    recorded_only: recordedOnly,
+    paystack_refunded: paystackRefunded,
+    actor: "admin",
+    reference: refundReference,
+    ...(params.note?.trim() ? { note: params.note.trim().slice(0, 2000) } : {}),
+  }, { source: "monthly_invoice/refund" });
 
   await logSystemEvent({
     level: "info",
@@ -251,6 +221,14 @@ export async function refundMonthlyInvoicePayment(
       payoutEligibleBookings: reversal.payoutEligible,
     },
   });
+
+  await sendRefundConfirmationEmail(admin, {
+    entityType: "monthly_invoice",
+    entityId: row.id,
+    refundReference,
+    amountCents,
+    currencyCode: "ZAR",
+  }).catch(() => undefined);
 
   return {
     ok: true,
