@@ -4,12 +4,23 @@ on:
   pull_request:
     paths:
       - "apps/web/app/(ui-redesign)/office/**"
+      - "apps/web/app/(ui-redesign)/jobs/**"
       - "apps/web/app/office/**"
+      - "apps/web/app/api/admin/financial-dashboard/**"
+      - "apps/web/app/api/admin/business-health/**"
+      - "apps/web/app/api/admin/expenses/reports/**"
+      - "apps/web/app/api/admin/payouts/period-report/**"
       - "apps/web/app/api/admin/security/my-permissions/**"
       - "apps/web/lib/admin/officeExperience.ts"
       - "apps/web/lib/admin/routePermissions.ts"
+      - "apps/web/lib/admin/requireAdmin.ts"
       - "apps/web/lib/admin/__tests__/officeExperience.test.ts"
       - "apps/web/lib/admin/__tests__/routePermissions.test.ts"
+      - "apps/web/lib/admin/__tests__/financialDashboardAccess.test.ts"
+      - "apps/web/lib/admin/__tests__/operationsRoutePermissions.test.ts"
+      - "apps/web/lib/auth/useRoleRouteGuard.tsx"
+      - "apps/web/lib/auth/__tests__/linkedCleanerPortalSwitch.test.ts"
+      - "apps/web/src/features/jobs/**"
       - "apps/web/src/features/office/**"
       - ".github/workflows/admin-rbac-priority2.yml"
   workflow_dispatch:
@@ -32,7 +43,14 @@ jobs:
         run: npm ci --ignore-scripts
       - name: Run role and page policy matrix
         working-directory: apps/web
-        run: npx vitest run lib/admin/__tests__/officeExperience.test.ts lib/admin/__tests__/routePermissions.test.ts
+        run: >-
+          npx vitest run
+          lib/admin/__tests__/officeExperience.test.ts
+          lib/admin/__tests__/routePermissions.test.ts
+          lib/admin/__tests__/financialDashboardAccess.test.ts
+          lib/admin/__tests__/operationsRoutePermissions.test.ts
+          lib/auth/__tests__/linkedCleanerPortalSwitch.test.ts
+          src/features/office/__tests__/OfficePermissionNavigationGate.operations.test.ts
       - name: Typecheck
         working-directory: apps/web
         run: npm run typecheck
