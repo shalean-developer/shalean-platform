@@ -44,6 +44,13 @@ describe("P3 Paystack refund webhook convergence", () => {
     expect(src).toContain("refund:${refundReference}");
   });
 
+  it("allows refund records through the existing accounting retry queue at the database boundary", () => {
+    const sql = read("supabase/migrations/20260809002000_allow_refund_accounting_sync_entity.sql");
+    expect(sql).toContain("accounting_sync_records_entity_type_check");
+    expect(sql).toContain("'payment_transaction'::text");
+    expect(sql).toContain("'refund'::text");
+  });
+
   it("fails closed before mutating a sales document when Paystack amount differs from invoice total", () => {
     const src = read("apps/web/lib/salesDocument/applySalesDocumentPayment.ts");
     const mismatch = src.indexOf("if (paidIn !== total)");
