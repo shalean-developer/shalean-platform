@@ -36,6 +36,31 @@ export async function performAdminAssignToCleaner(
   params: { bookingId: string; cleanerId: string; force: boolean },
 ): Promise<AdminAssignOneResult> {
   const { bookingId, force } = params;
+
+  // Individual-cleaner offers must never silently dismantle a team assignment. Team jobs
+  // have roster/member payout state outside the booking row, so clearing only booking.team_id
+  // would create split assignment truth and could later duplicate earnings. Require the
+  // explicit team-management flow to remove/replace the team first.
+  const { data: assignmentHead, error: assignmentHeadError } = await admin
+    .from("bookings")
+    .select("team_id, is_team_job")
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (assignmentHeadError) {
+    return { ok: false, httpStatus: 500, error: assignmentHeadError.message };
+  }
+  if (
+    assignmentHead &&
+    ((assignmentHead as { is_team_job?: boolean | null }).is_team_job === true ||
+      Boolean(String((assignmentHead as { team_id?: string | null }).team_id ?? "").trim()))
+  ) {
+    return {
+      ok: false,
+      httpStatus: 409,
+      error: "Booking has a team assignment. Remove or replace the team before offering the booking to an individual cleaner.",
+    };
+  }
+
   const validation = await validateAdminManualAssignToCleaner(admin, params);
   if (!validation.ok) return validation;
 
