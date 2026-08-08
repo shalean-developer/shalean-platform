@@ -45,11 +45,9 @@ export async function performAdminAssignToCleaner(
 
   const { booking: b, resolvedCleanerId, prevCleaner, workloadWarning, warnings } = validation;
 
-  // Individual-cleaner offers must never silently dismantle a team assignment. Team jobs
-  // have roster/member payout state outside the booking row, so clearing only booking.team_id
-  // would create split assignment truth and could later duplicate earnings. Require the
-  // explicit team-management flow to remove/replace the team first. This check runs after
-  // canonical validation but before any booking or offer write.
+  // Fail fast on an existing team assignment for a clear admin-facing error. The actual
+  // transition below also repeats this constraint atomically in its UPDATE predicates, so a
+  // team assignment that races in after this read is still blocked safely.
   const { data: assignmentHead, error: assignmentHeadError } = await admin
     .from("bookings")
     .select("team_id, is_team_job")
@@ -81,7 +79,11 @@ export async function performAdminAssignToCleaner(
   });
 
   if (!offered.ok) {
-    return { ok: false, httpStatus: 500, error: offered.error };
+    return {
+      ok: false,
+      httpStatus: offered.code === "team_assignment_conflict" ? 409 : 500,
+      error: offered.error,
+    };
   }
 
   await admin
