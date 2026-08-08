@@ -35,7 +35,9 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
   if (requestedService) {
     const normalized = requestedService.toLowerCase();
     if (SERVICE_SLUGS.includes(normalized as (typeof SERVICE_SLUGS)[number])) {
-      redirect(`/book/${normalized}`);
+      const redirectParams = new URLSearchParams(params);
+      redirectParams.set("service", normalized);
+      redirect(buildBookHubHrefFromLegacySearchParams(redirectParams));
     }
     redirect(buildBookHubHrefFromLegacySearchParams(params));
   }
