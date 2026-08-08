@@ -2,6 +2,8 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { recordUnifiedRefundAccounting } from "@/lib/accounting/recordUnifiedRefundAccounting";
+import { recordGatewayRefund } from "@/lib/booking/refund/recordGatewayRefund";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { refundPaystackTransaction } from "@/lib/paystack/refundPaystackTransaction";
 
@@ -39,9 +41,6 @@ async function resolveChargeReference(
 
   if (error) return { ok: false, error: error.message };
 
-  // P3 finance integrity: a sales document can have more than one captured charge.
-  // Refunding only the first row can leave cash and accounting state inconsistent,
-  // so fail closed until the unified refund ledger can walk every charge safely.
   if ((count ?? chargeRows?.length ?? 0) > 1) {
     return { ok: false, error: "multi_charge_refund_unsupported" };
   }
@@ -58,6 +57,39 @@ async function resolveChargeReference(
   const chargeAmount = Math.max(0, Math.round(Number(dedup?.amount_cents ?? 0)));
 
   return { ok: true, chargeRef, chargeAmount };
+}
+
+async function recordRefundLedger(
+  admin: SupabaseClient,
+  params: {
+    documentId: string;
+    chargeRef: string | null;
+    refundReference: string;
+    amountCents: number;
+    note?: string;
+  },
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (params.chargeRef) {
+    const ledger = await recordGatewayRefund(admin, {
+      chargeReference: params.chargeRef,
+      refundId: params.refundReference,
+      entityType: "sales_document",
+      entityId: params.documentId,
+      amountCents: params.amountCents,
+      reason: params.note,
+    });
+    return ledger.ok ? { ok: true } : ledger;
+  }
+
+  const manual = await recordUnifiedRefundAccounting(admin, {
+    entityType: "sales_document",
+    entityId: params.documentId,
+    provider: "manual",
+    refundReference: params.refundReference,
+    amountCents: params.amountCents,
+    reason: params.note,
+  });
+  return manual.ok ? { ok: true } : manual;
 }
 
 async function markSalesDocumentRefunded(
@@ -177,9 +209,19 @@ export async function refundSalesDocumentPayment(
   const pastedRefundRef = params.refundReference?.trim() || null;
 
   if (params.recordOnly) {
+    const refundReference = pastedRefundRef ?? chargeRef ?? `manual:${row.id}`;
+    const ledger = await recordRefundLedger(admin, {
+      documentId: row.id,
+      chargeRef,
+      refundReference,
+      amountCents,
+      note: params.note,
+    });
+    if (!ledger.ok) return ledger;
+
     const marked = await markSalesDocumentRefunded(admin, row, {
       note: params.note,
-      refundReference: pastedRefundRef ?? chargeRef,
+      refundReference,
       paystackRefunded: false,
       recordedOnly: true,
       alreadyReversedOnPaystack: Boolean(chargeRef),
@@ -193,7 +235,7 @@ export async function refundSalesDocumentPayment(
       paystackRefunded: false,
       recordedOnly: true,
       alreadyReversedOnPaystack: Boolean(chargeRef),
-      refundReference: pastedRefundRef ?? chargeRef,
+      refundReference,
     };
   }
 
@@ -210,8 +252,19 @@ export async function refundSalesDocumentPayment(
     if (!refundRes.ok) return { ok: false, error: refundRes.error };
     paystackRefunded = !refundRes.alreadyReversed;
     alreadyReversedOnPaystack = Boolean(refundRes.alreadyReversed);
-    refundReference = pastedRefundRef ?? refundRes.refundReference;
+    refundReference = pastedRefundRef ?? refundRes.refundReference ?? chargeRef;
+  } else {
+    refundReference = pastedRefundRef ?? `manual:${row.id}`;
   }
+
+  const ledger = await recordRefundLedger(admin, {
+    documentId: row.id,
+    chargeRef,
+    refundReference,
+    amountCents,
+    note: params.note,
+  });
+  if (!ledger.ok) return ledger;
 
   const marked = await markSalesDocumentRefunded(admin, row, {
     note: params.note,

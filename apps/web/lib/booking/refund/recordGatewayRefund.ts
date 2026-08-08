@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { recordUnifiedRefundAccounting } from "@/lib/accounting/recordUnifiedRefundAccounting";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { refundGatewayReference } from "@/lib/booking/refund/refundReconciliation";
 
@@ -9,9 +10,72 @@ export type RecordGatewayRefundResult =
   | { ok: true; created: boolean; paymentTransactionId: string }
   | { ok: false; error: string };
 
+async function ensureUnifiedAccounting(
+  admin: SupabaseClient,
+  params: {
+    paymentTransactionId: string;
+    chargeReference: string;
+    refundId: string;
+    entityType: "booking" | "monthly_invoice" | "sales_document";
+    entityId: string;
+    amountCents: number;
+    currencyCode?: string;
+    refundedAtIso?: string | null;
+    reason?: string | null;
+  },
+): Promise<void> {
+  try {
+    const unified = await recordUnifiedRefundAccounting(admin, {
+      entityType: params.entityType,
+      entityId: params.entityId,
+      paymentTransactionId: params.paymentTransactionId,
+      provider: "paystack",
+      chargeReference: params.chargeReference,
+      refundReference: params.refundId,
+      amountCents: params.amountCents,
+      currencyCode: params.currencyCode ?? "ZAR",
+      refundedAtIso: params.refundedAtIso,
+      reason: params.reason,
+    });
+
+    if (!unified.ok) {
+      await logSystemEvent({
+        level: "warn",
+        source: "payments/recordGatewayRefund",
+        message: "refund_accounting.enqueue_failed_after_reversal",
+        context: {
+          paymentTransactionId: params.paymentTransactionId,
+          entityType: params.entityType,
+          entityId: params.entityId,
+          refundId: params.refundId,
+          error: unified.error,
+        },
+      });
+    }
+  } catch (error) {
+    // The provider reversal + immutable payment_transactions row are authoritative.
+    // Accounting/Zoho convergence is asynchronous and must never make a completed
+    // refund look failed after money has already been returned to the customer.
+    await logSystemEvent({
+      level: "warn",
+      source: "payments/recordGatewayRefund",
+      message: "refund_accounting.enqueue_exception_after_reversal",
+      context: {
+        paymentTransactionId: params.paymentTransactionId,
+        entityType: params.entityType,
+        entityId: params.entityId,
+        refundId: params.refundId,
+        error: String(error instanceof Error ? error.message : error),
+      },
+    });
+  }
+}
+
 /**
  * Idempotent refund ledger row keyed by refund:{chargeRef}:{refundId}.
  * Original capture rows remain immutable; refunds are separate lines with settlement_status=reversed.
+ * The same retry-safe path also attempts to ensure the unified accounting record and Zoho queue entry.
+ * Accounting convergence is intentionally non-blocking after the reversal ledger exists.
  */
 export async function recordGatewayRefund(
   admin: SupabaseClient,
@@ -24,6 +88,7 @@ export async function recordGatewayRefund(
     currencyCode?: string;
     bookingId?: string | null;
     refundedAtIso?: string | null;
+    reason?: string | null;
   },
 ): Promise<RecordGatewayRefundResult> {
   const amountCents = Math.max(0, Math.round(params.amountCents));
@@ -42,7 +107,19 @@ export async function recordGatewayRefund(
     .maybeSingle();
 
   if (existing?.id) {
-    return { ok: true, created: false, paymentTransactionId: String(existing.id) };
+    const paymentTransactionId = String(existing.id);
+    await ensureUnifiedAccounting(admin, {
+      paymentTransactionId,
+      chargeReference: params.chargeReference,
+      refundId: params.refundId,
+      entityType: params.entityType,
+      entityId: params.entityId,
+      amountCents,
+      currencyCode: params.currencyCode,
+      refundedAtIso: params.refundedAtIso,
+      reason: params.reason,
+    });
+    return { ok: true, created: false, paymentTransactionId };
   }
 
   const now = params.refundedAtIso ?? new Date().toISOString();
@@ -79,7 +156,7 @@ export async function recordGatewayRefund(
     .single();
 
   if (error) {
-    // Unique race — treat as idempotent success.
+    // Unique race — converge through the same existing-row retry path.
     if (String(error.message).toLowerCase().includes("duplicate") || error.code === "23505") {
       const { data: again } = await admin
         .from("payment_transactions")
@@ -88,18 +165,43 @@ export async function recordGatewayRefund(
         .eq("gateway_reference", gatewayReference)
         .maybeSingle();
       if (again?.id) {
-        return { ok: true, created: false, paymentTransactionId: String(again.id) };
+        const paymentTransactionId = String(again.id);
+        await ensureUnifiedAccounting(admin, {
+          paymentTransactionId,
+          chargeReference: params.chargeReference,
+          refundId: params.refundId,
+          entityType: params.entityType,
+          entityId: params.entityId,
+          amountCents,
+          currencyCode: params.currencyCode,
+          refundedAtIso: params.refundedAtIso,
+          reason: params.reason,
+        });
+        return { ok: true, created: false, paymentTransactionId };
       }
     }
     return { ok: false, error: error.message };
   }
+
+  const paymentTransactionId = String((inserted as { id: string }).id);
+  await ensureUnifiedAccounting(admin, {
+    paymentTransactionId,
+    chargeReference: params.chargeReference,
+    refundId: params.refundId,
+    entityType: params.entityType,
+    entityId: params.entityId,
+    amountCents,
+    currencyCode: params.currencyCode,
+    refundedAtIso: now,
+    reason: params.reason,
+  });
 
   await logSystemEvent({
     level: "info",
     source: "payments/recordGatewayRefund",
     message: "payment_transaction.refund_recorded",
     context: {
-      paymentTransactionId: inserted?.id ?? null,
+      paymentTransactionId,
       gatewayReference,
       entityType: params.entityType,
       entityId: params.entityId,
@@ -110,6 +212,6 @@ export async function recordGatewayRefund(
   return {
     ok: true,
     created: true,
-    paymentTransactionId: String((inserted as { id: string }).id),
+    paymentTransactionId,
   };
 }
