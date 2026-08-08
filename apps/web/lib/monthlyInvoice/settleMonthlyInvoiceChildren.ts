@@ -3,7 +3,10 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { refreshRecurringBookingPaymentState } from "@/lib/booking/bookingOperations";
-import { resolveCleanerFrozenCentsForSettlement } from "@/lib/cleaner/resolveCleanerEarnings";
+import {
+  resolveCleanerEarningsCents,
+  resolveCleanerFrozenCentsForSettlement,
+} from "@/lib/cleaner/resolveCleanerEarnings";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { allocateMonthlyChildPaymentCents } from "@/lib/monthlyInvoice/allocateMonthlyChildPaymentCents";
 import { settleMonthlyInvoiceChildBooking } from "@/lib/monthlyInvoice/settleMonthlyInvoiceChildBooking";
@@ -58,11 +61,28 @@ export async function settleMonthlyInvoiceChildren(
       total_paid_zar: b.total_paid_zar,
       amount_paid_cents: b.amount_paid_cents,
     });
-    const frozen = resolveCleanerFrozenCentsForSettlement({
+    let frozen = resolveCleanerFrozenCentsForSettlement({
       display_earnings_cents: b.display_earnings_cents,
       cleaner_payout_cents: b.cleaner_payout_cents,
     });
-    if (frozen == null) {
+
+    // Legacy rows can carry a zero display/payout field while the canonical
+    // booking-wide earnings total is positive. Do not strand a paid monthly
+    // invoice child in pending_monthly because of that narrower legacy shape.
+    // Reuse the existing P1 earnings resolver instead of inventing a second rule.
+    if (frozen == null || frozen <= 0) {
+      const { data: basisRow } = await admin
+        .from("bookings")
+        .select("cleaner_earnings_total_cents")
+        .eq("id", b.id)
+        .maybeSingle();
+      frozen = resolveCleanerEarningsCents({
+        display_earnings_cents: b.display_earnings_cents,
+        cleaner_earnings_total_cents: basisRow?.cleaner_earnings_total_cents,
+      });
+    }
+
+    if (frozen == null || frozen <= 0) {
       const error = `booking_missing_cleaner_earnings_basis:${b.id}`;
       failures.push({ bookingId: b.id, error });
       await logSystemEvent({
