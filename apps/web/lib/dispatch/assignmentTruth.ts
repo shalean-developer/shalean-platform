@@ -6,6 +6,20 @@
  */
 
 /**
+ * Canonical final-assignee predicate for booking operations.
+ * A booking is operationally assigned when either an individual cleaner or a team owns it.
+ * Customer intent (`selected_cleaner_id`) and team-shape flags (`is_team_job`) are not final assignees.
+ */
+export function hasBookingAssignee(row: {
+  cleaner_id?: string | null;
+  team_id?: string | null;
+}): boolean {
+  if (String(row.cleaner_id ?? "").trim()) return true;
+  if (String(row.team_id ?? "").trim()) return true;
+  return false;
+}
+
+/**
  * Canonical booking patch when an individual-cleaner offer starts.
  *
  * Important: this patch intentionally preserves both `selected_cleaner_id` and `assignment_type`.

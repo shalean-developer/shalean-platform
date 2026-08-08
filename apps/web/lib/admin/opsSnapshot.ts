@@ -1,3 +1,5 @@
+import { hasBookingAssignee } from "@/lib/dispatch/assignmentTruth";
+
 /**
  * Pure ops counts for admin “Attention Required” — mirrors dispatch SLA watchdog clock rules.
  */
@@ -96,12 +98,6 @@ export function isRecurringOrMonthlyAssignable(r: OpsSnapshotRow): boolean {
   return ps === "pending_monthly" || ps === "monthly";
 }
 
-function hasAssignment(r: OpsSnapshotRow): boolean {
-  if (String(r.cleaner_id ?? "").trim()) return true;
-  if (String(r.team_id ?? "").trim()) return true;
-  return false;
-}
-
 function isClosedStatus(status: string | null): boolean {
   const st = String(status ?? "").toLowerCase();
   return st === "completed" || st === "cancelled" || st === "failed" || st === "payment_expired";
@@ -123,7 +119,7 @@ function startsInMinutesFromNow(date: string | null, time: string | null, nowMs:
 function isSlaBreachRow(r: OpsSnapshotRow, nowMs: number, slaMinutes: number): boolean {
   const st = String(r.status ?? "").toLowerCase();
   if (st !== "pending") return false;
-  if (hasAssignment(r)) return false;
+  if (hasBookingAssignee(r)) return false;
   const ds = String(r.dispatch_status ?? "").toLowerCase();
   if (ds !== "searching" && ds !== "offered") return false;
   const eff = effectivePendingClockIso(r);
@@ -146,7 +142,7 @@ export function classifyAttentionQueue(
   if (st === "pending_payment") return null;
 
   const ds = String(r.dispatch_status ?? "").toLowerCase();
-  const noCleaner = !hasAssignment(r);
+  const noCleaner = !hasBookingAssignee(r);
 
   if (isSlaBreachRow(r, nowMs, slaMinutes)) return "sla";
   if (ds === "unassignable" && noCleaner) return "unassignable";

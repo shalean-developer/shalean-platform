@@ -3,6 +3,7 @@ import { GET as getScopedBookings } from "@/app/api/admin/bookings/scoped/route"
 import { GET as getCronHealth } from "@/app/api/admin/cron-health/route";
 import { GET as getMyPermissions } from "@/app/api/admin/security/my-permissions/route";
 import { canReceiveOfficeWorkItem, sortOfficeWorkItems, type OfficeWorkItem } from "@/lib/admin/officeWorkItems";
+import { hasBookingAssignee } from "@/lib/dispatch/assignmentTruth";
 import { todayJohannesburg } from "@/lib/recurring/johannesburgCalendar";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -10,7 +11,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 type PermissionPayload = { permissions?: string[]; branchIds?: string[]; teamIds?: string[] };
-type BookingRow = { id?: string; customer_name?: string | null; service?: string | null; service_slug?: string | null; date?: string | null; time?: string | null; location?: string | null; status?: string | null; team_id?: string | null; city_id?: string | null };
+type BookingRow = { id?: string; customer_name?: string | null; service?: string | null; service_slug?: string | null; date?: string | null; time?: string | null; location?: string | null; status?: string | null; cleaner_id?: string | null; team_id?: string | null; city_id?: string | null };
 type BookingPayload = { bookings?: BookingRow[] };
 type CronJob = { job_name?: string; last_success_at?: string | null; last_run_at?: string | null; last_run_status?: "success" | "error" | null; last_run_message?: string | null };
 type CronPayload = { jobs?: CronJob[] };
@@ -28,18 +29,24 @@ function maskedPhone(value: string): string { const digits = normalizePhone(valu
 function addDaysYmd(ymd: string, days: number): string { const d = new Date(`${ymd}T12:00:00+02:00`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
 function categoryFor(item: OfficeWorkItem): Exclude<MyWorkCategory, "all"> { if (item.type === "booking.assignment") return "operations"; if (item.type === "system.cron") return "system-health"; if (item.type.startsWith("finance.")) return "finance"; if (item.type.startsWith("workforce.")) return "workforce"; if (item.type.startsWith("customer_care.")) return "customer-care"; return "marketing"; }
 
+export function bookingNeedsAllocationWork(row: BookingRow, nearTermEnd: string): boolean {
+  if (!row.id || hasBookingAssignee(row)) return false;
+  if (row.status === "completed" || row.status === "cancelled") return false;
+  return !row.date || row.date <= nearTermEnd;
+}
+
 function bookingItems(rows: BookingRow[], permissions: ReadonlySet<string>): OfficeWorkItem[] {
   if (!permissions.has("booking.assign")) return [];
   const today = todayJohannesburg();
   const nearTermEnd = addDaysYmd(today, 7);
-  return rows.filter((row) => row.id && !row.team_id && row.status !== "completed" && row.status !== "cancelled" && (!row.date || row.date <= nearTermEnd)).map((row) => {
+  return rows.filter((row) => bookingNeedsAllocationWork(row, nearTermEnd)).map((row) => {
     const id = row.id as string;
     const overdue = Boolean(row.date && row.date < today);
     const isToday = row.date === today;
     const service = cleanLabel(row.service_slug || row.service) || "Cleaning service";
     const customer = row.customer_name?.trim() || "Customer not recorded";
     const slot = [row.date, row.time?.slice(0, 5)].filter(Boolean).join(" · ");
-    return { id: `booking.assignment:${id}`, type: "booking.assignment", title: overdue ? `Overdue booking ${shortReference(id)} needs a team` : isToday ? `Today's booking ${shortReference(id)} needs team allocation` : `Upcoming booking ${shortReference(id)} needs team allocation`, summary: [service, customer, slot, row.location?.trim()].filter(Boolean).join(" • "), priority: overdue ? "critical" : isToday ? "high" : "medium", status: overdue ? "overdue" : "open", href: `/office/bookings/${id}`, actionLabel: "Assign team", requiredPermission: "booking.assign", occurredAt: null, dueAt: row.date ? `${row.date}T${row.time?.slice(0, 8) || "06:00:00"}+02:00` : null, branchId: row.city_id ?? null, teamId: null } satisfies OfficeWorkItem;
+    return { id: `booking.assignment:${id}`, type: "booking.assignment", title: overdue ? `Overdue booking ${shortReference(id)} needs allocation` : isToday ? `Today's booking ${shortReference(id)} needs allocation` : `Upcoming booking ${shortReference(id)} needs allocation`, summary: [service, customer, slot, row.location?.trim()].filter(Boolean).join(" • "), priority: overdue ? "critical" : isToday ? "high" : "medium", status: overdue ? "overdue" : "open", href: `/office/bookings/${id}`, actionLabel: "Assign cleaner or team", requiredPermission: "booking.assign", occurredAt: null, dueAt: row.date ? `${row.date}T${row.time?.slice(0, 8) || "06:00:00"}+02:00` : null, branchId: row.city_id ?? null, teamId: null } satisfies OfficeWorkItem;
   });
 }
 
