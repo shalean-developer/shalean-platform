@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { assignmentTruthPatchForOfferStart } from "@/lib/dispatch/assignmentTruth";
 import { BOOKING_PAYOUT_COLUMNS_CLEAR } from "@/lib/payout/bookingPayoutColumns";
 
 export type SetAdminManualBookingOfferedParams = {
@@ -8,21 +9,14 @@ export type SetAdminManualBookingOfferedParams = {
   nowIsoForPending: string;
 };
 
-/**
- * Command boundary for admin manual cleaner-offer state.
- * Phase 1D preserves the existing booking update shape and conditions.
- */
+/** Command boundary for admin manual individual-cleaner offer state. */
 export async function setAdminManualBookingOffered(
   params: SetAdminManualBookingOfferedParams,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { error } = await params.admin
     .from("bookings")
     .update({
-      cleaner_id: null,
-      status: "offered",
-      dispatch_status: "offered",
-      assigned_at: null,
-      accepted_at: null,
+      ...assignmentTruthPatchForOfferStart(),
       ...BOOKING_PAYOUT_COLUMNS_CLEAR,
       ...(params.dispatchWasUnassignable ? { became_pending_at: params.nowIsoForPending } : {}),
     })
