@@ -8,7 +8,10 @@ import { CleanerLifecycleFlushErrorListener } from "@/components/cleaner-dashboa
 import { JobsBottomNav } from "./JobsNav";
 
 export function JobsShell({ children }: { children: ReactNode }) {
-  const { state, retry } = useRoleRouteGuard({ requiredRole: "cleaner" });
+  const { state, retry } = useRoleRouteGuard({
+    requiredRole: "cleaner",
+    allowLinkedCleaner: true,
+  });
 
   if (state.status === "unauthenticated" || state.status === "missing_profile" || state.status === "wrong_role") {
     return null;
