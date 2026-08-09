@@ -195,15 +195,23 @@ export function BookingV2Provider({
           }
         : {}),
       ...(urlPatch.suburb ? { suburb: urlPatch.suburb } : {}),
-      ...(urlPatch.selectedExtras?.length
-        ? {
-            selectedExtras: [
-              ...new Set([...(saved?.selectedExtras ?? defaults.selectedExtras), ...urlPatch.selectedExtras]),
-            ],
-          }
-        : {}),
+      ...(urlPatch.replaceSelectedExtras
+        ? { selectedExtras: urlPatch.selectedExtras ?? [] }
+        : urlPatch.selectedExtras?.length
+          ? {
+              selectedExtras: [
+                ...new Set([...(saved?.selectedExtras ?? defaults.selectedExtras), ...urlPatch.selectedExtras]),
+              ],
+            }
+          : {}),
     };
-    if (sanitized || urlPatch.serviceDetails || urlPatch.suburb || urlPatch.selectedExtras?.length) {
+    if (
+      sanitized ||
+      urlPatch.serviceDetails ||
+      urlPatch.suburb ||
+      urlPatch.selectedExtras?.length ||
+      urlPatch.replaceSelectedExtras
+    ) {
       form.reset(merged, { keepDefaultValues: false });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
