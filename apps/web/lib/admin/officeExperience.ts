@@ -17,8 +17,8 @@ export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
   { path: "/office/blog/new", anyOf: ["content.draft"], audience: ["owner", "manager", "marketing"] },
   { path: "/office/blog", anyOf: ["content.draft", "content.publish"], audience: ["owner", "manager", "marketing"] },
   { path: "/office/invoices", anyOf: ["invoice.manage"], audience: ["owner", "manager", "finance"] },
-  { path: "/office/sales-documents/create", anyOf: ["invoice.manage"], audience: ["owner", "manager", "finance"] },
-  { path: "/office/sales-documents", anyOf: ["invoice.manage"], audience: ["owner", "manager", "finance"] },
+  { path: "/office/sales-documents/create", anyOf: ["invoice.manage"], audience: ["owner", "finance"] },
+  { path: "/office/sales-documents", anyOf: ["invoice.manage", "customer.contact", "marketing.view"], audience: ["owner", "manager", "finance", "customer-care", "marketing"] },
   { path: "/office/templates/editor", anyOf: ["template.manage"], audience: ["owner", "manager", "operations", "marketing"] },
   { path: "/office/templates", anyOf: ["template.manage"], audience: ["owner", "manager", "operations", "marketing"] },
 
