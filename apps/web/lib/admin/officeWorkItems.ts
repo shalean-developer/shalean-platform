@@ -7,6 +7,7 @@ export type OfficeWorkItemType =
   | "finance.payout_prepare"
   | "workforce.application"
   | "customer_care.whatsapp_reply"
+  | "customer_care.case"
   | "marketing.blog_draft"
   | "marketing.campaign_ready";
 export type OfficeWorkItemPriority = "critical" | "high" | "medium" | "low";
@@ -40,6 +41,7 @@ export const OFFICE_WORK_ITEM_POLICIES: Record<OfficeWorkItemType, WorkItemPolic
   "finance.payout_prepare": { permission: "payout.prepare", hrefPrefix: "/office/payouts" },
   "workforce.application": { permission: "application.decide", hrefPrefix: "/office/cleaner-applications" },
   "customer_care.whatsapp_reply": { permission: "customer.contact", hrefPrefix: "/office/notifications" },
+  "customer_care.case": { permission: "customer.contact", hrefPrefix: "/office/customer-care" },
   "marketing.blog_draft": { permission: "content.draft", hrefPrefix: "/office/blog" },
   "marketing.campaign_ready": { permission: "content.publish", hrefPrefix: "/office/marketing" },
 };
