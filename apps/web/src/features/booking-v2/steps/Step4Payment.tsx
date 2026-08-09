@@ -494,8 +494,13 @@ function PaymentSection({
           sessJson.code === "PAYMENT_BOOKING_NOT_FOUND" ||
           /could not find this booking/i.test(sessJson.error ?? "");
         if (notFound) {
-          // Pending row gone — clear and fall through to confirm (reuse or insert).
+          // Pending row gone — only fall through when a new canonical quote is ready.
           setPendingBookingId(null);
+          if (!quoteReadiness.ready) {
+            setError(quoteReadiness.message ?? "Your quote is not ready. Please refresh pricing.");
+            setConfirming(false);
+            return;
+          }
         } else {
           setError(
             sessJson.error?.trim() ||
