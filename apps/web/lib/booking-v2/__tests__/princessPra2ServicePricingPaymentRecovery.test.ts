@@ -399,6 +399,8 @@ describe("PRINCESS PRA2 — Paystack cancel recovery contracts", () => {
     expect(src).toContain("Boolean(pendingBookingId) || quoteReadiness.ready");
     expect(src).toContain("if (!pendingBookingId && !quoteReadiness.ready)");
     expect(src).toContain("Retry secure payment");
+    expect(src).toContain("setPendingBookingId(null);");
+    expect(src).toContain('quoteReadiness.message ?? "Your quote is not ready. Please refresh pricing."');
   });
 
   it("ensureBookingPaymentSession callback returns to /pay/{id}", () => {
