@@ -2,8 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Plus, RefreshCw } from "lucide-react";
+import { CircleDollarSign, Plus, RefreshCw, Target, TrendingDown, TrendingUp, UserRoundSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
 import { adminFetch } from "@/hooks/useAdminData";
 import { SalesDocumentDeleteDialog } from "@/components/admin/sales-documents/SalesDocumentDeleteDialog";
 import {
@@ -20,6 +21,12 @@ type SalesDocRow = SalesDocumentActionRow & {
   created_at: string;
   view_count: number;
   first_viewed_at: string | null;
+  linked_booking?: { id: string; status: string | null } | null;
+};
+
+type PipelineSummary = {
+  counts: { lead: number; quote: number; follow_up: number; won: number; lost: number };
+  completed_revenue_cents: number;
 };
 
 type FilterTab = "all" | "requests" | "quote" | "invoice";
@@ -141,6 +148,7 @@ function SalesDocumentTableRow({
 export default function OfficeSalesDocumentsPage() {
   const [docs, setDocs] = useState<SalesDocRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [pipeline, setPipeline] = useState<PipelineSummary | null>(null);
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
   const [deleteTarget, setDeleteTarget] = useState<SalesDocRow | null>(null);
@@ -150,7 +158,7 @@ export default function OfficeSalesDocumentsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await adminFetch<{ documents: SalesDocRow[] }>(
+      const res = await adminFetch<{ documents: SalesDocRow[]; pipeline: PipelineSummary }>(
         `/api/admin/sales-documents?q=${encodeURIComponent(q)}`,
       );
       if (!res.ok) {
@@ -158,6 +166,7 @@ export default function OfficeSalesDocumentsPage() {
         return;
       }
       setDocs(res.data?.documents ?? []);
+      setPipeline(res.data?.pipeline ?? null);
     } catch {
       setDocs([]);
     }
@@ -207,11 +216,9 @@ export default function OfficeSalesDocumentsPage() {
     <div className="space-y-5 md:space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="min-w-0">
-          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Quotes</h1>
+          <h1 className="text-xl font-bold text-slate-900 sm:text-2xl">Leads &amp; sales</h1>
           <p className="text-sm text-slate-500">
-            Review customer quote requests, create ad-hoc quotes, and send one-off invoices. Unpaid rows
-            show <span className="font-medium text-violet-700">Edit</span> and{" "}
-            <span className="font-medium text-red-600">Delete</span>.
+            Track each website request through quote, follow-up, won/lost, canonical booking and completed revenue.
           </p>
         </div>
         <Link
@@ -220,6 +227,23 @@ export default function OfficeSalesDocumentsPage() {
         >
           <Plus className="h-4 w-4" /> New document
         </Link>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+        {([
+          ["Open leads", pipeline ? pipeline.counts.lead + pipeline.counts.quote : "—", UserRoundSearch],
+          ["Follow-up", pipeline?.counts.follow_up ?? "—", Target],
+          ["Won", pipeline?.counts.won ?? "—", TrendingUp],
+          ["Lost", pipeline?.counts.lost ?? "—", TrendingDown],
+          ["Completed revenue", pipeline ? formatZar(pipeline.completed_revenue_cents) : "—", CircleDollarSign],
+        ] satisfies Array<[string, string | number, LucideIcon]>).map(([label, value, Icon]) => (
+          <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <Icon className="h-4 w-4" /> {label}
+            </div>
+            <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">{value}</p>
+          </div>
+        ))}
       </div>
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">

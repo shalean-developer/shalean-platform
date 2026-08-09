@@ -5,6 +5,7 @@ import { createSalesDocument } from "@/lib/salesDocument/salesDocumentMutations"
 import { parseSalesDocumentLineItems } from "@/lib/salesDocument/types";
 import { SALES_DOCUMENT_ADMIN_COLUMNS } from "@/lib/salesDocument/salesDocumentColumns";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { summarizeSalesPipeline } from "@/lib/admin/sales/salesPipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,21 +22,47 @@ export async function GET(request: Request) {
   const status = searchParams.get("status");
   const q = (searchParams.get("q") ?? "").trim().toLowerCase();
 
-  let query = admin.from("sales_documents").select(SALES_DOCUMENT_ADMIN_COLUMNS).order("created_at", { ascending: false });
+  const rows: Record<string, unknown>[] = [];
+  const pageSize = 1000;
+  for (let fromIndex = 0; ; fromIndex += pageSize) {
+    let query = admin
+      .from("sales_documents")
+      .select(SALES_DOCUMENT_ADMIN_COLUMNS)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (type === "quote" || type === "invoice") query = query.eq("document_type", type);
+    if (status && status !== "all") query = query.eq("status", status);
 
-  if (type === "quote" || type === "invoice") {
-    query = query.eq("document_type", type);
+    const { data, error } = await query.range(fromIndex, fromIndex + pageSize - 1);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    rows.push(...((data ?? []) as Record<string, unknown>[]));
+    if ((data?.length ?? 0) < pageSize) break;
   }
-  if (status && status !== "all") {
-    query = query.eq("status", status);
+
+  const documentIds = rows.map((row) => String(row.id ?? "")).filter(Boolean);
+  const bookingsByDocumentId = new Map<string, Record<string, unknown>>();
+  for (let i = 0; i < documentIds.length; i += 100) {
+    const { data: bookings, error: bookingError } = await admin
+      .from("bookings")
+      .select(
+        "id,sales_document_id,status,payment_status,payment_completed_at,total_paid_zar,amount_paid_cents,refunded_at,refund_status,billing_type,is_monthly_billing_booking,monthly_invoice_id",
+      )
+      .in("sales_document_id", documentIds.slice(i, i + 100));
+    if (bookingError) return NextResponse.json({ error: bookingError.message }, { status: 500 });
+    for (const booking of (bookings ?? []) as Record<string, unknown>[]) {
+      const salesDocumentId = String(booking.sales_document_id ?? "");
+      if (salesDocumentId) bookingsByDocumentId.set(salesDocumentId, booking);
+    }
   }
 
-  const { data, error } = await query.limit(200);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  let rows = (data ?? []) as Record<string, unknown>[];
+  const pipelineRows: Array<Record<string, unknown> & { linked_booking: Record<string, unknown> | null }> = rows.map((row) => ({
+    ...row,
+    linked_booking: bookingsByDocumentId.get(String(row.id ?? "")) ?? null,
+  }));
+  const pipeline = summarizeSalesPipeline(pipelineRows as never[]);
+  let visibleRows = pipelineRows;
   if (q) {
-    rows = rows.filter((r) => {
+    visibleRows = visibleRows.filter((r) => {
       const name = String(r.customer_name ?? "").toLowerCase();
       const email = String(r.customer_email ?? "").toLowerCase();
       const id = String(r.id ?? "").toLowerCase();
@@ -43,7 +70,7 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({ documents: rows });
+  return NextResponse.json({ documents: visibleRows, pipeline });
 }
 
 export async function POST(request: Request) {
