@@ -4,12 +4,12 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { fetchAuthUsersByIds } from "@/lib/admin/searchAuthUsersForAdminCustomerLookup";
 import { isAdmin } from "@/lib/auth/admin";
-import { normalizeEmail } from "@/lib/booking/normalizeEmail";
-import { pickBillingEmail } from "@/lib/zoho/shaleanBillingContactEmail";
 
 export type AdminCustomerListRow = {
   id: string;
   user_id: string;
+  crm_customer_id: string;
+  auth_user_id: string | null;
   email: string;
   full_name: string | null;
   phone: string | null;
@@ -23,6 +23,18 @@ export type AdminCustomerListRow = {
   has_active_recurring_plan: boolean;
 };
 
+type CrmCustomerRow = {
+  id: string;
+  auth_user_id: string | null;
+  display_name: string | null;
+  primary_email: string | null;
+  normalized_email: string | null;
+  primary_phone: string | null;
+  normalized_phone: string | null;
+  status: string;
+  updated_at: string | null;
+};
+
 type ProfileRow = {
   id: string;
   full_name: string | null;
@@ -31,9 +43,23 @@ type ProfileRow = {
   phone: string | null;
   phone_e164: string | null;
   role: string | null;
-  booking_count: number | null;
-  total_spent_cents: number | null;
-  updated_at: string | null;
+};
+
+type BookingRow = {
+  crm_customer_id: string | null;
+  created_at: string | null;
+  suburb: string | null;
+  location: string | null;
+  amount_paid_cents: number | null;
+  total_paid_zar: number | null;
+};
+
+type BookingAggregate = {
+  count: number;
+  spendCents: number;
+  lastBookingAt: string | null;
+  suburb: string | null;
+  location: string | null;
 };
 
 const ACTIVE_MS = 1000 * 60 * 60 * 24 * 90;
@@ -53,7 +79,7 @@ export function resolveCustomerTotalBookings(profileCount: number, actualCount: 
   return Math.max(0, Math.max(Math.round(profileCount), Math.round(actualCount)));
 }
 
-/** True when the profile belongs to staff (admin/cleaner), not a billing customer. */
+/** True when the linked auth account belongs to staff, not a billing customer. */
 export function isExcludedStaffCustomer(params: {
   userId: string;
   role: string | null | undefined;
@@ -78,84 +104,88 @@ async function loadCleanerAuthUserIds(admin: SupabaseClient): Promise<Set<string
   return out;
 }
 
-async function loadAllCustomerProfiles(admin: SupabaseClient): Promise<ProfileRow[]> {
-  const all: ProfileRow[] = [];
+async function loadCrmCustomers(admin: SupabaseClient): Promise<CrmCustomerRow[]> {
+  const all: CrmCustomerRow[] = [];
   const pageSize = 500;
   for (let from = 0; ; from += pageSize) {
     const { data, error } = await admin
-      .from("user_profiles")
-      .select(
-        "id, full_name, tier, billing_email, phone, phone_e164, role, booking_count, total_spent_cents, updated_at",
-      )
-      .eq("role", "customer")
+      .from("customers")
+      .select("id,auth_user_id,display_name,primary_email,normalized_email,primary_phone,normalized_phone,status,updated_at")
+      .eq("status", "active")
       .order("updated_at", { ascending: false })
       .range(from, from + pageSize - 1);
     if (error) throw new Error(error.message);
-    const rows = (data ?? []) as ProfileRow[];
+    const rows = (data ?? []) as CrmCustomerRow[];
     all.push(...rows);
     if (rows.length < pageSize) break;
   }
   return all;
 }
 
-async function loadLatestBookingHints(
-  admin: SupabaseClient,
-  userIds: string[],
-): Promise<Map<string, { last_booking_at: string; suburb: string | null; location: string | null }>> {
-  const out = new Map<string, { last_booking_at: string; suburb: string | null; location: string | null }>();
+async function loadProfilesByAuthId(admin: SupabaseClient, userIds: string[]): Promise<Map<string, ProfileRow>> {
+  const out = new Map<string, ProfileRow>();
   const chunkSize = 100;
   for (let i = 0; i < userIds.length; i += chunkSize) {
     const chunk = userIds.slice(i, i + chunkSize);
+    if (!chunk.length) continue;
     const { data } = await admin
-      .from("bookings")
-      .select("user_id, created_at, suburb, location")
-      .in("user_id", chunk)
-      .neq("status", "cancelled")
-      .order("created_at", { ascending: false });
+      .from("user_profiles")
+      .select("id,full_name,tier,billing_email,phone,phone_e164,role")
+      .in("id", chunk);
     for (const raw of data ?? []) {
-      const row = raw as {
-        user_id?: string | null;
-        created_at?: string;
-        suburb?: string | null;
-        location?: string | null;
-      };
-      const uid = String(row.user_id ?? "").trim();
-      const createdAt = String(row.created_at ?? "").trim();
-      if (!uid || !createdAt || out.has(uid)) continue;
-      out.set(uid, {
-        last_booking_at: createdAt,
-        suburb: row.suburb ?? null,
-        location: row.location ?? null,
-      });
+      const row = raw as ProfileRow;
+      if (row.id) out.set(row.id, row);
     }
   }
   return out;
 }
 
-async function loadBookingCountsByUserId(admin: SupabaseClient, userIds: string[]): Promise<Map<string, number>> {
-  const counts = new Map<string, number>();
-  const chunkSize = 100;
-  for (let i = 0; i < userIds.length; i += chunkSize) {
-    const chunk = userIds.slice(i, i + chunkSize);
-    const { data } = await admin
+async function loadBookingAggregates(admin: SupabaseClient): Promise<Map<string, BookingAggregate>> {
+  const out = new Map<string, BookingAggregate>();
+  const pageSize = 1000;
+  for (let from = 0; ; from += pageSize) {
+    const { data, error } = await admin
       .from("bookings")
-      .select("user_id")
-      .in("user_id", chunk)
-      .neq("status", "cancelled");
-    for (const raw of data ?? []) {
-      const uid = String((raw as { user_id?: string | null }).user_id ?? "").trim();
-      if (!uid) continue;
-      counts.set(uid, (counts.get(uid) ?? 0) + 1);
+      .select("crm_customer_id,created_at,suburb,location,amount_paid_cents,total_paid_zar")
+      .not("crm_customer_id", "is", null)
+      .neq("status", "cancelled")
+      .order("created_at", { ascending: false })
+      .range(from, from + pageSize - 1);
+    if (error) throw new Error(error.message);
+    const rows = (data ?? []) as BookingRow[];
+    for (const row of rows) {
+      const id = String(row.crm_customer_id ?? "").trim();
+      if (!id) continue;
+      const existing = out.get(id) ?? {
+        count: 0,
+        spendCents: 0,
+        lastBookingAt: null,
+        suburb: null,
+        location: null,
+      };
+      existing.count += 1;
+      const paidCents = Number.isFinite(Number(row.amount_paid_cents))
+        ? Math.max(0, Math.round(Number(row.amount_paid_cents)))
+        : Math.max(0, Math.round(Number(row.total_paid_zar ?? 0) * 100));
+      existing.spendCents += paidCents;
+      if (!existing.lastBookingAt && row.created_at) {
+        existing.lastBookingAt = row.created_at;
+        existing.suburb = row.suburb ?? null;
+        existing.location = row.location ?? null;
+      }
+      out.set(id, existing);
     }
+    if (rows.length < pageSize) break;
   }
-  return counts;
+  return out;
 }
 
-async function loadActiveRecurringCustomerIds(admin: SupabaseClient, userIds: string[]): Promise<Set<string>> {
+async function loadActiveRecurringAuthIds(admin: SupabaseClient, userIds: string[]): Promise<Set<string>> {
   const out = new Set<string>();
   const chunkSize = 100;
   for (let i = 0; i < userIds.length; i += chunkSize) {
     const chunk = userIds.slice(i, i + chunkSize);
+    if (!chunk.length) continue;
     const { data } = await admin
       .from("recurring_bookings")
       .select("customer_id")
@@ -169,97 +199,63 @@ async function loadActiveRecurringCustomerIds(admin: SupabaseClient, userIds: st
   return out;
 }
 
-function displayEmail(profile: ProfileRow, loginEmail: string | null): string {
-  const billing = pickBillingEmail([profile.billing_email, loginEmail]);
-  if (billing) return billing;
-  const login = loginEmail ? normalizeEmail(loginEmail) : null;
-  if (login) return login;
-  return displayPhone(profile) ?? "";
-}
-
-function displayLabel(profile: ProfileRow, loginEmail: string | null): string {
-  const email = displayEmail(profile, loginEmail);
-  if (email) return email;
-  return `(no contact · ${profile.id.slice(0, 8)})`;
-}
-
-function displayPhone(profile: ProfileRow): string | null {
-  const phone = String(profile.phone_e164 ?? profile.phone ?? "").trim();
-  return phone || null;
-}
-
 /**
- * Lists all customer accounts from `user_profiles` + auth, excluding admins and cleaners.
+ * P4 CRM source of truth: customer identity comes from `customers`.
+ * Auth/user_profiles are optional enrichment; booking facts aggregate by `crm_customer_id`.
  */
 export async function loadAdminCustomersList(admin: SupabaseClient): Promise<AdminCustomerListRow[]> {
-  const cleanerAuthUserIds = await loadCleanerAuthUserIds(admin);
-  const profiles = await loadAllCustomerProfiles(admin);
+  const crmCustomers = await loadCrmCustomers(admin);
+  const authIds = crmCustomers.map((c) => c.auth_user_id).filter((id): id is string => Boolean(id));
+  const [cleanerAuthUserIds, profilesById, authById, bookingsByCustomer, activeRecurringIds] = await Promise.all([
+    loadCleanerAuthUserIds(admin),
+    loadProfilesByAuthId(admin, authIds),
+    fetchAuthUsersByIds(admin, authIds),
+    loadBookingAggregates(admin),
+    loadActiveRecurringAuthIds(admin, authIds),
+  ]);
 
-  const preFiltered = profiles.filter(
-    (profile) =>
-      !isExcludedStaffCustomer({
-        userId: profile.id,
-        role: profile.role,
-        loginEmail: null,
-        cleanerAuthUserIds,
-      }),
-  );
+  const now = Date.now();
+  const customers: AdminCustomerListRow[] = [];
 
-  const capturedById = await fetchAuthUsersByIds(
-    admin,
-    preFiltered.map((p) => p.id),
-  );
+  for (const crm of crmCustomers) {
+    const authId = crm.auth_user_id;
+    const profile = authId ? profilesById.get(authId) : undefined;
+    const auth = authId ? authById.get(authId) : undefined;
 
-  const filteredProfiles: ProfileRow[] = [];
-  for (const profile of preFiltered) {
-    const loginEmail = capturedById.get(profile.id)?.email ?? null;
     if (
+      authId &&
       isExcludedStaffCustomer({
-        userId: profile.id,
-        role: profile.role,
-        loginEmail,
+        userId: authId,
+        role: profile?.role,
+        loginEmail: auth?.email ?? null,
         cleanerAuthUserIds,
       })
     ) {
       continue;
     }
-    filteredProfiles.push(profile);
-  }
 
-  const filteredIds = filteredProfiles.map((p) => p.id);
-  const bookingHints = await loadLatestBookingHints(admin, filteredIds);
-  const bookingCounts = await loadBookingCountsByUserId(admin, filteredIds);
-  const activeRecurringIds = await loadActiveRecurringCustomerIds(admin, filteredIds);
-
-  const now = Date.now();
-  const customers: AdminCustomerListRow[] = [];
-
-  for (const profile of filteredProfiles) {
-    const auth = capturedById.get(profile.id);
-    const loginEmail = auth?.email ?? null;
-    const email = displayLabel(profile, loginEmail);
-
-    const hints = bookingHints.get(profile.id);
-    const totalBookings = resolveCustomerTotalBookings(
-      Number(profile.booking_count ?? 0),
-      bookingCounts.get(profile.id) ?? 0,
-    );
-    const totalSpendZar = Math.max(0, Math.round(Number(profile.total_spent_cents ?? 0) / 100));
-    const lastBookingAt = hints?.last_booking_at ?? null;
-    const hasActiveRecurringPlan = activeRecurringIds.has(profile.id);
+    const aggregate = bookingsByCustomer.get(crm.id);
+    const hasActiveRecurringPlan = Boolean(authId && activeRecurringIds.has(authId));
+    const email = String(crm.primary_email ?? crm.normalized_email ?? profile?.billing_email ?? auth?.email ?? "").trim();
+    const phone = String(crm.primary_phone ?? crm.normalized_phone ?? profile?.phone_e164 ?? profile?.phone ?? "").trim() || null;
+    const fullName = crm.display_name?.trim() || profile?.full_name?.trim() || auth?.metaDisplayName || null;
+    const lastBookingAt = aggregate?.lastBookingAt ?? null;
 
     customers.push({
-      id: profile.id,
-      user_id: profile.id,
-      email,
-      full_name: profile.full_name?.trim() || auth?.metaDisplayName || null,
-      phone: displayPhone(profile),
-      location: hints?.location ?? null,
-      suburb: hints?.suburb ?? null,
-      total_bookings: totalBookings,
-      total_spend_zar: totalSpendZar,
+      // Preserve legacy UI action compatibility for auth-linked customers while exposing the stable CRM id explicitly.
+      id: authId ?? crm.id,
+      user_id: authId ?? crm.id,
+      crm_customer_id: crm.id,
+      auth_user_id: authId ?? null,
+      email: email || phone || `(no contact · ${crm.id.slice(0, 8)})`,
+      full_name: fullName,
+      phone,
+      location: aggregate?.location ?? null,
+      suburb: aggregate?.suburb ?? null,
+      total_bookings: aggregate?.count ?? 0,
+      total_spend_zar: Math.max(0, Math.round((aggregate?.spendCents ?? 0) / 100)),
       last_booking_at: lastBookingAt,
-      tier: profile.tier ?? null,
+      tier: profile?.tier ?? null,
       has_active_recurring_plan: hasActiveRecurringPlan,
       status: deriveCustomerListStatus({
         lastBookingAt,
