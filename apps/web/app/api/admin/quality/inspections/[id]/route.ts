@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { resolveQualityDefect } from "@/lib/quality/qualityDefectResolution";
 import {
   addQualityDefect,
   refreshQualityInspectionScore,
@@ -99,6 +100,25 @@ export async function PATCH(request: Request, { params }: Params) {
     });
     if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
     return NextResponse.json(result, { status: 201 });
+  }
+
+  if (action === "resolve_defect") {
+    const defectId = String(body.defectId ?? "").trim();
+    const resolution = String(body.resolution ?? "").trim();
+    if (!defectId || (resolution !== "fixed" && resolution !== "waived")) {
+      return NextResponse.json({ error: "defectId and a fixed/waived resolution are required." }, { status: 400 });
+    }
+    const result = await resolveQualityDefect(admin, {
+      inspectionId: id,
+      defectId,
+      resolution,
+      correctiveAction: typeof body.correctiveAction === "string" && body.correctiveAction.trim()
+        ? body.correctiveAction.trim()
+        : null,
+      actorUserId: auth.userId,
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json(result);
   }
 
   return NextResponse.json({ error: "Unsupported action." }, { status: 400 });
