@@ -1,9 +1,15 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import { Loader2, Minus, Plus, Search, X } from "lucide-react";
 import { useQuotePricingCatalog } from "@/components/quote/useQuotePricingCatalog";
-import { extrasForSelectedServices } from "@/lib/quote/quoteSelection";
+import {
+  extrasForSelectedServices,
+  QUOTE_CUSTOM_SERVICE_SLUGS,
+  QUOTE_UNSURE_SERVICE_NAME,
+  QUOTE_UNSURE_SERVICE_SLUG,
+} from "@/lib/quote/quoteSelection";
 import type { QuoteCatalogSelection } from "@/lib/quote/types";
 import { cn } from "@/lib/utils";
 
@@ -104,13 +110,21 @@ export function QuoteRequestCatalogPicker({
     [selectedServiceSlugs, services, extras],
   );
 
+  const customQuoteServices = useMemo(
+    () => [
+      ...services.filter((service) => QUOTE_CUSTOM_SERVICE_SLUGS.has(service.slug)),
+      { id: QUOTE_UNSURE_SERVICE_SLUG, slug: QUOTE_UNSURE_SERVICE_SLUG, name: QUOTE_UNSURE_SERVICE_NAME },
+    ],
+    [services],
+  );
+
   const filteredServices = useMemo(() => {
-    if (!q) return services;
-    return services.filter(
+    if (!q) return customQuoteServices;
+    return customQuoteServices.filter(
       (service) =>
         service.name.toLowerCase().includes(q) || service.slug.toLowerCase().includes(q),
     );
-  }, [services, q]);
+  }, [customQuoteServices, q]);
 
   const filteredExtras = useMemo(() => {
     if (selectedServiceSlugs.length === 0) return [];
@@ -148,12 +162,12 @@ export function QuoteRequestCatalogPicker({
 
   function handleBedroomsChange(next: number) {
     onBedroomsChange(next);
-    onChange(syncServiceRoomNotes(selected, next, bathrooms, services));
+    onChange(syncServiceRoomNotes(selected, next, bathrooms, customQuoteServices));
   }
 
   function handleBathroomsChange(next: number) {
     onBathroomsChange(next);
-    onChange(syncServiceRoomNotes(selected, bedrooms, next, services));
+    onChange(syncServiceRoomNotes(selected, bedrooms, next, customQuoteServices));
   }
 
   function addExtra(extra: { slug: string; name: string }) {
@@ -228,7 +242,7 @@ export function QuoteRequestCatalogPicker({
       {!loading && !error ? (
         <div className="mt-4 space-y-4">
           <section>
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Services</p>
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Custom quote options</p>
             {filteredServices.length === 0 ? (
               <p className="mt-2 text-xs text-slate-400">No matching services.</p>
             ) : (
@@ -269,6 +283,19 @@ export function QuoteRequestCatalogPicker({
                 })}
               </ul>
             )}
+          </section>
+
+          <section className="rounded-xl border border-blue-100 bg-blue-50 p-4">
+            <p className="text-sm font-semibold text-blue-950">Need a standard cleaning service?</p>
+            <p className="mt-1 text-xs leading-relaxed text-blue-800">
+              Standard, Airbnb, deep, move-in/out and carpet cleaning have instant online pricing.
+            </p>
+            <Link
+              href="/book"
+              className="mt-3 inline-flex min-h-10 items-center justify-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700"
+            >
+              See instant price
+            </Link>
           </section>
 
           {selectedServiceSlugs.length > 0 ? (
