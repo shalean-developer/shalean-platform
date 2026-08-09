@@ -97,6 +97,11 @@ function scheduledStartIso(date: string | null, time: string | null): number | n
   return Number.isFinite(ms) ? ms : null;
 }
 
+function normalizedRate(value: number | null | undefined): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  return clamp(value <= 1 ? value * 100 : value);
+}
+
 export async function loadCleanerPerformanceScorecards(
   admin: SupabaseClient,
   input?: { cleanerId?: string | null; days?: number },
@@ -239,12 +244,9 @@ export async function loadCleanerPerformanceScorecards(
 
     const totalOffers = Math.max(0, Number(cleaner.total_offers ?? 0));
     const acceptedOffers = Math.max(0, Number(cleaner.accepted_offers ?? 0));
-    const recent = Number(cleaner.acceptance_rate_recent);
-    const lifetime = Number(cleaner.acceptance_rate);
-    let reliabilityScore: number | null = null;
-    if (Number.isFinite(recent)) reliabilityScore = clamp(recent <= 1 ? recent * 100 : recent);
-    else if (Number.isFinite(lifetime)) reliabilityScore = clamp(lifetime <= 1 ? lifetime * 100 : lifetime);
-    else if (totalOffers > 0) reliabilityScore = clamp((acceptedOffers / totalOffers) * 100);
+    let reliabilityScore = normalizedRate(cleaner.acceptance_rate_recent);
+    if (reliabilityScore == null) reliabilityScore = normalizedRate(cleaner.acceptance_rate);
+    if (reliabilityScore == null && totalOffers > 0) reliabilityScore = clamp((acceptedOffers / totalOffers) * 100);
 
     let attendanceObserved = 0;
     let onTime = 0;
