@@ -4,6 +4,8 @@ import {
   handleCustomerBookingReschedule,
 } from "@/lib/customer/customerBookingModifyHandlers";
 import { validateCustomerBookingRescheduleAssignment } from "@/lib/customer/validateCustomerBookingRescheduleAssignment";
+import { orchestrateCustomerBookingReschedule } from "@/lib/customer/orchestrateCustomerBookingReschedule";
+import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,5 +40,22 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     }
   }
 
-  return handleCustomerBookingReschedule(auth, bookingId, body);
+  const response = await handleCustomerBookingReschedule(auth, bookingId, body);
+  if (!response.ok) return response;
+
+  const convergence = await orchestrateCustomerBookingReschedule(auth.admin, bookingId);
+  if (!convergence.ok) {
+    void reportOperationalIssue(
+      "error",
+      "customer_booking_reschedule",
+      "customer_reschedule_side_effect_convergence_failed",
+      { bookingId, error: convergence.error },
+    );
+    return NextResponse.json(
+      { ok: true, warning: "Booking moved, but assignment refresh needs operations review." },
+      { status: 200 },
+    );
+  }
+
+  return response;
 }
