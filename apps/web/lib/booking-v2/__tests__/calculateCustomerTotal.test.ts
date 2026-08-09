@@ -173,6 +173,15 @@ describe("calculateCustomerTotal", () => {
     expect(r.selected_extras_total).toBe(200);
   });
 
+  it("deduplicates accepted extras before pricing", () => {
+    const r = calculateCustomerTotal(
+      baseInput({ selectedExtras: ["inside_oven", "inside_oven"] }),
+    );
+
+    expect(r.selected_extras).toHaveLength(1);
+    expect(r.selected_extras_total).toBe(200);
+  });
+
   it("applies weekly recurring discount after service fee", () => {
     const r = calculateCustomerTotal(
       baseInput({
