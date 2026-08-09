@@ -9,6 +9,7 @@ import {
   SERVICE_SLUGS,
   type ServiceSlug,
 } from "@/src/features/booking-v2/config/serviceConfig";
+import { extraSlugsForService } from "@/lib/booking-v2/serviceExtraSlugs";
 
 /** Legacy `/booking/*` checkout segment → booking-v2 step (1–4). */
 export type LegacyCheckoutSegment = "details" | "schedule" | "cleaner" | "payment";
@@ -85,6 +86,7 @@ export type WidgetBookingSelection = {
   extraRooms?: number;
   extras?: string[];
   serviceAreaName?: string;
+  serviceAreaLocationId?: string | null;
   source?: string;
 };
 
@@ -92,6 +94,7 @@ export type WidgetBookingSelection = {
 export function buildBookHrefFromWidgetSelection(input: WidgetBookingSelection): string {
   const sp = new URLSearchParams();
   sp.set("service", input.service);
+  const serviceSlug = legacyServiceIdToBookSlug(input.service);
 
   for (const [key, value] of [
     ["bedrooms", input.bedrooms],
@@ -103,11 +106,21 @@ export function buildBookHrefFromWidgetSelection(input: WidgetBookingSelection):
     }
   }
 
-  const extras = (input.extras ?? []).map((value) => value.trim()).filter(Boolean);
+  const allowedExtras = new Set(extraSlugsForService(serviceSlug));
+  const extras = (input.extras ?? [])
+    .map((value) => value.trim())
+    .filter((value) => value && allowedExtras.has(value));
   if (extras.length > 0) sp.set("extras", extras.join(","));
+  sp.set("extrasMode", "replace");
 
   const location = input.serviceAreaName?.trim();
-  if (location) sp.set("location", location);
+  const locationId = input.serviceAreaLocationId?.trim();
+  if (location && locationId) {
+    sp.set("serviceAreaLocationId", locationId);
+    sp.set("serviceAreaName", location);
+  } else if (location) {
+    sp.set("location", location);
+  }
 
   const source = input.source?.trim();
   if (source) sp.set("source", source);
@@ -134,11 +147,13 @@ export function bookingV2PrefillPatchFromLegacySearchParams(
   serviceDetails?: Record<string, string | number | boolean>;
   suburb?: string;
   selectedExtras?: string[];
+  replaceSelectedExtras?: boolean;
 } {
   const patch: {
     serviceDetails?: Record<string, string | number | boolean>;
     suburb?: string;
     selectedExtras?: string[];
+    replaceSelectedExtras?: boolean;
   } = {};
 
   const br = sp.get("bedrooms");
@@ -160,7 +175,16 @@ export function bookingV2PrefillPatchFromLegacySearchParams(
   if (Object.keys(details).length) patch.serviceDetails = details;
 
   const locRaw = sp.get("location");
-  if (locRaw?.trim()) {
+  const serviceAreaLocationId = sp.get("serviceAreaLocationId")?.trim() ?? "";
+  const serviceAreaName = sp.get("serviceAreaName")?.trim() ?? "";
+  if (
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      serviceAreaLocationId,
+    ) &&
+    serviceAreaName
+  ) {
+    patch.suburb = serviceAreaName.slice(0, 120);
+  } else if (locRaw?.trim()) {
     const hit = findLocationBySlug(normalizeLocationSlugParam(locRaw.trim().replace(/\+/g, "-")));
     if (hit?.name) patch.suburb = hit.name;
   }
@@ -172,6 +196,7 @@ export function bookingV2PrefillPatchFromLegacySearchParams(
       .map((s) => s.trim())
       .filter(Boolean);
   }
+  patch.replaceSelectedExtras = sp.get("extrasMode") === "replace";
 
   return patch;
 }
