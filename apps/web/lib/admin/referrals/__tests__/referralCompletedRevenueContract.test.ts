@@ -9,10 +9,15 @@ describe("P7 referral completed-revenue contract", () => {
       "utf8",
     );
 
-    expect(source).toContain('.eq("event_type", "checkout_discount_applied")');
-    expect(source).toContain('.eq("event_type", "referral_reward_credited")');
-    expect(source).toContain('.gte("created_at", `${from}T00:00:00`)');
-    expect(source).toContain('.lte("created_at", `${to}T23:59:59`)');
+    expect(source).toContain('loadPeriodReferralEvents(admin, "checkout_discount_applied"');
+    expect(source).toContain('loadPeriodReferralEvents(admin, "referral_reward_credited"');
+    expect(source).toContain("johannesburgDayUtcBounds(from)");
+    expect(source).toContain("johannesburgDayUtcBounds(to).endExclusiveIso");
+    expect(source).toContain('.lt("created_at", endExclusiveIso)');
+    expect(source).toContain(".range(fromIndex, fromIndex + pageSize - 1)");
+    expect(source).toContain("unique.slice(i, i + 100)");
+    expect(source).toContain("isAdminDashboardRevenueEligible(booking)");
+    expect(source).toContain("adminDashboardRevenueCents(booking)");
     expect(source).toContain('toLowerCase() === "completed"');
     expect(source).toContain("completed_referred_revenue_cents");
     expect(source).toContain("paid_attributed_revenue_cents");
