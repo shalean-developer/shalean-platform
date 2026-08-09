@@ -8,6 +8,9 @@ import type {
 export const QUOTE_UNSURE_SERVICE_SLUG = "unsure";
 export const QUOTE_UNSURE_SERVICE_NAME = "Not sure — recommend for me";
 
+/** Database-backed services that remain in the reviewed custom-quote flow. */
+export const QUOTE_CUSTOM_SERVICE_SLUGS = new Set(["office"]);
+
 /** Pricing service slugs where optional add-ons are not offered on the quote form. */
 export const QUOTE_SERVICES_WITHOUT_EXTRAS = new Set<string>();
 
