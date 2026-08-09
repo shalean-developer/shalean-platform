@@ -22,19 +22,22 @@ export async function GET(request: Request) {
   const status = searchParams.get("status");
   const q = (searchParams.get("q") ?? "").trim().toLowerCase();
 
-  let query = admin.from("sales_documents").select(SALES_DOCUMENT_ADMIN_COLUMNS).order("created_at", { ascending: false });
+  const rows: Record<string, unknown>[] = [];
+  const pageSize = 1000;
+  for (let fromIndex = 0; ; fromIndex += pageSize) {
+    let query = admin
+      .from("sales_documents")
+      .select(SALES_DOCUMENT_ADMIN_COLUMNS)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false });
+    if (type === "quote" || type === "invoice") query = query.eq("document_type", type);
+    if (status && status !== "all") query = query.eq("status", status);
 
-  if (type === "quote" || type === "invoice") {
-    query = query.eq("document_type", type);
+    const { data, error } = await query.range(fromIndex, fromIndex + pageSize - 1);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    rows.push(...((data ?? []) as Record<string, unknown>[]));
+    if ((data?.length ?? 0) < pageSize) break;
   }
-  if (status && status !== "all") {
-    query = query.eq("status", status);
-  }
-
-  const { data, error } = await query.limit(500);
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-
-  let rows = (data ?? []) as Record<string, unknown>[];
 
   const documentIds = rows.map((row) => String(row.id ?? "")).filter(Boolean);
   const bookingsByDocumentId = new Map<string, Record<string, unknown>>();
@@ -52,13 +55,14 @@ export async function GET(request: Request) {
     }
   }
 
-  rows = rows.map((row) => ({
+  const pipelineRows: Array<Record<string, unknown> & { linked_booking: Record<string, unknown> | null }> = rows.map((row) => ({
     ...row,
     linked_booking: bookingsByDocumentId.get(String(row.id ?? "")) ?? null,
   }));
-  const pipeline = summarizeSalesPipeline(rows as never[]);
+  const pipeline = summarizeSalesPipeline(pipelineRows as never[]);
+  let visibleRows = pipelineRows;
   if (q) {
-    rows = rows.filter((r) => {
+    visibleRows = visibleRows.filter((r) => {
       const name = String(r.customer_name ?? "").toLowerCase();
       const email = String(r.customer_email ?? "").toLowerCase();
       const id = String(r.id ?? "").toLowerCase();
@@ -66,7 +70,7 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({ documents: rows, pipeline });
+  return NextResponse.json({ documents: visibleRows, pipeline });
 }
 
 export async function POST(request: Request) {
