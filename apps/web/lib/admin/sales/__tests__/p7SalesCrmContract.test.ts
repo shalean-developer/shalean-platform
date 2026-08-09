@@ -14,6 +14,8 @@ describe("P7 complete sales CRM contract", () => {
     expect(migration).toContain("sales_opportunity_activities");
     expect(migration).toContain("enable row level security");
     expect(migration).toContain("revoke all on public.sales_opportunity_activities from anon, authenticated");
+    expect(migration).toContain("set_sales_opportunity_crm");
+    expect(migration).toContain("for update");
   });
 
   it("captures attribution and gates CRM APIs for operational roles", () => {
@@ -22,6 +24,7 @@ describe("P7 complete sales CRM contract", () => {
     expect(quote).toContain("getAcquisitionPayloadFields");
     expect(route).toContain('"invoice.manage", "customer.contact", "marketing.view"');
     expect(route).toContain("lost_reason_required");
-    expect(route).toContain('activity_type: "stage_change"');
+    expect(route).toContain('rpc("set_sales_opportunity_crm"');
+    expect(route).toContain('["call", "email", "whatsapp"]');
   });
 });
