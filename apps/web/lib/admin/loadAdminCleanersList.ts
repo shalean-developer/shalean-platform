@@ -12,6 +12,7 @@ export type AdminCleanerListRow = {
   rating: number | null;
   jobs_completed: number | null;
   is_available: boolean | null;
+  is_active: boolean | null;
   home_lat: number | null;
   home_lng: number | null;
   email: string | null;
@@ -31,6 +32,7 @@ const SELECT_WITH_WEEKDAYS = `
   rating,
   jobs_completed,
   is_available,
+  is_active,
   home_lat,
   home_lng,
   email,
@@ -50,6 +52,7 @@ const SELECT_BASE = `
   rating,
   jobs_completed,
   is_available,
+  is_active,
   home_lat,
   home_lng,
   email,
