@@ -42,9 +42,8 @@ describe("legacyMarketingRedirectMatrix", () => {
   });
 
   it("does not assign keyword ownership to redirect sources", () => {
-    const redirectSources = new Set(legacyMarketingRedirectSourcePaths());
     for (const route of Object.values(KEYWORD_PRIMARY_ROUTE)) {
-      expect(redirectSources.has(route)).toBe(false);
+      expect(resolveLegacyMarketingExactRedirect(route)).toBeNull();
     }
   });
 });
