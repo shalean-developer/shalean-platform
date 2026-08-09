@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 
 import { createCustomerQuoteRequest } from "@/lib/salesDocument/createCustomerQuoteRequest";
+import { loadQuotePricingCatalog } from "@/lib/quote/loadQuotePricingCatalog";
+import { resolveQuoteRequestSelection } from "@/lib/quote/resolveQuoteRequestSelection";
 import type { SalesDocumentQuoteRequestSelectedItem } from "@/lib/salesDocument/types";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -43,8 +45,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid_property_type" }, { status: 400 });
   }
 
-  const selected_items = parseSelectedItems(body.selected_items);
-  if (!selected_items.length) {
+  const requestedItems = parseSelectedItems(body.selected_items);
+  if (!requestedItems.length) {
     return NextResponse.json({ error: "selection_required" }, { status: 400 });
   }
 
@@ -52,13 +54,31 @@ export async function POST(request: Request) {
   const preferred_date =
     preferredRaw && /^\d{4}-\d{2}-\d{2}$/.test(preferredRaw) ? preferredRaw : null;
 
+  const bedrooms = parseOptionalInt(body.bedrooms);
+  const bathrooms = parseOptionalInt(body.bathrooms);
+  let selected_items: SalesDocumentQuoteRequestSelectedItem[] | null = null;
+  try {
+    const catalog = await loadQuotePricingCatalog(admin);
+    selected_items = resolveQuoteRequestSelection({
+      requested: requestedItems,
+      services: catalog.services,
+      bedrooms,
+      bathrooms,
+    });
+  } catch {
+    return NextResponse.json({ error: "catalog_unavailable" }, { status: 503 });
+  }
+  if (!selected_items) {
+    return NextResponse.json({ error: "invalid_selection" }, { status: 400 });
+  }
+
   const result = await createCustomerQuoteRequest(admin, {
     customer_name: String(body.customer_name ?? ""),
     customer_email: String(body.customer_email ?? ""),
     customer_phone: String(body.customer_phone ?? ""),
     property_type: propertyType,
-    bedrooms: parseOptionalInt(body.bedrooms),
-    bathrooms: parseOptionalInt(body.bathrooms),
+    bedrooms,
+    bathrooms,
     suburb: String(body.suburb ?? ""),
     preferred_date,
     message: typeof body.message === "string" ? body.message : null,
