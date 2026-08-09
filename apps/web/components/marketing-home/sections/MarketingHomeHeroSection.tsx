@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { preload } from "react-dom";
-import { ShieldCheck, ThumbsUp, MousePointerClick, Star, Users } from "lucide-react";
+import { ShieldCheck, ThumbsUp, MousePointerClick, Star, BadgeCheck } from "lucide-react";
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
 import { GET_FREE_QUOTE_HREF, getFreeQuoteButtonClass } from "@/lib/marketing/getFreeQuote";
 import { marketingHeroImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -133,14 +133,14 @@ export function MarketingHomeHeroSection() {
             />
           </div>
 
-          {/* Floating stats card */}
+          {/* Floating conversion-truth card — no unsupported volume claims. */}
           <div className="absolute left-2 bottom-4 z-10 flex items-center gap-3 rounded-2xl bg-blue-600 px-4 py-3 shadow-lg sm:-left-6 sm:bottom-6 sm:px-5 sm:py-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20">
-              <Users className="h-5 w-5 text-white" aria-hidden />
+              <BadgeCheck className="h-5 w-5 text-white" aria-hidden />
             </div>
             <div>
-              <p className="text-xl font-extrabold leading-none tracking-tight text-white">100+</p>
-              <p className="mt-1 text-xs font-medium leading-tight text-blue-100">Happy customers<br />this week</p>
+              <p className="text-sm font-extrabold leading-none tracking-tight text-white">Instant pricing</p>
+              <p className="mt-1 text-xs font-medium leading-tight text-blue-100">See your total<br />before you pay</p>
             </div>
           </div>
         </div>
