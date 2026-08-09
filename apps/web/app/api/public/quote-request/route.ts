@@ -83,6 +83,16 @@ export async function POST(request: Request) {
     preferred_date,
     message: typeof body.message === "string" ? body.message : null,
     selected_items,
+    attribution: {
+      utm_source: typeof body.utm_source === "string" ? body.utm_source : null,
+      utm_medium: typeof body.utm_medium === "string" ? body.utm_medium : null,
+      utm_campaign: typeof body.utm_campaign === "string" ? body.utm_campaign : null,
+      utm_term: typeof body.utm_term === "string" ? body.utm_term : null,
+      utm_content: typeof body.utm_content === "string" ? body.utm_content : null,
+      gclid: typeof body.gclid === "string" ? body.gclid : null,
+      fbclid: typeof body.fbclid === "string" ? body.fbclid : null,
+      landing_page_slug: typeof body.landing_page_slug === "string" ? body.landing_page_slug : null,
+    },
   });
 
   if (!result.ok) {
