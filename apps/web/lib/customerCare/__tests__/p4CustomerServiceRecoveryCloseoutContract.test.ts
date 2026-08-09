@@ -42,7 +42,7 @@ describe("P4 customer service recovery closeout", () => {
   });
 
   it("preserves immutable paid cleaner payout history on cancellation", () => {
-    const migration = read("../supabase/migrations/20260809091000_preserve_paid_payout_on_customer_cancellation.sql");
+    const migration = read("../../supabase/migrations/20260809091000_preserve_paid_payout_on_customer_cancellation.sql");
     expect(migration).toContain("old.payout_status");
     expect(migration).toContain("new.cleaner_payout_cents := old.cleaner_payout_cents");
     expect(migration).toContain("new.payout_paid_at := old.payout_paid_at");
