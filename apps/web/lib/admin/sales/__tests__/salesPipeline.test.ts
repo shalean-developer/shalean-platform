@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { salesPipelineRevenueCents, salesPipelineStage, summarizeSalesPipeline } from "@/lib/admin/sales/salesPipeline";
+import { salesPipelineRevenueCents, salesPipelineSource, salesPipelineStage, summarizeSalesPipeline } from "@/lib/admin/sales/salesPipeline";
 
 const base = { id: "doc", document_type: "quote", status: "requested", source: "customer_request" };
 
@@ -9,6 +9,7 @@ describe("P7 sales pipeline", () => {
     expect(salesPipelineStage({ ...base, status: "draft" })).toBe("quote");
     expect(salesPipelineStage({ ...base, status: "sent", view_count: 1 })).toBe("follow_up");
     expect(salesPipelineStage({ ...base, status: "expired" })).toBe("lost");
+    expect(salesPipelineStage({ ...base, document_type: "invoice", status: "draft" })).toBe("quote");
     expect(salesPipelineStage({
       ...base,
       linked_booking: {
@@ -20,6 +21,14 @@ describe("P7 sales pipeline", () => {
         amount_paid_cents: null,
       },
     })).toBe("won");
+  });
+
+  it("inherits website attribution across quote-to-invoice conversion", () => {
+    expect(salesPipelineSource(
+      { source: "admin" },
+      { source: "customer_request" },
+    )).toBe("website");
+    expect(salesPipelineSource({ source: "admin" })).toBe("office");
   });
 
   it("counts only canonical eligible completed booking revenue", () => {
