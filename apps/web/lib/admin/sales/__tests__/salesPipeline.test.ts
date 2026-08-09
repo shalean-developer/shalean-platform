@@ -44,4 +44,28 @@ describe("P7 sales pipeline", () => {
     };
     expect(salesPipelineRevenueCents(refunded)).toBe(0);
   });
+
+  it("treats a converted quote and invoice as one opportunity", () => {
+    const quote = { ...base, id: "quote", status: "accepted" };
+    const invoice = {
+      ...base,
+      id: "invoice",
+      document_type: "invoice",
+      status: "paid",
+      converted_from_id: "quote",
+      linked_booking: {
+        id: "booking",
+        status: "completed",
+        payment_status: "success",
+        payment_completed_at: "2026-08-09T12:00:00Z",
+        amount_paid_cents: 50000,
+        total_paid_zar: null,
+      },
+    };
+
+    const summary = summarizeSalesPipeline([quote, invoice]);
+    expect(summary.counts.won).toBe(1);
+    expect(Object.values(summary.counts).reduce((sum, count) => sum + count, 0)).toBe(1);
+    expect(summary.completed_revenue_cents).toBe(50000);
+  });
 });
