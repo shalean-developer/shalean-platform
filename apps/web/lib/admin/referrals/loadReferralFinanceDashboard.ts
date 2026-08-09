@@ -7,6 +7,8 @@ import { loadReferralPromoCostTotals, loadReferralPromoCostsByBranch } from "@/l
 export type ReferralFinanceDashboardPayload = {
   period: { from: string; to: string };
   summary: {
+    paid_attributed_revenue_cents: number;
+    completed_referred_revenue_cents: number;
     gross_referred_revenue_cents: number;
     referral_discount_cost_cents: number;
     cleaning_credit_cost_cents: number;
@@ -91,14 +93,58 @@ export async function loadReferralFinanceDashboard(
         .lte("rewarded_at", `${to}T23:59:59`),
     ]);
 
-  let grossRevenueCents = 0;
-  let discountCostCents = promoTotals.referral_discount_cost_cents;
-  let rewardCostCents = 0;
+  const attributionEvents = await admin
+    .from("referral_events")
+    .select("booking_id")
+    .eq("event_type", "checkout_discount_applied")
+    .not("booking_id", "is", null)
+    .gte("created_at", `${from}T00:00:00`)
+    .lte("created_at", `${to}T23:59:59`);
+  const rewardEvents = await admin
+    .from("referral_events")
+    .select("value_zar")
+    .eq("event_type", "referral_reward_credited")
+    .gte("created_at", `${from}T00:00:00`)
+    .lte("created_at", `${to}T23:59:59`);
+  const attributedBookingIds = [
+    ...new Set(
+      (attributionEvents.data ?? [])
+        .map((row) => String((row as { booking_id?: string | null }).booking_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const attributedBookings = attributedBookingIds.length
+    ? await admin
+        .from("bookings")
+        .select("id, status, total_paid_zar, amount_paid_cents")
+        .in("id", attributedBookingIds)
+    : { data: [], error: null };
 
-  for (const row of profitability.data ?? []) {
-    grossRevenueCents += zarBigIntToCents((row as { gross_referred_revenue_zar?: number }).gross_referred_revenue_zar);
-    rewardCostCents += zarBigIntToCents((row as { total_reward_cost_zar?: number }).total_reward_cost_zar);
+  let paidAttributedRevenueCents = 0;
+  let completedReferredRevenueCents = 0;
+  for (const row of attributedBookings.data ?? []) {
+    const booking = row as {
+      status?: string | null;
+      total_paid_zar?: number | string | null;
+      amount_paid_cents?: number | string | null;
+    };
+    const totalPaidZar = Number(booking.total_paid_zar ?? 0);
+    const amountCents = Number(booking.amount_paid_cents ?? 0);
+    const revenueCents = Number.isFinite(totalPaidZar) && totalPaidZar > 0
+      ? Math.round(totalPaidZar * 100)
+      : Math.max(0, Math.round(amountCents));
+    paidAttributedRevenueCents += revenueCents;
+    if (String(booking.status ?? "").trim().toLowerCase() === "completed") {
+      completedReferredRevenueCents += revenueCents;
+    }
   }
+
+  const grossRevenueCents = completedReferredRevenueCents;
+  const discountCostCents = promoTotals.referral_discount_cost_cents;
+  const rewardCostCents = (rewardEvents.data ?? []).reduce(
+    (sum, row) => sum + zarBigIntToCents((row as { value_zar?: number | string | null }).value_zar),
+    0,
+  );
 
   // Use promo totals for discount (more accurate for period) and reward rollups for credits issued
   const totalCostCents = discountCostCents + rewardCostCents + promoTotals.cleaning_credit_cost_cents;
@@ -166,6 +212,8 @@ export async function loadReferralFinanceDashboard(
   return {
     period: { from, to },
     summary: {
+      paid_attributed_revenue_cents: paidAttributedRevenueCents,
+      completed_referred_revenue_cents: completedReferredRevenueCents,
       gross_referred_revenue_cents: grossRevenueCents,
       referral_discount_cost_cents: discountCostCents,
       cleaning_credit_cost_cents: promoTotals.cleaning_credit_cost_cents,
