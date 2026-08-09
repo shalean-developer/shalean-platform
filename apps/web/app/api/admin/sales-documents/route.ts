@@ -5,7 +5,7 @@ import { createSalesDocument } from "@/lib/salesDocument/salesDocumentMutations"
 import { parseSalesDocumentLineItems } from "@/lib/salesDocument/types";
 import { SALES_DOCUMENT_ADMIN_COLUMNS } from "@/lib/salesDocument/salesDocumentColumns";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { salesPipelineStage, summarizeSalesPipeline, type SalesPipelineDocument } from "@/lib/admin/sales/salesPipeline";
+import { salesPipelineSource, salesPipelineStage, summarizeSalesPipeline, type SalesPipelineDocument } from "@/lib/admin/sales/salesPipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,14 +55,17 @@ export async function GET(request: Request) {
     }
   }
 
-  const pipelineRows: Array<Record<string, unknown> & { linked_booking: Record<string, unknown> | null; pipeline_stage: string }> = rows.map((row) => {
+  const documentsById = new Map(rows.map((row) => [String(row.id ?? ""), row]));
+  const pipelineRows: Array<Record<string, unknown> & { linked_booking: Record<string, unknown> | null; pipeline_stage: string; pipeline_source: string }> = rows.map((row) => {
     const enriched = {
       ...row,
       linked_booking: bookingsByDocumentId.get(String(row.id ?? "")) ?? null,
     };
+    const parent = documentsById.get(String(row.converted_from_id ?? "")) ?? null;
     return {
       ...enriched,
       pipeline_stage: salesPipelineStage(enriched as unknown as SalesPipelineDocument),
+      pipeline_source: salesPipelineSource(enriched as SalesPipelineDocument, parent as SalesPipelineDocument | null),
     };
   });
   const pipeline = summarizeSalesPipeline(pipelineRows as never[]);
