@@ -17,6 +17,7 @@ type CleanerDetail = {
   jobs_completed: number | null;
   status: string | null;
   is_available: boolean | null;
+  is_active: boolean | null;
   location: string | null;
   availability_start: string | null;
   availability_end: string | null;
@@ -26,6 +27,15 @@ type CleanerDetail = {
 
 type CleanerDetailResponse = {
   cleaner: CleanerDetail;
+  assignedBookings: Array<{
+    id: string;
+    booking_reference: string | null;
+    service: string | null;
+    date: string | null;
+    time: string | null;
+    status: string | null;
+    location: string | null;
+  }>;
 };
 
 const CLEANER_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -75,6 +85,7 @@ function OfficeCleanerDetailContent() {
   );
 
   const cleaner = data?.cleaner;
+  const assignedBookings = data?.assignedBookings ?? [];
 
   return (
     <div className="space-y-5">
@@ -143,6 +154,9 @@ function OfficeCleanerDetailContent() {
                   >
                     {workloadLabel(cleaner.status, cleaner.is_available)}
                   </span>
+                  <span className={cn("rounded-full px-2.5 py-1 text-xs font-bold", cleaner.is_active === false ? "bg-rose-100 text-rose-700" : "bg-emerald-100 text-emerald-700")}>
+                    {cleaner.is_active === false ? "Archived" : "Active roster"}
+                  </span>
                 </div>
                 <p className="mt-1 font-mono text-xs text-slate-400">{cleaner.id}</p>
               </div>
@@ -176,6 +190,46 @@ function OfficeCleanerDetailContent() {
                 </dd>
               </div>
             </dl>
+          </section>
+
+          <section className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm lg:col-span-2">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-bold text-slate-900">Assigned jobs</h2>
+                <p className="mt-1 text-sm text-slate-500">Recent assignments from the canonical booking and team roster.</p>
+              </div>
+              <Link href="/office/bookings" className="text-sm font-semibold text-blue-600 hover:underline">
+                Open bookings
+              </Link>
+            </div>
+            {assignedBookings.length === 0 ? (
+              <p className="mt-4 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-500">No assigned bookings found.</p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full divide-y divide-slate-200 text-sm">
+                  <thead>
+                    <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      <th className="px-3 py-2">Booking</th>
+                      <th className="px-3 py-2">Service</th>
+                      <th className="px-3 py-2">Date</th>
+                      <th className="px-3 py-2">Status</th>
+                      <th className="px-3 py-2">Location</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {assignedBookings.map((booking) => (
+                      <tr key={booking.id}>
+                        <td className="px-3 py-3 font-semibold text-blue-700">{booking.booking_reference ?? booking.id.slice(0, 8)}</td>
+                        <td className="px-3 py-3 capitalize text-slate-700">{booking.service ?? "—"}</td>
+                        <td className="px-3 py-3 text-slate-700">{booking.date ?? "—"}{booking.time ? ` · ${booking.time.slice(0, 5)}` : ""}</td>
+                        <td className="px-3 py-3 capitalize text-slate-700">{booking.status ?? "—"}</td>
+                        <td className="px-3 py-3 text-slate-700">{booking.location ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
 
           <aside className="space-y-4">
