@@ -78,6 +78,43 @@ export function buildBookHubHrefFromLegacySearchParams(sp: URLSearchParams): str
   return qs ? `/book?${qs}` : "/book";
 }
 
+export type WidgetBookingSelection = {
+  service: string;
+  bedrooms?: number;
+  bathrooms?: number;
+  extraRooms?: number;
+  extras?: string[];
+  serviceAreaName?: string;
+  source?: string;
+};
+
+/** Preserve widget choices when handing customers to the canonical booking-v2 funnel. */
+export function buildBookHrefFromWidgetSelection(input: WidgetBookingSelection): string {
+  const sp = new URLSearchParams();
+  sp.set("service", input.service);
+
+  for (const [key, value] of [
+    ["bedrooms", input.bedrooms],
+    ["bathrooms", input.bathrooms],
+    ["extraRooms", input.extraRooms],
+  ] as const) {
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      sp.set(key, String(Math.floor(value)));
+    }
+  }
+
+  const extras = (input.extras ?? []).map((value) => value.trim()).filter(Boolean);
+  if (extras.length > 0) sp.set("extras", extras.join(","));
+
+  const location = input.serviceAreaName?.trim();
+  if (location) sp.set("location", location);
+
+  const source = input.source?.trim();
+  if (source) sp.set("source", source);
+
+  return buildBookHrefFromLegacySearchParams(sp, "details");
+}
+
 export function legacyFlowStepQueryToBookHref(step: string | null, sp: URLSearchParams): string {
   const migrated =
     step === "when" || step === "schedule"
