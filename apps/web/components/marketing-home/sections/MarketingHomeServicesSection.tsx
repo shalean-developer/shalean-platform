@@ -15,7 +15,7 @@ const BENEFITS = [
   {
     Icon: UserCheck,
     title: "Vetted Professionals",
-    body: "Trained, background-checked and uniformed, left entry and gets to work.",
+    body: "Trained and background-checked cleaners who follow the booked checklist.",
   },
   {
     Icon: Sprout,
