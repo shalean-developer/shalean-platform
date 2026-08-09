@@ -5,6 +5,7 @@ import Link from "next/link";
 import { CheckCircle2, Loader2 } from "lucide-react";
 import { QuoteRequestCatalogPicker } from "@/components/quote/QuoteRequestCatalogPicker";
 import type { QuoteCatalogSelection } from "@/lib/quote/types";
+import { getAcquisitionPayloadFields } from "@/lib/analytics/acquisitionContext";
 
 const PROPERTY_OPTIONS = [
   { value: "apartment", label: "Apartment / flat" },
@@ -67,6 +68,7 @@ export function QuoteRequestForm() {
           bathrooms,
           preferred_date: form.preferred_date || null,
           selected_items: selected,
+          ...getAcquisitionPayloadFields(),
         }),
       });
       const json = (await res.json().catch(() => ({}))) as { error?: string };

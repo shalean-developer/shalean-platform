@@ -22,14 +22,15 @@ type SalesDocRow = SalesDocumentActionRow & {
   view_count: number;
   first_viewed_at: string | null;
   linked_booking?: { id: string; status: string | null } | null;
-  pipeline_stage: "lead" | "quote" | "follow_up" | "won" | "lost";
+  pipeline_stage: "lead" | "qualified" | "quote" | "follow_up" | "won" | "lost";
   pipeline_source: "website" | "office";
 };
 
 type PipelineSummary = {
-  counts: { lead: number; quote: number; follow_up: number; won: number; lost: number };
+  counts: { lead: number; qualified: number; quote: number; follow_up: number; won: number; lost: number };
   completed_revenue_cents: number;
 };
+type CrmReporting = { overdue_follow_ups: number; average_response_hours: number | null; win_rate_percent: number; sources: Array<{ source: string; opportunities: number; won: number }> };
 
 type FilterTab = "all" | "requests" | "quote" | "invoice";
 type StageFilter = "all" | SalesDocRow["pipeline_stage"];
@@ -186,6 +187,7 @@ export default function OfficeSalesDocumentsPage() {
   const [docs, setDocs] = useState<SalesDocRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [pipeline, setPipeline] = useState<PipelineSummary | null>(null);
+  const [reporting, setReporting] = useState<CrmReporting | null>(null);
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
   const [stage, setStage] = useState<StageFilter>("all");
@@ -196,7 +198,7 @@ export default function OfficeSalesDocumentsPage() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await adminFetch<{ documents: SalesDocRow[]; pipeline: PipelineSummary }>(
+      const res = await adminFetch<{ documents: SalesDocRow[]; pipeline: PipelineSummary; reporting: CrmReporting }>(
         `/api/admin/sales-documents?q=${encodeURIComponent(q)}`,
       );
       if (!res.ok) {
@@ -205,6 +207,7 @@ export default function OfficeSalesDocumentsPage() {
       }
       setDocs(res.data?.documents ?? []);
       setPipeline(res.data?.pipeline ?? null);
+      setReporting(res.data?.reporting ?? null);
     } catch {
       setDocs([]);
     }
@@ -272,7 +275,7 @@ export default function OfficeSalesDocumentsPage() {
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {([
-          ["Open leads", pipeline ? pipeline.counts.lead + pipeline.counts.quote : "—", UserRoundSearch],
+          ["Open leads", pipeline ? pipeline.counts.lead + pipeline.counts.qualified + pipeline.counts.quote : "—", UserRoundSearch],
           ["Follow-up", pipeline?.counts.follow_up ?? "—", Target],
           ["Won", pipeline?.counts.won ?? "—", TrendingUp],
           ["Lost", pipeline?.counts.lost ?? "—", TrendingDown],
@@ -285,6 +288,13 @@ export default function OfficeSalesDocumentsPage() {
             <p className="mt-2 text-2xl font-bold tabular-nums text-slate-900">{value}</p>
           </div>
         ))}
+      </div>
+
+      <div className="grid gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:grid-cols-3">
+        <div><p className="text-xs font-semibold uppercase text-slate-500">Overdue follow-ups</p><p className="mt-1 text-xl font-bold text-slate-900">{reporting?.overdue_follow_ups ?? "—"}</p></div>
+        <div><p className="text-xs font-semibold uppercase text-slate-500">Average response</p><p className="mt-1 text-xl font-bold text-slate-900">{reporting?.average_response_hours == null ? "—" : `${reporting.average_response_hours}h`}</p></div>
+        <div><p className="text-xs font-semibold uppercase text-slate-500">Win rate</p><p className="mt-1 text-xl font-bold text-slate-900">{reporting ? `${reporting.win_rate_percent}%` : "—"}</p></div>
+        {reporting?.sources.length ? <p className="text-xs text-slate-500 sm:col-span-3">Source conversion: {reporting.sources.slice(0, 5).map((source) => `${source.source} ${source.won}/${source.opportunities}`).join(" · ")}</p> : null}
       </div>
 
       <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1">
@@ -326,6 +336,7 @@ export default function OfficeSalesDocumentsPage() {
         >
           <option value="all">All sales stages</option>
           <option value="lead">Lead</option>
+          <option value="qualified">Qualified</option>
           <option value="quote">Quote</option>
           <option value="follow_up">Follow-up</option>
           <option value="won">Won</option>

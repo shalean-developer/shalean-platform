@@ -9,6 +9,8 @@ describe("P7 sales pipeline", () => {
     expect(salesPipelineStage({ ...base, status: "draft" })).toBe("quote");
     expect(salesPipelineStage({ ...base, status: "sent", view_count: 1 })).toBe("follow_up");
     expect(salesPipelineStage({ ...base, status: "expired" })).toBe("lost");
+    expect(salesPipelineStage({ ...base, status: "sent", crm_stage: "lead" })).toBe("follow_up");
+    expect(salesPipelineStage({ ...base, status: "paid", crm_stage: "quote" })).toBe("won");
     expect(salesPipelineStage({ ...base, document_type: "invoice", status: "draft" })).toBe("quote");
     expect(salesPipelineStage({
       ...base,

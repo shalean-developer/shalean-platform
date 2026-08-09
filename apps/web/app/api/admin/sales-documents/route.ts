@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { requireAnyAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import { createSalesDocument } from "@/lib/salesDocument/salesDocumentMutations";
 import { parseSalesDocumentLineItems } from "@/lib/salesDocument/types";
 import { SALES_DOCUMENT_ADMIN_COLUMNS } from "@/lib/salesDocument/salesDocumentColumns";
@@ -11,8 +11,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = await requireAdminApi(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireAnyAdminPermissionFromRequest(request, ["invoice.manage", "customer.contact", "marketing.view"]);
+  if (!auth.ok) return auth.response;
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -69,6 +69,33 @@ export async function GET(request: Request) {
     };
   });
   const pipeline = summarizeSalesPipeline(pipelineRows as never[]);
+  const now = Date.now();
+  const rootRows = pipelineRows.filter((row) => !row.converted_from_id);
+  const sources = new Map<string, { opportunities: number; won: number }>();
+  let overdueFollowUps = 0;
+  let responseHours = 0;
+  let responseCount = 0;
+  for (const row of rootRows) {
+    const source = String(row.lead_source ?? row.pipeline_source ?? "unknown");
+    const sourceRow = sources.get(source) ?? { opportunities: 0, won: 0 };
+    sourceRow.opportunities += 1;
+    if (row.pipeline_stage === "won") sourceRow.won += 1;
+    sources.set(source, sourceRow);
+    const followUpAt = Date.parse(String(row.crm_next_follow_up_at ?? ""));
+    if (Number.isFinite(followUpAt) && followUpAt < now && !["won", "lost"].includes(row.pipeline_stage)) overdueFollowUps += 1;
+    const createdAt = Date.parse(String(row.created_at ?? ""));
+    const respondedAt = Date.parse(String(row.crm_first_responded_at ?? ""));
+    if (Number.isFinite(createdAt) && Number.isFinite(respondedAt) && respondedAt >= createdAt) {
+      responseHours += (respondedAt - createdAt) / 3_600_000;
+      responseCount += 1;
+    }
+  }
+  const reporting = {
+    overdue_follow_ups: overdueFollowUps,
+    average_response_hours: responseCount ? Math.round((responseHours / responseCount) * 10) / 10 : null,
+    win_rate_percent: rootRows.length ? Math.round((pipeline.counts.won / rootRows.length) * 1000) / 10 : 0,
+    sources: Array.from(sources, ([source, values]) => ({ source, ...values })).sort((a, b) => b.opportunities - a.opportunities),
+  };
   let visibleRows = pipelineRows;
   if (q) {
     visibleRows = visibleRows.filter((r) => {
@@ -79,12 +106,12 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({ documents: visibleRows, pipeline });
+  return NextResponse.json({ documents: visibleRows, pipeline, reporting });
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminApi(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireAnyAdminPermissionFromRequest(request, ["invoice.manage"]);
+  if (!auth.ok) return auth.response;
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -102,7 +129,7 @@ export async function POST(request: Request) {
     line_items: parseSalesDocumentLineItems(body.line_items),
     due_date: typeof body.due_date === "string" ? body.due_date : null,
     notes: typeof body.notes === "string" ? body.notes : null,
-    created_by: auth.userId,
+    created_by: auth.user.id,
   });
 
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 400 });

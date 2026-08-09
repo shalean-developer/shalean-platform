@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { requireAnyAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import { deleteSalesDocument } from "@/lib/salesDocument/deleteSalesDocument";
 import { updateSalesDocumentDraft } from "@/lib/salesDocument/salesDocumentMutations";
 import { parseSalesDocumentLineItems } from "@/lib/salesDocument/types";
@@ -11,8 +11,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(_request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdminApi(_request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireAnyAdminPermissionFromRequest(_request, ["invoice.manage", "customer.contact", "marketing.view"]);
+  if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
   const admin = getSupabaseAdmin();
@@ -44,8 +44,8 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
 }
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdminApi(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireAnyAdminPermissionFromRequest(request, ["invoice.manage"]);
+  if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
   const admin = getSupabaseAdmin();
@@ -67,8 +67,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 }
 
 export async function DELETE(_request: Request, ctx: { params: Promise<{ id: string }> }) {
-  const auth = await requireAdminApi(_request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireAnyAdminPermissionFromRequest(_request, ["invoice.manage"]);
+  if (!auth.ok) return auth.response;
 
   const { id } = await ctx.params;
   const admin = getSupabaseAdmin();
