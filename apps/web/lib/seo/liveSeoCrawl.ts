@@ -84,25 +84,48 @@ export function extractCanonicalHref(html: string): string | null {
 
 export type LiveFetchResult = { status: number; location: string | null; body: string };
 
+function isTransientLiveFetchError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const name = error.name.toLowerCase();
+  const message = error.message.toLowerCase();
+  return name === "aborterror" || message.includes("aborted") || message.includes("timeout") || message.includes("timed out");
+}
+
+/**
+ * Fetch one live page without following redirects. A production crawl is an external-network
+ * check, so retry one transient timeout/abort before failing the PR. Persistent failures still
+ * surface normally on the second attempt and remain blocking.
+ */
 export async function fetchWithNoRedirect(url: string, timeoutMs = 25_000): Promise<LiveFetchResult> {
-  const ac = new AbortController();
-  const t = setTimeout(() => ac.abort(), timeoutMs);
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      redirect: "manual",
-      signal: ac.signal,
-      headers: {
-        "user-agent": LIVE_SEO_CRAWL_USER_AGENT,
-        accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-      },
-    });
-    const location = res.headers.get("location");
-    const buf = res.status === 200 ? await res.text() : "";
-    return { status: res.status, location, body: buf.slice(0, 250_000) };
-  } finally {
-    clearTimeout(t);
+  const maxAttempts = 2;
+  let lastError: unknown;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    const ac = new AbortController();
+    const t = setTimeout(() => ac.abort(), timeoutMs);
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        redirect: "manual",
+        signal: ac.signal,
+        headers: {
+          "user-agent": LIVE_SEO_CRAWL_USER_AGENT,
+          accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+      });
+      const location = res.headers.get("location");
+      const buf = res.status === 200 ? await res.text() : "";
+      return { status: res.status, location, body: buf.slice(0, 250_000) };
+    } catch (error) {
+      lastError = error;
+      if (attempt >= maxAttempts || !isTransientLiveFetchError(error)) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 400));
+    } finally {
+      clearTimeout(t);
+    }
   }
+
+  throw lastError instanceof Error ? lastError : new Error(`Live SEO fetch failed for ${url}`);
 }
 
 /** HEAD probe with GET fallback when HEAD is not allowed. */
