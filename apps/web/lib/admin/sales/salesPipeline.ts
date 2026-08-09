@@ -1,7 +1,7 @@
 import type { AdminDashboardRevenueRow } from "@/lib/admin/dashboardRevenue";
 import { adminDashboardRevenueCents, isAdminDashboardRevenueEligible } from "@/lib/admin/dashboardRevenue";
 
-export type SalesPipelineStage = "lead" | "quote" | "follow_up" | "won" | "lost";
+export type SalesPipelineStage = "lead" | "qualified" | "quote" | "follow_up" | "won" | "lost";
 
 export type SalesPipelineBooking = AdminDashboardRevenueRow & {
   id: string;
@@ -17,6 +17,7 @@ export type SalesPipelineDocument = {
   first_viewed_at?: string | null;
   view_count?: number | null;
   linked_booking?: SalesPipelineBooking | null;
+  crm_stage?: SalesPipelineStage | null;
 };
 
 export type SalesPipelineSource = "website" | "office";
@@ -30,6 +31,7 @@ export function salesPipelineSource(
 }
 
 export function salesPipelineStage(document: SalesPipelineDocument): SalesPipelineStage {
+  if (document.crm_stage) return document.crm_stage;
   const status = String(document.status ?? "").trim().toLowerCase();
   if (["void", "expired", "refunded"].includes(status)) return "lost";
   if (document.linked_booking || status === "paid") return "won";
@@ -46,7 +48,7 @@ export function salesPipelineRevenueCents(document: SalesPipelineDocument): numb
 }
 
 export function summarizeSalesPipeline(documents: SalesPipelineDocument[]) {
-  const counts: Record<SalesPipelineStage, number> = { lead: 0, quote: 0, follow_up: 0, won: 0, lost: 0 };
+  const counts: Record<SalesPipelineStage, number> = { lead: 0, qualified: 0, quote: 0, follow_up: 0, won: 0, lost: 0 };
   let completedRevenueCents = 0;
 
   const documentsById = new Map(documents.map((document) => [document.id, document]));
@@ -59,7 +61,7 @@ export function summarizeSalesPipeline(documents: SalesPipelineDocument[]) {
     opportunities.set(rootId, group);
   }
 
-  const stagePriority: Record<SalesPipelineStage, number> = { lead: 0, quote: 1, follow_up: 2, lost: 3, won: 4 };
+  const stagePriority: Record<SalesPipelineStage, number> = { lead: 0, qualified: 1, quote: 2, follow_up: 3, lost: 4, won: 5 };
   for (const opportunity of opportunities.values()) {
     const stage = opportunity
       .map(salesPipelineStage)
