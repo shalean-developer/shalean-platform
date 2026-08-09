@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { CircleDollarSign, Plus, RefreshCw, Target, TrendingUp, UserRoundSearch } from "lucide-react";
+import { CircleDollarSign, Plus, RefreshCw, Target, TrendingDown, TrendingUp, UserRoundSearch } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 import { adminFetch } from "@/hooks/useAdminData";
@@ -229,11 +229,12 @@ export default function OfficeSalesDocumentsPage() {
         </Link>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {([
           ["Open leads", pipeline ? pipeline.counts.lead + pipeline.counts.quote : "—", UserRoundSearch],
           ["Follow-up", pipeline?.counts.follow_up ?? "—", Target],
           ["Won", pipeline?.counts.won ?? "—", TrendingUp],
+          ["Lost", pipeline?.counts.lost ?? "—", TrendingDown],
           ["Completed revenue", pipeline ? formatZar(pipeline.completed_revenue_cents) : "—", CircleDollarSign],
         ] satisfies Array<[string, string | number, LucideIcon]>).map(([label, value, Icon]) => (
           <div key={String(label)} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
