@@ -31,12 +31,13 @@ export function salesPipelineSource(
 }
 
 export function salesPipelineStage(document: SalesPipelineDocument): SalesPipelineStage {
-  if (document.crm_stage) return document.crm_stage;
   const status = String(document.status ?? "").trim().toLowerCase();
   if (["void", "expired", "refunded"].includes(status)) return "lost";
   if (document.linked_booking || status === "paid") return "won";
   if (status === "accepted" || (document.document_type === "invoice" && Boolean(document.converted_from_id))) return "won";
+  if (document.crm_stage === "won" || document.crm_stage === "lost") return document.crm_stage;
   if (status === "sent" || Number(document.view_count ?? 0) > 0 || document.first_viewed_at) return "follow_up";
+  if (document.crm_stage) return document.crm_stage;
   if (status === "draft") return "quote";
   return "lead";
 }
