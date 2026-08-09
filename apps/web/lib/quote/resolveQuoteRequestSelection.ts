@@ -1,4 +1,9 @@
 import type { QuoteCatalogSelection, QuotePublicService } from "@/lib/quote/types";
+import {
+  QUOTE_CUSTOM_SERVICE_SLUGS,
+  QUOTE_UNSURE_SERVICE_NAME,
+  QUOTE_UNSURE_SERVICE_SLUG,
+} from "@/lib/quote/quoteSelection";
 
 function roomNote(bedrooms: number | null, bathrooms: number | null): string {
   if (bedrooms == null && bathrooms == null) return "";
@@ -14,8 +19,18 @@ export function resolveQuoteRequestSelection(input: {
   const requestedServices = input.requested.filter((item) => item.kind === "service");
   if (requestedServices.length !== 1) return null;
 
+  if (requestedServices[0].slug === QUOTE_UNSURE_SERVICE_SLUG) {
+    if (input.requested.some((item) => item.kind === "extra")) return null;
+    return [{
+      kind: "service",
+      slug: QUOTE_UNSURE_SERVICE_SLUG,
+      name: `${QUOTE_UNSURE_SERVICE_NAME}${roomNote(input.bedrooms, input.bathrooms)}`,
+      quantity: 1,
+    }];
+  }
+
   const service = input.services.find((item) => item.slug === requestedServices[0].slug);
-  if (!service) return null;
+  if (!service || !QUOTE_CUSTOM_SERVICE_SLUGS.has(service.slug)) return null;
 
   const allowedExtras = new Map(service.extras.map((extra) => [extra.slug, extra]));
   const seenExtras = new Set<string>();
