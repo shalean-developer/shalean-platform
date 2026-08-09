@@ -29,16 +29,35 @@ export async function GET(request: Request) {
   const auth = await authenticateCustomerBookingRequest(request);
   if (!auth.ok) return auth.response;
 
-  const byId = await auth.admin
+  const merged = new Map<string, PublicCase>();
+  const { data: crm, error: crmError } = await auth.admin
+    .from("customers")
+    .select("id")
+    .eq("auth_user_id", auth.userId)
+    .eq("status", "active")
+    .maybeSingle();
+  if (crmError) return NextResponse.json({ error: crmError.message }, { status: 500 });
+
+  if (crm?.id) {
+    const byCrm = await auth.admin
+      .from("customer_care_cases")
+      .select(PUBLIC_FIELDS)
+      .eq("crm_customer_id", crm.id)
+      .order("created_at", { ascending: false })
+      .limit(100);
+    if (byCrm.error) return NextResponse.json({ error: byCrm.error.message }, { status: 500 });
+    for (const row of (byCrm.data ?? []) as PublicCase[]) merged.set(row.id, row);
+  }
+
+  // Legacy compatibility while older cases finish converging to the CRM key.
+  const byLegacyId = await auth.admin
     .from("customer_care_cases")
     .select(PUBLIC_FIELDS)
     .eq("customer_id", auth.userId)
     .order("created_at", { ascending: false })
     .limit(100);
-  if (byId.error) return NextResponse.json({ error: byId.error.message }, { status: 500 });
-
-  const merged = new Map<string, PublicCase>();
-  for (const row of (byId.data ?? []) as PublicCase[]) merged.set(row.id, row);
+  if (byLegacyId.error) return NextResponse.json({ error: byLegacyId.error.message }, { status: 500 });
+  for (const row of (byLegacyId.data ?? []) as PublicCase[]) merged.set(row.id, row);
 
   const email = auth.viewerEmail?.trim().toLowerCase() ?? "";
   if (email) {
