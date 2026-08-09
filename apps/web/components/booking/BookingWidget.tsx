@@ -104,6 +104,7 @@ export function BookingWidget({ services }: BookingWidgetProps) {
         extraRooms: 0,
         extras: selectedAddOns,
         serviceAreaName,
+        serviceAreaLocationId,
         source: "booking_widget",
       }),
     );
