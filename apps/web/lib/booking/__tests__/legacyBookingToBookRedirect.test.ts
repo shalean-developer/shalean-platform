@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  bookingV2PrefillPatchFromLegacySearchParams,
   buildBookHrefFromLegacySearchParams,
   buildBookHrefFromWidgetSelection,
   legacyServiceIdToBookSlug,
@@ -33,11 +34,12 @@ describe("legacyBookingToBookRedirect", () => {
       extraRooms: 1,
       extras: ["inside-oven", "inside-fridge"],
       serviceAreaName: "Claremont",
+      serviceAreaLocationId: "11111111-1111-4111-8111-111111111111",
       source: "home_hero",
     });
 
     expect(href).toBe(
-      "/book/deep-cleaning?service=deep&bedrooms=3&bathrooms=2&extraRooms=1&extras=inside-oven%2Cinside-fridge&source=home_hero&location=Claremont&step=1",
+      "/book/deep-cleaning?service=deep&bedrooms=3&bathrooms=2&extraRooms=1&extrasMode=replace&source=home_hero&serviceAreaLocationId=11111111-1111-4111-8111-111111111111&serviceAreaName=Claremont&step=1",
     );
   });
 
@@ -49,7 +51,32 @@ describe("legacyBookingToBookRedirect", () => {
     });
 
     expect(href).toBe(
-      "/book/moving-cleaning?service=move&source=live_widget&location=Sea+Point&step=1",
+      "/book/moving-cleaning?service=move&extrasMode=replace&source=live_widget&location=Sea+Point&step=1",
     );
+  });
+
+  it("filters incompatible extras and explicitly replaces stale selections", () => {
+    const href = buildBookHrefFromWidgetSelection({
+      service: "carpet",
+      extras: ["inside-oven", "stain-treatment"],
+    });
+
+    expect(href).toBe(
+      "/book/carpet-cleaning?service=carpet&extras=stain-treatment&extrasMode=replace&step=1",
+    );
+  });
+
+  it("hydrates a database-backed suburb and exact empty extras selection", () => {
+    const patch = bookingV2PrefillPatchFromLegacySearchParams(
+      new URLSearchParams({
+        serviceAreaLocationId: "11111111-1111-4111-8111-111111111111",
+        serviceAreaName: "New Service Area",
+        extrasMode: "replace",
+      }),
+    );
+
+    expect(patch.suburb).toBe("New Service Area");
+    expect(patch.selectedExtras).toBeUndefined();
+    expect(patch.replaceSelectedExtras).toBe(true);
   });
 });
