@@ -29,7 +29,7 @@ const RULES: Rule[] = [
   { pattern: /\bstandard cleaning\b/i, href: "/services/standard-cleaning-cape-town" },
   {
     pattern: /\bcleaning services in Cape Town\b/i,
-    href: "/cleaning-services-cape-town",
+    href: "/services",
   },
   { pattern: /\bcleaning (?:prices|costs) in Cape Town\b/i, href: PRICING_AUTHORITY_PAGE },
 ];

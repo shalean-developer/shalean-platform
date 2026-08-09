@@ -4,6 +4,7 @@ import {
   legacyMarketingRedirectSourcePaths,
   resolveLegacyMarketingExactRedirect,
 } from "@/lib/seo/legacyMarketingRedirectMatrix";
+import { KEYWORD_PRIMARY_ROUTE } from "@/lib/seo/keyword-primary-route";
 
 describe("legacyMarketingRedirectMatrix", () => {
   it("maps P0 legacy .co.za routes to one-hop permanent destinations", () => {
@@ -38,5 +39,11 @@ describe("legacyMarketingRedirectMatrix", () => {
   it("exposes source paths for sitemap exclusion", () => {
     expect(legacyMarketingRedirectSourcePaths()).toContain("/details");
     expect(legacyMarketingRedirectSourcePaths()).toContain("/how-it-works");
+  });
+
+  it("does not assign keyword ownership to redirect sources", () => {
+    for (const route of Object.values(KEYWORD_PRIMARY_ROUTE)) {
+      expect(resolveLegacyMarketingExactRedirect(route)).toBeNull();
+    }
   });
 });

@@ -232,7 +232,7 @@ export default function ServicesHubPage() {
               </p>
               <ul className="mt-6 space-y-3">
                 {[
-                  "From R300 — exact total before you pay",
+                  "Exact total shown before you pay",
                   "Same-day availability when routing allows",
                   "Background-checked cleaners",
                 ].map((line) => (
@@ -406,21 +406,20 @@ export default function ServicesHubPage() {
               How much does cleaning cost?
             </h2>
             <p className="mt-4 max-w-3xl text-base leading-relaxed text-zinc-700">
-              Cleaning services in Cape Town typically cost between <strong className="font-semibold text-blue-900">R300</strong> and{" "}
-              <strong className="font-semibold text-blue-900">R900</strong> depending on your home size and service type.
+              Your total is calculated from the service, property details and extras you select. Use the instant-price flow for the current amount rather than relying on a static estimate.
             </p>
             <div className="mt-8 grid gap-4 sm:grid-cols-3">
               {[
-                { label: "Small home", hint: "Compact apartment / fewer wet rooms", from: "R300" },
-                { label: "Medium home", hint: "Typical 2–3 bed layouts", from: "R500" },
-                { label: "Large home", hint: "More bedrooms, baths, or deep scope", from: "R800" },
+                { label: "Service", value: "Choose the right scope", hint: "Standard, deep, move-out, Airbnb, office, carpet or windows." },
+                { label: "Property", value: "Add accurate details", hint: "Rooms and bathrooms keep the visit duration and total honest." },
+                { label: "Extras", value: "Select only what you need", hint: "Review every line item before confirming payment." },
               ].map((tier) => (
                 <div
                   key={tier.label}
                   className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"
                 >
                   <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{tier.label}</p>
-                  <p className="mt-2 text-2xl font-bold tabular-nums text-blue-950">From {tier.from}</p>
+                  <p className="mt-2 text-lg font-bold text-blue-950">{tier.value}</p>
                   <p className="mt-2 text-xs leading-relaxed text-zinc-600">{tier.hint}</p>
                 </div>
               ))}

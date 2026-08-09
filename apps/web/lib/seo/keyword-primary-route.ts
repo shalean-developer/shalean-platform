@@ -3,8 +3,8 @@
  * Reference when authoring titles/H1s; enforce manually in content reviews for now.
  */
 export const KEYWORD_PRIMARY_ROUTE: Record<string, string> = {
-  /** Broad city intent → city hub; standard cleaning stays the primary booking path for “standard” queries. */
-  "cleaning services cape town": "/cleaning-services-cape-town",
+  /** Broad city intent → canonical services hub; standard cleaning keeps its focused booking route. */
+  "cleaning services cape town": "/services",
   "cleaning services claremont": "/locations/claremont-cleaning-services",
   "deep cleaning cape town": "/services/deep-cleaning-cape-town",
   "standard cleaning cape town": "/services/standard-cleaning-cape-town",

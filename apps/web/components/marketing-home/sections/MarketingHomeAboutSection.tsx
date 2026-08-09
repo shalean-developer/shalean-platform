@@ -19,14 +19,14 @@ export function MarketingHomeAboutSection() {
             </p>
           </div>
 
-          {/* Card 2: Homes cleaned */}
+          {/* Card 2: evidence-backed service coverage (no unsupported volume claim). */}
           <div className="flex flex-col justify-between rounded-2xl bg-[#1e4fd4] p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-blue-200">Total cleans</p>
+            <p className="text-xs font-semibold uppercase tracking-widest text-blue-200">Service coverage</p>
             <div className="mt-4">
-              <p className="text-4xl font-extrabold tracking-tight text-white">4,500+</p>
+              <p className="text-2xl font-extrabold tracking-tight text-white">Homes, apartments & offices</p>
             </div>
             <p className="mt-3 text-xs leading-relaxed text-blue-200">
-              Homes cleaned with care.
+              Professional cleaning across Cape Town.
             </p>
           </div>
 
