@@ -24,16 +24,17 @@ function computeSelectedExtras(
   selectedExtras: string[],
   catalogExtras: Array<{ id: string; label: string; priceZar: number }>,
 ) {
-  const lines = selectedExtras.map((extraId) => {
+  const lines = selectedExtras.flatMap((extraId) => {
     const extra = catalogExtras.find((e) => e.id === extraId);
-    const price = extra?.priceZar ?? 0;
-    return {
+    const price = Math.round(Number(extra?.priceZar) || 0);
+    if (!extra || price <= 0) return [];
+    return [{
       extra_id: extraId,
-      name: extra?.label ?? extraId,
+      name: extra.label,
       price,
       quantity: 1,
       total: price,
-    };
+    }];
   });
   const selected_extras_total = lines.reduce((sum, l) => sum + l.total, 0);
   return { selected_extras: lines, selected_extras_total };
