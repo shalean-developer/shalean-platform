@@ -2,11 +2,19 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
+import {
+  adminDashboardRevenueCents,
+  isAdminDashboardRevenueEligible,
+  type AdminDashboardRevenueRow,
+} from "@/lib/admin/dashboardRevenue";
+import { johannesburgDayUtcBounds } from "@/lib/admin/metrics";
 import { loadReferralPromoCostTotals, loadReferralPromoCostsByBranch } from "@/lib/admin/referrals/loadReferralPromoCosts";
 
 export type ReferralFinanceDashboardPayload = {
   period: { from: string; to: string };
   summary: {
+    paid_attributed_revenue_cents: number;
+    completed_referred_revenue_cents: number;
     gross_referred_revenue_cents: number;
     referral_discount_cost_cents: number;
     cleaning_credit_cost_cents: number;
@@ -52,12 +60,58 @@ function zarBigIntToCents(zar: number | string | null | undefined): number {
   return Math.round(n * 100);
 }
 
+async function loadPeriodReferralEvents(
+  admin: SupabaseClient,
+  eventType: "checkout_discount_applied" | "referral_reward_credited",
+  startIso: string,
+  endExclusiveIso: string,
+): Promise<Array<{ id: string; booking_id: string | null; value_zar: number | string | null }>> {
+  const rows: Array<{ id: string; booking_id: string | null; value_zar: number | string | null }> = [];
+  const pageSize = 1000;
+  for (let fromIndex = 0; ; fromIndex += pageSize) {
+    const { data, error } = await admin
+      .from("referral_events")
+      .select("id, booking_id, value_zar")
+      .eq("event_type", eventType)
+      .gte("created_at", startIso)
+      .lt("created_at", endExclusiveIso)
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true })
+      .range(fromIndex, fromIndex + pageSize - 1);
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as typeof rows));
+    if ((data?.length ?? 0) < pageSize) break;
+  }
+  return rows;
+}
+
+async function loadAttributedBookings(
+  admin: SupabaseClient,
+  bookingIds: string[],
+): Promise<AdminDashboardRevenueRow[]> {
+  const rows: AdminDashboardRevenueRow[] = [];
+  const unique = [...new Set(bookingIds.filter(Boolean))];
+  for (let i = 0; i < unique.length; i += 100) {
+    const { data, error } = await admin
+      .from("bookings")
+      .select(
+        "id,status,payment_status,payment_completed_at,total_paid_zar,amount_paid_cents,refunded_at,refund_status,billing_type,is_monthly_billing_booking,monthly_invoice_id",
+      )
+      .in("id", unique.slice(i, i + 100));
+    if (error) throw new Error(error.message);
+    rows.push(...((data ?? []) as AdminDashboardRevenueRow[]));
+  }
+  return rows;
+}
+
 export async function loadReferralFinanceDashboard(
   admin: SupabaseClient,
   fromRaw?: string | null,
   toRaw?: string | null,
 ): Promise<ReferralFinanceDashboardPayload> {
   const { from, to } = normalizeOfficePayoutPeriodRange(fromRaw, toRaw);
+  const startIso = johannesburgDayUtcBounds(from).startIso;
+  const endExclusiveIso = johannesburgDayUtcBounds(to).endExclusiveIso;
 
   const [promoTotals, byBranch, globalMonthly, profitability, conversion, reconCount, rewards] =
     await Promise.all([
@@ -87,18 +141,40 @@ export async function loadReferralFinanceDashboard(
         .select("id", { count: "exact", head: true })
         .eq("referrer_type", "customer")
         .eq("status", "rewarded")
-        .gte("rewarded_at", `${from}T00:00:00`)
-        .lte("rewarded_at", `${to}T23:59:59`),
+        .gte("rewarded_at", startIso)
+        .lt("rewarded_at", endExclusiveIso),
     ]);
 
-  let grossRevenueCents = 0;
-  let discountCostCents = promoTotals.referral_discount_cost_cents;
-  let rewardCostCents = 0;
+  const [attributionEvents, rewardEvents] = await Promise.all([
+    loadPeriodReferralEvents(admin, "checkout_discount_applied", startIso, endExclusiveIso),
+    loadPeriodReferralEvents(admin, "referral_reward_credited", startIso, endExclusiveIso),
+  ]);
+  const attributedBookingIds = [
+    ...new Set(
+      attributionEvents
+        .map((row) => String((row as { booking_id?: string | null }).booking_id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const attributedBookings = await loadAttributedBookings(admin, attributedBookingIds);
 
-  for (const row of profitability.data ?? []) {
-    grossRevenueCents += zarBigIntToCents((row as { gross_referred_revenue_zar?: number }).gross_referred_revenue_zar);
-    rewardCostCents += zarBigIntToCents((row as { total_reward_cost_zar?: number }).total_reward_cost_zar);
+  let paidAttributedRevenueCents = 0;
+  let completedReferredRevenueCents = 0;
+  for (const booking of attributedBookings) {
+    if (!isAdminDashboardRevenueEligible(booking)) continue;
+    const revenueCents = adminDashboardRevenueCents(booking);
+    paidAttributedRevenueCents += revenueCents;
+    if (String(booking.status ?? "").trim().toLowerCase() === "completed") {
+      completedReferredRevenueCents += revenueCents;
+    }
   }
+
+  const grossRevenueCents = completedReferredRevenueCents;
+  const discountCostCents = promoTotals.referral_discount_cost_cents;
+  const rewardCostCents = rewardEvents.reduce(
+    (sum, row) => sum + zarBigIntToCents((row as { value_zar?: number | string | null }).value_zar),
+    0,
+  );
 
   // Use promo totals for discount (more accurate for period) and reward rollups for credits issued
   const totalCostCents = discountCostCents + rewardCostCents + promoTotals.cleaning_credit_cost_cents;
@@ -166,6 +242,8 @@ export async function loadReferralFinanceDashboard(
   return {
     period: { from, to },
     summary: {
+      paid_attributed_revenue_cents: paidAttributedRevenueCents,
+      completed_referred_revenue_cents: completedReferredRevenueCents,
       gross_referred_revenue_cents: grossRevenueCents,
       referral_discount_cost_cents: discountCostCents,
       cleaning_credit_cost_cents: promoTotals.cleaning_credit_cost_cents,
