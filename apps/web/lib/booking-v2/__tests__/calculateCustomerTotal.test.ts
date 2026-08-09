@@ -153,6 +153,26 @@ describe("calculateCustomerTotal", () => {
     expect(r.selected_extras[0]?.name).toBe("Inside Oven");
   });
 
+  it("drops unknown and non-positive extras instead of creating R0 line items", () => {
+    const r = calculateCustomerTotal(
+      baseInput({
+        selectedExtras: ["unknown-extra", "free-extra", "inside_oven"],
+        catalog: {
+          ...baseInput().catalog,
+          extras: [
+            ...baseInput().catalog.extras,
+            { id: "free-extra", label: "Misconfigured extra", priceZar: 0 },
+          ],
+        },
+      }),
+    );
+
+    expect(r.selected_extras).toEqual([
+      expect.objectContaining({ extra_id: "inside_oven", price: 200, total: 200 }),
+    ]);
+    expect(r.selected_extras_total).toBe(200);
+  });
+
   it("applies weekly recurring discount after service fee", () => {
     const r = calculateCustomerTotal(
       baseInput({
