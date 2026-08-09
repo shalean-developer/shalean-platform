@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { AddOnsSelector, iconForAddOn, type AddOn } from "@/components/booking/AddOnsSelector";
 import { cn } from "@/lib/utils";
 import { bookingCopy } from "@/lib/booking/copy";
+import { buildBookHrefFromWidgetSelection } from "@/lib/booking/legacyBookingToBookRedirect";
 import { ServiceAreaPicker } from "@/components/booking/ServiceAreaPicker";
 import { ROOM_FIELD_LABEL_CLASS, ROOM_TEXT_INPUT_CLASS } from "@/components/ui/floating-select";
 
@@ -95,7 +96,17 @@ export function BookingWidget({ services }: BookingWidgetProps) {
     } catch {
       /* Storage can be unavailable in private browsing. */
     }
-    router.push("/book");
+    router.push(
+      buildBookHrefFromWidgetSelection({
+        service,
+        bedrooms,
+        bathrooms: Math.min(3, bathrooms),
+        extraRooms: 0,
+        extras: selectedAddOns,
+        serviceAreaName,
+        source: "booking_widget",
+      }),
+    );
   }
 
   return (
