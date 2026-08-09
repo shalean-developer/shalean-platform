@@ -584,7 +584,7 @@ export async function POST(request: Request) {
     : null;
 
   const promoCodeInput = typeof data.promoCode === "string" ? data.promoCode.trim() : "";
-  const selectedExtraIds = data.selectedExtras ?? [];
+  const selectedExtraIds = serverBreakdown.selected_extras.map((extra) => extra.extra_id);
   let promotionApplied: AppliedPromotionDiscount[] = [];
   let promotionDiscountZar = 0;
   try {
@@ -723,7 +723,7 @@ export async function POST(request: Request) {
           cleanerMode: data.cleanerMode,
           cleanerCount: data.cleanerCount,
           assignedTeamId: data.assignedTeamId,
-          selectedExtras: data.selectedExtras,
+          selectedExtras: selectedExtraIds,
           equipmentRequired: data.equipmentRequired,
           equipmentQuote: serverEquipmentQuote,
           pricingSummary: serverBreakdown,
@@ -901,7 +901,7 @@ export async function POST(request: Request) {
 
       // Service-specific
       service_details: data.serviceDetails,
-      selected_extras: data.selectedExtras,
+      selected_extras: selectedExtraIds,
 
       // Pricing
       ...persistPricing,
@@ -921,7 +921,7 @@ export async function POST(request: Request) {
         cleanerMode: data.cleanerMode,
         cleanerCount: data.cleanerCount,
         assignedTeamId: data.assignedTeamId,
-        selectedExtras: data.selectedExtras,
+        selectedExtras: selectedExtraIds,
         equipmentRequired: data.equipmentRequired,
         equipmentQuote: serverEquipmentQuote,
         pricingSummary: serverBreakdown,

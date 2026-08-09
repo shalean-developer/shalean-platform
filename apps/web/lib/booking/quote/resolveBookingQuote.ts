@@ -2,7 +2,7 @@ import type { CustomerPricingBreakdown } from "@/lib/booking-v2/types";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import { buildBookingV2QuoteSignatureInputs } from "@/lib/booking/quote/validateBookingV2Quote";
 import { quoteLockFromRequestBodyWithSnapshot, type LockQuoteError, type LockQuoteSuccess } from "@/lib/booking/bookingLockQuote";
-import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
+import { calculateCustomerTotal, resolvePricedExtraIds } from "@/lib/booking-v2/calculateCustomerTotal";
 import type { CustomerTotalInput } from "@/lib/booking-v2/types";
 import {
   computeBookingQuoteSignature,
@@ -211,20 +211,24 @@ export function resolveLegacyBookingQuoteFromParts(params: {
 }
 
 export function resolveBookingV2Quote(input: CustomerTotalInput & { serviceSlug: ServiceSlug }): BookingV2QuoteResult {
+  const canonicalInput = {
+    ...input,
+    selectedExtras: resolvePricedExtraIds(input.selectedExtras, input.catalog.extras),
+  };
   const duration_workload = resolveBookingV2DurationWorkload({
-    serviceSlug: input.serviceSlug,
-    serviceDetails: input.serviceDetails,
-    selectedExtras: input.selectedExtras,
-    cleanerMode: input.cleanerMode,
-    cleanerCount: input.cleanerCount,
+    serviceSlug: canonicalInput.serviceSlug,
+    serviceDetails: canonicalInput.serviceDetails,
+    selectedExtras: canonicalInput.selectedExtras,
+    cleanerMode: canonicalInput.cleanerMode,
+    cleanerCount: canonicalInput.cleanerCount,
     durationLimits: {
-      minHours: input.catalog.minDurationHours,
-      maxHours: input.catalog.maxDurationHours,
+      minHours: canonicalInput.catalog.minDurationHours,
+      maxHours: canonicalInput.catalog.maxDurationHours,
     },
   });
 
   const breakdown = calculateCustomerTotal({
-    ...input,
+    ...canonicalInput,
     precomputedDurationWorkload: duration_workload,
   });
 
@@ -232,7 +236,7 @@ export function resolveBookingV2Quote(input: CustomerTotalInput & { serviceSlug:
     funnel: "v2",
     customer_price_zar: breakdown.estimated_total,
     duration_workload,
-    signatureInputs: buildBookingV2QuoteSignatureInputs(input, breakdown),
+    signatureInputs: buildBookingV2QuoteSignatureInputs(canonicalInput, breakdown),
   });
 
   return {

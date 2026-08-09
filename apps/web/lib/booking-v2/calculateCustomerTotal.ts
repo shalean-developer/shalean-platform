@@ -20,16 +20,28 @@ import {
 
 export { computeServiceFeeZar, applyRecurringDiscountZar } from "@shalean/pricing";
 
+export function resolvePricedExtraIds(
+  selectedExtras: readonly string[],
+  catalogExtras: Array<{ id: string; priceZar: number }>,
+): string[] {
+  const accepted = new Set(
+    catalogExtras
+      .filter((extra) => Math.round(Number(extra.priceZar) || 0) > 0)
+      .map((extra) => extra.id),
+  );
+  return [...new Set(selectedExtras.filter((extraId) => accepted.has(extraId)))];
+}
+
 function computeSelectedExtras(
   selectedExtras: string[],
   catalogExtras: Array<{ id: string; label: string; priceZar: number }>,
 ) {
-  const lines = selectedExtras.map((extraId) => {
-    const extra = catalogExtras.find((e) => e.id === extraId);
-    const price = extra?.priceZar ?? 0;
+  const lines = resolvePricedExtraIds(selectedExtras, catalogExtras).map((extraId) => {
+    const extra = catalogExtras.find((e) => e.id === extraId)!;
+    const price = Math.round(Number(extra.priceZar));
     return {
       extra_id: extraId,
-      name: extra?.label ?? extraId,
+      name: extra.label,
       price,
       quantity: 1,
       total: price,

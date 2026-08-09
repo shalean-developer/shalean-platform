@@ -95,6 +95,7 @@ function buildExtrasForService(
   dbExtras: Record<string, DbExtraRow>,
 ): LiveExtra[] {
   const allowlist = serviceDef.extraSlugs?.map((s) => normalizeExtraSlug(s));
+  const hasDatabaseCatalog = Object.keys(dbExtras).length > 0;
   const rows = Object.entries(dbExtras)
     .filter(([slug]) => !BOOKING_V2_INTERNAL_EXTRA_SLUGS.has(slug))
     .filter(([slug, row]) => {
@@ -103,9 +104,12 @@ function buildExtrasForService(
       }
       return row.service_type === "all" || serviceDef.extraTypes.includes(row.service_type as "light" | "heavy" | "all");
     })
+    .filter(([, row]) => Number.isFinite(row.price) && row.price > 0)
     .sort((a, b) => a[1].sort_order - b[1].sort_order || a[0].localeCompare(b[0]));
 
-  if (rows.length > 0) {
+  // Once a database catalog exists, it is authoritative. Do not silently revive
+  // missing or non-positive rows from static config and create a second price source.
+  if (hasDatabaseCatalog) {
     return rows.map(([slug, row]) => ({
       id: slug,
       label: row.name,
@@ -115,7 +119,7 @@ function buildExtrasForService(
     }));
   }
 
-  // Staging/dev catalogs may lack pricing_extras rows — fall back to static service extras.
+  // Local/staging environments with no pricing_extras catalog may use static fixtures.
   const staticExtras = SERVICE_CONFIG[serviceDef.slug]?.extras ?? [];
   const filtered = allowlist?.length
     ? staticExtras.filter((e) => {
