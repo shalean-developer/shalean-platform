@@ -290,6 +290,7 @@ function PaymentSection({
   const [pendingBookingId, setPendingBookingIdState] = useState<string | null>(
     () => values.pendingBookingId?.trim() || null,
   );
+  const canStartPayment = Boolean(pendingBookingId) || quoteReadiness.ready;
 
   function setPendingBookingId(id: string | null) {
     setPendingBookingIdState(id);
@@ -420,7 +421,9 @@ function PaymentSection({
   }
 
   async function handleConfirmAndPay() {
-    if (!quoteReadiness.ready) {
+    // A saved booking already has a server-owned canonical amount. Do not block its
+    // idempotent payment-session recovery when the client quote catalogue is unavailable.
+    if (!pendingBookingId && !quoteReadiness.ready) {
       setError(quoteReadiness.message ?? "Your quote is not ready. Please refresh pricing.");
       return;
     }
@@ -491,8 +494,13 @@ function PaymentSection({
           sessJson.code === "PAYMENT_BOOKING_NOT_FOUND" ||
           /could not find this booking/i.test(sessJson.error ?? "");
         if (notFound) {
-          // Pending row gone — clear and fall through to confirm (reuse or insert).
+          // Pending row gone — only fall through when a new canonical quote is ready.
           setPendingBookingId(null);
+          if (!quoteReadiness.ready) {
+            setError(quoteReadiness.message ?? "Your quote is not ready. Please refresh pricing.");
+            setConfirming(false);
+            return;
+          }
         } else {
           setError(
             sessJson.error?.trim() ||
@@ -798,7 +806,7 @@ function PaymentSection({
               disabled={promoChecking || !promoCode.trim()}
               className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
             >
-              {promoChecking ? "?" : "Apply"}
+              {promoChecking ? "Checking…" : "Apply"}
             </button>
           </div>
           {promoError ? (
@@ -816,7 +824,7 @@ function PaymentSection({
             <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
               <p className="font-semibold">Referral discount applied</p>
               <p className="mt-1 text-emerald-800">
-                R {referralDiscount.discountZar.toLocaleString("en-ZA")} off your first booking ? no code needed.
+                R {referralDiscount.discountZar.toLocaleString("en-ZA")} off your first booking — no code needed.
               </p>
             </div>
           ) : null}
@@ -893,7 +901,7 @@ function PaymentSection({
           {error}
         </div>
       )}
-      {!error && !quoteReadiness.ready ? (
+      {!error && !pendingBookingId && !quoteReadiness.ready ? (
         <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           {quoteReadiness.message}
@@ -904,18 +912,20 @@ function PaymentSection({
       <button
         type="button"
         onClick={handleConfirmAndPay}
-        disabled={confirming || !quoteReadiness.ready}
+        disabled={confirming || !canStartPayment}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-4 text-base font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
       >
         {confirming ? (
           <>
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-            Processing?
+            {pendingBookingId ? "Reopening secure payment…" : "Preparing secure payment…"}
           </>
         ) : (
           <>
             <Lock className="h-5 w-5" aria-hidden />
-            Pay R{payTotal.toLocaleString("en-ZA")} securely
+            {pendingBookingId
+              ? "Retry secure payment"
+              : `Pay R${payTotal.toLocaleString("en-ZA")} securely`}
           </>
         )}
       </button>
@@ -925,7 +935,7 @@ function PaymentSection({
         {[
           { Icon: ShieldCheck, label: "Vetted and background-checked cleaners" },
           { Icon: CreditCard, label: "Secure card payment — you’ll get a Shalean confirmation after" },
-          { Icon: CheckCircle2, label: "100% satisfaction guarantee ? we'll make it right" },
+          { Icon: CheckCircle2, label: "100% satisfaction guarantee — we'll make it right" },
         ].map(({ Icon, label }) => (
           <div key={label} className="flex items-center gap-2 text-xs text-slate-500">
             <Icon className="h-3.5 w-3.5 shrink-0 text-green-500" aria-hidden />
