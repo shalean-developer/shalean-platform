@@ -24,59 +24,54 @@ begin
     from public.customers
     where auth_user_id = p_auth_user_id and status = 'active'
     limit 1;
-    if v_customer_id is not null then
-      goto remember_aliases;
-    end if;
   end if;
 
   -- Email is the strongest contact alias. Fail closed when an alias is ambiguous.
-  if v_email is not null then
+  if v_customer_id is null and v_email is not null then
     select count(distinct customer_id), min(customer_id::text)::uuid
       into v_count, v_customer_id
     from public.customer_identity_aliases
     where identity_type = 'email' and normalized_value = v_email;
     if v_count > 1 then
       return null;
-    elsif v_count = 1 then
-      goto maybe_attach_auth;
+    elsif v_count = 0 then
+      v_customer_id := null;
     end if;
   end if;
 
   -- Phone-only resolution is allowed only when exactly one CRM customer owns the alias.
-  if v_phone is not null then
+  if v_customer_id is null and v_phone is not null then
     select count(distinct customer_id), min(customer_id::text)::uuid
       into v_count, v_customer_id
     from public.customer_identity_aliases
     where identity_type = 'phone' and normalized_value = v_phone;
     if v_count > 1 then
       return null;
-    elsif v_count = 1 then
-      goto maybe_attach_auth;
+    elsif v_count = 0 then
+      v_customer_id := null;
     end if;
   end if;
 
   -- A new business customer can be created only when we have at least one usable identity.
-  if v_email is null and v_phone is null and p_auth_user_id is null then
-    return null;
-  end if;
+  if v_customer_id is null then
+    if v_email is null and v_phone is null and p_auth_user_id is null then
+      return null;
+    end if;
 
-  insert into public.customers(
-    auth_user_id, display_name, primary_email, normalized_email,
-    primary_phone, normalized_phone, metadata, created_at, updated_at
-  ) values (
-    p_auth_user_id,
-    nullif(trim(coalesce(p_display_name, '')), ''),
-    nullif(trim(coalesce(p_email, '')), ''),
-    v_email,
-    nullif(trim(coalesce(p_phone, '')), ''),
-    v_phone,
-    jsonb_build_object('created_from', p_source),
-    v_now, v_now
-  ) returning id into v_customer_id;
-  goto remember_aliases;
-
-  <<maybe_attach_auth>>
-  if p_auth_user_id is not null then
+    insert into public.customers(
+      auth_user_id, display_name, primary_email, normalized_email,
+      primary_phone, normalized_phone, metadata, created_at, updated_at
+    ) values (
+      p_auth_user_id,
+      nullif(trim(coalesce(p_display_name, '')), ''),
+      nullif(trim(coalesce(p_email, '')), ''),
+      v_email,
+      nullif(trim(coalesce(p_phone, '')), ''),
+      v_phone,
+      jsonb_build_object('created_from', p_source),
+      v_now, v_now
+    ) returning id into v_customer_id;
+  elsif p_auth_user_id is not null then
     update public.customers c
       set auth_user_id = p_auth_user_id,
           updated_at = v_now
@@ -90,7 +85,6 @@ begin
       );
   end if;
 
-  <<remember_aliases>>
   if v_email is not null then
     insert into public.customer_identity_aliases(
       customer_id, identity_type, normalized_value, raw_value, source,
@@ -185,4 +179,4 @@ on public.customer_care_cases
 for each row execute function public.crm_customer_write_convergence_trigger();
 
 comment on function public.resolve_crm_customer_for_write(uuid,text,text,text,text)
-is 'Canonical P4 CRM resolver used by database write convergence triggers. Email/auth preferred; ambiguous aliases fail closed.';
+is 'Canonical P4 CRM resolver used by database write convergence triggers. Auth/email preferred; ambiguous aliases fail closed.';
