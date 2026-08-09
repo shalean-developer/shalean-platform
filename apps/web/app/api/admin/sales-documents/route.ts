@@ -5,6 +5,7 @@ import { createSalesDocument } from "@/lib/salesDocument/salesDocumentMutations"
 import { parseSalesDocumentLineItems } from "@/lib/salesDocument/types";
 import { SALES_DOCUMENT_ADMIN_COLUMNS } from "@/lib/salesDocument/salesDocumentColumns";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { summarizeSalesPipeline } from "@/lib/admin/sales/salesPipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -30,10 +31,32 @@ export async function GET(request: Request) {
     query = query.eq("status", status);
   }
 
-  const { data, error } = await query.limit(200);
+  const { data, error } = await query.limit(500);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   let rows = (data ?? []) as Record<string, unknown>[];
+
+  const documentIds = rows.map((row) => String(row.id ?? "")).filter(Boolean);
+  const bookingsByDocumentId = new Map<string, Record<string, unknown>>();
+  for (let i = 0; i < documentIds.length; i += 100) {
+    const { data: bookings, error: bookingError } = await admin
+      .from("bookings")
+      .select(
+        "id,sales_document_id,status,payment_status,payment_completed_at,total_paid_zar,amount_paid_cents,refunded_at,refund_status,billing_type,is_monthly_billing_booking,monthly_invoice_id",
+      )
+      .in("sales_document_id", documentIds.slice(i, i + 100));
+    if (bookingError) return NextResponse.json({ error: bookingError.message }, { status: 500 });
+    for (const booking of (bookings ?? []) as Record<string, unknown>[]) {
+      const salesDocumentId = String(booking.sales_document_id ?? "");
+      if (salesDocumentId) bookingsByDocumentId.set(salesDocumentId, booking);
+    }
+  }
+
+  rows = rows.map((row) => ({
+    ...row,
+    linked_booking: bookingsByDocumentId.get(String(row.id ?? "")) ?? null,
+  }));
+  const pipeline = summarizeSalesPipeline(rows as never[]);
   if (q) {
     rows = rows.filter((r) => {
       const name = String(r.customer_name ?? "").toLowerCase();
@@ -43,7 +66,7 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({ documents: rows });
+  return NextResponse.json({ documents: rows, pipeline });
 }
 
 export async function POST(request: Request) {
