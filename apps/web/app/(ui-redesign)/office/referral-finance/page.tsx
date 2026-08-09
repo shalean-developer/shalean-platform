@@ -62,7 +62,8 @@ export default function ReferralFinancePage() {
       ) : null}
 
       <OfficeZohoMetricsRow>
-        <FinanceKpiCard icon={TrendingUp} label="Referred revenue" value={loading || !s ? "—" : formatZar(s.gross_referred_revenue_cents)} loading={loading} />
+        <FinanceKpiCard icon={TrendingUp} label="Completed referral revenue" value={loading || !s ? "—" : formatZar(s.completed_referred_revenue_cents)} loading={loading} />
+        <FinanceKpiCard icon={TrendingUp} label="Paid attributed revenue" value={loading || !s ? "—" : formatZar(s.paid_attributed_revenue_cents)} loading={loading} />
         <FinanceKpiCard icon={DollarSign} label="Referral discount cost" value={loading || !s ? "—" : formatZar(s.referral_discount_cost_cents)} loading={loading} />
         <FinanceKpiCard icon={DollarSign} label="Cleaning credit cost" value={loading || !s ? "—" : formatZar(s.cleaning_credit_cost_cents)} loading={loading} />
         <FinanceKpiCard icon={TrendingUp} label="Net contribution" value={loading || !s ? "—" : formatZar(s.estimated_net_contribution_cents)} loading={loading} />
