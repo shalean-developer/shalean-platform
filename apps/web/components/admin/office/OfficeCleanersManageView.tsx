@@ -76,16 +76,6 @@ function statusLabel(row: AdminCleanerRow): string {
   return "Available";
 }
 
-function acceptanceRate(row: AdminCleanerRow): number {
-  const rating = typeof row.rating === "number" ? row.rating : 4.5;
-  return Math.max(72, Math.min(99, Math.round(rating * 20)));
-}
-
-function responseTimeMinutes(row: AdminCleanerRow): number {
-  const jobs = typeof row.jobs_completed === "number" ? row.jobs_completed : 0;
-  return Math.max(2, 16 - Math.min(12, Math.floor(jobs / 15)));
-}
-
 function formatWeekdayList(days: string[]): string {
   return days.map((d) => CLEANER_WEEKDAY_LABELS[d as CleanerWeekdayCode] ?? d).join(" ");
 }
@@ -351,7 +341,7 @@ export function OfficeCleanersManageView() {
   const metrics = useMemo(() => {
     const totalCleaners = rows.length;
     const availableNow = rows.filter((c) => Boolean(c.is_available)).length;
-    const active = rows.filter((r) => String(r.status ?? "").toLowerCase() !== "offline").length;
+    const active = rows.filter((r) => r.is_active !== false).length;
     const avgRating =
       rows.length > 0 ? rows.reduce((acc, c) => acc + (c.rating || 0), 0) / rows.length : NaN;
     return [
@@ -472,6 +462,36 @@ export function OfficeCleanersManageView() {
       pushToast(isAvailable ? "Cleaner enabled" : "Cleaner disabled");
     } catch (e) {
       pushToast(e instanceof Error ? e.message : "Availability update failed.");
+    }
+  }
+
+  async function toggleLifecycle(row: AdminCleanerRow) {
+    const isActive = row.is_active === false;
+    try {
+      await updateCleanerProfile(row.id, { is_active: isActive });
+      setRows((prev) =>
+        prev.map((r) =>
+          r.id === row.id
+            ? {
+                ...r,
+                is_active: isActive,
+                ...(!isActive ? { is_available: false, status: "offline" } : {}),
+              }
+            : r,
+        ),
+      );
+      setSelected((current) =>
+        current?.id === row.id
+          ? {
+              ...current,
+              is_active: isActive,
+              ...(!isActive ? { is_available: false, status: "offline" } : {}),
+            }
+          : current,
+      );
+      pushToast(isActive ? "Cleaner restored to the active roster" : "Cleaner archived safely");
+    } catch (e) {
+      pushToast(e instanceof Error ? e.message : "Cleaner lifecycle update failed.");
     }
   }
 
@@ -936,20 +956,21 @@ export function OfficeCleanersManageView() {
             <AdminCleanerPreferencesPanel cleanerId={selected.id} onToast={(msg) => pushToast(msg)} />
             <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Performance metrics</h3>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Acceptance rate: {acceptanceRate(selected)}%</p>
-              <p className="text-sm text-zinc-600 dark:text-zinc-300">Avg response time: {responseTimeMinutes(selected)}m</p>
-              <p className="text-sm text-zinc-600 dark:text-zinc-300">Jobs completed: {selected.jobs_completed ?? 0}</p>
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Jobs completed: {selected.jobs_completed ?? 0}</p>
+              <Link href="/office/cleaner-performance" className="mt-2 inline-block text-sm font-semibold text-blue-600 hover:underline">
+                Open canonical performance
+              </Link>
             </section>
             <section className="rounded-xl border border-zinc-200 p-4 dark:border-zinc-800">
               <h3 className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Assigned jobs</h3>
-              <p className="mt-2 text-sm text-zinc-500">Detailed booking list can be plugged in from `/api/admin/bookings` by cleaner id.</p>
+              <p className="mt-2 text-sm text-zinc-500">Open the full profile to view assignments from the canonical booking roster.</p>
             </section>
             <div className="flex flex-wrap gap-2">
-              <button type="button" onClick={() => pushToast("Assign flow ready to connect.")} className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white">
-                Assign
-              </button>
               <button type="button" onClick={() => void toggleAvailability(selected)} className="rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700">
                 {selected.is_available ? "Disable" : "Enable"}
+              </button>
+              <button type="button" onClick={() => void toggleLifecycle(selected)} className="rounded-lg border border-rose-300 px-3 py-2 text-sm text-rose-800 dark:border-rose-700 dark:text-rose-300">
+                {selected.is_active === false ? "Restore cleaner" : "Archive cleaner"}
               </button>
               <button type="button" onClick={() => openReset(selected)} className="rounded-lg border border-amber-300 px-3 py-2 text-sm text-amber-800 dark:border-amber-700 dark:text-amber-300">
                 Reset password

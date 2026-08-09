@@ -27,6 +27,7 @@ export type AdminCleanerRow = {
   rating: number;
   jobs_completed: number;
   is_available: boolean;
+  is_active?: boolean | null;
   home_lat?: number | null;
   home_lng?: number | null;
   email?: string | null;
@@ -639,6 +640,7 @@ export async function updateCleanerProfile(
     availability_start?: string | null;
     availability_end?: string | null;
     is_available?: boolean;
+    is_active?: boolean;
     status?: "available" | "busy" | "offline";
     availability_weekdays?: string[];
     /** Canonical tenure anchor for payout tier (admin Office panel). */

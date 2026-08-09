@@ -62,7 +62,7 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   const { data, error } = await auth.admin
     .from("cleaners")
     .select(
-      "id, full_name, phone, email, rating, jobs_completed, is_available, status, city_id, location, availability_start, availability_end, availability_weekdays, auth_user_id, joined_at, created_at",
+      "id, full_name, phone, email, rating, jobs_completed, is_available, is_active, status, city_id, location, availability_start, availability_end, availability_weekdays, auth_user_id, joined_at, created_at",
     )
     .eq("id", id)
     .maybeSingle();
@@ -70,7 +70,47 @@ export async function GET(_request: Request, ctx: { params: Promise<{ id: string
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Cleaner not found." }, { status: 404 });
 
-  return NextResponse.json({ cleaner: data });
+  const bookingFields = "id, booking_reference, service, date, time, status, location";
+  const [directResult, rosterResult] = await Promise.all([
+    auth.admin
+      .from("bookings")
+      .select(bookingFields)
+      .eq("cleaner_id", id)
+      .order("date", { ascending: false })
+      .order("time", { ascending: false })
+      .limit(20),
+    auth.admin.from("booking_cleaners").select("booking_id").eq("cleaner_id", id).limit(100),
+  ]);
+
+  if (directResult.error) return NextResponse.json({ error: directResult.error.message }, { status: 500 });
+  if (rosterResult.error) return NextResponse.json({ error: rosterResult.error.message }, { status: 500 });
+
+  const directBookings = Array.isArray(directResult.data) ? directResult.data : [];
+  const directIds = new Set(directBookings.map((booking) => String(booking.id)));
+  const rosterBookingIds = (rosterResult.data ?? [])
+    .map((row) => String(row.booking_id ?? "").trim())
+    .filter((bookingId) => bookingId && !directIds.has(bookingId));
+
+  let rosterBookings: typeof directBookings = [];
+  if (rosterBookingIds.length > 0) {
+    const rosterBookingsResult = await auth.admin
+      .from("bookings")
+      .select(bookingFields)
+      .in("id", rosterBookingIds)
+      .order("date", { ascending: false })
+      .order("time", { ascending: false })
+      .limit(20);
+    if (rosterBookingsResult.error) {
+      return NextResponse.json({ error: rosterBookingsResult.error.message }, { status: 500 });
+    }
+    rosterBookings = rosterBookingsResult.data ?? [];
+  }
+
+  const assignedBookings = [...directBookings, ...rosterBookings]
+    .sort((a, b) => `${b.date ?? ""}T${b.time ?? ""}`.localeCompare(`${a.date ?? ""}T${a.time ?? ""}`))
+    .slice(0, 20);
+
+  return NextResponse.json({ cleaner: data, assignedBookings });
 }
 
 export async function PATCH(request: Request, ctx: { params: Promise<{ id: string }> }) {
@@ -94,6 +134,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     availability_start?: string | null;
     availability_end?: string | null;
     is_available?: boolean;
+    is_active?: boolean;
     availability_weekdays?: string[];
     joined_at?: string | null;
   };
@@ -152,6 +193,15 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     updates.is_available = Boolean(body.is_available);
     if (body.status === undefined) {
       updates.status = body.is_available ? "available" : "offline";
+    }
+  }
+  if (body.is_active !== undefined) {
+    updates.is_active = Boolean(body.is_active);
+    // Archiving is deliberately non-destructive: preserve the cleaner id and
+    // all historical booking/earnings links, but remove dispatch eligibility.
+    if (!body.is_active) {
+      updates.is_available = false;
+      updates.status = "offline";
     }
   }
 
