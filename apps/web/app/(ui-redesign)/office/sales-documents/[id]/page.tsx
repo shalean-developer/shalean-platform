@@ -49,6 +49,19 @@ type DocDetail = {
   zoho_invoice_number?: string | null;
 };
 
+type CrmOpportunity = {
+  id: string;
+  crm_stage: "lead" | "qualified" | "quote" | "follow_up" | "won" | "lost" | null;
+  crm_next_follow_up_at: string | null;
+  crm_lost_reason: string | null;
+  lead_source: string | null;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+};
+
+type CrmActivity = { id: string; activity_type: string; body: string | null; created_at: string };
+
 const SERVICE_LABELS: Record<string, string> = {
   standard: "Standard cleaning",
   deep: "Deep cleaning",
@@ -89,6 +102,13 @@ export default function OfficeSalesDocumentDetailPage() {
   const [reconcileOpen, setReconcileOpen] = useState(false);
   const [reconcileReference, setReconcileReference] = useState("");
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [crm, setCrm] = useState<CrmOpportunity | null>(null);
+  const [activities, setActivities] = useState<CrmActivity[]>([]);
+  const [crmStage, setCrmStage] = useState("lead");
+  const [followUp, setFollowUp] = useState("");
+  const [lostReason, setLostReason] = useState("");
+  const [activityType, setActivityType] = useState("note");
+  const [activityBody, setActivityBody] = useState("");
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -102,13 +122,24 @@ export default function OfficeSalesDocumentDetailPage() {
     if (!id || !mountedRef.current) return;
     setLoading(true);
     try {
-      const res = await adminFetch<{ document: DocDetail }>(`/api/admin/sales-documents/${id}`);
+      const [res, crmRes] = await Promise.all([
+        adminFetch<{ document: DocDetail }>(`/api/admin/sales-documents/${id}`),
+        adminFetch<{ opportunity: CrmOpportunity; activities: CrmActivity[] }>(`/api/admin/sales-documents/${id}/crm`),
+      ]);
       if (!mountedRef.current) return;
       if (!res.ok || !res.data?.document) {
         setDoc(null);
         return;
       }
       setDoc(res.data.document);
+      if (crmRes.ok && crmRes.data?.opportunity) {
+        const opportunity = crmRes.data.opportunity;
+        setCrm(opportunity);
+        setActivities(crmRes.data.activities ?? []);
+        setCrmStage(opportunity.crm_stage ?? "lead");
+        setFollowUp(opportunity.crm_next_follow_up_at?.slice(0, 16) ?? "");
+        setLostReason(opportunity.crm_lost_reason ?? "");
+      }
     } catch {
       if (!mountedRef.current) return;
       setDoc(null);
@@ -236,6 +267,35 @@ export default function OfficeSalesDocumentDetailPage() {
     setBusy(false);
   }
 
+  async function saveCrm() {
+    setBusy(true);
+    setMessage(null);
+    const res = await adminFetch(`/api/admin/sales-documents/${id}/crm`, {
+      method: "PATCH",
+      body: JSON.stringify({ stage: crmStage, next_follow_up_at: followUp || null, lost_reason: lostReason }),
+    });
+    setMessageKind(res.ok ? "success" : "error");
+    setMessage(res.ok ? "Sales opportunity updated." : res.error ?? "Could not update opportunity.");
+    if (res.ok) await load();
+    setBusy(false);
+  }
+
+  async function addActivity() {
+    if (!activityBody.trim()) return;
+    setBusy(true);
+    const res = await adminFetch(`/api/admin/sales-documents/${id}/crm`, {
+      method: "POST",
+      body: JSON.stringify({ activity_type: activityType, body: activityBody }),
+    });
+    setMessageKind(res.ok ? "success" : "error");
+    setMessage(res.ok ? "Activity added." : res.error ?? "Could not add activity.");
+    if (res.ok) {
+      setActivityBody("");
+      await load();
+    }
+    setBusy(false);
+  }
+
   if (loading) return <div className="p-6 text-slate-500">Loading…</div>;
   if (!doc) return <div className="p-6 text-red-600">Document not found.</div>;
 
@@ -331,6 +391,45 @@ export default function OfficeSalesDocumentDetailPage() {
           ) : null}
         </div>
       </div>
+
+      {crm ? (
+        <section className="rounded-2xl border border-blue-200 bg-blue-50/50 p-5 shadow-sm">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-slate-900">Sales opportunity</h2>
+              <p className="text-xs text-slate-500">One timeline across this quote, its invoice and canonical booking.</p>
+            </div>
+            <p className="text-xs font-medium text-slate-600">Source: {crm.lead_source ?? "unknown"}</p>
+          </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+            <label className="text-xs font-semibold text-slate-600">Stage
+              <select value={crmStage} onChange={(event) => setCrmStage(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal">
+                <option value="lead">Lead</option><option value="qualified">Qualified</option><option value="quote">Quote</option><option value="follow_up">Follow-up</option><option value="won">Won</option><option value="lost">Lost</option>
+              </select>
+            </label>
+            <label className="text-xs font-semibold text-slate-600">Next follow-up
+              <input type="datetime-local" value={followUp} onChange={(event) => setFollowUp(event.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal" />
+            </label>
+          </div>
+          {crmStage === "lost" ? <label className="mt-3 block text-xs font-semibold text-slate-600">Lost reason
+            <input value={lostReason} onChange={(event) => setLostReason(event.target.value)} placeholder="Required when marking lost" className="mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-normal" />
+          </label> : null}
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs text-slate-500">{[crm.utm_source, crm.utm_medium, crm.utm_campaign].filter(Boolean).join(" · ") || "No campaign parameters captured"}</p>
+            <button type="button" disabled={busy} onClick={() => void saveCrm()} className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Save opportunity</button>
+          </div>
+          <div className="mt-5 border-t border-blue-100 pt-4">
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <select value={activityType} onChange={(event) => setActivityType(event.target.value)} aria-label="Activity type" className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm"><option value="note">Note</option><option value="call">Call</option><option value="email">Email</option><option value="whatsapp">WhatsApp</option><option value="follow_up">Follow-up</option></select>
+              <input value={activityBody} onChange={(event) => setActivityBody(event.target.value)} placeholder="Record an update…" className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm" />
+              <button type="button" disabled={busy || !activityBody.trim()} onClick={() => void addActivity()} className="rounded-xl border border-blue-300 bg-white px-4 py-2 text-sm font-semibold text-blue-700 disabled:opacity-50">Add</button>
+            </div>
+            <ol className="mt-4 space-y-2">
+              {activities.length ? activities.map((activity) => <li key={activity.id} className="rounded-xl bg-white px-3 py-2 text-sm"><span className="font-semibold capitalize text-slate-700">{activity.activity_type.replace("_", " ")}</span><span className="ml-2 text-xs text-slate-400">{formatDateTime(activity.created_at)}</span><p className="mt-1 text-slate-600">{activity.body}</p></li>) : <li className="text-sm text-slate-500">No activity recorded yet.</li>}
+            </ol>
+          </div>
+        </section>
+      ) : null}
 
       {doc.sent_at || doc.view_count > 0 ? (
         <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm text-slate-700">
