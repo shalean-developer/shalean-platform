@@ -57,3 +57,38 @@ grant all on public.sales_opportunity_activities to service_role;
 
 comment on table public.sales_opportunity_activities is
   'Auditable CRM activity for the root quote/opportunity; financial records remain canonical elsewhere.';
+
+create or replace function public.set_sales_opportunity_crm(
+  p_document_id uuid, p_stage text, p_next_follow_up_at timestamptz,
+  p_lost_reason text, p_owner_user_id uuid, p_lead_source text, p_actor_user_id uuid
+) returns void language plpgsql security invoker set search_path = public, pg_temp as $$
+declare v_previous_stage text;
+begin
+  if p_stage is not null and p_stage <> all (array['lead','qualified','quote','follow_up','won','lost']) then
+    raise exception 'invalid_stage';
+  end if;
+  if p_stage = 'lost' and nullif(trim(p_lost_reason), '') is null then raise exception 'lost_reason_required'; end if;
+
+  select crm_stage into v_previous_stage from public.sales_documents
+  where id = p_document_id and converted_from_id is null for update;
+  if not found then raise exception 'opportunity_not_found'; end if;
+
+  update public.sales_documents set
+    crm_stage = coalesce(p_stage, crm_stage),
+    crm_next_follow_up_at = p_next_follow_up_at,
+    crm_owner_user_id = coalesce(p_owner_user_id, crm_owner_user_id),
+    lead_source = coalesce(nullif(trim(p_lead_source), ''), lead_source),
+    crm_lost_reason = case when p_stage = 'lost' then trim(p_lost_reason) when p_stage is not null then null else crm_lost_reason end,
+    crm_won_at = case when p_stage = 'won' and v_previous_stage is distinct from 'won' then now() when p_stage is not null and p_stage <> 'won' then null else crm_won_at end,
+    crm_lost_at = case when p_stage = 'lost' and v_previous_stage is distinct from 'lost' then now() when p_stage is not null and p_stage <> 'lost' then null else crm_lost_at end
+  where id = p_document_id;
+
+  if p_stage is not null and p_stage is distinct from v_previous_stage then
+    insert into public.sales_opportunity_activities (sales_document_id, activity_type, body, metadata, created_by)
+    values (p_document_id, 'stage_change', format('Stage changed from %s to %s', coalesce(v_previous_stage, 'unassigned'), p_stage), jsonb_build_object('from', v_previous_stage, 'to', p_stage), p_actor_user_id);
+  end if;
+end;
+$$;
+
+revoke all on function public.set_sales_opportunity_crm(uuid,text,timestamptz,text,uuid,text,uuid) from public, anon, authenticated;
+grant execute on function public.set_sales_opportunity_crm(uuid,text,timestamptz,text,uuid,text,uuid) to service_role;
