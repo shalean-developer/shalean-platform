@@ -23,6 +23,7 @@ type SalesDocRow = SalesDocumentActionRow & {
   first_viewed_at: string | null;
   linked_booking?: { id: string; status: string | null } | null;
   pipeline_stage: "lead" | "quote" | "follow_up" | "won" | "lost";
+  pipeline_source: "website" | "office";
 };
 
 type PipelineSummary = {
@@ -98,7 +99,7 @@ function SalesDocumentListItem({
           </div>
           <p className="mt-2 truncate text-sm font-medium text-slate-800">{doc.customer_name}</p>
           <p className="truncate text-xs text-slate-400">{doc.customer_email}</p>
-          {doc.source === "customer_request" ? (
+          {doc.pipeline_source === "website" ? (
             <p className="mt-1 text-xs font-medium text-amber-700">Website request</p>
           ) : <p className="mt-1 text-xs font-medium text-slate-500">Office-created</p>}
           <span className={cn("mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", pipelineStageCls(doc.pipeline_stage))}>
@@ -154,7 +155,7 @@ function SalesDocumentTableRow({
         {doc.status === "requested" ? "—" : formatZar(doc.total_cents)}
       </td>
       <td className="px-4 py-3 text-xs text-slate-600">
-        {doc.source === "customer_request" ? "Website" : "Office"}
+        {doc.pipeline_source === "website" ? "Website" : "Office"}
       </td>
       <td className="px-4 py-3">
         <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold capitalize", statusCls(doc.status))}>
