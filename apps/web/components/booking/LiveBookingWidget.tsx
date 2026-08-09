@@ -22,6 +22,7 @@ import {
 import { usePricingCatalogSnapshot } from "@/lib/pricing/usePricingCatalogSnapshot";
 import { ServiceAreaPicker } from "@/components/booking/ServiceAreaPicker";
 import { bookingCopy } from "@/lib/booking/copy";
+import { buildBookHrefFromWidgetSelection } from "@/lib/booking/legacyBookingToBookRedirect";
 
 export type LiveBookingWidgetProps = {
   className?: string;
@@ -100,9 +101,18 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
     } catch {
       /* ignore quota / private mode */
     }
-    const q = new URLSearchParams();
-    if (source) q.set("source", source);
-    router.push(q.size ? `/book?${q.toString()}` : "/book");
+    router.push(
+      buildBookHrefFromWidgetSelection({
+        service,
+        bedrooms: isEstimateMode ? undefined : bedrooms,
+        bathrooms: isEstimateMode ? undefined : bathrooms,
+        extraRooms: isEstimateMode ? undefined : extraRooms,
+        extras: isEstimateMode ? [] : extras,
+        serviceAreaName,
+        serviceAreaLocationId,
+        source,
+      }),
+    );
   }
 
   const onWidgetDateChange = useCallback((ymd: string) => setDate(ymd), []);

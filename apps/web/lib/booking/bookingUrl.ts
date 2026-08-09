@@ -17,9 +17,12 @@ export const BOOKING_ALLOWED_PARAMS = [
   "bathrooms",
   "extraRooms",
   "extras",
+  "extrasMode",
   "promo",
   "source",
   "location",
+  "serviceAreaLocationId",
+  "serviceAreaName",
   "register",
 ] as const;
 

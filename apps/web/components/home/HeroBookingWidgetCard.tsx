@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BOOKING_DATA_STORAGE_KEY } from "@/lib/booking/bookingWidgetDraft";
+import { buildBookHrefFromWidgetSelection } from "@/lib/booking/legacyBookingToBookRedirect";
 import { defaultBookingTimeForDate, todayBookingYmd } from "@/lib/booking/bookingTimeSlots";
 import {
   calculateHomeWidgetQuoteZar,
@@ -78,7 +79,16 @@ export function HeroBookingWidgetCard() {
     } catch {
       /* ignore */
     }
-    router.push("/book");
+    router.push(
+      buildBookHrefFromWidgetSelection({
+        service,
+        bedrooms,
+        bathrooms: Math.min(3, bathrooms),
+        extraRooms: 0,
+        extras,
+        source: "hero_booking_widget",
+      }),
+    );
   }
 
   return (
