@@ -56,8 +56,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
       return NextResponse.json({ error: "lost_reason_required" }, { status: 400 });
     }
     updates.crm_stage = body.stage;
-    updates.crm_won_at = body.stage === "won" ? new Date().toISOString() : null;
-    updates.crm_lost_at = body.stage === "lost" ? new Date().toISOString() : null;
     updates.crm_lost_reason = body.stage === "lost" ? normalizedCrmText(body.lost_reason, 500) : null;
   }
   if (body.next_follow_up_at !== undefined) {
@@ -71,19 +69,16 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (body.lead_source !== undefined) updates.lead_source = normalizedCrmText(body.lead_source, 100) ?? "other";
   if (!Object.keys(updates).length) return NextResponse.json({ error: "no_changes" }, { status: 400 });
 
-  const { data: previous } = await admin.from("sales_documents").select("crm_stage").eq("id", rootId).single();
-  const { error } = await admin.from("sales_documents").update(updates).eq("id", rootId);
+  const { error } = await admin.rpc("set_sales_opportunity_crm", {
+    p_document_id: rootId,
+    p_stage: updates.crm_stage,
+    p_next_follow_up_at: updates.crm_next_follow_up_at,
+    p_lost_reason: updates.crm_lost_reason,
+    p_owner_user_id: updates.crm_owner_user_id,
+    p_lead_source: updates.lead_source,
+    p_actor_user_id: auth.user.id,
+  });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (updates.crm_stage && updates.crm_stage !== previous?.crm_stage) {
-    const { error: auditError } = await admin.from("sales_opportunity_activities").insert({
-      sales_document_id: rootId,
-      activity_type: "stage_change",
-      body: `Stage changed from ${previous?.crm_stage ?? "unassigned"} to ${updates.crm_stage}`,
-      metadata: { from: previous?.crm_stage ?? null, to: updates.crm_stage },
-      created_by: auth.user.id,
-    });
-    if (auditError) return NextResponse.json({ error: "stage_saved_audit_failed" }, { status: 500 });
-  }
   return NextResponse.json({ ok: true });
 }
 
@@ -101,6 +96,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   if (!text) return NextResponse.json({ error: "activity_body_required" }, { status: 400 });
   const { error } = await admin.from("sales_opportunity_activities").insert({ sales_document_id: rootId, activity_type: body.activity_type, body: text, created_by: auth.user.id });
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  await admin.from("sales_documents").update({ crm_first_responded_at: new Date().toISOString() }).eq("id", rootId).is("crm_first_responded_at", null);
+  if (["call", "email", "whatsapp"].includes(body.activity_type)) {
+    await admin.from("sales_documents").update({ crm_first_responded_at: new Date().toISOString() }).eq("id", rootId).is("crm_first_responded_at", null);
+  }
   return NextResponse.json({ ok: true });
 }
