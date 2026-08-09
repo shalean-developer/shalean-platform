@@ -109,6 +109,7 @@ export function LiveBookingWidget({ className, source = "live_widget" }: LiveBoo
         extraRooms: isEstimateMode ? undefined : extraRooms,
         extras: isEstimateMode ? [] : extras,
         serviceAreaName,
+        serviceAreaLocationId,
         source,
       }),
     );
