@@ -108,6 +108,17 @@ describe("PRINCESS PR-A — quote calculation scenarios", () => {
 });
 
 describe("PRINCESS PR-A — quote integrity / readiness", () => {
+  it("removes rejected extras before duration and quote signing", () => {
+    const quote = resolveBookingV2Quote(
+      baseInput({ selectedExtras: ["unknown-extra", "inside-oven"] }),
+    );
+
+    expect(quote.breakdown.selected_extras.map((extra) => extra.extra_id)).toEqual([
+      "inside-oven",
+    ]);
+    expect(quote.duration_workload.unknown_extras).toEqual([]);
+  });
+
   it("stale client quote is soft-accepted with server pricing", () => {
     const quote = resolveBookingV2Quote(baseInput());
     const result = assertV2ConfirmQuoteIntegrity({
