@@ -5,7 +5,7 @@ import { createSalesDocument } from "@/lib/salesDocument/salesDocumentMutations"
 import { parseSalesDocumentLineItems } from "@/lib/salesDocument/types";
 import { SALES_DOCUMENT_ADMIN_COLUMNS } from "@/lib/salesDocument/salesDocumentColumns";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { summarizeSalesPipeline } from "@/lib/admin/sales/salesPipeline";
+import { salesPipelineStage, summarizeSalesPipeline, type SalesPipelineDocument } from "@/lib/admin/sales/salesPipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,10 +55,16 @@ export async function GET(request: Request) {
     }
   }
 
-  const pipelineRows: Array<Record<string, unknown> & { linked_booking: Record<string, unknown> | null }> = rows.map((row) => ({
-    ...row,
-    linked_booking: bookingsByDocumentId.get(String(row.id ?? "")) ?? null,
-  }));
+  const pipelineRows: Array<Record<string, unknown> & { linked_booking: Record<string, unknown> | null; pipeline_stage: string }> = rows.map((row) => {
+    const enriched = {
+      ...row,
+      linked_booking: bookingsByDocumentId.get(String(row.id ?? "")) ?? null,
+    };
+    return {
+      ...enriched,
+      pipeline_stage: salesPipelineStage(enriched as unknown as SalesPipelineDocument),
+    };
+  });
   const pipeline = summarizeSalesPipeline(pipelineRows as never[]);
   let visibleRows = pipelineRows;
   if (q) {
