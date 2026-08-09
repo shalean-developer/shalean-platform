@@ -27,7 +27,30 @@ export type CustomerQuoteRequestInput = {
   preferred_date: string | null;
   message: string | null;
   selected_items: SalesDocumentQuoteRequestSelectedItem[];
+  attribution?: {
+    utm_source: string | null;
+    utm_medium: string | null;
+    utm_campaign: string | null;
+    utm_term: string | null;
+    utm_content: string | null;
+    gclid: string | null;
+    fbclid: string | null;
+    landing_page_slug: string | null;
+  };
 };
+
+function attributionText(value: string | null | undefined): string | null {
+  const text = value?.trim();
+  return text ? text.slice(0, 500) : null;
+}
+
+function leadSource(input: CustomerQuoteRequestInput["attribution"]): string {
+  const source = attributionText(input?.utm_source)?.toLowerCase();
+  if (source) return source;
+  if (input?.gclid) return "google";
+  if (input?.fbclid) return "facebook";
+  return "direct";
+}
 
 function buildRequestSummary(input: CustomerQuoteRequestInput): string {
   const property = PROPERTY_LABELS[input.property_type] ?? input.property_type;
@@ -104,6 +127,13 @@ export async function createCustomerQuoteRequest(
       notes: buildRequestSummary(input),
       request_details: requestDetails,
       created_by: null,
+      crm_stage: "lead",
+      lead_source: leadSource(input.attribution),
+      utm_source: attributionText(input.attribution?.utm_source),
+      utm_medium: attributionText(input.attribution?.utm_medium),
+      utm_campaign: attributionText(input.attribution?.utm_campaign),
+      utm_term: attributionText(input.attribution?.utm_term),
+      utm_content: attributionText(input.attribution?.utm_content),
     })
     .select("id")
     .single();
