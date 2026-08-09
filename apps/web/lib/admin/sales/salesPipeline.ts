@@ -19,11 +19,21 @@ export type SalesPipelineDocument = {
   linked_booking?: SalesPipelineBooking | null;
 };
 
+export type SalesPipelineSource = "website" | "office";
+
+export function salesPipelineSource(
+  document: Pick<SalesPipelineDocument, "source">,
+  parent?: Pick<SalesPipelineDocument, "source"> | null,
+): SalesPipelineSource {
+  const source = String(parent?.source ?? document.source ?? "").trim().toLowerCase();
+  return source === "customer_request" ? "website" : "office";
+}
+
 export function salesPipelineStage(document: SalesPipelineDocument): SalesPipelineStage {
   const status = String(document.status ?? "").trim().toLowerCase();
   if (["void", "expired", "refunded"].includes(status)) return "lost";
   if (document.linked_booking || status === "paid") return "won";
-  if (document.document_type === "invoice" || status === "accepted") return "won";
+  if (status === "accepted" || (document.document_type === "invoice" && Boolean(document.converted_from_id))) return "won";
   if (status === "sent" || Number(document.view_count ?? 0) > 0 || document.first_viewed_at) return "follow_up";
   if (status === "draft") return "quote";
   return "lead";

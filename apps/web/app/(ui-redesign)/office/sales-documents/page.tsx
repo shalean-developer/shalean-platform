@@ -22,6 +22,8 @@ type SalesDocRow = SalesDocumentActionRow & {
   view_count: number;
   first_viewed_at: string | null;
   linked_booking?: { id: string; status: string | null } | null;
+  pipeline_stage: "lead" | "quote" | "follow_up" | "won" | "lost";
+  pipeline_source: "website" | "office";
 };
 
 type PipelineSummary = {
@@ -30,6 +32,7 @@ type PipelineSummary = {
 };
 
 type FilterTab = "all" | "requests" | "quote" | "invoice";
+type StageFilter = "all" | SalesDocRow["pipeline_stage"];
 
 function formatZar(cents: number) {
   return `R ${(cents / 100).toLocaleString("en-ZA")}`;
@@ -49,6 +52,19 @@ function statusCls(status: string) {
 function statusLabel(status: string) {
   if (status === "requested") return "New request";
   return status.replace(/_/g, " ");
+}
+
+function pipelineStageLabel(stage: SalesDocRow["pipeline_stage"]) {
+  if (stage === "follow_up") return "Follow-up";
+  return stage.charAt(0).toUpperCase() + stage.slice(1);
+}
+
+function pipelineStageCls(stage: SalesDocRow["pipeline_stage"]) {
+  if (stage === "won") return "bg-emerald-100 text-emerald-700";
+  if (stage === "lost") return "bg-red-100 text-red-700";
+  if (stage === "follow_up") return "bg-blue-100 text-blue-700";
+  if (stage === "quote") return "bg-violet-100 text-violet-700";
+  return "bg-amber-100 text-amber-800";
 }
 
 function SalesDocumentListItem({
@@ -83,9 +99,12 @@ function SalesDocumentListItem({
           </div>
           <p className="mt-2 truncate text-sm font-medium text-slate-800">{doc.customer_name}</p>
           <p className="truncate text-xs text-slate-400">{doc.customer_email}</p>
-          {doc.source === "customer_request" ? (
+          {doc.pipeline_source === "website" ? (
             <p className="mt-1 text-xs font-medium text-amber-700">Website request</p>
-          ) : null}
+          ) : <p className="mt-1 text-xs font-medium text-slate-500">Office-created</p>}
+          <span className={cn("mt-2 inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold", pipelineStageCls(doc.pipeline_stage))}>
+            {pipelineStageLabel(doc.pipeline_stage)}
+          </span>
           <p className="mt-2 text-sm font-semibold tabular-nums text-slate-800">
             {doc.status === "requested" ? "—" : formatZar(doc.total_cents)}
           </p>
@@ -96,6 +115,11 @@ function SalesDocumentListItem({
                 ? ` · ${new Date(doc.first_viewed_at).toLocaleDateString("en-ZA", { dateStyle: "medium" })}`
                 : ""}
             </p>
+          ) : null}
+          {doc.linked_booking ? (
+            <Link href={`/office/bookings/${doc.linked_booking.id}`} className="mt-2 block text-xs font-semibold text-blue-600 hover:underline">
+              Open booking
+            </Link>
           ) : null}
         </div>
         <SalesDocumentRowActions doc={doc} onDelete={() => onDelete(doc)} layout="stack" />
@@ -116,6 +140,11 @@ function SalesDocumentTableRow({
       <td className="px-4 py-3 font-mono text-xs text-blue-600">{doc.id.slice(0, 8).toUpperCase()}</td>
       <td className="px-4 py-3 capitalize">{doc.document_type}</td>
       <td className="px-4 py-3">
+        <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold", pipelineStageCls(doc.pipeline_stage))}>
+          {pipelineStageLabel(doc.pipeline_stage)}
+        </span>
+      </td>
+      <td className="px-4 py-3">
         <p className="font-medium text-slate-800">{doc.customer_name}</p>
         <p className="text-xs text-slate-400">{doc.customer_email}</p>
         {doc.source === "customer_request" ? (
@@ -124,6 +153,9 @@ function SalesDocumentTableRow({
       </td>
       <td className="px-4 py-3 tabular-nums">
         {doc.status === "requested" ? "—" : formatZar(doc.total_cents)}
+      </td>
+      <td className="px-4 py-3 text-xs text-slate-600">
+        {doc.pipeline_source === "website" ? "Website" : "Office"}
       </td>
       <td className="px-4 py-3">
         <span className={cn("rounded-full px-2 py-0.5 text-xs font-semibold capitalize", statusCls(doc.status))}>
@@ -136,6 +168,11 @@ function SalesDocumentTableRow({
               ? ` · ${new Date(doc.first_viewed_at).toLocaleDateString("en-ZA", { dateStyle: "medium" })}`
               : ""}
           </p>
+        ) : null}
+        {doc.linked_booking ? (
+          <Link href={`/office/bookings/${doc.linked_booking.id}`} className="mt-1 block text-xs font-semibold text-blue-600 hover:underline">
+            Booking {doc.linked_booking.id.slice(0, 8).toUpperCase()}
+          </Link>
         ) : null}
       </td>
       <td className="px-4 py-3 text-right">
@@ -151,6 +188,7 @@ export default function OfficeSalesDocumentsPage() {
   const [pipeline, setPipeline] = useState<PipelineSummary | null>(null);
   const [q, setQ] = useState("");
   const [tab, setTab] = useState<FilterTab>("all");
+  const [stage, setStage] = useState<StageFilter>("all");
   const [deleteTarget, setDeleteTarget] = useState<SalesDocRow | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -178,10 +216,13 @@ export default function OfficeSalesDocumentsPage() {
   }, [load]);
 
   const filtered = useMemo(() => {
-    if (tab === "all") return docs;
-    if (tab === "requests") return docs.filter((d) => d.status === "requested");
-    return docs.filter((d) => d.document_type === tab);
-  }, [docs, tab]);
+    const byType = tab === "all"
+      ? docs
+      : tab === "requests"
+        ? docs.filter((d) => d.status === "requested")
+        : docs.filter((d) => d.document_type === tab);
+    return stage === "all" ? byType : byType.filter((d) => d.pipeline_stage === stage);
+  }, [docs, stage, tab]);
 
   const requestCount = docs.filter((d) => d.status === "requested").length;
 
@@ -277,6 +318,19 @@ export default function OfficeSalesDocumentsPage() {
           onChange={(e) => setQ(e.target.value)}
           className="min-w-0 flex-1 rounded-xl border border-slate-200 px-3 py-2 text-sm"
         />
+        <select
+          value={stage}
+          onChange={(event) => setStage(event.target.value as StageFilter)}
+          aria-label="Filter by sales stage"
+          className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700"
+        >
+          <option value="all">All sales stages</option>
+          <option value="lead">Lead</option>
+          <option value="quote">Quote</option>
+          <option value="follow_up">Follow-up</option>
+          <option value="won">Won</option>
+          <option value="lost">Lost</option>
+        </select>
         <button
           type="button"
           onClick={() => void load()}
@@ -306,13 +360,15 @@ export default function OfficeSalesDocumentsPage() {
 
       <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm md:block">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[820px] text-left text-sm">
+          <table className="w-full min-w-[980px] text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase text-slate-500">
               <tr>
                 <th className="px-4 py-3">ID</th>
                 <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">Stage</th>
                 <th className="px-4 py-3">Customer</th>
                 <th className="px-4 py-3">Total</th>
+                <th className="px-4 py-3">Source</th>
                 <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Actions</th>
               </tr>
@@ -320,13 +376,13 @@ export default function OfficeSalesDocumentsPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                     Loading…
                   </td>
                 </tr>
               ) : filtered.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-slate-400">
+                  <td colSpan={8} className="px-4 py-8 text-center text-slate-400">
                     No documents yet.
                   </td>
                 </tr>
