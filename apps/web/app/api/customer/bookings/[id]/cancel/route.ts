@@ -19,7 +19,9 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
   // The booking mutation remains authoritative. Converge all secondary rails
   // only after cancellation succeeds so an operational-cleanup failure cannot
   // accidentally suppress work/messages for a booking that stayed active.
-  const convergence = await orchestrateCustomerBookingCancellation(auth.admin, bookingId);
+  const convergence = await orchestrateCustomerBookingCancellation(auth.admin, bookingId, {
+    actorUserId: auth.userId,
+  });
   if (!convergence.ok) {
     void reportOperationalIssue(
       "error",
