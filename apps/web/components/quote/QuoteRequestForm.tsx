@@ -80,6 +80,8 @@ export function QuoteRequestForm() {
                 ? "Please tell us which suburb or area you are in."
                 : json.error === "selection_required"
                   ? "Please select at least one service."
+                  : json.error === "invalid_selection"
+                    ? "That service selection is no longer available. Reload the services and try again."
                   : "We could not submit your request. Please try again or call us.",
         );
         return;
