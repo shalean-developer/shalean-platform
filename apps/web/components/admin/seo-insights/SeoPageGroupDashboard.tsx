@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { SeoFreshnessStatus } from "@/components/admin/seo-insights/SeoFreshnessStatus";
 import { useAdminData } from "@/hooks/useAdminData";
 import { cn } from "@/lib/utils";
 
@@ -101,6 +102,8 @@ export function SeoPageGroupDashboard() {
 
       {!loading && data ? (
         <>
+          <SeoFreshnessStatus syncedAt={data.synced_at} />
+
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
             {data.groups.map((item) => (
               <button
