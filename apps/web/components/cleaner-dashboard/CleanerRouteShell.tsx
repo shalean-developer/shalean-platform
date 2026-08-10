@@ -11,6 +11,7 @@ import { CleanerBottomNav } from "./CleanerBottomNav";
 import { CleanerNavBadgesProvider } from "./CleanerNavBadgesContext";
 import { CleanerNotificationsProvider } from "@/lib/notifications/notificationsStore";
 import { CleanerLifecycleFlushErrorListener } from "./CleanerLifecycleFlushErrorListener";
+import { CleanerIssueReportControl } from "@/components/cleaner/CleanerIssueReportControl";
 
 const PUBLIC_PREFIXES = ["/cleaner/login", "/cleaner/apply"] as const;
 
@@ -195,6 +196,7 @@ export function CleanerRouteShell({ children }: { children: ReactNode }) {
           <div className={showBottomNav ? "pb-[calc(4.25rem+env(safe-area-inset-bottom))]" : ""}>{children}</div>
           {showBottomNav ? <CleanerBottomNav /> : null}
           {showBottomNav ? <CleanerLifecycleFlushErrorListener /> : null}
+          {showBottomNav ? <CleanerIssueReportControl /> : null}
         </CleanerNotificationsProvider>
       </CleanerNavBadgesProvider>
     </div>
