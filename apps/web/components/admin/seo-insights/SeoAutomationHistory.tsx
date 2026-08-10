@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 
 type Run = {
   id: string;
-  job: "gsc-sync" | "seo-optimization";
+  job: "gsc-sync" | "seo-optimization" | "sitemap-health";
   status: "success" | "error";
   created_at: string;
   detail: string | null;
@@ -21,6 +21,7 @@ type Payload = {
 const LABELS = {
   "gsc-sync": "GSC sync",
   "seo-optimization": "SEO optimization",
+  "sitemap-health": "Sitemap health",
 } as const;
 
 function metricLabel(key: string) {
@@ -35,7 +36,7 @@ export function SeoAutomationHistory() {
       <div>
         <h1 className="text-2xl font-bold text-slate-900">SEO Automation History</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Recent Search Console sync and SEO optimizer runs, including rows processed, applied changes and failures.
+          Recent Search Console sync, SEO optimizer and sitemap health runs, including processing metrics and failures.
         </p>
       </div>
 
@@ -84,7 +85,7 @@ export function SeoAutomationHistory() {
 
           {data.runs.length === 0 ? (
             <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">
-              No SEO automation run records yet. The next GSC sync or SEO optimization run will appear here.
+              No SEO automation run records yet. The next GSC sync, SEO optimization or sitemap health run will appear here.
             </div>
           ) : null}
         </div>
