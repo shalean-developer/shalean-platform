@@ -40,7 +40,7 @@ export const OFFICE_WORK_ITEM_POLICIES: Record<OfficeWorkItemType, WorkItemPolic
   "finance.invoice_overdue": { permission: "finance.full.view", hrefPrefix: "/office/invoices" },
   "finance.payout_prepare": { permission: "payout.prepare", hrefPrefix: "/office/payouts" },
   "workforce.application": { permission: "application.decide", hrefPrefix: "/office/cleaner-applications" },
-  "customer_care.whatsapp_reply": { permission: "customer.contact", hrefPrefix: "/office/notifications" },
+  "customer_care.whatsapp_reply": { permission: "customer.contact", hrefPrefix: "/office/notification-logs" },
   "customer_care.case": { permission: "customer.contact", hrefPrefix: "/office/customer-care" },
   "marketing.blog_draft": { permission: "content.draft", hrefPrefix: "/office/blog" },
   "marketing.campaign_ready": { permission: "content.publish", hrefPrefix: "/office/marketing" },
