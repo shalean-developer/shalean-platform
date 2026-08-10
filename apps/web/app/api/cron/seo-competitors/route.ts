@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { withCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { logCronRun } from "@/lib/logging/systemLog";
 import { runCompetitorSerpSync } from "@/lib/seo/competitors/runCompetitorSerpSync";
@@ -14,7 +16,16 @@ async function handle(request: Request) {
   if (!admin) return NextResponse.json({ error: "Supabase admin not configured." }, { status: 503 });
 
   try {
-    const result = await runCompetitorSerpSync(admin, 50);
+    const lockResult = await withCronLock(
+      admin,
+      { jobName: CRON_LOCK_KEYS.seoCompetitors, leaseSeconds: 3600 },
+      () => runCompetitorSerpSync(admin, 50),
+    );
+    if (lockResult.skipped) {
+      return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
+    }
+
+    const result = lockResult.ranIt;
     await logCronRun({
       jobName: "seo-competitors",
       status: result.ok ? "success" : "error",
