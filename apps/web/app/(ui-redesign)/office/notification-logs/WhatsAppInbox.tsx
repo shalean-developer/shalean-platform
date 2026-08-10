@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Inbox, RefreshCw, Send, Search, UserRound, Clock3 } from "lucide-react";
 import { adminFetch } from "@/hooks/useAdminData";
 
@@ -29,6 +30,8 @@ type InboxResponse = {
 function digits(value: string | null | undefined) { return String(value ?? "").replace(/\D/g, ""); }
 
 export function WhatsAppInbox() {
+  const searchParams = useSearchParams();
+  const requestedConversation = digits(searchParams.get("conversation"));
   const [data, setData] = useState<InboxResponse>({ messages: [], contacts: {}, conversationState: {}, approvedCustomerTemplates: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -57,8 +60,11 @@ export function WhatsAppInbox() {
     const next = result.data ?? { messages: [], contacts: {}, conversationState: {}, approvedCustomerTemplates: [] };
     setData(next);
     if (!selectedPhoneRef.current) {
-      const first = next.messages.map((m) => digits(m.phone)).find(Boolean);
-      if (first) setSelectedPhone(first);
+      const phones = new Set(next.messages.map((m) => digits(m.phone)).filter(Boolean));
+      const initial = requestedConversation && phones.has(requestedConversation)
+        ? requestedConversation
+        : next.messages.map((m) => digits(m.phone)).find(Boolean);
+      if (initial) setSelectedPhone(initial);
     }
   }
 
@@ -124,6 +130,12 @@ export function WhatsAppInbox() {
       .filter((item) => Boolean(item.latest))
       .sort((a, b) => +new Date(b.latest.createdAt) - +new Date(a.latest.createdAt));
   }, [data.messages]);
+
+  useEffect(() => {
+    if (requestedConversation && conversations.some((conversation) => conversation.phone === requestedConversation)) {
+      setSelectedPhone(requestedConversation);
+    }
+  }, [requestedConversation, conversations]);
 
   const filtered = conversations.filter((c) => {
     const q = search.trim().toLowerCase();
@@ -254,7 +266,7 @@ export function WhatsAppInbox() {
                       {message.templateName ? <p className={`mb-1 text-[10px] font-semibold ${message.direction === "outbound" ? "text-emerald-100" : "text-slate-400"}`}>Template: {message.templateName}</p> : null}
                       <p className="whitespace-pre-wrap break-words text-sm">{message.body || "[Non-text WhatsApp message]"}</p>
                       <div className={`mt-1 flex items-center justify-end gap-2 text-[10px] ${message.direction === "outbound" ? "text-emerald-100" : "text-slate-400"}`}>
-                        {message.direction === "outbound" ? <span>{message.adminEmail ? `Sent by ${message.adminEmail}` : "Sent by Shalean"}</span> : null}<span>{new Date(message.createdAt).toLocaleString()}</span>
+                        {message.direction === "outbound" ? <span>{message.adminEmail ? `Sent by ${message.adminEmail}` : "Sent by Shalean"}</span> : null}<span>{new Date(message.createdAt).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg" })}</span>
                       </div>
                     </div>
                   </div>

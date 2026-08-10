@@ -10,10 +10,10 @@ const whatsappItem: OfficeWorkItem = {
   id: "customer_care.whatsapp_reply:event-1",
   type: "customer_care.whatsapp_reply",
   title: "WhatsApp customer needs a reply",
-  summary: "Latest inbound message",
+  summary: "Latest inbound message received 7 Aug 2026, 12:00 SAST",
   priority: "high",
   status: "overdue",
-  href: "/office/notifications?conversation=27821234567",
+  href: "/office/notification-logs?conversation=27821234567",
   actionLabel: "Reply on WhatsApp",
   requiredPermission: "customer.contact",
   occurredAt: "2026-08-07T10:00:00Z",
@@ -23,9 +23,10 @@ const whatsappItem: OfficeWorkItem = {
 };
 
 describe("Admin RBAC Priority 4 Customer Care My Work queue", () => {
-  it("requires customer.contact and a safe notifications destination", () => {
+  it("requires customer.contact and a safe WhatsApp inbox destination", () => {
     expect(canReceiveOfficeWorkItem(whatsappItem, new Set(["customer.contact"]))).toBe(true);
     expect(canReceiveOfficeWorkItem(whatsappItem, new Set(["customer.view"]))).toBe(false);
+    expect(canReceiveOfficeWorkItem({ ...whatsappItem, href: "/office/notifications?conversation=27821234567" }, new Set(["customer.contact"]))).toBe(false);
     expect(canReceiveOfficeWorkItem({ ...whatsappItem, href: "/office/customers" }, new Set(["customer.contact"]))).toBe(false);
   });
 
@@ -33,10 +34,10 @@ describe("Admin RBAC Priority 4 Customer Care My Work queue", () => {
     const source = read("app/api/admin/my-work/route.ts");
     expect(source).toContain('permissions.has("customer.contact")');
     expect(source).toContain('.from("whatsapp_provider_events")');
-    expect(source).toContain('event.direction === "inbound"');
-    expect(source).toContain('event.event_type === "message"');
+    expect(source).toContain('e.direction === "inbound"');
+    expect(source).toContain('e.event_type === "message"');
     expect(source).toContain('requiredPermission: "customer.contact"');
-    expect(source).toContain('/office/notifications?conversation=');
+    expect(source).toContain('/office/notification-logs?conversation=');
   });
 
   it("does not expose message body content in the My Work item", () => {
@@ -46,11 +47,23 @@ describe("Admin RBAC Priority 4 Customer Care My Work queue", () => {
     expect(source).toContain("maskedPhone(phone)");
   });
 
+  it("formats customer-care timestamps for Johannesburg instead of exposing raw UTC strings", () => {
+    const source = read("app/api/admin/my-work/route.ts");
+    expect(source).toContain('timeZone: "Africa/Johannesburg"');
+    expect(source).toContain("formatJohannesburgDateTime(e.created_at)");
+  });
+
+  it("deep-links the WhatsApp inbox to the requested conversation", () => {
+    const source = read("app/(ui-redesign)/office/notification-logs/WhatsAppInbox.tsx");
+    expect(source).toContain('searchParams.get("conversation")');
+    expect(source).toContain("requestedConversation");
+  });
+
   it("honours branch-scoped Customer Care assignments when a customer booking can be resolved", () => {
     const source = read("app/api/admin/my-work/route.ts");
     expect(source).toContain("permissionPayload.branchIds ?? []");
-    expect(source).toContain("allowedBranches.has(branchId)");
-    expect(source).toContain("if (!globallyScoped && (!branchId || !allowedBranches.has(branchId))) return [];");
+    expect(source).toContain("allowed.has(branchId)");
+    expect(source).toContain("if (!global && (!branchId || !allowed.has(branchId))) return [];");
   });
 
   it("preserves Finance and Workforce My Work queues", () => {
