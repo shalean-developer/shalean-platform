@@ -181,7 +181,10 @@ export async function createBookingFromSalesQuoteInvoice(
     },
     lineItemsPricing: {
       mode: "exact_source_lines",
-      declaredTotalCents: totalCents,
+      // The bookings table stores the canonical total in whole ZAR. Reconcile
+      // source lines to that persisted value so cents on a sales document do
+      // not fail unified booking validation.
+      declaredTotalCents: totalPaidZar * 100,
       source: "sales_document",
       lines: lineItems.map((line) => ({
         name: line.description,
