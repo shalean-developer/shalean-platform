@@ -149,26 +149,16 @@ $function$;
 
 -- Backfill every date for which the analytics warehouse has source data.
 -- Refresh first because some non-production databases keep the MVs unpopulated.
-do $backfill$
-declare
-  v_start date;
-  v_end date := (timezone('utc', now()))::date;
-  v_day date;
-begin
-  perform public.refresh_analytics_materialized_views();
+select public.refresh_analytics_materialized_views();
 
-  select least(
-    coalesce((select min((ue.created_at at time zone 'UTC')::date) from public.user_events ue), v_end),
-    coalesce((select min((b.created_at at time zone 'UTC')::date) from public.bookings b), v_end)
-  ) into v_start;
-
-  if v_start is null then
-    return;
-  end if;
-
-  for v_day in select generate_series(v_start, v_end, interval '1 day')::date
-  loop
-    perform public.populate_daily_analytics_rollups(v_day);
-  end loop;
-end;
-$backfill$;
+with bounds as (
+  select
+    least(
+      coalesce((select min((ue.created_at at time zone 'UTC')::date) from public.user_events ue), (timezone('utc', now()))::date),
+      coalesce((select min((b.created_at at time zone 'UTC')::date) from public.bookings b), (timezone('utc', now()))::date)
+    ) as start_day,
+    (timezone('utc', now()))::date as end_day
+)
+select public.populate_daily_analytics_rollups(gs.day::date)
+from bounds
+cross join lateral generate_series(bounds.start_day, bounds.end_day, interval '1 day') as gs(day);
