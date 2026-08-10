@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import {
-  ProviderDisabledError,
   connectInstagramForAdmin,
   getProviderRegistry,
   publishOutcomeToHttp,
@@ -11,21 +10,6 @@ import { disconnectInstagramConnection } from "@/lib/promotions/instagramPublish
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function disabledResponse(e: ProviderDisabledError) {
-  return NextResponse.json(
-    {
-      configured: false,
-      connected: false,
-      okForPublish: false,
-      error: e.message,
-      hint: "Instagram publishing is disabled by feature flag. Connection management remains available.",
-      statusLabel: "disabled",
-      authModel: "facebook_login",
-    },
-    { status: 403 },
-  );
-}
 
 /**
  * GET — Instagram connection / publish readiness (Facebook Login path).
@@ -43,8 +27,11 @@ export async function GET(request: Request) {
   return NextResponse.json({
     configured: status.configured,
     connected: status.connected,
-    okForPublish: Boolean(details.okForPublish ?? status.connected) &&
-      getProviderRegistry().listEntries().some((entry) => entry.provider.key === "instagram" && entry.enabled),
+    okForPublish:
+      Boolean(details.okForPublish ?? status.connected) &&
+      getProviderRegistry()
+        .listEntries()
+        .some((entry) => entry.provider.key === "instagram" && entry.enabled),
     displayName: status.displayName,
     hint: status.hint,
     statusLabel: status.statusLabel,
