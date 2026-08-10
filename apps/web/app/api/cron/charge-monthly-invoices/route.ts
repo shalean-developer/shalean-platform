@@ -115,13 +115,30 @@ export async function POST(request: Request) {
     return NextResponse.json(body, { status: 500 });
   }
 
+  const partialErrors = result.errors ?? [];
+  if (partialErrors.length) {
+    const detail = {
+      today: result.today,
+      finalized: result.finalized ?? 0,
+      error_count: partialErrors.length,
+      errors: partialErrors,
+    };
+    await reportOperationalIssue("error", "cron/charge-monthly-invoices", "partial_finalize_failure", detail);
+    await logCronRun({
+      jobName: "charge-monthly-invoices",
+      status: "error",
+      message: JSON.stringify(detail),
+    });
+    return NextResponse.json({ ...body, ok: false }, { status: 500 });
+  }
+
   await logCronRun({
     jobName: "charge-monthly-invoices",
     status: "success",
     message: JSON.stringify({
       today: result.today,
       finalized: result.finalized ?? 0,
-      error_count: result.errors?.length ?? 0,
+      error_count: 0,
     }),
   });
 
