@@ -40,13 +40,16 @@ describe("Admin RBAC Priority 4 Marketing My Work queue", () => {
     expect(canReceiveOfficeWorkItem({ ...campaignReady, href: "/office/security" }, new Set(["content.publish"]))).toBe(false);
   });
 
-  it("uses trusted draft and ready-content sources without widening access", () => {
+  it("uses trusted draft and publish-eligible ready-content sources without widening access", () => {
     const source = read("app/api/admin/my-work/route.ts");
     expect(source).toContain('.from("blog_posts")');
     expect(source).toContain('.eq("status", "draft")');
     expect(source).toContain('requiredPermission: "content.draft"');
+    expect(source).toContain('.from("promotions")');
+    expect(source).toContain('.in("status", ["active", "scheduled"])');
     expect(source).toContain('.from("campaign_content")');
     expect(source).toContain('.eq("status", "ready")');
+    expect(source).toContain('.in("promotion_id", promotionIds)');
     expect(source).toContain('requiredPermission: "content.publish"');
   });
 
@@ -59,7 +62,7 @@ describe("Admin RBAC Priority 4 Marketing My Work queue", () => {
 
   it("keeps Marketing work data operational rather than exposing campaign bodies", () => {
     const source = read("app/api/admin/my-work/route.ts");
-    expect(source).toContain('select("id,title,channel,status,created_at,updated_at")');
+    expect(source).toContain('select("id,title,channel,status,created_at,updated_at,promotion_id")');
     expect(source).not.toContain('campaign_content").select("id,title,body');
     expect(source).not.toContain('campaign_content").select("id,title,html_body');
   });
