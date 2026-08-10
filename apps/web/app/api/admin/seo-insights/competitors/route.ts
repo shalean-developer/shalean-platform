@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { isSerpProviderConfigured } from "@/lib/seo/competitors/serpProvider";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -8,11 +9,8 @@ export const dynamic = "force-dynamic";
 function normalizeDomain(value: string): string | null {
   const raw = value.trim().toLowerCase();
   if (!raw) return null;
-  try {
-    return new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.replace(/^www\./, "");
-  } catch {
-    return null;
-  }
+  try { return new URL(raw.includes("://") ? raw : `https://${raw}`).hostname.replace(/^www\./, ""); }
+  catch { return null; }
 }
 
 export async function GET(request: Request) {
@@ -30,9 +28,7 @@ export async function GET(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const latestSnapshotByKeyword = new Map<string, string>();
-  for (const snapshot of snapshots ?? []) {
-    if (!latestSnapshotByKeyword.has(snapshot.keyword_id)) latestSnapshotByKeyword.set(snapshot.keyword_id, snapshot.id);
-  }
+  for (const snapshot of snapshots ?? []) if (!latestSnapshotByKeyword.has(snapshot.keyword_id)) latestSnapshotByKeyword.set(snapshot.keyword_id, snapshot.id);
   const snapshotIds = [...latestSnapshotByKeyword.values()];
   const latestQuery = snapshotIds.length
     ? await admin.from("seo_competitor_rankings").select("snapshot_id,keyword_id,domain,position,url,title,is_shalean,created_at").in("snapshot_id", snapshotIds).order("position", { ascending: true })
@@ -54,21 +50,8 @@ export async function GET(request: Request) {
   const comparisons = (keywords ?? []).map((keyword) => {
     const rows = latestRows.filter((row) => row.keyword_id === keyword.id);
     const shalean = rows.find((row) => row.is_shalean) ?? null;
-    const competitorsForKeyword = rows.filter((row) => competitorDomains.has(row.domain));
-    const leader = competitorsForKeyword[0] ?? null;
-    return {
-      keyword_id: keyword.id,
-      keyword: keyword.keyword,
-      target_path: keyword.target_path,
-      location_name: keyword.location_name,
-      device: keyword.device,
-      priority: keyword.priority,
-      shalean_position: shalean?.position ?? null,
-      shalean_url: shalean?.url ?? null,
-      best_competitor_domain: leader?.domain ?? null,
-      best_competitor_position: leader?.position ?? null,
-      gap: shalean && leader ? shalean.position - leader.position : null,
-    };
+    const leader = rows.filter((row) => competitorDomains.has(row.domain))[0] ?? null;
+    return { keyword_id: keyword.id, keyword: keyword.keyword, target_path: keyword.target_path, location_name: keyword.location_name, device: keyword.device, priority: keyword.priority, shalean_position: shalean?.position ?? null, shalean_url: shalean?.url ?? null, best_competitor_domain: leader?.domain ?? null, best_competitor_position: leader?.position ?? null, gap: shalean && leader ? shalean.position - leader.position : null };
   });
 
   const visibility = (competitors ?? []).filter((row) => row.active && !row.ignored).map((competitor) => {
@@ -80,18 +63,7 @@ export async function GET(request: Request) {
   const shaleanVisibility = shaleanRows.reduce((sum, row) => sum + Math.max(0, 101 - row.position), 0);
   const totalVisibility = shaleanVisibility + visibility.reduce((sum, row) => sum + row.visibility_score, 0);
 
-  return NextResponse.json({
-    competitors: competitors ?? [],
-    keywords: keywords ?? [],
-    latest_snapshots: snapshots ?? [],
-    comparisons,
-    suggested_competitors: [...discovery.values()].sort((a, b) => b.appearances - a.appearances || a.best_position - b.best_position).slice(0, 20),
-    visibility: {
-      shalean: { domain: "shalean.co.za", visibility_score: shaleanVisibility, share_of_voice: totalVisibility ? shaleanVisibility / totalVisibility : 0 },
-      competitors: visibility.map((row) => ({ ...row, share_of_voice: totalVisibility ? row.visibility_score / totalVisibility : 0 })),
-    },
-    provider_configured: Boolean(process.env.DATAFORSEO_LOGIN && process.env.DATAFORSEO_PASSWORD),
-  });
+  return NextResponse.json({ competitors: competitors ?? [], keywords: keywords ?? [], latest_snapshots: snapshots ?? [], comparisons, suggested_competitors: [...discovery.values()].sort((a, b) => b.appearances - a.appearances || a.best_position - b.best_position).slice(0, 20), visibility: { shalean: { domain: "shalean.co.za", visibility_score: shaleanVisibility, share_of_voice: totalVisibility ? shaleanVisibility / totalVisibility : 0 }, competitors: visibility.map((row) => ({ ...row, share_of_voice: totalVisibility ? row.visibility_score / totalVisibility : 0 })) }, provider_configured: isSerpProviderConfigured() });
 }
 
 export async function POST(request: Request) {
@@ -108,29 +80,18 @@ export async function POST(request: Request) {
     const { data, error } = await admin.from("seo_competitors").upsert({ name, domain, source: body.source === "discovered" ? "discovered" : "manual", active: true, ignored: false }, { onConflict: "domain" }).select().single();
     return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ competitor: data });
   }
-
   if (body.action === "ignore_competitor") {
     const domain = normalizeDomain(String(body.domain ?? ""));
     if (!domain) return NextResponse.json({ error: "Invalid domain." }, { status: 400 });
     const { data, error } = await admin.from("seo_competitors").upsert({ name: domain, domain, source: "discovered", active: false, ignored: true }, { onConflict: "domain" }).select().single();
     return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ competitor: data });
   }
-
   if (body.action === "add_keyword") {
     const keyword = String(body.keyword ?? "").trim();
     if (!keyword) return NextResponse.json({ error: "Keyword is required." }, { status: 400 });
-    const row = {
-      keyword,
-      target_path: String(body.target_path ?? "").trim() || null,
-      location_name: String(body.location_name ?? "Cape Town, Western Cape, South Africa").trim(),
-      language_code: "en",
-      device: body.device === "mobile" ? "mobile" : "desktop",
-      priority: ["p0", "p1", "p2"].includes(body.priority) ? body.priority : "p1",
-      active: true,
-    };
+    const row = { keyword, target_path: String(body.target_path ?? "").trim() || null, location_name: String(body.location_name ?? "Cape Town, Western Cape, South Africa").trim(), language_code: "en", device: body.device === "mobile" ? "mobile" : "desktop", priority: ["p0", "p1", "p2"].includes(body.priority) ? body.priority : "p1", active: true };
     const { data, error } = await admin.from("seo_tracked_keywords").upsert(row, { onConflict: "keyword,location_name,device" }).select().single();
     return error ? NextResponse.json({ error: error.message }, { status: 500 }) : NextResponse.json({ keyword: data });
   }
-
   return NextResponse.json({ error: "Unknown action." }, { status: 400 });
 }
