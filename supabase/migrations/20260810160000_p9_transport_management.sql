@@ -108,6 +108,12 @@ select r.id as run_id, r.total_km,
 from public.transport_runs r left join public.transport_cost_entries c on c.run_id=r.id
 group by r.id,r.total_km;
 
+create or replace view public.transport_fleet_summary with (security_invoker = true) as
+select
+  (select count(*) from public.transport_runs where status in ('planned','in_progress'))::bigint as active_runs,
+  coalesce((select sum(total_km) from public.transport_runs where status='completed'),0)::numeric as completed_km,
+  coalesce((select sum(amount_cents) from public.transport_cost_entries),0)::bigint as recorded_cost_cents;
+
 alter table public.fleet_vehicles enable row level security;
 alter table public.transport_drivers enable row level security;
 alter table public.transport_runs enable row level security;
@@ -117,5 +123,5 @@ revoke all on table public.fleet_vehicles,public.transport_drivers,public.transp
 revoke all on function public.complete_transport_run(uuid,numeric,uuid) from public,anon,authenticated;
 grant all on table public.fleet_vehicles,public.transport_drivers,public.transport_runs,public.transport_stops,public.transport_cost_entries to service_role;
 grant select on public.transport_run_cost_summary to service_role;
+grant select on public.transport_fleet_summary to service_role;
 grant execute on function public.complete_transport_run(uuid,numeric,uuid) to service_role;
-
