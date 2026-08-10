@@ -4,6 +4,10 @@ import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { PayoutGenerationBlockedError } from "@/lib/payout/backfillLegacyWeeklyPayoutColumns";
 import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
+import {
+  prepareDraftRunPayoutsForCatchUp,
+  restoreDraftRunPayoutsAfterCatchUp,
+} from "@/lib/payout/runs/reconcileDraftRunLateEarnings";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -11,6 +15,13 @@ export const dynamic = "force-dynamic";
 
 /**
  * Admin manual trigger for monthly payout generation (catch-up: all unbatched completion months from July 2026).
+ *
+ * Late-earnings reconciliation: frozen cleaner payouts that are still inside a
+ * DRAFT payout run are temporarily re-opened while this same payout-generation
+ * lock is held. The normal generator can then append newly eligible earnings to
+ * the canonical cleaner/period payout. In a finally block the payout is restored
+ * to its original draft run and the run total is recomputed. Approved/paid runs
+ * are never re-opened.
  *
  * M-18: shares the same H-15 cron lease (`CRON_LOCK_KEYS.generatePayouts`) as
  * `/api/cron/generate-payouts`, so an admin replay cannot race the scheduled
@@ -30,7 +41,19 @@ export async function POST(request: Request) {
     const lockResult = await withCronLock(
       admin,
       { jobName: CRON_LOCK_KEYS.generatePayouts, leaseSeconds: 900 },
-      () => generateCatchUpWeeklyPayouts(admin, { createdBy: auth.userId }),
+      async () => {
+        const prep = await prepareDraftRunPayoutsForCatchUp(admin);
+        try {
+          const generated = await generateCatchUpWeeklyPayouts(admin, { createdBy: auth.userId });
+          return {
+            ...generated,
+            lateEarningsReconciledPayouts: prep.payouts.length,
+            lateEarningsReconciledRuns: prep.runIds.length,
+          };
+        } finally {
+          await restoreDraftRunPayoutsAfterCatchUp(admin, prep);
+        }
+      },
     );
     if (lockResult.skipped) {
       return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
