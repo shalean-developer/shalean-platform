@@ -15,9 +15,9 @@ async function handle(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error:"Supabase admin not configured." },{ status:503 });
   try {
-    const lock = await withCronLock(admin,{ jobName:CRON_LOCK_KEYS.seoIndexing,leaseSeconds:7200 },()=>runIndexingSync(admin,400));
-    if (lock.skipped) return NextResponse.json({ ok:true,skipped:true,reason:lock.reason });
-    const result = lock.ranIt;
+    const lockResult = await withCronLock(admin,{ jobName:CRON_LOCK_KEYS.seoIndexing,leaseSeconds:7200 },()=>runIndexingSync(admin,400));
+    if (lockResult.skipped) return NextResponse.json({ ok:true,skipped:true,reason:lockResult.reason });
+    const result = lockResult.ranIt;
     await logCronRun({ jobName:"seo-indexing",status:result.ok?"success":"error",message:result.ok?"SEO indexing inspection completed.":"SEO indexing inspection completed with errors.",context:result });
     return NextResponse.json(result,{ status:result.ok?200:502 });
   } catch (error) {
