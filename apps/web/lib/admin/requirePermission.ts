@@ -132,6 +132,39 @@ async function recordAuditedPermissionAccess(
   return true;
 }
 
+async function recordPermissionDenial(
+  adminClient: AuditInsertClient,
+  request: Request,
+  userId: string,
+  permissions: readonly AdminPermission[],
+  scope: PermissionScope,
+): Promise<void> {
+  const url = new URL(request.url);
+  const { error } = await adminClient.from("admin_audit_events").insert({
+    actor_user_id: userId,
+    event_type: "authorization_denied",
+    target_type: "admin_route",
+    target_id: url.pathname,
+    permission_code: permissions[0] ?? null,
+    reason: "No requested permission resolved in scope",
+    old_value: null,
+    new_value: null,
+    metadata: {
+      method: request.method.toUpperCase(),
+      required_any_permission: permissions,
+      branch_id: scope.branchId ?? null,
+      team_id: scope.teamId ?? null,
+    },
+  });
+  if (error) {
+    console.error("Admin authorization denial audit failed", {
+      userId,
+      path: url.pathname,
+      code: error.code,
+    });
+  }
+}
+
 export async function requireAdminPermissionFromRequest(
   request: Request,
   permission: AdminPermission,
@@ -203,6 +236,8 @@ export async function requireAnyAdminPermissionFromRequest(
       return { ok: true, user, email: user.email, permission };
     }
   }
+
+  await recordPermissionDenial(clients.adminClient as unknown as AuditInsertClient, request, user.id, permissions, scope);
 
   return {
     ok: false,
