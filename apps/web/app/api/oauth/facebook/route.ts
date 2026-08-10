@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getCookieUser } from "@/lib/auth/getCookieUser";
 import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
-import { isProviderFeatureEnabled } from "@/lib/promotions/providers/registry";
 import {
   FACEBOOK_OAUTH_PURPOSE_COOKIE,
   FACEBOOK_OAUTH_STATE_COOKIE,
@@ -34,6 +33,11 @@ export const dynamic = "force-dynamic";
  *
  * Login for Business `config_id` is required — classic scope-only authorize URLs
  * are rejected before redirect (Meta returns "config_id is required" otherwise).
+ *
+ * Connection is intentionally independent from MARKETING_PROVIDER_* publish flags.
+ * Publish remains fail-closed in the provider registry; allowing OAuth here lets
+ * operators establish and verify encrypted connected accounts before publishing
+ * is promoted.
  */
 export async function GET(request: Request) {
   const purpose = parseFacebookLoginPurpose(new URL(request.url).searchParams.get("purpose"));
@@ -78,28 +82,6 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!isProviderFeatureEnabled("facebook")) {
-    const msg =
-      "Facebook is disabled by feature flag (MARKETING_PROVIDER_FACEBOOK). Enable it before connecting.";
-    if (wantsJson) {
-      return NextResponse.json({ error: msg, configured: true, providerEnabled: false }, { status: 403 });
-    }
-    return NextResponse.redirect(
-      marketingConnectedAccountsUrl({ error: "provider_disabled" }, origin),
-    );
-  }
-
-  if (purpose === "instagram" && !isProviderFeatureEnabled("instagram")) {
-    const msg =
-      "Instagram is disabled by feature flag (MARKETING_PROVIDER_INSTAGRAM). Enable it before connecting.";
-    if (wantsJson) {
-      return NextResponse.json({ error: msg, configured: true, providerEnabled: false }, { status: 403 });
-    }
-    return NextResponse.redirect(
-      marketingConnectedAccountsUrl({ error: "provider_disabled" }, origin),
-    );
-  }
-
   const authHeader = request.headers.get("authorization");
   let actor = "unknown";
   if (authHeader) {
@@ -116,7 +98,6 @@ export async function GET(request: Request) {
   }
 
   const state = createOAuthState();
-  // Preview/production on Vercel always serve HTTPS — never leave Secure unset there.
   const secureCookie =
     process.env.VERCEL === "1" || process.env.NODE_ENV === "production";
   const cookieOpts = {
@@ -131,7 +112,6 @@ export async function GET(request: Request) {
   const redacted = redactFacebookAuthUrl(url);
   const identity = getFacebookOAuthIdentity(purpose);
 
-  // Guard: never redirect a classic-scope URL when Login for Business is required.
   if (!redacted.hasConfigId || redacted.hasScope || redacted.incompatibleLoginForBusinessCombo) {
     logFacebookOAuthEvent("oauth_blocked_invalid_authorize_shape", {
       correlationId,
@@ -178,8 +158,6 @@ export async function GET(request: Request) {
   });
 
   if (authHeader) {
-    // JSON path: set cookies on the JSON response so a subsequent full navigation
-    // is not required for CSRF — callers should still prefer assign() to the start URL.
     const json = NextResponse.json({
       url,
       configured: true,
@@ -195,9 +173,6 @@ export async function GET(request: Request) {
     return json;
   }
 
-  // Attach OAuth cookies to the redirect response itself. Relying only on
-  // cookies() from next/headers has dropped Set-Cookie on some Vercel redirects
-  // (callback then reports hasStateCookie=false / correlationId=fb-oauth-unknown).
   const redirect = NextResponse.redirect(url);
   redirect.cookies.set(FACEBOOK_OAUTH_STATE_COOKIE, hashOAuthState(state), cookieOpts);
   redirect.cookies.set("fb_oauth_cid", correlationId, cookieOpts);
