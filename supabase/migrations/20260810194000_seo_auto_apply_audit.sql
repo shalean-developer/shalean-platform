@@ -22,7 +22,18 @@ language plpgsql
 security definer
 set search_path = public
 as $$
+declare
+  audit_slug text;
+  audit_source text;
 begin
+  if tg_op = 'DELETE' then
+    audit_slug := old.slug;
+    audit_source := coalesce(old.source, 'optimizer');
+  else
+    audit_slug := new.slug;
+    audit_source := coalesce(new.source, 'optimizer');
+  end if;
+
   insert into public.seo_auto_apply_audit (
     target_table,
     slug,
@@ -32,13 +43,17 @@ begin
     source
   ) values (
     tg_table_name,
-    coalesce(new.slug, old.slug),
+    audit_slug,
     tg_op,
     case when tg_op in ('UPDATE','DELETE') then to_jsonb(old) else null end,
     case when tg_op in ('INSERT','UPDATE') then to_jsonb(new) else null end,
-    coalesce(new.source, old.source, 'optimizer')
+    audit_source
   );
-  return coalesce(new, old);
+
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  return new;
 end;
 $$;
 
