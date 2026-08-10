@@ -41,6 +41,7 @@ const HTTP_JOBS = [
   ["retry-failed-jobs", "* * * * *", "/api/cron/retry-failed-jobs"],
   ["whatsapp-worker", "* * * * *", "/api/cron/whatsapp-worker"],
   ["booking-lifecycle", "*/15 * * * *", "/api/cron/booking-lifecycle"],
+  ["review-prompts", "*/10 * * * *", "/api/cron/review-prompts"],
   ["payment-recovery", "*/15 * * * *", "/api/cron/payment-recovery"],
   ["assignment-ack-timeout", "*/5 * * * *", "/api/cron/assignment-ack-timeout"],
   ["notification-health", "*/10 * * * *", "/api/cron/notification-health"],

@@ -34,10 +34,7 @@ export function buildReviewPromptSmsBody(params: {
 }): string {
   const link = `${getPublicAppUrlBase()}/review?booking=${encodeURIComponent(params.bookingId)}`;
   const google = getGoogleReviewWriteUrl();
-  const googleLine =
-    google != null
-      ? `\nGoogle review (helps others find us):\n${google}`
-      : "";
+  const googleLine = google != null ? `\nGoogle review (helps others find us):\n${google}` : "";
   if (params.kind === "reminder") {
     return `Hi ${params.firstName}, quick reminder — we'd love your feedback on your Shalean clean:\n${link}${googleLine}`;
   }
@@ -135,10 +132,14 @@ export type ProcessReviewSmsPromptQueueResult = {
   firstSent: number;
   remindersSent: number;
   skipped: number;
+  policyBlockedReason?: string;
 };
 
 /**
  * Cron worker: first SMS after `first_due_at`, one reminder after `reminder_due_at` if still no review.
+ *
+ * If customer SMS is disabled by communication policy, queued prompts are preserved.
+ * Policy changes must never destroy deferred work or make the queue look healthy by emptying it.
  */
 export async function processReviewSmsPromptQueue(
   supabase: SupabaseClient,
@@ -146,8 +147,12 @@ export async function processReviewSmsPromptQueue(
 ): Promise<ProcessReviewSmsPromptQueueResult> {
   const smsDecision = getSmsOutboundDecision("customer");
   if (!smsDecision.allowed) {
-    await supabase.from("review_sms_prompt_queue").delete().not("booking_id", "is", null);
-    return { firstSent: 0, remindersSent: 0, skipped: 0 };
+    return {
+      firstSent: 0,
+      remindersSent: 0,
+      skipped: 0,
+      policyBlockedReason: smsDecision.reason,
+    };
   }
 
   const limit = opts?.limit ?? 25;
