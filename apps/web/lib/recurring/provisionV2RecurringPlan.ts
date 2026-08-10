@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { calculateNextRunDate } from "@/lib/recurring/calculateNextRunDate";
 
 /**
  * Day-name → ISO weekday integer (Mon=1 … Sun=7).
@@ -37,18 +38,6 @@ function mapFrequency(raw: string): "weekly" | "biweekly" | "monthly" | null {
   return null;
 }
 
-/**
- * Returns the next occurrence date after `startYmd` for the given frequency.
- * Format: "YYYY-MM-DD".
- */
-function nextRunDate(startYmd: string, freq: "weekly" | "biweekly" | "monthly"): string {
-  const d = new Date(`${startYmd}T12:00:00Z`);
-  if (freq === "weekly") d.setUTCDate(d.getUTCDate() + 7);
-  else if (freq === "biweekly") d.setUTCDate(d.getUTCDate() + 14);
-  else d.setUTCMonth(d.getUTCMonth() + 1);
-  return d.toISOString().slice(0, 10);
-}
-
 export type ProvisionV2RecurringPlanParams = {
   bookingId: string;
   customerId: string;
@@ -73,9 +62,31 @@ export type ProvisionV2RecurringPlanResult =
   | { ok: true; planId: string; alreadyExists?: true }
   | { ok: false; error: string };
 
+async function linkSourceBookingToPlan(
+  admin: SupabaseClient,
+  bookingId: string,
+  customerId: string,
+  planId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { data, error } = await admin
+    .from("bookings")
+    .update({ recurring_id: planId })
+    .eq("id", bookingId)
+    .eq("customer_id", customerId)
+    .select("id")
+    .maybeSingle();
+
+  if (error) return { ok: false, error: error.message };
+  if (!data) return { ok: false, error: "source_booking_not_found" };
+  return { ok: true };
+}
+
 /**
  * Creates a `recurring_bookings` plan row from a paid booking-v2 recurring booking.
- * Idempotent: if a plan for this booking already exists (via `source_booking_id`) it returns ok.
+ *
+ * The paid checkout booking is the first occurrence of the plan. It must be linked
+ * to `bookings.recurring_id` immediately so the recurring generator sees that
+ * start-date occurrence as already present and does not create a second unpaid row.
  */
 export async function provisionV2RecurringPlan(
   admin: SupabaseClient,
@@ -88,32 +99,38 @@ export async function provisionV2RecurringPlan(
     return { ok: false, error: `unsupported_frequency:${recurringFrequency}` };
   }
 
-  // Map day names to int[]
   const daysOfWeek = recurringDays
     .map(parseDayName)
     .filter((n): n is number => n !== null);
 
-  // Fall back to the weekday of startDate if no days provided
   if (daysOfWeek.length === 0) {
     const dow = new Date(`${startDate}T12:00:00Z`).getUTCDay();
-    // ISO weekday: 0=Sun → 7, 1=Mon → 1, …
     daysOfWeek.push(dow === 0 ? 7 : dow);
   }
 
-  // Idempotency: check if we already provisioned a plan from this booking
-  const { data: existing } = await admin
-    .from("recurring_bookings")
-    .select("id")
+  // True idempotency source: the paid booking itself already points at a recurring plan.
+  const { data: sourceBooking, error: sourceBookingErr } = await admin
+    .from("bookings")
+    .select("recurring_id")
+    .eq("id", bookingId)
     .eq("customer_id", customerId)
-    .eq("source_booking_id" as string, bookingId)
     .maybeSingle();
 
-  if (existing && typeof (existing as { id?: string }).id === "string") {
-    return { ok: true, planId: (existing as { id: string }).id, alreadyExists: true };
+  if (sourceBookingErr) {
+    return { ok: false, error: `source_booking_lookup_failed:${sourceBookingErr.message}` };
   }
 
-  // Also guard: same customer + startDate + service + frequency already has a plan
-  const { data: dupPlan } = await admin
+  const existingPlanId =
+    sourceBooking && typeof (sourceBooking as { recurring_id?: string | null }).recurring_id === "string"
+      ? (sourceBooking as { recurring_id: string }).recurring_id
+      : null;
+
+  if (existingPlanId) {
+    return { ok: true, planId: existingPlanId, alreadyExists: true };
+  }
+
+  // Guard retries/races where a matching plan exists but the source booking was not linked yet.
+  const { data: dupPlan, error: dupPlanErr } = await admin
     .from("recurring_bookings")
     .select("id")
     .eq("customer_id", customerId)
@@ -121,16 +138,31 @@ export async function provisionV2RecurringPlan(
     .eq("frequency", frequency)
     .maybeSingle();
 
+  if (dupPlanErr) {
+    return { ok: false, error: `recurring_plan_lookup_failed:${dupPlanErr.message}` };
+  }
+
   if (dupPlan && typeof (dupPlan as { id?: string }).id === "string") {
-    return { ok: true, planId: (dupPlan as { id: string }).id, alreadyExists: true };
+    const planId = (dupPlan as { id: string }).id;
+    const linked = await linkSourceBookingToPlan(admin, bookingId, customerId, planId);
+    if (!linked.ok) return { ok: false, error: `source_booking_link_failed:${linked.error}` };
+    return { ok: true, planId, alreadyExists: true };
   }
 
   const durationHours = Math.max(1, Math.round((params.durationMinutes / 60) * 10) / 10);
-  const nextRun = nextRunDate(startDate, frequency);
+  const monthlyPattern = "mirror_start_date" as const;
+  const nextRun = calculateNextRunDate(
+    {
+      frequency,
+      days_of_week: daysOfWeek,
+      start_date: startDate,
+      end_date: params.endDate ?? null,
+      monthly_pattern: monthlyPattern,
+      monthly_nth: null,
+    },
+    startDate,
+  );
 
-  // Build a minimal BookingSnapshotV1-compatible template (locked sub-object).
-  // parseLockedBookingFromUnknown requires: locked=true, finalPrice, finalHours,
-  // time, lockedAt, rooms, bathrooms, extras, date.
   const bookingSnapshotTemplate = {
     v: 1,
     locked: {
@@ -171,7 +203,7 @@ export async function provisionV2RecurringPlan(
       status: "active",
       next_run_date: nextRun,
       booking_snapshot_template: bookingSnapshotTemplate,
-      monthly_pattern: "mirror_start_date",
+      monthly_pattern: monthlyPattern,
       ...(params.preferredCleanerIds?.[0] ? { preferred_cleaner_id: params.preferredCleanerIds[0] } : {}),
     })
     .select("id")
@@ -181,20 +213,29 @@ export async function provisionV2RecurringPlan(
     return { ok: false, error: insertErr?.message ?? "insert_failed" };
   }
 
+  const planId = (plan as { id: string }).id;
+  const linked = await linkSourceBookingToPlan(admin, bookingId, customerId, planId);
+  if (!linked.ok) {
+    // Prevent an orphan active plan from generating a duplicate first occurrence.
+    await admin.from("recurring_bookings").delete().eq("id", planId);
+    return { ok: false, error: `source_booking_link_failed:${linked.error}` };
+  }
+
   await logSystemEvent({
     level: "info",
     source: "recurring/provision",
     message: "recurring_plan_provisioned_from_v2_booking",
     context: {
-      planId: (plan as { id: string }).id,
+      planId,
       bookingId,
       customerId,
       frequency,
       daysOfWeek,
       startDate,
       nextRun,
+      firstOccurrenceLinked: true,
     },
   });
 
-  return { ok: true, planId: (plan as { id: string }).id };
+  return { ok: true, planId };
 }
