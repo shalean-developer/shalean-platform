@@ -76,11 +76,26 @@ function isPrivatePath(pathname: string): boolean {
   ].some((prefix) => pathname === prefix || pathname.startsWith(prefix));
 }
 
+function resolveGscPropertyHostname(siteUrl: string): string | null {
+  const value = siteUrl.trim();
+  if (value.startsWith("sc-domain:")) {
+    const hostname = value.slice("sc-domain:".length).trim().toLowerCase().replace(/^www\./, "");
+    return hostname || null;
+  }
+  try {
+    return new URL(value).hostname.toLowerCase().replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
+
 export function classifyGscPageUrl(pageUrl: string, siteUrl: string): SiteGscPageGroup | null {
   try {
     const page = new URL(pageUrl);
-    const site = new URL(siteUrl);
-    if (page.hostname !== site.hostname) return null;
+    const expectedHostname = resolveGscPropertyHostname(siteUrl);
+    if (!expectedHostname) return null;
+    const pageHostname = page.hostname.toLowerCase().replace(/^www\./, "");
+    if (pageHostname !== expectedHostname) return null;
 
     const pathname = page.pathname.replace(/\/+$/, "") || "/";
     if (isPrivatePath(pathname)) return null;
