@@ -18,6 +18,11 @@ type CronPayload = { jobs?: CronJob[] };
 type MyWorkCategory = "all" | "operations" | "finance" | "workforce" | "customer-care" | "marketing" | "system-health";
 
 const VALID_CATEGORIES = new Set<MyWorkCategory>(["all", "operations", "finance", "workforce", "customer-care", "marketing", "system-health"]);
+const DEFAULT_CRON_STALE_AFTER_MS = 30 * 60_000;
+const CRON_STALE_AFTER_MS: Readonly<Record<string, number>> = {
+  "charge-monthly-invoices": 26 * 60 * 60_000,
+  "payout-integrity-daily": 26 * 60 * 60_000,
+};
 
 async function jsonFrom<T>(response: Response): Promise<T | null> { if (!response.ok) return null; try { return (await response.json()) as T; } catch { return null; } }
 function derivedRequest(request: Request, pathname: string, search = ""): Request { const url = new URL(request.url); url.pathname = pathname; url.search = search; return new Request(url, { method: "GET", headers: request.headers, cache: "no-store" }); }
@@ -40,6 +45,16 @@ export function bookingNeedsAllocationWork(row: BookingRow, nearTermEnd: string)
   return !row.date || row.date <= nearTermEnd;
 }
 
+export function cronStaleAfterMs(jobName: string): number {
+  return CRON_STALE_AFTER_MS[jobName] ?? DEFAULT_CRON_STALE_AFTER_MS;
+}
+
+export function cronJobIsStale(job: CronJob, now = Date.now()): boolean {
+  if (!job.job_name) return false;
+  const last = job.last_success_at ? Date.parse(job.last_success_at) : Number.NaN;
+  return !Number.isFinite(last) || now - last > cronStaleAfterMs(job.job_name);
+}
+
 function bookingItems(rows: BookingRow[], permissions: ReadonlySet<string>): OfficeWorkItem[] {
   if (!permissions.has("booking.assign")) return [];
   const today = todayJohannesburg();
@@ -60,8 +75,7 @@ function cronItems(jobs: CronJob[], permissions: ReadonlySet<string>): OfficeWor
   const now = Date.now();
   return jobs.flatMap((job) => {
     if (!job.job_name) return [];
-    const last = job.last_success_at ? Date.parse(job.last_success_at) : 0;
-    const stale = !last || now - last > 30 * 60_000;
+    const stale = cronJobIsStale(job, now);
     const failed = job.last_run_status === "error";
     if (!stale && !failed) return [];
     return [{ id: `system.cron:${job.job_name}`, type: "system.cron", title: failed ? `${job.job_name} failed` : `${job.job_name} is stale`, summary: job.last_run_message || "The scheduled process needs operational review.", priority: failed ? "critical" : "high", status: failed ? "blocked" : "overdue", href: "/office/ops-health", actionLabel: "Review system health", requiredPermission: "ops.health.view", occurredAt: job.last_run_at ?? null, dueAt: null, branchId: null, teamId: null } satisfies OfficeWorkItem];
