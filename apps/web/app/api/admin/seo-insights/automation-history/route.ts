@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SEO_JOBS = ["gsc-sync", "seo-optimization", "sitemap-health"] as const;
+const SEO_JOBS = ["gsc-sync", "seo-optimization", "sitemap-health", "robots-health"] as const;
 type SeoJob = (typeof SEO_JOBS)[number];
 
 type CronLogRow = {
@@ -37,11 +37,7 @@ function normalizeRun(row: CronLogRow) {
     const querySaved = asNumber(context.query_rows_saved) ?? 0;
     const siteSaved = asNumber(context.site_rows_saved) ?? 0;
     return {
-      id: row.id,
-      job,
-      status,
-      created_at: row.created_at,
-      detail,
+      id: row.id, job, status, created_at: row.created_at, detail,
       metrics: {
         rows_processed: locationSaved + querySaved + siteSaved,
         location_rows_saved: locationSaved,
@@ -51,22 +47,25 @@ function normalizeRun(row: CronLogRow) {
         query_rows_fetched: asNumber(context.query_rows_fetched),
         site_rows_fetched: asNumber(context.site_rows_fetched),
       },
-      errors: [context.location_error, context.query_error, context.site_error, context.error]
-        .map(asString)
-        .filter((value): value is string => Boolean(value)),
+      errors: [context.location_error, context.query_error, context.site_error, context.error].map(asString).filter((value): value is string => Boolean(value)),
     };
   }
 
   if (job === "sitemap-health") {
     return {
-      id: row.id,
-      job,
-      status,
-      created_at: row.created_at,
-      detail,
+      id: row.id, job, status, created_at: row.created_at, detail,
+      metrics: { http_status: asNumber(context.http_status), url_count: asNumber(context.url_count) },
+      errors: [context.error].map(asString).filter((value): value is string => Boolean(value)),
+    };
+  }
+
+  if (job === "robots-health") {
+    return {
+      id: row.id, job, status, created_at: row.created_at, detail,
       metrics: {
         http_status: asNumber(context.http_status),
-        url_count: asNumber(context.url_count),
+        allow_count: asNumber(context.allow_count),
+        disallow_count: asNumber(context.disallow_count),
       },
       errors: [context.error].map(asString).filter((value): value is string => Boolean(value)),
     };
@@ -76,11 +75,7 @@ function normalizeRun(row: CronLogRow) {
   const titleApplied = asNumber(context.titleVariantsUpserted) ?? 0;
   const hubApplied = asNumber(context.hubPatchesUpserted) ?? 0;
   return {
-    id: row.id,
-    job,
-    status,
-    created_at: row.created_at,
-    detail,
+    id: row.id, job, status, created_at: row.created_at, detail,
     metrics: {
       rows_processed: asNumber(context.rows_loaded) ?? 0,
       recommendations_created: recommendations,
@@ -110,19 +105,10 @@ export async function GET(request: Request) {
     .order("created_at", { ascending: false })
     .limit(50);
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
-  }
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   const runs = ((data ?? []) as CronLogRow[]).map(normalizeRun).filter(Boolean);
-  const latestByJob = Object.fromEntries(
-    SEO_JOBS.map((job) => [job, runs.find((run) => run?.job === job) ?? null]),
-  );
+  const latestByJob = Object.fromEntries(SEO_JOBS.map((job) => [job, runs.find((run) => run?.job === job) ?? null]));
 
-  return NextResponse.json({
-    jobs: SEO_JOBS,
-    latest_by_job: latestByJob,
-    runs,
-    run_count: runs.length,
-  });
+  return NextResponse.json({ jobs: SEO_JOBS, latest_by_job: latestByJob, runs, run_count: runs.length });
 }
