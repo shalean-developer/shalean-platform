@@ -1,6 +1,10 @@
 /**
  * MKT-001H — Sanitize Facebook OAuth / connect failures for browser redirects.
  * Pure module (no secrets, no I/O, no server-only) so client UI can map reason → copy.
+ *
+ * Shared provider failures are deliberately namespaced with `facebook_` so Google
+ * Business callback reasons (for example `rate_limited`) can never be rendered with
+ * Facebook-specific copy by Connected Accounts.
  */
 
 export type FacebookSaveErrorReason =
@@ -13,11 +17,11 @@ export type FacebookSaveErrorReason =
   | "provider_disabled"
   | "no_pages"
   | "no_eligible_pages"
-  | "permission_denied"
-  | "token_revoked"
-  | "rate_limited"
-  | "provider_unavailable"
-  | "save_failed";
+  | "facebook_permission_denied"
+  | "facebook_token_revoked"
+  | "facebook_rate_limited"
+  | "facebook_provider_unavailable"
+  | "facebook_save_failed";
 
 export const FACEBOOK_SAVE_ERROR_MESSAGES: Record<FacebookSaveErrorReason, string> = {
   oauth_denied: "Facebook connection was cancelled or denied.",
@@ -35,12 +39,12 @@ export const FACEBOOK_SAVE_ERROR_MESSAGES: Record<FacebookSaveErrorReason, strin
   no_pages: "Connected to Facebook, but no Pages were found for this account. Confirm you manage a Page, then reconnect.",
   no_eligible_pages:
     "Connected to Facebook, but none of the discovered Pages grant publish permission (CREATE_CONTENT or MANAGE).",
-  permission_denied:
+  facebook_permission_denied:
     "Connected to Facebook, but required Page permissions were not granted. Reconnect and approve pages_show_list, pages_read_engagement, and pages_manage_posts.",
-  token_revoked: "Facebook access was revoked or expired. Reconnect Facebook from Connected Accounts.",
-  rate_limited: "Facebook is rate-limiting requests. Wait a minute, then reconnect.",
-  provider_unavailable: "Facebook is temporarily unavailable. Try again shortly.",
-  save_failed: "Connected to Facebook but saving the account failed.",
+  facebook_token_revoked: "Facebook access was revoked or expired. Reconnect Facebook from Connected Accounts.",
+  facebook_rate_limited: "Facebook is rate-limiting requests. Wait a minute, then reconnect.",
+  facebook_provider_unavailable: "Facebook is temporarily unavailable. Try again shortly.",
+  facebook_save_failed: "Connected to Facebook but saving the account failed.",
 };
 
 /** Safe callback stage labels for redacted runtime logs (never includes secrets). */
@@ -83,7 +87,7 @@ export function classifyFacebookSaveError(
 ): { reason: FacebookSaveErrorReason; message: string } {
   const text = typeof rawError === "string" ? rawError : "";
 
-  let reason: FacebookSaveErrorReason = "save_failed";
+  let reason: FacebookSaveErrorReason = "facebook_save_failed";
   if (ENCRYPTION_MISSING.test(text)) {
     reason = "encryption_not_configured";
   } else if (CREDENTIAL_MISMATCH.test(text)) {
@@ -95,13 +99,13 @@ export function classifyFacebookSaveError(
   } else if (NO_PAGES.test(text)) {
     reason = "no_pages";
   } else if (status === 429 || RATE_LIMITED.test(text)) {
-    reason = "rate_limited";
+    reason = "facebook_rate_limited";
   } else if (status === 401 || TOKEN_REVOKED.test(text)) {
-    reason = "token_revoked";
+    reason = "facebook_token_revoked";
   } else if (status === 403 || PERMISSION_DENIED.test(text)) {
-    reason = "permission_denied";
+    reason = "facebook_permission_denied";
   } else if ((typeof status === "number" && status >= 500) || PROVIDER_UNAVAILABLE.test(text)) {
-    reason = "provider_unavailable";
+    reason = "facebook_provider_unavailable";
   }
 
   return { reason, message: FACEBOOK_SAVE_ERROR_MESSAGES[reason] };
