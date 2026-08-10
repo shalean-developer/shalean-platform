@@ -9,6 +9,13 @@ export const dynamic = "force-dynamic";
 
 const WINDOW_MS = 24 * 60 * 60 * 1000;
 
+function renderTemplateBody(templateBody: string, bodyParams: readonly string[]): string {
+  return templateBody.replace(/\{\{(\d+)\}\}/g, (_match, index: string) => {
+    const value = bodyParams[Number(index) - 1];
+    return value ?? `{{${index}}}`;
+  });
+}
+
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -33,11 +40,16 @@ export async function GET(request: Request) {
     const payload = row.payload && typeof row.payload === "object" && !Array.isArray(row.payload)
       ? row.payload as Record<string, unknown>
       : {};
-    const body =
+    const rawBody =
       typeof payload.body === "string" ? payload.body
         : typeof payload.text === "string" ? payload.text
           : typeof payload.message === "string" ? payload.message
             : "";
+    const bodyParams = Array.isArray(payload.body_params) ? payload.body_params.map((value) => String(value)) : [];
+    const templateBody = typeof payload.template_body === "string" ? payload.template_body : rawBody;
+    const body = bodyParams.length > 0 && /\{\{\d+\}\}/.test(templateBody)
+      ? renderTemplateBody(templateBody, bodyParams)
+      : rawBody;
     return {
       id: row.id,
       provider: row.provider,
@@ -59,8 +71,6 @@ export async function GET(request: Request) {
     contactPhones.map((phone) => [phone, { name: null, bookingId: null, bookingReference: null }]),
   );
 
-  // Resolve customer identities in one booking query rather than one query per conversation.
-  // This endpoint is polled by the live inbox, so avoiding an N+1 lookup is important.
   const variantOwner = new Map<string, string>();
   const allVariants = new Set<string>();
   for (const phone of contactPhones) {

@@ -13,6 +13,13 @@ function normalizePhone(value: unknown): string {
   return String(value ?? "").replace(/\D/g, "");
 }
 
+function renderTemplateBody(templateBody: string, bodyParams: readonly string[]): string {
+  return templateBody.replace(/\{\{(\d+)\}\}/g, (_match, index: string) => {
+    const value = bodyParams[Number(index) - 1];
+    return value ?? `{{${index}}}`;
+  });
+}
+
 export async function POST(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
@@ -64,9 +71,9 @@ export async function POST(request: Request) {
       item.sendReady && item.audience === "customer" && (item.metaTemplateName === templateName || item.key === templateName),
     );
     if (!template) return NextResponse.json({ error: "Select an approved customer WhatsApp template." }, { status: 400 });
-    const bodyParams = Array.isArray(body?.bodyParams) ? body!.bodyParams.map(String) : [];
-    if (bodyParams.length !== template.variables.length) {
-      return NextResponse.json({ error: `Template requires ${template.variables.length} body parameter(s).` }, { status: 400 });
+    const bodyParams = Array.isArray(body?.bodyParams) ? body!.bodyParams.map((value) => String(value).trim()) : [];
+    if (bodyParams.length !== template.variables.length || bodyParams.some((value) => !value)) {
+      return NextResponse.json({ error: `Template requires ${template.variables.length} completed body parameter(s).` }, { status: 400 });
     }
     result = await provider.sendTemplate({
       phone,
@@ -75,7 +82,13 @@ export async function POST(request: Request) {
       bodyParams,
       recipientRole: "customer",
     });
-    payload = { kind: "template", body: template.body, template_name: template.metaTemplateName, body_params: bodyParams };
+    payload = {
+      kind: "template",
+      body: renderTemplateBody(template.body, bodyParams),
+      template_body: template.body,
+      template_name: template.metaTemplateName,
+      body_params: bodyParams,
+    };
   }
 
   if (!result.ok) return NextResponse.json({ error: result.error ?? "WhatsApp send failed." }, { status: 502 });
