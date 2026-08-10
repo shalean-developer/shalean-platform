@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAnyAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
+import { requireAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -35,7 +35,7 @@ async function activeSupervisorRole(admin: NonNullable<ReturnType<typeof getSupa
 }
 
 export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireAnyAdminPermissionFromRequest(request, ["cleaner.edit", "role.manage"]);
+  const auth = await requireAdminPermissionFromRequest(request, "role.manage");
   if (!auth.ok) return auth.response;
   const { id } = await context.params;
   if (!UUID_RE.test(id)) return NextResponse.json({ error: "Invalid cleaner id." }, { status: 400 });
@@ -50,7 +50,7 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
 }
 
 export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
-  const auth = await requireAnyAdminPermissionFromRequest(request, ["cleaner.edit", "role.manage"]);
+  const auth = await requireAdminPermissionFromRequest(request, "role.manage");
   if (!auth.ok) return auth.response;
   const { id } = await context.params;
   if (!UUID_RE.test(id)) return NextResponse.json({ error: "Invalid cleaner id." }, { status: 400 });
@@ -74,12 +74,13 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
   const { data: primaryConflict } = await admin.from("cleaners").select("id,full_name").eq("auth_user_id", authLookup.user.id).neq("id", id).maybeSingle();
   if (primaryConflict) return NextResponse.json({ error: `That login already belongs to ${primaryConflict.full_name}.` }, { status: 409 });
 
-  const { error } = await admin.from("cleaner_auth_links").upsert({ cleaner_id: id, auth_user_id: authLookup.user.id, link_type: "supervisor", is_active: true, linked_by: auth.user.id, reason }, { onConflict: "cleaner_id,auth_user_id" });
+  const { error } = await admin.rpc("admin_link_supervisor_cleaner", {
+    p_cleaner_id: id,
+    p_auth_user_id: authLookup.user.id,
+    p_actor_id: auth.user.id,
+    p_email: email,
+    p_reason: reason,
+  });
   if (error) return NextResponse.json({ error: error.code === "23505" ? "That login is linked to another cleaner." : error.message }, { status: error.code === "23505" ? 409 : 500 });
-  await Promise.all([
-    admin.from("user_profiles").upsert({ id: authLookup.user.id, role: "admin", updated_at: new Date().toISOString() }, { onConflict: "id" }),
-    admin.from("admin_audit_events").insert({ actor_user_id: auth.user.id, event_type: "cleaner_auth_linked", target_type: "cleaner", target_id: id, permission_code: auth.permission, reason, old_value: null, new_value: { auth_user_id: authLookup.user.id, email }, metadata: { link_type: "supervisor" } }),
-  ]);
   return NextResponse.json({ ok: true, cleanerId: id, authUserId: authLookup.user.id, email });
 }
-
