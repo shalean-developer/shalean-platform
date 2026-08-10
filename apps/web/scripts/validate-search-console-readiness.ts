@@ -3,8 +3,8 @@
  *
  * `npm run validate:search-console-readiness`
  *
- * Checks live HTML for `<meta name="google-site-verification">` and sitemap in robots.txt.
- * Set `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION` on Vercel when this fails.
+ * Checks live HTML, robots.txt, and explicit Search Console verification configuration.
+ * Production CI should run this with REQUIRE_GSC_VERIFICATION=1.
  */
 
 import {
@@ -13,6 +13,7 @@ import {
   fetchWithNoRedirect,
   resolveAuditBaseUrl,
 } from "@/lib/seo/liveSeoCrawl";
+import { evaluateGscVerificationReadiness } from "@/lib/seo/search-console-readiness";
 
 const baseEnv = resolveAuditBaseUrl(process.env.AUDIT_BASE_URL);
 const requireVerification = process.env.REQUIRE_GSC_VERIFICATION === "1";
@@ -28,16 +29,24 @@ async function main(): Promise<void> {
   }
 
   const token = extractGoogleSiteVerificationToken(home.body);
-  if (!token) {
-    const msg =
-      "Missing google-site-verification meta tag on homepage. Set NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION in Vercel (or verify via DNS in Search Console).";
+  const readiness = evaluateGscVerificationReadiness({
+    baseUrl: baseEnv,
+    htmlVerificationToken: token,
+    verificationMethod: process.env.GSC_VERIFICATION_METHOD,
+    siteUrl: process.env.GSC_SITE_URL,
+  });
+
+  if (!readiness.ok) {
+    const msg = readiness.reason ?? "Search Console verification readiness failed.";
     if (requireVerification) {
       console.error(`[validate-search-console-readiness] FAILED — ${msg}`);
       process.exit(1);
     }
     console.warn(`[validate-search-console-readiness] WARN — ${msg}`);
   } else {
-    console.log("[validate-search-console-readiness] google-site-verification meta present");
+    console.log(
+      `[validate-search-console-readiness] Search Console verification configured via ${readiness.method}`,
+    );
   }
 
   const robotsUrl = `${baseEnv}/robots.txt`;
@@ -62,10 +71,8 @@ async function main(): Promise<void> {
 
   console.log(`[validate-search-console-readiness] robots.txt declares sitemap (${sitemapLine.trim()})`);
 
-  if (baseEnv === DEFAULT_AUDIT_BASE_URL && !token && requireVerification) {
-    console.error(
-      "[validate-search-console-readiness] Production is not verified for Search Console HTML tag method.",
-    );
+  if (baseEnv === DEFAULT_AUDIT_BASE_URL && requireVerification && !readiness.ok) {
+    console.error("[validate-search-console-readiness] Production Search Console readiness is incomplete.");
     process.exit(1);
   }
 
