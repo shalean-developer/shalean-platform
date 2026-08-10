@@ -3,6 +3,7 @@ import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { buildMergedGscMetricsMap } from "@/lib/gsc/resolve-location-gsc-metrics";
 import { logCronRun } from "@/lib/logging/systemLog";
 import { aggregateSeoUserEvents, fetchSeoInsightUserEvents } from "@/lib/seo/optimization/aggregate-seo-events";
+import { parseManualHubUiSlugs } from "@/lib/seo/optimization/auto-apply-safety";
 import { runSeoOptimizationEngine } from "@/lib/seo/optimization/engine";
 import { persistSeoOptimizationResults } from "@/lib/seo/optimization/persist";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -55,10 +56,12 @@ export async function POST(request: Request) {
 
     const applyTitleVariants = envBool("SEO_OPTIMIZATION_AUTO_APPLY_TITLE", false);
     const applyHubUiPatches = envBool("SEO_OPTIMIZATION_AUTO_APPLY_HUB_UI", false);
+    const manualHubUiSlugs = parseManualHubUiSlugs(process.env.SEO_OPTIMIZATION_HUB_UI_MANUAL_SLUGS);
 
     const persisted = await persistSeoOptimizationResults(admin, engineResult, {
       applyTitleVariants,
       applyHubUiPatches,
+      manualHubUiSlugs,
     });
 
     const result = {
@@ -67,6 +70,7 @@ export async function POST(request: Request) {
       rows_loaded: rows.length,
       apply_title_variants: applyTitleVariants,
       apply_hub_ui_patches: applyHubUiPatches,
+      manual_hub_ui_slug_count: manualHubUiSlugs.size,
       ...persisted,
       title_candidates: engineResult.titleAutoCandidates.length,
       hub_ui_candidates: engineResult.hubUiPatches.length,
