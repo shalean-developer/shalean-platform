@@ -23,7 +23,9 @@ begin
   if canonical_minutes is not null then
     new.duration_minutes := canonical_minutes;
     new.estimated_duration_minutes := canonical_minutes;
-    new.duration_hours := round((canonical_minutes::numeric / 60), 2);
+    -- Match durationHoursFromMinutes(): duration_hours is a one-decimal
+    -- reporting mirror while integer minutes remain canonical.
+    new.duration_hours := round((canonical_minutes::numeric / 60), 1);
   end if;
 
   return new;
