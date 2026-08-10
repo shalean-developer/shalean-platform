@@ -16,6 +16,7 @@ import {
   createAdminCleaner,
   fetchCleaners,
   fetchPendingCleanerChangeRequests,
+  linkSupervisorCleanerAccount,
   rejectCleanerChangeRequest,
   requestCleanerRecoveryLink,
   resetCleanerPassword,
@@ -118,6 +119,8 @@ export function OfficeCleanersManageView() {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const [selected, setSelected] = useState<AdminCleanerRow | null>(null);
+  const [supervisorLinkEmail, setSupervisorLinkEmail] = useState("");
+  const [supervisorLinkBusy, setSupervisorLinkBusy] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editForm, setEditForm] = useState<CleanerForm>(DEFAULT_FORM);
   const [editBusy, setEditBusy] = useState(false);
@@ -218,6 +221,20 @@ export function OfficeCleanersManageView() {
       /* ignore */
     }
   }, [search]);
+
+  async function linkSupervisorLogin() {
+    if (!selected || !supervisorLinkEmail.trim()) return;
+    try {
+      setSupervisorLinkBusy(true);
+      await linkSupervisorCleanerAccount(selected.id, supervisorLinkEmail.trim());
+      showToast("Supervisor login linked. They can now switch to their cleaner account.", "success");
+      setSupervisorLinkEmail("");
+    } catch (cause) {
+      showToast(cause instanceof Error ? cause.message : "Failed to link supervisor login.", "error");
+    } finally {
+      setSupervisorLinkBusy(false);
+    }
+  }
 
   const focusRefetchAt = useRef(0);
   useEffect(() => {
@@ -914,6 +931,27 @@ export function OfficeCleanersManageView() {
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <span className="text-xs text-zinc-500 dark:text-zinc-400">Supabase Auth</span>
                 <AuthLinkBadge linked={Boolean(selected.auth_user_id)} />
+              </div>
+              <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/60 p-3">
+                <p className="text-xs font-semibold text-blue-900">Link supervisor login</p>
+                <p className="mt-1 text-xs text-blue-800">Keeps the cleaner’s existing login and allows the same supervisor login to open this cleaner profile.</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <input
+                    type="email"
+                    value={supervisorLinkEmail}
+                    onChange={(event) => setSupervisorLinkEmail(event.target.value)}
+                    placeholder="supervisor@shalean.com"
+                    className="min-w-0 flex-1 rounded-md border border-blue-200 bg-white px-3 py-2 text-sm"
+                  />
+                  <button
+                    type="button"
+                    disabled={supervisorLinkBusy || !supervisorLinkEmail.trim()}
+                    onClick={() => void linkSupervisorLogin()}
+                    className="rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {supervisorLinkBusy ? "Linking…" : "Link account"}
+                  </button>
+                </div>
               </div>
               <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-300">Phone: {selected.phone ?? "—"}</p>
               <p className="text-sm text-zinc-600 dark:text-zinc-300">Location: {selected.location ?? "—"}</p>
