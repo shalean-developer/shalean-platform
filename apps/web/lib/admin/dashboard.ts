@@ -119,6 +119,17 @@ export async function fetchCleaners(search?: string) {
   return json.cleaners ?? [];
 }
 
+export async function linkSupervisorCleanerAccount(cleanerId: string, email: string): Promise<void> {
+  const token = await getAdminToken();
+  const res = await fetch(`/api/admin/cleaners/${encodeURIComponent(cleanerId)}/auth-links`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ email }),
+  });
+  const json = (await res.json().catch(() => ({}))) as { error?: string };
+  if (!res.ok) throw new Error(json.error ?? "Failed to link supervisor login.");
+}
+
 export type AdminCleanerChangeRequest = {
   id: string;
   cleaner_id: string;

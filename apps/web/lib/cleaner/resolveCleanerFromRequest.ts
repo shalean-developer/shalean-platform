@@ -38,6 +38,15 @@ export async function fetchCleanerRowForSupabaseAuthUser(
   if (byAuth && typeof (byAuth as { id?: string }).id === "string") {
     return { id: String((byAuth as { id: string }).id) };
   }
+  const { data: linked } = await admin
+    .from("cleaner_auth_links")
+    .select("cleaner_id")
+    .eq("auth_user_id", authUserId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (linked && typeof (linked as { cleaner_id?: string }).cleaner_id === "string") {
+    return { id: String((linked as { cleaner_id: string }).cleaner_id) };
+  }
   const { data: legacy } = await admin.from("cleaners").select("id").eq("id", authUserId).maybeSingle();
   if (legacy && typeof (legacy as { id?: string }).id === "string") {
     const cleanerId = String((legacy as { id: string }).id);
