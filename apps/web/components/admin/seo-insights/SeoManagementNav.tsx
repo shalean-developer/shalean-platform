@@ -9,6 +9,7 @@ const ITEMS = [
   { label: "Issues", href: "/office/seo-insights/issues" },
   { label: "Pages", href: "/office/seo-insights/page-groups" },
   { label: "Queries", href: "/office/seo-insights/queries" },
+  { label: "Keywords", href: "/office/seo-insights/keywords" },
   { label: "Indexing", href: "/office/seo-insights/indexing" },
   { label: "Web Vitals", href: "/office/seo-insights/web-vitals" },
   { label: "Competitors", href: "/office/seo-insights/competitors" },
