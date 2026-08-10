@@ -54,13 +54,13 @@ describe("Priority 4 eight-role Definition of Done", () => {
       ["finance", item("finance.invoice_overdue","/office/invoices/1","finance.full.view"), true],
       ["finance", item("finance.payout_prepare","/office/payouts","payout.prepare"), true],
       ["workforce", item("workforce.application","/office/cleaner-applications?application=1","application.decide"), true],
-      ["customer-care", item("customer_care.whatsapp_reply","/office/notifications?conversation=1","customer.contact"), true],
+      ["customer-care", item("customer_care.whatsapp_reply","/office/notification-logs?conversation=1","customer.contact"), true],
       ["marketing", item("marketing.blog_draft","/office/blog","content.draft"), true],
       ["marketing", item("marketing.campaign_ready","/office/marketing","content.publish"), false],
       ["manager", item("finance.payout_prepare","/office/payouts","payout.prepare"), true],
       ["manager", item("finance.payout_prepare","/office/payouts","payout.approve"), false],
       ["supervisor", item("finance.invoice_overdue","/office/invoices/1","finance.full.view"), false],
-      ["marketing", item("customer_care.whatsapp_reply","/office/notifications?conversation=1","customer.contact"), false],
+      ["marketing", item("customer_care.whatsapp_reply","/office/notification-logs?conversation=1","customer.contact"), false],
       ["customer-care", item("marketing.blog_draft","/office/blog","content.draft"), false],
     ];
     for (const [role, work, expected] of cases) expect(canReceiveOfficeWorkItem(work, new Set(roles[role])), `${role}:${work.type}`).toBe(expected);
