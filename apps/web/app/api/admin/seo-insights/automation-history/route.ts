@@ -82,7 +82,7 @@ function normalizeRun(row: CronLogRow) {
 
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
-  if (!auth.ok) return NextResponse.json(auth.body, { status: auth.status });
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
