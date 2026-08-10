@@ -58,7 +58,7 @@ grant execute on function public.enqueue_review_prompt_on_booking_completion() t
 
 drop trigger if exists bookings_enqueue_review_prompt_on_completion on public.bookings;
 create trigger bookings_enqueue_review_prompt_on_completion
-after insert or update of status, completed_at, customer_phone, cleaner_id, team_id on public.bookings
+after insert or update of status, completed_at, customer_phone, cleaner_id, is_team_job, team_id on public.bookings
 for each row
 execute function public.enqueue_review_prompt_on_booking_completion();
 
