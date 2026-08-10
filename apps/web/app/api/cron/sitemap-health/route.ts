@@ -44,7 +44,7 @@ export async function GET(request: Request) {
         message: result.reason,
         context: { url: result.url, http_status: result.status, error: result.reason },
       });
-      return NextResponse.json({ ok: false, ...result }, { status: 503 });
+      return NextResponse.json(result, { status: 503 });
     }
 
     await logCronRun({
@@ -54,7 +54,7 @@ export async function GET(request: Request) {
       context: { url: result.url, http_status: result.status, url_count: result.urlCount },
     });
 
-    return NextResponse.json({ ok: true, ...result });
+    return NextResponse.json(result);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     await logCronRun({
