@@ -112,4 +112,24 @@ describe("buildExactSourceLineItems", () => {
       }),
     ]);
   });
+
+  it("flattens fractional source quantities into an integer database row without changing the total", () => {
+    const lines = buildExactSourceLineItems({
+      declaredTotalCents: 15_000,
+      source: "sales_document",
+      lines: [{ name: "Hourly service", quantity: 1.5, unitPriceCents: 10_000 }],
+    });
+
+    expect(lines).toEqual([
+      expect.objectContaining({
+        quantity: 1,
+        unit_price_cents: 15_000,
+        total_price_cents: 15_000,
+        metadata: expect.objectContaining({
+          sourceQuantity: 1.5,
+          sourceUnitPriceCents: 10_000,
+        }),
+      }),
+    ]);
+  });
 });
