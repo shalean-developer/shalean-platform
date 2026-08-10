@@ -26,6 +26,8 @@ import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyR
 import { syncPreferredCleanerRoster } from "@/lib/booking/persistPreferredCleaners";
 import { resolveRecurringPreferredCleanerIds } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { buildExactSourceLineItems } from "@/lib/booking/buildBookingLineItems";
+import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 
 const FAR_LOCK_DAYS = 120;
 
@@ -205,6 +207,20 @@ export async function insertMonthlyRecurringOccurrenceBooking(
   }
   const id = data && typeof data === "object" && "id" in data ? String((data as { id: string }).id) : "";
   if (!id) return { ok: false, error: "Insert returned no id." };
+
+  await persistBookingLineItems(
+    admin,
+    id,
+    buildExactSourceLineItems({
+      declaredTotalCents: priceZar * 100,
+      source: "monthly_recurring_occurrence",
+      lines: [{
+        name: "Monthly recurring service",
+        quantity: 1,
+        unitPriceCents: priceZar * 100,
+      }],
+    }),
+  );
 
   if (preferredCleanerIds.length >= 2) {
     const continuity = await applyRecurringOccurrenceRosterContinuity(admin, {
