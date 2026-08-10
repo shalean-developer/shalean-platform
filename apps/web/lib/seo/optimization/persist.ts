@@ -3,17 +3,27 @@ import {
   getExplicitEnvTitleVariant,
   hasManualLocationMetaTitle,
 } from "@/lib/seo/location-seo-feedback";
-import type { HubUiAutoPatch, SeoOptimizationEngineResult, TitleAutoCandidate } from "@/lib/seo/optimization/engine";
+import {
+  isHubUiAutoApplyAllowed,
+  isTitleAutoApplyAllowed,
+  SEO_AUTO_APPLY_MAX_PER_TYPE,
+} from "@/lib/seo/optimization/auto-apply-safety";
+import type { SeoOptimizationEngineResult } from "@/lib/seo/optimization/engine";
 
 export type PersistSeoOptimizationOptions = {
   applyTitleVariants: boolean;
   applyHubUiPatches: boolean;
+  manualHubUiSlugs?: ReadonlySet<string>;
 };
 
 export type PersistSeoOptimizationSummary = {
   titleVariantsUpserted: number;
   hubPatchesUpserted: number;
   recommendationsInserted: number;
+  titleCandidatesEligible: number;
+  hubPatchesEligible: number;
+  titleCandidatesCapped: number;
+  hubPatchesCapped: number;
 };
 
 export async function persistSeoOptimizationResults(
@@ -23,31 +33,41 @@ export async function persistSeoOptimizationResults(
 ): Promise<PersistSeoOptimizationSummary> {
   let titleVariantsUpserted = 0;
   let hubPatchesUpserted = 0;
+  const manualHubUiSlugs = opts.manualHubUiSlugs ?? new Set<string>();
 
-  const filterTitle = (c: TitleAutoCandidate): boolean => {
-    if (hasManualLocationMetaTitle(c.slug)) return false;
-    if (getExplicitEnvTitleVariant(c.slug)) return false;
-    return c.confidence >= 0.35;
-  };
+  const eligibleTitles = result.titleAutoCandidates.filter((candidate) =>
+    isTitleAutoApplyAllowed({
+      confidence: candidate.confidence,
+      hasManualTitle: hasManualLocationMetaTitle(candidate.slug),
+      hasExplicitEnvVariant: Boolean(getExplicitEnvTitleVariant(candidate.slug)),
+    }),
+  );
+  const eligibleHubPatches = result.hubUiPatches.filter((patch) =>
+    isHubUiAutoApplyAllowed({
+      slug: patch.slug,
+      confidence: patch.confidence,
+      manualHubUiSlugs,
+    }),
+  );
 
-  const filterPatch = (p: HubUiAutoPatch): boolean => p.confidence >= 0.35;
+  const titleCandidates = eligibleTitles.slice(0, SEO_AUTO_APPLY_MAX_PER_TYPE);
+  const hubPatches = eligibleHubPatches.slice(0, SEO_AUTO_APPLY_MAX_PER_TYPE);
 
   if (opts.applyTitleVariants) {
-    const candidates = result.titleAutoCandidates.filter(filterTitle);
-    for (const c of candidates) {
+    for (const candidate of titleCandidates) {
       const { error } = await admin.from("seo_auto_title_variant").upsert(
         {
-          slug: c.slug,
-          variant: c.variant,
-          reason: c.reason,
-          confidence: c.confidence,
+          slug: candidate.slug,
+          variant: candidate.variant,
+          reason: candidate.reason,
+          confidence: candidate.confidence,
           source: "optimizer",
           updated_at: new Date().toISOString(),
         },
         { onConflict: "slug" },
       );
       if (error) {
-        console.error("[seo-optimization] seo_auto_title_variant upsert failed", c.slug, error.message);
+        console.error("[seo-optimization] seo_auto_title_variant upsert failed", candidate.slug, error.message);
       } else {
         titleVariantsUpserted++;
       }
@@ -55,21 +75,20 @@ export async function persistSeoOptimizationResults(
   }
 
   if (opts.applyHubUiPatches) {
-    const patches = result.hubUiPatches.filter(filterPatch);
-    for (const p of patches) {
+    for (const patch of hubPatches) {
       const { error } = await admin.from("seo_auto_hub_ui_patch").upsert(
         {
-          slug: p.slug,
-          swap_hero_book_ctas: p.swap_hero_book_ctas,
-          reason: p.reason,
-          confidence: p.confidence,
+          slug: patch.slug,
+          swap_hero_book_ctas: patch.swap_hero_book_ctas,
+          reason: patch.reason,
+          confidence: patch.confidence,
           source: "optimizer",
           updated_at: new Date().toISOString(),
         },
         { onConflict: "slug" },
       );
       if (error) {
-        console.error("[seo-optimization] seo_auto_hub_ui_patch upsert failed", p.slug, error.message);
+        console.error("[seo-optimization] seo_auto_hub_ui_patch upsert failed", patch.slug, error.message);
       } else {
         hubPatchesUpserted++;
       }
@@ -87,13 +106,13 @@ export async function persistSeoOptimizationResults(
     }
 
     const { error } = await admin.from("seo_insights_recommendations").insert(
-      result.recommendations.map((r) => ({
-        slug: r.slug,
-        kind: r.kind,
-        severity: r.severity,
-        title: r.title,
-        detail: r.detail,
-        confidence: r.confidence,
+      result.recommendations.map((recommendation) => ({
+        slug: recommendation.slug,
+        kind: recommendation.kind,
+        severity: recommendation.severity,
+        title: recommendation.title,
+        detail: recommendation.detail,
+        confidence: recommendation.confidence,
       })),
     );
     if (error) {
@@ -103,5 +122,13 @@ export async function persistSeoOptimizationResults(
     }
   }
 
-  return { titleVariantsUpserted, hubPatchesUpserted, recommendationsInserted };
+  return {
+    titleVariantsUpserted,
+    hubPatchesUpserted,
+    recommendationsInserted,
+    titleCandidatesEligible: eligibleTitles.length,
+    hubPatchesEligible: eligibleHubPatches.length,
+    titleCandidatesCapped: Math.max(eligibleTitles.length - titleCandidates.length, 0),
+    hubPatchesCapped: Math.max(eligibleHubPatches.length - hubPatches.length, 0),
+  };
 }
