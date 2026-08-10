@@ -5,7 +5,7 @@ import type { BookingLineItemInsert, BookingLineItemRow } from "@/lib/booking/bo
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 
 /**
- * Best-effort Phase 1 dual-write: booking row already exists; failures are logged but do not roll back the booking.
+ * Best-effort canonical detail write: booking row already exists; failures are logged but do not roll back the booking.
  */
 export async function persistBookingLineItems(
   admin: SupabaseClient,
