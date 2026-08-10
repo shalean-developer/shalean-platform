@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { buildMergedGscMetricsMap } from "@/lib/gsc/resolve-location-gsc-metrics";
+import { logCronRun } from "@/lib/logging/systemLog";
 import { aggregateSeoUserEvents, fetchSeoInsightUserEvents } from "@/lib/seo/optimization/aggregate-seo-events";
 import { runSeoOptimizationEngine } from "@/lib/seo/optimization/engine";
 import { persistSeoOptimizationResults } from "@/lib/seo/optimization/persist";
@@ -34,34 +35,60 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase admin not configured." }, { status: 503 });
   }
 
-  const [{ sinceIso, rows, error }, gscMetricsBySlug] = await Promise.all([
-    fetchSeoInsightUserEvents(admin, WINDOW_DAYS),
-    buildMergedGscMetricsMap(admin),
-  ]);
-  if (error) {
-    return NextResponse.json({ error }, { status: 500 });
+  try {
+    const [{ sinceIso, rows, error }, gscMetricsBySlug] = await Promise.all([
+      fetchSeoInsightUserEvents(admin, WINDOW_DAYS),
+      buildMergedGscMetricsMap(admin),
+    ]);
+    if (error) {
+      await logCronRun({
+        jobName: "seo-optimization",
+        status: "error",
+        message: error,
+        context: { rows_loaded: rows.length, since: sinceIso },
+      });
+      return NextResponse.json({ error }, { status: 500 });
+    }
+
+    const aggregated = aggregateSeoUserEvents(rows);
+    const engineResult = runSeoOptimizationEngine(aggregated, { gscMetricsBySlug });
+
+    const applyTitleVariants = envBool("SEO_OPTIMIZATION_AUTO_APPLY_TITLE", false);
+    const applyHubUiPatches = envBool("SEO_OPTIMIZATION_AUTO_APPLY_HUB_UI", false);
+
+    const persisted = await persistSeoOptimizationResults(admin, engineResult, {
+      applyTitleVariants,
+      applyHubUiPatches,
+    });
+
+    const result = {
+      ok: true,
+      since: sinceIso,
+      rows_loaded: rows.length,
+      apply_title_variants: applyTitleVariants,
+      apply_hub_ui_patches: applyHubUiPatches,
+      ...persisted,
+      title_candidates: engineResult.titleAutoCandidates.length,
+      hub_ui_candidates: engineResult.hubUiPatches.length,
+      page_health_rows: engineResult.pageHealth.length,
+    };
+
+    await logCronRun({
+      jobName: "seo-optimization",
+      status: "success",
+      message: "SEO optimization completed.",
+      context: result,
+    });
+
+    return NextResponse.json(result);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Unknown SEO optimization failure.";
+    await logCronRun({
+      jobName: "seo-optimization",
+      status: "error",
+      message,
+      context: { error: message },
+    });
+    return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-
-  const aggregated = aggregateSeoUserEvents(rows);
-  const engineResult = runSeoOptimizationEngine(aggregated, { gscMetricsBySlug });
-
-  const applyTitleVariants = envBool("SEO_OPTIMIZATION_AUTO_APPLY_TITLE", false);
-  const applyHubUiPatches = envBool("SEO_OPTIMIZATION_AUTO_APPLY_HUB_UI", false);
-
-  const persisted = await persistSeoOptimizationResults(admin, engineResult, {
-    applyTitleVariants,
-    applyHubUiPatches,
-  });
-
-  return NextResponse.json({
-    ok: true,
-    since: sinceIso,
-    rows_loaded: rows.length,
-    apply_title_variants: applyTitleVariants,
-    apply_hub_ui_patches: applyHubUiPatches,
-    ...persisted,
-    title_candidates: engineResult.titleAutoCandidates.length,
-    hub_ui_candidates: engineResult.hubUiPatches.length,
-    page_health_rows: engineResult.pageHealth.length,
-  });
 }
