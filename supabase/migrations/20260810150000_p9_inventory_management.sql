@@ -79,6 +79,9 @@ begin
   end if;
   select * into v_item from public.inventory_items where id = p_item_id and is_active for update;
   if not found then raise exception 'inventory item not found'; end if;
+  if p_movement_type = 'consume' and v_item.item_type <> 'supply' then
+    raise exception 'only supply items can be consumed on a booking';
+  end if;
   v_delta := case when p_movement_type in ('purchase','adjustment_in') then p_quantity else -p_quantity end;
   if v_item.quantity_on_hand + v_delta < 0 then raise exception 'insufficient stock'; end if;
   insert into public.inventory_movements(item_id,movement_type,quantity_delta,unit_cost_cents,total_cost_cents,booking_id,cleaner_id,team_id,notes,created_by)
