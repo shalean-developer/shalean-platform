@@ -223,19 +223,17 @@ describe("Princess PR E cron authentication", () => {
 });
 
 describe("Princess PR E booking-lifecycle static guards", () => {
-  it("registers Hobby-compatible daily vercel.json schedule (not Pro */5)", () => {
+  it("registers booking-lifecycle in the canonical Supabase scheduler", () => {
+    const setupPath = join(process.cwd(), "scripts/print-setup-supabase-crons.sql.mjs");
+    const setupSrc = readFileSync(setupPath, "utf8");
+    expect(setupSrc).toContain(
+      '["booking-lifecycle", "*/15 * * * *", "/api/cron/booking-lifecycle"]',
+    );
+
     const vercelPath = join(process.cwd(), "vercel.json");
-    const src = readFileSync(vercelPath, "utf8");
-    const parsed = JSON.parse(src) as {
-      crons: Array<{ path: string; schedule: string }>;
-    };
-    const lifecycle = parsed.crons.find((c) => c.path === "/api/cron/booking-lifecycle");
-    expect(lifecycle).toBeDefined();
-    expect(lifecycle!.schedule).toBe(BOOKING_LIFECYCLE_HOBBY_SCHEDULE);
-    expect(lifecycle!.schedule).toBe("0 2 * * *");
-    // Future Pro schedule must not be currently enabled for this path.
-    expect(lifecycle!.schedule).not.toBe(BOOKING_LIFECYCLE_PRO_SCHEDULE);
-    expect(lifecycle!.schedule).not.toContain("*/5");
+    const vercelSrc = readFileSync(vercelPath, "utf8");
+    const parsed = JSON.parse(vercelSrc) as { crons?: unknown };
+    expect(parsed.crons).toBeUndefined();
   });
 
   it("Hobby schedule runs at most once per day", () => {
