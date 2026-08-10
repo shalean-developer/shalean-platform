@@ -3,6 +3,7 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { parseBookingServiceId } from "@/components/booking/serviceCategories";
 import {
+  buildExactSourceLineItems,
   buildHomeWidgetCatalogLineItems,
   buildMonthlyBundledZarLineItems,
 } from "@/lib/booking/buildBookingLineItems";
@@ -48,6 +49,12 @@ export type LineItemsPricingContext =
       mode: "monthly_bundled_zar";
       quotedTotalZar: number | null;
       bundleLabel: string;
+    }
+  | {
+      mode: "exact_source_lines";
+      declaredTotalCents: number;
+      source: string;
+      lines: readonly { name: string; quantity: number; unitPriceCents: number }[];
     };
 
 export type InsertBookingRowUnifiedArgs = {
@@ -69,7 +76,7 @@ export type InsertBookingRowUnifiedArgs = {
   select?: string;
   /** Set false to skip `system_logs` row (e.g. ultra-hot paths). Default true. */
   logInsert?: boolean;
-  /** When set, inserts immutable `booking_line_items` after the booking row (Phase 1 dual-write). */
+  /** When set, inserts immutable canonical `booking_line_items` after the booking row. */
   lineItemsPricing?: LineItemsPricingContext | null;
 };
 
@@ -100,6 +107,9 @@ function buildLineItemsForUnifiedInsert(
       bundleLabel: args.lineItemsPricing.bundleLabel,
       extras: extrasPersist,
     });
+  }
+  if (args.lineItemsPricing.mode === "exact_source_lines") {
+    return buildExactSourceLineItems(args.lineItemsPricing);
   }
   return null;
 }

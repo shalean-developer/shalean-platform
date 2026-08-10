@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { buildHomeWidgetCatalogLineItems, buildMonthlyBundledZarLineItems, zarToCents } from "@/lib/booking/buildBookingLineItems";
+import {
+  buildExactSourceLineItems,
+  buildHomeWidgetCatalogLineItems,
+  buildMonthlyBundledZarLineItems,
+  zarToCents,
+} from "@/lib/booking/buildBookingLineItems";
 import { computeJobSubtotalZarSnapshot } from "@/lib/pricing/pricingEngineSnapshot";
 import { normalizePricingJobInput, type PricingJobInput } from "@/lib/pricing/pricingEngine";
 import { vitestTestPricingRatesSnapshot } from "@/lib/pricing/testPricingSnapshot";
@@ -69,5 +74,62 @@ describe("buildMonthlyBundledZarLineItems", () => {
     expect(lines.filter((r) => r.item_type === "extra")).toHaveLength(2);
     const base = lines.find((r) => r.item_type === "base");
     expect(base?.total_price_cents).toBe(400 * 100);
+  });
+});
+
+describe("buildExactSourceLineItems", () => {
+  it("preserves source rows and reconciles their sum to the declared booking total", () => {
+    const lines = buildExactSourceLineItems({
+      declaredTotalCents: 35_050,
+      source: "sales_document",
+      lines: [
+        { name: "Standard clean", quantity: 1, unitPriceCents: 25_000 },
+        { name: "Oven", quantity: 2, unitPriceCents: 5_000 },
+      ],
+    });
+
+    expect(lines.slice(0, 2)).toMatchObject([
+      { item_type: "base", name: "Standard clean", total_price_cents: 25_000 },
+      { item_type: "extra", name: "Oven", quantity: 2, total_price_cents: 10_000 },
+    ]);
+    expect(lines.at(-1)).toMatchObject({
+      item_type: "adjustment",
+      total_price_cents: 50,
+    });
+    expect(lines.reduce((sum, line) => sum + line.total_price_cents, 0)).toBe(35_050);
+  });
+
+  it("creates a canonical fallback line when a source has no usable rows", () => {
+    expect(buildExactSourceLineItems({
+      declaredTotalCents: 12_300,
+      source: "recurring_occurrence",
+      lines: [],
+    })).toEqual([
+      expect.objectContaining({
+        item_type: "base",
+        name: "Service total",
+        total_price_cents: 12_300,
+      }),
+    ]);
+  });
+
+  it("flattens fractional source quantities into an integer database row without changing the total", () => {
+    const lines = buildExactSourceLineItems({
+      declaredTotalCents: 15_000,
+      source: "sales_document",
+      lines: [{ name: "Hourly service", quantity: 1.5, unitPriceCents: 10_000 }],
+    });
+
+    expect(lines).toEqual([
+      expect.objectContaining({
+        quantity: 1,
+        unit_price_cents: 15_000,
+        total_price_cents: 15_000,
+        metadata: expect.objectContaining({
+          sourceQuantity: 1.5,
+          sourceUnitPriceCents: 10_000,
+        }),
+      }),
+    ]);
   });
 });

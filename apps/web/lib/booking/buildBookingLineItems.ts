@@ -15,11 +15,83 @@ import { normalizePricingJobInput, resolveServiceForPricing, type PricingJobInpu
 const PRICING_HOME_WIDGET = "home_widget_catalog_v1" as const;
 const PRICING_MONTHLY_BUNDLED = "monthly_bundled_zar_v1" as const;
 const PRICING_CHECKOUT_LOCK = "checkout_lock_catalog_v1" as const;
+const PRICING_EXACT_SOURCE = "exact_source_lines_v1" as const;
 
 /** Integer ZAR → Paystack-style minor units (cents). */
 export function zarToCents(zar: number): number {
   if (!Number.isFinite(zar)) return 0;
   return Math.round(zar * 100);
+}
+
+/**
+ * Preserve externally-priced source rows (for example a sales document) while
+ * reconciling them to the booking's declared total. This does not re-price the
+ * booking, so the canonical payment amount remains authoritative.
+ */
+export function buildExactSourceLineItems(params: {
+  declaredTotalCents: number;
+  source: string;
+  lines: readonly { name: string; quantity: number; unitPriceCents: number }[];
+}): BookingLineItemInsert[] {
+  const declaredTotalCents = Math.max(0, Math.round(params.declaredTotalCents));
+  const items: BookingLineItemInsert[] = [];
+  for (const [index, line] of params.lines.entries()) {
+    const name = String(line.name ?? "").trim();
+    const quantity = Number(line.quantity);
+    const unitPriceCents = Math.round(Number(line.unitPriceCents));
+    if (!name || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPriceCents)) {
+      continue;
+    }
+    const sourceTotalCents = Math.round(quantity * unitPriceCents);
+    const persistedQuantity = Number.isInteger(quantity) ? quantity : 1;
+    const persistedUnitPriceCents = Number.isInteger(quantity) ? unitPriceCents : sourceTotalCents;
+    items.push({
+      item_type: index === 0 ? "base" : "extra",
+      slug: null,
+      name,
+      quantity: persistedQuantity,
+      unit_price_cents: persistedUnitPriceCents,
+      total_price_cents: sourceTotalCents,
+      pricing_source: PRICING_EXACT_SOURCE,
+      metadata: {
+        source: params.source,
+        sourceLineIndex: index,
+        ...(persistedQuantity !== quantity
+          ? { sourceQuantity: quantity, sourceUnitPriceCents: unitPriceCents }
+          : {}),
+      },
+    });
+  }
+
+  if (items.length === 0 && declaredTotalCents > 0) {
+    items.push({
+      item_type: "base",
+      slug: null,
+      name: "Service total",
+      quantity: 1,
+      unit_price_cents: declaredTotalCents,
+      total_price_cents: declaredTotalCents,
+      pricing_source: PRICING_EXACT_SOURCE,
+      metadata: { source: params.source, fallback: true },
+    });
+    return items;
+  }
+
+  const sumCents = items.reduce((sum, item) => sum + item.total_price_cents, 0);
+  const delta = declaredTotalCents - sumCents;
+  if (delta !== 0) {
+    items.push({
+      item_type: "adjustment",
+      slug: null,
+      name: "Declared total reconciliation",
+      quantity: 1,
+      unit_price_cents: delta,
+      total_price_cents: delta,
+      pricing_source: PRICING_EXACT_SOURCE,
+      metadata: { source: params.source, sumCentsBefore: sumCents },
+    });
+  }
+  return items;
 }
 
 function tariffFor(snapshot: PricingRatesSnapshot, service: BookingServiceId | null): ServiceTariff {

@@ -93,4 +93,16 @@ describe("recurring occurrence insertion convergence (static guard)", () => {
       expect(src).not.toMatch(/user_id:\s*params\.recurring\.customer_id/);
     }
   });
+
+  it("every recurring occurrence persists canonical booking line items", () => {
+    for (const file of [
+      "lib/recurring/insertRecurringOccurrenceBooking.ts",
+      "lib/recurring/insertMonthlyRecurringOccurrenceBooking.ts",
+    ]) {
+      const src = readFileSync(join(cwd, file), "utf8");
+      expect(src).toContain("buildExactSourceLineItems");
+      expect(src).toContain("persistBookingLineItems");
+      expect(src.indexOf("persistBookingLineItems")).toBeLessThan(src.lastIndexOf("return { ok: true"));
+    }
+  });
 });
