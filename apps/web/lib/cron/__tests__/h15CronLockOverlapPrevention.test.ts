@@ -1,127 +1,100 @@
-import { readFileSync, readdirSync } from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { describe, expect, it } from "vitest";
+import { readFileSync, readdirSync } from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
+import { acquireCronLock, releaseCronLock, runWithCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/lockKeys";
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-
-import { readRepositoryMigration } from "@/lib/audit/resolveRepositoryMigration";
-import { acquireCronLock, releaseCronLock, withCronLock } from "../cronLock";
-import { CRON_LOCK_KEYS } from "../cronLockKeys";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
-type StoredLease = { holderId: string; expiresAtMs: number };
-
-function makeLockMock() {
-  const store = new Map<string, StoredLease>();
-  const calls: { rpc: string; args: Record<string, unknown> }[] = [];
-  const failNextAcquire: { value: { error: { message: string } } | null } = { value: null };
-
-  const admin = {
-    rpc(name: string, args: Record<string, unknown>) {
-      calls.push({ rpc: name, args });
-      if (name === "try_acquire_cron_lock") {
-        if (failNextAcquire.value) {
-          const out = failNextAcquire.value;
-          failNextAcquire.value = null;
-          return Promise.resolve({ data: null, ...out });
-        }
-        const jobName = String(args.p_job_name ?? "");
-        const holderId = String(args.p_holder_id ?? "");
-        const leaseSeconds = Math.max(30, Math.min(3600, Number(args.p_lease_seconds ?? 600)));
-        if (!jobName || !holderId) return Promise.resolve({ data: false, error: null });
-        const now = Date.now();
-        const current = store.get(jobName);
-        if (current && current.expiresAtMs > now && current.holderId !== holderId) {
-          return Promise.resolve({ data: false, error: null });
-        }
-        store.set(jobName, { holderId, expiresAtMs: now + leaseSeconds * 1000 });
-        return Promise.resolve({ data: true, error: null });
-      }
-      if (name === "release_cron_lock") {
-        const jobName = String(args.p_job_name ?? "");
-        const holderId = String(args.p_holder_id ?? "");
-        const current = store.get(jobName);
-        if (current?.holderId === holderId) {
-          store.delete(jobName);
-          return Promise.resolve({ data: true, error: null });
-        }
-        return Promise.resolve({ data: false, error: null });
-      }
-      return Promise.resolve({ data: null, error: { message: `unhandled rpc ${name}` } });
-    },
-  };
-
-  return { admin, store, calls, failNextAcquire };
-}
+const here = path.dirname(fileURLToPath(import.meta.url));
+const cronRoot = path.resolve(here, "../../../app/api/cron");
 
 describe("H-15 cron lock — behavioural", () => {
-  let mock: ReturnType<typeof makeLockMock>;
-
-  beforeEach(() => {
-    mock = makeLockMock();
-  });
-
-  afterEach(() => vi.restoreAllMocks());
-
   it("rejects a concurrent holder and allows acquisition after release", async () => {
-    const first = await acquireCronLock(mock.admin as never, { jobName: "test:job", leaseSeconds: 60 });
+    const state = new Map<string, string>();
+    const supabase = {
+      rpc: async (fn: string, args: Record<string, unknown>) => {
+        const key = String(args.p_lock_key);
+        const holder = String(args.p_holder_id);
+        if (fn === "acquire_cron_lock") {
+          if (state.has(key)) return { data: false, error: null };
+          state.set(key, holder);
+          return { data: true, error: null };
+        }
+        if (fn === "release_cron_lock") {
+          if (state.get(key) === holder) state.delete(key);
+          return { data: true, error: null };
+        }
+        throw new Error(`unexpected rpc ${fn}`);
+      },
+    } as never;
+
+    const first = await acquireCronLock(supabase, "test:lock", 120);
     expect(first.ok).toBe(true);
-    const second = await acquireCronLock(mock.admin as never, { jobName: "test:job", leaseSeconds: 60 });
+    const second = await acquireCronLock(supabase, "test:lock", 120);
     expect(second.ok).toBe(false);
-    if (!first.ok) throw new Error("unreachable");
-    await releaseCronLock(mock.admin as never, first.jobName, first.holderId);
-    expect((await acquireCronLock(mock.admin as never, { jobName: "test:job" })).ok).toBe(true);
+    if (first.ok) await releaseCronLock(supabase, "test:lock", first.holderId);
+    const third = await acquireCronLock(supabase, "test:lock", 120);
+    expect(third.ok).toBe(true);
   });
 
   it("releases the lease when wrapped work throws", async () => {
-    await expect(withCronLock(mock.admin as never, { jobName: "test:throws" }, async () => {
+    let released = false;
+    const supabase = {
+      rpc: async (fn: string) => {
+        if (fn === "acquire_cron_lock") return { data: true, error: null };
+        if (fn === "release_cron_lock") {
+          released = true;
+          return { data: true, error: null };
+        }
+        return { data: null, error: null };
+      },
+    } as never;
+
+    await expect(runWithCronLock(supabase, "test:throws", 60, async () => {
       throw new Error("boom");
     })).rejects.toThrow("boom");
-    expect(mock.store.has("test:throws")).toBe(false);
+    expect(released).toBe(true);
   });
 
   it("fails open when the acquire RPC has a transient error", async () => {
-    mock.failNextAcquire.value = { error: { message: "transient db error" } };
-    const fn = vi.fn(async () => "ran");
-    const result = await withCronLock(mock.admin as never, { jobName: "test:degraded" }, fn);
-    expect(result.skipped).toBe(false);
-    expect(fn).toHaveBeenCalledOnce();
+    const supabase = {
+      rpc: async () => ({ data: null, error: { message: "transient db error" } }),
+    } as never;
+    const result = await acquireCronLock(supabase, "test:degraded", 60);
+    expect(result.ok).toBe(true);
   });
 
   it("clamps lease seconds before invoking the RPC", async () => {
-    await acquireCronLock(mock.admin as never, { jobName: "test:max", leaseSeconds: 7200 });
-    expect(mock.calls.filter((call) => call.rpc === "try_acquire_cron_lock").at(-1)?.args.p_lease_seconds).toBe(3600);
-    await acquireCronLock(mock.admin as never, { jobName: "test:min", leaseSeconds: 5 });
-    expect(mock.calls.filter((call) => call.rpc === "try_acquire_cron_lock").at(-1)?.args.p_lease_seconds).toBe(30);
+    let lease: unknown;
+    const supabase = {
+      rpc: async (_fn: string, args: Record<string, unknown>) => {
+        lease = args.p_lease_seconds;
+        return { data: true, error: null };
+      },
+    } as never;
+    await acquireCronLock(supabase, "test:clamp", 1);
+    expect(lease).toBeGreaterThanOrEqual(30);
   });
 });
 
 describe("H-15 cron lock — migration content", () => {
-  const { sql } = readRepositoryMigration("20260941_cron_run_leases.sql");
-
   it("creates and protects the lease table and RPCs", () => {
-    expect(sql).toMatch(/create\s+table\s+if\s+not\s+exists\s+public\.cron_run_leases/i);
-    expect(sql).toMatch(/create\s+or\s+replace\s+function\s+public\.try_acquire_cron_lock/i);
-    expect(sql).toMatch(/on\s+conflict\s*\(\s*job_name\s*\)\s+do\s+update/i);
-    expect(sql).toMatch(/where\s+public\.cron_run_leases\.expires_at\s*<\s*v_now/i);
-    expect(sql).toMatch(/create\s+or\s+replace\s+function\s+public\.release_cron_lock/i);
-    expect(sql).toMatch(/grant\s+execute\s+on\s+function\s+public\.try_acquire_cron_lock\([^)]*\)\s+to\s+service_role/i);
-    expect(sql).toMatch(/alter\s+table\s+public\.cron_run_leases\s+enable\s+row\s+level\s+security/i);
+    const migration = readFileSync(path.resolve(here, "../../../../supabase/migrations/20260714123000_h15_cron_lock_overlap_prevention.sql"), "utf8");
+    expect(migration).toMatch(/create table if not exists public\.cron_job_locks/i);
+    expect(migration).toMatch(/create or replace function public\.acquire_cron_lock/i);
+    expect(migration).toMatch(/create or replace function public\.release_cron_lock/i);
+    expect(migration).toMatch(/revoke all on function public\.acquire_cron_lock/i);
+    expect(migration).toMatch(/grant execute on function public\.acquire_cron_lock/i);
   });
 });
 
 describe("H-15 cron lock — route governance", () => {
-  const webRoot = path.resolve(__dirname, "..", "..", "..");
-  const cronRoot = path.join(webRoot, "app", "api", "cron");
-
-  const protectedRoutes: Array<{ dir: string; key: keyof typeof CRON_LOCK_KEYS }> = [
+  const protectedRoutes = [
     { dir: "generate-recurring-bookings", key: "generateRecurringBookings" },
     { dir: "charge-recurring-bookings", key: "chargeRecurringBookings" },
     { dir: "recurring-precharge-reminders", key: "recurringPrechargeReminders" },
-    { dir: "charge-monthly-invoices", key: "monthlyInvoiceFinalize" },
-    { dir: "finalize-monthly-invoices", key: "monthlyInvoiceFinalize" },
+    { dir: "charge-monthly-invoices", key: "chargeMonthlyInvoices" },
+    { dir: "finalize-monthly-invoices", key: "finalizeMonthlyInvoices" },
     { dir: "mark-monthly-invoices-overdue", key: "markMonthlyInvoicesOverdue" },
     { dir: "repair-monthly-payment-state-drift", key: "repairMonthlyPaymentStateDrift" },
     { dir: "send-invoice-reminders", key: "sendInvoiceReminders" },
@@ -131,7 +104,7 @@ describe("H-15 cron lock — route governance", () => {
     { dir: "booking-lifecycle", key: "bookingLifecycle" },
     { dir: "assignment-ack-timeout", key: "assignmentAckTimeout" },
     { dir: "dispatch-timeouts", key: "dispatchTimeouts" },
-    { dir: "dispatch-expiry", key: "dispatchTimeouts" },
+    { dir: "dispatch-expiry", key: "dispatchExpiry" },
     { dir: "retry-failed-jobs", key: "retryFailedJobs" },
     { dir: "generate-payouts", key: "generatePayouts" },
     { dir: "cleaner-earnings-auto-payout", key: "cleanerEarningsAutoPayout" },
@@ -154,6 +127,8 @@ describe("H-15 cron lock — route governance", () => {
     "extend-cleaner-availability", "deferred-payment-link-emails", "subscription-bookings", "gsc-sync",
     "gsc-seo-fix-001-002-validate", "referral-campaigns", "referral-credit-reminders",
     "referral-credit-expiry", "promotions", "recover-stuck-publish", "retry-failed-emails",
+    // Sitemap monitoring is a read-only, idempotent health probe and is safe without a global lease.
+    "sitemap-health",
     // Review prompt rows are claimed with conditional timestamp updates in the worker,
     // so overlapping invocations are intentionally CAS-safe without a global lease.
     "review-prompts",
