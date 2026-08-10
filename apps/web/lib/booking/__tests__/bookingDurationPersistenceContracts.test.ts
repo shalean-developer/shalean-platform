@@ -53,6 +53,18 @@ describe("booking duration persistence contracts", () => {
     expect(script).toContain("resolveHealedBookingDurationMinutes");
   });
 
+  it("database trigger protects the canonical duration and synchronizes reporting mirrors", () => {
+    const migration = readFileSync(
+      join(root, "../../supabase/migrations/20260810133000_p9_protect_canonical_booking_duration.sql"),
+      "utf8",
+    );
+    expect(migration).toContain("sync_booking_duration_columns");
+    expect(migration).toContain("new.duration_minutes := canonical_minutes");
+    expect(migration).toContain("new.estimated_duration_minutes := canonical_minutes");
+    expect(migration).toContain("new.duration_hours :=");
+    expect(migration).not.toContain("duration_minutes integer not null");
+  });
+
   it("unified insert derives team-scaled duration for team jobs", () => {
     const solo = buildUnifiedInsertDurationPatch({
       rowBase: {},

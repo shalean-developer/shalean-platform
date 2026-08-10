@@ -3,6 +3,7 @@ import {
   avgScheduledMinutes,
   computeFleetHourUtilizationPct,
   resolveReportingDurationMinutes,
+  summarizeDurationCoverage,
   sumScheduledMinutes,
 } from "@/lib/admin/reporting/bookingDurationReporting";
 
@@ -42,5 +43,24 @@ describe("bookingDurationReporting", () => {
       policyMinutesPerCleanerDay: 480,
     });
     expect(utilization).toBe(37.5);
+  });
+
+  it("reports canonical-duration coverage and neutralizes utilization when coverage is incomplete", () => {
+    expect(summarizeDurationCoverage([
+      { duration_minutes: 120 },
+      { duration_minutes: null },
+    ])).toEqual({
+      totalBookings: 2,
+      coveredBookings: 1,
+      missingBookings: 1,
+      coveragePct: 50,
+    });
+
+    expect(computeFleetHourUtilizationPct({
+      bookings: [{ duration_minutes: 480 }, { duration_minutes: null }],
+      activeCleanerCount: 1,
+      windowDays: 1,
+      policyMinutesPerCleanerDay: 480,
+    })).toBe(50);
   });
 });
