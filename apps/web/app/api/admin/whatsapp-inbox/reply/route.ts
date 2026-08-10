@@ -100,7 +100,7 @@ export async function POST(request: Request) {
     provider_message_id: result.messageId ?? null,
     direction: "outbound",
     phone,
-    event_type: mode === "text" ? "admin_reply" : "admin_template_reply",
+    event_type: "admin_reply",
     payload: {
       ...payload,
       admin_user_id: auth.userId,
