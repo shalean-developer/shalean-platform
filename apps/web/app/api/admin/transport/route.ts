@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { summarizeTransport } from "@/lib/admin/transport";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -24,16 +23,17 @@ export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   if (!(await canManage(admin, auth.userId, false))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-  const [vehicles, drivers, runs] = await Promise.all([
+  const [vehicles, drivers, runs, fleetSummary] = await Promise.all([
     admin.from("fleet_vehicles").select("*").order("registration"),
-    admin.from("transport_drivers").select("*").eq("is_active", true).order("full_name"),
+    admin.from("transport_drivers").select("id,full_name,phone").eq("is_active", true).order("full_name"),
     admin.from("transport_runs").select("*, fleet_vehicles(registration,make,model), transport_drivers(full_name,phone), transport_stops(*), transport_cost_entries(*)").order("scheduled_at", { ascending: false }).limit(100),
+    admin.from("transport_fleet_summary").select("*").single(),
   ]);
-  const error = vehicles.error ?? drivers.error ?? runs.error;
+  const error = vehicles.error ?? drivers.error ?? runs.error ?? fleetSummary.error;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const vehicleRows = vehicles.data ?? [];
   const due = vehicleRows.filter((vehicle) => vehicle.service_due_km != null && Number(vehicle.odometer_km) >= Number(vehicle.service_due_km)).length;
-  return NextResponse.json({ vehicles: vehicleRows, drivers: drivers.data ?? [], runs: runs.data ?? [], summary: summarizeTransport(runs.data ?? [], due) });
+  return NextResponse.json({ vehicles: vehicleRows, drivers: drivers.data ?? [], runs: runs.data ?? [], summary: { activeRuns: Number(fleetSummary.data?.active_runs ?? 0), completedKm: Number(fleetSummary.data?.completed_km ?? 0), recordedCostCents: Number(fleetSummary.data?.recorded_cost_cents ?? 0), vehiclesDueForService: due } });
 }
 
 export async function POST(request: Request) {
@@ -59,7 +59,9 @@ export async function POST(request: Request) {
   } else if (action === "run") {
     const vehicleId = nullable(body.vehicle_id); const driverId = nullable(body.driver_id); const scheduledAt = nullable(body.scheduled_at); const origin = value(body.origin); const destination = value(body.destination);
     if (!vehicleId || !driverId || !scheduledAt || !origin || !destination) return NextResponse.json({ error: "Vehicle, driver, schedule, origin and destination are required." }, { status: 400 });
-    result = await admin.from("transport_runs").insert({ vehicle_id: vehicleId, driver_id: driverId, scheduled_at: scheduledAt, origin, destination, notes: nullable(body.notes), created_by: auth.userId }).select("id").single();
+    const { data: selectedVehicle, error: vehicleError } = await admin.from("fleet_vehicles").select("odometer_km").eq("id", vehicleId).eq("status", "active").single();
+    if (vehicleError || !selectedVehicle) return NextResponse.json({ error: "Active vehicle not found." }, { status: 400 });
+    result = await admin.from("transport_runs").insert({ vehicle_id: vehicleId, driver_id: driverId, scheduled_at: scheduledAt, origin, destination, odometer_start_km: selectedVehicle.odometer_km, notes: nullable(body.notes), created_by: auth.userId }).select("id").single();
   } else if (action === "stop") {
     const runId = nullable(body.run_id); const stopType = value(body.stop_type); const address = value(body.address); const order = Number(body.stop_order);
     if (!runId || !["pickup","dropoff","booking","fuel","other"].includes(stopType) || !address || !Number.isInteger(order) || order <= 0) return NextResponse.json({ error: "Valid run, stop type, order and address are required." }, { status: 400 });
@@ -76,4 +78,3 @@ export async function POST(request: Request) {
   if (result.error) return NextResponse.json({ error: result.error.message }, { status: result.error.code === "23505" ? 409 : 400 });
   return NextResponse.json({ ok: true, id: result.data }, { status: 201 });
 }
-
