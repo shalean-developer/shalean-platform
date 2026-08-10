@@ -13,6 +13,7 @@ const ITEMS = [
   { label: "Web Vitals", href: "/office/seo-insights/web-vitals" },
   { label: "Competitors", href: "/office/seo-insights/competitors" },
   { label: "Backlinks", href: "/office/seo-insights/backlinks" },
+  { label: "Structured Data", href: "/office/seo-insights/structured-data" },
   { label: "Performance & Automation", href: "/office/seo-insights/performance" },
 ] as const;
 
