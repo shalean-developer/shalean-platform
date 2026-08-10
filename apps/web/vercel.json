@@ -1,35 +1,5 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "ignoreCommand": "node -e \"process.exit(['main','staging'].includes(process.env.VERCEL_GIT_COMMIT_REF) ? 1 : 0)\"",
-  "installCommand": "npm ci",
-  "crons": [
-    {
-      "path": "/api/cron/booking-lifecycle",
-      "schedule": "0 2 * * *"
-    },
-    {
-      "path": "/api/cron/referral-credit-reminders",
-      "schedule": "0 6 * * *"
-    },
-    {
-      "path": "/api/cron/referral-credit-expiry",
-      "schedule": "30 6 * * *"
-    },
-    {
-      "path": "/api/cron/referral-campaigns",
-      "schedule": "0 7 1 * *"
-    },
-    {
-      "path": "/api/cron/promotions",
-      "schedule": "0 5 * * *"
-    },
-    {
-      "path": "/api/cron/recover-stuck-publish",
-      "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/cron/process-social-publish-jobs",
-      "schedule": "0 4 * * *"
-    }
-  ]
+  "installCommand": "npm ci"
 }
