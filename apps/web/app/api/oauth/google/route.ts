@@ -22,6 +22,10 @@ export const dynamic = "force-dynamic";
  * Starts Google Business Profile OAuth (offline access + consent).
  * - Browser navigation: uses cookie session (admin only) and redirects to Google.
  * - Bearer adminFetch: returns `{ url }` so the UI can open the connect flow.
+ *
+ * Some Office roles can reach Connected Accounts with a valid admin cookie while
+ * granular bearer RBAC does not include this OAuth bootstrap route. In that case,
+ * fall back to the authenticated admin cookie instead of returning a false 403.
  */
 export async function GET(request: Request) {
   const cfg = getGoogleOAuthConfig();
@@ -42,7 +46,17 @@ export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
   if (authHeader) {
     const auth = await requireAdminApi(request);
-    if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+    if (!auth.ok) {
+      const user = await getCookieUser();
+      const cookieAdmin = await requireAdminUser(user);
+      if (!cookieAdmin.ok) {
+        return NextResponse.json({ error: auth.error }, { status: auth.status });
+      }
+      console.info("[gbp] oauth_admin_cookie_fallback", {
+        actor: cookieAdmin.email,
+        bearerStatus: auth.status,
+      });
+    }
   } else {
     const user = await getCookieUser();
     const adminAuth = await requireAdminUser(user);
