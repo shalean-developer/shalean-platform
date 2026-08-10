@@ -109,7 +109,7 @@ export async function GET(request: Request) {
     };
   });
 
-  const rank = { critical: 0, warning: 1, healthy: 2 } as const;
+  const rank: Record<string, number> = { critical: 0, warning: 1, healthy: 2 };
   rows.sort((a, b) => rank[a.health] - rank[b.health] || b.issues.length - a.issues.length);
 
   return NextResponse.json({
