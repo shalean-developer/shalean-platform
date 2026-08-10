@@ -1,14 +1,14 @@
 "use client";
 
 import { useState } from "react";
-import { useAdminData } from "@/hooks/useAdminData";
+import { adminFetch, useAdminData } from "@/hooks/useAdminData";
 
  type Payload={summary:{total:number;indexed:number;notIndexed:number;excluded:number;blocked:number;unknown:number;regressions:number;actionRequired:number};rows:Array<{url:string;path:string;page_group:string;priority:string;state:string;coverage_state:string|null;reason:string|null;last_crawl_time:string|null;inspected_at:string|null;google_canonical:string|null;user_canonical:string|null;regression_detected:boolean;action_required:boolean}>;runs:Array<{id:string;started_at:string;status:string;inspected:number;indexed:number;not_indexed:number;excluded:number;blocked:number;regressions:number;errors:number}>};
 
 export function IndexingManagementDashboard(){
  const {data,loading,error,refetch}=useAdminData<Payload>("/api/admin/seo-insights/indexing");
  const [running,setRunning]=useState(false); const [runError,setRunError]=useState<string|null>(null);
- async function run(){setRunning(true);setRunError(null);try{const r=await fetch("/api/admin/seo-insights/indexing",{method:"POST"});const j=await r.json();if(!r.ok)throw new Error(j.error||"Inspection failed");await refetch();}catch(e){setRunError(e instanceof Error?e.message:"Inspection failed");}finally{setRunning(false);}}
+ async function run(){setRunning(true);setRunError(null);try{const result=await adminFetch("/api/admin/seo-insights/indexing",{method:"POST"});if(!result.ok)throw new Error(result.error||"Inspection failed");await refetch();}catch(e){setRunError(e instanceof Error?e.message:"Inspection failed");}finally{setRunning(false);}}
  if(loading)return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500">Loading indexing coverage…</div>;
  if(error)return <div className="rounded-2xl border border-red-200 bg-red-50 p-5 text-sm text-red-700">{error}</div>;
  if(!data)return null;
