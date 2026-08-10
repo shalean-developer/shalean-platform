@@ -42,15 +42,24 @@ export function buildExactSourceLineItems(params: {
     if (!name || !Number.isFinite(quantity) || quantity <= 0 || !Number.isFinite(unitPriceCents)) {
       continue;
     }
+    const sourceTotalCents = Math.round(quantity * unitPriceCents);
+    const persistedQuantity = Number.isInteger(quantity) ? quantity : 1;
+    const persistedUnitPriceCents = Number.isInteger(quantity) ? unitPriceCents : sourceTotalCents;
     items.push({
       item_type: index === 0 ? "base" : "extra",
       slug: null,
       name,
-      quantity,
-      unit_price_cents: unitPriceCents,
-      total_price_cents: Math.round(quantity * unitPriceCents),
+      quantity: persistedQuantity,
+      unit_price_cents: persistedUnitPriceCents,
+      total_price_cents: sourceTotalCents,
       pricing_source: PRICING_EXACT_SOURCE,
-      metadata: { source: params.source, sourceLineIndex: index },
+      metadata: {
+        source: params.source,
+        sourceLineIndex: index,
+        ...(persistedQuantity !== quantity
+          ? { sourceQuantity: quantity, sourceUnitPriceCents: unitPriceCents }
+          : {}),
+      },
     });
   }
 
