@@ -154,6 +154,8 @@ describe("H-15 cron lock — route governance", () => {
     "extend-cleaner-availability", "deferred-payment-link-emails", "subscription-bookings", "gsc-sync",
     "gsc-seo-fix-001-002-validate", "referral-campaigns", "referral-credit-reminders",
     "referral-credit-expiry", "promotions", "recover-stuck-publish", "retry-failed-emails",
+    // Sitemap health is a read-only idempotent probe, so overlapping invocations are safe without a global lease.
+    "sitemap-health",
     // Review prompt rows are claimed with conditional timestamp updates in the worker,
     // so overlapping invocations are intentionally CAS-safe without a global lease.
     "review-prompts",

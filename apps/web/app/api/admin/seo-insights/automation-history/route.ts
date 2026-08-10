@@ -5,7 +5,7 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-const SEO_JOBS = ["gsc-sync", "seo-optimization"] as const;
+const SEO_JOBS = ["gsc-sync", "seo-optimization", "sitemap-health"] as const;
 type SeoJob = (typeof SEO_JOBS)[number];
 
 type CronLogRow = {
@@ -54,6 +54,21 @@ function normalizeRun(row: CronLogRow) {
       errors: [context.location_error, context.query_error, context.site_error, context.error]
         .map(asString)
         .filter((value): value is string => Boolean(value)),
+    };
+  }
+
+  if (job === "sitemap-health") {
+    return {
+      id: row.id,
+      job,
+      status,
+      created_at: row.created_at,
+      detail,
+      metrics: {
+        http_status: asNumber(context.http_status),
+        url_count: asNumber(context.url_count),
+      },
+      errors: [context.error].map(asString).filter((value): value is string => Boolean(value)),
     };
   }
 
