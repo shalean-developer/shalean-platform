@@ -60,6 +60,11 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     path.includes("/payment-reconciliation") ||
     path.includes("/booking-profitability")
   ) return ["finance.full.view"];
+  if (path.includes("/money-action-proposals")) {
+    if (path.includes("/approve")) return ["payout.approve"];
+    if (path.includes("/reject")) return ["payout.approve", "finance.full.view"];
+    return read ? ["finance.full.view"] : ["payout.prepare"];
+  }
   if (path.includes("/cleaner-earnings-disputes") || path.includes("/disputes")) {
     return ["dispute.resolve"];
   }
@@ -73,6 +78,18 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     return ["cleaner.documents.view"];
   }
 
+  if (path.includes("/invoices") || path.includes("/billing-documents") || path.includes("/sales-documents")) {
+    if (path.includes("/refund")) return ["refund.approve.high"];
+    if (
+      path.includes("/reconcile") ||
+      path.includes("/sync-payment") ||
+      path.includes("/mark-paid") ||
+      path.includes("/hard-close") ||
+      path.includes("/repair-")
+    ) return ["payment.reconcile"];
+    return ["invoice.manage"];
+  }
+
   if (
     path.includes("/office-notifications") ||
     path.includes("/notification-logs") ||
@@ -82,6 +99,26 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
       ? ["system.notifications", "notification.send", "system.logs"]
       : ["notification.send"];
   }
+  if (path.includes("/email/health")) return ["system.notifications"];
+  if (path.includes("/whatsapp-test")) return ["notification.send"];
+
+  if (path.includes("/customer-care-cases")) return ["customer.view", "customer.contact"];
+  if (
+    path.includes("/customers") ||
+    path.includes("/addresses") ||
+    path.includes("/customer-saved-addresses")
+  ) {
+    return read ? ["customer.view"] : ["customer.edit"];
+  }
+
+  if (path.includes("/quality/inspections")) {
+    return read ? ["cleaner.view", "incident.manage"] : ["incident.manage"];
+  }
+  if (
+    path.includes("/cleaner-applications") ||
+    path.includes("/cleaner-change-requests")
+  ) return read ? ["cleaner.view"] : ["application.decide", "cleaner.edit"];
+  if (path.includes("/cleaners")) return read ? ["cleaner.view"] : ["cleaner.edit"];
   if (path.includes("/email-operations")) {
     return read
       ? ["system.notifications", "notification.send"]
@@ -97,6 +134,7 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   }
   if (
     path.includes("/ops-health") ||
+    path.includes("/cron-health") ||
     path.includes("/office-ops-health") ||
     path.includes("/launch-check") ||
     path.includes("/sla-breaches") ||
@@ -109,6 +147,11 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     return read
       ? ["ops.health.view", "incident.manage"]
       : ["incident.manage", "ops.health.view"];
+  }
+
+  if (path.includes("/pricing-catalog-audit")) return ["pricing.manage"];
+  if (path.includes("/workforce/training-compliance")) {
+    return read ? ["cleaner.view"] : ["cleaner.edit"];
   }
 
   if (
@@ -142,7 +185,29 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
       : ["content.publish", "marketing.view"];
   }
 
-  return ["booking.view"];
+  if (path.includes("/seo") || path.includes("/conversion") || path.includes("/growth/")) {
+    return ["marketing.view"];
+  }
+
+  if (path.includes("/whatsapp-inbox")) return ["customer.contact"];
+
+  if (path.includes("/recurring") || path.includes("/bookings")) {
+    if (path.includes("/refund")) return ["refund.approve.low", "refund.approve.high"];
+    if (
+      path.includes("/resend-confirmation") ||
+      path.includes("/send-review-request") ||
+      path.includes("/resend-payment-link")
+    ) return ["notification.send"];
+    if (path.includes("/assign") || path.includes("/roster") || path.includes("/cleaners")) {
+      return ["booking.assign"];
+    }
+    return read ? ["booking.view"] : ["booking.edit"];
+  }
+
+  // Compatibility helpers must never turn an unknown admin route into generic
+  // booking access. An empty policy is rejected by the canonical permission
+  // resolver, so new/unmapped route families fail closed until classified.
+  return [];
 }
 
 /** Backwards-compatible single-permission accessor used by existing tests. */
