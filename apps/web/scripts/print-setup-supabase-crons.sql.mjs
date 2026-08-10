@@ -63,7 +63,6 @@ const HTTP_JOBS = [
   ["gsc-sync", "15 5 * * *", "/api/cron/gsc-sync"],
   ["customer-retention", "30 7 * * *", "/api/cron/customer-retention"],
   ["extend-cleaner-availability", "30 2 * * *", "/api/cron/extend-cleaner-availability"],
-  ["cleaner-earnings-auto-payout", "45 5 * * *", "/api/cron/cleaner-earnings-auto-payout"],
   ["charge-monthly-invoices", "55 21 * * *", "/api/cron/charge-monthly-invoices"],
   ["seo-optimization", "20 6 * * 1", "/api/cron/seo-optimization"],
   ["generate-payouts", "0 6 * * 1", "/api/cron/generate-payouts"],
@@ -73,6 +72,7 @@ const HTTP_JOBS = [
 ];
 
 const LEGACY_NAMES = [
+  "cleaner-earnings-auto-payout",
   "booking-lifecycle-job",
   "shalean_booking_lifecycle",
   "retry-unassigned",
