@@ -386,7 +386,7 @@ describe("MKT-001H facebook save error classification", () => {
       "OAuthException: secret_token=abc (#190) Invalid OAuth access token.",
       401,
     );
-    expect(reason).toBe("token_revoked");
+    expect(reason).toBe("facebook_token_revoked");
     expect(message).not.toContain("secret_token");
     expect(message).not.toContain("abc");
   });
@@ -424,6 +424,10 @@ describe("MKT-001H facebook save error classification", () => {
     expect(isFacebookSaveErrorReason("no_pages")).toBe(true);
     expect(isFacebookSaveErrorReason("credential_mismatch")).toBe(true);
     expect(isFacebookSaveErrorReason("encryption_not_configured")).toBe(true);
+    expect(isFacebookSaveErrorReason("facebook_token_revoked")).toBe(true);
+    expect(isFacebookSaveErrorReason("facebook_rate_limited")).toBe(true);
+    expect(isFacebookSaveErrorReason("token_revoked")).toBe(false);
+    expect(isFacebookSaveErrorReason("rate_limited")).toBe(false);
     expect(isFacebookSaveErrorReason("totally_fake")).toBe(false);
   });
 });
