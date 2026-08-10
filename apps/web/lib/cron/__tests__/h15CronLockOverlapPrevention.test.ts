@@ -146,6 +146,7 @@ describe("H-15 cron lock — route governance", () => {
     { dir: "accounting-sync", key: "accountingSync" },
     { dir: "ops-health", key: "opsHealthMetrics" },
     { dir: "process-social-publish-jobs", key: "processSocialPublishJobs" },
+    { dir: "seo-competitors", key: "seoCompetitors" },
   ];
 
   const unblockedRoutes = [

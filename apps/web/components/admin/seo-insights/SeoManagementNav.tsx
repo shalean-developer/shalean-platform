@@ -9,6 +9,7 @@ const ITEMS = [
   { label: "Issues", href: "/office/seo-insights/issues" },
   { label: "Pages", href: "/office/seo-insights/page-groups" },
   { label: "Queries", href: "/office/seo-insights/queries" },
+  { label: "Competitors", href: "/office/seo-insights/competitors" },
   { label: "Performance & Automation", href: "/office/seo-insights/performance" },
 ] as const;
 
