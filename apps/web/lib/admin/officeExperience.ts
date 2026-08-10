@@ -10,6 +10,7 @@ export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
   { path: "/office/payouts/runs", anyOf: ["payout.view"], audience: ["owner", "manager", "finance"] },
   { path: "/office/cleaners/manage", anyOf: ["cleaner.edit"], audience: ["owner", "manager", "workforce"] },
   { path: "/office/cleaners", anyOf: ["cleaner.view"], audience: ["owner", "manager", "operations", "workforce", "supervisor"] },
+  { path: "/office/inventory", anyOf: ["expense.manage", "booking.assign", "finance.full.view"], audience: ["owner", "manager", "operations", "finance", "supervisor"] },
   { path: "/office/customers/create", anyOf: ["customer.edit"], audience: ["owner", "manager", "operations", "customer-care"] },
   { path: "/office/customers", anyOf: ["customer.view"], audience: ["owner", "manager", "operations", "customer-care"] },
   { path: "/office/bookings/create", anyOf: ["booking.create"], audience: ["owner", "manager", "operations", "customer-care"] },
