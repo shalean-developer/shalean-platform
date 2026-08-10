@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyCronSecret } from "@/lib/cron/verifyCronSecret";
 import { runLocationGscSync } from "@/lib/gsc/sync-location-gsc-metrics";
+import { runSiteGscSync } from "@/lib/gsc/sync-site-gsc-metrics";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -17,11 +18,15 @@ async function handleCron(request: Request) {
     return NextResponse.json({ error: "Supabase admin not configured." }, { status: 503 });
   }
 
-  const summary = await runLocationGscSync(admin);
-  return NextResponse.json(summary, { status: summary.ok ? 200 : 502 });
+  const [location, site] = await Promise.all([
+    runLocationGscSync(admin),
+    runSiteGscSync(admin),
+  ]);
+  const ok = location.ok && site.ok;
+  return NextResponse.json({ ok, location, site }, { status: ok ? 200 : 502 });
 }
 
-/** Vercel Cron (GET) or manual POST with CRON_SECRET. */
+/** Scheduled pg_cron GET or authenticated manual POST with CRON_SECRET. */
 export async function GET(request: Request) {
   return handleCron(request);
 }
