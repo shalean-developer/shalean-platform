@@ -24,36 +24,27 @@ export async function GET(request: Request) {
   const [{ data: competitors, error: competitorError }, { data: keywords, error: keywordError }, { data: snapshots, error: snapshotError }] = await Promise.all([
     admin.from("seo_competitors").select("id,name,domain,source,active,ignored,notes,created_at,updated_at").order("created_at", { ascending: true }),
     admin.from("seo_tracked_keywords").select("id,keyword,target_path,location_name,language_code,device,priority,active,created_at,updated_at").order("priority", { ascending: true }).order("keyword", { ascending: true }),
-    admin.from("seo_serp_snapshots").select("id,keyword_id,provider,fetched_at,result_count").order("fetched_at", { ascending: false }).limit(200),
+    admin.from("seo_serp_snapshots").select("id,keyword_id,provider,fetched_at,result_count").order("fetched_at", { ascending: false }).limit(1000),
   ]);
   const error = competitorError || keywordError || snapshotError;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  const keywordIds = (keywords ?? []).map((row) => row.id);
-  const { data: rankings, error: rankingError } = keywordIds.length
-    ? await admin.from("seo_competitor_rankings").select("keyword_id,domain,position,url,title,is_shalean,created_at").in("keyword_id", keywordIds).order("created_at", { ascending: false }).limit(5000)
-    : { data: [], error: null };
-  if (rankingError) return NextResponse.json({ error: rankingError.message }, { status: 500 });
-
   const latestSnapshotByKeyword = new Map<string, string>();
-  for (const snapshot of snapshots ?? []) if (!latestSnapshotByKeyword.has(snapshot.keyword_id)) latestSnapshotByKeyword.set(snapshot.keyword_id, snapshot.id);
-  const snapshotIds = new Set(latestSnapshotByKeyword.values());
-  const latestRankings = (rankings ?? []).filter((row: any) => {
-    const latest = latestSnapshotByKeyword.get(row.keyword_id);
-    if (!latest) return false;
-    return snapshotIds.has(latest);
-  });
+  for (const snapshot of snapshots ?? []) {
+    if (!latestSnapshotByKeyword.has(snapshot.keyword_id)) latestSnapshotByKeyword.set(snapshot.keyword_id, snapshot.id);
+  }
+  const snapshotIds = [...latestSnapshotByKeyword.values()];
+  const latestQuery = snapshotIds.length
+    ? await admin.from("seo_competitor_rankings").select("snapshot_id,keyword_id,domain,position,url,title,is_shalean,created_at").in("snapshot_id", snapshotIds).order("position", { ascending: true })
+    : { data: [], error: null };
+  if (latestQuery.error) return NextResponse.json({ error: latestQuery.error.message }, { status: 500 });
+  const latestRows = latestQuery.data ?? [];
 
-  // Fetch exact latest-snapshot ranking rows so historical rows never contaminate the comparison.
-  const { data: latestRows } = snapshotIds.size
-    ? await admin.from("seo_competitor_rankings").select("snapshot_id,keyword_id,domain,position,url,title,is_shalean,created_at").in("snapshot_id", [...snapshotIds]).order("position", { ascending: true })
-    : { data: [] as any[] };
-
-  const competitorDomains = new Set((competitors ?? []).map((row) => row.domain));
-  const ignoredDomains = new Set((competitors ?? []).filter((row) => row.ignored).map((row) => row.domain));
+  const competitorDomains = new Set((competitors ?? []).filter((row) => row.active && !row.ignored).map((row) => row.domain));
+  const knownDomains = new Set((competitors ?? []).map((row) => row.domain));
   const discovery = new Map<string, { domain: string; appearances: number; best_position: number }>();
-  for (const row of latestRows ?? []) {
-    if (row.is_shalean || competitorDomains.has(row.domain) || ignoredDomains.has(row.domain)) continue;
+  for (const row of latestRows) {
+    if (row.is_shalean || knownDomains.has(row.domain)) continue;
     const current = discovery.get(row.domain) ?? { domain: row.domain, appearances: 0, best_position: 999 };
     current.appearances += 1;
     current.best_position = Math.min(current.best_position, row.position);
@@ -61,10 +52,10 @@ export async function GET(request: Request) {
   }
 
   const comparisons = (keywords ?? []).map((keyword) => {
-    const rows = (latestRows ?? []).filter((row) => row.keyword_id === keyword.id);
+    const rows = latestRows.filter((row) => row.keyword_id === keyword.id);
     const shalean = rows.find((row) => row.is_shalean) ?? null;
     const competitorsForKeyword = rows.filter((row) => competitorDomains.has(row.domain));
-    const leader = [...competitorsForKeyword].sort((a, b) => a.position - b.position)[0] ?? null;
+    const leader = competitorsForKeyword[0] ?? null;
     return {
       keyword_id: keyword.id,
       keyword: keyword.keyword,
@@ -81,11 +72,11 @@ export async function GET(request: Request) {
   });
 
   const visibility = (competitors ?? []).filter((row) => row.active && !row.ignored).map((competitor) => {
-    const domainRows = (latestRows ?? []).filter((row) => row.domain === competitor.domain);
+    const domainRows = latestRows.filter((row) => row.domain === competitor.domain);
     const score = domainRows.reduce((sum, row) => sum + Math.max(0, 101 - row.position), 0);
     return { id: competitor.id, name: competitor.name, domain: competitor.domain, appearances: domainRows.length, visibility_score: score };
   });
-  const shaleanRows = (latestRows ?? []).filter((row) => row.is_shalean);
+  const shaleanRows = latestRows.filter((row) => row.is_shalean);
   const shaleanVisibility = shaleanRows.reduce((sum, row) => sum + Math.max(0, 101 - row.position), 0);
   const totalVisibility = shaleanVisibility + visibility.reduce((sum, row) => sum + row.visibility_score, 0);
 
@@ -134,7 +125,7 @@ export async function POST(request: Request) {
       location_name: String(body.location_name ?? "Cape Town, Western Cape, South Africa").trim(),
       language_code: "en",
       device: body.device === "mobile" ? "mobile" : "desktop",
-      priority: ["p0","p1","p2"].includes(body.priority) ? body.priority : "p1",
+      priority: ["p0", "p1", "p2"].includes(body.priority) ? body.priority : "p1",
       active: true,
     };
     const { data, error } = await admin.from("seo_tracked_keywords").upsert(row, { onConflict: "keyword,location_name,device" }).select().single();
