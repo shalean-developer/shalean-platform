@@ -3,6 +3,7 @@ import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { executeAllCleanersApprovedEarningsPaystack } from "@/lib/payout/executeCleanerApprovedEarningsPaystack";
+import { isLedgerAutoPayoutEnabled } from "@/lib/payout/ledgerAutoPayoutPolicy";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -19,6 +20,16 @@ export async function POST(request: Request) {
   }
   if (request.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  // The weekly cleaner_payouts rail is canonical. Keep the legacy ledger cron
+  // fail-closed unless finance deliberately enables it for a controlled run.
+  if (!isLedgerAutoPayoutEnabled()) {
+    return NextResponse.json({
+      ok: true,
+      skipped: true,
+      reason: "ledger_auto_payout_disabled_weekly_rail_canonical",
+    });
   }
 
   const admin = getSupabaseAdmin();
