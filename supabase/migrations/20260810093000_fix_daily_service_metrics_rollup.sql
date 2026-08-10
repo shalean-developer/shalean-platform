@@ -43,26 +43,13 @@ begin
     and event_type = 'booking_completed';
 
   insert into public.daily_booking_funnel_metrics (
-    day,
-    quote_starts,
-    payment_reached,
-    booking_completed_signals,
-    paystack_opened,
-    paystack_completed,
-    unique_sessions,
-    updated_at
-  )
-  values (
-    p_day,
-    coalesce(v_quote_views, 0),
-    coalesce(v_payment_reached, 0),
-    coalesce(v_bc_direct, 0),
-    coalesce(v_pay_open, 0),
-    coalesce(v_book_done, 0),
-    coalesce(v_distinct_sessions, 0),
-    now()
-  )
-  on conflict (day) do update set
+    day, quote_starts, payment_reached, booking_completed_signals,
+    paystack_opened, paystack_completed, unique_sessions, updated_at
+  ) values (
+    p_day, coalesce(v_quote_views, 0), coalesce(v_payment_reached, 0),
+    coalesce(v_bc_direct, 0), coalesce(v_pay_open, 0), coalesce(v_book_done, 0),
+    coalesce(v_distinct_sessions, 0), now()
+  ) on conflict (day) do update set
     quote_starts = excluded.quote_starts,
     payment_reached = excluded.payment_reached,
     booking_completed_signals = excluded.booking_completed_signals,
@@ -71,74 +58,43 @@ begin
     unique_sessions = excluded.unique_sessions,
     updated_at = excluded.updated_at;
 
-  select count(*)::int into v_starts
-  from public.user_events
+  select count(*)::int into v_starts from public.user_events
   where (created_at at time zone 'UTC')::date = p_day and event_type = 'booking_started';
-
-  select count(*)::int into v_completed
-  from public.user_events
+  select count(*)::int into v_completed from public.user_events
   where (created_at at time zone 'UTC')::date = p_day and event_type = 'booking_completed';
-
-  select count(*)::int into v_pay_init
-  from public.user_events
+  select count(*)::int into v_pay_init from public.user_events
   where (created_at at time zone 'UTC')::date = p_day and event_type = 'payment_initiated';
-
-  select count(*)::int into v_pay_done
-  from public.user_events
+  select count(*)::int into v_pay_done from public.user_events
   where (created_at at time zone 'UTC')::date = p_day and event_type = 'payment_completed';
 
   insert into public.daily_conversion_metrics (
-    day,
-    booking_started,
-    booking_completed,
-    payment_initiated,
-    payment_completed,
-    updated_at
-  )
-  values (
-    p_day,
-    coalesce(v_starts, 0),
-    coalesce(v_completed, 0),
-    coalesce(v_pay_init, 0),
-    coalesce(v_pay_done, 0),
-    now()
-  )
-  on conflict (day) do update set
+    day, booking_started, booking_completed, payment_initiated, payment_completed, updated_at
+  ) values (
+    p_day, coalesce(v_starts, 0), coalesce(v_completed, 0),
+    coalesce(v_pay_init, 0), coalesce(v_pay_done, 0), now()
+  ) on conflict (day) do update set
     booking_started = excluded.booking_started,
     booking_completed = excluded.booking_completed,
     payment_initiated = excluded.payment_initiated,
     payment_completed = excluded.payment_completed,
     updated_at = excluded.updated_at;
 
-  v_abandon :=
-    case
-      when coalesce(v_pay_open, 0) > 0 then
-        round(((v_pay_open - coalesce(v_book_done, 0))::numeric / v_pay_open::numeric) * 100, 2)
-      else null
-    end;
+  v_abandon := case
+    when coalesce(v_pay_open, 0) > 0 then
+      round(((v_pay_open - coalesce(v_book_done, 0))::numeric / v_pay_open::numeric) * 100, 2)
+    else null
+  end;
 
   insert into public.daily_payment_metrics (
-    day,
-    paystack_opened,
-    payment_failed_signals,
-    abandonment_pct,
-    updated_at
-  )
-  values (
-    p_day,
-    coalesce(v_pay_open, 0),
-    0,
-    v_abandon,
-    now()
-  )
-  on conflict (day) do update set
+    day, paystack_opened, payment_failed_signals, abandonment_pct, updated_at
+  ) values (
+    p_day, coalesce(v_pay_open, 0), 0, v_abandon, now()
+  ) on conflict (day) do update set
     paystack_opened = excluded.paystack_opened,
     payment_failed_signals = excluded.payment_failed_signals,
     abandonment_pct = excluded.abandonment_pct,
     updated_at = excluded.updated_at;
 
-  -- Rebuild this day's service rows atomically so removed/reclassified data
-  -- cannot leave stale service buckets behind.
   delete from public.daily_service_metrics where day = p_day;
 
   with event_metrics as (
@@ -159,20 +115,18 @@ begin
   ), revenue_metrics as (
     select
       coalesce(nullif(b.service_slug, ''), nullif(b.service, '')) as service_slug,
-      sum(
-        coalesce(
-          b.total_paid_cents,
-          b.amount_paid_cents,
-          round(coalesce(b.total_price, 0) * 100)::int,
-          0
-        )
-      )::numeric / 100 as revenue_zar
+      sum(coalesce(
+        b.total_paid_cents,
+        b.amount_paid_cents,
+        round(coalesce(b.total_price, 0) * 100)::int,
+        0
+      ))::numeric / 100 as revenue_zar
     from public.bookings b
     where coalesce(
-            (b.paid_at at time zone 'UTC')::date,
-            (b.payment_completed_at at time zone 'UTC')::date,
-            (b.created_at at time zone 'UTC')::date
-          ) = p_day
+      (b.paid_at at time zone 'UTC')::date,
+      (b.payment_completed_at at time zone 'UTC')::date,
+      (b.created_at at time zone 'UTC')::date
+    ) = p_day
       and coalesce(b.payment_status, '') in ('success', 'paid')
     group by 1
   ), service_rollup as (
@@ -185,32 +139,24 @@ begin
     full join revenue_metrics r using (service_slug)
   )
   insert into public.daily_service_metrics (
-    day,
-    service_slug,
-    booking_starts,
-    completions,
-    revenue_zar,
-    updated_at
+    day, service_slug, booking_starts, completions, revenue_zar, updated_at
   )
-  select
-    p_day,
-    service_slug,
-    booking_starts,
-    completions,
-    revenue_zar,
-    now()
+  select p_day, service_slug, booking_starts, completions, revenue_zar, now()
   from service_rollup
   where service_slug is not null;
 end;
 $function$;
 
 -- Backfill every date for which the analytics warehouse has source data.
+-- Refresh first because some non-production databases keep the MVs unpopulated.
 do $backfill$
 declare
   v_start date;
   v_end date := (timezone('utc', now()))::date;
   v_day date;
 begin
+  perform public.refresh_analytics_materialized_views();
+
   select least(
     coalesce((select min((ue.created_at at time zone 'UTC')::date) from public.user_events ue), v_end),
     coalesce((select min((b.created_at at time zone 'UTC')::date) from public.bookings b), v_end)
@@ -220,8 +166,7 @@ begin
     return;
   end if;
 
-  for v_day in
-    select generate_series(v_start, v_end, interval '1 day')::date
+  for v_day in select generate_series(v_start, v_end, interval '1 day')::date
   loop
     perform public.populate_daily_analytics_rollups(v_day);
   end loop;
