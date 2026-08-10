@@ -4,7 +4,8 @@
  * `npm run validate:search-console-readiness`
  *
  * Checks live HTML, robots.txt, and explicit Search Console verification configuration.
- * Production CI should run this with REQUIRE_GSC_VERIFICATION=1.
+ * The canonical production host is always hard-gated; non-production can opt in with
+ * REQUIRE_GSC_VERIFICATION=1.
  */
 
 import {
@@ -16,7 +17,16 @@ import {
 import { evaluateGscVerificationReadiness } from "@/lib/seo/search-console-readiness";
 
 const baseEnv = resolveAuditBaseUrl(process.env.AUDIT_BASE_URL);
-const requireVerification = process.env.REQUIRE_GSC_VERIFICATION === "1";
+const isCanonicalProduction = baseEnv === DEFAULT_AUDIT_BASE_URL;
+const requireVerification = isCanonicalProduction || process.env.REQUIRE_GSC_VERIFICATION === "1";
+
+// Shalean uses the Search Console domain property in production. Keeping this
+// declaration in code makes the production verification method reviewable and
+// prevents a missing optional CI variable from silently downgrading the gate.
+const verificationMethod =
+  process.env.GSC_VERIFICATION_METHOD ?? (isCanonicalProduction ? "dns" : undefined);
+const siteUrl =
+  process.env.GSC_SITE_URL ?? (isCanonicalProduction ? "sc-domain:shalean.co.za" : undefined);
 
 async function main(): Promise<void> {
   console.log(`[validate-search-console-readiness] Base ${baseEnv}`);
@@ -32,8 +42,8 @@ async function main(): Promise<void> {
   const readiness = evaluateGscVerificationReadiness({
     baseUrl: baseEnv,
     htmlVerificationToken: token,
-    verificationMethod: process.env.GSC_VERIFICATION_METHOD,
-    siteUrl: process.env.GSC_SITE_URL,
+    verificationMethod,
+    siteUrl,
   });
 
   if (!readiness.ok) {
@@ -70,12 +80,6 @@ async function main(): Promise<void> {
   }
 
   console.log(`[validate-search-console-readiness] robots.txt declares sitemap (${sitemapLine.trim()})`);
-
-  if (baseEnv === DEFAULT_AUDIT_BASE_URL && requireVerification && !readiness.ok) {
-    console.error("[validate-search-console-readiness] Production Search Console readiness is incomplete.");
-    process.exit(1);
-  }
-
   console.log("[validate-search-console-readiness] OK");
 }
 
