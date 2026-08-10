@@ -56,6 +56,9 @@ export const CRON_LOCK_KEYS = {
 
   // Marketing — durable social publish queue (MKT-001B.2)
   processSocialPublishJobs: "cron:process-social-publish-jobs",
+
+  // SEO competitor intelligence writes SERP snapshots and may incur provider cost.
+  seoCompetitors: "cron:seo-competitors",
 } as const;
 
 export type CronLockKey = (typeof CRON_LOCK_KEYS)[keyof typeof CRON_LOCK_KEYS];
