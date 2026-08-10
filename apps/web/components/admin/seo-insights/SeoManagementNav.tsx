@@ -10,6 +10,7 @@ const ITEMS = [
   { label: "Pages", href: "/office/seo-insights/page-groups" },
   { label: "Queries", href: "/office/seo-insights/queries" },
   { label: "Indexing", href: "/office/seo-insights/indexing" },
+  { label: "Web Vitals", href: "/office/seo-insights/web-vitals" },
   { label: "Competitors", href: "/office/seo-insights/competitors" },
   { label: "Performance & Automation", href: "/office/seo-insights/performance" },
 ] as const;
