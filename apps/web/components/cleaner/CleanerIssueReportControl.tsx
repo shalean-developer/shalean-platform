@@ -99,7 +99,14 @@ export function CleanerIssueReportControl() {
                 <h2 className="text-lg font-semibold">Report a job issue</h2>
                 <p className="mt-1 text-sm text-muted-foreground">Operations will receive this against the current booking.</p>
               </div>
-              <Button type="button" variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label="Close issue report">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 w-9 p-0"
+                onClick={() => setOpen(false)}
+                aria-label="Close issue report"
+              >
                 <X className="h-4 w-4" />
               </Button>
             </div>
