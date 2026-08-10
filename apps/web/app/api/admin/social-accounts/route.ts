@@ -53,7 +53,10 @@ type PlatformCard = {
 
 /**
  * GET — Connected Accounts overview for Marketing Hub.
- * Live FB/GBP/IG diagnostics + registry-aligned stubs (MKT-001D / MKT-001H).
+ *
+ * Connected-account management is intentionally separate from one-click publish
+ * enablement. OAuth-capable providers may be connected and verified while their
+ * MARKETING_PROVIDER_* flag is still off; publishEnabled remains fail-closed.
  */
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
@@ -87,9 +90,13 @@ export async function GET(request: Request) {
   for (const entry of registry.listEntries()) {
     const key = entry.provider.key as ProviderKey;
     const caps = entry.provider.getCapabilities();
+    const isConnectable =
+      key === "facebook" || key === "google_business" || key === "instagram" || key === "x";
     const baseMeta = {
       featureFlag: entry.featureFlag,
-      providerEnabled: entry.enabled,
+      // The UI historically used providerEnabled to decide whether Connect exists.
+      // Keep Connect available for OAuth-capable providers even when publishing is off.
+      providerEnabled: isConnectable ? true : entry.enabled,
       publishEnabled: caps.publishEnabled && entry.enabled,
       version: entry.provider.version,
       characterLimit: caps.characterLimit,
@@ -99,17 +106,17 @@ export async function GET(request: Request) {
     if (key === "facebook") {
       const acct = fbPublic.account;
       const status =
-        !entry.enabled
-          ? "disabled"
-          : acct?.status === "pending_location"
-            ? "pending_location"
-            : acct?.status === "error" || (fbDiag.configured && !fbDiag.okForPublish)
-              ? "error"
-              : fbDiag.okForPublish
-                ? "connected"
-                : acct?.status === "disconnected" || !acct
-                  ? "disconnected"
-                  : acct.status;
+        acct?.status === "pending_location"
+          ? "pending_location"
+          : acct?.status === "error" || (fbDiag.configured && !fbDiag.okForPublish && entry.enabled)
+            ? "error"
+            : fbDiag.okForPublish
+              ? "connected"
+              : acct?.status === "disconnected" || !acct
+                ? fbPublic.oauthConfigured
+                  ? "configured"
+                  : "disconnected"
+                : acct.status;
 
       const health =
         status === "connected"
@@ -123,20 +130,19 @@ export async function GET(request: Request) {
       platforms.push({
         id: "facebook",
         label: entry.provider.displayName,
-        available: entry.enabled,
+        available: fbPublic.oauthConfigured,
         connected:
           Boolean(acct && (acct.status === "connected" || acct.status === "pending_location")) ||
           fbDiag.okForPublish,
         status,
         health,
         detail:
-          !entry.enabled
-            ? "Facebook is disabled by feature flag (MARKETING_PROVIDER_FACEBOOK)."
-            : acct?.lastError ||
-              fbDiag.hint ||
-              (!fbPublic.oauthConfigured
-                ? "Set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI."
-                : null),
+          acct?.lastError ||
+          (!fbPublic.oauthConfigured
+            ? "Set FACEBOOK_APP_ID, FACEBOOK_APP_SECRET, and FACEBOOK_REDIRECT_URI."
+            : !entry.enabled
+              ? "Facebook publishing is disabled by MARKETING_PROVIDER_FACEBOOK, but account connection and verification are available."
+              : fbDiag.hint || null),
         lastSync: acct?.lastSync ?? null,
         lastPublishAt: acct?.lastPublishAt ?? null,
         accountName: acct?.accountName ?? fbDiag.tokenSubjectName,
@@ -160,16 +166,20 @@ export async function GET(request: Request) {
       platforms.push({
         id: "google_business",
         label: entry.provider.displayName,
-        available: entry.enabled,
+        available: gbp.oauthConfigured,
         connected: Boolean(gbp.connected),
-        status: (gbp.account?.status as string) ?? (gbp.connected ? "connected" : "disconnected"),
+        status:
+          (gbp.account?.status as string) ??
+          (gbp.connected ? "connected" : gbp.oauthConfigured ? "configured" : "disconnected"),
         health: (gbp.account?.health as string) ?? "unknown",
         detail:
           typeof gbp.account?.lastError === "string"
             ? gbp.account.lastError
-            : gbp.oauthConfigured
-              ? null
-              : "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI.",
+            : !gbp.oauthConfigured
+              ? "Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, and GOOGLE_REDIRECT_URI."
+              : !entry.enabled
+                ? "Google Business publishing is disabled by MARKETING_PROVIDER_GOOGLE_BUSINESS, but account connection and verification are available."
+                : null,
         lastSync: (gbp.account?.lastSync as string) ?? null,
         lastPublishAt: (gbp.account?.lastPublishAt as string) ?? null,
         accountName: (gbp.account?.accountName as string) ?? null,
@@ -183,24 +193,6 @@ export async function GET(request: Request) {
     }
 
     if (key === "instagram") {
-      if (!entry.enabled) {
-        platforms.push({
-          id: "instagram",
-          label: entry.provider.displayName,
-          available: false,
-          connected: false,
-          status: "disabled",
-          health: "unknown",
-          detail:
-            "Instagram is disabled by feature flag (MARKETING_PROVIDER_INSTAGRAM). Enable only after MKT-001G staging verification.",
-          lastSync: null,
-          lastPublishAt: null,
-          ...baseMeta,
-          publishEnabled: false,
-        });
-        continue;
-      }
-
       const status = await entry.provider.validateConnection();
       let lastSync: string | null = null;
       let lastPublishAt: string | null = null;
@@ -217,11 +209,15 @@ export async function GET(request: Request) {
       platforms.push({
         id: "instagram",
         label: entry.provider.displayName,
-        available: entry.enabled,
+        available: status.configured,
         connected: status.connected,
         status: status.statusLabel,
         health: status.health,
-        detail: status.hint,
+        detail:
+          status.hint ??
+          (!entry.enabled
+            ? "Instagram publishing is disabled by MARKETING_PROVIDER_INSTAGRAM, but account connection and verification are available."
+            : null),
         lastSync,
         lastPublishAt,
         accountName: status.displayName,
@@ -234,34 +230,20 @@ export async function GET(request: Request) {
     }
 
     if (key === "x") {
-      if (!entry.enabled) {
-        platforms.push({
-          id: "x",
-          label: entry.provider.displayName,
-          available: false,
-          connected: false,
-          status: "disabled",
-          health: "unknown",
-          detail:
-            "X is disabled by feature flag (MARKETING_PROVIDER_X). Enable only after staging OAuth + publish verification.",
-          lastSync: null,
-          lastPublishAt: null,
-          oauthConfigured: isXOAuthConfigured(),
-          ...baseMeta,
-          publishEnabled: false,
-        });
-        continue;
-      }
-
       const status = await entry.provider.validateConnection();
       platforms.push({
         id: "x",
         label: entry.provider.displayName,
-        available: entry.enabled,
+        available: isXOAuthConfigured(),
         connected: status.connected && xPublic.connected,
         status: status.statusLabel,
         health: status.health,
-        detail: status.hint ?? xPublic.lastError,
+        detail:
+          status.hint ??
+          xPublic.lastError ??
+          (!entry.enabled
+            ? "X publishing is disabled by MARKETING_PROVIDER_X, but account connection and verification are available."
+            : null),
         lastSync: xPublic.lastSync,
         lastPublishAt: xPublic.lastPublishAt,
         accountName: status.displayName ?? xPublic.accountName,
