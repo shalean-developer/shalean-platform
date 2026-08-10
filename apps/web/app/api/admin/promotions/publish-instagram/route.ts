@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import {
-  ProviderDisabledError,
   connectInstagramForAdmin,
   getProviderRegistry,
   publishOutcomeToHttp,
@@ -12,43 +11,27 @@ import { disconnectInstagramConnection } from "@/lib/promotions/instagramPublish
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function disabledResponse(e: ProviderDisabledError) {
-  return NextResponse.json(
-    {
-      configured: false,
-      connected: false,
-      okForPublish: false,
-      error: e.message,
-      hint: "Instagram is disabled by feature flag (intentionally off until staging verification).",
-      statusLabel: "disabled",
-      authModel: "facebook_login",
-    },
-    { status: 403 },
-  );
-}
-
 /**
  * GET — Instagram connection / publish readiness (Facebook Login path).
- * Does not expose tokens or raw Graph payloads.
+ * Does not expose tokens or raw Graph payloads. Connection diagnostics are
+ * available even while the publish feature flag is off.
  */
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
-  let provider;
-  try {
-    provider = getProviderRegistry().requireEnabled("instagram");
-  } catch (e) {
-    if (e instanceof ProviderDisabledError) return disabledResponse(e);
-    throw e;
-  }
+  const provider = getProviderRegistry().get("instagram");
   const status = await provider.validateConnection();
   const details = status.details ?? {};
 
   return NextResponse.json({
     configured: status.configured,
     connected: status.connected,
-    okForPublish: Boolean(details.okForPublish ?? status.connected),
+    okForPublish:
+      Boolean(details.okForPublish ?? status.connected) &&
+      getProviderRegistry()
+        .listEntries()
+        .some((entry) => entry.provider.key === "instagram" && entry.enabled),
     displayName: status.displayName,
     hint: status.hint,
     statusLabel: status.statusLabel,
@@ -63,6 +46,10 @@ export async function GET(request: Request) {
  * Body publish: { message, imageUrl, link?, promotionId? }
  * Body connect: { action: "connect" }
  * Body disconnect: { action: "disconnect" }
+ *
+ * Connect/disconnect are intentionally allowed with the publish flag off.
+ * Actual publishing still flows through runPublish/requireEnabled and remains
+ * fail-closed.
  */
 export async function POST(request: Request) {
   const auth = await requireAdminApi(request);
@@ -80,15 +67,6 @@ export async function POST(request: Request) {
     body = (await request.json()) as typeof body;
   } catch {
     return NextResponse.json({ error: "Invalid body." }, { status: 400 });
-  }
-
-  if (body.action === "connect" || body.action === "disconnect") {
-    try {
-      getProviderRegistry().requireEnabled("instagram");
-    } catch (e) {
-      if (e instanceof ProviderDisabledError) return disabledResponse(e);
-      throw e;
-    }
   }
 
   if (body.action === "connect") {

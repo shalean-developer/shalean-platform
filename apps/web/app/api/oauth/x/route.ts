@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { getCookieUser } from "@/lib/auth/getCookieUser";
 import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
-import { isProviderFeatureEnabled } from "@/lib/promotions/providers/registry";
 import {
   X_OAUTH_CID_COOKIE,
   X_OAUTH_STATE_COOKIE,
@@ -27,6 +26,8 @@ export const dynamic = "force-dynamic";
  * GET /api/oauth/x
  *
  * Starts X OAuth 2.0 Authorization Code + PKCE for Connected Accounts (MKT-001I).
+ * Connection is independent from the publishing feature flag; actual posting
+ * remains fail-closed in the provider registry.
  */
 export async function GET(request: Request) {
   const cfg = getXOAuthConfig();
@@ -44,16 +45,6 @@ export async function GET(request: Request) {
     }
     return NextResponse.redirect(
       marketingConnectedAccountsUrl({ error: "oauth_not_configured" }, origin),
-    );
-  }
-
-  if (!isProviderFeatureEnabled("x")) {
-    const msg = "X is disabled by feature flag (MARKETING_PROVIDER_X). Enable it before connecting.";
-    if (wantsJson) {
-      return NextResponse.json({ error: msg, configured: true, providerEnabled: false }, { status: 403 });
-    }
-    return NextResponse.redirect(
-      marketingConnectedAccountsUrl({ error: "provider_disabled" }, origin),
     );
   }
 

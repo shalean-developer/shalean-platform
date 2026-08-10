@@ -41,6 +41,10 @@ export const dynamic = "force-dynamic";
  * discovers Pages, persists encrypted tokens, redirects to Connected Accounts.
  * When OAuth purpose was Instagram, also discovers/saves the Page-linked IG account.
  * Never returns raw Meta payloads or access tokens to the browser.
+ *
+ * OAuth connection/persistence is deliberately independent from publish feature
+ * flags. Publishing remains fail-closed in the provider registry, while operators
+ * can connect and verify accounts before a provider is promoted for publishing.
  */
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -92,17 +96,7 @@ export async function GET(request: Request) {
     );
   }
 
-  if (!isProviderFeatureEnabled("facebook")) {
-    await clearStateCookies();
-    return NextResponse.redirect(
-      marketingConnectedAccountsUrl({ error: "provider_disabled" }, origin),
-    );
-  }
-
   if (oauthError) {
-    // Meta Login for Business often returns access_denied + error_code=200 +
-    // error_description=Permissions error (len 17) when the app is not Live or
-    // the Login config permissions/assets cannot be granted — not a true cancel.
     const errorCategory = classifyFacebookOAuthProviderError({
       oauthError,
       errorCode: callbackQuery.errorCode,
@@ -162,7 +156,6 @@ export async function GET(request: Request) {
     return NextResponse.redirect(marketingConnectedAccountsUrl({ error: "invalid_state" }, origin));
   }
 
-  // Single-use: clear state before exchange so replay fails.
   await clearStateCookies();
 
   const user = await getCookieUser();
@@ -199,7 +192,6 @@ export async function GET(request: Request) {
       );
     }
 
-    // Best-effort app-scoped user id for Meta data-deletion correlation (hash only).
     let metaUserIdHash: string | null = null;
     const me = await fetchFacebookAppScopedUserId(cfg, longLived.access_token);
     if (me.ok) {
@@ -250,10 +242,9 @@ export async function GET(request: Request) {
 
     let instagramConnected = false;
     let instagramError: string | null = null;
-    // After Facebook Page persist (any purpose), try Page-linked IG discovery when
-    // Instagram is enabled and a single Page was selected — pass the Page token
-    // explicitly so we do not depend on a second DB round-trip.
-    if (isProviderFeatureEnabled("instagram") && !saved.needsPagePick) {
+    const shouldDiscoverInstagram =
+      (purpose === "instagram" || isProviderFeatureEnabled("instagram")) && !saved.needsPagePick;
+    if (shouldDiscoverInstagram) {
       const pageCfg = await resolveFacebookPublishConfig();
       const ig = await saveInstagramConnection({
         connectedBy: adminAuth.email,
