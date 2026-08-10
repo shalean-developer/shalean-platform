@@ -93,6 +93,9 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   if (
     path.includes("/inventory")
   ) return read ? ["expense.manage", "booking.assign", "finance.full.view"] : ["expense.manage", "booking.assign"];
+  if (path.includes("/transport")) {
+    return read ? ["booking.assign", "booking.view", "expense.manage", "finance.full.view"] : ["booking.assign", "expense.manage"];
+  }
   if (
     path.includes("/office-notifications") ||
     path.includes("/notification-logs") ||
