@@ -1,5 +1,7 @@
 import "server-only";
 
+import { zohoWebsiteReceiptAccountId } from "@/lib/zoho/zohoWebsiteReceiptAccount";
+
 /**
  * Low-level Zoho Books API client.
  *
@@ -77,6 +79,29 @@ function booksUrl(path: string): string {
   return `https://${API_DOMAIN}/books/v3${path}${sep}organization_id=${ORG_ID}`;
 }
 
+/**
+ * Zoho otherwise places customer receipts in Undeposited Funds when no account_id
+ * is supplied. Shalean's approved default incoming-sales account is the Zoho bank
+ * account "FNB - Primary Cheque Account" (253016000000097002).
+ *
+ * Preserve an explicitly supplied account_id so specialised flows can override the
+ * default. This applies only to customer-payment creates/updates, never invoices,
+ * expenses or unrelated Zoho resources.
+ */
+function withDefaultCustomerPaymentAccount(path: string, body: unknown): unknown {
+  if (!path.startsWith("/customerpayments")) return body;
+  if (!body || typeof body !== "object" || Array.isArray(body)) return body;
+
+  const record = body as Record<string, unknown>;
+  const explicit = String(record.account_id ?? "").trim();
+  if (explicit) return body;
+
+  return {
+    ...record,
+    account_id: zohoWebsiteReceiptAccountId(),
+  };
+}
+
 async function request<T>(
   method: "GET" | "POST" | "PUT" | "DELETE",
   path: string,
@@ -97,7 +122,7 @@ async function request<T>(
   };
 
   if (body !== undefined) {
-    init.body = JSON.stringify(body);
+    init.body = JSON.stringify(withDefaultCustomerPaymentAccount(path, body));
   }
 
   const res = await fetch(url, init);
