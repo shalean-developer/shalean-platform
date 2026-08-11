@@ -6,6 +6,11 @@ import { syncZohoBankBalance } from "@/lib/zoho/syncZohoBankBalance";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+export async function GET(request: Request) {
+  const auth = await requireAdminPermissionFromRequest(request, "expense.manage");
+  return NextResponse.json({ can_manage: auth.ok });
+}
+
 export async function POST(request: Request) {
   // Bank-balance sync persists a finance balance, so view-only finance access is not sufficient.
   const auth = await requireAdminPermissionFromRequest(request, "expense.manage");
