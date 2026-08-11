@@ -59,11 +59,11 @@ export type FunnelIntelMetrics = {
 };
 
 const BUSINESS_STEP_LABELS: Record<string, string> = {
-  entry: "Booking started",
-  quote: "Service & price",
-  extras: "Service & price",
+  entry: "Booking",
+  quote: "Service",
+  extras: "Service",
   datetime: "Schedule",
-  details: "Details & extras",
+  details: "Details",
   payment: "Checkout",
   paid: "Paid",
 };
@@ -163,8 +163,8 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
       title: "No acute funnel regressions detected",
       detail:
         paid > 0 && m.reachedPaymentSessions > paid
-          ? `${paid}/${m.reachedPaymentSessions} checkout sessions completed payment; service-and-price to checkout reach is ${m.conversionRatePct.toFixed(1)}%.`
-          : `Overall checkout reach from service-and-price sessions is ${m.conversionRatePct.toFixed(1)}% with ${m.funnelStartSessions} starters in-window.`,
+          ? `${paid}/${m.reachedPaymentSessions} checkout sessions completed payment; service-to-checkout reach is ${m.conversionRatePct.toFixed(1)}%.`
+          : `Overall checkout reach from service sessions is ${m.conversionRatePct.toFixed(1)}% with ${m.funnelStartSessions} starters in-window.`,
     });
   }
 
