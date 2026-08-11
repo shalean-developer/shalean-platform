@@ -21,16 +21,16 @@ export function buildFunnelNarrativeSummary(input: FunnelNarrativeInput): string
 
   if (input.funnelStartSessions <= 0 && checkoutReached <= 0 && paid > 0) {
     parts.push(
-      `${paid} paid booking(s) recorded with limited quote-stage funnel events — step drop-off charts may under-report until booking_events views accumulate.`,
+      `${paid} paid booking(s) recorded with limited service-and-price funnel events — step drop-off charts may under-report until booking_events views accumulate.`,
     );
   } else if (checkoutReached > 0 && paid > 0 && paid < checkoutReached) {
     const paidPct = Math.round((paid / checkoutReached) * 1000) / 10;
     parts.push(
-      `${checkoutReached} sessions reached checkout; ${paid} completed payment (${paidPct}%). Quote-to-checkout reach is ${input.conversionRatePct.toFixed(1)}% across ${input.funnelStartSessions} starters.`,
+      `${checkoutReached} sessions reached checkout; ${paid} completed payment (${paidPct}%). Service-and-price to checkout reach is ${input.conversionRatePct.toFixed(1)}% across ${input.funnelStartSessions} starters.`,
     );
   } else {
     parts.push(
-      `Roughly ${input.conversionRatePct.toFixed(1)}% of quote-stage sessions reached checkout (payment step), across ${input.funnelStartSessions} starters in this window.`,
+      `Roughly ${input.conversionRatePct.toFixed(1)}% of service-and-price sessions reached checkout, across ${input.funnelStartSessions} starters in this window.`,
     );
   }
 
