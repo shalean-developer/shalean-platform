@@ -1,7 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { johannesburgCalendarMonthDateRangeYmd } from "@/lib/dashboard/johannesburgMonth";
 import { logSystemEvent } from "@/lib/logging/systemLog";
-import { isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
+import { isClosedMonthlyPayoutBatchPeriod, isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 
@@ -21,8 +20,7 @@ export async function approveCleanerPayout(
 
   const periodStart = String((payout as { period_start?: string | null }).period_start ?? "").trim();
   const periodEnd = String((payout as { period_end?: string | null }).period_end ?? "").trim();
-  const currentMonthStart = johannesburgCalendarMonthDateRangeYmd(new Date()).startYmd;
-  if (isMonthlyPayoutBatchPeriod(periodStart, periodEnd) && periodEnd >= currentMonthStart) {
+  if (isMonthlyPayoutBatchPeriod(periodStart, periodEnd) && !isClosedMonthlyPayoutBatchPeriod(periodStart, periodEnd)) {
     return {
       ok: false,
       error: "This monthly payout period is still open. Close the month before approving cleaner payouts.",
