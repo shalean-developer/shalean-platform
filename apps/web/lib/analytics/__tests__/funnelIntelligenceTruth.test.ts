@@ -30,7 +30,7 @@ describe("Funnel Intelligence truth model", () => {
     expect(insights[0]?.title).not.toContain("price");
   });
 
-  it("treats repeated validation attempts as one affected customer session for severity", () => {
+  it("keeps repeated validation attempts separate from distinct sessions within a stage", () => {
     const insights = generateAnalyticsInsights(
       metrics({
         errorsByStep: [
@@ -47,7 +47,8 @@ describe("Funnel Intelligence truth model", () => {
     );
 
     const errorInsight = insights.find((row) => row.id === "booking_errors");
-    expect(errorInsight?.detail).toContain("18 affected customer sessions");
+    expect(errorInsight?.detail).toContain("18 affected session-stage pairs");
+    expect(errorInsight?.detail).toContain("18 distinct sessions");
     expect(errorInsight?.detail).toContain("94 validation attempts");
     expect(errorInsight?.detail).not.toContain("94 errors");
     expect(errorInsight?.detail).toContain("Service");
