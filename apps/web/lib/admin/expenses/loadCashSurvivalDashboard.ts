@@ -10,6 +10,14 @@ export type CashSurvivalDashboardPayload = {
   period: { from: string; to: string };
   as_of: string;
   status: CashSurvivalStatus;
+  accounts: Array<{
+    id: string;
+    name: string;
+    account_type: string;
+    balance_cents: number;
+    updated_at: string | null;
+    stale: boolean;
+  }>;
   data_quality: {
     bank_balance_fresh: boolean;
     bank_balance_last_updated_at: string | null;
@@ -80,7 +88,7 @@ export async function loadCashSurvivalDashboard(
     await Promise.all([
       admin
         .from("expense_accounts")
-        .select("account_type, balance_cents, updated_at, is_active")
+        .select("id, name, account_type, balance_cents, updated_at, is_active")
         .eq("is_active", true),
       admin
         .from("monthly_invoices")
@@ -103,16 +111,33 @@ export async function loadCashSurvivalDashboard(
   let latestBankUpdatedAt: string | null = null;
   let staleBankAccountCount = 0;
   const staleCutoffMs = now.getTime() - 48 * 60 * 60 * 1000;
+  const accountRows: CashSurvivalDashboardPayload["accounts"] = [];
 
   for (const raw of accounts ?? []) {
-    const row = raw as { account_type?: string | null; balance_cents?: number | null; updated_at?: string | null };
+    const row = raw as {
+      id?: string | null;
+      name?: string | null;
+      account_type?: string | null;
+      balance_cents?: number | null;
+      updated_at?: string | null;
+    };
     const type = String(row.account_type ?? "").toLowerCase();
     const updatedAt = row.updated_at ? String(row.updated_at) : null;
+    const updatedMs = updatedAt ? Date.parse(updatedAt) : NaN;
+    const stale = !Number.isFinite(updatedMs) || updatedMs < staleCutoffMs;
+    accountRows.push({
+      id: String(row.id ?? ""),
+      name: String(row.name ?? "Finance account"),
+      account_type: type,
+      balance_cents: cents(row.balance_cents),
+      updated_at: updatedAt,
+      stale,
+    });
+
     if (type === "bank") {
       bankCents += cents(row.balance_cents);
       if (updatedAt && (!latestBankUpdatedAt || updatedAt > latestBankUpdatedAt)) latestBankUpdatedAt = updatedAt;
-      const ms = updatedAt ? Date.parse(updatedAt) : NaN;
-      if (!Number.isFinite(ms) || ms < staleCutoffMs) staleBankAccountCount += 1;
+      if (stale) staleBankAccountCount += 1;
     } else if (type === "petty_cash") {
       pettyCashCents += cents(row.balance_cents);
     }
@@ -165,6 +190,7 @@ export async function loadCashSurvivalDashboard(
     period: { from, to },
     as_of: now.toISOString(),
     status,
+    accounts: accountRows.sort((a, b) => a.account_type.localeCompare(b.account_type) || a.name.localeCompare(b.name)),
     data_quality: {
       bank_balance_fresh: bankBalanceFresh,
       bank_balance_last_updated_at: latestBankUpdatedAt,
