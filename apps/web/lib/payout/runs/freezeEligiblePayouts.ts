@@ -1,6 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { johannesburgCalendarMonthDateRangeYmd } from "@/lib/dashboard/johannesburgMonth";
-import { isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
+import { isClosedMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 
 export type FreezeEligiblePayoutsResult = { frozenCount: number };
@@ -17,7 +16,6 @@ export async function freezeEligiblePayouts(
   admin: SupabaseClient,
   now: Date = new Date(),
 ): Promise<FreezeEligiblePayoutsResult> {
-  const currentMonthStart = johannesburgCalendarMonthDateRangeYmd(now).startYmd;
   const { data: pending, error: selErr } = await admin
     .from("cleaner_payouts")
     .select("id, period_start, period_end")
@@ -27,11 +25,13 @@ export async function freezeEligiblePayouts(
   if (selErr) throw new Error(selErr.message);
 
   const ids = (pending ?? [])
-    .filter((row) => {
-      const periodStart = String((row as { period_start?: string }).period_start ?? "");
-      const periodEnd = String((row as { period_end?: string }).period_end ?? "");
-      return isMonthlyPayoutBatchPeriod(periodStart, periodEnd) && periodEnd < currentMonthStart;
-    })
+    .filter((row) =>
+      isClosedMonthlyPayoutBatchPeriod(
+        String((row as { period_start?: string }).period_start ?? ""),
+        String((row as { period_end?: string }).period_end ?? ""),
+        now,
+      ),
+    )
     .map((row) => String((row as { id?: string }).id ?? ""))
     .filter(Boolean);
 
@@ -53,7 +53,7 @@ export async function freezeEligiblePayouts(
       level: "info",
       source: "payout_run_freeze",
       message: "Frozen eligible closed-month cleaner payout rows for disbursement batching",
-      context: { frozenCount, currentMonthStart },
+      context: { frozenCount },
     });
   }
   return { frozenCount };
