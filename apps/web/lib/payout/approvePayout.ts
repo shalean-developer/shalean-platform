@@ -3,6 +3,7 @@ import { logSystemEvent } from "@/lib/logging/systemLog";
 import { isClosedMonthlyPayoutBatchPeriod, isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
+import { loadCleanerPayoutFunding } from "@/lib/payout/payoutFunding";
 
 export async function approveCleanerPayout(
   admin: SupabaseClient,
@@ -36,6 +37,18 @@ export async function approveCleanerPayout(
   if (loaded.items.some((item) => item.booking_status !== "completed" || item.refunded_at)) {
     return { ok: false, error: "Payout contains an incomplete or refunded earning item." };
   }
+
+  const funding = await loadCleanerPayoutFunding(admin, params.payoutId, loaded.items);
+  if (funding.error || !funding.summary) {
+    return { ok: false, error: funding.error ?? "Could not verify payout funding." };
+  }
+  if (funding.summary.fundingGapCents > 0) {
+    return {
+      ok: false,
+      error: `Payout is not fully funded by collected customer cash. Funding gap: R ${(funding.summary.fundingGapCents / 100).toFixed(2)} across ${funding.summary.unfundedItemCount} earning item(s).`,
+    };
+  }
+
   const calculated = Math.max(0, Math.round(Number((payout as { calculated_amount_cents?: number }).calculated_amount_cents) || 0));
   if (calculated !== loaded.totalCents) {
     return { ok: false, error: "Payout calculated total does not match its linked earning items. Recalculate before approval." };
@@ -109,14 +122,19 @@ export async function approveCleanerPayout(
     level: "info",
     source: "PAYOUT_APPROVED",
     message: "Cleaner payout batch approved",
-    context: { payoutId: params.payoutId, approvedBy: params.approvedBy },
+    context: {
+      payoutId: params.payoutId,
+      approvedBy: params.approvedBy,
+      fundedCents: funding.summary.fundedCents,
+      liabilityCents: funding.summary.liabilityCents,
+    },
   });
 
   void logPayoutAuditEvent(admin, {
     eventType: "payout_approved",
     actorUserId: params.approvedBy,
     payoutId: params.payoutId,
-    newValues: { status: "approved" },
+    newValues: { status: "approved", funding_gap_cents: 0 },
   });
 
   return { ok: true };
