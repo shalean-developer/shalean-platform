@@ -131,16 +131,23 @@ export type OfficeProductFlowStep = {
  */
 export const OFFICE_FUNNEL_STEP_LABELS: Record<string, string> = {
   entry: "Booking started",
-  quote: "Service & price",
-  extras: "Service & price",
+  quote: "Service",
+  extras: "Service",
   datetime: "Schedule",
-  details: "Details & extras",
+  details: "Details",
   payment: "Checkout",
   paid: "Paid",
 };
 
-const STEP_COLORS = ["bg-blue-500", "bg-blue-400", "bg-violet-400", "bg-emerald-500"] as const;
-const PRODUCT_FLOW_ORDER = ["entry", "quote", "datetime", "details", "payment"] as const;
+const STEP_COLORS = [
+  "bg-blue-500",
+  "bg-blue-400",
+  "bg-violet-400",
+  "bg-violet-300",
+  "bg-emerald-400",
+  "bg-emerald-500",
+] as const;
+const PRODUCT_FLOW_ORDER = ["entry", "quote", "datetime", "details", "payment", "paid"] as const;
 
 function pct(part: number, total: number): number {
   if (total <= 0) return 0;
@@ -230,19 +237,24 @@ export function checkoutToPaidConversionPct(data: BookingFunnelApiPayload): numb
 }
 
 export function buildOfficeFunnelSteps(data: BookingFunnelApiPayload): OfficeFunnelStep[] {
-  const visitors = funnelVisitorCount(data);
-  const serviceAndPrice = Math.max(data.funnelStartSessions ?? 0, data.reachedPaymentSessions ?? 0 > 0 ? Math.min(funnelVisitorCount(data), data.reachedPaymentSessions ?? 0) : 0);
-  const checkoutReached = data.reachedPaymentSessions ?? 0;
-  const paymentCompleted = paymentCompletedCount(data);
+  const views = new Map((data.viewsByStep ?? []).map((row) => [row.step, row.views]));
+  const bookingStarted = Math.max(views.get("entry") ?? 0, funnelVisitorCount(data));
+  const service = Math.max(views.get("quote") ?? 0, data.funnelStartSessions ?? 0);
+  const schedule = views.get("datetime") ?? 0;
+  const details = views.get("details") ?? 0;
+  const checkout = Math.max(views.get("payment") ?? 0, data.reachedPaymentSessions ?? 0);
+  const paid = paymentCompletedCount(data);
 
   const values = [
-    { label: "Visitors", value: visitors },
-    { label: "Service & price", value: serviceAndPrice },
-    { label: "Checkout reached", value: checkoutReached },
-    { label: "Payment completed", value: paymentCompleted },
+    { label: "Booking started", value: bookingStarted },
+    { label: "Service", value: service },
+    { label: "Schedule", value: schedule },
+    { label: "Details", value: details },
+    { label: "Checkout", value: checkout },
+    { label: "Paid", value: paid },
   ];
 
-  const top = Math.max(visitors, 1);
+  const top = Math.max(bookingStarted, 1);
 
   return values.map((row, index) => {
     const prev = index > 0 ? values[index - 1]!.value : null;
@@ -274,7 +286,7 @@ export function buildOfficeProductFlowSteps(data: BookingFunnelApiPayload): Offi
   return PRODUCT_FLOW_ORDER.map((key) => ({
     key,
     label: funnelStepLabel(key),
-    views: views.get(key) ?? 0,
+    views: key === "paid" ? paid : (views.get(key) ?? 0),
     sub: key === "payment" && paid > 0 ? `${paid} paid` : undefined,
   }));
 }
@@ -290,9 +302,9 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
 
   return [
     {
-      label: "Visitor → paid",
+      label: "Booking started → paid",
       value: overall != null ? `${overall}%` : "—",
-      sub: `${paid} paid · ${funnelVisitorCount(data)} visitors`,
+      sub: `${paid} paid · ${funnelVisitorCount(data)} booking starts`,
       tone: "emerald",
     },
     {
@@ -355,7 +367,7 @@ export function buildOfficeFunnelRecommendations(data: BookingFunnelApiPayload):
 export function buildOfficeFunnelSummaryLine(data: BookingFunnelApiPayload): string | null {
   if (data.narrativeSummary?.trim()) return data.narrativeSummary.trim();
   if (typeof data.conversionRatePct === "number" && (data.funnelStartSessions ?? 0) > 0) {
-    return `${data.conversionRatePct}% of service-and-price sessions reached checkout (${data.reachedPaymentSessions ?? 0}/${data.funnelStartSessions} sessions, last 30 days).`;
+    return `${data.conversionRatePct}% of service-stage sessions reached checkout (${data.reachedPaymentSessions ?? 0}/${data.funnelStartSessions} sessions, last 30 days).`;
   }
   return null;
 }
