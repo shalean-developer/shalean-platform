@@ -92,7 +92,7 @@ export async function loadCashSurvivalDashboard(
         .eq("is_active", true),
       admin
         .from("monthly_invoices")
-        .select("status, balance_cents, total_cents, due_date, period_start, period_end")
+        .select("status, balance_cents, due_date, period_start, period_end")
         .lte("period_start", to)
         .gte("period_end", from),
       admin
@@ -148,10 +148,12 @@ export async function loadCashSurvivalDashboard(
   let draftMonthly = 0;
   const todayYmd = now.toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" });
   for (const raw of invoices ?? []) {
-    const row = raw as { status?: string | null; balance_cents?: number | null; total_cents?: number | null; due_date?: string | null };
+    const row = raw as { status?: string | null; balance_cents?: number | null; due_date?: string | null };
     const status = String(row.status ?? "").toLowerCase();
     if (status === "draft") {
-      draftMonthly += cents(row.total_cents ?? row.balance_cents);
+      // Draft monthly invoices are unpaid by definition, so their outstanding balance
+      // is the conservative forecast value. `monthly_invoices` has no `total_cents` column.
+      draftMonthly += cents(row.balance_cents);
       continue;
     }
     if (["sent", "partially_paid", "overdue"].includes(status)) {
