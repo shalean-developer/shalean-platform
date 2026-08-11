@@ -197,7 +197,7 @@ export async function loadCashFlowDashboard(
       money_paid_cents: moneyPaid,
       cash_in_bank_cents: cashInBank,
       petty_cash_cents: pettyCash,
-      paystack_in_transit_cents: settlementSummary.verified_in_transit_cents,
+      paystack_in_transit_cents: settlementSummary.in_transit_cents,
       expected_income_cents: expectedIncome,
       expected_expenses_cents: expectedExpenses,
       net_cash_flow_cents: netCashFlow,
