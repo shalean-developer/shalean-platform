@@ -18,15 +18,16 @@ function metrics(overrides: Partial<FunnelIntelMetrics> = {}): FunnelIntelMetric
 }
 
 describe("Funnel Intelligence truth model", () => {
-  it("uses customer-facing stage names instead of the legacy quote label", () => {
+  it("uses customer-facing Service instead of the legacy quote label", () => {
     const insights = generateAnalyticsInsights(
       metrics({
         dropOffByStep: [{ step: "quote", viewed: 100, dropped: 60, dropOffPct: 60 }],
       }),
     );
 
-    expect(insights[0]?.title).toContain("Service & price");
+    expect(insights[0]?.title).toContain("Service");
     expect(insights[0]?.title).not.toContain("quote");
+    expect(insights[0]?.title).not.toContain("price");
   });
 
   it("treats repeated validation attempts as one affected customer session for severity", () => {
@@ -49,5 +50,6 @@ describe("Funnel Intelligence truth model", () => {
     expect(errorInsight?.detail).toContain("18 affected customer sessions");
     expect(errorInsight?.detail).toContain("94 validation attempts");
     expect(errorInsight?.detail).not.toContain("94 errors");
+    expect(errorInsight?.detail).toContain("Service");
   });
 });
