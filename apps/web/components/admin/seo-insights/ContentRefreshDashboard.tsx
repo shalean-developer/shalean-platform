@@ -9,16 +9,31 @@ type Payload={summary:{queue:number;unassigned:number;overdue:number;completed:n
 export function ContentRefreshDashboard(){
   const {data,loading,error,refetch}=useAdminData<Payload>("/api/admin/seo-insights/content-refresh");
   const [saving,setSaving]=useState<string|null>(null);
+  const [mutationError,setMutationError]=useState<string|null>(null);
   const [status,setStatus]=useState("all");
   const rows=useMemo(()=>status==="all"?(data?.queue??[]):(data?.queue??[]).filter(r=>(r.refresh?.status??"unqueued")===status),[data,status]);
 
-  async function queue(row:QueueRow){ setSaving(row.post.id); try{ await adminFetch("/api/admin/seo-insights/content-refresh",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({blog_post_id:row.post.id,reason_codes:row.reasons,due_date:new Date(Date.now()+14*86400000).toISOString().slice(0,10)})}); await refetch(); } finally{ setSaving(null); } }
-  async function patch(id:string,payload:any){ setSaving(id); try{ await adminFetch("/api/admin/seo-insights/content-refresh",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,...payload})}); await refetch(); } finally{ setSaving(null); } }
+  async function queue(row:QueueRow){
+    setSaving(row.post.id); setMutationError(null);
+    try{
+      const result=await adminFetch("/api/admin/seo-insights/content-refresh",{method:"POST",body:JSON.stringify({blog_post_id:row.post.id,reason_codes:row.reasons,due_date:new Date(Date.now()+14*86400000).toISOString().slice(0,10)})});
+      if(!result.ok){ setMutationError(result.error??"Could not add this post to the refresh queue."); return; }
+      await refetch();
+    } finally{ setSaving(null); }
+  }
+  async function patch(id:string,payload:any){
+    setSaving(id); setMutationError(null);
+    try{
+      const result=await adminFetch("/api/admin/seo-insights/content-refresh",{method:"PATCH",body:JSON.stringify({id,...payload})});
+      if(!result.ok){ setMutationError(result.error??"Could not save the content refresh change."); await refetch(); return; }
+      await refetch();
+    } finally{ setSaving(null); }
+  }
 
   if(loading&&!data) return <div className="rounded-2xl border bg-white p-6">Loading content refresh calendar…</div>;
   return <div className="space-y-6">
     <div><h1 className="text-2xl font-bold text-slate-950">Content Refresh Calendar</h1><p className="mt-1 text-sm text-slate-600">Turn declining blog content into an assigned refresh queue, track due dates and history, then verify results against later GSC performance.</p></div>
-    {error&&<div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+    {(error||mutationError)&&<div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">{mutationError??error}</div>}
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">{[["Refresh queue",data?.summary.queue],["Unassigned",data?.summary.unassigned],["Overdue",data?.summary.overdue],["Completed",data?.summary.completed]].map(([k,v])=><div key={String(k)} className="rounded-2xl border bg-white p-4"><div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k}</div><div className="mt-2 text-2xl font-bold">{v??0}</div></div>)}</div>
     <div className="rounded-2xl border bg-white p-4"><select value={status} onChange={e=>setStatus(e.target.value)} className="rounded-xl border px-3 py-2 text-sm"><option value="all">All refreshes</option><option value="unqueued">Detected / not queued</option><option value="queued">Queued</option><option value="in_progress">In progress</option><option value="completed">Completed</option></select></div>
     <div className="space-y-3">{rows.map(row=><div key={row.post.id} className="rounded-2xl border bg-white p-5">
