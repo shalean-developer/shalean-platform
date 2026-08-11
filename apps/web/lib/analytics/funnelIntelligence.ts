@@ -33,6 +33,17 @@ export type DailyTrendLite = {
   reachedPayment?: number;
 };
 
+export type FunnelErrorMetric = {
+  step: string;
+  /** Distinct customer sessions affected within this step. */
+  count: number;
+  affectedSessions?: number;
+  eventCount?: number;
+  validationAttempts?: number;
+  technicalErrors?: number;
+  topFields?: Array<{ field: string; count: number }>;
+};
+
 export type FunnelIntelMetrics = {
   conversionRatePct: number;
   funnelStartSessions: number;
@@ -42,10 +53,24 @@ export type FunnelIntelMetrics = {
   paystackOpened: number;
   paystackCompleted: number;
   dropOffByStep: { step: string; viewed: number; dropped: number; dropOffPct: number }[];
-  errorsByStep: { step: string; count: number }[];
+  errorsByStep: FunnelErrorMetric[];
   dailyTrends: DailyTrendLite[];
   mobileUxHint?: { starts: number; completed: number; conversionPct: number; label: string };
 };
+
+const BUSINESS_STEP_LABELS: Record<string, string> = {
+  entry: "Booking",
+  quote: "Service",
+  extras: "Service",
+  datetime: "Schedule",
+  details: "Details",
+  payment: "Checkout",
+  paid: "Paid",
+};
+
+function stepLabel(step: string): string {
+  return BUSINESS_STEP_LABELS[step] ?? step.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
+}
 
 function pct(part: number, total: number): number {
   if (total <= 0) return 0;
@@ -59,6 +84,11 @@ function volumeFloor(m: FunnelIntelMetrics, base: number): number {
   return Math.max(2, Math.round(base * 0.35));
 }
 
+/** Sum of per-step distinct sessions; a customer affected at two steps contributes two session-stage pairs. */
+function affectedSessionStagePairs(m: FunnelIntelMetrics): number {
+  return m.errorsByStep.reduce((s, r) => s + (r.affectedSessions ?? r.count), 0);
+}
+
 export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsight[] {
   const out: AnalyticsInsight[] = [];
 
@@ -70,8 +100,8 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
       id: "funnel_step_dropoff",
       severity: worstDrop.dropOffPct >= 55 ? "critical" : "warning",
       category: "Funnel",
-      title: `Largest leak: ${worstDrop.step} → next`,
-      detail: `${worstDrop.dropOffPct.toFixed(1)}% of sessions that viewed ${worstDrop.step} never progressed (${worstDrop.dropped}/${worstDrop.viewed}).`,
+      title: `Largest leak: ${stepLabel(worstDrop.step)} → next`,
+      detail: `${worstDrop.dropOffPct.toFixed(1)}% of sessions that reached ${stepLabel(worstDrop.step)} never progressed (${worstDrop.dropped}/${worstDrop.viewed}).`,
     });
   }
 
@@ -101,17 +131,22 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
     }
   }
 
-  const errTotal = m.errorsByStep.reduce((s, r) => s + r.count, 0);
-  if (errTotal >= volumeFloor(m, 15)) {
-    const top = [...m.errorsByStep].sort((a, b) => b.count - a.count)[0];
+  const affectedPairs = affectedSessionStagePairs(m);
+  if (affectedPairs >= volumeFloor(m, 15)) {
+    const top = [...m.errorsByStep].sort(
+      (a, b) => (b.affectedSessions ?? b.count) - (a.affectedSessions ?? a.count),
+    )[0];
+    const topAffected = top ? (top.affectedSessions ?? top.count) : 0;
+    const topAttempts = top?.validationAttempts ?? 0;
+    const topTechnical = top?.technicalErrors ?? 0;
     out.push({
       id: "booking_errors",
-      severity: errTotal >= 50 ? "critical" : "warning",
+      severity: affectedPairs >= 50 ? "critical" : "warning",
       category: "Operations",
-      title: "Booking flow errors spiking",
+      title: "Booking flow friction needs review",
       detail: top
-        ? `${errTotal} errors in-window; busiest step: ${top.step} (${top.count}).`
-        : `${errTotal} errors recorded in-window.`,
+        ? `${affectedPairs} affected session-stage pairs in-window; highest-friction stage: ${stepLabel(top.step)} (${topAffected} distinct sessions${topAttempts > 0 ? `, ${topAttempts} validation attempts` : ""}${topTechnical > 0 ? `, ${topTechnical} technical errors` : ""}).`
+        : `${affectedPairs} affected session-stage pairs were recorded in-window.`,
     });
   }
 
@@ -133,8 +168,8 @@ export function generateAnalyticsInsights(m: FunnelIntelMetrics): AnalyticsInsig
       title: "No acute funnel regressions detected",
       detail:
         paid > 0 && m.reachedPaymentSessions > paid
-          ? `${paid}/${m.reachedPaymentSessions} checkout sessions completed payment; quote-to-checkout reach is ${m.conversionRatePct.toFixed(1)}%.`
-          : `Overall checkout reach from quote starts is ${m.conversionRatePct.toFixed(1)}% with ${m.funnelStartSessions} starters in-window.`,
+          ? `${paid}/${m.reachedPaymentSessions} checkout sessions completed payment; service-to-checkout reach is ${m.conversionRatePct.toFixed(1)}%.`
+          : `Overall checkout reach from service sessions is ${m.conversionRatePct.toFixed(1)}% with ${m.funnelStartSessions} starters in-window.`,
     });
   }
 
@@ -190,7 +225,7 @@ export function detectFunnelAnomalies(m: FunnelIntelMetrics): FunnelAnomaly[] {
       id: "step_dropoff_elevated",
       severity: worstDrop.dropOffPct >= 40 ? "warning" : "info",
       metric: `dropoff_${worstDrop.step}`,
-      message: `Elevated drop-off after ${worstDrop.step} (${worstDrop.dropOffPct.toFixed(1)}%).`,
+      message: `Elevated drop-off after ${stepLabel(worstDrop.step)} (${worstDrop.dropOffPct.toFixed(1)}%).`,
       observed: worstDrop.dropOffPct,
       baseline: 15,
     });
@@ -207,14 +242,14 @@ export function detectFunnelAnomalies(m: FunnelIntelMetrics): FunnelAnomaly[] {
     });
   }
 
-  const errTotal = m.errorsByStep.reduce((s, r) => s + r.count, 0);
-  if (errTotal >= volumeFloor(m, 30)) {
+  const affectedPairs = affectedSessionStagePairs(m);
+  if (affectedPairs >= volumeFloor(m, 30)) {
     anomalies.push({
       id: "error_volume",
       severity: "warning",
-      metric: "booking_events.error",
-      message: `High volume of booking_errors (${errTotal}) — verify APIs and validation.`,
-      observed: errTotal,
+      metric: "booking_events.error affected session-stage pairs",
+      message: `High booking-flow friction (${affectedPairs} affected session-stage pairs) — review validation fields and true technical failures separately.`,
+      observed: affectedPairs,
     });
   }
 

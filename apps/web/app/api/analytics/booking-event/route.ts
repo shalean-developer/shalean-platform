@@ -20,6 +20,21 @@ function clampMetadata(raw: unknown): Record<string, unknown> {
     if (typeof v === "string" && v.length <= 2000) {
       out[k] = v;
       n++;
+      continue;
+    }
+    // Booking validation telemetry sends field paths as a small string array.
+    // Preserve only bounded primitive strings so metadata remains safe and compact.
+    if (Array.isArray(v)) {
+      const strings = v
+        .filter((item): item is string => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean)
+        .slice(0, 20)
+        .map((item) => item.slice(0, 200));
+      if (strings.length > 0) {
+        out[k] = strings;
+        n++;
+      }
     }
   }
   return out;
