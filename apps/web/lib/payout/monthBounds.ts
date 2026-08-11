@@ -46,6 +46,21 @@ export function isMonthlyPayoutBatchPeriod(periodStart: string, periodEnd: strin
   return isMonthlyPayoutPeriod(periodStart) && isCanonicalJohannesburgMonthPeriod(periodStart, periodEnd);
 }
 
+/**
+ * A monthly cleaner payout can only enter freeze/approval/disbursement after its
+ * Johannesburg calendar month has fully closed. Current-month rows represent
+ * accrued earnings, not a payable batch.
+ */
+export function isClosedMonthlyPayoutBatchPeriod(
+  periodStart: string,
+  periodEnd: string,
+  now: Date = new Date(),
+): boolean {
+  if (!isMonthlyPayoutBatchPeriod(periodStart, periodEnd)) return false;
+  const currentMonthStart = getJohannesburgMonthBoundsContainingYmd(johannesburgCalendarYmd(now)).periodStart;
+  return periodEnd < currentMonthStart;
+}
+
 export function filterMonthlyPayoutBatchRows<T extends { period_start: string; period_end: string }>(rows: readonly T[]): T[] {
   return rows.filter((row) => isMonthlyPayoutBatchPeriod(row.period_start, row.period_end));
 }
