@@ -7,13 +7,13 @@ type QueueRow={post:{id:string;slug:string;title:string;primary_keyword:string|n
 type Payload={summary:{queue:number;unassigned:number;overdue:number;completed:number};queue:QueueRow[];history:any[]};
 
 export function ContentRefreshDashboard(){
-  const {data,loading,error,refresh}=useAdminData<Payload>("/api/admin/seo-insights/content-refresh");
+  const {data,loading,error,refetch}=useAdminData<Payload>("/api/admin/seo-insights/content-refresh");
   const [saving,setSaving]=useState<string|null>(null);
   const [status,setStatus]=useState("all");
   const rows=useMemo(()=>status==="all"?(data?.queue??[]):(data?.queue??[]).filter(r=>(r.refresh?.status??"unqueued")===status),[data,status]);
 
-  async function queue(row:QueueRow){ setSaving(row.post.id); try{ await adminFetch("/api/admin/seo-insights/content-refresh",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({blog_post_id:row.post.id,reason_codes:row.reasons,due_date:new Date(Date.now()+14*86400000).toISOString().slice(0,10)})}); await refresh(); } finally{ setSaving(null); } }
-  async function patch(id:string,payload:any){ setSaving(id); try{ await adminFetch("/api/admin/seo-insights/content-refresh",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,...payload})}); await refresh(); } finally{ setSaving(null); } }
+  async function queue(row:QueueRow){ setSaving(row.post.id); try{ await adminFetch("/api/admin/seo-insights/content-refresh",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({blog_post_id:row.post.id,reason_codes:row.reasons,due_date:new Date(Date.now()+14*86400000).toISOString().slice(0,10)})}); await refetch(); } finally{ setSaving(null); } }
+  async function patch(id:string,payload:any){ setSaving(id); try{ await adminFetch("/api/admin/seo-insights/content-refresh",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({id,...payload})}); await refetch(); } finally{ setSaving(null); } }
 
   if(loading&&!data) return <div className="rounded-2xl border bg-white p-6">Loading content refresh calendar…</div>;
   return <div className="space-y-6">
