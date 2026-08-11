@@ -1,11 +1,13 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 import { isClosedMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
+import { loadCleanerPayoutFunding } from "@/lib/payout/payoutFunding";
 
 /**
  * Approves a draft disbursement run and moves child `cleaner_payouts` from `frozen` → `approved`
  * so existing Paystack / mark-paid flows can execute. Every child must belong to a fully closed
- * Johannesburg monthly payout period.
+ * Johannesburg monthly payout period and must be fully backed by collected customer cash.
  */
 export async function approvePayoutRun(
   admin: SupabaseClient,
@@ -45,6 +47,30 @@ export async function approvePayoutRun(
     return { ok: false, error: "All payouts in the run must be frozen before approval." };
   }
 
+  let runFundingGapCents = 0;
+  let unfundedPayouts = 0;
+  for (const child of children) {
+    const payoutId = String((child as { id?: string }).id ?? "").trim();
+    if (!payoutId) continue;
+    const loaded = await loadCleanerPayoutBatchItems(admin, payoutId);
+    if (loaded.error) return { ok: false, error: loaded.error };
+    const funding = await loadCleanerPayoutFunding(admin, payoutId, loaded.items);
+    if (funding.error || !funding.summary) {
+      return { ok: false, error: funding.error ?? "Could not verify payout funding." };
+    }
+    if (funding.summary.fundingGapCents > 0) {
+      runFundingGapCents += funding.summary.fundingGapCents;
+      unfundedPayouts += 1;
+    }
+  }
+
+  if (runFundingGapCents > 0) {
+    return {
+      ok: false,
+      error: `Payout run is not fully funded by collected customer cash. Funding gap: R ${(runFundingGapCents / 100).toFixed(2)} across ${unfundedPayouts} payout(s).`,
+    };
+  }
+
   const now = new Date().toISOString();
   const patch: Record<string, unknown> = { status: "approved", approved_at: now };
   if (approvedBy?.trim()) patch.approved_by = approvedBy.trim();
@@ -74,8 +100,8 @@ export async function approvePayoutRun(
   void logSystemEvent({
     level: "info",
     source: "payout_run_approved",
-    message: "Approved closed-month cleaner payout run",
-    context: { runId, childPayoutCount: children.length, approvedBy: approvedBy ?? null },
+    message: "Approved fully funded closed-month cleaner payout run",
+    context: { runId, childPayoutCount: children.length, approvedBy: approvedBy ?? null, fundingGapCents: 0 },
   });
 
   return { ok: true };
