@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { requireAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 import { loadCleanerPayoutFunding } from "@/lib/payout/payoutFunding";
+import { presentMonthlyPayoutLifecycle } from "@/lib/payout/payoutLifecycle";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -16,6 +17,7 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const payoutId = url.searchParams.get("payoutId")?.trim();
+  const now = new Date();
 
   let query = admin
     .from("cleaner_payouts")
@@ -51,14 +53,28 @@ export async function GET(request: Request) {
     totalLiabilityCents += funding.summary.liabilityCents;
     totalFundedCents += funding.summary.fundedCents;
     totalFundingGapCents += funding.summary.fundingGapCents;
+    const lifecycle = presentMonthlyPayoutLifecycle({
+      periodEnd: payout.period_end ?? "",
+      status: payout.status,
+      fundingGapCents: funding.summary.fundingGapCents,
+      now,
+    });
     rows.push({
       ...payout,
       ...funding.summary,
       fullyFunded: funding.summary.fundingGapCents === 0,
+      lifecycle,
     });
   }
 
   return NextResponse.json({
+    asOf: now.toISOString(),
+    policy: {
+      payoutFrequency: "monthly",
+      openMonthEarningsArePayable: false,
+      approvalRequiresClosedMonth: true,
+      approvalRequiresFullFunding: true,
+    },
     totals: {
       liabilityCents: totalLiabilityCents,
       fundedCents: totalFundedCents,
@@ -66,6 +82,7 @@ export async function GET(request: Request) {
       fullyFunded: totalFundingGapCents === 0,
       payoutCount: rows.length,
       unfundedPayoutCount: rows.filter((row) => Number(row.fundingGapCents ?? 0) > 0).length,
+      payableNowCount: rows.filter((row) => Boolean((row.lifecycle as { payableNow?: boolean } | undefined)?.payableNow)).length,
     },
     payouts: rows,
   });
