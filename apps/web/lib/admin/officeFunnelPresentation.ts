@@ -44,6 +44,17 @@ export type FunnelStepConversionRow = {
   dropOffPct: number;
 };
 
+export type FunnelErrorRow = {
+  step: string;
+  /** Distinct customer sessions affected. Kept as `count` for backward compatibility. */
+  count: number;
+  affectedSessions?: number;
+  eventCount?: number;
+  validationAttempts?: number;
+  technicalErrors?: number;
+  topFields?: Array<{ field: string; count: number }>;
+};
+
 export type BookingFunnelApiPayload = {
   since?: string;
   rows?: number;
@@ -62,7 +73,7 @@ export type BookingFunnelApiPayload = {
   dropOffByStep?: Array<{ step: string; viewed: number; dropped: number; dropOffPct: number }>;
   viewsByStep?: Array<{ step: string; views: number }>;
   topExitSteps?: Array<{ step: string; count: number }>;
-  errorsByStep?: Array<{ step: string; count: number }>;
+  errorsByStep?: FunnelErrorRow[];
   intelligence?: {
     stepConversion?: FunnelStepConversionRow[];
     timeToComplete?: {
@@ -114,18 +125,22 @@ export type OfficeProductFlowStep = {
   sub?: string;
 };
 
+/**
+ * Business-facing labels for the canonical booking-v2 journey.
+ * Legacy DB step keys are intentionally preserved so historical telemetry remains readable.
+ */
 export const OFFICE_FUNNEL_STEP_LABELS: Record<string, string> = {
-  entry: "Entry",
-  quote: "Quote",
-  extras: "Extras",
+  entry: "Booking started",
+  quote: "Service & price",
+  extras: "Service & price",
   datetime: "Schedule",
-  details: "Details",
+  details: "Details & extras",
   payment: "Checkout",
   paid: "Paid",
 };
 
 const STEP_COLORS = ["bg-blue-500", "bg-blue-400", "bg-violet-400", "bg-emerald-500"] as const;
-const PRODUCT_FLOW_ORDER = ["entry", "quote", "extras", "datetime", "payment"] as const;
+const PRODUCT_FLOW_ORDER = ["entry", "quote", "datetime", "details", "payment"] as const;
 
 function pct(part: number, total: number): number {
   if (total <= 0) return 0;
@@ -216,13 +231,13 @@ export function checkoutToPaidConversionPct(data: BookingFunnelApiPayload): numb
 
 export function buildOfficeFunnelSteps(data: BookingFunnelApiPayload): OfficeFunnelStep[] {
   const visitors = funnelVisitorCount(data);
-  const quoteStarted = Math.max(data.funnelStartSessions ?? 0, data.reachedPaymentSessions ?? 0 > 0 ? Math.min(funnelVisitorCount(data), data.reachedPaymentSessions ?? 0) : 0);
+  const serviceAndPrice = Math.max(data.funnelStartSessions ?? 0, data.reachedPaymentSessions ?? 0 > 0 ? Math.min(funnelVisitorCount(data), data.reachedPaymentSessions ?? 0) : 0);
   const checkoutReached = data.reachedPaymentSessions ?? 0;
   const paymentCompleted = paymentCompletedCount(data);
 
   const values = [
     { label: "Visitors", value: visitors },
-    { label: "Quote started", value: quoteStarted },
+    { label: "Service & price", value: serviceAndPrice },
     { label: "Checkout reached", value: checkoutReached },
     { label: "Payment completed", value: paymentCompleted },
   ];
@@ -340,7 +355,7 @@ export function buildOfficeFunnelRecommendations(data: BookingFunnelApiPayload):
 export function buildOfficeFunnelSummaryLine(data: BookingFunnelApiPayload): string | null {
   if (data.narrativeSummary?.trim()) return data.narrativeSummary.trim();
   if (typeof data.conversionRatePct === "number" && (data.funnelStartSessions ?? 0) > 0) {
-    return `${data.conversionRatePct}% of quote starts reached checkout (${data.reachedPaymentSessions ?? 0}/${data.funnelStartSessions} sessions, last 30 days).`;
+    return `${data.conversionRatePct}% of service-and-price sessions reached checkout (${data.reachedPaymentSessions ?? 0}/${data.funnelStartSessions} sessions, last 30 days).`;
   }
   return null;
 }
