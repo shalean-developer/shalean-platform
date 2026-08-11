@@ -20,6 +20,7 @@ export function CashAccountBalanceEditor({
   const [values, setValues] = useState<Record<string, string>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [syncingZoho, setSyncingZoho] = useState(false);
+  const [canManage, setCanManage] = useState<boolean | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const autoSyncAttempted = useRef(false);
 
@@ -29,7 +30,23 @@ export function CashAccountBalanceEditor({
     setValues(next);
   }, [accounts]);
 
+  useEffect(() => {
+    let cancelled = false;
+    void fetch("/api/admin/finance-accounts/zoho-sync", { method: "GET" })
+      .then((response) => response.json())
+      .then((body) => {
+        if (!cancelled) setCanManage(body?.can_manage === true);
+      })
+      .catch(() => {
+        if (!cancelled) setCanManage(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function syncFromZoho(automatic = false) {
+    if (canManage !== true) return;
     setSyncingZoho(true);
     if (!automatic) setMessage(null);
     try {
@@ -49,7 +66,7 @@ export function CashAccountBalanceEditor({
   }
 
   useEffect(() => {
-    if (autoSyncAttempted.current || !bankAccounts.length) return;
+    if (canManage !== true || autoSyncAttempted.current || !bankAccounts.length) return;
     const shouldSync = bankAccounts.some((account) => {
       if (!account.updated_at) return true;
       const ms = Date.parse(account.updated_at);
@@ -58,7 +75,7 @@ export function CashAccountBalanceEditor({
     if (!shouldSync) return;
     autoSyncAttempted.current = true;
     void syncFromZoho(true);
-  }, [accounts]);
+  }, [accounts, canManage]);
 
   if (!editable.length) return null;
 
@@ -93,10 +110,12 @@ export function CashAccountBalanceEditor({
         <div>
           <h3 className="text-sm font-semibold">Actual cash balances</h3>
           <p className="text-xs text-slate-500">
-            Bank balance syncs automatically from the Zoho bank feed when older than 15 minutes. Manual entry remains available as fallback. Safe-to-spend stays unavailable when bank data is older than 48 hours.
+            {canManage === true
+              ? "Bank balance syncs automatically from the Zoho bank feed when older than 15 minutes. Manual entry remains available as fallback. Safe-to-spend stays unavailable when bank data is older than 48 hours."
+              : "Bank balances are read-only for your role. Safe-to-spend stays unavailable when bank data is older than 48 hours."}
           </p>
         </div>
-        {bankAccounts.length ? (
+        {bankAccounts.length && canManage === true ? (
           <button
             type="button"
             onClick={() => void syncFromZoho(false)}
@@ -129,19 +148,22 @@ export function CashAccountBalanceEditor({
                   inputMode="decimal"
                   value={values[account.id] ?? ""}
                   onChange={(e) => setValues((current) => ({ ...current, [account.id]: e.target.value }))}
-                  className="min-w-0 flex-1 py-2 text-sm outline-none"
+                  disabled={canManage !== true}
+                  className="min-w-0 flex-1 py-2 text-sm outline-none disabled:bg-slate-50 disabled:text-slate-500"
                   aria-label={`${account.name} current balance`}
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => save(account)}
-                disabled={savingId === account.id}
-                className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
-              >
-                <RefreshCw className={`h-4 w-4 ${savingId === account.id ? "animate-spin" : ""}`} />
-                Manual save
-              </button>
+              {canManage === true ? (
+                <button
+                  type="button"
+                  onClick={() => save(account)}
+                  disabled={savingId === account.id}
+                  className="inline-flex items-center gap-2 rounded-md bg-slate-900 px-3 py-2 text-sm font-medium text-white disabled:opacity-60"
+                >
+                  <RefreshCw className={`h-4 w-4 ${savingId === account.id ? "animate-spin" : ""}`} />
+                  Manual save
+                </button>
+              ) : null}
             </div>
           </div>
         ))}
