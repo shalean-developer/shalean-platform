@@ -29,6 +29,23 @@ type KeywordRow = {
   active:boolean;
 };
 
+type SearchAppearanceRow = {
+  keyword_id:string;
+  keyword:string;
+  target_path:string|null;
+  service_name:string|null;
+  intent:string|null;
+  priority:string;
+  feature_type:string|null;
+  owner_type:"shalean"|"competitor"|"other"|"unowned";
+  owner_domain:string|null;
+  url:string|null;
+  title:string|null;
+  position:number|null;
+  observed_at:string|null;
+  status:"win"|"loss"|"opportunity"|"no_data";
+};
+
 export async function GET(request:Request){
   const auth=await requireAdminApi(request);
   if(!auth.ok) return NextResponse.json({error:auth.error},{status:auth.status});
@@ -55,20 +72,24 @@ export async function GET(request:Request){
     }
   }
 
-  const rows=((keywords??[]) as KeywordRow[]).flatMap((keyword)=>{
+  const rows:SearchAppearanceRow[]=[];
+  for(const keyword of (keywords??[]) as KeywordRow[]){
     const observed=FEATURE_TYPES.flatMap((featureType)=>latestByKeywordFeature.get(`${keyword.id}:${featureType}`)??[]);
     if(!observed.length){
-      return [{
+      rows.push({
         keyword_id:keyword.id,keyword:keyword.keyword,target_path:keyword.target_path,service_name:keyword.service_name??null,intent:keyword.intent??null,priority:keyword.priority,
-        feature_type:null,owner_type:"unowned" as const,owner_domain:null,url:null,title:null,position:null,observed_at:null,status:"no_data" as const,
-      }];
+        feature_type:null,owner_type:"unowned",owner_domain:null,url:null,title:null,position:null,observed_at:null,status:"no_data",
+      });
+      continue;
     }
-    return observed.map((feature)=>({
-      keyword_id:keyword.id,keyword:keyword.keyword,target_path:keyword.target_path,service_name:keyword.service_name??null,intent:keyword.intent??null,priority:keyword.priority,
-      feature_type:feature.feature_type,owner_type:feature.owner_type,owner_domain:feature.owner_domain,url:feature.url,title:feature.title,position:feature.position,observed_at:feature.observed_at,
-      status:feature.owner_type==="shalean"?"win":feature.owner_type==="competitor"?"loss":"opportunity",
-    }));
-  });
+    for(const feature of observed){
+      rows.push({
+        keyword_id:keyword.id,keyword:keyword.keyword,target_path:keyword.target_path,service_name:keyword.service_name??null,intent:keyword.intent??null,priority:keyword.priority,
+        feature_type:feature.feature_type,owner_type:feature.owner_type,owner_domain:feature.owner_domain,url:feature.url,title:feature.title,position:feature.position,observed_at:feature.observed_at,
+        status:feature.owner_type==="shalean"?"win":feature.owner_type==="competitor"?"loss":"opportunity",
+      });
+    }
+  }
 
   const withFeature=rows.filter((r)=>r.feature_type!=null);
   return NextResponse.json({
