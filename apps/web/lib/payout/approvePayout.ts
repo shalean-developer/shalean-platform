@@ -1,5 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { johannesburgCalendarMonthDateRangeYmd } from "@/lib/dashboard/johannesburgMonth";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 import { logPayoutAuditEvent } from "@/lib/payout/payoutAudit";
 import { loadCleanerPayoutBatchItems } from "@/lib/payout/loadCleanerPayoutBatchItems";
 
@@ -9,11 +11,23 @@ export async function approveCleanerPayout(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const { data: payout, error: payoutErr } = await admin
     .from("cleaner_payouts")
-    .select("id, cleaner_id, total_amount_cents, calculated_amount_cents, adjustment_note, created_by, amount_adjusted_by")
+    .select(
+      "id, cleaner_id, total_amount_cents, calculated_amount_cents, adjustment_note, created_by, amount_adjusted_by, period_start, period_end",
+    )
     .eq("id", params.payoutId)
     .maybeSingle();
   if (payoutErr) return { ok: false, error: payoutErr.message };
   if (!payout) return { ok: false, error: "Payout not found." };
+
+  const periodStart = String((payout as { period_start?: string | null }).period_start ?? "").trim();
+  const periodEnd = String((payout as { period_end?: string | null }).period_end ?? "").trim();
+  const currentMonthStart = johannesburgCalendarMonthDateRangeYmd(new Date()).startYmd;
+  if (isMonthlyPayoutBatchPeriod(periodStart, periodEnd) && periodEnd >= currentMonthStart) {
+    return {
+      ok: false,
+      error: "This monthly payout period is still open. Close the month before approving cleaner payouts.",
+    };
+  }
 
   const loaded = await loadCleanerPayoutBatchItems(admin, params.payoutId);
   if (loaded.error) return { ok: false, error: loaded.error };
