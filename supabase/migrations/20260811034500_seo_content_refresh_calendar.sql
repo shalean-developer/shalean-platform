@@ -13,13 +13,15 @@ create table if not exists public.seo_content_refreshes (
   completed_clicks integer,
   completed_impressions integer,
   completed_position numeric,
+  verified_clicks integer,
+  verified_impressions integer,
+  verified_position numeric,
   baseline_captured_at timestamptz,
   completed_at timestamptz,
   verification_due_at timestamptz,
   verified_at timestamptz,
   created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique(blog_post_id, status)
+  updated_at timestamptz not null default now()
 );
 
 create table if not exists public.seo_content_refresh_history (
@@ -31,6 +33,9 @@ create table if not exists public.seo_content_refresh_history (
   created_at timestamptz not null default now()
 );
 
+create unique index if not exists seo_content_refreshes_one_active_per_post_idx
+  on public.seo_content_refreshes(blog_post_id)
+  where status in ('queued','in_progress');
 create index if not exists seo_content_refreshes_status_due_idx on public.seo_content_refreshes(status, due_date nulls last);
 create index if not exists seo_content_refreshes_post_idx on public.seo_content_refreshes(blog_post_id, created_at desc);
 create index if not exists seo_content_refresh_history_refresh_idx on public.seo_content_refresh_history(refresh_id, created_at desc);
@@ -42,5 +47,5 @@ revoke all on public.seo_content_refresh_history from anon, authenticated;
 grant all on public.seo_content_refreshes to service_role;
 grant all on public.seo_content_refresh_history to service_role;
 
-comment on table public.seo_content_refreshes is 'SEO-026 managed content refresh queue with baseline and post-refresh GSC verification.';
+comment on table public.seo_content_refreshes is 'SEO-026 managed content refresh queue with baseline and immutable post-refresh GSC verification snapshots.';
 comment on table public.seo_content_refresh_history is 'SEO-026 audit trail for content refresh lifecycle actions.';
