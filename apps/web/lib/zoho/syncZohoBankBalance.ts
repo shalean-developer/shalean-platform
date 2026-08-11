@@ -39,6 +39,11 @@ function isConfigured(): boolean {
   );
 }
 
+function isZarOrUnspecified(account: ZohoBankAccount): boolean {
+  const currency = String(account.currency_code ?? "").trim().toUpperCase();
+  return !currency || currency === "ZAR";
+}
+
 function selectZohoBankAccount(accounts: ZohoBankAccount[]): ZohoBankAccount {
   const activeBanks = accounts.filter(
     (a) => a.is_active !== false && String(a.account_type ?? "").toLowerCase() === "bank",
@@ -47,13 +52,19 @@ function selectZohoBankAccount(accounts: ZohoBankAccount[]): ZohoBankAccount {
   if (explicitId) {
     const match = activeBanks.find((a) => String(a.account_id ?? "") === explicitId);
     if (!match) throw new Error("Configured ZOHO_BANK_ACCOUNT_ID was not found in active Zoho bank accounts.");
+    if (!isZarOrUnspecified(match)) {
+      throw new Error(`Configured ZOHO_BANK_ACCOUNT_ID is not a ZAR account (${match.currency_code}).`);
+    }
     return match;
   }
-  const zar = activeBanks.filter((a) => !a.currency_code || a.currency_code === "ZAR");
+  const zar = activeBanks.filter(isZarOrUnspecified);
   const primary = zar.find((a) => a.is_primary_account === true);
   if (primary) return primary;
   if (zar.length === 1) return zar[0];
-  if (activeBanks.length === 1) return activeBanks[0];
+  if (activeBanks.length === 1 && isZarOrUnspecified(activeBanks[0])) return activeBanks[0];
+  if (activeBanks.length === 1) {
+    throw new Error(`The only active Zoho bank account is not ZAR (${activeBanks[0].currency_code ?? "unknown"}).`);
+  }
   throw new Error("Multiple Zoho bank accounts found. Set ZOHO_BANK_ACCOUNT_ID to the Shalean operating account.");
 }
 
