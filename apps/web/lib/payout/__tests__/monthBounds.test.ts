@@ -3,6 +3,7 @@ import {
   getJohannesburgMonthBoundsContainingYmd,
   getPreviousMonthDateBoundsJhb,
   isCanonicalJohannesburgMonthPeriod,
+  isClosedMonthlyPayoutBatchPeriod,
   isMonthlyPayoutBatchPeriod,
   isMonthlyPayoutPeriod,
 } from "@/lib/payout/monthBounds";
@@ -36,5 +37,18 @@ describe("monthBounds", () => {
     expect(isCanonicalJohannesburgMonthPeriod("2026-06-23", "2026-06-29")).toBe(false);
     expect(isMonthlyPayoutBatchPeriod("2026-07-01", "2026-07-31")).toBe(true);
     expect(isMonthlyPayoutBatchPeriod("2026-06-01", "2026-06-30")).toBe(false);
+  });
+
+  it("treats only fully closed Johannesburg months as payable", () => {
+    const duringAugust = new Date("2026-08-11T22:00:00+02:00");
+    expect(isClosedMonthlyPayoutBatchPeriod("2026-07-01", "2026-07-31", duringAugust)).toBe(true);
+    expect(isClosedMonthlyPayoutBatchPeriod("2026-08-01", "2026-08-31", duringAugust)).toBe(false);
+    expect(isClosedMonthlyPayoutBatchPeriod("2026-08-01", "2026-08-31", new Date("2026-09-01T00:01:00+02:00"))).toBe(true);
+  });
+
+  it("rejects malformed and partial periods from the closed-month guard", () => {
+    const now = new Date("2026-09-15T12:00:00+02:00");
+    expect(isClosedMonthlyPayoutBatchPeriod("2026-08-01", "2026-08-30", now)).toBe(false);
+    expect(isClosedMonthlyPayoutBatchPeriod("2026-06-01", "2026-06-30", now)).toBe(false);
   });
 });

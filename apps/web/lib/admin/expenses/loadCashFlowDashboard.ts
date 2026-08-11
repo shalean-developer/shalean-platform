@@ -9,6 +9,7 @@ import {
 } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { computeProfitBreakdown } from "@/lib/admin/expenses/profitCalculations";
 import { loadPaymentTransactionMetrics } from "@/lib/payments/loadPaymentTransactionMetrics";
+import { loadSettlementCashSummary } from "@/lib/payments/loadSettlementCashSummary";
 
 export type CashFlowDashboardPayload = {
   period: { from: string; to: string };
@@ -19,6 +20,7 @@ export type CashFlowDashboardPayload = {
     money_paid_cents: number;
     cash_in_bank_cents: number;
     petty_cash_cents: number;
+    paystack_in_transit_cents: number;
     expected_income_cents: number;
     expected_expenses_cents: number;
     net_cash_flow_cents: number;
@@ -60,9 +62,12 @@ export async function loadCashFlowDashboard(
   toRaw?: string | null,
 ): Promise<CashFlowDashboardPayload> {
   const { from, to } = normalizeOfficePayoutPeriodRange(fromRaw, toRaw);
-  const report = await loadOfficePayoutPeriodReport(admin, from, to);
-  const approvedExpenses = await sumApprovedExpensesInRange(admin, from, to);
-  const gatewayMetrics = await loadPaymentTransactionMetrics(admin, from, to);
+  const [report, approvedExpenses, gatewayMetrics, settlementSummary] = await Promise.all([
+    loadOfficePayoutPeriodReport(admin, from, to),
+    sumApprovedExpensesInRange(admin, from, to),
+    loadPaymentTransactionMetrics(admin, from, to),
+    loadSettlementCashSummary(admin, { from, to }),
+  ]);
 
   const { data: accounts } = await admin
     .from("expense_accounts")
@@ -74,21 +79,20 @@ export async function loadCashFlowDashboard(
   for (const a of accounts ?? []) {
     const bal = a.balance_cents ?? 0;
     if (a.account_type === "petty_cash") pettyCash += bal;
-    else if (a.account_type === "bank" || a.account_type === "paystack") cashInBank += bal;
+    else if (a.account_type === "bank") cashInBank += bal;
   }
 
   const moneyReceived = report.totals.total_revenue_cents;
-  const moneyReceivedNet =
-    gatewayMetrics.transaction_count > 0
-      ? gatewayMetrics.net_settlement_cents
-      : moneyReceived - gatewayMetrics.processing_fee_cents;
+  const moneyReceivedNet = settlementSummary.settled_to_bank_cents;
   const moneyPaid = (report.totals.paid_cents ?? 0) + approvedExpenses;
 
-  const { data: paymentTxRows } = await admin
+  const { data: settledPaymentTxRows } = await admin
     .from("payment_transactions")
-    .select("paid_at, net_settlement_cents, amount_cents")
-    .gte("paid_at", `${from}T00:00:00`)
-    .lte("paid_at", `${to}T23:59:59`);
+    .select("settlement_date, net_settlement_cents, amount_cents")
+    .eq("gateway", "paystack")
+    .eq("settlement_status", "settled")
+    .gte("settlement_date", from)
+    .lte("settlement_date", to);
 
   const { data: pendingInvoices } = await admin
     .from("monthly_invoices")
@@ -113,18 +117,12 @@ export async function loadCashFlowDashboard(
     (pendingPayouts ?? []).reduce((s, r) => s + (r.total_amount_cents ?? 0), 0) +
     (pendingRecurring ?? []).reduce((s, r) => s + (r.amount_cents ?? 0), 0);
 
+  // Net cash flow is actual settled bank inflow less actual/approved outflow. Pending
+  // Paystack settlements are shown separately and are not treated as cash received.
   const netCashFlow = moneyReceivedNet - moneyPaid;
   const avgDailyBurn = moneyPaid / Math.max(1, report.totals.visit_count || 30);
   const cashRunwayDays =
     avgDailyBurn > 0 ? Math.round((cashInBank + pettyCash) / avgDailyBurn) : null;
-
-  const { data: paidBookings } = await admin
-    .from("bookings")
-    .select("date, total_paid_zar, amount_paid_cents, total_paid_cents")
-    .eq("status", "completed")
-    .eq("is_test", false)
-    .gte("date", from)
-    .lte("date", to);
 
   const { data: expenseRows } = await admin
     .from("expenses")
@@ -142,21 +140,13 @@ export async function loadCashFlowDashboard(
 
   const dailyMap = new Map<string, { in: number; out: number }>();
 
-  for (const tx of paymentTxRows ?? []) {
-    const d = tx.paid_at?.slice(0, 10) ?? from;
+  for (const tx of settledPaymentTxRows ?? []) {
+    const d = tx.settlement_date ?? from;
     const row = dailyMap.get(d) ?? { in: 0, out: 0 };
     row.in += tx.net_settlement_cents ?? tx.amount_cents ?? 0;
     dailyMap.set(d, row);
   }
 
-  if ((paymentTxRows ?? []).length === 0) {
-    for (const b of paidBookings ?? []) {
-      const d = b.date ?? from;
-      const row = dailyMap.get(d) ?? { in: 0, out: 0 };
-      row.in += bookingCustomerRevenueCents(b);
-      dailyMap.set(d, row);
-    }
-  }
   for (const e of expenseRows ?? []) {
     const row = dailyMap.get(e.expense_date) ?? { in: 0, out: 0 };
     row.out += e.amount_cents ?? 0;
@@ -207,6 +197,7 @@ export async function loadCashFlowDashboard(
       money_paid_cents: moneyPaid,
       cash_in_bank_cents: cashInBank,
       petty_cash_cents: pettyCash,
+      paystack_in_transit_cents: settlementSummary.in_transit_cents,
       expected_income_cents: expectedIncome,
       expected_expenses_cents: expectedExpenses,
       net_cash_flow_cents: netCashFlow,

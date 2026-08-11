@@ -1,7 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { metrics } from "@/lib/metrics/counters";
-import { isMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
+import { isClosedMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 
 export type CleanerPayoutRunRow = {
   id: string;
@@ -13,18 +13,16 @@ export type CleanerPayoutRunRow = {
 };
 
 /**
- * Groups all frozen weekly payouts that are not yet on a run into a new draft `cleaner_payout_runs` row.
+ * Groups all frozen, fully closed monthly payouts that are not yet on a run into
+ * a new draft `cleaner_payout_runs` row. Current-month accruals are never
+ * disbursement candidates.
  *
  * M-18 race-loss handling: the post-insert update is guarded by `payout_run_id IS NULL` so that
  * if a concurrent `createPayoutRun` runner already linked the same frozen `cleaner_payouts` rows
  * to a different run, this caller's update affects 0 rows and we delete the just-inserted empty
- * `cleaner_payout_runs` row instead of silently overwriting the winner's link. This is the
- * defense-in-depth pair to the H-15 cron lock on `cron:create-payout-run`: the cron lock is the
- * primary fence, but if it fails open or an admin manual replay races, the DB-level guard here
- * (plus the symmetric `cleaner_payouts_unique_active_period_idx` invariant on the upstream
- * `cleaner_payouts` insert) prevents orphan run rows or link-hijacking.
+ * `cleaner_payout_runs` row instead of silently overwriting the winner's link.
  */
-export async function createPayoutRun(admin: SupabaseClient): Promise<CleanerPayoutRunRow | null> {
+export async function createPayoutRun(admin: SupabaseClient, now: Date = new Date()): Promise<CleanerPayoutRunRow | null> {
   const { data: payouts, error: selErr } = await admin
     .from("cleaner_payouts")
     .select("id, total_amount_cents, period_start, period_end")
@@ -34,11 +32,14 @@ export async function createPayoutRun(admin: SupabaseClient): Promise<CleanerPay
   if (selErr) throw new Error(selErr.message);
   const list = (payouts ?? []).filter((p) => {
     const row = p as { period_start?: string; period_end?: string };
-    return isMonthlyPayoutBatchPeriod(String(row.period_start ?? ""), String(row.period_end ?? ""));
+    return isClosedMonthlyPayoutBatchPeriod(String(row.period_start ?? ""), String(row.period_end ?? ""), now);
   });
   if (!list.length) return null;
 
-  const total = list.reduce((s, p) => s + Math.max(0, Math.floor(Number((p as { total_amount_cents?: number }).total_amount_cents) || 0)), 0);
+  const total = list.reduce(
+    (s, p) => s + Math.max(0, Math.floor(Number((p as { total_amount_cents?: number }).total_amount_cents) || 0)),
+    0,
+  );
 
   const { data: run, error: insErr } = await admin
     .from("cleaner_payout_runs")
@@ -55,14 +56,6 @@ export async function createPayoutRun(admin: SupabaseClient): Promise<CleanerPay
     .from("cleaner_payouts")
     .update({ payout_run_id: runRow.id })
     .in("id", ids)
-    /**
-     * M-18: link-claim guard. Without this filter, two concurrent createPayoutRun runners
-     * (e.g. cron + admin manual replay, or H-15 lock fail-open) would both succeed at
-     * updating the same `cleaner_payouts` rows to point at their own freshly-inserted run,
-     * with the last writer silently winning. The IS NULL filter means only the first
-     * runner's update lands; the loser sees `linked.length === 0` and deletes its empty
-     * run row below, leaving a single canonical run.
-     */
     .is("payout_run_id", null)
     .select("id");
 
@@ -73,12 +66,6 @@ export async function createPayoutRun(admin: SupabaseClient): Promise<CleanerPay
 
   const linkedCount = linked?.length ?? 0;
   if (linkedCount === 0) {
-    /**
-     * Race loss: a concurrent createPayoutRun already linked the candidate payouts to
-     * its own run. Roll back the just-inserted empty run so we don't accumulate orphan
-     * `cleaner_payout_runs` draft rows. This is idempotent — if the delete also fails
-     * we still surface the metric and return null so the caller treats it as no-op.
-     */
     await admin.from("cleaner_payout_runs").delete().eq("id", runRow.id);
     metrics.increment("cleaner.create_payout_run_race_lost", {
       runId: runRow.id,
@@ -97,7 +84,7 @@ export async function createPayoutRun(admin: SupabaseClient): Promise<CleanerPay
   void logSystemEvent({
     level: "info",
     source: "payout_run_created",
-    message: "Created draft cleaner_payout_runs batch",
+    message: "Created draft cleaner_payout_runs batch for closed monthly payouts",
     context: { runId: runRow.id, payoutCount: linkedCount, total_amount_cents: total },
   });
 
