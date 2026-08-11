@@ -51,34 +51,61 @@ function pushFeature(
   });
 }
 
+function collectNestedSources(value: unknown, depth = 0): Array<{url:unknown;title:unknown;position:unknown}> {
+  if (depth > 6 || value == null) return [];
+  if (Array.isArray(value)) return value.flatMap((item) => collectNestedSources(item, depth + 1));
+  if (typeof value !== "object") return [];
+  const record = value as Record<string, unknown>;
+  const url = record.url ?? record.link ?? record.website ?? record.source_url;
+  const title = record.title ?? record.name ?? record.question ?? record.text;
+  const position = record.rank_absolute ?? record.rank_group ?? record.position;
+  const rows: Array<{url:unknown;title:unknown;position:unknown}> = [];
+  if (textOrNull(url)) rows.push({ url, title, position });
+  for (const key of ["items","references","sources","links","results","elements","answers"]) {
+    if (record[key] != null) rows.push(...collectNestedSources(record[key], depth + 1));
+  }
+  return rows;
+}
+
+function pushContainerFeature(output:NormalizedSerpFeature[], featureType:SerpFeatureType, item:any, fallbackPosition:unknown) {
+  const children = collectNestedSources(item).filter((row) => textOrNull(row.url));
+  if (children.length) {
+    for (const child of children) pushFeature(output, featureType, { url:child.url, title:child.title, position:child.position ?? fallbackPosition });
+    return;
+  }
+  pushFeature(output, featureType, { url:item?.url, title:item?.title, position:fallbackPosition });
+}
+
 function dataForSeoFeatures(raw: any): NormalizedSerpFeature[] {
   const output: NormalizedSerpFeature[] = [];
   const items = raw?.tasks?.[0]?.result?.[0]?.items ?? [];
   for (const item of items) {
     const type = String(item?.type ?? "").toLowerCase();
-    const common = {
-      url: item?.url,
-      title: item?.title,
-      position: item?.rank_absolute ?? item?.rank_group,
-    };
-    if (type === "featured_snippet") pushFeature(output, "featured_snippet", common);
-    else if (type === "local_pack" || type === "maps") {
-      const packItems = Array.isArray(item?.items) ? item.items : [];
-      if (!packItems.length) pushFeature(output, "local_pack", common);
-      for (const child of packItems) pushFeature(output, "local_pack", { url: child?.url ?? child?.website, title: child?.title ?? child?.name, position: child?.rank_absolute ?? child?.rank_group ?? common.position });
-    } else if (type === "people_also_ask") pushFeature(output, "people_also_ask", common);
-    else if (type === "images" || type === "images_element") pushFeature(output, "images", common);
-    else if (type === "video" || type === "videos" || type === "video_element") pushFeature(output, "video", common);
-    else if (type === "ai_overview") pushFeature(output, "ai_overview", common);
+    const position = item?.rank_absolute ?? item?.rank_group;
+    const common = { url: item?.url, title: item?.title, position };
+    if (type === "featured_snippet") pushContainerFeature(output, "featured_snippet", item, position);
+    else if (type === "local_pack" || type === "maps") pushContainerFeature(output, "local_pack", item, position);
+    else if (type === "people_also_ask") pushContainerFeature(output, "people_also_ask", item, position);
+    else if (type === "images" || type === "images_element") pushContainerFeature(output, "images", item, position);
+    else if (type === "video" || type === "videos" || type === "video_element") pushContainerFeature(output, "video", item, position);
+    else if (type === "ai_overview") pushContainerFeature(output, "ai_overview", item, position);
     else if (type === "knowledge_graph" || type === "knowledge_panel") pushFeature(output, "knowledge_panel", common);
   }
   return output;
 }
 
+function isSerpApiFeaturedSnippet(answerBox:any):boolean {
+  if (!answerBox || typeof answerBox !== "object") return false;
+  const type = String(answerBox.type ?? answerBox.answer_type ?? "").toLowerCase();
+  if (["calculator","weather","dictionary","conversion","currency","time","sports_results"].some((value)=>type.includes(value))) return false;
+  if (type.includes("featured") || type.includes("organic")) return true;
+  return Boolean(answerBox.link && (answerBox.snippet || answerBox.displayed_link || answerBox.highlighted_words));
+}
+
 function serpApiFeatures(raw: any): NormalizedSerpFeature[] {
   const output: NormalizedSerpFeature[] = [];
   const answerBox = raw?.answer_box;
-  if (answerBox) pushFeature(output, "featured_snippet", { url: answerBox.link ?? answerBox.source?.link, title: answerBox.title ?? answerBox.answer, position: 1 });
+  if (isSerpApiFeaturedSnippet(answerBox)) pushFeature(output, "featured_snippet", { url: answerBox.link ?? answerBox.source?.link, title: answerBox.title ?? answerBox.answer, position: 1 });
 
   const localResults = raw?.local_results?.places ?? raw?.local_results ?? [];
   if (Array.isArray(localResults) && localResults.length) {
@@ -92,7 +119,7 @@ function serpApiFeatures(raw: any): NormalizedSerpFeature[] {
 
   const images = raw?.inline_images ?? raw?.images_results ?? [];
   if (Array.isArray(images) && images.length) {
-    for (const image of images.slice(0, 10)) pushFeature(output, "images", { url: image?.source ?? image?.link, title: image?.title, position: image?.position });
+    for (const image of images.slice(0, 10)) pushFeature(output, "images", { url: image?.link ?? image?.source?.link, title: image?.title ?? image?.source, position: image?.position });
   }
 
   const videos = raw?.video_results ?? raw?.inline_videos ?? [];
@@ -104,7 +131,7 @@ function serpApiFeatures(raw: any): NormalizedSerpFeature[] {
   if (ai) {
     const sources = ai?.references ?? ai?.sources ?? [];
     if (Array.isArray(sources) && sources.length) {
-      for (const source of sources.slice(0, 10)) pushFeature(output, "ai_overview", { url: source?.link, title: source?.title, position: 1 });
+      for (const source of sources.slice(0, 10)) pushFeature(output, "ai_overview", { url: source?.link ?? source?.url, title: source?.title, position: 1 });
     } else pushFeature(output, "ai_overview", { title: ai?.text ?? ai?.snippet, position: 1 });
   }
 
