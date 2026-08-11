@@ -9,21 +9,27 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-/** Must match client {@link bookingRouteToFunnelStep} labels used in `booking_events.step`. */
-const FUNNEL_ORDER = ["entry", "quote", "extras", "datetime", "payment"] as const;
+/** Canonical booking-v2 customer journey. Legacy DB labels are normalized before aggregation. */
+const FUNNEL_ORDER = ["entry", "quote", "datetime", "details", "payment"] as const;
+type CanonicalFunnelStep = (typeof FUNNEL_ORDER)[number];
 
-/** Semantic `user_events` mapped to coarse funnel steps when `booking_events` views are sparse. */
-const USER_EVENT_FUNNEL_STEP: Record<string, (typeof FUNNEL_ORDER)[number]> = {
+function canonicalFunnelStep(step: string): CanonicalFunnelStep | null {
+  if (step === "extras") return "quote";
+  return FUNNEL_ORDER.includes(step as CanonicalFunnelStep) ? (step as CanonicalFunnelStep) : null;
+}
+
+/** Semantic `user_events` mapped to canonical customer-facing stages when `booking_events` views are sparse. */
+const USER_EVENT_FUNNEL_STEP: Record<string, CanonicalFunnelStep> = {
   booking_step_details_started: "entry",
   [ANALYTICS_EVENTS.START_BOOKING]: "entry",
   [ANALYTICS_EVENTS.BOOKING_SERVICE_SELECTED]: "quote",
   [ANALYTICS_EVENTS.VIEW_PRICE]: "quote",
-  booking_addon_selected: "extras",
-  booking_continue_schedule: "extras",
+  booking_addon_selected: "quote",
+  booking_continue_schedule: "datetime",
   [ANALYTICS_EVENTS.BOOKING_DATE_SELECTED]: "datetime",
   [ANALYTICS_EVENTS.BOOKING_TIME_SELECTED]: "datetime",
   [ANALYTICS_EVENTS.SELECT_TIME]: "datetime",
-  [ANALYTICS_EVENTS.BOOKING_CLEANER_SELECTED]: "datetime",
+  [ANALYTICS_EVENTS.BOOKING_CLEANER_SELECTED]: "details",
   [ANALYTICS_EVENTS.BOOKING_PAYMENT_STARTED]: "payment",
   [ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED]: "payment",
   [ANALYTICS_EVENTS.PAYMENT_COMPLETED]: "payment",
@@ -101,29 +107,22 @@ function safePayload(row: UserEventRow): Record<string, unknown> {
   return row.payload && typeof row.payload === "object" && !Array.isArray(row.payload) ? row.payload : {};
 }
 
+function safeMetadata(row: BookingEventRow): Record<string, unknown> {
+  return row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata) ? row.metadata : {};
+}
+
 function stringValue(value: unknown): string | null {
   return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 function correlationSessionId(row: UserEventRow): string | null {
   const p = safePayload(row);
-  return (
-    stringValue(p.analytics_session_id) ??
-    stringValue(p.booking_session_id) ??
-    stringValue(p.session_id)
-  );
+  return stringValue(p.analytics_session_id) ?? stringValue(p.booking_session_id) ?? stringValue(p.session_id);
 }
 
 function bookingEventCorrelationId(row: BookingEventRow): string {
-  const meta =
-    row.metadata && typeof row.metadata === "object" && !Array.isArray(row.metadata)
-      ? (row.metadata as Record<string, unknown>)
-      : {};
-  return (
-    stringValue(row.analytics_session_id) ??
-    stringValue(meta.analytics_session_id) ??
-    row.session_id
-  );
+  const meta = safeMetadata(row);
+  return stringValue(row.analytics_session_id) ?? stringValue(meta.analytics_session_id) ?? row.session_id;
 }
 
 function normalizeBucket(value: string | null | undefined, fallback = "Unknown"): string {
@@ -217,7 +216,6 @@ export async function GET(request: Request) {
 
   const since = new Date();
   since.setDate(since.getDate() - 30);
-
   const sinceIso = since.toISOString();
 
   const [bookingEventsRes, userEventsRes, bookingsRes] = await Promise.all([
@@ -298,11 +296,8 @@ export async function GET(request: Request) {
   }
 
   const viewedStepBySession = new Map<string, Set<string>>();
-  const funnelStepSet = new Set<string>(FUNNEL_ORDER);
 
-  function recordFunnelStepViews(sessionId: string, step: (typeof FUNNEL_ORDER)[number]) {
-    const idx = FUNNEL_ORDER.indexOf(step);
-    if (idx < 0) return;
+  function recordFunnelStepViews(sessionId: string, step: CanonicalFunnelStep) {
     let s = viewedStepBySession.get(sessionId);
     if (!s) {
       s = new Set();
@@ -311,7 +306,7 @@ export async function GET(request: Request) {
     s.add(step);
   }
 
-  function sessionsReachedStep(step: (typeof FUNNEL_ORDER)[number]): number {
+  function sessionsReachedStep(step: CanonicalFunnelStep): number {
     const idx = FUNNEL_ORDER.indexOf(step);
     if (idx < 0) return 0;
     let n = 0;
@@ -334,13 +329,9 @@ export async function GET(request: Request) {
       t.firstAt = Math.min(t.firstAt ?? createdAtMs, createdAtMs);
     }
     if (r.event_type !== "view") continue;
-    if (!funnelStepSet.has(r.step)) continue;
-    let s = viewedStepBySession.get(cid);
-    if (!s) {
-      s = new Set();
-      viewedStepBySession.set(cid, s);
-    }
-    s.add(r.step);
+    const step = canonicalFunnelStep(r.step);
+    if (!step) continue;
+    recordFunnelStepViews(cid, step);
   }
 
   for (const event of userEvents) {
@@ -394,7 +385,7 @@ export async function GET(request: Request) {
 
   const reachedPayment = new Set<string>();
   for (const r of rows) {
-    if (r.step === "payment" && (r.event_type === "view" || r.event_type === "next")) {
+    if (canonicalFunnelStep(r.step) === "payment" && (r.event_type === "view" || r.event_type === "next")) {
       reachedPayment.add(bookingEventCorrelationId(r));
     }
   }
@@ -406,7 +397,7 @@ export async function GET(request: Request) {
 
   const startedQuote = new Set<string>();
   for (const r of rows) {
-    if (r.step === "quote" && r.event_type === "view") startedQuote.add(bookingEventCorrelationId(r));
+    if (canonicalFunnelStep(r.step) === "quote" && r.event_type === "view") startedQuote.add(bookingEventCorrelationId(r));
   }
   for (const event of userEvents) {
     const sessionId = correlationSessionId(event);
@@ -438,15 +429,22 @@ export async function GET(request: Request) {
     dropOffByStep.push({ step: cur, viewed, dropped, dropOffPct });
   }
 
-  const exitCounts = new Map<string, number>();
+  const exitSessionsByStep = new Map<string, Set<string>>();
   for (const r of rows) {
     if (r.event_type !== "exit") continue;
-    exitCounts.set(r.step, (exitCounts.get(r.step) ?? 0) + 1);
+    const step = canonicalFunnelStep(r.step);
+    if (!step) continue;
+    let sessions = exitSessionsByStep.get(step);
+    if (!sessions) {
+      sessions = new Set();
+      exitSessionsByStep.set(step, sessions);
+    }
+    sessions.add(bookingEventCorrelationId(r));
   }
-  const topExitStepsFromEvents = [...exitCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 8)
-    .map(([step, count]) => ({ step, count }));
+  const topExitStepsFromEvents = [...exitSessionsByStep.entries()]
+    .map(([step, sessions]) => ({ step, count: sessions.size }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
   /** When clients omit explicit `exit` rows, infer exits from step drop-off counts. */
   const topExitSteps =
     topExitStepsFromEvents.length > 0
@@ -457,14 +455,53 @@ export async function GET(request: Request) {
           .slice(0, 8)
           .map((row) => ({ step: row.step, count: row.dropped }));
 
-  const errCounts = new Map<string, number>();
+  type ErrorBucket = {
+    sessions: Set<string>;
+    eventCount: number;
+    validationAttempts: number;
+    technicalErrors: number;
+    fields: Map<string, number>;
+  };
+  const errorBuckets = new Map<string, ErrorBucket>();
   for (const r of rows) {
     if (r.event_type !== "error") continue;
-    errCounts.set(r.step, (errCounts.get(r.step) ?? 0) + 1);
+    const step = canonicalFunnelStep(r.step);
+    if (!step) continue;
+    let bucket = errorBuckets.get(step);
+    if (!bucket) {
+      bucket = { sessions: new Set(), eventCount: 0, validationAttempts: 0, technicalErrors: 0, fields: new Map() };
+      errorBuckets.set(step, bucket);
+    }
+    bucket.sessions.add(bookingEventCorrelationId(r));
+    bucket.eventCount += 1;
+    const metadata = safeMetadata(r);
+    if (stringValue(metadata.reason)?.toLowerCase() === "validation") {
+      bucket.validationAttempts += 1;
+      if (Array.isArray(metadata.fields)) {
+        for (const value of metadata.fields) {
+          const field = stringValue(value);
+          if (!field) continue;
+          bucket.fields.set(field, (bucket.fields.get(field) ?? 0) + 1);
+        }
+      }
+    } else {
+      bucket.technicalErrors += 1;
+    }
   }
-  const errorsByStep = [...errCounts.entries()]
-    .sort((a, b) => b[1] - a[1])
-    .map(([step, count]) => ({ step, count }));
+  const errorsByStep = [...errorBuckets.entries()]
+    .map(([step, bucket]) => ({
+      step,
+      count: bucket.sessions.size,
+      affectedSessions: bucket.sessions.size,
+      eventCount: bucket.eventCount,
+      validationAttempts: bucket.validationAttempts,
+      technicalErrors: bucket.technicalErrors,
+      topFields: [...bucket.fields.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([field, count]) => ({ field, count })),
+    }))
+    .sort((a, b) => b.affectedSessions - a.affectedSessions);
 
   const viewsByStep = FUNNEL_ORDER.map((step) => ({
     step,
@@ -509,7 +546,7 @@ export async function GET(request: Request) {
     if (prev == null || ms < prev) paymentAtBySession.set(sid, ms);
   }
   for (const r of rows) {
-    if (r.step !== "payment") continue;
+    if (canonicalFunnelStep(r.step) !== "payment") continue;
     const ms = r.created_at ? new Date(r.created_at).getTime() : NaN;
     if (Number.isFinite(ms)) notePaymentAt(bookingEventCorrelationId(r), ms);
   }
@@ -531,13 +568,13 @@ export async function GET(request: Request) {
   const dayMap = initDayMap(since);
   for (const sid of startedQuote) {
     const day =
-      ymd(rows.find((r) => bookingEventCorrelationId(r) === sid && r.step === "quote" && r.event_type === "view")?.created_at) ??
+      ymd(rows.find((r) => bookingEventCorrelationId(r) === sid && canonicalFunnelStep(r.step) === "quote" && r.event_type === "view")?.created_at) ??
       ymdFromMs(sessionTraits.get(sid)?.firstAt);
     if (day && dayMap.has(day)) dayMap.get(day)!.starts += 1;
   }
   for (const sid of reachedPayment) {
     const day =
-      ymd(rows.find((r) => bookingEventCorrelationId(r) === sid && r.step === "payment")?.created_at) ??
+      ymd(rows.find((r) => bookingEventCorrelationId(r) === sid && canonicalFunnelStep(r.step) === "payment")?.created_at) ??
       ymdFromMs(paymentAtBySession.get(sid) ?? sessionTraits.get(sid)?.firstAt);
     if (day && dayMap.has(day)) dayMap.get(day)!.reachedPayment += 1;
   }
