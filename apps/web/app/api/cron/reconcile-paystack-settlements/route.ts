@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { acquireCronLock, releaseCronLock } from "@/lib/cron/cronLock";
+import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { reconcilePaystackSettlements } from "@/lib/payments/reconcilePaystackSettlements";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -15,6 +17,14 @@ export async function POST(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
+  const lockAcq = await acquireCronLock(admin, {
+    jobName: CRON_LOCK_KEYS.reconcilePaystackSettlements,
+    leaseSeconds: 1800,
+  });
+  if (!lockAcq.ok) {
+    return NextResponse.json({ ok: true, skipped: true, reason: lockAcq.reason });
+  }
+
   try {
     const result = await reconcilePaystackSettlements(admin);
     return NextResponse.json({ ok: true, ...result });
@@ -22,5 +32,7 @@ export async function POST(request: Request) {
     const message = e instanceof Error ? e.message : "Paystack settlement reconciliation failed.";
     console.error("[cron/reconcile-paystack-settlements]", message, e);
     return NextResponse.json({ error: message }, { status: 500 });
+  } finally {
+    await releaseCronLock(admin, lockAcq.jobName, lockAcq.holderId);
   }
 }
