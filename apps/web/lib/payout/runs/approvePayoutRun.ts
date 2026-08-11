@@ -1,9 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { logSystemEvent } from "@/lib/logging/systemLog";
+import { isClosedMonthlyPayoutBatchPeriod } from "@/lib/payout/monthBounds";
 
 /**
  * Approves a draft disbursement run and moves child `cleaner_payouts` from `frozen` → `approved`
- * so existing Paystack / mark-paid flows can execute.
+ * so existing Paystack / mark-paid flows can execute. Every child must belong to a fully closed
+ * Johannesburg monthly payout period.
  */
 export async function approvePayoutRun(
   admin: SupabaseClient,
@@ -21,35 +23,59 @@ export async function approvePayoutRun(
     return { ok: false, error: "Run not found or not in draft status." };
   }
 
-  const now = new Date().toISOString();
+  const { data: children, error: childErr } = await admin
+    .from("cleaner_payouts")
+    .select("id, status, period_start, period_end")
+    .eq("payout_run_id", runId);
+  if (childErr) return { ok: false, error: childErr.message };
+  if (!children?.length) return { ok: false, error: "Payout run has no cleaner payouts." };
 
-  const patch: Record<string, unknown> = {
-    status: "approved",
-    approved_at: now,
-  };
+  const openPeriod = children.find((row) => {
+    const r = row as { period_start?: string | null; period_end?: string | null };
+    return !isClosedMonthlyPayoutBatchPeriod(String(r.period_start ?? ""), String(r.period_end ?? ""));
+  });
+  if (openPeriod) {
+    return {
+      ok: false,
+      error: "Payout run contains an open or invalid monthly period. Close the month before approval.",
+    };
+  }
+
+  if (children.some((row) => String((row as { status?: string }).status ?? "") !== "frozen")) {
+    return { ok: false, error: "All payouts in the run must be frozen before approval." };
+  }
+
+  const now = new Date().toISOString();
+  const patch: Record<string, unknown> = { status: "approved", approved_at: now };
   if (approvedBy?.trim()) patch.approved_by = approvedBy.trim();
 
-  const { data: frozenBefore, error: pErr } = await admin.from("cleaner_payouts").select("id").eq("payout_run_id", runId).eq("status", "frozen");
-
-  if (pErr) return { ok: false, error: pErr.message };
-
-  const { error: upPayoutsErr } = await admin.from("cleaner_payouts").update(patch).eq("payout_run_id", runId).eq("status", "frozen");
+  const { data: updatedPayouts, error: upPayoutsErr } = await admin
+    .from("cleaner_payouts")
+    .update(patch)
+    .eq("payout_run_id", runId)
+    .eq("status", "frozen")
+    .select("id");
 
   if (upPayoutsErr) return { ok: false, error: upPayoutsErr.message };
+  if ((updatedPayouts?.length ?? 0) !== children.length) {
+    return { ok: false, error: "Payout run changed during approval. Refresh and try again." };
+  }
 
-  const { error: upRunErr } = await admin
+  const { data: updatedRun, error: upRunErr } = await admin
     .from("cleaner_payout_runs")
     .update({ status: "approved", approved_at: now })
     .eq("id", runId)
-    .eq("status", "draft");
+    .eq("status", "draft")
+    .select("id");
 
   if (upRunErr) return { ok: false, error: upRunErr.message };
+  if (!updatedRun?.length) return { ok: false, error: "Payout run changed during approval. Refresh and try again." };
 
   void logSystemEvent({
     level: "info",
     source: "payout_run_approved",
-    message: "Approved cleaner_payout_runs batch",
-    context: { runId, childPayoutCount: frozenBefore?.length ?? 0, approvedBy: approvedBy ?? null },
+    message: "Approved closed-month cleaner payout run",
+    context: { runId, childPayoutCount: children.length, approvedBy: approvedBy ?? null },
   });
 
   return { ok: true };
