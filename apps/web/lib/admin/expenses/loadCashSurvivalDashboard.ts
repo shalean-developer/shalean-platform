@@ -83,6 +83,8 @@ export async function loadCashSurvivalDashboard(
   const { from, to } = normalizeOfficePayoutPeriodRange(fromRaw, toRaw, now);
   const report = await loadOfficePayoutPeriodReport(admin, from, to);
   const settlement = await loadSettlementCashSummary(admin, { from, to, now });
+  const invoiceMonthFrom = from.slice(0, 7);
+  const invoiceMonthTo = to.slice(0, 7);
 
   const [{ data: accounts, error: accountsErr }, { data: invoices, error: invoiceErr }, { data: recurring, error: recurringErr }] =
     await Promise.all([
@@ -92,9 +94,9 @@ export async function loadCashSurvivalDashboard(
         .eq("is_active", true),
       admin
         .from("monthly_invoices")
-        .select("status, balance_cents, due_date, period_start, period_end")
-        .lte("period_start", to)
-        .gte("period_end", from),
+        .select("status, balance_cents, due_date, month")
+        .gte("month", invoiceMonthFrom)
+        .lte("month", invoiceMonthTo),
       admin
         .from("recurring_expenses")
         .select("amount_cents, next_run_date, status")
@@ -152,7 +154,7 @@ export async function loadCashSurvivalDashboard(
     const status = String(row.status ?? "").toLowerCase();
     if (status === "draft") {
       // Draft monthly invoices are unpaid by definition, so their outstanding balance
-      // is the conservative forecast value. `monthly_invoices` has no `total_cents` column.
+      // is the conservative forecast value.
       draftMonthly += cents(row.balance_cents);
       continue;
     }
