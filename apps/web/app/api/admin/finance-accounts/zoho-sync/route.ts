@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireFinanceApi } from "@/lib/auth/requireFinanceApi";
+import { requireAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { syncZohoBankBalance } from "@/lib/zoho/syncZohoBankBalance";
 
@@ -7,13 +7,14 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const auth = await requireFinanceApi(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  // Bank-balance sync persists a finance balance, so view-only finance access is not sufficient.
+  const auth = await requireAdminPermissionFromRequest(request, "expense.manage");
+  if (!auth.ok) return auth.response;
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const result = await syncZohoBankBalance(admin, auth.userId);
+  const result = await syncZohoBankBalance(admin, auth.user.id);
   if (!result.ok) {
     return NextResponse.json(result, { status: result.configured ? 409 : 503 });
   }
