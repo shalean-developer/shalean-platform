@@ -1,0 +1,94 @@
+.shell {
+  width: 100%;
+  padding: 20px 16px 48px;
+}
+
+.canvas {
+  width: min(100%, 1440px);
+  margin: 0 auto;
+}
+
+@media (min-width: 640px) {
+  .shell {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .shell {
+    padding-left: 32px;
+    padding-right: 32px;
+    padding-top: 24px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .shell {
+    padding-left: 40px;
+    padding-right: 40px;
+  }
+}
+
+.canvas :global(nav[aria-label="SEO management"]) {
+  margin-bottom: 28px;
+  border-color: #e2e8f0;
+  border-radius: 18px;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.04), 0 8px 24px rgb(15 23 42 / 0.035);
+}
+
+.canvas :global(h1) {
+  letter-spacing: -0.025em;
+}
+
+.canvas :global(input),
+.canvas :global(select),
+.canvas :global(textarea) {
+  border-color: #cbd5e1;
+}
+
+.canvas :global(input:focus),
+.canvas :global(select:focus),
+.canvas :global(textarea:focus) {
+  border-color: #64748b;
+  outline: 2px solid rgb(100 116 139 / 0.14);
+  outline-offset: 1px;
+}
+
+.canvas :global(.bg-white.border),
+.canvas :global(.border.bg-white) {
+  border-color: #e2e8f0;
+  box-shadow: 0 1px 2px rgb(15 23 42 / 0.025);
+}
+
+.canvas :global(table) {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.canvas :global(thead) {
+  background: #f8fafc;
+}
+
+.canvas :global(th) {
+  color: #52647e;
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.canvas :global(td),
+.canvas :global(th) {
+  border-color: #e2e8f0;
+}
+
+@media (max-width: 639px) {
+  .shell {
+    padding-top: 12px;
+  }
+
+  .canvas :global(nav[aria-label="SEO management"]) {
+    margin-bottom: 20px;
+  }
+}
