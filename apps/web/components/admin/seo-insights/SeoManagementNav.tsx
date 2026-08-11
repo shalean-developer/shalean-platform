@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 
 type NavItem = { label: string; href: string };
@@ -47,6 +48,7 @@ function isActive(pathname: string, href: string) {
 
 export function SeoManagementNav() {
   const pathname = usePathname();
+  const [openGroup, setOpenGroup] = useState<string | null>(null);
 
   return (
     <nav
@@ -55,6 +57,7 @@ export function SeoManagementNav() {
     >
       <Link
         href={OVERVIEW.href}
+        onClick={() => setOpenGroup(null)}
         className={cn(
           "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
           isActive(pathname, OVERVIEW.href)
@@ -67,44 +70,57 @@ export function SeoManagementNav() {
 
       {GROUPS.map((group) => {
         const groupActive = group.items.some((item) => isActive(pathname, item.href));
+        const open = openGroup === group.label;
         return (
-          <details key={group.label} className="group relative">
-            <summary
+          <div key={group.label} className="relative">
+            <button
+              type="button"
+              aria-expanded={open}
+              aria-haspopup="menu"
+              onClick={() => setOpenGroup(open ? null : group.label)}
               className={cn(
-                "flex cursor-pointer list-none items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition marker:content-none",
+                "flex cursor-pointer items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition",
                 groupActive
                   ? "bg-slate-900 text-white"
                   : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
               )}
             >
               {group.label}
-              <span aria-hidden="true" className="text-[10px] transition group-open:rotate-180">▼</span>
-            </summary>
-            <div className="absolute left-0 z-50 mt-2 min-w-64 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl">
-              {group.items.map((item) => {
-                const active = isActive(pathname, item.href);
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className={cn(
-                      "block rounded-xl px-3 py-2.5 text-sm font-medium transition",
-                      active
-                        ? "bg-slate-900 text-white"
-                        : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
-                    )}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </details>
+              <span aria-hidden="true" className={cn("text-[10px] transition", open && "rotate-180")}>▼</span>
+            </button>
+            {open ? (
+              <div
+                role="menu"
+                className="fixed left-4 right-4 z-50 mt-2 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl sm:absolute sm:left-0 sm:right-auto sm:w-64"
+              >
+                {group.items.map((item) => {
+                  const active = isActive(pathname, item.href);
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      role="menuitem"
+                      onClick={() => setOpenGroup(null)}
+                      className={cn(
+                        "block rounded-xl px-3 py-2.5 text-sm font-medium transition",
+                        active
+                          ? "bg-slate-900 text-white"
+                          : "text-slate-700 hover:bg-slate-100 hover:text-slate-950",
+                      )}
+                    >
+                      {item.label}
+                    </Link>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
         );
       })}
 
       <Link
         href={LINKS.href}
+        onClick={() => setOpenGroup(null)}
         className={cn(
           "rounded-xl px-4 py-2.5 text-sm font-semibold transition",
           isActive(pathname, LINKS.href)
