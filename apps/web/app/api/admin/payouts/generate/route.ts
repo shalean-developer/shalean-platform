@@ -3,7 +3,7 @@ import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { PayoutGenerationBlockedError } from "@/lib/payout/backfillLegacyWeeklyPayoutColumns";
-import { generateCatchUpWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
+import { generateWeeklyPayouts } from "@/lib/payout/generateWeeklyPayouts";
 import {
   prepareDraftRunPayoutsForCatchUp,
   restoreDraftRunPayoutsAfterCatchUp,
@@ -14,20 +14,24 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 /**
- * Admin manual trigger for monthly payout generation (catch-up: all unbatched completion months from July 2026).
+ * Admin manual trigger for the canonical monthly cleaner payout cycle.
+ *
+ * Only the previous, fully closed Johannesburg calendar month may be generated.
+ * This intentionally prevents the admin button from creating/finalising payout
+ * batches for the current month while cleaner earnings and monthly customer
+ * invoices are still accruing.
  *
  * Late-earnings reconciliation: frozen cleaner payouts that are still inside a
  * DRAFT payout run are temporarily re-opened while this same payout-generation
- * lock is held. The normal generator can then append newly eligible earnings to
- * the canonical cleaner/period payout. In a finally block the payout is restored
+ * lock is held. The generator can then append newly eligible earnings to the
+ * canonical cleaner/period payout. In a finally block the payout is restored
  * to its original draft run and the run total is recomputed. Approved/paid runs
  * are never re-opened.
  *
  * M-18: shares the same H-15 cron lease (`CRON_LOCK_KEYS.generatePayouts`) as
  * `/api/cron/generate-payouts`, so an admin replay cannot race the scheduled
  * cron and produce duplicate `cleaner_payouts` rows. The DB-level partial
- * unique index `cleaner_payouts_unique_active_period_idx`
- * (supabase/migrations/20260945_m18_cleaner_payouts_unique_period.sql) is the
+ * unique index `cleaner_payouts_unique_active_period_idx` remains the
  * defense-in-depth fence if the lock RPC is unavailable.
  */
 export async function POST(request: Request) {
@@ -44,9 +48,11 @@ export async function POST(request: Request) {
       async () => {
         const prep = await prepareDraftRunPayoutsForCatchUp(admin);
         try {
-          const generated = await generateCatchUpWeeklyPayouts(admin, { createdBy: auth.userId });
+          const generated = await generateWeeklyPayouts(admin, { createdBy: auth.userId });
           return {
             ...generated,
+            payoutFrequency: "monthly" as const,
+            closedPeriodOnly: true,
             lateEarningsReconciledPayouts: prep.payouts.length,
             lateEarningsReconciledRuns: prep.runIds.length,
           };
