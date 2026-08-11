@@ -5,6 +5,7 @@ import {
   buildOfficeFunnelSteps,
   buildOfficeProductFlowSteps,
   dailyTrendMax,
+  funnelStepLabel,
   funnelVisitorCount,
   overallFunnelConversionPct,
   paymentCompletedCount,
@@ -26,15 +27,28 @@ const SAMPLE: BookingFunnelApiPayload = {
   viewsByStep: [
     { step: "entry", views: 300 },
     { step: "quote", views: 180 },
+    { step: "datetime", views: 130 },
+    { step: "details", views: 100 },
     { step: "payment", views: 72 },
+  ],
+  errorsByStep: [
+    {
+      step: "quote",
+      count: 18,
+      affectedSessions: 18,
+      eventCount: 94,
+      validationAttempts: 94,
+      technicalErrors: 0,
+      topFields: [{ field: "serviceDetails.bathrooms", count: 31 }],
+    },
   ],
   insights: [
     {
       id: "funnel_step_dropoff",
       severity: "warning",
       category: "Funnel",
-      title: "Largest leak: quote → next",
-      detail: "45% drop-off at quote.",
+      title: "Largest leak: Service & price → next",
+      detail: "45% drop-off at Service & price.",
     },
   ],
   anomalies: [
@@ -56,7 +70,7 @@ const SAMPLE: BookingFunnelApiPayload = {
       { date: "2026-06-02", starts: 8, reachedPayment: 4, completed: 3, bookings: 3, paystackAbandons: 1, conversionPct: 37.5, paymentReachPct: 50 },
     ],
     stepConversion: [
-      { from: "quote", to: "extras", viewed: 100, progressed: 70, conversionPct: 70, dropOffPct: 30 },
+      { from: "quote", to: "datetime", viewed: 100, progressed: 70, conversionPct: 70, dropOffPct: 30 },
     ],
     deviceBreakdown: [{ label: "Mobile", starts: 80, reachedPayment: 30, completed: 20, conversionPct: 25 }],
     addOnAttachRatePct: 34.5,
@@ -65,9 +79,10 @@ const SAMPLE: BookingFunnelApiPayload = {
 };
 
 describe("buildOfficeFunnelSteps", () => {
-  it("maps API funnel counts into four office UI steps with drop-off", () => {
+  it("maps API funnel counts into four office UI steps with customer-facing labels", () => {
     const steps = buildOfficeFunnelSteps(SAMPLE);
     expect(steps.map((s) => s.value)).toEqual([310, 180, 72, 48]);
+    expect(steps[1]?.label).toBe("Service & price");
     expect(steps[1]?.dropoff).toBe(130);
   });
 });
@@ -91,12 +106,27 @@ describe("paymentCompletedCount", () => {
 });
 
 describe("buildOfficeProductFlowSteps", () => {
-  it("returns ordered product flow tiles with view counts", () => {
+  it("returns the canonical booking-v2 product flow without a duplicate legacy extras stage", () => {
     const flow = buildOfficeProductFlowSteps(SAMPLE);
+    expect(flow.map((s) => s.label)).toEqual([
+      "Booking started",
+      "Service & price",
+      "Schedule",
+      "Details & extras",
+      "Checkout",
+    ]);
     expect(flow.find((s) => s.key === "entry")?.views).toBe(300);
+    expect(flow.find((s) => s.key === "details")?.views).toBe(100);
     expect(flow.find((s) => s.key === "payment")?.views).toBe(72);
-    expect(flow.find((s) => s.key === "payment")?.label).toBe("Checkout");
     expect(flow.find((s) => s.key === "payment")?.sub).toBe("48 paid");
+  });
+});
+
+describe("funnelStepLabel", () => {
+  it("keeps legacy analytics keys readable but does not call step one a quote", () => {
+    expect(funnelStepLabel("quote")).toBe("Service & price");
+    expect(funnelStepLabel("extras")).toBe("Service & price");
+    expect(funnelStepLabel("details")).toBe("Details & extras");
   });
 });
 
