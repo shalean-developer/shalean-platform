@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireFinanceApi } from "@/lib/auth/requireFinanceApi";
+import { requireAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -7,8 +7,8 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request) {
-  const auth = await requireFinanceApi(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const auth = await requireAdminPermissionFromRequest(request, "expense.manage");
+  if (!auth.ok) return auth.response;
 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
@@ -53,7 +53,7 @@ export async function PATCH(request: Request) {
       account_type: accountType,
       previous_balance_cents: existing.balance_cents ?? 0,
       balance_cents: balanceCents,
-      actor_user_id: auth.userId,
+      actor_user_id: auth.user.id,
     },
   });
 
