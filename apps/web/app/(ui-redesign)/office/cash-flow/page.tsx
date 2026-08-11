@@ -20,6 +20,7 @@ import {
   OfficeZohoSecondaryButton,
 } from "@/components/admin/office/OfficeZohoChrome";
 import { FinanceKpiCard } from "@/components/admin/finance/FinanceKpiCard";
+import { CashAccountBalanceEditor } from "@/components/admin/finance/CashAccountBalanceEditor";
 import { useAdminData } from "@/hooks/useAdminData";
 import type { CashFlowDashboardPayload } from "@/lib/admin/expenses/loadCashFlowDashboard";
 import type { CashSurvivalDashboardPayload } from "@/lib/admin/expenses/loadCashSurvivalDashboard";
@@ -143,6 +144,7 @@ export default function CashFlowPage() {
         <p className="mt-3 text-xs opacity-70">
           Draft invoices, unverified Paystack rows and pending settlements are not counted as spendable cash. Minimum protected reserve: {formatZar(survival?.obligations.minimum_operating_reserve_cents ?? 0)}.
         </p>
+        {survival ? <CashAccountBalanceEditor accounts={survival.accounts} onSaved={refreshAll} /> : null}
       </section>
 
       <div className="flex flex-wrap gap-3">
