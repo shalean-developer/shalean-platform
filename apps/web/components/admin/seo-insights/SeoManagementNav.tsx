@@ -11,6 +11,7 @@ const ITEMS = [
   { label: "Queries", href: "/office/seo-insights/queries" },
   { label: "Keywords", href: "/office/seo-insights/keywords" },
   { label: "Organic Revenue", href: "/office/seo-insights/organic-revenue" },
+  { label: "Local SEO", href: "/office/seo-insights/local-seo" },
   { label: "Indexing", href: "/office/seo-insights/indexing" },
   { label: "Web Vitals", href: "/office/seo-insights/web-vitals" },
   { label: "Competitors", href: "/office/seo-insights/competitors" },
