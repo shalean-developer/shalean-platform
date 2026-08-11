@@ -47,8 +47,8 @@ const SAMPLE: BookingFunnelApiPayload = {
       id: "funnel_step_dropoff",
       severity: "warning",
       category: "Funnel",
-      title: "Largest leak: Service & price → next",
-      detail: "45% drop-off at Service & price.",
+      title: "Largest leak: Service → next",
+      detail: "45% drop-off at Service.",
     },
   ],
   anomalies: [
@@ -79,10 +79,17 @@ const SAMPLE: BookingFunnelApiPayload = {
 };
 
 describe("buildOfficeFunnelSteps", () => {
-  it("maps API funnel counts into four office UI steps with customer-facing labels", () => {
+  it("maps API funnel counts into the exact six-stage business funnel", () => {
     const steps = buildOfficeFunnelSteps(SAMPLE);
-    expect(steps.map((s) => s.value)).toEqual([310, 180, 72, 48]);
-    expect(steps[1]?.label).toBe("Service & price");
+    expect(steps.map((s) => s.label)).toEqual([
+      "Booking",
+      "Service",
+      "Schedule",
+      "Details",
+      "Checkout",
+      "Paid",
+    ]);
+    expect(steps.map((s) => s.value)).toEqual([310, 180, 130, 100, 72, 48]);
     expect(steps[1]?.dropoff).toBe(130);
   });
 });
@@ -106,27 +113,33 @@ describe("paymentCompletedCount", () => {
 });
 
 describe("buildOfficeProductFlowSteps", () => {
-  it("returns the canonical booking-v2 product flow without a duplicate legacy extras stage", () => {
+  it("returns Booking → Service → Schedule → Details → Checkout → Paid", () => {
     const flow = buildOfficeProductFlowSteps(SAMPLE);
     expect(flow.map((s) => s.label)).toEqual([
-      "Booking started",
-      "Service & price",
+      "Booking",
+      "Service",
       "Schedule",
-      "Details & extras",
+      "Details",
       "Checkout",
+      "Paid",
     ]);
     expect(flow.find((s) => s.key === "entry")?.views).toBe(300);
     expect(flow.find((s) => s.key === "details")?.views).toBe(100);
     expect(flow.find((s) => s.key === "payment")?.views).toBe(72);
+    expect(flow.find((s) => s.key === "paid")?.views).toBe(48);
     expect(flow.find((s) => s.key === "payment")?.sub).toBe("48 paid");
   });
 });
 
 describe("funnelStepLabel", () => {
-  it("keeps legacy analytics keys readable but does not call step one a quote", () => {
-    expect(funnelStepLabel("quote")).toBe("Service & price");
-    expect(funnelStepLabel("extras")).toBe("Service & price");
-    expect(funnelStepLabel("details")).toBe("Details & extras");
+  it("keeps legacy analytics keys compatible while using exact business labels", () => {
+    expect(funnelStepLabel("entry")).toBe("Booking");
+    expect(funnelStepLabel("quote")).toBe("Service");
+    expect(funnelStepLabel("extras")).toBe("Service");
+    expect(funnelStepLabel("datetime")).toBe("Schedule");
+    expect(funnelStepLabel("details")).toBe("Details");
+    expect(funnelStepLabel("payment")).toBe("Checkout");
+    expect(funnelStepLabel("paid")).toBe("Paid");
   });
 });
 
@@ -134,6 +147,7 @@ describe("buildOfficeFunnelKpis", () => {
   it("builds four KPI cards from intelligence payload", () => {
     const kpis = buildOfficeFunnelKpis(SAMPLE);
     expect(kpis).toHaveLength(4);
+    expect(kpis[0]?.label).toBe("Booking → paid");
     expect(kpis[0]?.value).toBe("15.5%");
     expect(kpis[1]?.label).toBe("Checkout → paid");
     expect(kpis[1]?.value).toBe("66.7%");
@@ -150,7 +164,7 @@ describe("sliceDailyTrends", () => {
 });
 
 describe("overallFunnelConversionPct", () => {
-  it("uses visitors to completed payment sessions", () => {
+  it("uses booking sessions to completed payment sessions", () => {
     expect(overallFunnelConversionPct(SAMPLE)).toBeCloseTo(15.5, 1);
   });
 
