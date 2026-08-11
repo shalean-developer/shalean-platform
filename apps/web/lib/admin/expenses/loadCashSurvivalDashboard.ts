@@ -167,8 +167,8 @@ export async function loadCashSurvivalDashboard(
   const cleanerUnpaid = Math.max(0, cleanerEarned - cleanerPaid);
   const reserve = configuredReserveCents();
   const confirmedLiquidCash = bankCents + pettyCashCents;
-  const protected = cleanerUnpaid + recurringDue + reserve;
-  const postProtection = confirmedLiquidCash - protected;
+  const protectedCashRequired = cleanerUnpaid + recurringDue + reserve;
+  const postProtection = confirmedLiquidCash - protectedCashRequired;
   const fundingGap = Math.max(0, -postProtection);
 
   const bankBalanceFresh = staleBankAccountCount === 0 && latestBankUpdatedAt != null;
@@ -202,7 +202,7 @@ export async function loadCashSurvivalDashboard(
       petty_cash_cents: pettyCashCents,
       confirmed_liquid_cash_cents: confirmedLiquidCash,
       paystack_settled_cents: settlement.settled_to_bank_cents,
-      paystack_in_transit_verified_cents: settlement.verified_in_transit_cents,
+      paystack_in_transit_verified_cents: settlement.in_transit_cents,
       paystack_pending_unverified_cents: settlement.unverified_pending_cents,
     },
     receivables: {
@@ -216,7 +216,7 @@ export async function loadCashSurvivalDashboard(
       cleaner_unpaid_liability_cents: cleanerUnpaid,
       recurring_due_cents: recurringDue,
       minimum_operating_reserve_cents: reserve,
-      protected_cash_required_cents: protected,
+      protected_cash_required_cents: protectedCashRequired,
     },
     decision: {
       safe_to_spend_cents: safeToSpend,
