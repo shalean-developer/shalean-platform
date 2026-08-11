@@ -130,7 +130,7 @@ export type OfficeProductFlowStep = {
  * Legacy DB step keys are intentionally preserved so historical telemetry remains readable.
  */
 export const OFFICE_FUNNEL_STEP_LABELS: Record<string, string> = {
-  entry: "Booking started",
+  entry: "Booking",
   quote: "Service",
   extras: "Service",
   datetime: "Schedule",
@@ -238,7 +238,7 @@ export function checkoutToPaidConversionPct(data: BookingFunnelApiPayload): numb
 
 export function buildOfficeFunnelSteps(data: BookingFunnelApiPayload): OfficeFunnelStep[] {
   const views = new Map((data.viewsByStep ?? []).map((row) => [row.step, row.views]));
-  const bookingStarted = Math.max(views.get("entry") ?? 0, funnelVisitorCount(data));
+  const booking = Math.max(views.get("entry") ?? 0, funnelVisitorCount(data));
   const service = Math.max(views.get("quote") ?? 0, data.funnelStartSessions ?? 0);
   const schedule = views.get("datetime") ?? 0;
   const details = views.get("details") ?? 0;
@@ -246,7 +246,7 @@ export function buildOfficeFunnelSteps(data: BookingFunnelApiPayload): OfficeFun
   const paid = paymentCompletedCount(data);
 
   const values = [
-    { label: "Booking started", value: bookingStarted },
+    { label: "Booking", value: booking },
     { label: "Service", value: service },
     { label: "Schedule", value: schedule },
     { label: "Details", value: details },
@@ -254,7 +254,7 @@ export function buildOfficeFunnelSteps(data: BookingFunnelApiPayload): OfficeFun
     { label: "Paid", value: paid },
   ];
 
-  const top = Math.max(bookingStarted, 1);
+  const top = Math.max(booking, 1);
 
   return values.map((row, index) => {
     const prev = index > 0 ? values[index - 1]!.value : null;
@@ -302,9 +302,9 @@ export function buildOfficeFunnelKpis(data: BookingFunnelApiPayload): OfficeFunn
 
   return [
     {
-      label: "Booking started → paid",
+      label: "Booking → paid",
       value: overall != null ? `${overall}%` : "—",
-      sub: `${paid} paid · ${funnelVisitorCount(data)} booking starts`,
+      sub: `${paid} paid · ${funnelVisitorCount(data)} booking sessions`,
       tone: "emerald",
     },
     {
@@ -367,7 +367,7 @@ export function buildOfficeFunnelRecommendations(data: BookingFunnelApiPayload):
 export function buildOfficeFunnelSummaryLine(data: BookingFunnelApiPayload): string | null {
   if (data.narrativeSummary?.trim()) return data.narrativeSummary.trim();
   if (typeof data.conversionRatePct === "number" && (data.funnelStartSessions ?? 0) > 0) {
-    return `${data.conversionRatePct}% of service-stage sessions reached checkout (${data.reachedPaymentSessions ?? 0}/${data.funnelStartSessions} sessions, last 30 days).`;
+    return `${data.conversionRatePct}% of service sessions reached checkout (${data.reachedPaymentSessions ?? 0}/${data.funnelStartSessions} sessions, last 30 days).`;
   }
   return null;
 }
