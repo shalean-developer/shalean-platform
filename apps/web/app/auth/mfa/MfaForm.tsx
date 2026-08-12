@@ -3,11 +3,14 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AlertCircle, ShieldCheck } from "lucide-react";
+import QRCode from "qrcode";
 
 import { AuthCard } from "@/components/auth/AuthShell";
 import {
   enrollMfaTotp,
   getMfaStatus,
+  getUser,
+  unenrollMfaFactor,
   verifyMfaTotp,
 } from "@/lib/auth/authClient";
 
@@ -17,11 +20,19 @@ type Enrollment = {
   secret: string;
 };
 
+const MFA_ISSUER = "Shalean Office";
+
+function buildTotpUri(secret: string, account: string) {
+  const label = `${MFA_ISSUER}:${account}`;
+  return `otpauth://totp/${encodeURIComponent(label)}?secret=${encodeURIComponent(secret)}&issuer=${encodeURIComponent(MFA_ISSUER)}&algorithm=SHA1&digits=6&period=30`;
+}
+
 export function MfaForm({ redirect }: { redirect: string }) {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<"enroll" | "challenge">("enroll");
   const [verifiedFactorId, setVerifiedFactorId] = useState<string | null>(null);
+  const [staleFactorId, setStaleFactorId] = useState<string | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +57,7 @@ export function MfaForm({ redirect }: { redirect: string }) {
         setVerifiedFactorId(status.verifiedTotpFactorId);
         setMode("challenge");
       } else {
+        setStaleFactorId(status.unverifiedTotpFactorId);
         setMode("enroll");
       }
       setLoading(false);
@@ -59,16 +71,41 @@ export function MfaForm({ redirect }: { redirect: string }) {
     setError(null);
     setSubmitting(true);
     try {
+      if (staleFactorId) {
+        const { error: unenrollError } = await unenrollMfaFactor(staleFactorId);
+        if (unenrollError) {
+          setError(`Could not restart authenticator setup: ${unenrollError.message}`);
+          return;
+        }
+        setStaleFactorId(null);
+      }
+
       const { data, error: enrollError } = await enrollMfaTotp();
-      if (enrollError || !data?.id || !data.totp?.qr_code || !data.totp.secret) {
+      if (enrollError || !data?.id || !data.totp?.secret) {
         setError(enrollError?.message ?? "Could not start authenticator setup.");
         return;
       }
+
+      // Build the QR payload ourselves from Supabase's TOTP secret. This keeps
+      // the authenticator payload independent from the Supabase Site URL (which
+      // may still be localhost in project configuration) and guarantees a
+      // standard otpauth:// URI labelled for Shalean Office.
+      const user = await getUser();
+      const account = user?.email?.trim() || "Office account";
+      const otpAuthUri = buildTotpUri(data.totp.secret, account);
+      const qrCode = await QRCode.toDataURL(otpAuthUri, {
+        errorCorrectionLevel: "M",
+        margin: 2,
+        width: 256,
+      });
+
       setEnrollment({
         factorId: data.id,
-        qrCode: data.totp.qr_code,
+        qrCode,
         secret: data.totp.secret,
       });
+    } catch (enrollmentError) {
+      setError(enrollmentError instanceof Error ? enrollmentError.message : "Could not create authenticator QR code.");
     } finally {
       setSubmitting(false);
     }
@@ -148,22 +185,30 @@ export function MfaForm({ redirect }: { redirect: string }) {
               <p className="text-sm text-zinc-600 dark:text-zinc-300">
                 Use an authenticator app such as Microsoft Authenticator, Google Authenticator, 1Password, or Authy.
               </p>
+              {staleFactorId ? (
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  An unfinished authenticator setup was found. Shalean will safely restart it and generate a fresh QR code.
+                </p>
+              ) : null}
               <button
                 type="button"
                 disabled={submitting}
                 onClick={() => void startEnrollment()}
                 className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               >
-                {submitting ? "Starting setup…" : "Set up authenticator"}
+                {submitting ? "Starting setup…" : staleFactorId ? "Restart authenticator setup" : "Set up authenticator"}
               </button>
             </>
           ) : (
             <>
               <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-                {/* Supabase returns a data URI for the TOTP QR code. */}
+                {/* Generated from a standard otpauth:// TOTP URI for Shalean Office. */}
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={enrollment.qrCode} alt="Authenticator setup QR code" className="mx-auto h-48 w-48" />
                 <p className="mt-3 break-all text-center text-xs text-zinc-500">Manual key: {enrollment.secret}</p>
+                <p className="mt-2 text-center text-xs text-amber-700 dark:text-amber-300">
+                  Keep this QR code and manual key private. They are the secret for your authenticator.
+                </p>
               </div>
               <label htmlFor="mfa-enroll-code" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Enter the 6-digit code

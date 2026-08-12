@@ -35,6 +35,21 @@ describe("P0-04 privileged MFA flow contract", () => {
     expect(authClient).toContain("challengeAndVerify");
   });
 
+  it("recovers abandoned unverified TOTP enrollment before creating a replacement", () => {
+    expect(authClient).toContain('factor.status === "unverified"');
+    expect(authClient).toContain("sb.auth.mfa.unenroll({ factorId })");
+    expect(mfaForm).toContain("status.unverifiedTotpFactorId");
+    expect(mfaForm).toContain("unenrollMfaFactor(staleFactorId)");
+    expect(mfaForm).toContain("Restart authenticator setup");
+  });
+
+  it("generates a standard Shalean otpauth QR instead of trusting the provider site URL", () => {
+    expect(mfaForm).toContain("otpauth://totp/");
+    expect(mfaForm).toContain('const MFA_ISSUER = "Shalean Office"');
+    expect(mfaForm).toContain("QRCode.toDataURL(otpAuthUri");
+    expect(mfaForm).not.toContain("qrCode: data.totp.qr_code");
+  });
+
   it("has no temporary bypass once mandatory AAL2 enforcement is enabled", () => {
     expect(mfaForm).not.toContain("Set up later — continue to Office");
     expect(mfaForm).not.toContain("continueForNow");
