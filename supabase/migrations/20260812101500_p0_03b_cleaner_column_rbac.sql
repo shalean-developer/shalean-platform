@@ -9,6 +9,8 @@ begin;
 -- Keep the existing row-level ownership policy, but narrow the SQL privilege
 -- to the explicitly self-service profile/availability columns. Server-side
 -- operational/admin writes continue through service_role and are unaffected.
+-- Availability weekdays remain on the governed request/admin approval path,
+-- and last_active_at remains server-controlled because it affects dispatch ranking.
 
 revoke update on table public.cleaners from authenticated;
 
@@ -24,12 +26,10 @@ grant update (
   location,
   is_available,
   availability_start,
-  availability_end,
-  availability_weekdays,
-  last_active_at
+  availability_end
 ) on table public.cleaners to authenticated;
 
 comment on table public.cleaners is
-  'P0-03B RBAC: authenticated self-service UPDATE is column-scoped; admin/system fields remain service-role controlled.';
+  'P0-03B RBAC: authenticated self-service UPDATE is column-scoped; governed availability weekdays, activity timestamps, and admin/system fields remain service-role controlled.';
 
 commit;
