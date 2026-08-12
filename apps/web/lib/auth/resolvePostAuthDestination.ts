@@ -16,13 +16,14 @@ export type ResolveProfileApiResponse = {
 };
 
 export type ResolvePostAuthResult =
-  | { kind: "redirect"; path: string }
+  | { kind: "redirect"; path: string; role: AppUserRole | null }
   | { kind: "timeout" }
   | { kind: "error"; message: string };
 
 /**
  * After email/password sign-in, resolve role from `user_profiles.role` and pick the dashboard route.
- * Caches `shalean_user_role` + `shalean_dashboard_route` in localStorage on success.
+ * Caches `shalean_user_role` + `shalean_dashboard_route` in localStorage on success, but callers
+ * must use the role returned here for security-sensitive routing because browser storage is best-effort.
  */
 export async function resolvePostAuthDestination(
   accessToken: string,
@@ -56,11 +57,11 @@ async function resolvePostAuthDestinationOnce(
     }
 
     if (json.missingProfile) {
-      return { kind: "redirect", path: "/complete-profile" };
+      return { kind: "redirect", path: "/complete-profile", role: null };
     }
 
     if (json.invalidRole) {
-      return { kind: "redirect", path: "/login" };
+      return { kind: "redirect", path: "/login", role: null };
     }
 
     if (!res.ok || !json.ok || !json.role) {
@@ -69,7 +70,11 @@ async function resolvePostAuthDestinationOnce(
 
     cacheUserRole(json.role);
     const path = safePostLoginRedirect(redirectParam, json.role);
-    return { kind: "redirect", path: path || json.dashboardRoute || dashboardRouteForRole(json.role) };
+    return {
+      kind: "redirect",
+      path: path || json.dashboardRoute || dashboardRouteForRole(json.role),
+      role: json.role,
+    };
   } catch (e) {
     if (e instanceof DOMException && e.name === "AbortError") {
       return { kind: "timeout" };
