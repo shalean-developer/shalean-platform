@@ -32,6 +32,10 @@ function payoutPermission(pathname: string, method: string): AdminPermission {
   return "payout.view";
 }
 
+function isPublishingMarketingAction(path: string): boolean {
+  return /(?:^|\/)(?:publish|send|activate|launch|schedule|sync|post)(?:\/|$)/.test(path);
+}
+
 /**
  * Priority 1/2 compatibility map for legacy Office routes.
  *
@@ -109,7 +113,7 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   if (path.includes("/whatsapp-test")) return ["notification.send"];
 
   if (path.includes("/customer-care-cases")) {
-    return read ? ["customer.view", "customer.contact"] : ["customer.contact"];
+    return read ? ["customer.view", "customer.contact", "incident.manage"] : ["customer.contact", "incident.manage"];
   }
   if (
     path.includes("/customers") ||
@@ -190,13 +194,13 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     path.includes("/referrals/") ||
     path.includes("/marketing/")
   ) {
-    return read
-      ? ["marketing.view", "content.draft", "content.publish"]
-      : ["content.publish"];
+    if (read) return ["marketing.view", "content.draft", "content.publish"];
+    return isPublishingMarketingAction(path) ? ["content.publish"] : ["content.draft", "content.publish"];
   }
 
   if (path.includes("/seo") || path.includes("/conversion") || path.includes("/growth/")) {
-    return read ? ["marketing.view"] : ["content.publish"];
+    if (read) return ["marketing.view"];
+    return isPublishingMarketingAction(path) ? ["content.publish"] : ["content.draft", "content.publish"];
   }
 
   if (path.includes("/whatsapp-inbox")) return ["customer.contact"];
