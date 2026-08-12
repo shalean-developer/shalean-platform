@@ -8,6 +8,7 @@ import { AuthCard } from "@/components/auth/AuthShell";
 import {
   enrollMfaTotp,
   getMfaStatus,
+  unenrollMfaFactor,
   verifyMfaTotp,
 } from "@/lib/auth/authClient";
 
@@ -22,6 +23,7 @@ export function MfaForm({ redirect }: { redirect: string }) {
   const [loading, setLoading] = useState(true);
   const [mode, setMode] = useState<"enroll" | "challenge">("enroll");
   const [verifiedFactorId, setVerifiedFactorId] = useState<string | null>(null);
+  const [staleFactorId, setStaleFactorId] = useState<string | null>(null);
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -46,6 +48,7 @@ export function MfaForm({ redirect }: { redirect: string }) {
         setVerifiedFactorId(status.verifiedTotpFactorId);
         setMode("challenge");
       } else {
+        setStaleFactorId(status.unverifiedTotpFactorId);
         setMode("enroll");
       }
       setLoading(false);
@@ -59,6 +62,18 @@ export function MfaForm({ redirect }: { redirect: string }) {
     setError(null);
     setSubmitting(true);
     try {
+      // Supabase keeps abandoned TOTP enrollments as unverified factors. Remove
+      // that stale factor before creating a replacement so a repeated setup
+      // attempt cannot fail with the duplicate friendly-name error.
+      if (staleFactorId) {
+        const { error: unenrollError } = await unenrollMfaFactor(staleFactorId);
+        if (unenrollError) {
+          setError(`Could not restart authenticator setup: ${unenrollError.message}`);
+          return;
+        }
+        setStaleFactorId(null);
+      }
+
       const { data, error: enrollError } = await enrollMfaTotp();
       if (enrollError || !data?.id || !data.totp?.qr_code || !data.totp.secret) {
         setError(enrollError?.message ?? "Could not start authenticator setup.");
@@ -148,13 +163,18 @@ export function MfaForm({ redirect }: { redirect: string }) {
               <p className="text-sm text-zinc-600 dark:text-zinc-300">
                 Use an authenticator app such as Microsoft Authenticator, Google Authenticator, 1Password, or Authy.
               </p>
+              {staleFactorId ? (
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  An unfinished authenticator setup was found. Shalean will safely restart it and generate a fresh QR code.
+                </p>
+              ) : null}
               <button
                 type="button"
                 disabled={submitting}
                 onClick={() => void startEnrollment()}
                 className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
               >
-                {submitting ? "Starting setup…" : "Set up authenticator"}
+                {submitting ? "Starting setup…" : staleFactorId ? "Restart authenticator setup" : "Set up authenticator"}
               </button>
             </>
           ) : (
