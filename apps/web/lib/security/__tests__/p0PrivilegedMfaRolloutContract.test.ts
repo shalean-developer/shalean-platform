@@ -19,8 +19,8 @@ const postAuthResolver = fs.readFileSync(
   "utf8",
 );
 
-describe("P0-04B privileged MFA rollout contract", () => {
-  it("routes only authoritatively resolved admin Office logins into the MFA rollout", () => {
+describe("P0-04 privileged MFA flow contract", () => {
+  it("routes only authoritatively resolved admin Office logins into MFA", () => {
     expect(loginForm).toContain('result.role === "admin"');
     expect(loginForm).toContain('result.path.startsWith("/office")');
     expect(loginForm).toContain('/auth/mfa?redirect=');
@@ -35,8 +35,9 @@ describe("P0-04B privileged MFA rollout contract", () => {
     expect(authClient).toContain("challengeAndVerify");
   });
 
-  it("keeps a temporary rollout bypass until central AAL2 enforcement lands", () => {
-    expect(mfaForm).toContain("Set up later — continue to Office");
-    expect(mfaForm).toContain("Mandatory enforcement will only be enabled");
+  it("has no temporary bypass once mandatory AAL2 enforcement is enabled", () => {
+    expect(mfaForm).not.toContain("Set up later — continue to Office");
+    expect(mfaForm).not.toContain("continueForNow");
+    expect(mfaForm).toContain("Multi-factor authentication required");
   });
 });

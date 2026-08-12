@@ -95,6 +95,10 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical
 
+      - name: Mandatory privileged AAL2 security contract
+        if: steps.filter.outputs.run_suite == 'true'
+        run: npm run test -- lib/security/__tests__/p0MandatoryAal2Contract.test.ts lib/security/__tests__/p0PrivilegedMfaRolloutContract.test.ts
+
       - name: Revenue path tests (booking, dispatch, cleaner API, cron locks)
         if: steps.filter.outputs.run_suite == 'true'
         run: >-

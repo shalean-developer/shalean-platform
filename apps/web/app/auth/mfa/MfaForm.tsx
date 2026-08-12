@@ -95,11 +95,6 @@ export function MfaForm({ redirect }: { redirect: string }) {
     }
   }
 
-  function continueForNow() {
-    router.replace(redirect);
-    router.refresh();
-  }
-
   return (
     <AuthCard>
       <div className="flex items-start gap-3">
@@ -108,10 +103,10 @@ export function MfaForm({ redirect }: { redirect: string }) {
         </div>
         <div>
           <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Protect your Office account
+            Multi-factor authentication required
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Shalean is rolling out multi-factor authentication for privileged Office access.
+            Privileged Shalean Office access requires a verified authenticator session.
           </p>
         </div>
       </div>
@@ -121,7 +116,7 @@ export function MfaForm({ redirect }: { redirect: string }) {
       {!loading && mode === "challenge" && verifiedFactorId ? (
         <div className="mt-6 space-y-4">
           <p className="text-sm text-zinc-600 dark:text-zinc-300">
-            Enter the code from your authenticator app to continue with a stronger session.
+            Enter the code from your authenticator app to continue to Office.
           </p>
           <label htmlFor="mfa-code" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Authenticator code
@@ -202,18 +197,8 @@ export function MfaForm({ redirect }: { redirect: string }) {
         </div>
       ) : null}
 
-      {!loading ? (
-        <button
-          type="button"
-          onClick={continueForNow}
-          className="mt-5 w-full rounded-xl border border-zinc-300 px-3 py-2.5 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800"
-        >
-          Set up later — continue to Office
-        </button>
-      ) : null}
-
-      <p className="mt-3 text-xs text-zinc-500 dark:text-zinc-400">
-        MFA is in rollout mode during P0-04B. Mandatory enforcement will only be enabled after this setup flow is production verified.
+      <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
+        You must complete MFA before privileged Office APIs will accept this session.
       </p>
     </AuthCard>
   );
