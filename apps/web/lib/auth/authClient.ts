@@ -131,17 +131,25 @@ export type MfaStatus = {
 
 export async function getMfaStatus(): Promise<{ status: MfaStatus | null; error: Error | null }> {
   const sb = client();
-  const [{ data: aal, error: aalError }, { data: factors, error: factorsError }] = await Promise.all([
+  const [
+    { data: aal, error: aalError },
+    { data: factors, error: factorsError },
+    { data: userData, error: userError },
+  ] = await Promise.all([
     sb.auth.mfa.getAuthenticatorAssuranceLevel(),
     sb.auth.mfa.listFactors(),
+    sb.auth.getUser(),
   ]);
 
-  const error = aalError ?? factorsError;
+  const error = aalError ?? factorsError ?? userError;
   if (error) return { status: null, error: new Error(error.message) };
 
-  const totpFactors = factors?.totp ?? [];
-  const verifiedTotp = totpFactors.find((factor) => factor.status === "verified") ?? null;
-  const unverifiedTotp = totpFactors.find((factor) => factor.status === "unverified") ?? null;
+  const verifiedTotp = (factors?.totp ?? [])[0] ?? null;
+  const unverifiedTotp =
+    (userData.user?.factors ?? []).find(
+      (factor) => factor.factor_type === "totp" && factor.status === "unverified",
+    ) ?? null;
+
   return {
     status: {
       currentLevel: aal?.currentLevel ?? null,
