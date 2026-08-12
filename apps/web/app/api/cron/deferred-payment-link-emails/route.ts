@@ -26,13 +26,19 @@ export async function POST(request: Request) {
 
   try {
     const stats = await processDueDeferredPaymentLinkEmails(admin, { limit: 30 });
-    await logSystemEvent({
-      level: "info",
-      source: "cron/deferred-payment-link-emails",
-      message: "Cron finished",
-      context: stats,
-    });
-    return NextResponse.json({ ok: true, ...stats });
+
+    // Empty healthy runs happen every few minutes and are not operational events.
+    // Only persist activity or a genuine problem so system health stays signal-rich.
+    if (stats.processed > 0 || stats.errors > 0 || stats.deliveryFailures > 0) {
+      await logSystemEvent({
+        level: stats.errors > 0 || stats.deliveryFailures > 0 ? "warn" : "info",
+        source: "cron/deferred-payment-link-emails",
+        message: "Cron finished",
+        context: stats,
+      });
+    }
+
+    return NextResponse.json({ ok: stats.errors === 0, ...stats });
   } catch (e) {
     await reportOperationalIssue("error", "cron/deferred-payment-link-emails", String(e));
     return NextResponse.json({ error: String(e) }, { status: 500 });
