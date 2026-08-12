@@ -35,6 +35,14 @@ describe("P0-04 privileged MFA flow contract", () => {
     expect(authClient).toContain("challengeAndVerify");
   });
 
+  it("recovers abandoned unverified TOTP enrollment before creating a replacement", () => {
+    expect(authClient).toContain('factor.status === "unverified"');
+    expect(authClient).toContain("sb.auth.mfa.unenroll({ factorId })");
+    expect(mfaForm).toContain("status.unverifiedTotpFactorId");
+    expect(mfaForm).toContain("unenrollMfaFactor(staleFactorId)");
+    expect(mfaForm).toContain("Restart authenticator setup");
+  });
+
   it("has no temporary bypass once mandatory AAL2 enforcement is enabled", () => {
     expect(mfaForm).not.toContain("Set up later — continue to Office");
     expect(mfaForm).not.toContain("continueForNow");
