@@ -21,7 +21,7 @@ const mfaForm = fs.readFileSync(
 
 describe("P0-04E mandatory privileged Office email verification contract", () => {
   it("requires a user-bound Office verification cookie before evaluating granular admin permissions", () => {
-    const verificationIndex = permissionGate.indexOf("verifyOfficeVerificationToken");
+    const verificationIndex = permissionGate.indexOf("if (!verifyOfficeVerificationToken(");
     const rbacIndex = permissionGate.indexOf("admin_has_permission");
     expect(verificationIndex).toBeGreaterThan(-1);
     expect(rbacIndex).toBeGreaterThan(-1);
@@ -31,7 +31,7 @@ describe("P0-04E mandatory privileged Office email verification contract", () =>
 
   it("verifies the Supabase bearer session before trusting the Office verification cookie", () => {
     const verifyUserIndex = permissionGate.indexOf("auth.getUser(token)");
-    const officeVerificationIndex = permissionGate.indexOf("verifyOfficeVerificationToken");
+    const officeVerificationIndex = permissionGate.indexOf("if (!verifyOfficeVerificationToken(", verifyUserIndex);
     expect(verifyUserIndex).toBeGreaterThan(-1);
     expect(officeVerificationIndex).toBeGreaterThan(verifyUserIndex);
   });
