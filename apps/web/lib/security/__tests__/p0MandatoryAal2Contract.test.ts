@@ -20,13 +20,14 @@ const mfaForm = fs.readFileSync(
 );
 
 describe("P0-04E mandatory privileged Office email verification contract", () => {
-  it("requires a user-bound Office verification cookie before evaluating granular admin permissions", () => {
+  it("requires a session-bound Office verification cookie before evaluating granular admin permissions", () => {
     const verificationIndex = permissionGate.indexOf("if (!verifyOfficeVerificationToken(");
     const rbacIndex = permissionGate.indexOf("admin_has_permission");
     expect(verificationIndex).toBeGreaterThan(-1);
     expect(rbacIndex).toBeGreaterThan(-1);
     expect(verificationIndex).toBeLessThan(rbacIndex);
     expect(permissionGate).toContain('code: "office_email_verification_required"');
+    expect(permissionGate).toContain("officeSessionBinding(user.last_sign_in_at)");
   });
 
   it("verifies the Supabase bearer session before trusting the Office verification cookie", () => {
@@ -43,11 +44,11 @@ describe("P0-04E mandatory privileged Office email verification contract", () =>
     expect(sessionBoundary).toContain('pathname.startsWith("/api/oauth/x")');
     expect(sessionBoundary).toContain("OFFICE_VERIFICATION_COOKIE");
     expect(sessionBoundary).toContain("verifyOfficeVerificationToken");
+    expect(sessionBoundary).toContain("officeSessionBinding");
     expect(sessionBoundary).toContain('code: "office_email_verification_required"');
   });
 
   it("keeps custom machine and cron bearer auth outside the human Office verification gate", () => {
-    expect(sessionBoundary).toContain("Only verified Supabase user sessions are Office-verification gated here");
     expect(sessionBoundary).toContain("!bearerError &&");
     expect(sessionBoundary).toContain("bearerUser?.id");
   });
@@ -58,10 +59,12 @@ describe("P0-04E mandatory privileged Office email verification contract", () =>
     expect(sessionBoundary).toContain('redirectUrl.pathname = "/auth/mfa"');
   });
 
-  it("uses signed, expiring, user-bound HttpOnly verification state", () => {
+  it("uses signed, expiring, user-and-session-bound HttpOnly verification state", () => {
     expect(verificationHelper).toContain('export const OFFICE_VERIFICATION_COOKIE = "shalean_office_verified"');
     expect(verificationHelper).toContain("OFFICE_VERIFICATION_TTL_MS = 8 * 60 * 60 * 1000");
     expect(verificationHelper).toContain("payload.uid === expectedUserId");
+    expect(verificationHelper).toContain("payload.sid === expectedSessionBinding");
+    expect(verificationHelper).toContain("officeSessionBinding(lastSignInAt");
     expect(verificationHelper).toContain("payload.exp > now");
     expect(verificationHelper).toContain("httpOnly: true");
     expect(verificationHelper).toContain('sameSite: "lax"');
