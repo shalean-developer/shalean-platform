@@ -42,4 +42,54 @@ describe("priorityPermissionsForRequest", () => {
       "cleaner.documents.view",
     ]);
   });
+
+  it("does not allow finance read access to reject money proposals", () => {
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://example.test/api/admin/money-action-proposals/abc/reject", { method: "POST" }),
+      ),
+    ).toEqual(["payout.approve"]);
+  });
+
+  it("preserves incident-manager access to customer-care mutations", () => {
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://example.test/api/admin/customer-care-cases/abc", { method: "PATCH" }),
+      ),
+    ).toEqual(["customer.contact", "incident.manage"]);
+  });
+
+  it("requires incident.manage for operational mutations", () => {
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://example.test/api/admin/ops-queue/abc", { method: "POST" }),
+      ),
+    ).toEqual(["incident.manage"]);
+  });
+
+  it("allows draft marketing writes without granting read-only mutation access", () => {
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://example.test/api/admin/promotions/abc", { method: "PATCH" }),
+      ),
+    ).toEqual(["content.draft", "content.publish"]);
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://example.test/api/admin/seo/recommendations/abc", { method: "POST" }),
+      ),
+    ).toEqual(["content.draft", "content.publish"]);
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://example.test/api/admin/promotions/abc/publish", { method: "POST" }),
+      ),
+    ).toEqual(["content.publish"]);
+  });
+
+  it("requires customer.contact for review mutations", () => {
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://example.test/api/admin/reviews/abc", { method: "POST" }),
+      ),
+    ).toEqual(["customer.contact"]);
+  });
 });

@@ -36,7 +36,7 @@ describe("Operations API permission mappings", () => {
       priorityPermissionsForRequest(
         new Request("https://example.test/api/admin/office-ops-health", { method: "POST" }),
       ),
-    ).toEqual(["incident.manage", "ops.health.view"]);
+    ).toEqual(["incident.manage"]);
   });
 
   it("maps email, template and real dispute APIs explicitly", () => {

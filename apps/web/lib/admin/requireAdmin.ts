@@ -32,12 +32,16 @@ function payoutPermission(pathname: string, method: string): AdminPermission {
   return "payout.view";
 }
 
+function isPublishingMarketingAction(path: string): boolean {
+  return /(?:^|\/)(?:publish|send|activate|launch|schedule|sync|post)(?:\/|$)/.test(path);
+}
+
 /**
  * Priority 1/2 compatibility map for legacy Office routes.
  *
- * The returned list mirrors the page policy: mixed-purpose pages may be used
- * by more than one legitimate role, while critical resources remain protected
- * by their dedicated permission.
+ * Reads may legitimately be shared by multiple operational roles. Mutations
+ * must never be authorized by a read-only permission: write mappings therefore
+ * return only permissions that carry explicit change authority for that domain.
  */
 export function priorityPermissionsForRequest(request: Request): AdminPermission[] {
   const { pathname } = new URL(request.url);
@@ -62,7 +66,7 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   ) return ["finance.full.view"];
   if (path.includes("/money-action-proposals")) {
     if (path.includes("/approve")) return ["payout.approve"];
-    if (path.includes("/reject")) return ["payout.approve", "finance.full.view"];
+    if (path.includes("/reject")) return ["payout.approve"];
     return read ? ["finance.full.view"] : ["payout.prepare"];
   }
   if (path.includes("/cleaner-earnings-disputes") || path.includes("/disputes")) {
@@ -90,9 +94,9 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     return ["invoice.manage"];
   }
 
-  if (
-    path.includes("/inventory")
-  ) return read ? ["expense.manage", "booking.assign", "finance.full.view"] : ["expense.manage", "booking.assign"];
+  if (path.includes("/inventory")) {
+    return read ? ["expense.manage", "booking.assign", "finance.full.view"] : ["expense.manage", "booking.assign"];
+  }
   if (path.includes("/transport")) {
     return read ? ["booking.assign", "booking.view", "expense.manage", "finance.full.view"] : ["booking.assign", "expense.manage"];
   }
@@ -108,7 +112,9 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   if (path.includes("/email/health")) return ["system.notifications"];
   if (path.includes("/whatsapp-test")) return ["notification.send"];
 
-  if (path.includes("/customer-care-cases")) return ["customer.view", "customer.contact"];
+  if (path.includes("/customer-care-cases")) {
+    return read ? ["customer.view", "customer.contact", "incident.manage"] : ["customer.contact", "incident.manage"];
+  }
   if (
     path.includes("/customers") ||
     path.includes("/addresses") ||
@@ -152,7 +158,7 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   ) {
     return read
       ? ["ops.health.view", "incident.manage"]
-      : ["incident.manage", "ops.health.view"];
+      : ["incident.manage"];
   }
 
   if (path.includes("/pricing-catalog-audit")) return ["pricing.manage"];
@@ -168,7 +174,7 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     return read ? ["cleaner.view"] : ["cleaner.edit"];
   }
   if (path.includes("/reviews") || path.includes("/review-funnel")) {
-    return ["customer.view", "marketing.view"];
+    return read ? ["customer.view", "marketing.view"] : ["customer.contact"];
   }
   if (path.includes("/blog/")) {
     return read
@@ -176,7 +182,9 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
       : ["content.draft", "content.publish"];
   }
   if (path.includes("/campaign-template")) {
-    return ["template.manage", "content.draft", "marketing.view"];
+    return read
+      ? ["template.manage", "content.draft", "marketing.view"]
+      : ["template.manage", "content.draft"];
   }
   if (
     path.includes("/promotions") ||
@@ -186,13 +194,13 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
     path.includes("/referrals/") ||
     path.includes("/marketing/")
   ) {
-    return read
-      ? ["marketing.view", "content.draft", "content.publish"]
-      : ["content.publish", "marketing.view"];
+    if (read) return ["marketing.view", "content.draft", "content.publish"];
+    return isPublishingMarketingAction(path) ? ["content.publish"] : ["content.draft", "content.publish"];
   }
 
   if (path.includes("/seo") || path.includes("/conversion") || path.includes("/growth/")) {
-    return ["marketing.view"];
+    if (read) return ["marketing.view"];
+    return isPublishingMarketingAction(path) ? ["content.publish"] : ["content.draft", "content.publish"];
   }
 
   if (path.includes("/whatsapp-inbox")) return ["customer.contact"];
