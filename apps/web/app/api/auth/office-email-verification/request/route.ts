@@ -11,6 +11,7 @@ import {
   OFFICE_CODE_TTL_MS,
 } from "@/lib/auth/officeEmailVerification";
 import { getDefaultFromAddress, getResend } from "@/lib/email/resendFrom";
+import { assertNotSeedEmail } from "@/lib/seed/devSeedGuard";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -47,6 +48,22 @@ export async function POST(request: Request) {
   const resolved = await resolveUserRoleServer(admin, { userId: user.id, email: user.email });
   if (resolved.kind !== "ok" || resolved.role !== "admin") {
     return NextResponse.json({ ok: false, error: "Forbidden." }, { status: 403 });
+  }
+
+  // Repository-wide outbound safety: development/staging seed identities must never
+  // reach Resend or another real provider. In production this guard is a no-op.
+  try {
+    assertNotSeedEmail(user.email, "office-email-verification");
+  } catch (seedRecipientError) {
+    console.warn("[office-email-verification] blocked seed recipient", {
+      userId: user.id,
+      email: user.email,
+      error: seedRecipientError instanceof Error ? seedRecipientError.message : "seed recipient blocked",
+    });
+    return NextResponse.json(
+      { ok: false, error: "Security-code email is disabled for development seed accounts." },
+      { status: 409 },
+    );
   }
 
   const { data: latest, error: latestError } = await admin
