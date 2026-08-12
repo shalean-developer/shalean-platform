@@ -6,10 +6,11 @@ import { useEffect, useLayoutEffect, useState } from "react";
 import { AlertCircle, Mail } from "lucide-react";
 import { AuthBackLink, AuthCard } from "@/components/auth/AuthShell";
 import { PasswordInput } from "@/components/ui/password-input";
-import { signIn } from "@/lib/auth/authClient";
+import { getMfaStatus, signIn } from "@/lib/auth/authClient";
 import { getResolvedAuthIntent, parseIntentQuery } from "@/lib/auth/authRoleIntent";
 import { resolvePostAuthDestination } from "@/lib/auth/resolvePostAuthDestination";
 import { stripCredentialParamsFromBrowserUrl } from "@/lib/auth/sanitizeLoginSearchParams";
+import { readCachedUserRole } from "@/lib/auth/userRole";
 
 export function LoginForm({
   initialEmail = "",
@@ -74,6 +75,16 @@ export function LoginForm({
         setError(result.message);
         return;
       }
+
+      if (readCachedUserRole() === "admin" && result.path.startsWith("/office")) {
+        const { status } = await getMfaStatus();
+        if (status?.currentLevel !== "aal2") {
+          router.replace(`/auth/mfa?redirect=${encodeURIComponent(result.path)}`);
+          router.refresh();
+          return;
+        }
+      }
+
       router.replace(result.path);
       router.refresh();
     } finally {
