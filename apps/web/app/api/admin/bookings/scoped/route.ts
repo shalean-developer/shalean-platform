@@ -190,7 +190,7 @@ export async function GET(request: Request) {
   const forwardedUrl = new URL(request.url);
   forwardedUrl.pathname = "/api/admin/bookings";
 
-  const isSupervisor = scope.roles.includes("supervisor");
+  const isSupervisor = !scope.isOwner && scope.roles.includes("supervisor");
   if (isSupervisor && scope.teams.length === 0) {
     return NextResponse.json({ error: "Supervisor team assignment is required for booking access." }, { status: 403 });
   }
