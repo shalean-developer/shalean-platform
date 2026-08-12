@@ -37,6 +37,7 @@ jobs:
           lib/admin/__tests__/officeWorkItems.test.ts
           lib/admin/__tests__/routePermissions.test.ts
           lib/security/__tests__/p0CleanerColumnRbacContract.test.ts
+          lib/security/__tests__/p0SupervisorCustomerScopeContract.test.ts
       - name: Typecheck
         working-directory: apps/web
         run: npm run typecheck
