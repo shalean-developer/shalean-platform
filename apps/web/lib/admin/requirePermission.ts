@@ -83,6 +83,19 @@ function bearerToken(request: Request): string {
   return request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
 }
 
+function verifiedTokenAal(token: string): string | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const claims = JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as { aal?: unknown };
+    return typeof claims.aal === "string" ? claims.aal : null;
+  } catch {
+    return null;
+  }
+}
+
 function configuredClients() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -198,6 +211,18 @@ export async function requireAnyAdminPermissionFromRequest(
   } = await clients.publicClient.auth.getUser(token);
   if (userError || !user?.id || !user.email) {
     return { ok: false, response: NextResponse.json({ error: "Invalid or expired session." }, { status: 401 }) };
+  }
+
+  // P0-04C: the token has already been verified above by Supabase. Only an AAL2
+  // session may proceed to privileged Office/Admin permission evaluation.
+  if (verifiedTokenAal(token) !== "aal2") {
+    return {
+      ok: false,
+      response: NextResponse.json(
+        { error: "Multi-factor authentication required.", code: "mfa_required" },
+        { status: 403 },
+      ),
+    };
   }
 
   for (const permission of permissions) {
