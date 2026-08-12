@@ -1,6 +1,10 @@
 import { createClient } from "@supabase/supabase-js";
 import type { User } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
+import {
+  OFFICE_VERIFICATION_COOKIE,
+  verifyOfficeVerificationToken,
+} from "@/lib/auth/officeEmailVerification";
 
 export type AdminPermission =
   | "booking.view"
@@ -83,17 +87,19 @@ function bearerToken(request: Request): string {
   return request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
 }
 
-function verifiedTokenAal(token: string): string | null {
-  try {
-    const payload = token.split(".")[1];
-    if (!payload) return null;
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-    const claims = JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as { aal?: unknown };
-    return typeof claims.aal === "string" ? claims.aal : null;
-  } catch {
-    return null;
+function requestCookie(request: Request, name: string): string | null {
+  const raw = request.headers.get("cookie") ?? "";
+  for (const part of raw.split(";")) {
+    const [key, ...valueParts] = part.trim().split("=");
+    if (key !== name) continue;
+    const value = valueParts.join("=");
+    try {
+      return decodeURIComponent(value);
+    } catch {
+      return value || null;
+    }
   }
+  return null;
 }
 
 function configuredClients() {
@@ -213,13 +219,18 @@ export async function requireAnyAdminPermissionFromRequest(
     return { ok: false, response: NextResponse.json({ error: "Invalid or expired session." }, { status: 401 }) };
   }
 
-  // P0-04C: the token has already been verified above by Supabase. Only an AAL2
-  // session may proceed to privileged Office/Admin permission evaluation.
-  if (verifiedTokenAal(token) !== "aal2") {
+  // P0-04E: Supabase verifies the user session above; Shalean then requires
+  // its own short-lived, user-bound Office email verification cookie before
+  // any privileged RBAC permission is evaluated.
+  const officeVerificationToken = requestCookie(request, OFFICE_VERIFICATION_COOKIE);
+  if (!verifyOfficeVerificationToken(officeVerificationToken, user.id)) {
     return {
       ok: false,
       response: NextResponse.json(
-        { error: "Multi-factor authentication required.", code: "mfa_required" },
+        {
+          error: "Office email verification is required.",
+          code: "office_email_verification_required",
+        },
         { status: 403 },
       ),
     };
