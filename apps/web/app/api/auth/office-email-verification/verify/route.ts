@@ -6,6 +6,7 @@ import { resolveUserRoleServer } from "@/lib/auth/resolveUserRoleServer";
 import {
   createOfficeVerificationToken,
   OFFICE_VERIFICATION_COOKIE,
+  officeSessionBinding,
   officeVerificationCookieOptions,
   verifyOfficeEmailCodeHash,
 } from "@/lib/auth/officeEmailVerification";
@@ -48,6 +49,11 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "Invalid or expired session." }, { status: 401 });
   }
 
+  const sessionBinding = officeSessionBinding(user.last_sign_in_at);
+  if (!sessionBinding) {
+    return NextResponse.json({ ok: false, error: "Could not bind verification to this login session." }, { status: 401 });
+  }
+
   const resolved = await resolveUserRoleServer(admin, { userId: user.id, email: user.email });
   if (resolved.kind !== "ok" || resolved.role !== "admin") {
     return NextResponse.json({ ok: false, error: "Forbidden." }, { status: 403 });
@@ -82,17 +88,40 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: false, error: "This code has expired. Request a new code." }, { status: 400 });
   }
 
+  // Serialize guesses before checking the code. Only one request can claim the
+  // current attempt_count value; concurrent requests lose the race and are rejected
+  // without evaluating another guess.
+  const nextAttempts = attempts + 1;
+  const { data: claimedAttempt, error: claimError } = await admin
+    .from("office_email_verification_challenges")
+    .update({ attempt_count: nextAttempts })
+    .eq("id", challenge.id)
+    .eq("user_id", user.id)
+    .eq("attempt_count", attempts)
+    .is("consumed_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (claimError) {
+    console.error("[office-email-verification] attempt claim failed", claimError.code);
+    return NextResponse.json({ ok: false, error: "Verification service unavailable." }, { status: 503 });
+  }
+  if (!claimedAttempt) {
+    return NextResponse.json(
+      { ok: false, error: "Another verification attempt was processed. Try again." },
+      { status: 409 },
+    );
+  }
+
   const matches = verifyOfficeEmailCodeHash(user.id, challenge.id, code, String(challenge.code_hash ?? ""));
   if (!matches) {
-    const nextAttempts = attempts + 1;
-    await admin
-      .from("office_email_verification_challenges")
-      .update({
-        attempt_count: nextAttempts,
-        ...(nextAttempts >= maxAttempts ? { consumed_at: new Date().toISOString() } : {}),
-      })
-      .eq("id", challenge.id)
-      .eq("attempt_count", attempts);
+    if (nextAttempts >= maxAttempts) {
+      await admin
+        .from("office_email_verification_challenges")
+        .update({ consumed_at: new Date().toISOString() })
+        .eq("id", challenge.id)
+        .is("consumed_at", null);
+    }
     return NextResponse.json(
       { ok: false, error: nextAttempts >= maxAttempts ? "Too many attempts. Request a new code." : "That security code is not correct." },
       { status: 400 },
@@ -100,13 +129,15 @@ export async function POST(request: Request) {
   }
 
   const consumedAt = new Date().toISOString();
-  const { error: consumeError } = await admin
+  const { data: consumedChallenge, error: consumeError } = await admin
     .from("office_email_verification_challenges")
     .update({ consumed_at: consumedAt })
     .eq("id", challenge.id)
-    .is("consumed_at", null);
-  if (consumeError) {
-    console.error("[office-email-verification] challenge consume failed", consumeError.code);
+    .is("consumed_at", null)
+    .select("id")
+    .maybeSingle();
+  if (consumeError || !consumedChallenge) {
+    console.error("[office-email-verification] challenge consume failed", consumeError?.code);
     return NextResponse.json({ ok: false, error: "Verification service unavailable." }, { status: 503 });
   }
 
@@ -114,7 +145,7 @@ export async function POST(request: Request) {
   const secure = new URL(request.url).protocol === "https:";
   response.cookies.set(
     OFFICE_VERIFICATION_COOKIE,
-    createOfficeVerificationToken(user.id),
+    createOfficeVerificationToken(user.id, sessionBinding),
     officeVerificationCookieOptions(secure),
   );
   return response;
