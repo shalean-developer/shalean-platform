@@ -37,8 +37,10 @@ export async function POST(request: Request) {
 
   const result = await sendPasswordResetEmail(admin, email);
 
+  // Do not disclose whether the supplied address belongs to an account.
+  // Returning the same success response for an unknown user prevents account enumeration.
   if (!result.ok && result.reason === "no_user") {
-    return NextResponse.json({ sent: false, code: "no_account" });
+    return NextResponse.json({ sent: true });
   }
 
   if (!result.ok) {
