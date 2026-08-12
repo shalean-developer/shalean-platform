@@ -4,7 +4,7 @@
 
 import type { CapeTownLocationRow } from "@/lib/seo/capeTownLocations";
 import { googleBusinessAggregateRatingSchema } from "@/lib/seo/googleReviews";
-import { capeTownAdministrativeServiceArea } from "@/lib/seo/primaryLocalBusinessJsonLd";
+import { buildPrimaryLocalBusinessBase, capeTownAdministrativeServiceArea } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { getLocationMetaPriceHint } from "@/lib/seo/location-pricing";
 import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
 
@@ -67,6 +67,7 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
       containedInPlace: cityPlace,
     })),
   ];
+  const primaryLocalBusiness = buildPrimaryLocalBusinessBase();
 
   return {
     "@context": "https://schema.org",
@@ -92,9 +93,8 @@ export function buildLocationHubJsonLd(params: BuildLocationHubJsonLdParams): Re
         ],
       },
       {
-        "@type": "LocalBusiness",
+        ...primaryLocalBusiness,
         "@id": localBusinessId,
-        name: "Shalean Cleaning Services",
         url: siteOrigin,
         telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
         priceRange: getLocationMetaPriceHint(location),
