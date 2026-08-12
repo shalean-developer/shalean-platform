@@ -51,12 +51,12 @@ describe("priorityPermissionsForRequest", () => {
     ).toEqual(["payout.approve"]);
   });
 
-  it("requires customer.contact for customer-care mutations", () => {
+  it("preserves incident-manager access to customer-care mutations", () => {
     expect(
       priorityPermissionsForRequest(
         new Request("https://example.test/api/admin/customer-care-cases/abc", { method: "PATCH" }),
       ),
-    ).toEqual(["customer.contact"]);
+    ).toEqual(["customer.contact", "incident.manage"]);
   });
 
   it("requires incident.manage for operational mutations", () => {
@@ -67,15 +67,20 @@ describe("priorityPermissionsForRequest", () => {
     ).toEqual(["incident.manage"]);
   });
 
-  it("does not allow marketing.view to mutate marketing resources", () => {
+  it("allows draft marketing writes without granting read-only mutation access", () => {
     expect(
       priorityPermissionsForRequest(
         new Request("https://example.test/api/admin/promotions/abc", { method: "PATCH" }),
       ),
-    ).toEqual(["content.publish"]);
+    ).toEqual(["content.draft", "content.publish"]);
     expect(
       priorityPermissionsForRequest(
         new Request("https://example.test/api/admin/seo/recommendations/abc", { method: "POST" }),
+      ),
+    ).toEqual(["content.draft", "content.publish"]);
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://example.test/api/admin/promotions/abc/publish", { method: "POST" }),
       ),
     ).toEqual(["content.publish"]);
   });
