@@ -85,7 +85,7 @@ export type OfficeOpsCronRunRow = OfficeOpsCronErrorRow & {
   status?: string | null;
 };
 
-export function filterBookingEngineCronSuccesses(rows: readonly OfficeOpsCronRunRow[]): OfficeOpsCronRunRunRow[] {
+export function filterBookingEngineCronSuccesses(rows: readonly OfficeOpsCronRunRow[]): OfficeOpsCronRunRow[] {
   return rows.filter((row) => {
     const job = String(row.job_name ?? "").trim();
     if (!job || !BOOKING_ENGINE_CRON_JOBS.has(job)) return false;
