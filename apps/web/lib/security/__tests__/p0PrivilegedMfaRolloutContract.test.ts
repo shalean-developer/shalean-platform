@@ -77,7 +77,7 @@ describe("P0-04E privileged Office email verification flow contract", () => {
 
   it("serializes verification attempts before evaluating a code", () => {
     const claimIndex = verifyRoute.indexOf(".eq(\"attempt_count\", attempts)");
-    const compareIndex = verifyRoute.indexOf("verifyOfficeEmailCodeHash");
+    const compareIndex = verifyRoute.indexOf("verifyOfficeEmailCodeHash(user.id", claimIndex);
     expect(claimIndex).toBeGreaterThan(-1);
     expect(compareIndex).toBeGreaterThan(claimIndex);
     expect(verifyRoute).toContain("if (!claimedAttempt)");
@@ -92,8 +92,8 @@ describe("P0-04E privileged Office email verification flow contract", () => {
   });
 
   it("issues the signed Office verification cookie only after successful code verification", () => {
-    const verifyIndex = verifyRoute.indexOf("verifyOfficeEmailCodeHash");
-    const cookieIndex = verifyRoute.indexOf("response.cookies.set");
+    const verifyIndex = verifyRoute.indexOf("verifyOfficeEmailCodeHash(user.id");
+    const cookieIndex = verifyRoute.indexOf("response.cookies.set", verifyIndex);
     expect(verifyIndex).toBeGreaterThan(-1);
     expect(cookieIndex).toBeGreaterThan(verifyIndex);
     expect(verifyRoute).toContain("createOfficeVerificationToken(user.id, sessionBinding)");
