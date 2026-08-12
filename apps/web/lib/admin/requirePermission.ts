@@ -3,6 +3,7 @@ import type { User } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import {
   OFFICE_VERIFICATION_COOKIE,
+  officeSessionBinding,
   verifyOfficeVerificationToken,
 } from "@/lib/auth/officeEmailVerification";
 
@@ -59,10 +60,7 @@ export type AdminPermission =
   | "system.integrations"
   | "system.logs";
 
-export type PermissionScope = {
-  branchId?: string | null;
-  teamId?: string | null;
-};
+export type PermissionScope = { branchId?: string | null; teamId?: string | null };
 
 export type PermissionAuthResult =
   | { ok: true; user: User; email: string; permission: AdminPermission }
@@ -133,19 +131,10 @@ async function recordAuditedPermissionAccess(
     reason: "Permission-gated sensitive access",
     old_value: null,
     new_value: null,
-    metadata: {
-      method,
-      branch_id: scope.branchId ?? null,
-      team_id: scope.teamId ?? null,
-    },
+    metadata: { method, branch_id: scope.branchId ?? null, team_id: scope.teamId ?? null },
   });
   if (error) {
-    console.error("Sensitive admin access audit failed", {
-      permission,
-      userId,
-      path: url.pathname,
-      code: error.code,
-    });
+    console.error("Sensitive admin access audit failed", { permission, userId, path: url.pathname, code: error.code });
     return false;
   }
   return true;
@@ -175,13 +164,7 @@ async function recordPermissionDenial(
       team_id: scope.teamId ?? null,
     },
   });
-  if (error) {
-    console.error("Admin authorization denial audit failed", {
-      userId,
-      path: url.pathname,
-      code: error.code,
-    });
-  }
+  if (error) console.error("Admin authorization denial audit failed", { userId, path: url.pathname, code: error.code });
 }
 
 export async function requireAdminPermissionFromRequest(
@@ -192,24 +175,17 @@ export async function requireAdminPermissionFromRequest(
   return requireAnyAdminPermissionFromRequest(request, [permission], scope);
 }
 
-/** Authorize when at least one listed permission resolves in the requested scope. */
 export async function requireAnyAdminPermissionFromRequest(
   request: Request,
   permissions: readonly AdminPermission[],
   scope: PermissionScope = {},
 ): Promise<PermissionAuthResult> {
   const token = bearerToken(request);
-  if (!token) {
-    return { ok: false, response: NextResponse.json({ error: "Missing authorization." }, { status: 401 }) };
-  }
-  if (permissions.length === 0) {
-    return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
-  }
+  if (!token) return { ok: false, response: NextResponse.json({ error: "Missing authorization." }, { status: 401 }) };
+  if (permissions.length === 0) return { ok: false, response: NextResponse.json({ error: "Forbidden." }, { status: 403 }) };
 
   const clients = configuredClients();
-  if (!clients) {
-    return { ok: false, response: NextResponse.json({ error: "Server configuration error." }, { status: 503 }) };
-  }
+  if (!clients) return { ok: false, response: NextResponse.json({ error: "Server configuration error." }, { status: 503 }) };
 
   const {
     data: { user },
@@ -219,18 +195,13 @@ export async function requireAnyAdminPermissionFromRequest(
     return { ok: false, response: NextResponse.json({ error: "Invalid or expired session." }, { status: 401 }) };
   }
 
-  // P0-04E: Supabase verifies the user session above; Shalean then requires
-  // its own short-lived, user-bound Office email verification cookie before
-  // any privileged RBAC permission is evaluated.
   const officeVerificationToken = requestCookie(request, OFFICE_VERIFICATION_COOKIE);
-  if (!verifyOfficeVerificationToken(officeVerificationToken, user.id)) {
+  const sessionBinding = officeSessionBinding(user.last_sign_in_at);
+  if (!verifyOfficeVerificationToken(officeVerificationToken, user.id, sessionBinding)) {
     return {
       ok: false,
       response: NextResponse.json(
-        {
-          error: "Office email verification is required.",
-          code: "office_email_verification_required",
-        },
+        { error: "Office email verification is required.", code: "office_email_verification_required" },
         { status: 403 },
       ),
     };
@@ -245,11 +216,7 @@ export async function requireAnyAdminPermissionFromRequest(
     });
 
     if (permissionError) {
-      console.error("RBAC permission evaluation failed", {
-        permission,
-        userId: user.id,
-        code: permissionError.code,
-      });
+      console.error("RBAC permission evaluation failed", { permission, userId: user.id, code: permissionError.code });
       return { ok: false, response: NextResponse.json({ error: "Authorization unavailable." }, { status: 503 }) };
     }
     if (allowed === true) {
@@ -263,10 +230,7 @@ export async function requireAnyAdminPermissionFromRequest(
       if (!auditRecorded) {
         return {
           ok: false,
-          response: NextResponse.json(
-            { error: "Sensitive access audit unavailable. Access was not granted." },
-            { status: 503 },
-          ),
+          response: NextResponse.json({ error: "Sensitive access audit unavailable. Access was not granted." }, { status: 503 }),
         };
       }
       return { ok: true, user, email: user.email, permission };
@@ -274,13 +238,9 @@ export async function requireAnyAdminPermissionFromRequest(
   }
 
   await recordPermissionDenial(clients.adminClient as unknown as AuditInsertClient, request, user.id, permissions, scope);
-
   return {
     ok: false,
-    response: NextResponse.json(
-      { error: "Forbidden.", requiredAnyPermission: permissions },
-      { status: 403 },
-    ),
+    response: NextResponse.json({ error: "Forbidden.", requiredAnyPermission: permissions }, { status: 403 }),
   };
 }
 
