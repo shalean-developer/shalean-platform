@@ -57,6 +57,15 @@ describe("P0-04E privileged Office email verification flow contract", () => {
     expect(requestRoute).toContain("hashOfficeEmailCode(user.id, challengeId, code)");
   });
 
+  it("guards seed recipients before calling the email provider", () => {
+    const guardIndex = requestRoute.indexOf('assertNotSeedEmail(user.email, "office-email-verification")');
+    const sendIndex = requestRoute.indexOf("resend.emails.send");
+    expect(guardIndex).toBeGreaterThan(-1);
+    expect(sendIndex).toBeGreaterThan(-1);
+    expect(guardIndex).toBeLessThan(sendIndex);
+    expect(requestRoute).toContain("Security-code email is disabled for development seed accounts.");
+  });
+
   it("keeps codes short-lived, one-time and attempt limited", () => {
     expect(verificationHelper).toContain("OFFICE_CODE_TTL_MS = 10 * 60 * 1000");
     expect(verificationHelper).toContain("OFFICE_CODE_RESEND_COOLDOWN_MS = 60 * 1000");
