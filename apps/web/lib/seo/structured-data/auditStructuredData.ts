@@ -17,6 +17,9 @@ export type StructuredDataAuditRow = {
   raw_summary: Record<string, unknown>;
 };
 
+const AUDIT_FETCH_TIMEOUT_MS = 15_000;
+const AUDIT_BATCH_SIZE = 5;
+
 function pageGroup(path: string): string {
   if (path === "/") return "core";
   if (path.startsWith("/blog/")) return "blog";
@@ -88,7 +91,7 @@ async function inspectUrl(url: string): Promise<StructuredDataAuditRow> {
   const required = expectedTypes(path);
   const checkedAt = new Date().toISOString();
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+  const timer = setTimeout(() => controller.abort(), AUDIT_FETCH_TIMEOUT_MS);
   try {
     const response = await fetch(url, { cache: "no-store", redirect: "follow", signal: controller.signal, headers: { "User-Agent": "Shalean-SEO-StructuredData-Audit/1.0" } });
     const html = await response.text();
@@ -113,7 +116,25 @@ async function inspectUrl(url: string): Promise<StructuredDataAuditRow> {
       raw_summary: { finalUrl: response.url, contentType: response.headers.get("content-type"), googleRichResultEligibleTypes: [...types].filter((t) => ["Article","BlogPosting","BreadcrumbList","LocalBusiness","Organization"].includes(t)) },
     };
   } catch (error) {
-    return { url, path, page_group: pageGroup(path), http_status: null, json_ld_count: 0, schema_types: [], required_types: required, missing_types: required, errors: [error instanceof Error ? error.message : "Fetch failed"], warnings: [], status: "error", checked_at: checkedAt, raw_summary: {} };
+    const isAbort = error instanceof Error && (error.name === "AbortError" || /aborted/i.test(error.message));
+    const message = isAbort
+      ? `Audit fetch timed out after ${AUDIT_FETCH_TIMEOUT_MS / 1000}s; schema was not evaluated`
+      : error instanceof Error ? error.message : "Fetch failed";
+    return {
+      url,
+      path,
+      page_group: pageGroup(path),
+      http_status: null,
+      json_ld_count: 0,
+      schema_types: [],
+      required_types: required,
+      missing_types: [],
+      errors: [message],
+      warnings: [],
+      status: "unknown",
+      checked_at: checkedAt,
+      raw_summary: { fetchFailed: true, timedOut: isAbort },
+    };
   } finally { clearTimeout(timer); }
 }
 
@@ -121,8 +142,8 @@ export async function runStructuredDataAudit(admin: SupabaseClient, limit = 220)
   const sitemap = await buildMarketingSitemapEntries();
   const urls = sitemap.slice(0, Math.max(1, Math.min(limit, 250))).map((entry) => entry.url);
   const rows: StructuredDataAuditRow[] = [];
-  for (let i = 0; i < urls.length; i += 10) {
-    rows.push(...await Promise.all(urls.slice(i, i + 10).map(inspectUrl)));
+  for (let i = 0; i < urls.length; i += AUDIT_BATCH_SIZE) {
+    rows.push(...await Promise.all(urls.slice(i, i + AUDIT_BATCH_SIZE).map(inspectUrl)));
   }
   if (rows.length) {
     const { error } = await admin.from("seo_structured_data_audits").upsert(rows.map((row) => ({ ...row, updated_at: row.checked_at })), { onConflict: "url" });
