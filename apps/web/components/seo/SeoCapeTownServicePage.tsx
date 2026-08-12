@@ -187,7 +187,7 @@ export function SeoCapeTownServicePage({ slug, trustStats }: Props) {
   const jsonLdGraph: Record<string, unknown>[] = [
     localBusinessNode,
     {
-      "@type": "CleaningService",
+      "@type": ["Service", "CleaningService"],
       "@id": serviceNodeId,
       name: schemaName,
       serviceType: schemaServiceType,
