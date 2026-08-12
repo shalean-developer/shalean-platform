@@ -1,4 +1,4 @@
-import type { Session, User } from "@supabase/supabase-js";
+import type { AuthenticatorAssuranceLevels, Session, User } from "@supabase/supabase-js";
 import { clearAuthIntent } from "@/lib/auth/authRoleIntent";
 import { clearCachedUserRole } from "@/lib/auth/userRole";
 import { getSupabaseBrowser, getSupabaseSession, clearSupabaseSessionCache } from "@/lib/supabase/browser";
@@ -123,8 +123,8 @@ export async function signOut(): Promise<{ error: Error | null }> {
 }
 
 export type MfaStatus = {
-  currentLevel: "aal1" | "aal2" | null;
-  nextLevel: "aal1" | "aal2" | null;
+  currentLevel: AuthenticatorAssuranceLevels | null;
+  nextLevel: AuthenticatorAssuranceLevels | null;
   verifiedTotpFactorId: string | null;
 };
 
