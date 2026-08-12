@@ -3,21 +3,12 @@ import { createClient, type User } from "@supabase/supabase-js";
 import { NextResponse, type NextRequest } from "next/server";
 import { sanitizeCleanerPostAuthRedirect } from "@/lib/cleaner/cleanerRedirect";
 import { isOfficePortalPath } from "@/lib/auth/officePortalPath";
+import {
+  OFFICE_VERIFICATION_COOKIE,
+  verifyOfficeVerificationToken,
+} from "@/lib/auth/officeEmailVerification";
 
-function verifiedJwtAal(token: string): string | null {
-  try {
-    const payload = token.split(".")[1];
-    if (!payload) return null;
-    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
-    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
-    const decoded = JSON.parse(Buffer.from(padded, "base64").toString("utf8")) as { aal?: unknown };
-    return typeof decoded.aal === "string" ? decoded.aal : null;
-  } catch {
-    return null;
-  }
-}
-
-function privilegedMfaApiPath(pathname: string): boolean {
+function privilegedOfficeApiPath(pathname: string): boolean {
   return (
     pathname.startsWith("/api/admin/") ||
     pathname === "/api/admin" ||
@@ -28,11 +19,11 @@ function privilegedMfaApiPath(pathname: string): boolean {
   );
 }
 
-function mfaRequiredResponse(): NextResponse {
+function officeVerificationRequiredResponse(): NextResponse {
   return NextResponse.json(
     {
-      error: "Multi-factor authentication is required for privileged Office access.",
-      code: "mfa_required",
+      error: "Office email verification is required for privileged access.",
+      code: "office_email_verification_required",
     },
     { status: 403 },
   );
@@ -61,7 +52,6 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
   }
 
   let user: User | null = null;
-  let cookieAal: string | null = null;
 
   try {
     const supabase = createServerClient(url, anon, {
@@ -97,10 +87,6 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     try {
       const { data } = await supabase.auth.getUser();
       user = data.user ?? null;
-      if (user?.id) {
-        const { data: aal, error: aalError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-        cookieAal = aalError ? null : aal?.currentLevel ?? null;
-      }
     } catch (authErr) {
       console.error("[middleware] supabase.auth.getUser failed — continuing without session", authErr);
     }
@@ -109,7 +95,9 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     return supabaseResponse;
   }
 
-  if (privilegedMfaApiPath(pathname)) {
+  const officeVerificationToken = request.cookies.get(OFFICE_VERIFICATION_COOKIE)?.value ?? null;
+
+  if (privilegedOfficeApiPath(pathname)) {
     const authHeader = request.headers.get("authorization");
     const token = authHeader?.replace(/^Bearer\s+/i, "").trim() ?? "";
 
@@ -123,17 +111,22 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
           error: bearerError,
         } = await publicClient.auth.getUser(token);
 
-        // Only Supabase user tokens are MFA-gated here. Invalid/custom bearer
-        // values are left to the route's existing machine/cron authorization.
-        if (!bearerError && bearerUser?.id && verifiedJwtAal(token) !== "aal2") {
-          return mfaRequiredResponse();
+        // Only verified Supabase user sessions are Office-verification gated here.
+        // Invalid/custom bearer values are intentionally left to the route's
+        // existing machine/cron authorization so automation credentials keep working.
+        if (
+          !bearerError &&
+          bearerUser?.id &&
+          !verifyOfficeVerificationToken(officeVerificationToken, bearerUser.id)
+        ) {
+          return officeVerificationRequiredResponse();
         }
       } catch (bearerCheckError) {
-        console.error("[middleware] privileged bearer AAL check failed", bearerCheckError);
+        console.error("[middleware] privileged Office verification check failed", bearerCheckError);
         return NextResponse.json({ error: "Authorization unavailable." }, { status: 503 });
       }
-    } else if (user?.id && cookieAal !== "aal2") {
-      return mfaRequiredResponse();
+    } else if (user?.id && !verifyOfficeVerificationToken(officeVerificationToken, user.id)) {
+      return officeVerificationRequiredResponse();
     }
   }
 
@@ -184,8 +177,12 @@ export async function updateSession(request: NextRequest): Promise<NextResponse>
     return NextResponse.redirect(redirectUrl);
   }
 
-  // Enforce AAL2 for authenticated Office browser sessions as well as APIs.
-  if (isOfficePortalPath(pathname) && user && cookieAal !== "aal2") {
+  // Require the Shalean-managed email verification session for authenticated Office users.
+  if (
+    isOfficePortalPath(pathname) &&
+    user &&
+    !verifyOfficeVerificationToken(officeVerificationToken, user.id)
+  ) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/auth/mfa";
     redirectUrl.search = "";
