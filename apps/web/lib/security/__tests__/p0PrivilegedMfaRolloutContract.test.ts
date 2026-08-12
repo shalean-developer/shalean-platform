@@ -14,12 +14,18 @@ const authClient = fs.readFileSync(
   path.resolve(process.cwd(), "lib/auth/authClient.ts"),
   "utf8",
 );
+const postAuthResolver = fs.readFileSync(
+  path.resolve(process.cwd(), "lib/auth/resolvePostAuthDestination.ts"),
+  "utf8",
+);
 
 describe("P0-04B privileged MFA rollout contract", () => {
-  it("routes only admin Office logins into the MFA rollout", () => {
-    expect(loginForm).toContain('readCachedUserRole() === "admin"');
+  it("routes only authoritatively resolved admin Office logins into the MFA rollout", () => {
+    expect(loginForm).toContain('result.role === "admin"');
     expect(loginForm).toContain('result.path.startsWith("/office")');
     expect(loginForm).toContain('/auth/mfa?redirect=');
+    expect(loginForm).not.toContain("readCachedUserRole");
+    expect(postAuthResolver).toContain("role: json.role");
   });
 
   it("uses Supabase TOTP enrollment and challenge verification APIs", () => {
