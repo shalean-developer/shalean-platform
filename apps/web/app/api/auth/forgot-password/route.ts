@@ -37,33 +37,16 @@ export async function POST(request: Request) {
 
   const result = await sendPasswordResetEmail(admin, email);
 
-  if (!result.ok && result.reason === "no_user") {
-    return NextResponse.json({ sent: false, code: "no_account" });
-  }
-
   if (!result.ok) {
+    // Do not disclose whether the supplied address belongs to an account, nor whether
+    // an account-specific reset/link/delivery operation failed. These outcomes are
+    // logged internally but intentionally share the same external response.
     void logSystemEvent({
       level: "warn",
       source: "auth/password_reset",
       message: "password_reset_delivery_failed",
       context: { email, reason: result.reason },
     });
-    if (result.reason === "production_redirect") {
-      return NextResponse.json(
-        { error: "Password reset is misconfigured for this environment. Contact support." },
-        { status: 503 },
-      );
-    }
-    if (result.reason === "rate_limited") {
-      return NextResponse.json(
-        { error: "Please wait a minute before requesting another reset email." },
-        { status: 429 },
-      );
-    }
-    return NextResponse.json(
-      { error: "We could not send the reset email. Try again in a few minutes." },
-      { status: 502 },
-    );
   }
 
   return NextResponse.json({ sent: true });
