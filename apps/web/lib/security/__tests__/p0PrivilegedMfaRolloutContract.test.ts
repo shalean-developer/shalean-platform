@@ -72,8 +72,23 @@ describe("P0-04E privileged Office email verification flow contract", () => {
     expect(verificationHelper).toContain("OFFICE_CODE_MAX_ATTEMPTS = 5");
     expect(verifyRoute).toContain("attempts >= maxAttempts");
     expect(verifyRoute).toContain("nextAttempts >= maxAttempts");
-    expect(verifyRoute).toContain("consumed_at: consumedAt");
     expect(verifyRoute).toContain("verifyOfficeEmailCodeHash");
+  });
+
+  it("serializes verification attempts before evaluating a code", () => {
+    const claimIndex = verifyRoute.indexOf(".eq(\"attempt_count\", attempts)");
+    const compareIndex = verifyRoute.indexOf("verifyOfficeEmailCodeHash");
+    expect(claimIndex).toBeGreaterThan(-1);
+    expect(compareIndex).toBeGreaterThan(claimIndex);
+    expect(verifyRoute).toContain("if (!claimedAttempt)");
+    expect(verifyRoute).toContain("Another verification attempt was processed. Try again.");
+  });
+
+  it("binds the verification cookie to the current Supabase sign-in session", () => {
+    expect(verificationHelper).toContain("officeSessionBinding(lastSignInAt");
+    expect(verificationHelper).toContain("payload.sid === expectedSessionBinding");
+    expect(verifyRoute).toContain("officeSessionBinding(user.last_sign_in_at)");
+    expect(verifyRoute).toContain("createOfficeVerificationToken(user.id, sessionBinding)");
   });
 
   it("issues the signed Office verification cookie only after successful code verification", () => {
@@ -81,7 +96,7 @@ describe("P0-04E privileged Office email verification flow contract", () => {
     const cookieIndex = verifyRoute.indexOf("response.cookies.set");
     expect(verifyIndex).toBeGreaterThan(-1);
     expect(cookieIndex).toBeGreaterThan(verifyIndex);
-    expect(verifyRoute).toContain("createOfficeVerificationToken(user.id)");
+    expect(verifyRoute).toContain("createOfficeVerificationToken(user.id, sessionBinding)");
     expect(verifyRoute).toContain("officeVerificationCookieOptions(secure)");
   });
 
