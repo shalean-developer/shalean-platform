@@ -122,6 +122,52 @@ export async function signOut(): Promise<{ error: Error | null }> {
   return { error: error ? new Error(error.message) : null };
 }
 
+export type MfaStatus = {
+  currentLevel: "aal1" | "aal2" | null;
+  nextLevel: "aal1" | "aal2" | null;
+  verifiedTotpFactorId: string | null;
+};
+
+export async function getMfaStatus(): Promise<{ status: MfaStatus | null; error: Error | null }> {
+  const sb = client();
+  const [{ data: aal, error: aalError }, { data: factors, error: factorsError }] = await Promise.all([
+    sb.auth.mfa.getAuthenticatorAssuranceLevel(),
+    sb.auth.mfa.listFactors(),
+  ]);
+
+  const error = aalError ?? factorsError;
+  if (error) return { status: null, error: new Error(error.message) };
+
+  const verifiedTotp = (factors?.totp ?? []).find((factor) => factor.status === "verified") ?? null;
+  return {
+    status: {
+      currentLevel: aal?.currentLevel ?? null,
+      nextLevel: aal?.nextLevel ?? null,
+      verifiedTotpFactorId: verifiedTotp?.id ?? null,
+    },
+    error: null,
+  };
+}
+
+export async function enrollMfaTotp() {
+  const sb = client();
+  const { data, error } = await sb.auth.mfa.enroll({
+    factorType: "totp",
+    friendlyName: "Shalean Office",
+  });
+  return { data, error: error ? new Error(error.message) : null };
+}
+
+export async function verifyMfaTotp(factorId: string, code: string) {
+  const sb = client();
+  const { data, error } = await sb.auth.mfa.challengeAndVerify({
+    factorId,
+    code: code.trim(),
+  });
+  if (!error) clearSupabaseSessionCache();
+  return { data, error: error ? new Error(error.message) : null };
+}
+
 export type RequestPasswordResetResult =
   | { ok: true }
   | { ok: false; error: Error };
