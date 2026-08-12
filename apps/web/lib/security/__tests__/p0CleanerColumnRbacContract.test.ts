@@ -32,8 +32,6 @@ describe("P0-03B cleaner column RBAC contract", () => {
       "is_available",
       "availability_start",
       "availability_end",
-      "availability_weekdays",
-      "last_active_at",
     ]) {
       expect(grant).toContain(allowed);
     }
@@ -57,6 +55,8 @@ describe("P0-03B cleaner column RBAC contract", () => {
       "total_offers",
       "accepted_offers",
       "acceptance_rate",
+      "availability_weekdays",
+      "last_active_at",
     ]) {
       expect(grant).not.toContain(adminOwned);
     }
