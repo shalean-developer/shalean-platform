@@ -77,9 +77,6 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          # Tailwind v4 PostCSS is required by next/font/CSS compilation. The current
-          # lockfile declares it at the root but does not reliably materialize it in CI.
-          # Install it explicitly without mutating package.json/package-lock.json.
           npm install --no-save --package-lock=false @tailwindcss/postcss@^4
           node -e "require.resolve('@tailwindcss/postcss')"
           echo "Linked @shalean packages:"
@@ -111,7 +108,7 @@ jobs:
           lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts
 
       - name: Focused marketing / Meta compliance unit tests
-        if: steps/filter.outputs.run_suite == 'true'
+        if: steps.filter.outputs.run_suite == 'true'
         run: >-
           npm run test --
           lib/marketing/__tests__/marketingAreaLinks.test.ts
@@ -156,7 +153,6 @@ jobs:
           REQUIRE_GSC_VERIFICATION: ${{ vars.REQUIRE_GSC_VERIFICATION || '0' }}
         run: npm run validate:search-console-readiness
 
-      # --- PR-only: crawl the proposed build on localhost (breaks prod↔CI circular gate) ---
       - name: Write CI build SHA for PR crawl proof
         if: github.event_name == 'pull_request' && steps.filter.outputs.run_suite == 'true'
         run: |
@@ -170,8 +166,6 @@ jobs:
           NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
           FACEBOOK_APP_ID: ci-test-app-id
           FACEBOOK_APP_SECRET: ci-meta-data-deletion-test-secret
-        # Webpack matches Vercel production resolution for file: ../../packages/*;
-        # default Turbopack root (apps/web) cannot see monorepo packages outside that root.
         run: node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
 
       - name: Start production Next.js server
