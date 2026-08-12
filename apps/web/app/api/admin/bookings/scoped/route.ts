@@ -190,14 +190,19 @@ export async function GET(request: Request) {
   const forwardedUrl = new URL(request.url);
   forwardedUrl.pathname = "/api/admin/bookings";
 
+  const isSupervisor = scope.roles.includes("supervisor");
+  if (isSupervisor && scope.teams.length === 0) {
+    return NextResponse.json({ error: "Supervisor team assignment is required for booking access." }, { status: 403 });
+  }
+  if (isSupervisor && scope.teams.length !== 1) {
+    return NextResponse.json({ error: "Exactly one team assignment is required for Supervisor booking access." }, { status: 503 });
+  }
+
   const globalAssignment = scope.branches.length === 0 && scope.teams.length === 0;
-  const wildcard = scope.isOwner || scope.branches.includes("*") || globalAssignment;
-  const teamOnly = !wildcard && scope.branches.length === 0 && scope.teams.length > 0;
+  const wildcard = scope.isOwner || scope.branches.includes("*") || (!isSupervisor && globalAssignment);
+  const teamOnly = isSupervisor || (!wildcard && scope.branches.length === 0 && scope.teams.length > 0);
 
   if (teamOnly) {
-    if (scope.teams.length !== 1) {
-      return NextResponse.json({ error: "Exactly one team assignment is required for Supervisor booking access." }, { status: 503 });
-    }
     forwardedUrl.searchParams.delete("page");
     forwardedUrl.searchParams.delete("pageSize");
     forwardedUrl.searchParams.delete("cityId");
