@@ -15,7 +15,7 @@ describe("P0-03B cleaner column RBAC contract", () => {
   });
 
   it("allows only explicit self-service profile and availability columns", () => {
-    const grantMatch = sql.match(/grant update\s*\(([^)]+)\)\s*on table public\.cleaners to authenticated/s);
+    const grantMatch = sql.match(/grant update\s*\(([\s\S]*?\))\s*on table public\.cleaners to authenticated/);
     expect(grantMatch).not.toBeNull();
 
     const grant = grantMatch?.[1] ?? "";
