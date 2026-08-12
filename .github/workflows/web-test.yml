@@ -77,6 +77,11 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
+          # Tailwind v4 PostCSS is required by next/font/CSS compilation. The current
+          # lockfile declares it at the root but does not reliably materialize it in CI.
+          # Install it explicitly without mutating package.json/package-lock.json.
+          npm install --no-save --package-lock=false @tailwindcss/postcss@^4
+          node -e "require.resolve('@tailwindcss/postcss')"
           echo "Linked @shalean packages:"
           ls -la node_modules/@shalean
           test -f node_modules/@shalean/utils/package.json
