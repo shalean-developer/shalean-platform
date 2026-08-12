@@ -45,8 +45,9 @@ export function verifyOfficeEmailCodeHash(
 }
 
 type VerificationPayload = {
-  v: 1;
+  v: 2;
   uid: string;
+  sid: string;
   exp: number;
 };
 
@@ -54,25 +55,47 @@ function encodePayload(payload: VerificationPayload): string {
   return Buffer.from(JSON.stringify(payload), "utf8").toString("base64url");
 }
 
-export function createOfficeVerificationToken(userId: string, now = Date.now()): string {
-  const payload = encodePayload({ v: 1, uid: userId, exp: now + OFFICE_VERIFICATION_TTL_MS });
-  return `${payload}.${hmac(`office-session:v1:${payload}`)}`;
+export function officeSessionBinding(lastSignInAt: string | null | undefined): string | null {
+  const value = lastSignInAt?.trim();
+  return value ? hmac(`office-auth-session:v1:${value}`) : null;
+}
+
+export function createOfficeVerificationToken(
+  userId: string,
+  sessionBinding: string,
+  now = Date.now(),
+): string {
+  if (!userId || !sessionBinding) throw new Error("Office verification session binding is required.");
+  const payload = encodePayload({
+    v: 2,
+    uid: userId,
+    sid: sessionBinding,
+    exp: now + OFFICE_VERIFICATION_TTL_MS,
+  });
+  return `${payload}.${hmac(`office-session:v2:${payload}`)}`;
 }
 
 export function verifyOfficeVerificationToken(
   token: string | null | undefined,
   expectedUserId: string,
+  expectedSessionBinding: string | null | undefined,
   now = Date.now(),
 ): boolean {
-  if (!token || !expectedUserId) return false;
+  if (!token || !expectedUserId || !expectedSessionBinding) return false;
   const [payloadPart, signature, extra] = token.split(".");
   if (!payloadPart || !signature || extra) return false;
-  const expectedSignature = hmac(`office-session:v1:${payloadPart}`);
+  const expectedSignature = hmac(`office-session:v2:${payloadPart}`);
   if (!safeEqualHex(signature, expectedSignature)) return false;
 
   try {
     const payload = JSON.parse(Buffer.from(payloadPart, "base64url").toString("utf8")) as Partial<VerificationPayload>;
-    return payload.v === 1 && payload.uid === expectedUserId && typeof payload.exp === "number" && payload.exp > now;
+    return (
+      payload.v === 2 &&
+      payload.uid === expectedUserId &&
+      payload.sid === expectedSessionBinding &&
+      typeof payload.exp === "number" &&
+      payload.exp > now
+    );
   } catch {
     return false;
   }
