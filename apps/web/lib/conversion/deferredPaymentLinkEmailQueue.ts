@@ -8,6 +8,9 @@ import { sendPaymentLinkEmail } from "@/lib/email/sendBookingEmail";
 import type { PaymentLinkDeliveryJson } from "@/lib/admin/persistPaymentLinkDelivery";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 
+const DEFERRED_EMAIL_MAX_FAILURES = 3;
+const DEFERRED_EMAIL_RETRY_BASE_SECONDS = 300;
+
 export function paymentLinkEmailDelaySecondsCap(): number {
   const raw = Number(process.env.PAYMENT_LINK_EXPERIMENT_DELAY_SECONDS ?? "0");
   if (!Number.isFinite(raw) || raw <= 0) return 0;
@@ -18,6 +21,17 @@ export function paymentLinkEmailDelaySecondsCap(): number {
 export function isAsyncPaymentLinkEmailDelayEnabled(): boolean {
   if (paymentLinkEmailDelaySecondsCap() <= 0) return false;
   return String(process.env.PAYMENT_LINK_EXPERIMENT_DELAY_INLINE ?? "").toLowerCase() !== "true";
+}
+
+function deferredEmailFailureCount(context: Record<string, unknown>): number {
+  const raw = Number(context.deferred_email_failure_count ?? 0);
+  if (!Number.isFinite(raw) || raw < 0) return 0;
+  return Math.floor(raw);
+}
+
+export function deferredEmailRetryDelaySeconds(failureCount: number): number {
+  const attempt = Math.max(1, Math.floor(failureCount));
+  return Math.min(DEFERRED_EMAIL_RETRY_BASE_SECONDS * 3 ** (attempt - 1), 3600);
 }
 
 export async function enqueueDeferredPaymentLinkEmail(
@@ -125,10 +139,62 @@ async function completeClaim(
   return true;
 }
 
+async function releaseClaimForRetry(
+  admin: SupabaseClient,
+  row: DeferredRow,
+  errorMessage: string,
+): Promise<{ released: boolean; failureCount: number; runAtIso: string | null }> {
+  const failureCount = deferredEmailFailureCount(row.delivery_context ?? {}) + 1;
+  if (failureCount >= DEFERRED_EMAIL_MAX_FAILURES) {
+    return { released: false, failureCount, runAtIso: null };
+  }
+
+  const runAtIso = new Date(Date.now() + deferredEmailRetryDelaySeconds(failureCount) * 1000).toISOString();
+  const { data, error } = await admin
+    .from("conversion_deferred_payment_link_emails")
+    .update({
+      run_at: runAtIso,
+      last_error: errorMessage,
+      delivery_context: {
+        ...(row.delivery_context ?? {}),
+        deferred_email_failure_count: failureCount,
+        deferred_email_last_failed_at: new Date().toISOString(),
+      },
+      processing_started_at: null,
+      processing_token: null,
+    })
+    .eq("id", row.id)
+    .eq("processing_token", row.processing_token)
+    .is("sent_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (error || !data) {
+    await reportOperationalIssue(
+      "error",
+      "deferred_payment_link_email/release_claim",
+      error?.message ?? "claim_lost_before_retry_release",
+      { bookingId: row.booking_id, deferredId: row.id },
+    );
+    return { released: false, failureCount, runAtIso: null };
+  }
+
+  return { released: true, failureCount, runAtIso };
+}
+
+export type DeferredPaymentLinkEmailWorkerStats = {
+  processed: number;
+  emailed: number;
+  smsFallback: number;
+  retriesScheduled: number;
+  deliveryFailures: number;
+  errors: number;
+};
+
 export async function processDueDeferredPaymentLinkEmails(
   admin: SupabaseClient,
   params?: { limit?: number },
-): Promise<{ processed: number; emailed: number; smsFallback: number; errors: number }> {
+): Promise<DeferredPaymentLinkEmailWorkerStats> {
   const limit = Math.min(50, Math.max(1, params?.limit ?? 25));
 
   // The SQL function selects with FOR UPDATE SKIP LOCKED and stamps a unique
@@ -141,11 +207,20 @@ export async function processDueDeferredPaymentLinkEmails(
 
   if (error) {
     await reportOperationalIssue("error", "deferred_payment_link_email/process", error.message);
-    return { processed: 0, emailed: 0, smsFallback: 0, errors: 1 };
+    return {
+      processed: 0,
+      emailed: 0,
+      smsFallback: 0,
+      retriesScheduled: 0,
+      deliveryFailures: 0,
+      errors: 1,
+    };
   }
 
   let emailed = 0;
   let smsFallback = 0;
+  let retriesScheduled = 0;
+  let deliveryFailures = 0;
   let errors = 0;
 
   for (const raw of rows ?? []) {
@@ -184,6 +259,7 @@ export async function processDueDeferredPaymentLinkEmails(
       continue;
     }
 
+    const emailError = em.error ?? "email_failed";
     const phone = typeof row.phone === "string" ? row.phone.trim() : "";
     const wa = row.wa_payload;
     let smsOk = false;
@@ -198,26 +274,77 @@ export async function processDueDeferredPaymentLinkEmails(
       if (smsOk) smsFallback++;
     }
 
-    if (!smsOk) errors++;
-    const completed = await completeClaim(admin, row, { last_error: em.error ?? "email_failed" });
+    if (smsOk) {
+      const completed = await completeClaim(admin, row, { last_error: emailError });
+      if (!completed) {
+        errors++;
+        continue;
+      }
+      await mergeDeferredEmailCompletion(admin, row.booking_id, {
+        email: "failed",
+        sms: "sent",
+        sms_role: "fallback",
+        email_deferred_until: null,
+        updated_at: new Date().toISOString(),
+      });
+      await logSystemEvent({
+        level: "warn",
+        source: "deferred_payment_link_email",
+        message: "email_failed_sms_fallback_ok",
+        context: { bookingId: row.booking_id, deferred_id: row.id, error: emailError },
+      });
+      continue;
+    }
+
+    const retry = await releaseClaimForRetry(admin, row, emailError);
+    if (retry.released) {
+      retriesScheduled++;
+      await logSystemEvent({
+        level: "warn",
+        source: "deferred_payment_link_email",
+        message: "email_failed_retry_scheduled",
+        context: {
+          bookingId: row.booking_id,
+          deferred_id: row.id,
+          error: emailError,
+          failure_count: retry.failureCount,
+          retry_at: retry.runAtIso,
+        },
+      });
+      continue;
+    }
+
+    if (retry.failureCount < DEFERRED_EMAIL_MAX_FAILURES) {
+      errors++;
+      continue;
+    }
+
+    deliveryFailures++;
+    const completed = await completeClaim(admin, row, { last_error: emailError });
     if (!completed) {
       errors++;
       continue;
     }
     await mergeDeferredEmailCompletion(admin, row.booking_id, {
       email: "failed",
-      sms: smsOk ? "sent" : "skipped",
-      sms_role: smsOk ? "fallback" : null,
+      sms: "skipped",
+      sms_role: null,
       email_deferred_until: null,
       updated_at: new Date().toISOString(),
     });
-    await logSystemEvent({
-      level: "warn",
-      source: "deferred_payment_link_email",
-      message: smsOk ? "email_failed_sms_fallback_ok" : "email_failed_no_sms",
-      context: { bookingId: row.booking_id, deferred_id: row.id, error: em.error },
+    await reportOperationalIssue("error", "deferred_payment_link_email/delivery_failed", emailError, {
+      bookingId: row.booking_id,
+      deferredId: row.id,
+      failureCount: retry.failureCount,
     });
   }
 
-  return { processed: (rows ?? []).length, emailed, smsFallback, errors };
+  return {
+    processed: (rows ?? []).length,
+    emailed,
+    smsFallback,
+    retriesScheduled,
+    deliveryFailures,
+    errors,
+  };
 }
