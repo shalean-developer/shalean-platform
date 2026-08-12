@@ -10,53 +10,72 @@ const sessionBoundary = fs.readFileSync(
   path.resolve(process.cwd(), "lib/supabase/supabaseMiddleware.ts"),
   "utf8",
 );
+const verificationHelper = fs.readFileSync(
+  path.resolve(process.cwd(), "lib/auth/officeEmailVerification.ts"),
+  "utf8",
+);
 const mfaForm = fs.readFileSync(
   path.resolve(process.cwd(), "app/auth/mfa/MfaForm.tsx"),
   "utf8",
 );
 
-describe("P0-04C mandatory privileged AAL2 contract", () => {
-  it("requires aal2 before evaluating granular admin permissions", () => {
-    const aalIndex = permissionGate.indexOf('verifiedTokenAal(token) !== "aal2"');
-    const rbacIndex = permissionGate.indexOf('admin_has_permission');
-    expect(aalIndex).toBeGreaterThan(-1);
+describe("P0-04E mandatory privileged Office email verification contract", () => {
+  it("requires a session-bound Office verification cookie before evaluating granular admin permissions", () => {
+    const verificationIndex = permissionGate.indexOf("if (!verifyOfficeVerificationToken(");
+    const rbacIndex = permissionGate.indexOf("admin_has_permission");
+    expect(verificationIndex).toBeGreaterThan(-1);
     expect(rbacIndex).toBeGreaterThan(-1);
-    expect(aalIndex).toBeLessThan(rbacIndex);
-    expect(permissionGate).toContain('code: "mfa_required"');
+    expect(verificationIndex).toBeLessThan(rbacIndex);
+    expect(permissionGate).toContain('code: "office_email_verification_required"');
+    expect(permissionGate).toContain("officeSessionBinding(user.last_sign_in_at)");
   });
 
-  it("only reads bearer AAL after Supabase verifies the user token", () => {
-    const verifyIndex = permissionGate.indexOf('auth.getUser(token)');
-    const aalIndex = permissionGate.indexOf('verifiedTokenAal(token) !== "aal2"');
-    expect(verifyIndex).toBeGreaterThan(-1);
-    expect(aalIndex).toBeGreaterThan(verifyIndex);
+  it("verifies the Supabase bearer session before trusting the Office verification cookie", () => {
+    const verifyUserIndex = permissionGate.indexOf("auth.getUser(token)");
+    const officeVerificationIndex = permissionGate.indexOf("if (!verifyOfficeVerificationToken(", verifyUserIndex);
+    expect(verifyUserIndex).toBeGreaterThan(-1);
+    expect(officeVerificationIndex).toBeGreaterThan(verifyUserIndex);
   });
 
-  it("enforces AAL2 at the shared request boundary for legacy privileged routes", () => {
+  it("enforces the same Office verification boundary for privileged routes", () => {
     expect(sessionBoundary).toContain('pathname.startsWith("/api/admin/")');
     expect(sessionBoundary).toContain('pathname.startsWith("/api/dispatch/")');
     expect(sessionBoundary).toContain('pathname.startsWith("/api/oauth/google")');
     expect(sessionBoundary).toContain('pathname.startsWith("/api/oauth/x")');
-    expect(sessionBoundary).toContain('publicClient.auth.getUser(token)');
-    expect(sessionBoundary).toContain('verifiedJwtAal(token) !== "aal2"');
-    expect(sessionBoundary).toContain('cookieAal !== "aal2"');
-    expect(sessionBoundary).toContain('code: "mfa_required"');
+    expect(sessionBoundary).toContain("OFFICE_VERIFICATION_COOKIE");
+    expect(sessionBoundary).toContain("verifyOfficeVerificationToken");
+    expect(sessionBoundary).toContain("officeSessionBinding");
+    expect(sessionBoundary).toContain('code: "office_email_verification_required"');
   });
 
-  it("preserves route-specific machine auth while gating verified human sessions", () => {
-    expect(sessionBoundary).toContain("Only Supabase user tokens are MFA-gated here");
-    expect(sessionBoundary).toContain("if (!bearerError && bearerUser?.id");
+  it("keeps custom machine and cron bearer auth outside the human Office verification gate", () => {
+    expect(sessionBoundary).toContain("!bearerError &&");
+    expect(sessionBoundary).toContain("bearerUser?.id");
   });
 
-  it("forces authenticated Office browser sessions through MFA", () => {
-    expect(sessionBoundary).toContain("isOfficePortalPath(pathname) && user && cookieAal !== \"aal2\"");
+  it("forces authenticated Office browser sessions through the email-code screen", () => {
+    expect(sessionBoundary).toContain("isOfficePortalPath(pathname)");
+    expect(sessionBoundary).toContain("verifyOfficeVerificationToken");
     expect(sessionBoundary).toContain('redirectUrl.pathname = "/auth/mfa"');
   });
 
-  it("removes the P0-04B bypass from the MFA screen", () => {
+  it("uses signed, expiring, user-and-session-bound HttpOnly verification state", () => {
+    expect(verificationHelper).toContain('export const OFFICE_VERIFICATION_COOKIE = "shalean_office_verified"');
+    expect(verificationHelper).toContain("OFFICE_VERIFICATION_TTL_MS = 8 * 60 * 60 * 1000");
+    expect(verificationHelper).toContain("payload.uid === expectedUserId");
+    expect(verificationHelper).toContain("payload.sid === expectedSessionBinding");
+    expect(verificationHelper).toContain("officeSessionBinding(lastSignInAt");
+    expect(verificationHelper).toContain("payload.exp > now");
+    expect(verificationHelper).toContain("httpOnly: true");
+    expect(verificationHelper).toContain('sameSite: "lax"');
+  });
+
+  it("removes QR/TOTP setup and temporary bypasses from the live Office verification screen", () => {
     expect(mfaForm).not.toContain("Set up later — continue to Office");
     expect(mfaForm).not.toContain("continueForNow");
-    expect(mfaForm).toContain("Multi-factor authentication required");
-    expect(mfaForm).toContain("You must complete MFA before privileged Office APIs will accept this session.");
+    expect(mfaForm).not.toContain("QRCode");
+    expect(mfaForm).not.toContain("otpauth://");
+    expect(mfaForm).toContain("Email me a security code");
+    expect(mfaForm).toContain("Verify and continue to Office");
   });
 });
