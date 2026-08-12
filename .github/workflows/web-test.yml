@@ -95,7 +95,7 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test:critical
 
-      - name: Mandatory privileged AAL2 security contract
+      - name: Mandatory privileged Office email verification security contract
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/p0MandatoryAal2Contract.test.ts lib/security/__tests__/p0PrivilegedMfaRolloutContract.test.ts
 
@@ -111,7 +111,7 @@ jobs:
           lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts
 
       - name: Focused marketing / Meta compliance unit tests
-        if: steps.filter.outputs.run_suite == 'true'
+        if: steps/filter.outputs.run_suite == 'true'
         run: >-
           npm run test --
           lib/marketing/__tests__/marketingAreaLinks.test.ts
