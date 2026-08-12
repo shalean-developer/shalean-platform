@@ -29,12 +29,16 @@ const WEBSITE_SYSTEM_LOG_SOURCE_DENY = [
   "ops_health",
   "conversion_dashboard",
   "ops_health_alert",
+  // Background worker failures are operational/integration issues, not evidence that a
+  // customer-facing website request failed. Keep these visible in system logs without
+  // degrading the Website service card.
+  "deferred_payment_link_email/",
 ];
 
 const CRON_ERROR_NOISE_PREFIXES = ["[auth]", "[env]"];
 const CRON_ERROR_NOISE_EXACT = new Set(["Unauthorized.", "[auth] Unauthorized."]);
 
-/** Infra / scanner / cron mirror rows are not customer website outages. */
+/** Infra / scanner / cron / background-worker rows are not customer website outages. */
 export function isWebsiteCustomerFacingSystemLog(row: {
   created_at: string | null;
   source?: string | null;
@@ -81,7 +85,7 @@ export type OfficeOpsCronRunRow = OfficeOpsCronErrorRow & {
   status?: string | null;
 };
 
-export function filterBookingEngineCronSuccesses(rows: readonly OfficeOpsCronRunRow[]): OfficeOpsCronRunRow[] {
+export function filterBookingEngineCronSuccesses(rows: readonly OfficeOpsCronRunRow[]): OfficeOpsCronRunRunRow[] {
   return rows.filter((row) => {
     const job = String(row.job_name ?? "").trim();
     if (!job || !BOOKING_ENGINE_CRON_JOBS.has(job)) return false;
