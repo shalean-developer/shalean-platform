@@ -2,131 +2,64 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { AlertCircle, ShieldCheck } from "lucide-react";
-import QRCode from "qrcode";
+import { AlertCircle, MailCheck, ShieldCheck } from "lucide-react";
 
 import { AuthCard } from "@/components/auth/AuthShell";
-import {
-  enrollMfaTotp,
-  getMfaStatus,
-  getUser,
-  unenrollMfaFactor,
-  verifyMfaTotp,
-} from "@/lib/auth/authClient";
-
-type Enrollment = {
-  factorId: string;
-  qrCode: string;
-  secret: string;
-};
-
-const MFA_ISSUER = "Shalean Office";
-
-function buildTotpUri(secret: string, account: string) {
-  const label = `${MFA_ISSUER}:${account}`;
-  return `otpauth://totp/${encodeURIComponent(label)}?secret=${encodeURIComponent(secret)}&issuer=${encodeURIComponent(MFA_ISSUER)}&algorithm=SHA1&digits=6&period=30`;
-}
+import { requestOfficeEmailCode, verifyOfficeEmailCode } from "@/lib/auth/officeEmailClient";
 
 export function MfaForm({ redirect }: { redirect: string }) {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
-  const [mode, setMode] = useState<"enroll" | "challenge">("enroll");
-  const [verifiedFactorId, setVerifiedFactorId] = useState<string | null>(null);
-  const [staleFactorId, setStaleFactorId] = useState<string | null>(null);
-  const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [code, setCode] = useState("");
+  const [maskedEmail, setMaskedEmail] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [resendIn, setResendIn] = useState(0);
 
   useEffect(() => {
-    let active = true;
-    void (async () => {
-      const { status, error: statusError } = await getMfaStatus();
-      if (!active) return;
-      if (statusError || !status) {
-        setError(statusError?.message ?? "Could not load multi-factor authentication status.");
-        setLoading(false);
-        return;
-      }
-      if (status.currentLevel === "aal2") {
-        router.replace(redirect);
-        router.refresh();
-        return;
-      }
-      if (status.verifiedTotpFactorId) {
-        setVerifiedFactorId(status.verifiedTotpFactorId);
-        setMode("challenge");
-      } else {
-        setStaleFactorId(status.unverifiedTotpFactorId);
-        setMode("enroll");
-      }
-      setLoading(false);
-    })();
-    return () => {
-      active = false;
-    };
-  }, [redirect, router]);
+    if (resendIn <= 0) return;
+    const timer = window.setInterval(() => setResendIn((value) => Math.max(0, value - 1)), 1000);
+    return () => window.clearInterval(timer);
+  }, [resendIn]);
 
-  async function startEnrollment() {
+  async function sendCode() {
     setError(null);
     setSubmitting(true);
     try {
-      if (staleFactorId) {
-        const { error: unenrollError } = await unenrollMfaFactor(staleFactorId);
-        if (unenrollError) {
-          setError(`Could not restart authenticator setup: ${unenrollError.message}`);
-          return;
-        }
-        setStaleFactorId(null);
-      }
-
-      const { data, error: enrollError } = await enrollMfaTotp();
-      if (enrollError || !data?.id || !data.totp?.secret) {
-        setError(enrollError?.message ?? "Could not start authenticator setup.");
+      const result = await requestOfficeEmailCode();
+      if (!result.ok) {
+        if (result.retryAfterSeconds) setResendIn(result.retryAfterSeconds);
+        setError(result.error ?? "Could not send the security code.");
         return;
       }
-
-      // Build the QR payload ourselves from Supabase's TOTP secret. This keeps
-      // the authenticator payload independent from the Supabase Site URL (which
-      // may still be localhost in project configuration) and guarantees a
-      // standard otpauth:// URI labelled for Shalean Office.
-      const user = await getUser();
-      const account = user?.email?.trim() || "Office account";
-      const otpAuthUri = buildTotpUri(data.totp.secret, account);
-      const qrCode = await QRCode.toDataURL(otpAuthUri, {
-        errorCorrectionLevel: "M",
-        margin: 2,
-        width: 256,
-      });
-
-      setEnrollment({
-        factorId: data.id,
-        qrCode,
-        secret: data.totp.secret,
-      });
-    } catch (enrollmentError) {
-      setError(enrollmentError instanceof Error ? enrollmentError.message : "Could not create authenticator QR code.");
+      setSent(true);
+      setMaskedEmail(result.email ?? null);
+      setResendIn(result.resendAfterSeconds ?? 60);
+    } catch (sendError) {
+      setError(sendError instanceof Error ? sendError.message : "Could not send the security code.");
     } finally {
       setSubmitting(false);
     }
   }
 
-  async function verify(factorId: string) {
+  async function verify() {
     const trimmed = code.replace(/\s+/g, "");
-    if (trimmed.length < 6) {
-      setError("Enter the 6-digit code from your authenticator app.");
+    if (!/^\d{6}$/.test(trimmed)) {
+      setError("Enter the 6-digit security code from your email.");
       return;
     }
     setError(null);
     setSubmitting(true);
     try {
-      const { error: verifyError } = await verifyMfaTotp(factorId, trimmed);
-      if (verifyError) {
-        setError(verifyError.message);
+      const result = await verifyOfficeEmailCode(trimmed);
+      if (!result.ok) {
+        setError(result.error ?? "Verification failed.");
         return;
       }
       router.replace(redirect);
       router.refresh();
+    } catch (verifyError) {
+      setError(verifyError instanceof Error ? verifyError.message : "Verification failed.");
     } finally {
       setSubmitting(false);
     }
@@ -140,100 +73,69 @@ export function MfaForm({ redirect }: { redirect: string }) {
         </div>
         <div>
           <h1 className="text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-            Multi-factor authentication required
+            Verify your Shalean Office access
           </h1>
           <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-            Privileged Shalean Office access requires a verified authenticator session.
+            For management security, we&apos;ll email you a 6-digit code before opening Office.
           </p>
         </div>
       </div>
 
-      {loading ? <p className="mt-6 text-sm text-zinc-500">Checking your security settings…</p> : null}
-
-      {!loading && mode === "challenge" && verifiedFactorId ? (
-        <div className="mt-6 space-y-4">
-          <p className="text-sm text-zinc-600 dark:text-zinc-300">
-            Enter the code from your authenticator app to continue to Office.
-          </p>
-          <label htmlFor="mfa-code" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Authenticator code
-          </label>
-          <input
-            id="mfa-code"
-            inputMode="numeric"
-            autoComplete="one-time-code"
-            value={code}
-            onChange={(event) => setCode(event.target.value)}
-            className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm tracking-[0.25em] text-zinc-900 outline-none ring-primary/30 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-            placeholder="123456"
-          />
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={() => void verify(verifiedFactorId)}
-            className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-          >
-            {submitting ? "Verifying…" : "Verify and continue"}
-          </button>
-        </div>
-      ) : null}
-
-      {!loading && mode === "enroll" ? (
-        <div className="mt-6 space-y-4">
-          {!enrollment ? (
-            <>
+      <div className="mt-6 space-y-4">
+        {!sent ? (
+          <>
+            <div className="flex items-start gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900">
+              <MailCheck className="mt-0.5 h-5 w-5 shrink-0 text-primary" aria-hidden />
               <p className="text-sm text-zinc-600 dark:text-zinc-300">
-                Use an authenticator app such as Microsoft Authenticator, Google Authenticator, 1Password, or Authy.
+                Click below and Shalean will send the code to the management email on your signed-in account. No authenticator app or second phone is needed.
               </p>
-              {staleFactorId ? (
-                <p className="text-sm text-amber-700 dark:text-amber-300">
-                  An unfinished authenticator setup was found. Shalean will safely restart it and generate a fresh QR code.
-                </p>
-              ) : null}
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => void startEnrollment()}
-                className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                {submitting ? "Starting setup…" : staleFactorId ? "Restart authenticator setup" : "Set up authenticator"}
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-900">
-                {/* Generated from a standard otpauth:// TOTP URI for Shalean Office. */}
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={enrollment.qrCode} alt="Authenticator setup QR code" className="mx-auto h-48 w-48" />
-                <p className="mt-3 break-all text-center text-xs text-zinc-500">Manual key: {enrollment.secret}</p>
-                <p className="mt-2 text-center text-xs text-amber-700 dark:text-amber-300">
-                  Keep this QR code and manual key private. They are the secret for your authenticator.
-                </p>
-              </div>
-              <label htmlFor="mfa-enroll-code" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                Enter the 6-digit code
-              </label>
-              <input
-                id="mfa-enroll-code"
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-2.5 text-sm tracking-[0.25em] text-zinc-900 outline-none ring-primary/30 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
-                placeholder="123456"
-              />
-              <button
-                type="button"
-                disabled={submitting}
-                onClick={() => void verify(enrollment.factorId)}
-                className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
-              >
-                {submitting ? "Verifying…" : "Verify and finish setup"}
-              </button>
-            </>
-          )}
-        </div>
-      ) : null}
+            </div>
+            <button
+              type="button"
+              disabled={submitting}
+              onClick={() => void sendCode()}
+              className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              {submitting ? "Sending code…" : "Email me a security code"}
+            </button>
+          </>
+        ) : (
+          <>
+            <p className="text-sm text-zinc-600 dark:text-zinc-300">
+              We sent a 6-digit security code{maskedEmail ? <> to <strong>{maskedEmail}</strong></> : " to your management email"}. It expires in 10 minutes.
+            </p>
+            <label htmlFor="office-email-code" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Security code
+            </label>
+            <input
+              id="office-email-code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, "").slice(0, 6))}
+              className="w-full rounded-xl border border-zinc-300 bg-white px-3 py-3 text-center text-lg tracking-[0.35em] text-zinc-900 outline-none ring-primary/30 focus:border-primary focus:ring-2 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-50"
+              placeholder="123456"
+            />
+            <button
+              type="button"
+              disabled={submitting || code.length !== 6}
+              onClick={() => void verify()}
+              className="w-full rounded-xl bg-primary py-3 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+            >
+              {submitting ? "Verifying…" : "Verify and continue to Office"}
+            </button>
+            <button
+              type="button"
+              disabled={submitting || resendIn > 0}
+              onClick={() => void sendCode()}
+              className="w-full rounded-xl border border-zinc-300 bg-white py-2.5 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200"
+            >
+              {resendIn > 0 ? `Send another code in ${resendIn}s` : "Send another code"}
+            </button>
+          </>
+        )}
+      </div>
 
       {error ? (
         <div className="mt-4 flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-3 py-2.5 text-sm text-red-700 dark:border-red-800/50 dark:bg-red-950/50 dark:text-red-300" role="alert">
@@ -243,7 +145,7 @@ export function MfaForm({ redirect }: { redirect: string }) {
       ) : null}
 
       <p className="mt-4 text-xs text-zinc-500 dark:text-zinc-400">
-        You must complete MFA before privileged Office APIs will accept this session.
+        This extra verification is required only for privileged Shalean Office access. Customer and cleaner accounts are not affected.
       </p>
     </AuthCard>
   );
