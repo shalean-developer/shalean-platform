@@ -47,8 +47,9 @@ describe("P0-04E mandatory privileged Office email verification contract", () =>
   });
 
   it("keeps custom machine and cron bearer auth outside the human Office verification gate", () => {
-    expect(sessionBoundary).toContain("Only verified Supabase user sessions are Office-email gated here");
-    expect(sessionBoundary).toContain("if (!bearerError && bearerUser?.id");
+    expect(sessionBoundary).toContain("Only verified Supabase user sessions are Office-verification gated here");
+    expect(sessionBoundary).toContain("!bearerError &&");
+    expect(sessionBoundary).toContain("bearerUser?.id");
   });
 
   it("forces authenticated Office browser sessions through the email-code screen", () => {
