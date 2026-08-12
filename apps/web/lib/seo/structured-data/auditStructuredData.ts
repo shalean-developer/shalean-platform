@@ -18,7 +18,7 @@ export type StructuredDataAuditRow = {
 };
 
 const AUDIT_FETCH_TIMEOUT_MS = 15_000;
-const AUDIT_BATCH_SIZE = 5;
+const AUDIT_BATCH_SIZE = 20;
 
 function pageGroup(path: string): string {
   if (path === "/") return "core";
@@ -138,16 +138,22 @@ async function inspectUrl(url: string): Promise<StructuredDataAuditRow> {
   } finally { clearTimeout(timer); }
 }
 
+async function persistAuditRows(admin: SupabaseClient, rows: StructuredDataAuditRow[]): Promise<void> {
+  if (!rows.length) return;
+  const { error } = await admin
+    .from("seo_structured_data_audits")
+    .upsert(rows.map((row) => ({ ...row, updated_at: row.checked_at })), { onConflict: "url" });
+  if (error) throw new Error(error.message);
+}
+
 export async function runStructuredDataAudit(admin: SupabaseClient, limit = 220): Promise<{ ok: boolean; scanned: number; valid: number; warning: number; error: number }> {
   const sitemap = await buildMarketingSitemapEntries();
   const urls = sitemap.slice(0, Math.max(1, Math.min(limit, 250))).map((entry) => entry.url);
   const rows: StructuredDataAuditRow[] = [];
   for (let i = 0; i < urls.length; i += AUDIT_BATCH_SIZE) {
-    rows.push(...await Promise.all(urls.slice(i, i + AUDIT_BATCH_SIZE).map(inspectUrl)));
-  }
-  if (rows.length) {
-    const { error } = await admin.from("seo_structured_data_audits").upsert(rows.map((row) => ({ ...row, updated_at: row.checked_at })), { onConflict: "url" });
-    if (error) throw new Error(error.message);
+    const batchRows = await Promise.all(urls.slice(i, i + AUDIT_BATCH_SIZE).map(inspectUrl));
+    rows.push(...batchRows);
+    await persistAuditRows(admin, batchRows);
   }
   return { ok: true, scanned: rows.length, valid: rows.filter((r) => r.status === "valid").length, warning: rows.filter((r) => r.status === "warning").length, error: rows.filter((r) => r.status === "error").length };
 }
