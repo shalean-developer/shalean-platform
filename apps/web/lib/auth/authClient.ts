@@ -124,7 +124,6 @@ export async function signOut(): Promise<{ error: Error | null }> {
 
 export type RequestPasswordResetResult =
   | { ok: true }
-  | { ok: false; noAccount: true }
   | { ok: false; error: Error };
 
 /** Sends a password recovery email via `/api/auth/forgot-password` (Resend in production). */
@@ -136,12 +135,8 @@ export async function requestPasswordReset(email: string): Promise<RequestPasswo
   });
   const json = (await res.json().catch(() => ({}))) as {
     sent?: boolean;
-    code?: string;
     error?: string;
   };
-  if (res.ok && json.code === "no_account") {
-    return { ok: false, noAccount: true };
-  }
   if (!res.ok) {
     return { ok: false, error: new Error(json.error ?? "Could not send reset email. Try again.") };
   }
