@@ -126,6 +126,7 @@ export type MfaStatus = {
   currentLevel: AuthenticatorAssuranceLevels | null;
   nextLevel: AuthenticatorAssuranceLevels | null;
   verifiedTotpFactorId: string | null;
+  unverifiedTotpFactorId: string | null;
 };
 
 export async function getMfaStatus(): Promise<{ status: MfaStatus | null; error: Error | null }> {
@@ -138,15 +139,24 @@ export async function getMfaStatus(): Promise<{ status: MfaStatus | null; error:
   const error = aalError ?? factorsError;
   if (error) return { status: null, error: new Error(error.message) };
 
-  const verifiedTotp = (factors?.totp ?? []).find((factor) => factor.status === "verified") ?? null;
+  const totpFactors = factors?.totp ?? [];
+  const verifiedTotp = totpFactors.find((factor) => factor.status === "verified") ?? null;
+  const unverifiedTotp = totpFactors.find((factor) => factor.status === "unverified") ?? null;
   return {
     status: {
       currentLevel: aal?.currentLevel ?? null,
       nextLevel: aal?.nextLevel ?? null,
       verifiedTotpFactorId: verifiedTotp?.id ?? null,
+      unverifiedTotpFactorId: unverifiedTotp?.id ?? null,
     },
     error: null,
   };
+}
+
+export async function unenrollMfaFactor(factorId: string) {
+  const sb = client();
+  const { data, error } = await sb.auth.mfa.unenroll({ factorId });
+  return { data, error: error ? new Error(error.message) : null };
 }
 
 export async function enrollMfaTotp() {
