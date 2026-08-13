@@ -5,6 +5,7 @@ import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
 import { OfficeShell } from "@/src/features/office/OfficeShell";
 import { OfficePermissionBoundary } from "@/src/features/office/OfficePermissionBoundary";
 import { OfficePermissionNavigationGate } from "@/src/features/office/OfficePermissionNavigationGate";
+import { OfficeSupervisorTeamsGate } from "@/src/features/office/OfficeSupervisorTeamsGate";
 
 export const metadata = {
   title: "Office | Shalean Admin",
@@ -32,7 +33,9 @@ export default function OfficeLayout({ children }: { children: ReactNode }) {
       <OfficeBookingFinancialVisibilityGate />
       <OfficePermissionNavigationGate>
         <OfficeShell>
-          <OfficePermissionBoundary>{children}</OfficePermissionBoundary>
+          <OfficePermissionBoundary>
+            <OfficeSupervisorTeamsGate>{children}</OfficeSupervisorTeamsGate>
+          </OfficePermissionBoundary>
         </OfficeShell>
       </OfficePermissionNavigationGate>
     </AppMonoFontScope>
