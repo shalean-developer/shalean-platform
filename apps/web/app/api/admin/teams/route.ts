@@ -120,12 +120,12 @@ export async function GET(request: Request) {
   }
 
   const { data: cleanerRows, error: cleanerError } = activeTeamCleanerIds.length
-    ? await admin.from("cleaners").select("id, full_name, status, is_available, jobs_completed, rating").in("id", activeTeamCleanerIds)
+    ? await admin.from("cleaners").select("id, full_name, phone, status, is_available, jobs_completed, rating").in("id", activeTeamCleanerIds)
     : { data: [], error: null };
   if (cleanerError) return NextResponse.json({ error: cleanerError.message }, { status: 500 });
   const members = (cleanerRows ?? []).map((raw) => {
-    const row = raw as { id: string; full_name?: string | null; status?: string | null; is_available?: boolean | null; jobs_completed?: number | null; rating?: number | null };
-    return { cleaner_id: row.id, team_id: teamId, name: row.full_name ?? "Cleaner", status: row.status ?? null, is_available: row.is_available ?? null, jobs_completed: row.jobs_completed ?? 0, rating: row.rating ?? null, earnings: earningsByCleaner.get(row.id) ?? emptyEarnings() };
+    const row = raw as { id: string; full_name?: string | null; phone?: string | null; status?: string | null; is_available?: boolean | null; jobs_completed?: number | null; rating?: number | null };
+    return { cleaner_id: row.id, team_id: teamId, name: row.full_name ?? "Cleaner", phone: row.phone ?? null, status: row.status ?? null, is_available: row.is_available ?? null, jobs_completed: row.jobs_completed ?? 0, rating: row.rating ?? null, earnings: earningsByCleaner.get(row.id) ?? emptyEarnings() };
   }).sort((a, b) => a.name.localeCompare(b.name));
 
   return NextResponse.json({ teams: teamsWithCounts, supervisor_view: true, can_view_earnings: canViewEarnings, members, earnings: canViewEarnings ? totals : null, earnings_period_start: monthStartIso }, { headers: { "Cache-Control": "private, no-store" } });
