@@ -1,7 +1,6 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { fetchCleanerRowForSupabaseAuthUser } from "@/lib/cleaner/resolveCleanerFromRequest";
 
 export type SupervisorTeamScope = {
   isSupervisor: boolean;
@@ -34,12 +33,24 @@ export async function resolveSupervisorTeamScope(
     .map((raw) => String((raw as { team_id?: string | null }).team_id ?? "").trim())
     .filter(Boolean);
 
-  // Supervisor Office accounts use a separate Auth identity from their
-  // canonical cleaner login. Resolve through cleaner_auth_links as well as
-  // cleaners.auth_user_id so team-lead scope includes the supervisor's own
-  // cleaner profile and any teams they lead.
-  const cleanerRow = await fetchCleanerRowForSupabaseAuthUser(admin, userId);
-  const leadCleanerId = cleanerRow?.id ?? null;
+  const { data: directCleaner, error: directCleanerError } = await admin
+    .from("cleaners")
+    .select("id")
+    .eq("auth_user_id", userId)
+    .maybeSingle();
+  if (directCleanerError) throw new Error(directCleanerError.message);
+
+  let leadCleanerId = directCleaner ? String((directCleaner as { id: string }).id) : null;
+  if (!leadCleanerId) {
+    const { data: linkedCleaner, error: linkedCleanerError } = await admin
+      .from("cleaner_auth_links")
+      .select("cleaner_id")
+      .eq("auth_user_id", userId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (linkedCleanerError) throw new Error(linkedCleanerError.message);
+    leadCleanerId = linkedCleaner ? String((linkedCleaner as { cleaner_id: string }).cleaner_id) : null;
+  }
 
   let teamIds = [...new Set(explicitTeamIds)];
   if (leadCleanerId) {
