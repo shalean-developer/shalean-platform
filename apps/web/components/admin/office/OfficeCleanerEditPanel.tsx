@@ -38,6 +38,7 @@ function timeOptionsIncluding(value: string): FloatingSelectOption[] { return !v
 function buildForm(cleaner: OfficeCleanerEditTarget): FormState { return { fullName: cleaner.full_name ?? "", phone: cleaner.phone ?? "", status: normalizeStatus(cleaner.status, cleaner.is_available), availabilityStart: timeInputValue(cleaner.availability_start, "08:00"), availabilityEnd: timeInputValue(cleaner.availability_end, "17:00") }; }
 
 async function saveCleanerStatus(cleanerId: string, status: CleanerStatus): Promise<void> {
+  if (status === "busy") return;
   const sb = getSupabaseBrowser();
   const session = await sb?.auth.getSession();
   const token = session?.data.session?.access_token;
