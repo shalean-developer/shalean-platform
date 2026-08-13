@@ -9,99 +9,50 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const ME_CACHE_CONTROL = "private, max-age=15, stale-while-revalidate=30";
+const MANAGEMENT_CONTROLLED_STATUSES = new Set(["unavailable", "day_off", "sick", "leave", "training", "suspended", "inactive"]);
 
 export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
-  if (!admin) {
-    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  }
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   const session = await resolveCleanerFromRequest(request, admin);
   if (!session.ok) {
-    return NextResponse.json(
-      { error: session.error, cleaner: null, user: null },
-      { status: session.status, headers: { "Cache-Control": "no-store" } },
-    );
+    return NextResponse.json({ error: session.error, cleaner: null, user: null }, { status: session.status, headers: { "Cache-Control": "no-store" } });
   }
 
   const { data: cleaner, error } = await fetchCleanerMeRow(admin, session.cleaner.id);
-
-  if (error) {
-    return NextResponse.json(
-      { error: error.message, cleaner: null, user: session.authUser },
-      { status: 500, headers: { "Cache-Control": "no-store" } },
-    );
-  }
-
-  if (!cleaner) {
-    return NextResponse.json(
-      { cleaner: null, user: session.authUser, isCleaner: false, teamIds: [] as string[] },
-      { headers: { "Cache-Control": ME_CACHE_CONTROL } },
-    );
-  }
+  if (error) return NextResponse.json({ error: error.message, cleaner: null, user: session.authUser }, { status: 500, headers: { "Cache-Control": "no-store" } });
+  if (!cleaner) return NextResponse.json({ cleaner: null, user: session.authUser, isCleaner: false, teamIds: [] as string[] }, { headers: { "Cache-Control": ME_CACHE_CONTROL } });
 
   const teamIds = await fetchCleanerTeamIds(admin, session.cleaner.id);
   const completion_pct = await fetchCleanerCompletionRatePercent(admin, session.cleaner.id);
-  return NextResponse.json(
-    {
-      cleaner,
-      user: session.authUser,
-      isCleaner: true,
-      teamIds,
-      completion_pct,
-    },
-    { headers: { "Cache-Control": ME_CACHE_CONTROL } },
-  );
+  return NextResponse.json({ cleaner, user: session.authUser, isCleaner: true, teamIds, completion_pct }, { headers: { "Cache-Control": ME_CACHE_CONTROL } });
 }
 
 export async function PATCH(request: Request) {
   let body: { is_available?: boolean };
-  try {
-    body = (await request.json()) as { is_available?: boolean };
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
-  }
-
-  if (typeof body.is_available !== "boolean") {
-    return NextResponse.json({ error: "is_available must be boolean." }, { status: 400 });
-  }
+  try { body = (await request.json()) as { is_available?: boolean }; }
+  catch { return NextResponse.json({ error: "Invalid JSON." }, { status: 400 }); }
+  if (typeof body.is_available !== "boolean") return NextResponse.json({ error: "is_available must be boolean." }, { status: 400 });
 
   const admin = getSupabaseAdmin();
-  if (!admin) {
-    return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  }
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   const session = await resolveCleanerFromRequest(request, admin);
   if (!session.ok) {
-    return NextResponse.json(
-      { error: session.error, cleaner: null, user: null },
-      { status: session.status, headers: { "Cache-Control": "no-store" } },
-    );
+    return NextResponse.json({ error: session.error, cleaner: null, user: null }, { status: session.status, headers: { "Cache-Control": "no-store" } });
+  }
+
+  const { data: current, error: currentError } = await fetchCleanerMeRow(admin, session.cleaner.id);
+  if (currentError) return NextResponse.json({ error: currentError.message }, { status: 500, headers: { "Cache-Control": "no-store" } });
+  const currentStatus = String((current as { status?: string | null } | null)?.status ?? "").trim().toLowerCase();
+  if (MANAGEMENT_CONTROLLED_STATUSES.has(currentStatus)) {
+    return NextResponse.json({ error: `Availability is controlled by management while status is ${currentStatus}.` }, { status: 403, headers: { "Cache-Control": "no-store" } });
   }
 
   const status = body.is_available ? "available" : "offline";
-  const { data: cleaner, error } = await updateCleanerMeAvailabilityAndFetch(
-    admin,
-    session.cleaner.id,
-    body.is_available,
-    status,
-  );
-
-  if (error) {
-    return NextResponse.json(
-      { error: error.message, cleaner: null, user: session.authUser },
-      { status: 500, headers: { "Cache-Control": "no-store" } },
-    );
-  }
-
-  if (!cleaner) {
-    return NextResponse.json(
-      { error: "Cleaner not found.", cleaner: null, user: session.authUser },
-      { status: 404, headers: { "Cache-Control": "no-store" } },
-    );
-  }
+  const { data: cleaner, error } = await updateCleanerMeAvailabilityAndFetch(admin, session.cleaner.id, body.is_available, status);
+  if (error) return NextResponse.json({ error: error.message, cleaner: null, user: session.authUser }, { status: 500, headers: { "Cache-Control": "no-store" } });
+  if (!cleaner) return NextResponse.json({ error: "Cleaner not found.", cleaner: null, user: session.authUser }, { status: 404, headers: { "Cache-Control": "no-store" } });
 
   const teamIds = await fetchCleanerTeamIds(admin, session.cleaner.id);
-  return NextResponse.json(
-    { cleaner, user: session.authUser, isCleaner: true, teamIds },
-    { headers: { "Cache-Control": "no-store" } },
-  );
+  return NextResponse.json({ cleaner, user: session.authUser, isCleaner: true, teamIds }, { headers: { "Cache-Control": "no-store" } });
 }
