@@ -3,16 +3,21 @@
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Loader2, RefreshCw, Users } from "lucide-react";
+import { Loader2, Phone, RefreshCw, Users } from "lucide-react";
 import { getSupabaseBrowser } from "@/lib/supabase/browser";
 
 type Team = { id: string; name: string; member_count: number; lead_cleaner_id?: string | null };
 type Earnings = { month_total_cents: number; pending_cents: number; approved_cents: number; processing_cents: number; paid_cents: number };
-type Member = { cleaner_id: string; team_id: string | null; name: string; status: string | null; is_available: boolean | null; jobs_completed: number; rating: number | null; earnings: Earnings };
+type Member = { cleaner_id: string; team_id: string | null; name: string; phone: string | null; status: string | null; is_available: boolean | null; jobs_completed: number; rating: number | null; earnings: Earnings };
 type Payload = { teams?: Team[]; supervisor_view?: boolean; can_view_earnings?: boolean; members?: Member[]; earnings?: Earnings | null; earnings_period_start?: string; error?: string };
 
 function money(cents: number) {
   return new Intl.NumberFormat("en-ZA", { style: "currency", currency: "ZAR" }).format((Number(cents) || 0) / 100);
+}
+
+function phoneHref(phone: string) {
+  const value = phone.trim();
+  return `tel:${value.replace(/[^+\d]/g, "")}`;
 }
 
 export function OfficeSupervisorTeamsGate({ children }: { children: ReactNode }) {
@@ -69,7 +74,7 @@ export function OfficeSupervisorTeamsGate({ children }: { children: ReactNode })
       </div>
       <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
         <div className="flex items-center gap-2 border-b px-4 py-4"><Users className="h-5 w-5 text-blue-600" /><h2 className="font-bold text-slate-900">My cleaners</h2></div>
-        <div className="overflow-x-auto"><table className="w-full min-w-[640px] text-left text-sm"><thead className="bg-slate-50"><tr><th className="px-4 py-3">Cleaner</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Jobs</th><th className="px-4 py-3 text-right">Earnings this month</th></tr></thead><tbody className="divide-y">{cleaners.map((m) => <tr key={m.cleaner_id}><td className="px-4 py-3 font-semibold text-slate-900">{m.name}</td><td className="px-4 py-3 text-slate-600">{m.status ?? (m.is_available ? "available" : "offline")}</td><td className="px-4 py-3 text-slate-600">{m.jobs_completed ?? 0}</td><td className="px-4 py-3 text-right font-semibold">{canViewEarnings ? money(m.earnings.month_total_cents) : "Restricted"}</td></tr>)}</tbody></table></div>
+        <div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-sm"><thead className="bg-slate-50"><tr><th className="px-4 py-3">Cleaner</th><th className="px-4 py-3">Phone</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Jobs</th><th className="px-4 py-3 text-right">Earnings this month</th></tr></thead><tbody className="divide-y">{cleaners.map((m) => <tr key={m.cleaner_id}><td className="px-4 py-3 font-semibold text-slate-900">{m.name}</td><td className="px-4 py-3">{m.phone ? <a href={phoneHref(m.phone)} className="inline-flex items-center gap-1.5 font-medium text-blue-700 hover:underline"><Phone className="h-4 w-4" />{m.phone}</a> : <span className="text-slate-400">Not provided</span>}</td><td className="px-4 py-3 text-slate-600">{m.status ?? (m.is_available ? "available" : "offline")}</td><td className="px-4 py-3 text-slate-600">{m.jobs_completed ?? 0}</td><td className="px-4 py-3 text-right font-semibold">{canViewEarnings ? money(m.earnings.month_total_cents) : "Restricted"}</td></tr>)}</tbody></table></div>
       </div>
       <p className="text-xs text-slate-500">This view does not include customer amount paid, invoices, Paystack/Zoho payment data, company revenue, margin, or profit.</p>
     </div>
