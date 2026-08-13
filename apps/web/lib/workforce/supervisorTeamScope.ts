@@ -33,13 +33,24 @@ export async function resolveSupervisorTeamScope(
     .map((raw) => String((raw as { team_id?: string | null }).team_id ?? "").trim())
     .filter(Boolean);
 
-  const { data: cleanerRow, error: cleanerError } = await admin
+  const { data: directCleaner, error: directCleanerError } = await admin
     .from("cleaners")
     .select("id")
     .eq("auth_user_id", userId)
     .maybeSingle();
-  if (cleanerError) throw new Error(cleanerError.message);
-  const leadCleanerId = cleanerRow ? String((cleanerRow as { id: string }).id) : null;
+  if (directCleanerError) throw new Error(directCleanerError.message);
+
+  let leadCleanerId = directCleaner ? String((directCleaner as { id: string }).id) : null;
+  if (!leadCleanerId) {
+    const { data: linkedCleaner, error: linkedCleanerError } = await admin
+      .from("cleaner_auth_links")
+      .select("cleaner_id")
+      .eq("auth_user_id", userId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (linkedCleanerError) throw new Error(linkedCleanerError.message);
+    leadCleanerId = linkedCleaner ? String((linkedCleaner as { cleaner_id: string }).cleaner_id) : null;
+  }
 
   let teamIds = [...new Set(explicitTeamIds)];
   if (leadCleanerId) {
