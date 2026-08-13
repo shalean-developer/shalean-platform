@@ -42,8 +42,8 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const updates: Record<string, unknown> = {
     status,
     is_available: status === "available",
+    is_active: status !== "inactive",
   };
-  if (status === "inactive") updates.is_active = false;
 
   const { error } = await admin.from("cleaners").update(updates).eq("id", id);
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
