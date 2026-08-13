@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { fetchCleanerRowForSupabaseAuthUser } from "@/lib/cleaner/resolveCleanerFromRequest";
 
 export type SupervisorTeamScope = {
   isSupervisor: boolean;
@@ -33,13 +34,12 @@ export async function resolveSupervisorTeamScope(
     .map((raw) => String((raw as { team_id?: string | null }).team_id ?? "").trim())
     .filter(Boolean);
 
-  const { data: cleanerRow, error: cleanerError } = await admin
-    .from("cleaners")
-    .select("id")
-    .eq("auth_user_id", userId)
-    .maybeSingle();
-  if (cleanerError) throw new Error(cleanerError.message);
-  const leadCleanerId = cleanerRow ? String((cleanerRow as { id: string }).id) : null;
+  // Supervisor Office accounts use a separate Auth identity from their
+  // canonical cleaner login. Resolve through cleaner_auth_links as well as
+  // cleaners.auth_user_id so team-lead scope includes the supervisor's own
+  // cleaner profile and any teams they lead.
+  const cleanerRow = await fetchCleanerRowForSupabaseAuthUser(admin, userId);
+  const leadCleanerId = cleanerRow?.id ?? null;
 
   let teamIds = [...new Set(explicitTeamIds)];
   if (leadCleanerId) {
