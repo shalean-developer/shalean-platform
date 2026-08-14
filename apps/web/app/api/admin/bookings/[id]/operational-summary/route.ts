@@ -72,7 +72,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const booking = bookingData as unknown as Record<string, unknown>;
 
-  const [{ data: rosterRows, error: rosterError }, { data: paymentData, error: paymentError }] = await Promise.all([
+  const [{ data: rosterRows, error: rosterError }, { data: paymentRows, error: paymentError }] = await Promise.all([
     admin
       .from("booking_cleaners")
       .select("cleaner_id, role, lead_bonus_cents, payout_weight, assigned_at")
@@ -85,14 +85,21 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
       )
       .eq("booking_id", id)
       .order("paid_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .limit(10),
   ]);
 
   if (rosterError) return NextResponse.json({ error: rosterError.message }, { status: 500 });
   if (paymentError) {
     console.warn("[operational-summary] payment transaction lookup failed", paymentError.message);
   }
+
+  // Refunds/reversals are separate ledger events. Profitability must be based on
+  // the original capture/covered settlement rather than whichever row is newest.
+  const paymentData = (paymentRows ?? []).find((row) => {
+    const channel = String(row.payment_channel ?? "").trim().toLowerCase();
+    const settlement = String(row.settlement_status ?? "").trim().toLowerCase();
+    return channel !== "refund" && settlement !== "reversed";
+  }) ?? null;
 
   const persistedRoster = (rosterRows ?? []) as Array<Record<string, unknown>>;
   const directCleanerId = String(booking.cleaner_id ?? "").trim();
@@ -146,5 +153,5 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     };
   });
 
-  return NextResponse.json({ booking, roster, payment: paymentData ?? null });
+  return NextResponse.json({ booking, roster, payment: paymentData });
 }
