@@ -2,13 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { RefreshCw } from "lucide-react";
-import { fetchCleaners, type AdminCleanerRow, updateCleanerProfile } from "@/lib/admin/dashboard";
+import { fetchCleaners, type AdminCleanerRow } from "@/lib/admin/dashboard";
 import {
   CLEANER_STATUSES,
   CLEANER_STATUS_LABELS,
   normalizeCleanerStatus,
   type CleanerStatus,
 } from "@/lib/cleaner/cleanerStatus";
+import { getSupabaseBrowser } from "@/lib/supabase/browser";
 import { showToast } from "@/components/ui/notifications";
 import { cn } from "@/lib/utils";
 
@@ -42,6 +43,25 @@ function badgeClass(status: CleanerStatus): string {
     default:
       return "bg-slate-100 text-slate-700";
   }
+}
+
+async function patchCleanerStatus(cleanerId: string, status: CleanerStatus): Promise<void> {
+  if (status === "busy") return;
+  const sb = getSupabaseBrowser();
+  const session = await sb?.auth.getSession();
+  const token = session?.data.session?.access_token;
+  if (!token) throw new Error("Please sign in again.");
+
+  const response = await fetch(`/api/admin/cleaners/${encodeURIComponent(cleanerId)}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ status }),
+  });
+  const payload = (await response.json().catch(() => ({}))) as { error?: string };
+  if (!response.ok) throw new Error(payload.error ?? "Could not update cleaner status.");
 }
 
 export function OfficeCleanerStatusManager() {
@@ -92,20 +112,15 @@ export function OfficeCleanerStatusManager() {
     const current = effectiveStatus(row);
     if (current === next) return;
 
-    const isAvailable = next === "available";
-    const shouldBeActive = next !== "inactive";
-
     try {
       setSavingId(row.id);
-      await updateCleanerProfile(row.id, {
-        status: next,
-        is_available: isAvailable,
-        is_active: shouldBeActive,
-      });
+      await patchCleanerStatus(row.id, next);
+      const isAvailable = next === "available";
+      const isActive = next !== "inactive";
       setRows((prev) =>
         prev.map((item) =>
           item.id === row.id
-            ? { ...item, status: next, is_available: isAvailable, is_active: shouldBeActive }
+            ? { ...item, status: next, is_available: isAvailable, is_active: isActive }
             : item,
         ),
       );
