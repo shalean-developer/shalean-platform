@@ -8,7 +8,6 @@ import {
   FileText,
   House,
   MapPin,
-  PawPrint,
   ReceiptText,
   ShieldAlert,
   Sparkles,
@@ -64,9 +63,7 @@ type RosterRow = {
 };
 
 type ApiResponse = { booking?: SummaryBooking; roster?: RosterRow[]; error?: string };
-
-type PriceLine = { label: string; amountZar: number };
-
+type PriceLine = { label: string; amountZar: number | null };
 type CustomerInstruction = { label: string; value: string };
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -99,15 +96,16 @@ function titleCaseService(value: string | null | undefined): string {
     .replace(/[_-]+/g, " ")
     .replace(/\b\w/g, (m) => m.toUpperCase())
     .replace(/^Deep$/i, "Deep Cleaning")
+    .replace(/^Deep Cleaning$/i, "Deep Cleaning")
     .replace(/^Move$/i, "Move In / Out Cleaning");
 }
 
-function bookingTotalZar(booking: SummaryBooking): number {
+/** Cash actually collected. Never fall back to the quote/total_price. */
+function bookingCollectedZar(booking: SummaryBooking): number {
   const cents = numberOrNull(booking.total_paid_cents) ?? numberOrNull(booking.amount_paid_cents);
   if (cents != null && cents > 0) return cents / 100;
   const paid = numberOrNull(booking.total_paid_zar);
-  if (paid != null && paid > 0) return paid;
-  return numberOrNull(booking.total_price) ?? 0;
+  return paid != null && paid > 0 ? paid : 0;
 }
 
 function bookingDurationMinutes(booking: SummaryBooking): number | null {
@@ -158,6 +156,38 @@ function extractInstructions(booking: SummaryBooking): { special: string | null;
   return { special, items };
 }
 
+function humanizeExtraId(value: string): string {
+  return value.replace(/[_-]+/g, " ").replace(/\b\w/g, (m) => m.toUpperCase()).trim();
+}
+
+function parseExtraRows(raw: unknown, lines: PriceLine[]): PriceLine[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item): PriceLine | null => {
+      if (typeof item === "string") {
+        const label = humanizeExtraId(item);
+        const matchingLine = lines.find((line) => line.label.trim().toLowerCase() === label.toLowerCase());
+        return label ? { label, amountZar: matchingLine?.amountZar ?? null } : null;
+      }
+      const row = asRecord(item);
+      if (!row) return null;
+      const label = cleanText(row.name) ?? cleanText(row.label) ?? cleanText(row.id)?.replace(/[_-]+/g, " ") ?? null;
+      const amount = numberOrNull(row.total) ?? numberOrNull(row.price) ?? numberOrNull(row.amountZar) ?? numberOrNull(row.amount_zar);
+      return label ? { label: humanizeExtraId(label), amountZar: amount } : null;
+    })
+    .filter((v): v is PriceLine => Boolean(v));
+}
+
+function dedupePriceLines(rows: PriceLine[]): PriceLine[] {
+  const map = new Map<string, PriceLine>();
+  for (const row of rows) {
+    const key = row.label.trim().toLowerCase();
+    const current = map.get(key);
+    if (!current || (current.amountZar == null && row.amountZar != null)) map.set(key, row);
+  }
+  return [...map.values()];
+}
+
 function extractPricing(booking: SummaryBooking): {
   originalTotal: number | null;
   discount: number;
@@ -169,39 +199,62 @@ function extractPricing(booking: SummaryBooking): {
   const snapshot = asRecord(booking.booking_snapshot);
   const snapshotPricing = asRecord(snapshot?.pricingSummary);
   const source = pricing ?? snapshotPricing;
-  const rawLines = Array.isArray(source?.lineItems) ? source?.lineItems : [];
+  const rawLines = Array.isArray(source?.lineItems) ? source.lineItems : [];
   const lines = (rawLines as unknown[])
     .map((item): PriceLine | null => {
       const row = asRecord(item);
       const label = cleanText(row?.label);
-      const amount = numberOrNull(row?.amountZar);
-      return label && amount != null ? { label, amountZar: amount } : null;
-    })
-    .filter((v): v is PriceLine => Boolean(v));
-  const rawExtras = Array.isArray(source?.selected_extras) ? source?.selected_extras : [];
-  const extras = (rawExtras as unknown[])
-    .map((item): PriceLine | null => {
-      const row = asRecord(item);
-      const label = cleanText(row?.name) ?? cleanText(row?.label);
-      const amount = numberOrNull(row?.total) ?? numberOrNull(row?.price);
-      return label && amount != null ? { label, amountZar: amount } : null;
+      const amount = numberOrNull(row?.amountZar) ?? numberOrNull(row?.amount_zar);
+      return label ? { label, amountZar: amount } : null;
     })
     .filter((v): v is PriceLine => Boolean(v));
 
-  const promo = asRecord(snapshot?.promotionCheckout);
-  const discount = numberOrNull(promo?.totalDiscountZar) ?? numberOrNull(asRecord(booking.price_breakdown)?.discountZar) ?? 0;
-  const originalTotal = numberOrNull(source?.total) ?? numberOrNull(source?.estimated_total);
-  return { originalTotal, discount, paidTotal: bookingTotalZar(booking), lines, extras };
+  const priceSnapshot = asRecord(booking.price_snapshot);
+  const extras = dedupePriceLines([
+    ...parseExtraRows(source?.selected_extras, lines),
+    ...parseExtraRows(priceSnapshot?.extras, lines),
+    ...parseExtraRows(booking.extras, lines),
+    ...parseExtraRows(booking.selected_extras, lines),
+  ]);
+
+  const promotionCheckout = asRecord(snapshot?.promotionCheckout);
+  const referralCheckout = asRecord(snapshot?.referralCheckout);
+  const snapshotAggregateDiscount = numberOrNull(priceSnapshot?.discount_zar);
+  const snapshotPromotion = numberOrNull(priceSnapshot?.promotion_discount_zar) ?? 0;
+  const snapshotReferral = numberOrNull(priceSnapshot?.referral_discount_zar) ?? 0;
+  const snapshotCredit = numberOrNull(priceSnapshot?.cleaning_credit_zar) ?? 0;
+  const detailedSnapshotDiscount = snapshotPromotion + snapshotReferral + snapshotCredit;
+  const persistedCheckoutDiscount =
+    (numberOrNull(promotionCheckout?.totalDiscountZar) ?? 0) +
+    (numberOrNull(referralCheckout?.discountZar) ?? 0);
+  const legacyBreakdownDiscount = numberOrNull(asRecord(booking.price_breakdown)?.discountZar) ?? 0;
+  const discount = Math.max(
+    0,
+    snapshotAggregateDiscount ?? (detailedSnapshotDiscount > 0 ? detailedSnapshotDiscount : persistedCheckoutDiscount || legacyBreakdownDiscount),
+  );
+
+  const paidTotal = bookingCollectedZar(booking);
+  const quotedPayable = numberOrNull(booking.total_price);
+  const originalTotal =
+    numberOrNull(source?.total) ??
+    numberOrNull(source?.estimated_total) ??
+    (quotedPayable != null ? quotedPayable + discount : null);
+  return { originalTotal, discount, paidTotal, lines, extras };
 }
 
-function extractTeamEarnings(booking: SummaryBooking, roster: RosterRow[]): { totalCents: number; marginCents: number } {
+function extractTeamEarnings(booking: SummaryBooking, roster: RosterRow[]): { totalCents: number; marginCents: number | null } {
   const earnings = asRecord(booking.earnings_summary);
   const fromSummary = numberOrNull(earnings?.total_cleaner_earnings_cents);
   const rosterTotal = roster.reduce((sum, row) => sum + (numberOrNull(row.earning_cents) ?? 0), 0);
   const totalCents = Math.max(0, Math.round(fromSummary ?? numberOrNull(booking.cleaner_earnings_total_cents) ?? rosterTotal));
-  const paidCents = Math.round(bookingTotalZar(booking) * 100);
-  const storedMargin = numberOrNull(booking.company_revenue_cents);
-  return { totalCents, marginCents: Math.max(0, Math.round(storedMargin ?? paidCents - totalCents)) };
+  const paidCents = Math.round(bookingCollectedZar(booking) * 100);
+  return { totalCents, marginCents: paidCents > 0 ? Math.max(0, paidCents - totalCents) : null };
+}
+
+function isPaidBooking(booking: SummaryBooking): boolean {
+  if (bookingCollectedZar(booking) > 0) return true;
+  const status = String(booking.payment_status ?? "").trim().toLowerCase();
+  return ["paid", "success", "completed", "settled"].includes(status);
 }
 
 export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: string }) {
@@ -248,6 +301,8 @@ export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: stri
   const teamCount = roster.length || numberOrNull(booking.team_member_count_snapshot) || (teamJob ? 1 : 0);
   const leader = roster.find((row) => row.role.toLowerCase() === "lead") ?? roster[0] ?? null;
   const hasInstructions = Boolean(instructions?.special || instructions?.items.length);
+  const collected = bookingCollectedZar(booking);
+  const paid = isPaidBooking(booking);
 
   return (
     <section className="space-y-4" aria-label="Canonical booking operational summary">
@@ -299,7 +354,7 @@ export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: stri
             icon={Users}
             label={teamJob ? "Assigned team" : "Assigned cleaner"}
             value={teamJob ? `${teamCount} cleaner${teamCount === 1 ? "" : "s"}` : leader?.name ?? "Not assigned"}
-            detail={leader ? `${leader.name}${leader.role.toLowerCase() === "lead" ? " · Team Leader" : ""}` : "Roster not loaded"}
+            detail={leader ? `${leader.name}${leader.role.toLowerCase() === "lead" ? " · Team Leader" : ""}` : "No cleaner assigned"}
           />
         </div>
       </div>
@@ -308,7 +363,7 @@ export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: stri
         <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5">
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-blue-600" />
-            <h3 className="font-semibold text-slate-950">Team roster & earnings</h3>
+            <h3 className="font-semibold text-slate-950">{teamJob ? "Team roster & earnings" : "Cleaner assignment & earnings"}</h3>
           </div>
           {roster.length ? (
             <div className="mt-3 overflow-hidden rounded-xl border border-slate-200">
@@ -317,7 +372,13 @@ export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: stri
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="truncate font-semibold text-slate-900">{row.name}</p>
-                      {row.role.toLowerCase() === "lead" ? <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase text-violet-700">Team Leader</span> : <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Member</span>}
+                      {row.role.toLowerCase() === "lead" ? (
+                        <span className="rounded-full bg-violet-50 px-2 py-0.5 text-[10px] font-bold uppercase text-violet-700">Team Leader</span>
+                      ) : teamJob ? (
+                        <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-slate-600">Member</span>
+                      ) : (
+                        <span className="rounded-full bg-blue-50 px-2 py-0.5 text-[10px] font-semibold uppercase text-blue-700">Assigned cleaner</span>
+                      )}
                     </div>
                     <p className="text-xs text-slate-500">{row.rating != null ? `${row.rating.toFixed(1)} rating` : "Rating unavailable"}{row.jobs_completed != null ? ` · ${row.jobs_completed} jobs completed` : ""}</p>
                   </div>
@@ -326,7 +387,7 @@ export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: stri
               ))}
             </div>
           ) : (
-            <p className="mt-3 text-sm text-slate-500">No roster rows recorded for this booking.</p>
+            <p className="mt-3 text-sm text-slate-500">No cleaner is currently assigned to this booking.</p>
           )}
         </div>
 
@@ -336,9 +397,9 @@ export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: stri
             <h3 className="font-semibold text-slate-950">Payment & margin</h3>
           </div>
           <div className="mt-3 grid gap-2">
-            <MoneyRow label="Customer paid" value={moneyZar(bookingTotalZar(booking))} strong />
+            <MoneyRow label="Customer paid" value={collected > 0 ? moneyZar(collected) : paid ? "R 0 (settled)" : "Not collected"} strong />
             <MoneyRow label={teamJob ? "Team earnings" : "Cleaner earnings"} value={centsZar(financials?.totalCents)} />
-            <MoneyRow label="Shalean gross margin" value={centsZar(financials?.marginCents)} accent />
+            <MoneyRow label="Shalean gross margin" value={financials?.marginCents != null ? centsZar(financials.marginCents) : "Available after payment"} accent={financials?.marginCents != null} />
           </div>
           {booking.zoho_invoice_number ? <p className="mt-3 text-xs text-slate-500">Zoho invoice: <span className="font-semibold text-slate-700">{booking.zoho_invoice_number}</span></p> : null}
         </div>
@@ -352,8 +413,8 @@ export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: stri
               <h3 className="font-semibold text-slate-950">Canonical pricing breakdown</h3>
             </div>
             <div className="text-right">
-              {pricing.originalTotal != null && pricing.originalTotal > pricing.paidTotal ? <p className="text-xs text-slate-500">Original quote <span className="line-through">{moneyZar(pricing.originalTotal)}</span></p> : null}
-              <p className="text-lg font-bold text-emerald-700">Paid {moneyZar(pricing.paidTotal)}</p>
+              {pricing.originalTotal != null ? <p className="text-xs text-slate-500">Original quote {moneyZar(pricing.originalTotal)}</p> : null}
+              <p className={`text-lg font-bold ${collected > 0 ? "text-emerald-700" : "text-amber-700"}`}>{collected > 0 ? `Paid ${moneyZar(pricing.paidTotal)}` : "Payment not collected"}</p>
             </div>
           </div>
           <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_280px]">
@@ -361,18 +422,23 @@ export function OfficeBookingOperationalSummary({ bookingId }: { bookingId: stri
               {pricing.lines.length ? pricing.lines.map((line, index) => (
                 <div key={`${line.label}-${index}`} className={`flex items-center justify-between gap-3 px-3 py-2.5 text-sm ${index ? "border-t border-slate-100" : ""}`}>
                   <span className="text-slate-700">{line.label}</span>
-                  <span className="font-semibold text-slate-900">{moneyZar(line.amountZar)}</span>
+                  <span className="font-semibold text-slate-900">{line.amountZar != null ? moneyZar(line.amountZar) : "—"}</span>
                 </div>
               )) : <p className="px-3 py-3 text-sm text-slate-500">No structured pricing lines recorded.</p>}
             </div>
             <div className="rounded-xl bg-slate-50 p-3">
               <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500">Reconciliation</p>
               {pricing.originalTotal != null ? <MoneyRow label="Original total" value={moneyZar(pricing.originalTotal)} /> : null}
-              {pricing.discount > 0 ? <MoneyRow label="Discount" value={`− ${moneyZar(pricing.discount)}`} /> : null}
-              <MoneyRow label="Customer paid" value={moneyZar(pricing.paidTotal)} strong />
+              {pricing.discount > 0 ? <MoneyRow label="Total discounts / credits" value={`− ${moneyZar(pricing.discount)}`} /> : null}
+              <MoneyRow label="Customer paid" value={collected > 0 ? moneyZar(pricing.paidTotal) : "Not collected"} strong />
               <div className="mt-3 border-t border-slate-200 pt-3">
                 <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wide text-slate-500"><Sparkles className="h-3.5 w-3.5" /> Extras</div>
-                {pricing.extras.length ? pricing.extras.map((extra) => <p key={extra.label} className="mt-1 flex justify-between gap-2 text-sm"><span>{extra.label}</span><span className="font-semibold">{moneyZar(extra.amountZar)}</span></p>) : <p className="mt-1 text-sm text-slate-500">No extras selected</p>}
+                {pricing.extras.length ? pricing.extras.map((extra) => (
+                  <p key={extra.label} className="mt-1 flex justify-between gap-2 text-sm">
+                    <span>{extra.label}</span>
+                    <span className="font-semibold">{extra.amountZar != null ? moneyZar(extra.amountZar) : "Selected"}</span>
+                  </p>
+                )) : <p className="mt-1 text-sm text-slate-500">No extras recorded</p>}
               </div>
             </div>
           </div>
