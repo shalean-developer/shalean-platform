@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CheckCircle2, Loader2, Navigation, PlayCircle } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -30,6 +30,8 @@ type CleanerJobPrimaryActionButtonProps = {
   variant?: "outline" | "hero";
 };
 
+const CLEANER_COMPLETION_MIN_ELAPSED_RATIO = 0.9;
+
 function iconForLabel(label: string): LucideIcon {
   const l = label.toLowerCase();
   if (l === "navigate" || l === "on my way") return Navigation;
@@ -37,6 +39,33 @@ function iconForLabel(label: string): LucideIcon {
   if (l === "in progress") return PlayCircle;
   if (l === "complete job" || l === "yes, complete") return CheckCircle2;
   return CheckCircle2;
+}
+
+function resolveDurationMinutes(row: CleanerBookingRow): number | null {
+  const candidates = [row.duration_minutes, row.estimated_duration_minutes];
+  for (const candidate of candidates) {
+    const n = Number(candidate);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  const hours = Number(row.duration_hours);
+  if (Number.isFinite(hours) && hours > 0) return hours * 60;
+  return null;
+}
+
+function completionRemainingMinutes(row: CleanerBookingRow, nowMs: number): number | null {
+  const durationMinutes = resolveDurationMinutes(row);
+  const startedAtMs = typeof row.started_at === "string" ? Date.parse(row.started_at) : Number.NaN;
+  if (durationMinutes == null || !Number.isFinite(startedAtMs)) return null;
+  const requiredMinutes = durationMinutes * CLEANER_COMPLETION_MIN_ELAPSED_RATIO;
+  const elapsedMinutes = Math.max(0, (nowMs - startedAtMs) / 60_000);
+  return Math.max(0, Math.ceil(requiredMinutes - elapsedMinutes));
+}
+
+function formatRemaining(minutes: number): string {
+  if (minutes < 60) return `${minutes} min`;
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return m === 0 ? `${h}h` : `${h}h ${m}m`;
 }
 
 export function CleanerJobPrimaryActionButton({
@@ -54,10 +83,18 @@ export function CleanerJobPrimaryActionButton({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmComplete, setConfirmComplete] = useState(false);
+  const [clockNowMs, setClockNowMs] = useState(() => Date.now() + clockOffsetMs);
   const guardRef = useRef(false);
 
+  useEffect(() => {
+    const tick = () => setClockNowMs(Date.now() + clockOffsetMs);
+    tick();
+    const interval = setInterval(tick, 30_000);
+    return () => clearInterval(interval);
+  }, [clockOffsetMs]);
+
   const effectiveRow = localRow ?? row;
-  const nowMs = Date.now() + clockOffsetMs;
+  const nowMs = clockNowMs;
 
   const cta = useMemo(
     () =>
@@ -70,6 +107,11 @@ export function CleanerJobPrimaryActionButton({
   );
 
   const jobEarningPositive = isCleanerJobEarningPositive(resolveCleanerJobEarning(effectiveRow));
+  const remainingMinutes =
+    cta.kind === "lifecycle" && cta.action === "complete"
+      ? completionRemainingMinutes(effectiveRow, nowMs)
+      : null;
+  const completionTimingBlocked = remainingMinutes != null && remainingMinutes > 0;
 
   const runLifecycle = useCallback(
     async (action: "accept" | "en_route" | "start" | "complete", mapsHref?: string) => {
@@ -126,7 +168,7 @@ export function CleanerJobPrimaryActionButton({
     if (cta.kind !== "lifecycle") return;
 
     if (cta.action === "complete") {
-      if (!jobEarningPositive) return;
+      if (!jobEarningPositive || completionTimingBlocked) return;
       if (cta.requiresConfirm && !confirmComplete) {
         setConfirmComplete(true);
         return;
@@ -134,7 +176,7 @@ export function CleanerJobPrimaryActionButton({
     }
 
     void runLifecycle(cta.action, cta.mapsHref);
-  }, [cta, confirmComplete, jobEarningPositive, runLifecycle]);
+  }, [cta, completionTimingBlocked, confirmComplete, jobEarningPositive, runLifecycle]);
 
   if (cta.kind === "hidden") return null;
 
@@ -153,7 +195,7 @@ export function CleanerJobPrimaryActionButton({
   );
 
   const completeBlocked =
-    cta.kind === "lifecycle" && cta.action === "complete" && !jobEarningPositive;
+    cta.kind === "lifecycle" && cta.action === "complete" && (!jobEarningPositive || completionTimingBlocked);
 
   return (
     <div className="min-w-0 flex-1 space-y-1">
@@ -202,7 +244,12 @@ export function CleanerJobPrimaryActionButton({
           {busy && cta.kind === "lifecycle" && cta.action === "en_route" ? "On my way…" : label}
         </button>
       )}
-      {completeBlocked ? (
+      {completionTimingBlocked && remainingMinutes != null ? (
+        <p className="text-xs leading-snug text-sky-700">
+          Complete available in {formatRemaining(remainingMinutes)}. Finished early with the customer happy? Contact support for an approved early finish.
+        </p>
+      ) : null}
+      {!completionTimingBlocked && cta.kind === "lifecycle" && cta.action === "complete" && !jobEarningPositive ? (
         <p className="text-xs leading-snug text-amber-700">{JOB_EARNING_BLOCK_COMPLETION_MESSAGE}</p>
       ) : null}
       {error ? (
