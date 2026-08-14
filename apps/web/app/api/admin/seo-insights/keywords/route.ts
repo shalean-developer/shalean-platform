@@ -163,7 +163,18 @@ export async function DELETE(request: Request) {
   const id = typeof body.id === "string" ? body.id : "";
   if (!id) return NextResponse.json({ error: "Keyword id is required." }, { status: 400 });
 
-  const { error } = await admin.from("seo_tracked_keywords").delete().eq("id", id);
+  // Archive instead of hard-deleting. seo_serp_snapshots references this row with
+  // ON DELETE CASCADE, so a hard delete would erase historical SERP/competitor data.
+  const { data, error } = await admin.from("seo_tracked_keywords")
+    .update({
+      active: false,
+      target_path: null,
+      owner_email: auth.email ?? null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select("id,active,target_path")
+    .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, archived: true, row: data });
 }
