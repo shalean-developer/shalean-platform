@@ -37,8 +37,7 @@ export function KeywordPortfolioDashboard(){
     const res=await adminFetch("/api/admin/seo-insights/keywords",{method,body:JSON.stringify(body)});
     setSaving(false);
     if(!res.ok){
-      const payload=await res.json().catch(()=>({}));
-      setActionError(typeof payload.error==="string"?payload.error:"Could not update keyword portfolio.");
+      setActionError(res.error||"Could not update keyword portfolio.");
       return false;
     }
     await refetch();
