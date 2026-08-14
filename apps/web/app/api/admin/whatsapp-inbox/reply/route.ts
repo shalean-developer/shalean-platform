@@ -55,7 +55,7 @@ export async function POST(request: Request) {
 
   const provider = getWhatsAppProvider();
   const providerName = getWhatsAppProviderName();
-  const logProvider = providerName === "twilio" ? "twilio" : "meta";
+  const logProvider = "meta" as const;
   let result: { ok: boolean; error?: string; messageId?: string | null };
   let payload: Record<string, unknown>;
   let templateKey = "admin_whatsapp_reply";
