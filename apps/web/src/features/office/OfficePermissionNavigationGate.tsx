@@ -9,6 +9,12 @@ import {
   policyForOfficePath,
   type OfficeRoleKey,
 } from "@/lib/admin/officeExperience";
+import {
+  audienceAllowsAnyAssignedRole,
+  hasOnlyOfficeRole,
+  officeRolesFromAssignments,
+  primaryOfficeRole,
+} from "@/lib/admin/officeRoleAssignments";
 import { OFFICE_NAV_ALL_ITEMS, OFFICE_NAV_MODULES, OFFICE_NAV_SECTIONS } from "./OfficeNav";
 import { OfficeMyWorkPanel } from "./OfficeMyWorkPanel";
 import { OfficeRoleDashboard, type OfficeAccessProfile } from "./OfficeRoleDashboard";
@@ -55,17 +61,6 @@ if (financeModule?.children && pricingItem && !financeModule.children.some((item
   });
 }
 
-const ROLE_CODE_MAP: Record<string, OfficeRoleKey> = {
-  owner: "owner",
-  general_manager: "manager",
-  operations_admin: "operations",
-  finance_admin: "finance",
-  customer_care: "customer-care",
-  workforce_admin: "workforce",
-  marketing_admin: "marketing",
-  supervisor: "supervisor",
-};
-
 /** Company-wide read models that do not yet accept a team scope. */
 const SUPERVISOR_TEAM_SCOPE_PENDING = [
   "/office/recurring",
@@ -77,48 +72,37 @@ const SUPERVISOR_TEAM_SCOPE_PENDING = [
   "/office/cleaner-performance",
 ] as const;
 
-function roleFromProfile(profile: OfficeAccessProfile): OfficeRoleKey {
-  for (const assignment of profile.roles) {
-    const mapped = ROLE_CODE_MAP[assignment.code];
-    if (mapped) return mapped;
-  }
-  return "restricted";
-}
-
-function isSupervisorScopePending(href: string, role: OfficeRoleKey): boolean {
-  return role === "supervisor" && SUPERVISOR_TEAM_SCOPE_PENDING.some(
+function isSupervisorScopePending(href: string, roles: readonly OfficeRoleKey[]): boolean {
+  return hasOnlyOfficeRole(roles, "supervisor") && SUPERVISOR_TEAM_SCOPE_PENDING.some(
     (path) => href === path || href.startsWith(`${path}/`),
   );
 }
 
-function isAllowed(href: string, permissions: ReadonlySet<string>, role: OfficeRoleKey): boolean {
+function isAllowed(href: string, permissions: ReadonlySet<string>, roles: readonly OfficeRoleKey[]): boolean {
   if (href === "/office") return permissions.size > 0;
-  if (isSupervisorScopePending(href, role)) return false;
+  if (isSupervisorScopePending(href, roles)) return false;
   const policy = policyForOfficePath(href);
   return policy
-    ? policy.audience.includes(role) && hasAnyOfficePermission(permissions, policy.anyOf)
+    ? audienceAllowsAnyAssignedRole(policy.audience, roles) && hasAnyOfficePermission(permissions, policy.anyOf)
     : false;
 }
 
-function applyNavigationPermissions(permissions: ReadonlySet<string>, role: OfficeRoleKey) {
+function applyNavigationPermissions(permissions: ReadonlySet<string>, roles: readonly OfficeRoleKey[]) {
   OFFICE_NAV_MODULES.splice(0, OFFICE_NAV_MODULES.length, ...originalModules.map((module) => ({
     ...module,
     children: module.children ? [...module.children] : undefined,
   })));
-  OFFICE_NAV_SECTIONS.splice(0, OFFICE_NAV_SECTIONS.length, ...originalSections.map((section) => ({
-    ...section,
-    items: [...section.items],
-  })));
+  OFFICE_NAV_SECTIONS.splice(0, OFFICE_NAV_SECTIONS.length, ...originalSections.map((section) => ({ ...section, items: [...section.items] })));
 
   for (const module of OFFICE_NAV_MODULES) {
     const original = originalModules.find((candidate) => candidate.id === module.id);
     if (!original) continue;
     if (original.href) {
-      module.href = isAllowed(original.href, permissions, role) ? original.href : undefined;
+      module.href = isAllowed(original.href, permissions, roles) ? original.href : undefined;
       module.children = undefined;
       continue;
     }
-    module.children = (original.children ?? []).filter((item) => isAllowed(item.href, permissions, role));
+    module.children = (original.children ?? []).filter((item) => isAllowed(item.href, permissions, roles));
   }
   OFFICE_NAV_MODULES.splice(
     0,
@@ -128,7 +112,7 @@ function applyNavigationPermissions(permissions: ReadonlySet<string>, role: Offi
 
   for (const section of OFFICE_NAV_SECTIONS) {
     const original = originalSections.find((candidate) => candidate.title === section.title);
-    section.items = (original?.items ?? []).filter((item) => isAllowed(item.href, permissions, role));
+    section.items = (original?.items ?? []).filter((item) => isAllowed(item.href, permissions, roles));
   }
   OFFICE_NAV_SECTIONS.splice(
     0,
@@ -138,7 +122,7 @@ function applyNavigationPermissions(permissions: ReadonlySet<string>, role: Offi
   OFFICE_NAV_ALL_ITEMS.splice(
     0,
     OFFICE_NAV_ALL_ITEMS.length,
-    ...originalAllItems.filter((item) => isAllowed(item.href, permissions, role)),
+    ...originalAllItems.filter((item) => isAllowed(item.href, permissions, roles)),
   );
 }
 
@@ -210,8 +194,9 @@ export function OfficePermissionNavigationGate({ children }: { children: ReactNo
     return <div className="flex min-h-screen items-center justify-center bg-slate-50 text-sm text-slate-500">Loading Office permissions…</div>;
   }
 
-  const role = roleFromProfile(profile);
-  applyNavigationPermissions(permissions, role);
+  const roles = officeRolesFromAssignments(profile.roles);
+  const role = primaryOfficeRole(profile.roles);
+  applyNavigationPermissions(permissions, roles);
   if (pathname === "/office") {
     if (role === "supervisor") {
       return (

@@ -8,28 +8,21 @@ import { getSupabaseSession } from "@/lib/supabase/browser";
 import {
   hasAnyOfficePermission,
   policyForOfficePath,
-  type OfficeRoleKey,
 } from "@/lib/admin/officeExperience";
+import {
+  audienceAllowsAnyAssignedRole,
+  hasOnlyOfficeRole,
+  officeRolesFromAssignments,
+  type OfficeRoleAssignment,
+} from "@/lib/admin/officeRoleAssignments";
 
-type RoleAssignment = { code?: string };
-type PermissionPayload = { permissions?: string[]; roles?: RoleAssignment[] };
+type PermissionPayload = { permissions?: string[]; roles?: OfficeRoleAssignment[] };
 
 type State =
   | { status: "checking" }
   | { status: "allowed" }
   | { status: "denied"; permissions: string[] }
   | { status: "error"; message: string };
-
-const ROLE_CODE_MAP: Record<string, OfficeRoleKey> = {
-  owner: "owner",
-  general_manager: "manager",
-  operations_admin: "operations",
-  finance_admin: "finance",
-  customer_care: "customer-care",
-  workforce_admin: "workforce",
-  marketing_admin: "marketing",
-  supervisor: "supervisor",
-};
 
 const SUPERVISOR_TEAM_SCOPE_PENDING = [
   "/office/recurring",
@@ -41,17 +34,8 @@ const SUPERVISOR_TEAM_SCOPE_PENDING = [
   "/office/cleaner-performance",
 ] as const;
 
-function roleFromAssignments(roles: RoleAssignment[]): OfficeRoleKey {
-  for (const assignment of roles) {
-    const code = String(assignment.code ?? "");
-    const mapped = ROLE_CODE_MAP[code];
-    if (mapped) return mapped;
-  }
-  return "restricted";
-}
-
-function supervisorScopePending(pathname: string, role: OfficeRoleKey): boolean {
-  return role === "supervisor" && SUPERVISOR_TEAM_SCOPE_PENDING.some(
+function supervisorScopePending(pathname: string, roles: ReturnType<typeof officeRolesFromAssignments>): boolean {
+  return hasOnlyOfficeRole(roles, "supervisor") && SUPERVISOR_TEAM_SCOPE_PENDING.some(
     (path) => pathname === path || pathname.startsWith(`${path}/`),
   );
 }
@@ -89,10 +73,10 @@ export function OfficePermissionBoundary({ children }: { children: ReactNode }) 
         }
         const payload = (await response.json()) as PermissionPayload;
         const permissions = new Set(Array.isArray(payload.permissions) ? payload.permissions : []);
-        const role = roleFromAssignments(Array.isArray(payload.roles) ? payload.roles : []);
+        const roles = officeRolesFromAssignments(Array.isArray(payload.roles) ? payload.roles : []);
         const allowed =
-          policy.audience.includes(role) &&
-          !supervisorScopePending(pathname, role) &&
+          audienceAllowsAnyAssignedRole(policy.audience, roles) &&
+          !supervisorScopePending(pathname, roles) &&
           hasAnyOfficePermission(permissions, policy.anyOf);
         setState(
           allowed
