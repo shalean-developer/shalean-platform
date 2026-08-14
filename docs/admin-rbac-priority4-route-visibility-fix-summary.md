@@ -1,1 +1,0 @@
-Priority 4 UI route visibility correction summary: no RBAC grant expansion; route audiences aligned with live permissions; targeted tests added.
