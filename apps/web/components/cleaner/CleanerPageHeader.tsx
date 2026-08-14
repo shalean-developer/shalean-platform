@@ -34,6 +34,7 @@ export function CleanerPageHeader({
   className,
 }: CleanerPageHeaderProps) {
   const [canonicalPerformance, setCanonicalPerformance] = useState<CleanerPerformanceResponse["scorecard"]>(null);
+  const [canonicalPerformanceLoaded, setCanonicalPerformanceLoaded] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +50,10 @@ export function CleanerPageHeader({
       if (!response.ok) return;
 
       const body = (await response.json().catch(() => null)) as CleanerPerformanceResponse | null;
-      if (!cancelled) setCanonicalPerformance(body?.scorecard ?? null);
+      if (!cancelled) {
+        setCanonicalPerformance(body?.scorecard ?? null);
+        setCanonicalPerformanceLoaded(true);
+      }
     })();
 
     return () => {
@@ -57,11 +61,14 @@ export function CleanerPageHeader({
     };
   }, []);
 
-  const canonicalPerformanceDisplay =
-    canonicalPerformance?.overallScore == null
-      ? null
-      : `${Math.round(canonicalPerformance.overallScore)}% · Grade ${canonicalPerformance.grade}`;
-  const performanceDisplay = canonicalPerformanceDisplay ?? reliabilityDisplay;
+  const canonicalPerformanceDisplay = canonicalPerformance
+    ? canonicalPerformance.overallScore == null
+      ? canonicalPerformance.grade
+      : `${Math.round(canonicalPerformance.overallScore)}% · Grade ${canonicalPerformance.grade}`
+    : null;
+  const performanceDisplay = canonicalPerformanceLoaded
+    ? canonicalPerformanceDisplay
+    : reliabilityDisplay;
   const showPerformance = Boolean(ratingDisplay || performanceDisplay);
 
   return (
