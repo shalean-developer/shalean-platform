@@ -17,9 +17,10 @@ export type StructuredDataAuditRow = {
   raw_summary: Record<string, unknown>;
 };
 
-const FETCH_TIMEOUT_MS = 10_000;
+const FETCH_TIMEOUT_MS = 3_000;
 const FETCH_ATTEMPTS = 2;
-const AUDIT_CONCURRENCY = 10;
+const AUDIT_CONCURRENCY = 30;
+const RETRY_DELAY_MS = 100;
 
 function pageGroup(path: string): string {
   if (path === "/") return "core";
@@ -93,13 +94,18 @@ function normalizeFetchError(error: unknown): string {
   return error.message || "Fetch failed";
 }
 
-async function fetchWithTimeout(url: string): Promise<Response> {
+type FetchedPage = {
+  response: Response;
+  html: string;
+};
+
+async function fetchPageWithTimeout(url: string): Promise<FetchedPage> {
   let lastError: unknown;
   for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt += 1) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
     try {
-      return await fetch(url, {
+      const response = await fetch(url, {
         cache: "no-store",
         redirect: "follow",
         signal: controller.signal,
@@ -108,9 +114,11 @@ async function fetchWithTimeout(url: string): Promise<Response> {
           Accept: "text/html,application/xhtml+xml",
         },
       });
+      const html = await response.text();
+      return { response, html };
     } catch (error) {
       lastError = error;
-      if (attempt < FETCH_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, 250 * attempt));
+      if (attempt < FETCH_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt));
     } finally {
       clearTimeout(timer);
     }
@@ -141,12 +149,14 @@ async function inspectUrl(url: string): Promise<StructuredDataAuditRow> {
   const required = expectedTypes(path);
   const checkedAt = new Date().toISOString();
 
-  let response: Response;
+  let fetched: FetchedPage;
   try {
-    response = await fetchWithTimeout(url);
+    fetched = await fetchPageWithTimeout(url);
   } catch (error) {
     return unknownScanRow(url, path, required, checkedAt, normalizeFetchError(error));
   }
+
+  const { response, html } = fetched;
 
   if (!response.ok) {
     return {
@@ -186,7 +196,6 @@ async function inspectUrl(url: string): Promise<StructuredDataAuditRow> {
   }
 
   try {
-    const html = await response.text();
     const scriptRe = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
     const items: unknown[] = [];
     const parseErrors: string[] = [];
@@ -231,17 +240,25 @@ async function inspectUrl(url: string): Promise<StructuredDataAuditRow> {
   }
 }
 
+async function persistAuditRows(admin: SupabaseClient, rows: StructuredDataAuditRow[]): Promise<void> {
+  if (!rows.length) return;
+  const { error } = await admin
+    .from("seo_structured_data_audits")
+    .upsert(rows.map((row) => ({ ...row, updated_at: row.checked_at })), { onConflict: "url" });
+  if (error) throw new Error(error.message);
+}
+
 export async function runStructuredDataAudit(admin: SupabaseClient, limit = 220): Promise<{ ok: boolean; scanned: number; valid: number; warning: number; error: number; unknown: number }> {
   const sitemap = await buildMarketingSitemapEntries();
   const urls = sitemap.slice(0, Math.max(1, Math.min(limit, 250))).map((entry) => entry.url);
   const rows: StructuredDataAuditRow[] = [];
+
   for (let i = 0; i < urls.length; i += AUDIT_CONCURRENCY) {
-    rows.push(...await Promise.all(urls.slice(i, i + AUDIT_CONCURRENCY).map(inspectUrl)));
+    const batchRows = await Promise.all(urls.slice(i, i + AUDIT_CONCURRENCY).map(inspectUrl));
+    rows.push(...batchRows);
+    await persistAuditRows(admin, batchRows);
   }
-  if (rows.length) {
-    const { error } = await admin.from("seo_structured_data_audits").upsert(rows.map((row) => ({ ...row, updated_at: row.checked_at })), { onConflict: "url" });
-    if (error) throw new Error(error.message);
-  }
+
   return {
     ok: true,
     scanned: rows.length,
