@@ -70,6 +70,8 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!booking) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
 
+  const bookingRow = booking as unknown as Record<string, unknown>;
+
   const { data: rosterRows, error: rosterError } = await admin
     .from("booking_cleaners")
     .select("cleaner_id, role, lead_bonus_cents, payout_weight, assigned_at")
@@ -89,11 +91,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     cleanerById = new Map((cleanerRows ?? []).map((row) => [String(row.id), row]));
   }
 
-  const earningsSummary = booking.earnings_summary && typeof booking.earnings_summary === "object"
-    ? (booking.earnings_summary as Record<string, unknown>)
-    : null;
+  const rawEarningsSummary = bookingRow.earnings_summary;
+  const earningsSummary =
+    rawEarningsSummary && typeof rawEarningsSummary === "object" && !Array.isArray(rawEarningsSummary)
+      ? (rawEarningsSummary as Record<string, unknown>)
+      : null;
   const perCleaner = Array.isArray(earningsSummary?.per_cleaner_earnings)
-    ? (earningsSummary?.per_cleaner_earnings as Array<Record<string, unknown>>)
+    ? (earningsSummary.per_cleaner_earnings as Array<Record<string, unknown>>)
     : [];
   const earningByCleanerId = new Map(
     perCleaner.map((row) => [String(row.cleaner_id ?? ""), Number(row.total_cents ?? row.base_earning_cents ?? 0)]),
@@ -112,5 +116,5 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     };
   });
 
-  return NextResponse.json({ booking, roster });
+  return NextResponse.json({ booking: bookingRow, roster });
 }
