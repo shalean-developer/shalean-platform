@@ -59,6 +59,17 @@ function formatCountdown(msUntil: number): string {
   return `Starts in ${h}h ${m}m`;
 }
 
+function formatElapsed(startedAt: string | null | undefined, nowMs: number): string | null {
+  const startMs = typeof startedAt === "string" ? Date.parse(startedAt) : Number.NaN;
+  if (!Number.isFinite(startMs)) return null;
+  const totalMin = Math.max(0, Math.floor((nowMs - startMs) / 60_000));
+  const h = Math.floor(totalMin / 60);
+  const m = totalMin % 60;
+  if (h === 0) return `Started ${m} min ago`;
+  if (m === 0) return `Started ${h}h ago`;
+  return `Started ${h}h ${m}m ago`;
+}
+
 function urgencyClass(msUntil: number | null): string {
   if (msUntil == null) return "text-slate-500";
   if (msUntil < 0) return "font-bold text-red-600";
@@ -98,7 +109,10 @@ export function NextJobCard({
   }, []);
 
   const msUntil = startsAtMs != null ? startsAtMs - nowMs : null;
-  const countdownText = msUntil != null ? formatCountdown(msUntil) : null;
+  const inProgress = statusVariant === "in-progress" || String(bookingRow.status ?? "").toLowerCase() === "in_progress";
+  const progressText = inProgress ? formatElapsed(bookingRow.started_at, nowMs) ?? "In progress" : null;
+  const countdownText = inProgress ? progressText : msUntil != null ? formatCountdown(msUntil) : null;
+  const countdownClass = inProgress ? "font-semibold text-sky-700" : urgencyClass(msUntil);
   const scopeParts = [serviceLabel, durationLabel, roomsLabel].filter(Boolean);
 
   return (
@@ -115,7 +129,7 @@ export function NextJobCard({
           <Calendar className="mt-0.5 size-4 shrink-0 text-blue-600" aria-hidden />
           <div>
             <p className="text-lg font-bold text-slate-900">{dateLabel}, {timeLabel}</p>
-            {countdownText ? <p className={cn("mt-0.5 text-xs tabular-nums", urgencyClass(msUntil))}>{countdownText}</p> : null}
+            {countdownText ? <p className={cn("mt-0.5 text-xs tabular-nums", countdownClass)}>{countdownText}</p> : null}
           </div>
         </div>
       </div>
