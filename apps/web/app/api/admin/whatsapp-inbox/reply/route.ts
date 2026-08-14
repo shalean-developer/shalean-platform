@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getWhatsAppProvider, getWhatsAppProviderName } from "@/lib/whatsapp/providers";
 import { getWhatsAppTemplateReadiness } from "@/lib/whatsapp/templateReadiness";
@@ -18,6 +19,12 @@ function renderTemplateBody(templateBody: string, bodyParams: readonly string[])
     const value = bodyParams[Number(index) - 1];
     return value ?? `{{${index}}}`;
   });
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) return error.message;
+  const value = String(error ?? "").trim();
+  return value || "WhatsApp provider threw an unexpected error.";
 }
 
 export async function POST(request: Request) {
@@ -54,44 +61,104 @@ export async function POST(request: Request) {
 
   const provider = getWhatsAppProvider();
   const providerName = getWhatsAppProviderName();
-  let result: { ok: boolean; error?: string; messageId?: string | null };
-  let payload: Record<string, unknown>;
+  const logProvider = "meta" as const;
+  let result: { ok: boolean; error?: string; messageId?: string | null } = { ok: false, error: "WhatsApp send did not complete." };
+  let payload: Record<string, unknown> = { kind: mode };
+  let templateKey = "admin_whatsapp_reply";
 
-  if (mode === "text") {
-    const message = String(body?.message ?? "").trim();
-    if (!message) return NextResponse.json({ error: "Reply message is required." }, { status: 400 });
-    if (!conversationOpen) {
-      return NextResponse.json({ error: "The 24-hour conversation window is closed. Use an approved Meta template.", code: "template_required" }, { status: 409 });
+  try {
+    if (mode === "text") {
+      const message = String(body?.message ?? "").trim();
+      if (!message) return NextResponse.json({ error: "Reply message is required." }, { status: 400 });
+      if (!conversationOpen) {
+        return NextResponse.json({ error: "The 24-hour conversation window is closed. Use an approved Meta template.", code: "template_required" }, { status: 409 });
+      }
+      payload = { kind: "text", body: message };
+      result = await provider.sendText({ phone, message, recipientRole: "customer" });
+    } else {
+      const templateName = String(body?.templateName ?? "").trim();
+      const template = getWhatsAppTemplateReadiness().find((item) =>
+        item.sendReady && item.audience === "customer" && (item.metaTemplateName === templateName || item.key === templateName),
+      );
+      if (!template) return NextResponse.json({ error: "Select an approved customer WhatsApp template." }, { status: 400 });
+      const bodyParams = Array.isArray(body?.bodyParams) ? body!.bodyParams.map((value) => String(value).trim()) : [];
+      if (bodyParams.length !== template.variables.length || bodyParams.some((value) => !value)) {
+        return NextResponse.json({ error: `Template requires ${template.variables.length} completed body parameter(s).` }, { status: 400 });
+      }
+      templateKey = template.key || template.metaTemplateName || "admin_whatsapp_template";
+      payload = {
+        kind: "template",
+        body: renderTemplateBody(template.body, bodyParams),
+        template_body: template.body,
+        template_name: template.metaTemplateName,
+        body_params: bodyParams,
+      };
+      result = await provider.sendTemplate({
+        phone,
+        templateName: template.metaTemplateName,
+        language: body?.language || template.language,
+        bodyParams,
+        recipientRole: "customer",
+      });
     }
-    result = await provider.sendText({ phone, message, recipientRole: "customer" });
-    payload = { kind: "text", body: message };
-  } else {
-    const templateName = String(body?.templateName ?? "").trim();
-    const template = getWhatsAppTemplateReadiness().find((item) =>
-      item.sendReady && item.audience === "customer" && (item.metaTemplateName === templateName || item.key === templateName),
-    );
-    if (!template) return NextResponse.json({ error: "Select an approved customer WhatsApp template." }, { status: 400 });
-    const bodyParams = Array.isArray(body?.bodyParams) ? body!.bodyParams.map((value) => String(value).trim()) : [];
-    if (bodyParams.length !== template.variables.length || bodyParams.some((value) => !value)) {
-      return NextResponse.json({ error: `Template requires ${template.variables.length} completed body parameter(s).` }, { status: 400 });
-    }
-    result = await provider.sendTemplate({
-      phone,
-      templateName: template.metaTemplateName,
-      language: body?.language || template.language,
-      bodyParams,
-      recipientRole: "customer",
+  } catch (error) {
+    const providerError = errorMessage(error);
+    await writeNotificationLog({
+      channel: "whatsapp",
+      template_key: templateKey,
+      recipient: phone,
+      status: "failed",
+      error: providerError,
+      provider: logProvider,
+      role: "customer",
+      event_type: "admin_reply",
+      payload: {
+        ...payload,
+        admin_user_id: auth.userId,
+        admin_email: auth.email,
+        conversation_window_open: conversationOpen,
+        provider_message_id: null,
+        source: "admin_whatsapp_inbox",
+        provider_exception: true,
+      },
     });
-    payload = {
-      kind: "template",
-      body: renderTemplateBody(template.body, bodyParams),
-      template_body: template.body,
-      template_name: template.metaTemplateName,
-      body_params: bodyParams,
-    };
+    return NextResponse.json({ error: providerError }, { status: 502 });
   }
 
-  if (!result.ok) return NextResponse.json({ error: result.error ?? "WhatsApp send failed." }, { status: 502 });
+  const notificationPayload = {
+    ...payload,
+    admin_user_id: auth.userId,
+    admin_email: auth.email,
+    conversation_window_open: conversationOpen,
+    provider_message_id: result.messageId ?? null,
+    source: "admin_whatsapp_inbox",
+  };
+
+  if (!result.ok) {
+    await writeNotificationLog({
+      channel: "whatsapp",
+      template_key: templateKey,
+      recipient: phone,
+      status: "failed",
+      error: result.error ?? "WhatsApp send failed.",
+      provider: logProvider,
+      role: "customer",
+      event_type: "admin_reply",
+      payload: notificationPayload,
+    });
+    return NextResponse.json({ error: result.error ?? "WhatsApp send failed." }, { status: 502 });
+  }
+
+  await writeNotificationLog({
+    channel: "whatsapp",
+    template_key: templateKey,
+    recipient: phone,
+    status: "sent",
+    provider: logProvider,
+    role: "customer",
+    event_type: "admin_reply",
+    payload: notificationPayload,
+  });
 
   const createdAt = new Date().toISOString();
   const { data: inserted, error: insertError } = await admin.from("whatsapp_provider_events").insert({
