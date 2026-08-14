@@ -79,10 +79,13 @@ export function OfficeBookingCustomerInstructionsBanner({ bookingId }: { booking
       try {
         const token = (await getAdminToken()) ?? undefined;
         if (!token || ac.signal.aborted) return;
-        const res = await fetch(`/api/admin/bookings/${encodeURIComponent(bookingId)}`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: ac.signal,
-        });
+        const res = await fetch(
+          `/api/admin/bookings/${encodeURIComponent(bookingId)}/customer-instructions`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: ac.signal,
+          },
+        );
         if (!res.ok || ac.signal.aborted) return;
         const json = (await res.json()) as { booking?: BookingInstructionSource };
         if (!ac.signal.aborted) setBooking(json.booking ?? null);
