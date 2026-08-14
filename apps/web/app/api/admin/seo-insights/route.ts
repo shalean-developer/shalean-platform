@@ -15,6 +15,7 @@ import {
   type ScrollFunnelRow,
 } from "@/lib/seo/optimization/aggregate-seo-events";
 import { runSeoOptimizationEngine } from "@/lib/seo/optimization/engine";
+import { normalizeRecommendationsForDataReadiness } from "@/lib/seo/optimization/persist";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -158,7 +159,8 @@ export async function GET(request: Request) {
   }));
 
   const dbRecommendations = recRes.error ? [] : recRes.data ?? [];
-  const engineRecommendations = optimization.recommendations.map((rec, index) => ({
+  const liveRecommendations = normalizeRecommendationsForDataReadiness(optimization);
+  const engineRecommendations = liveRecommendations.map((rec, index) => ({
     id: `engine-${rec.slug}-${rec.kind}-${index}`,
     slug: rec.slug,
     kind: rec.kind,
