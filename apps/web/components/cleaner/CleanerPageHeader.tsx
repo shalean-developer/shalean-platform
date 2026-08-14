@@ -1,16 +1,27 @@
 "use client";
 
-import { Bell, Star, ThumbsUp } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Award, Bell, Star } from "lucide-react";
+import { cleanerAuthenticatedFetch } from "@/lib/cleaner/cleanerAuthenticatedFetch";
+import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { cn } from "@/lib/utils";
 
 type CleanerPageHeaderProps = {
   firstName: string;
   subline?: string;
   ratingDisplay?: string | null;
+  /** Legacy fallback only. Canonical performance is loaded from /api/cleaner/performance. */
   reliabilityDisplay?: string | null;
   notificationCount?: number;
   onNotificationClick?: () => void;
   className?: string;
+};
+
+type CleanerPerformanceResponse = {
+  scorecard?: {
+    overallScore: number | null;
+    grade: "A" | "B" | "C" | "D" | "Needs evidence";
+  } | null;
 };
 
 export function CleanerPageHeader({
@@ -22,7 +33,43 @@ export function CleanerPageHeader({
   onNotificationClick,
   className,
 }: CleanerPageHeaderProps) {
-  const showPerformance = Boolean(ratingDisplay || reliabilityDisplay);
+  const [canonicalPerformance, setCanonicalPerformance] = useState<CleanerPerformanceResponse["scorecard"]>(null);
+  const [canonicalPerformanceLoaded, setCanonicalPerformanceLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      const headers = await getCleanerAuthHeaders();
+      if (!headers) return;
+
+      const response = await cleanerAuthenticatedFetch("/api/cleaner/performance?days=90", {
+        headers,
+        cache: "no-store",
+      });
+      if (!response.ok) return;
+
+      const body = (await response.json().catch(() => null)) as CleanerPerformanceResponse | null;
+      if (!cancelled) {
+        setCanonicalPerformance(body?.scorecard ?? null);
+        setCanonicalPerformanceLoaded(true);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const canonicalPerformanceDisplay = canonicalPerformance
+    ? canonicalPerformance.overallScore == null
+      ? canonicalPerformance.grade
+      : `${Math.round(canonicalPerformance.overallScore)}% · Grade ${canonicalPerformance.grade}`
+    : null;
+  const performanceDisplay = canonicalPerformanceLoaded
+    ? canonicalPerformanceDisplay
+    : reliabilityDisplay;
+  const showPerformance = Boolean(ratingDisplay || performanceDisplay);
 
   return (
     <div className={cn("flex items-start justify-between pt-4 pb-2", className)}>
@@ -32,13 +79,13 @@ export function CleanerPageHeader({
         </h1>
         {showPerformance ? (
           <div className="mt-1 flex items-center gap-3 text-sm font-semibold text-slate-600">
-            <span className="inline-flex items-center gap-1">
+            <span className="inline-flex items-center gap-1" title="Customer rating">
               <Star className="size-4 fill-amber-400 text-amber-400" aria-hidden />
               <span>{ratingDisplay ?? "—"}</span>
             </span>
-            <span className="inline-flex items-center gap-1">
-              <ThumbsUp className="size-4 text-blue-600" aria-hidden />
-              <span>{reliabilityDisplay ?? "—"}</span>
+            <span className="inline-flex items-center gap-1" title="Official 90-day performance score used by Office">
+              <Award className="size-4 text-blue-600" aria-hidden />
+              <span>{performanceDisplay ?? "—"}</span>
             </span>
           </div>
         ) : subline ? (
