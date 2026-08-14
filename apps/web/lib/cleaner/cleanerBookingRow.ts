@@ -72,6 +72,10 @@ export type CleanerBookingRow = {
   payout_frozen_cents?: number | null;
   /** True when this cleaner has at least one row in `cleaner_job_issue_reports` for this booking. */
   cleaner_has_issue_report?: boolean;
+  /** Persisted quoted on-site duration from `bookings.duration_minutes`. */
+  duration_minutes?: number | null;
+  /** Legacy/fallback persisted duration from `bookings.estimated_duration_minutes`. */
+  estimated_duration_minutes?: number | null;
   /** Snapshot-derived; added by cleaner jobs API for clients. */
   duration_hours?: number | null;
   job_notes?: string | null;
