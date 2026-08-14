@@ -33,6 +33,9 @@ export type PersistSeoOptimizationSummary = {
  * Page-health scoring has three independent inputs: GSC CTR, scroll depth and CTA conversion.
  * A missing engagement baseline is not a measured zero. Keep those pages in "gathering data"
  * instead of persisting false critical/actionable issues until both engagement samples are ready.
+ *
+ * Location hubs also inherit the shared above-fold trust system from the page template, so the
+ * optimizer must not keep generating "add trust signals" work that is already implemented.
  */
 export function normalizeRecommendationsForDataReadiness(
   result: SeoOptimizationEngineResult,
@@ -50,8 +53,10 @@ export function normalizeRecommendationsForDataReadiness(
     const health = slug ? healthBySlug.get(slug) : undefined;
     const engagementReady = Boolean(health?.data_gaps.scroll_ready && health?.data_gaps.cta_ready);
 
-    if (health && !engagementReady && recommendation.kind === "trust_signals") {
-      // Trust work should be triggered by a measured critical page, not by missing traffic samples.
+    if (health && recommendation.kind === "trust_signals") {
+      // Every programmatic location hub now renders the shared above-fold trust block.
+      // Keep conversion diagnosis focused on measured CTR/scroll/CTA problems instead of
+      // repeatedly asking editors to add content that is already present in the template.
       continue;
     }
 
