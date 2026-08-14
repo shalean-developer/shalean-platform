@@ -15,7 +15,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const { data: booking, error } = await admin
+  const { data: bookingData, error } = await admin
     .from("bookings")
     .select(
       [
@@ -68,9 +68,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     .maybeSingle();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  if (!booking) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+  if (!bookingData) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
 
-  const bookingRow = booking as unknown as Record<string, unknown>;
+  const booking = bookingData as unknown as Record<string, unknown>;
 
   const { data: rosterRows, error: rosterError } = await admin
     .from("booking_cleaners")
@@ -80,7 +80,13 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   if (rosterError) return NextResponse.json({ error: rosterError.message }, { status: 500 });
 
-  const cleanerIds = [...new Set((rosterRows ?? []).map((row) => String(row.cleaner_id ?? "").trim()).filter(Boolean))];
+  const persistedRoster = (rosterRows ?? []) as Array<Record<string, unknown>>;
+  const directCleanerId = String(booking.cleaner_id ?? "").trim();
+  const rosterCleanerIds = persistedRoster
+    .map((row) => String(row.cleaner_id ?? "").trim())
+    .filter(Boolean);
+  const cleanerIds = [...new Set([...rosterCleanerIds, ...(directCleanerId ? [directCleanerId] : [])])];
+
   let cleanerById = new Map<string, { id: string; full_name: string | null; rating: number | null; jobs_completed: number | null }>();
   if (cleanerIds.length > 0) {
     const { data: cleanerRows, error: cleanerError } = await admin
@@ -91,11 +97,9 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     cleanerById = new Map((cleanerRows ?? []).map((row) => [String(row.id), row]));
   }
 
-  const rawEarningsSummary = bookingRow.earnings_summary;
-  const earningsSummary =
-    rawEarningsSummary && typeof rawEarningsSummary === "object" && !Array.isArray(rawEarningsSummary)
-      ? (rawEarningsSummary as Record<string, unknown>)
-      : null;
+  const earningsSummary = booking.earnings_summary && typeof booking.earnings_summary === "object" && !Array.isArray(booking.earnings_summary)
+    ? (booking.earnings_summary as Record<string, unknown>)
+    : null;
   const perCleaner = Array.isArray(earningsSummary?.per_cleaner_earnings)
     ? (earningsSummary.per_cleaner_earnings as Array<Record<string, unknown>>)
     : [];
@@ -103,18 +107,30 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     perCleaner.map((row) => [String(row.cleaner_id ?? ""), Number(row.total_cents ?? row.base_earning_cents ?? 0)]),
   );
 
-  const roster = (rosterRows ?? []).map((row) => {
+  const effectiveRoster = persistedRoster.length > 0
+    ? persistedRoster
+    : directCleanerId
+      ? [{ cleaner_id: directCleanerId, role: "solo", assigned_at: booking.updated_at ?? booking.created_at ?? null }]
+      : [];
+
+  const roster = effectiveRoster.map((row) => {
     const cleanerId = String(row.cleaner_id ?? "");
     const cleaner = cleanerById.get(cleanerId);
+    const summaryEarning = earningByCleanerId.get(cleanerId);
+    const fallbackDisplayEarning = effectiveRoster.length === 1 ? Number(booking.display_earnings_cents ?? 0) : 0;
     return {
       cleaner_id: cleanerId,
       name: cleaner?.full_name ?? "Cleaner",
-      role: String(row.role ?? "member"),
+      role: String(row.role ?? (effectiveRoster.length === 1 ? "solo" : "member")),
       rating: cleaner?.rating ?? null,
       jobs_completed: cleaner?.jobs_completed ?? null,
-      earning_cents: earningByCleanerId.get(cleanerId) ?? null,
+      earning_cents: Number.isFinite(summaryEarning) && Number(summaryEarning) > 0
+        ? Number(summaryEarning)
+        : fallbackDisplayEarning > 0
+          ? fallbackDisplayEarning
+          : null,
     };
   });
 
-  return NextResponse.json({ booking: bookingRow, roster });
+  return NextResponse.json({ booking, roster });
 }
