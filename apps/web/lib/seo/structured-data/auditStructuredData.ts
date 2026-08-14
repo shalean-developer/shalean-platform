@@ -17,10 +17,12 @@ export type StructuredDataAuditRow = {
   raw_summary: Record<string, unknown>;
 };
 
-const FETCH_TIMEOUT_MS = 3_000;
-const FETCH_ATTEMPTS = 2;
-const AUDIT_CONCURRENCY = 30;
-const RETRY_DELAY_MS = 100;
+const FETCH_TIMEOUT_MS = 10_000;
+const PRIMARY_CONCURRENCY = 10;
+const RETRY_CONCURRENCY = 2;
+const RETRY_DELAY_MS = 400;
+const AUDIT_BUDGET_MS = 260_000;
+const BATCH_SAFETY_MARGIN_MS = 2_000;
 
 function pageGroup(path: string): string {
   if (path === "/") return "core";
@@ -68,7 +70,11 @@ function validateKnownTypes(items: unknown[], types: Set<string>): { errors: str
 
   for (const obj of flattened) {
     const raw = obj["@type"];
-    const objTypes = Array.isArray(raw) ? raw.filter((v): v is string => typeof v === "string") : typeof raw === "string" ? [raw] : [];
+    const objTypes = Array.isArray(raw)
+      ? raw.filter((v): v is string => typeof v === "string")
+      : typeof raw === "string"
+        ? [raw]
+        : [];
     if (objTypes.includes("Article") || objTypes.includes("BlogPosting")) {
       if (!obj.headline) errors.push("Article is missing headline");
       if (!obj.datePublished) warnings.push("Article is missing datePublished");
@@ -99,31 +105,24 @@ type FetchedPage = {
   html: string;
 };
 
-async function fetchPageWithTimeout(url: string): Promise<FetchedPage> {
-  let lastError: unknown;
-  for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt += 1) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
-    try {
-      const response = await fetch(url, {
-        cache: "no-store",
-        redirect: "follow",
-        signal: controller.signal,
-        headers: {
-          "User-Agent": "Shalean-SEO-StructuredData-Audit/1.1",
-          Accept: "text/html,application/xhtml+xml",
-        },
-      });
-      const html = await response.text();
-      return { response, html };
-    } catch (error) {
-      lastError = error;
-      if (attempt < FETCH_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt));
-    } finally {
-      clearTimeout(timer);
-    }
+async function fetchPageOnce(url: string): Promise<FetchedPage> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const response = await fetch(url, {
+      cache: "no-store",
+      redirect: "follow",
+      signal: controller.signal,
+      headers: {
+        "User-Agent": "Shalean-SEO-StructuredData-Audit/1.3",
+        Accept: "text/html,application/xhtml+xml",
+      },
+    });
+    const html = await response.text();
+    return { response, html };
+  } finally {
+    clearTimeout(timer);
   }
-  throw lastError instanceof Error ? lastError : new Error("Fetch failed");
 }
 
 function unknownScanRow(url: string, path: string, required: string[], checkedAt: string, message: string): StructuredDataAuditRow {
@@ -151,7 +150,7 @@ async function inspectUrl(url: string): Promise<StructuredDataAuditRow> {
 
   let fetched: FetchedPage;
   try {
-    fetched = await fetchPageWithTimeout(url);
+    fetched = await fetchPageOnce(url);
   } catch (error) {
     return unknownScanRow(url, path, required, checkedAt, normalizeFetchError(error));
   }
@@ -232,7 +231,9 @@ async function inspectUrl(url: string): Promise<StructuredDataAuditRow> {
         finalUrl: response.url,
         contentType,
         scanState: "parsed",
-        googleRichResultEligibleTypes: [...types].filter((t) => ["Article", "BlogPosting", "BreadcrumbList", "LocalBusiness", "Organization"].includes(t)),
+        googleRichResultEligibleTypes: [...types].filter((t) =>
+          ["Article", "BlogPosting", "BreadcrumbList", "LocalBusiness", "Organization"].includes(t),
+        ),
       },
     };
   } catch (error) {
@@ -248,17 +249,65 @@ async function persistAuditRows(admin: SupabaseClient, rows: StructuredDataAudit
   if (error) throw new Error(error.message);
 }
 
-export async function runStructuredDataAudit(admin: SupabaseClient, limit = 220): Promise<{ ok: boolean; scanned: number; valid: number; warning: number; error: number; unknown: number }> {
+async function inspectBatch(urls: string[], concurrency: number): Promise<StructuredDataAuditRow[]> {
+  const rows: StructuredDataAuditRow[] = [];
+  for (let i = 0; i < urls.length; i += concurrency) {
+    rows.push(...(await Promise.all(urls.slice(i, i + concurrency).map(inspectUrl))));
+  }
+  return rows;
+}
+
+function isRetryableFetchFailure(row: StructuredDataAuditRow): boolean {
+  return row.status === "unknown" && row.raw_summary?.retryable === true && row.raw_summary?.scanState === "fetch_failed";
+}
+
+function hasTimeForAnotherBatch(deadlineMs: number): boolean {
+  return Date.now() + FETCH_TIMEOUT_MS + BATCH_SAFETY_MARGIN_MS < deadlineMs;
+}
+
+export async function runStructuredDataAudit(
+  admin: SupabaseClient,
+  limit = 220,
+): Promise<{ ok: boolean; scanned: number; valid: number; warning: number; error: number; unknown: number; retried: number; complete: boolean }> {
   const sitemap = await buildMarketingSitemapEntries();
   const urls = sitemap.slice(0, Math.max(1, Math.min(limit, 250))).map((entry) => entry.url);
-  const rows: StructuredDataAuditRow[] = [];
+  const finalRows = new Map<string, StructuredDataAuditRow>();
+  const retryUrls: string[] = [];
+  const deadlineMs = Date.now() + AUDIT_BUDGET_MS;
+  let primaryComplete = true;
 
-  for (let i = 0; i < urls.length; i += AUDIT_CONCURRENCY) {
-    const batchRows = await Promise.all(urls.slice(i, i + AUDIT_CONCURRENCY).map(inspectUrl));
-    rows.push(...batchRows);
+  // Primary pass: moderate concurrency gives DB-backed blog SSR enough room while
+  // still guaranteeing the whole request stays inside the platform execution budget.
+  for (let i = 0; i < urls.length; i += PRIMARY_CONCURRENCY) {
+    if (!hasTimeForAnotherBatch(deadlineMs)) {
+      primaryComplete = false;
+      break;
+    }
+    const batchUrls = urls.slice(i, i + PRIMARY_CONCURRENCY);
+    const batchRows = await Promise.all(batchUrls.map(inspectUrl));
     await persistAuditRows(admin, batchRows);
+    for (const row of batchRows) {
+      finalRows.set(row.url, row);
+      if (isRetryableFetchFailure(row)) retryUrls.push(row.url);
+    }
   }
 
+  // Retry only genuine fetch failures and only while there is enough route budget
+  // left for a complete retry batch. Never let retries push the POST into timeout.
+  let retried = 0;
+  if (retryUrls.length && hasTimeForAnotherBatch(deadlineMs)) {
+    await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+    for (let i = 0; i < retryUrls.length; i += RETRY_CONCURRENCY) {
+      if (!hasTimeForAnotherBatch(deadlineMs)) break;
+      const retryBatchUrls = retryUrls.slice(i, i + RETRY_CONCURRENCY);
+      const retryRows = await inspectBatch(retryBatchUrls, RETRY_CONCURRENCY);
+      retried += retryBatchUrls.length;
+      await persistAuditRows(admin, retryRows);
+      for (const row of retryRows) finalRows.set(row.url, row);
+    }
+  }
+
+  const rows = [...finalRows.values()];
   return {
     ok: true,
     scanned: rows.length,
@@ -266,5 +315,7 @@ export async function runStructuredDataAudit(admin: SupabaseClient, limit = 220)
     warning: rows.filter((r) => r.status === "warning").length,
     error: rows.filter((r) => r.status === "error").length,
     unknown: rows.filter((r) => r.status === "unknown").length,
+    retried,
+    complete: primaryComplete && rows.length === urls.length,
   };
 }
