@@ -18,7 +18,9 @@ const MANUAL_STATUSES = CLEANER_STATUSES.filter((status) => status !== "busy");
 type StatusFilter = "all" | CleanerStatus;
 
 function effectiveStatus(row: AdminCleanerRow): CleanerStatus {
+  if (row.is_active === false) return "inactive";
   const normalized = normalizeCleanerStatus(row.status);
+  if (normalized === "available" && row.is_available === false) return "offline";
   if (normalized) return normalized;
   return row.is_available === false ? "offline" : "available";
 }
@@ -52,7 +54,7 @@ async function patchCleanerStatus(cleanerId: string, status: CleanerStatus): Pro
   const token = session?.data.session?.access_token;
   if (!token) throw new Error("Please sign in again.");
 
-  const response = await fetch(`/api/admin/cleaners/${encodeURIComponent(cleanerId)}`, {
+  const response = await fetch(`/api/admin/cleaners/${encodeURIComponent(cleanerId)}/status`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -110,7 +112,11 @@ export function OfficeCleanerStatusManager() {
   async function setStatus(row: AdminCleanerRow, next: CleanerStatus) {
     if (next === "busy") return;
     const current = effectiveStatus(row);
-    if (current === next) return;
+    const alreadyCanonical =
+      current === next &&
+      row.is_available === (next === "available") &&
+      row.is_active !== (next === "inactive");
+    if (alreadyCanonical) return;
 
     try {
       setSavingId(row.id);
@@ -125,6 +131,9 @@ export function OfficeCleanerStatusManager() {
         ),
       );
       showToast(`${row.full_name ?? "Cleaner"} marked ${CLEANER_STATUS_LABELS[next]}.`, "success");
+      // The legacy profile editor below keeps its own cleaner snapshot. Refresh the page
+      // after a successful status-only write so it cannot submit stale status fields later.
+      window.setTimeout(() => window.location.reload(), 250);
     } catch (cause) {
       showToast(cause instanceof Error ? cause.message : "Could not update cleaner status.", "error");
     } finally {
