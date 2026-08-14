@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { writeNotificationLog } from "@/lib/notifications/notificationLogWrite";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { getWhatsAppProvider, getWhatsAppProviderName } from "@/lib/whatsapp/providers";
 import { getWhatsAppTemplateReadiness } from "@/lib/whatsapp/templateReadiness";
@@ -54,8 +55,10 @@ export async function POST(request: Request) {
 
   const provider = getWhatsAppProvider();
   const providerName = getWhatsAppProviderName();
+  const logProvider = providerName === "twilio" ? "twilio" : "meta";
   let result: { ok: boolean; error?: string; messageId?: string | null };
   let payload: Record<string, unknown>;
+  let templateKey = "admin_whatsapp_reply";
 
   if (mode === "text") {
     const message = String(body?.message ?? "").trim();
@@ -82,6 +85,7 @@ export async function POST(request: Request) {
       bodyParams,
       recipientRole: "customer",
     });
+    templateKey = template.key || template.metaTemplateName || "admin_whatsapp_template";
     payload = {
       kind: "template",
       body: renderTemplateBody(template.body, bodyParams),
@@ -91,7 +95,40 @@ export async function POST(request: Request) {
     };
   }
 
-  if (!result.ok) return NextResponse.json({ error: result.error ?? "WhatsApp send failed." }, { status: 502 });
+  const notificationPayload = {
+    ...payload,
+    admin_user_id: auth.userId,
+    admin_email: auth.email,
+    conversation_window_open: conversationOpen,
+    provider_message_id: result.messageId ?? null,
+    source: "admin_whatsapp_inbox",
+  };
+
+  if (!result.ok) {
+    await writeNotificationLog({
+      channel: "whatsapp",
+      template_key: templateKey,
+      recipient: phone,
+      status: "failed",
+      error: result.error ?? "WhatsApp send failed.",
+      provider: logProvider,
+      role: "customer",
+      event_type: "admin_reply",
+      payload: notificationPayload,
+    });
+    return NextResponse.json({ error: result.error ?? "WhatsApp send failed." }, { status: 502 });
+  }
+
+  await writeNotificationLog({
+    channel: "whatsapp",
+    template_key: templateKey,
+    recipient: phone,
+    status: "sent",
+    provider: logProvider,
+    role: "customer",
+    event_type: "admin_reply",
+    payload: notificationPayload,
+  });
 
   const createdAt = new Date().toISOString();
   const { data: inserted, error: insertError } = await admin.from("whatsapp_provider_events").insert({
