@@ -17,10 +17,12 @@ export type StructuredDataAuditRow = {
   raw_summary: Record<string, unknown>;
 };
 
-const FETCH_TIMEOUT_MS = 12_000;
-const PRIMARY_CONCURRENCY = 5;
+const FETCH_TIMEOUT_MS = 10_000;
+const PRIMARY_CONCURRENCY = 10;
 const RETRY_CONCURRENCY = 2;
 const RETRY_DELAY_MS = 400;
+const AUDIT_BUDGET_MS = 260_000;
+const BATCH_SAFETY_MARGIN_MS = 2_000;
 
 function pageGroup(path: string): string {
   if (path === "/") return "core";
@@ -112,7 +114,7 @@ async function fetchPageOnce(url: string): Promise<FetchedPage> {
       redirect: "follow",
       signal: controller.signal,
       headers: {
-        "User-Agent": "Shalean-SEO-StructuredData-Audit/1.2",
+        "User-Agent": "Shalean-SEO-StructuredData-Audit/1.3",
         Accept: "text/html,application/xhtml+xml",
       },
     });
@@ -259,18 +261,28 @@ function isRetryableFetchFailure(row: StructuredDataAuditRow): boolean {
   return row.status === "unknown" && row.raw_summary?.retryable === true && row.raw_summary?.scanState === "fetch_failed";
 }
 
+function hasTimeForAnotherBatch(deadlineMs: number): boolean {
+  return Date.now() + FETCH_TIMEOUT_MS + BATCH_SAFETY_MARGIN_MS < deadlineMs;
+}
+
 export async function runStructuredDataAudit(
   admin: SupabaseClient,
   limit = 220,
-): Promise<{ ok: boolean; scanned: number; valid: number; warning: number; error: number; unknown: number; retried: number }> {
+): Promise<{ ok: boolean; scanned: number; valid: number; warning: number; error: number; unknown: number; retried: number; complete: boolean }> {
   const sitemap = await buildMarketingSitemapEntries();
   const urls = sitemap.slice(0, Math.max(1, Math.min(limit, 250))).map((entry) => entry.url);
   const finalRows = new Map<string, StructuredDataAuditRow>();
   const retryUrls: string[] = [];
+  const deadlineMs = Date.now() + AUDIT_BUDGET_MS;
+  let primaryComplete = true;
 
-  // Primary pass: deliberately low concurrency so database-backed blog SSR is not
-  // overwhelmed by the audit itself. Persist every small batch as soon as it finishes.
+  // Primary pass: moderate concurrency gives DB-backed blog SSR enough room while
+  // still guaranteeing the whole request stays inside the platform execution budget.
   for (let i = 0; i < urls.length; i += PRIMARY_CONCURRENCY) {
+    if (!hasTimeForAnotherBatch(deadlineMs)) {
+      primaryComplete = false;
+      break;
+    }
     const batchUrls = urls.slice(i, i + PRIMARY_CONCURRENCY);
     const batchRows = await Promise.all(batchUrls.map(inspectUrl));
     await persistAuditRows(admin, batchRows);
@@ -280,13 +292,16 @@ export async function runStructuredDataAudit(
     }
   }
 
-  // Second pass: retry only pages that genuinely failed to fetch. Keep this even
-  // gentler than the primary pass so retries do not recreate the original load spike.
-  if (retryUrls.length) {
+  // Retry only genuine fetch failures and only while there is enough route budget
+  // left for a complete retry batch. Never let retries push the POST into timeout.
+  let retried = 0;
+  if (retryUrls.length && hasTimeForAnotherBatch(deadlineMs)) {
     await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
     for (let i = 0; i < retryUrls.length; i += RETRY_CONCURRENCY) {
+      if (!hasTimeForAnotherBatch(deadlineMs)) break;
       const retryBatchUrls = retryUrls.slice(i, i + RETRY_CONCURRENCY);
       const retryRows = await inspectBatch(retryBatchUrls, RETRY_CONCURRENCY);
+      retried += retryBatchUrls.length;
       await persistAuditRows(admin, retryRows);
       for (const row of retryRows) finalRows.set(row.url, row);
     }
@@ -300,6 +315,7 @@ export async function runStructuredDataAudit(
     warning: rows.filter((r) => r.status === "warning").length,
     error: rows.filter((r) => r.status === "error").length,
     unknown: rows.filter((r) => r.status === "unknown").length,
-    retried: retryUrls.length,
+    retried,
+    complete: primaryComplete && rows.length === urls.length,
   };
 }
