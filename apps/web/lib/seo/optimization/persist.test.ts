@@ -67,11 +67,11 @@ describe("normalizeRecommendationsForDataReadiness", () => {
     expect(pageHealth?.detail.band).toBe("insufficient_data");
   });
 
-  it("keeps measured critical recommendations once both engagement baselines are ready", () => {
+  it("keeps measured page-health failures but suppresses trust work already implemented by the shared template", () => {
     const normalized = normalizeRecommendationsForDataReadiness(resultWithReadiness(true, true));
 
     expect(normalized.find((row) => row.kind === "page_health")?.severity).toBe("critical");
-    expect(normalized.some((row) => row.kind === "trust_signals")).toBe(true);
+    expect(normalized.some((row) => row.kind === "trust_signals")).toBe(false);
     expect(normalized.some((row) => row.kind === "data_gaps")).toBe(false);
   });
 });
