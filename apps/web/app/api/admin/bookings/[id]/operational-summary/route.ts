@@ -72,13 +72,34 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
 
   const booking = bookingData as unknown as Record<string, unknown>;
 
-  const { data: rosterRows, error: rosterError } = await admin
-    .from("booking_cleaners")
-    .select("cleaner_id, role, lead_bonus_cents, payout_weight, assigned_at")
-    .eq("booking_id", id)
-    .order("assigned_at", { ascending: true });
+  const [{ data: rosterRows, error: rosterError }, { data: paymentRows, error: paymentError }] = await Promise.all([
+    admin
+      .from("booking_cleaners")
+      .select("cleaner_id, role, lead_bonus_cents, payout_weight, assigned_at")
+      .eq("booking_id", id)
+      .order("assigned_at", { ascending: true }),
+    admin
+      .from("payment_transactions")
+      .select(
+        "id, gateway, gateway_reference, amount_cents, processing_fee_cents, processing_fee_vat_cents, net_settlement_cents, payment_channel, paid_at, settlement_status, fee_calculation_method",
+      )
+      .eq("booking_id", id)
+      .order("paid_at", { ascending: false })
+      .limit(10),
+  ]);
 
   if (rosterError) return NextResponse.json({ error: rosterError.message }, { status: 500 });
+  if (paymentError) {
+    console.warn("[operational-summary] payment transaction lookup failed", paymentError.message);
+  }
+
+  // Refunds/reversals are separate ledger events. Profitability must be based on
+  // the original capture/covered settlement rather than whichever row is newest.
+  const paymentData = (paymentRows ?? []).find((row) => {
+    const channel = String(row.payment_channel ?? "").trim().toLowerCase();
+    const settlement = String(row.settlement_status ?? "").trim().toLowerCase();
+    return channel !== "refund" && settlement !== "reversed";
+  }) ?? null;
 
   const persistedRoster = (rosterRows ?? []) as Array<Record<string, unknown>>;
   const directCleanerId = String(booking.cleaner_id ?? "").trim();
@@ -132,5 +153,5 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
     };
   });
 
-  return NextResponse.json({ booking, roster });
+  return NextResponse.json({ booking, roster, payment: paymentData });
 }
