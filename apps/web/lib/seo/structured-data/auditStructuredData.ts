@@ -17,6 +17,11 @@ export type StructuredDataAuditRow = {
   raw_summary: Record<string, unknown>;
 };
 
+const FETCH_TIMEOUT_MS = 3_000;
+const FETCH_ATTEMPTS = 2;
+const AUDIT_CONCURRENCY = 30;
+const RETRY_DELAY_MS = 100;
+
 function pageGroup(path: string): string {
   if (path === "/") return "core";
   if (path.startsWith("/blog/")) return "blog";
@@ -83,50 +88,183 @@ function validateKnownTypes(items: unknown[], types: Set<string>): { errors: str
   return { errors: [...new Set(errors)], warnings: [...new Set(warnings)] };
 }
 
+function normalizeFetchError(error: unknown): string {
+  if (!(error instanceof Error)) return "Fetch failed";
+  if (error.name === "AbortError" || /aborted|timeout/i.test(error.message)) return "Page scan timed out";
+  return error.message || "Fetch failed";
+}
+
+type FetchedPage = {
+  response: Response;
+  html: string;
+};
+
+async function fetchPageWithTimeout(url: string): Promise<FetchedPage> {
+  let lastError: unknown;
+  for (let attempt = 1; attempt <= FETCH_ATTEMPTS; attempt += 1) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+    try {
+      const response = await fetch(url, {
+        cache: "no-store",
+        redirect: "follow",
+        signal: controller.signal,
+        headers: {
+          "User-Agent": "Shalean-SEO-StructuredData-Audit/1.1",
+          Accept: "text/html,application/xhtml+xml",
+        },
+      });
+      const html = await response.text();
+      return { response, html };
+    } catch (error) {
+      lastError = error;
+      if (attempt < FETCH_ATTEMPTS) await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS * attempt));
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error("Fetch failed");
+}
+
+function unknownScanRow(url: string, path: string, required: string[], checkedAt: string, message: string): StructuredDataAuditRow {
+  return {
+    url,
+    path,
+    page_group: pageGroup(path),
+    http_status: null,
+    json_ld_count: 0,
+    schema_types: [],
+    required_types: required,
+    missing_types: [],
+    errors: [`Scan failed: ${message}`],
+    warnings: ["Schema requirements were not evaluated because the page could not be fetched successfully. Retry the audit."],
+    status: "unknown",
+    checked_at: checkedAt,
+    raw_summary: { scanState: "fetch_failed", retryable: true },
+  };
+}
+
 async function inspectUrl(url: string): Promise<StructuredDataAuditRow> {
   const path = new URL(url).pathname.replace(/\/+$/, "") || "/";
   const required = expectedTypes(path);
   const checkedAt = new Date().toISOString();
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 8000);
+
+  let fetched: FetchedPage;
   try {
-    const response = await fetch(url, { cache: "no-store", redirect: "follow", signal: controller.signal, headers: { "User-Agent": "Shalean-SEO-StructuredData-Audit/1.0" } });
-    const html = await response.text();
+    fetched = await fetchPageWithTimeout(url);
+  } catch (error) {
+    return unknownScanRow(url, path, required, checkedAt, normalizeFetchError(error));
+  }
+
+  const { response, html } = fetched;
+
+  if (!response.ok) {
+    return {
+      url,
+      path,
+      page_group: pageGroup(path),
+      http_status: response.status,
+      json_ld_count: 0,
+      schema_types: [],
+      required_types: required,
+      missing_types: [],
+      errors: [`HTTP ${response.status} while scanning page`],
+      warnings: ["Schema requirements were not evaluated because the page did not return a successful HTTP response."],
+      status: "error",
+      checked_at: checkedAt,
+      raw_summary: { finalUrl: response.url, contentType: response.headers.get("content-type"), scanState: "http_error" },
+    };
+  }
+
+  const contentType = response.headers.get("content-type") ?? "";
+  if (contentType && !/text\/html|application\/xhtml\+xml/i.test(contentType)) {
+    return {
+      url,
+      path,
+      page_group: pageGroup(path),
+      http_status: response.status,
+      json_ld_count: 0,
+      schema_types: [],
+      required_types: required,
+      missing_types: [],
+      errors: [],
+      warnings: [`Unexpected content type: ${contentType}`],
+      status: "unknown",
+      checked_at: checkedAt,
+      raw_summary: { finalUrl: response.url, contentType, scanState: "unexpected_content_type", retryable: true },
+    };
+  }
+
+  try {
     const scriptRe = /<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
     const items: unknown[] = [];
     const parseErrors: string[] = [];
     for (const match of html.matchAll(scriptRe)) {
-      try { items.push(JSON.parse(match[1])); }
-      catch { parseErrors.push("Invalid JSON-LD JSON syntax"); }
+      try {
+        items.push(JSON.parse(match[1]));
+      } catch {
+        parseErrors.push("Invalid JSON-LD JSON syntax");
+      }
     }
+
     const types = new Set<string>();
     items.forEach((item) => collectTypes(item, types));
     const missing = required.filter((type) => !types.has(type) && !(type === "Article" && types.has("BlogPosting")));
     const validation = validateKnownTypes(items, types);
     const errors = [...new Set([...parseErrors, ...validation.errors, ...missing.map((type) => `Missing expected ${type} schema`)])];
     const warnings = validation.warnings;
-    const status: StructuredDataAuditRow["status"] = !response.ok || errors.length ? "error" : warnings.length ? "warning" : "valid";
+    const status: StructuredDataAuditRow["status"] = errors.length ? "error" : warnings.length ? "warning" : "valid";
+
     return {
-      url, path, page_group: pageGroup(path), http_status: response.status, json_ld_count: items.length,
-      schema_types: [...types].sort(), required_types: required, missing_types: missing, errors, warnings, status,
+      url,
+      path,
+      page_group: pageGroup(path),
+      http_status: response.status,
+      json_ld_count: items.length,
+      schema_types: [...types].sort(),
+      required_types: required,
+      missing_types: missing,
+      errors,
+      warnings,
+      status,
       checked_at: checkedAt,
-      raw_summary: { finalUrl: response.url, contentType: response.headers.get("content-type"), googleRichResultEligibleTypes: [...types].filter((t) => ["Article","BlogPosting","BreadcrumbList","LocalBusiness","Organization"].includes(t)) },
+      raw_summary: {
+        finalUrl: response.url,
+        contentType,
+        scanState: "parsed",
+        googleRichResultEligibleTypes: [...types].filter((t) => ["Article", "BlogPosting", "BreadcrumbList", "LocalBusiness", "Organization"].includes(t)),
+      },
     };
   } catch (error) {
-    return { url, path, page_group: pageGroup(path), http_status: null, json_ld_count: 0, schema_types: [], required_types: required, missing_types: required, errors: [error instanceof Error ? error.message : "Fetch failed"], warnings: [], status: "error", checked_at: checkedAt, raw_summary: {} };
-  } finally { clearTimeout(timer); }
+    return unknownScanRow(url, path, required, checkedAt, normalizeFetchError(error));
+  }
 }
 
-export async function runStructuredDataAudit(admin: SupabaseClient, limit = 220): Promise<{ ok: boolean; scanned: number; valid: number; warning: number; error: number }> {
+async function persistAuditRows(admin: SupabaseClient, rows: StructuredDataAuditRow[]): Promise<void> {
+  if (!rows.length) return;
+  const { error } = await admin
+    .from("seo_structured_data_audits")
+    .upsert(rows.map((row) => ({ ...row, updated_at: row.checked_at })), { onConflict: "url" });
+  if (error) throw new Error(error.message);
+}
+
+export async function runStructuredDataAudit(admin: SupabaseClient, limit = 220): Promise<{ ok: boolean; scanned: number; valid: number; warning: number; error: number; unknown: number }> {
   const sitemap = await buildMarketingSitemapEntries();
   const urls = sitemap.slice(0, Math.max(1, Math.min(limit, 250))).map((entry) => entry.url);
   const rows: StructuredDataAuditRow[] = [];
-  for (let i = 0; i < urls.length; i += 10) {
-    rows.push(...await Promise.all(urls.slice(i, i + 10).map(inspectUrl)));
+
+  for (let i = 0; i < urls.length; i += AUDIT_CONCURRENCY) {
+    const batchRows = await Promise.all(urls.slice(i, i + AUDIT_CONCURRENCY).map(inspectUrl));
+    rows.push(...batchRows);
+    await persistAuditRows(admin, batchRows);
   }
-  if (rows.length) {
-    const { error } = await admin.from("seo_structured_data_audits").upsert(rows.map((row) => ({ ...row, updated_at: row.checked_at })), { onConflict: "url" });
-    if (error) throw new Error(error.message);
-  }
-  return { ok: true, scanned: rows.length, valid: rows.filter((r) => r.status === "valid").length, warning: rows.filter((r) => r.status === "warning").length, error: rows.filter((r) => r.status === "error").length };
+
+  return {
+    ok: true,
+    scanned: rows.length,
+    valid: rows.filter((r) => r.status === "valid").length,
+    warning: rows.filter((r) => r.status === "warning").length,
+    error: rows.filter((r) => r.status === "error").length,
+    unknown: rows.filter((r) => r.status === "unknown").length,
+  };
 }
