@@ -141,6 +141,7 @@ jobs:
 
       - name: Live SEO validation (production site health)
         if: steps.filter.outputs.run_suite == 'true'
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
           LIVE_SEO_EXTENDED: ${{ vars.LIVE_SEO_EXTENDED || '1' }}
