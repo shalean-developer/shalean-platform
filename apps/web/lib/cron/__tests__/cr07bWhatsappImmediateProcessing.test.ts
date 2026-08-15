@@ -14,14 +14,23 @@ const retryRoute = readFileSync(
   resolve(process.cwd(), "lib/notifications/notificationRetry.ts"),
   "utf8",
 );
+const marketingRoute = readFileSync(
+  resolve(process.cwd(), "app/api/admin/marketing/once-off-recurring-whatsapp/route.ts"),
+  "utf8",
+);
+const adminTestRoute = readFileSync(
+  resolve(process.cwd(), "app/api/admin/whatsapp-test/route.ts"),
+  "utf8",
+);
 
 describe("CR-07B immediate WhatsApp processing", () => {
-  it("flushes a newly inserted provider-aware queue job immediately", () => {
+  it("flushes newly inserted provider-aware single-message jobs immediately by default", () => {
     const enqueueStart = providerQueue.indexOf("export async function enqueueProviderWhatsApp");
     expect(enqueueStart).toBeGreaterThan(-1);
     const enqueueSource = providerQueue.slice(enqueueStart);
 
     expect(enqueueSource).toContain('from("whatsapp_queue").insert(insert)');
+    expect(enqueueSource).toContain("if (params.immediate !== false)");
     expect(enqueueSource).toContain("await flushWhatsAppJobViaProvider(params.admin, id)");
     expect(enqueueSource.indexOf("await flushWhatsAppJobViaProvider(params.admin, id)")).toBeGreaterThan(
       enqueueSource.indexOf('from("whatsapp_queue").insert(insert)'),
@@ -32,6 +41,17 @@ describe("CR-07B immediate WhatsApp processing", () => {
     expect(providerQueue).toContain("status: dead ? \"dead\" : \"pending\"");
     expect(providerQueue).toContain("next_attempt_at: nextAttemptAt");
     expect(providerQueue).toContain("return { id };");
+  });
+
+  it("keeps bulk marketing sends queue-first so provider latency cannot block the campaign request", () => {
+    expect(marketingRoute).toContain("immediate: false");
+    expect(marketingRoute).not.toContain("flushWhatsAppJobViaProvider");
+  });
+
+  it("does not double-flush admin tests after the enqueue's immediate attempt", () => {
+    expect(adminTestRoute).toContain("immediate: true");
+    expect(adminTestRoute).not.toContain("flushWhatsAppJobViaProvider");
+    expect(adminTestRoute).toContain('status === "sent"');
   });
 
   it("preserves immediate delivery for the older notification-retry queue path", () => {
