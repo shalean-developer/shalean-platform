@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { SERVICE_EXTRA_SLUGS } from "@/lib/booking-v2/serviceExtraSlugs";
+import {
+  SERVICE_EXTRA_SLUGS,
+  safeExtraSlugsForService,
+} from "@/lib/booking-v2/serviceExtraSlugs";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 
 describe("SERVICE_EXTRA_SLUGS", () => {
@@ -57,5 +60,36 @@ describe("SERVICE_EXTRA_SLUGS", () => {
       "office-sanitisation",
       "waste-removal",
     ]);
+  });
+
+  it("blocks cross-service extras from persisted booking catalog config", () => {
+    expect(
+      safeExtraSlugsForService("deep-cleaning", [
+        "inside-cabinets",
+        "interior-walls",
+        "inside-fridge",
+        "laundry",
+      ]),
+    ).toEqual(["inside-cabinets", "interior-walls"]);
+
+    expect(
+      safeExtraSlugsForService("airbnb-cleaning", [
+        "laundry",
+        "inside-oven",
+        "office-kitchen",
+      ]),
+    ).toEqual(["laundry", "inside-oven"]);
+  });
+
+  it("falls back to the canonical service extras when configured extras are wholly invalid", () => {
+    expect(
+      safeExtraSlugsForService("moving-cleaning", ["laundry", "office-kitchen"]),
+    ).toEqual(SERVICE_EXTRA_SLUGS["moving-cleaning"]);
+  });
+
+  it("normalizes underscore slugs before validating them", () => {
+    expect(
+      safeExtraSlugsForService("deep-cleaning", ["inside_cabinets", "interior_walls"]),
+    ).toEqual(["inside-cabinets", "interior-walls"]);
   });
 });
