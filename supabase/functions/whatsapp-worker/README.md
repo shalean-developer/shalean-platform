@@ -1,43 +1,20 @@
-# whatsapp-worker
+# whatsapp-worker (retired)
 
-**Phase:** 1 — Priority 1  
-**Schedule:** `* * * * *` (every minute)  
-**Replaces:** `apps/web/app/api/cron/whatsapp-worker/route.ts`
+CR-07A retired this duplicate Supabase Edge Function implementation.
 
-## Responsibility
+## Canonical production worker
 
-Drain `whatsapp_queue` pending rows → Meta Cloud API → update status. One batch per invocation.
+Production WhatsApp queue processing is owned by:
 
-## Source files to port
+- `apps/web/app/api/cron/whatsapp-worker/route.ts`
+- `apps/web/lib/whatsapp/providerQueue.ts`
 
-| File | Function |
-|------|----------|
-| `lib/whatsapp/queue.ts` | `processWhatsAppPendingBatch` |
-| `lib/dispatch/metaWhatsAppSend.ts` | `sendViaMetaWhatsApp`, `sendViaMetaWhatsAppTemplateBody` |
-| `lib/whatsapp/whatsappMetaSafeguards.ts` | Rate limits, circuit breaker |
-| `lib/whatsapp/queueTerminalSms.ts` | SMS fallback on terminal failure |
-| `lib/notifications/customerPhoneNormalize.ts` | E.164 normalization |
+That path is provider-aware (`WHATSAPP_PROVIDER`) and supports the current Meta/Flaxxa migration model. Production `pg_cron` calls the Next.js route through `public.invoke_nextjs_cron('/api/cron/whatsapp-worker')`.
 
-## Queue pattern
+## Why this Edge Function was retired
 
-```
-SELECT * FROM whatsapp_queue WHERE status='pending' AND next_attempt_at <= now()
-  ORDER BY priority DESC LIMIT 15 FOR UPDATE SKIP LOCKED
-→ send via Meta API
-→ UPDATE status (sent | failed | dead)
-→ exit
-```
+This function duplicated queue claiming, retry, Meta delivery, locking, and observability logic while production was not invoking it. Keeping two worker implementations made future cost/reliability changes unsafe because behavior could drift or an operator could accidentally cut back to the Meta-only worker.
 
-## Est. CPU savings
+The executable files were removed in CR-07A. Do not redeploy `supabase functions deploy whatsapp-worker`.
 
-~2.0–2.5 h/month Fluid Active CPU
-
-## Not implemented yet
-
-**Implemented** — see `index.ts`, `processBatch.ts`, `flushJob.ts`. Deploy with:
-
-```bash
-supabase functions deploy whatsapp-worker --project-ref <ref>
-```
-
-pg_cron still calls Vercel until shadow verification + cutover (runbook).
+Historical Edge-worker migrations/runbooks remain archived under legacy/history locations only. New WhatsApp worker changes must target the canonical Next.js provider queue path above.
