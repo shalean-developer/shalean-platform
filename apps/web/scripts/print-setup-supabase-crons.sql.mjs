@@ -37,9 +37,9 @@ const sqlHost = host.replace(/'/g, "''");
 const HTTP_JOBS = [
   ["generate-recurring-bookings", "*/10 * * * *", "/api/cron/generate-recurring-bookings"],
   ["charge-recurring-bookings", "*/10 * * * *", "/api/cron/charge-recurring-bookings"],
-  ["dispatch-timeouts", "* * * * *", "/api/cron/dispatch-timeouts"],
-  ["retry-failed-jobs", "* * * * *", "/api/cron/retry-failed-jobs"],
-  ["whatsapp-worker", "* * * * *", "/api/cron/whatsapp-worker"],
+  ["dispatch-timeouts", "*/2 * * * *", "/api/cron/dispatch-timeouts"],
+  ["retry-failed-jobs", "*/2 * * * *", "/api/cron/retry-failed-jobs"],
+  ["whatsapp-worker", "*/2 * * * *", "/api/cron/whatsapp-worker"],
   ["booking-lifecycle", "*/15 * * * *", "/api/cron/booking-lifecycle"],
   ["review-prompts", "*/10 * * * *", "/api/cron/review-prompts"],
   ["payment-recovery", "*/15 * * * *", "/api/cron/payment-recovery"],
