@@ -1,9 +1,10 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { ExtrasStep } from "@/components/booking/steps/ExtrasStep";
 import { getBlockedExtraIds, parseBookingServiceId } from "@/components/booking/serviceCategories";
 import { useBookingCheckoutStore } from "@/lib/booking/bookingCheckoutStore";
+import { isExtraAllowedForService } from "@/lib/pricing/extrasConfig";
 import { usePricingCatalog } from "@/lib/pricing/usePricingCatalog";
 
 type AddOnsSectionProps = {
@@ -27,11 +28,16 @@ export function AddOnsSection({ layout = "card" }: AddOnsSectionProps) {
     return catalog.extras.filter((ex) => {
       if (blocked.has(ex.id)) return false;
       if (!catalog.snapshot) return true;
-      const row = catalog.snapshot.extras[ex.id];
-      if (!row?.services?.length) return true;
-      return sid ? row.services.includes(sid) : true;
+      return isExtraAllowedForService(ex.id, sid, catalog.snapshot);
     });
   }, [catalog, service]);
+
+  useEffect(() => {
+    if (!catalog?.snapshot) return;
+    const allowed = new Set(extrasForStep.map((extra) => extra.id));
+    const next = extras.filter((id) => allowed.has(id));
+    if (next.length !== extras.length) patch({ extras: next });
+  }, [catalog?.snapshot, extras, extrasForStep, patch]);
 
   if (layout === "embedded") {
     return (
