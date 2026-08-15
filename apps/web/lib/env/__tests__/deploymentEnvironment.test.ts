@@ -38,20 +38,19 @@ describe("resolveDeploymentEnvironment", () => {
 
 describe("supabase refs", () => {
   it("parses project ref from URL", () => {
+    expect(supabaseRefFromUrl(`https://${SHALEAN_SUPABASE_REFS.production}.supabase.co`)).toBe(
+      SHALEAN_SUPABASE_REFS.production,
+    );
     expect(supabaseRefFromUrl(`https://${SHALEAN_SUPABASE_REFS.staging}.supabase.co`)).toBe(
       SHALEAN_SUPABASE_REFS.staging,
     );
-    expect(supabaseRefFromUrl(`https://${SHALEAN_SUPABASE_REFS.development}.supabase.co`)).toBe(
-      SHALEAN_SUPABASE_REFS.development,
-    );
   });
 
-  it("maps expected refs", () => {
+  it("maps expected refs only for governed remote environments", () => {
     expect(expectedSupabaseRefForDeployment("production")).toBe(SHALEAN_SUPABASE_REFS.production);
     expect(expectedSupabaseRefForDeployment("staging")).toBe(SHALEAN_SUPABASE_REFS.staging);
-    expect(expectedSupabaseRefForDeployment("development")).toBe(
-      SHALEAN_SUPABASE_REFS.development,
-    );
+    expect(expectedSupabaseRefForDeployment("development")).toBeNull();
+    expect(expectedSupabaseRefForDeployment("local")).toBeNull();
   });
 });
 
