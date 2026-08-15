@@ -5,6 +5,15 @@
     "node": ">=20"
   },
   "scripts": {
+    "dev:local:start": "npx supabase start",
+    "dev:local:status": "npx supabase status",
+    "dev:local:env": "npx supabase status -o env",
+    "dev:local:check": "node scripts/check-local-dev-env.mjs",
+    "dev:local:web": "node scripts/check-local-dev-env.mjs && npm --prefix apps/web run dev",
+    "dev:local:reset": "npx supabase db reset --local",
+    "dev:local:seed:catalog": "npx supabase db query --local -f supabase/seeds/nonprod/env03_catalog_and_fixtures.sql",
+    "dev:local:stop": "npx supabase stop",
+    "dev:local:clean": "npx supabase stop --no-backup",
     "db:migrations:validate": "node scripts/validate-supabase-migrations.mjs",
     "db:seed:reference": "node scripts/export-reference-data.mjs",
     "db:seed:dev": "node scripts/seed-dev.mjs",
