@@ -46,31 +46,6 @@ export const SERVICE_EXTRA_SLUGS: Record<ServiceSlug, readonly string[]> = {
   ],
 };
 
-function normalizeExtraSlug(slug: string): string {
-  return slug.trim().replace(/_/g, "-");
-}
-
 export function extraSlugsForService(slug: ServiceSlug): readonly string[] {
   return SERVICE_EXTRA_SLUGS[slug];
-}
-
-/**
- * Constrain persisted/admin-configured extra slugs to the canonical service allowlist.
- * This prevents stale or misconfigured booking_v2 catalog JSON from leaking another
- * service's add-ons into the booking flow. A wholly invalid configured list falls
- * back to the canonical list so a bad config cannot hide every valid extra either.
- */
-export function safeExtraSlugsForService(
-  slug: ServiceSlug,
-  configured: readonly string[] | null | undefined,
-): readonly string[] {
-  const canonical = SERVICE_EXTRA_SLUGS[slug];
-  if (!configured?.length) return canonical;
-
-  const canonicalSet = new Set(canonical);
-  const safe = [...new Set(configured.map(normalizeExtraSlug))].filter((extraSlug) =>
-    canonicalSet.has(extraSlug),
-  );
-
-  return safe.length > 0 ? safe : canonical;
 }
