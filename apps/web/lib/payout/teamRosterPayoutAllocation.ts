@@ -74,25 +74,30 @@ export async function fetchActiveTeamMemberIdsForMembershipDate(
 
 /**
  * Cleaner ids that participate in team payout for a booking.
- * When `booking_cleaners` rows exist they are authoritative (roster-assigned jobs);
- * otherwise fall back to active `team_members` at appointment time.
+ * When `booking_cleaners` rows exist they are authoritative (the cleaners who worked that booking);
+ * only when no valid booking roster exists do we fall back to active `team_members`.
  */
 export function resolveTeamPayoutParticipantIds(params: {
   rosterRows: readonly { cleaner_id?: string | null }[];
   activeTeamMemberIds: readonly string[];
 }): string[] {
   const uuid = (s: string) => /^[0-9a-f-]{36}$/i.test(String(s ?? "").trim());
-  const fromRoster = params.rosterRows
-    .map((r) => String(r.cleaner_id ?? "").trim())
-    .filter((id) => uuid(id));
-  const fromActive = [...new Set(params.activeTeamMemberIds.map((c) => String(c ?? "").trim()).filter(uuid))];
-  if (fromRoster.length > 0) {
-    if (fromActive.length > fromRoster.length) {
-      return [...new Set([...fromRoster, ...fromActive])];
-    }
-    return [...new Set(fromRoster)];
-  }
-  return fromActive;
+  const fromRoster = [
+    ...new Set(
+      params.rosterRows
+        .map((r) => String(r.cleaner_id ?? "").trim())
+        .filter((id) => uuid(id)),
+    ),
+  ];
+  if (fromRoster.length > 0) return fromRoster;
+
+  return [
+    ...new Set(
+      params.activeTeamMemberIds
+        .map((c) => String(c ?? "").trim())
+        .filter(uuid),
+    ),
+  ];
 }
 
 import type { BookingEarningsSummary } from "@/lib/payout/bookingEarningsSummary";
