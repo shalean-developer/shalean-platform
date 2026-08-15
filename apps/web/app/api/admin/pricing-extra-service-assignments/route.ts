@@ -70,7 +70,7 @@ export async function PATCH(request: Request) {
   await recordPricingCatalogAudit(admin, {
     tableName: "pricing_extras",
     rowId: id,
-    action: "update_service_assignments",
+    action: "update",
     beforeRow: (before as Record<string, unknown> | null) ?? null,
     afterRow: data as Record<string, unknown>,
     actorUserId: auth.user.id,
