@@ -17,6 +17,7 @@ export type EnvironmentSafetyIssue = {
     | "paystack_mode_unknown"
     | "paystack_public_secret_mismatch"
     | "supabase_ref_mismatch"
+    | "supabase_remote_in_local_development"
     | "customer_host_outside_production";
   message: string;
 };
@@ -115,7 +116,13 @@ export function collectEnvironmentSafetyIssues(env: EnvLike = process.env): Envi
   const supabaseUrl = (env.NEXT_PUBLIC_SUPABASE_URL ?? env.SUPABASE_URL ?? "").trim();
   const actualRef = supabaseRefFromUrl(supabaseUrl);
   const expectedRef = expectedSupabaseRefForDeployment(deployment);
-  if (expectedRef && actualRef && actualRef !== expectedRef) {
+
+  if ((deployment === "development" || deployment === "local") && actualRef) {
+    issues.push({
+      code: "supabase_remote_in_local_development",
+      message: `${deployment} must use the local Supabase stack; remote Supabase ref ${actualRef} is not allowed.`,
+    });
+  } else if (expectedRef && actualRef && actualRef !== expectedRef) {
     issues.push({
       code: "supabase_ref_mismatch",
       message: `${deployment} is connected to Supabase ref ${actualRef}; expected ${expectedRef}.`,
@@ -143,7 +150,8 @@ export function assertEnvironmentPaymentSafety(env: EnvLike = process.env): Envi
   const issues = collectEnvironmentSafetyIssues(env).filter((i) =>
     i.code.startsWith("paystack_") ||
     i.code === "env_identity_unknown" ||
-    i.code === "supabase_ref_mismatch",
+    i.code === "supabase_ref_mismatch" ||
+    i.code === "supabase_remote_in_local_development",
   );
   return issues[0] ?? null;
 }

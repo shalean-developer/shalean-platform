@@ -12,13 +12,11 @@ export type ShaleanDeploymentEnv =
   | "preview"
   | "local";
 
-/** Canonical Supabase project refs for governed environments (never secrets). */
+/** Canonical Supabase project refs for governed remote environments (never secrets). */
 export const SHALEAN_SUPABASE_REFS = {
   production: "tchayecuvzssixyxlvfu",
-  /** Persistent dedicated project (ENV-03). Legacy ephemeral branch: gfvdiczqyrvlmynvgegd */
+  /** Retired/paused staging project retained only for explicit recovery or diagnostics. */
   staging: "gbgnemlpyykyhpqqbgru",
-  /** Persistent dedicated project (ENV-03). Legacy ephemeral branch: hborcpvarvgynjsjnfei */
-  development: "mbvixuzfvzbooiurvxwz",
 } as const;
 
 export type EnvLike = Record<string, string | undefined>;
@@ -91,12 +89,15 @@ export function supabaseRefFromUrl(url: string | undefined | null): string | nul
   }
 }
 
+/**
+ * Remote Supabase ref expected for a deployed environment.
+ * Development is intentionally local-only, so it has no canonical cloud ref.
+ */
 export function expectedSupabaseRefForDeployment(
   deployment: ShaleanDeploymentEnv = resolveDeploymentEnvironment(),
 ): string | null {
   if (deployment === "production") return SHALEAN_SUPABASE_REFS.production;
   if (deployment === "staging") return SHALEAN_SUPABASE_REFS.staging;
-  if (deployment === "development") return SHALEAN_SUPABASE_REFS.development;
   return null;
 }
 
