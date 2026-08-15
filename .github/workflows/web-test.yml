@@ -105,6 +105,7 @@ jobs:
           app/api/cleaner/__tests__/cleanerEarningsApi.test.ts
           app/api/cleaner/__tests__/cleanerJobsTeamApi.test.ts
           lib/cron/__tests__/h15CronLockOverlapPrevention.test.ts
+          lib/cron/__tests__/cr05RetryFailedJobsCadence.test.ts
           lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts
 
       - name: Focused marketing / Meta compliance unit tests
