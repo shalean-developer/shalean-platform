@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { ExtrasStep } from "@/components/booking/steps/ExtrasStep";
 import { getBlockedExtraIds, parseBookingServiceId } from "@/components/booking/serviceCategories";
 import { useBookingCheckoutStore } from "@/lib/booking/bookingCheckoutStore";
@@ -31,6 +31,13 @@ export function AddOnsSection({ layout = "card" }: AddOnsSectionProps) {
       return isExtraAllowedForService(ex.id, sid, catalog.snapshot);
     });
   }, [catalog, service]);
+
+  useEffect(() => {
+    if (!catalog?.snapshot) return;
+    const allowed = new Set(extrasForStep.map((extra) => extra.id));
+    const next = extras.filter((id) => allowed.has(id));
+    if (next.length !== extras.length) patch({ extras: next });
+  }, [catalog?.snapshot, extras, extrasForStep, patch]);
 
   if (layout === "embedded") {
     return (
