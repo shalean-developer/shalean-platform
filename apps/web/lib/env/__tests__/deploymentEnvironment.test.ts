@@ -85,6 +85,26 @@ describe("collectEnvironmentSafetyIssues", () => {
     expect(issues.some((i) => i.code === "supabase_ref_mismatch")).toBe(true);
   });
 
+  it("rejects remote Supabase for development", () => {
+    const issues = collectEnvironmentSafetyIssues({
+      SHALEAN_APP_ENV: "development",
+      PAYSTACK_SECRET_KEY: "sk_test_example",
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "pk_test_example",
+      NEXT_PUBLIC_SUPABASE_URL: `https://${SHALEAN_SUPABASE_REFS.production}.supabase.co`,
+    });
+    expect(issues.some((i) => i.code === "supabase_remote_in_local_development")).toBe(true);
+  });
+
+  it("accepts local Supabase for development", () => {
+    const issues = collectEnvironmentSafetyIssues({
+      SHALEAN_APP_ENV: "development",
+      PAYSTACK_SECRET_KEY: "sk_test_example",
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "pk_test_example",
+      NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:54321",
+    });
+    expect(issues).toEqual([]);
+  });
+
   it("accepts staging test + staging ref", () => {
     const issues = collectEnvironmentSafetyIssues({
       SHALEAN_APP_ENV: "staging",
