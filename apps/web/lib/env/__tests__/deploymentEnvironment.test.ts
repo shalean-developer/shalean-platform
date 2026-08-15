@@ -30,9 +30,7 @@ describe("resolveDeploymentEnvironment", () => {
   it("maps git branches", () => {
     expect(resolveDeploymentEnvironment({ VERCEL_GIT_COMMIT_REF: "main" })).toBe("production");
     expect(resolveDeploymentEnvironment({ VERCEL_GIT_COMMIT_REF: "staging" })).toBe("staging");
-    expect(resolveDeploymentEnvironment({ VERCEL_GIT_COMMIT_REF: "development" })).toBe(
-      "development",
-    );
+    expect(resolveDeploymentEnvironment({ VERCEL_GIT_COMMIT_REF: "development" })).toBe("preview");
   });
 });
 
@@ -41,17 +39,14 @@ describe("supabase refs", () => {
     expect(supabaseRefFromUrl(`https://${SHALEAN_SUPABASE_REFS.staging}.supabase.co`)).toBe(
       SHALEAN_SUPABASE_REFS.staging,
     );
-    expect(supabaseRefFromUrl(`https://${SHALEAN_SUPABASE_REFS.development}.supabase.co`)).toBe(
-      SHALEAN_SUPABASE_REFS.development,
-    );
   });
 
   it("maps expected refs", () => {
     expect(expectedSupabaseRefForDeployment("production")).toBe(SHALEAN_SUPABASE_REFS.production);
     expect(expectedSupabaseRefForDeployment("staging")).toBe(SHALEAN_SUPABASE_REFS.staging);
-    expect(expectedSupabaseRefForDeployment("development")).toBe(
-      SHALEAN_SUPABASE_REFS.development,
-    );
+    expect(expectedSupabaseRefForDeployment("development")).toBeNull();
+    expect(expectedSupabaseRefForDeployment("preview")).toBeNull();
+    expect(expectedSupabaseRefForDeployment("local")).toBeNull();
   });
 });
 
@@ -94,6 +89,16 @@ describe("collectEnvironmentSafetyIssues", () => {
       NEXT_PUBLIC_SUPABASE_URL: `https://${SHALEAN_SUPABASE_REFS.staging}.supabase.co`,
     });
     expect(issues).toEqual([]);
+  });
+
+  it("rejects production Supabase on previews", () => {
+    const issues = collectEnvironmentSafetyIssues({
+      SHALEAN_APP_ENV: "preview",
+      PAYSTACK_SECRET_KEY: "sk_test_example",
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "pk_test_example",
+      NEXT_PUBLIC_SUPABASE_URL: `https://${SHALEAN_SUPABASE_REFS.production}.supabase.co`,
+    });
+    expect(issues.some((i) => i.code === "supabase_production_ref_in_non_production")).toBe(true);
   });
 });
 
