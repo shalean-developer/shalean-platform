@@ -8,12 +8,12 @@
  *
  * | Situation | Payment / booking status | Assignment (informative) | Customer visible? | Cleaner jobs/dashboard? | Admin list (default GET)? |
  * |-----------|--------------------------|---------------------------|-----------------|-------------------------|---------------------------|
- * | Unpaid checkout | `pending_payment` | any | **No** (excluded in query + detail 404) | **No** (except recurring/invoice exception below) | **Yes** (in broad fetch) |
- * | Unpaid recurring / invoice-backed | `pending_payment` + recurring signals | assigned/roster paths | **No** | **Yes** if row merged via assignee/team/roster + {@link cleanerJobsListRowPostFilter} | **Yes** |
+ * | Unpaid checkout | `pending_payment` | any | **Yes** if ownership OK; shown as awaiting payment | **No** (except recurring/invoice exception below) | **Yes** (in broad fetch) |
+ * | Unpaid recurring / invoice-backed | `pending_payment` + recurring signals | assigned/roster paths | **Yes** if ownership OK | **Yes** if row merged via assignee/team/roster + {@link cleanerJobsListRowPostFilter} | **Yes** |
  * | Paid dispatchable | `pending`, `pending_assignment`, `offered`, … | unassigned → assigned | **Yes** if ownership OK | **Yes** only if cleaner is assignee, payout owner, team member, or **roster** + post-filter | **Yes** |
  * | Assigned active | `assigned`, `in_progress` | `cleaner_id` / team | **Yes** if ownership | **Yes** for linked cleaner(s) | **Yes** |
  * | Completed history | `completed` | any | **Yes** if ownership | **Yes** if still linked (history) | **Yes** — field coherence: {@link buildCompletionCoherencePatch} |
- * | Cancelled / failed | `cancelled`, `failed`, `payment_expired` | any | **Yes** except `payment_expired` hidden like unpaid terminal | Cleaner lists hide `failed` / `payment_expired` | **Yes** |
+ * | Cancelled / failed | `cancelled`, `failed`, `payment_expired` | any | **Yes** except `payment_expired` hidden as terminal expiry | Cleaner lists hide `failed` / `payment_expired` | **Yes** |
  * | Dispatch offers API | — | pending offer for cleaner | N/A | **Yes**: `/api/cleaner/offers` pending, unexpired, visible_at passed; stale offers dropped if booking already assigned to viewer | N/A |
  *
  * **Customer ownership** ({@link customerCanAccessBookingRow}): `user_id === auth` OR (`user_id` null AND normalized `customer_email` matches viewer email). Another user’s `user_id` is never visible via email match.
@@ -26,7 +26,7 @@
  * ### Known contradictions / limitations (explicit)
  *
  * 1. **Customer realtime** (`useBookings`): Supabase channel filters `user_id=eq.{uid}`. Email-orphan rows (`user_id` null) **do not** receive realtime events; they appear after full refetch only. **Homepage widget server draft** (`POST /api/booking/widget-draft`): authenticated callers should set `user_id` at insert so subscribed dashboards see the row without orphan rescue; guests still rely on `customer_email` match until they sign in and a safe handoff sets `user_id`.
- * 2. **Customer vs cleaner on `pending_payment`**: Customer APIs hide all `pending_payment`; cleaner may see recurring/invoice `pending_payment` — intentional product split.
+ * 2. **Customer vs cleaner on `pending_payment`**: Customer APIs show customer-owned `pending_payment` bookings for payment recovery; cleaner lists still hide one-shot unpaid bookings unless recurring/invoice signals make them operationally valid.
  * 3. **Cleaner vs offers**: A cleaner may see a **dispatch offer** before the job appears on **jobs** list if booking isn’t merged yet — rare; offers route loads bookings by offer ids.
  * 4. **Admin SLA / follow-up filters**: Switching filters can hide rows that customer/cleaner still see — admin UI filter semantics, not RBAC contradiction.
  *
@@ -55,11 +55,14 @@ export function explainCustomerDashboardVisibility(
   viewerEmailNormalized: string,
 ): DashboardVisibilityExplanation {
   const st = String(row.status ?? "").trim().toLowerCase();
-  if (st === "pending_payment" || st === "payment_expired") {
-    return { visible: false, reason: "customer_api_excludes_checkout_or_expired_terminal" };
+  if (st === "payment_expired") {
+    return { visible: false, reason: "customer_api_excludes_payment_expired_terminal" };
   }
   if (!customerCanAccessBookingRow(row, authUserId, viewerEmailNormalized)) {
     return { visible: false, reason: "customer_ownership_mismatch" };
+  }
+  if (st === "pending_payment") {
+    return { visible: true, reason: "customer_owner_pending_payment_recovery" };
   }
   return { visible: true, reason: "customer_owner_or_verified_email_orphan" };
 }

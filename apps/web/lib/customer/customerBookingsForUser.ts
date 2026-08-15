@@ -62,7 +62,7 @@ async function enrichCustomerBookingRowFromSavedAddress(
 }
 
 export type LoadCustomerBookingsOptions = {
-  /** When set, also returns paid bookings with no ownership id but matching `customer_email` (orphan repair). */
+  /** When set, also returns matching email-orphan bookings with no ownership id (legacy repair). */
   viewerEmail?: string | null;
 };
 
@@ -109,7 +109,9 @@ async function loadOwnedCustomerBookingRows(
     .from("bookings")
     .select(select)
     .eq(ownershipColumn, userId)
-    .neq("status", "pending_payment")
+    // A customer must still see a booking while payment is outstanding so the
+    // account can show the Awaiting payment state and payment recovery actions.
+    // Only terminal/expired checkout attempts are excluded from the live list.
     .neq("status", "payment_expired")
     .order("created_at", { ascending: false })
     .limit(CUSTOMER_BOOKINGS_LIST_LIMIT);
@@ -126,7 +128,6 @@ async function loadOrphanCustomerBookingRows(
     .select(select)
     .eq("customer_email", viewerNorm)
     .is(ownershipColumn, null)
-    .neq("status", "pending_payment")
     .neq("status", "payment_expired")
     .order("created_at", { ascending: false })
     .limit(100);
@@ -261,7 +262,7 @@ export async function loadCustomerBookingRowForUser(
   }
   const row = normalizeCustomerBookingRow(normalizeBookingCustomerIdentity(data as unknown as BookingRow));
   const st = String(row.status ?? "").toLowerCase();
-  if (st === "pending_payment" || st === "payment_expired") {
+  if (st === "payment_expired") {
     return { ok: false, error: "Not found.", status: 404 };
   }
   if (!customerCanAccessBookingRow(row, userId, viewerNorm)) {
