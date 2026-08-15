@@ -24,6 +24,7 @@ import {
   resolvePricingServiceRow,
 } from "@/lib/booking-v2/resolvePricingServiceSlug";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
+import type { BookingV2ServiceDefinition } from "@/lib/booking-v2/bookingV2CatalogTypes";
 
 export type {
   LiveExtra,
@@ -78,6 +79,7 @@ function attachMoveVariantRates(
 type DbExtraRow = {
   price: number;
   service_type: string;
+  service_slugs: string[];
   name: string;
   description: string;
   is_popular: boolean;
@@ -88,53 +90,22 @@ function normalizeExtraSlug(id: string): string {
   return id.replace(/_/g, "-");
 }
 
-import type { BookingV2ServiceDefinition } from "@/lib/booking-v2/bookingV2CatalogTypes";
-
 function buildExtrasForService(
   serviceDef: BookingV2ServiceDefinition,
   dbExtras: Record<string, DbExtraRow>,
 ): LiveExtra[] {
-  const allowlist = serviceDef.extraSlugs?.map((s) => normalizeExtraSlug(s));
-  const hasDatabaseCatalog = Object.keys(dbExtras).length > 0;
-  const rows = Object.entries(dbExtras)
+  return Object.entries(dbExtras)
     .filter(([slug]) => !BOOKING_V2_INTERNAL_EXTRA_SLUGS.has(slug))
-    .filter(([slug, row]) => {
-      if (allowlist?.length) {
-        return allowlist.includes(slug) || allowlist.includes(normalizeExtraSlug(slug));
-      }
-      return row.service_type === "all" || serviceDef.extraTypes.includes(row.service_type as "light" | "heavy" | "all");
-    })
+    .filter(([, row]) => row.service_slugs.includes(serviceDef.slug))
     .filter(([, row]) => Number.isFinite(row.price) && row.price > 0)
-    .sort((a, b) => a[1].sort_order - b[1].sort_order || a[0].localeCompare(b[0]));
-
-  // Once a database catalog exists, it is authoritative. Do not silently revive
-  // missing or non-positive rows from static config and create a second price source.
-  if (hasDatabaseCatalog) {
-    return rows.map(([slug, row]) => ({
+    .sort((a, b) => a[1].sort_order - b[1].sort_order || a[0].localeCompare(b[0]))
+    .map(([slug, row]) => ({
       id: slug,
       label: row.name,
       description: row.description,
       priceZar: row.price,
       isPopular: row.is_popular,
     }));
-  }
-
-  // Local/staging environments with no pricing_extras catalog may use static fixtures.
-  const staticExtras = SERVICE_CONFIG[serviceDef.slug]?.extras ?? [];
-  const filtered = allowlist?.length
-    ? staticExtras.filter((e) => {
-        const id = normalizeExtraSlug(e.id);
-        return allowlist.includes(id) || allowlist.includes(e.id);
-      })
-    : staticExtras;
-
-  return filtered.map((e) => ({
-    id: normalizeExtraSlug(e.id),
-    label: e.label,
-    description: e.description,
-    priceZar: e.priceZar,
-    isPopular: false,
-  }));
 }
 
 const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
@@ -149,7 +120,6 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   const admin = getSupabaseAdmin();
 
   const dbServices: Record<string, DbServiceRow> = {};
-
   const dbExtras: Record<string, DbExtraRow> = {};
   let configJson: unknown = null;
 
@@ -164,7 +134,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         .order("sort_order", { ascending: true }),
       admin
         .from("pricing_extras")
-        .select("slug, price, service_type, name, description, is_popular, sort_order")
+        .select("slug, price, service_type, service_slugs, name, description, is_popular, sort_order")
         .eq("is_active", true)
         .order("sort_order", { ascending: true }),
       admin.from("pricing_booking_config").select("config").eq("id", "default").maybeSingle(),
@@ -201,6 +171,9 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         dbExtras[slug] = {
           price: Math.round(Number(row.price) || 0),
           service_type: typeof row.service_type === "string" ? row.service_type : "all",
+          service_slugs: Array.isArray(row.service_slugs)
+            ? row.service_slugs.filter((value): value is string => typeof value === "string")
+            : [],
           name: typeof row.name === "string" ? row.name : slug,
           description: typeof row.description === "string" ? row.description : "",
           is_popular: row.is_popular === true,
@@ -312,7 +285,23 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
           dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
           dbSvc?.max_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
         ),
-        extras: [],
+        extras: buildExtrasForService(
+          {
+            slug,
+            pricingSlug: dbSlug,
+            label: staticFallback.label,
+            shortLabel: staticFallback.shortLabel,
+            description: staticFallback.description,
+            cleanerMode: staticFallback.cleanerMode,
+            extraTypes: [],
+            extraSlugs: [],
+            showEquipmentQuestion: slug === "regular-cleaning",
+            showCleaningProductsQuestion: slug === "regular-cleaning",
+            allowsExtraCleaner: false,
+            step1Questions: staticFallback.step1Questions,
+          },
+          dbExtras,
+        ),
       };
     }
   }
