@@ -8,6 +8,9 @@ import {
 const ID_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
 const ID_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
 const ID_C = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+const ID_D = "dddddddd-dddd-4ddd-8ddd-dddddddddddd";
+const ID_E = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+const ID_F = "ffffffff-ffff-4fff-8fff-ffffffffffff";
 
 describe("allocateTeamMemberPayoutCentsFromRoster", () => {
   it("splits pool by weights and assigns remainder + bonus to lead", () => {
@@ -41,6 +44,28 @@ describe("resolveTeamPayoutParticipantIds", () => {
       resolveTeamPayoutParticipantIds({
         rosterRows: [{ cleaner_id: ID_A }, { cleaner_id: ID_B }],
         activeTeamMemberIds: [ID_C],
+      }),
+    ).toEqual([ID_A, ID_B]);
+  });
+
+  it("does not pay the full permanent team when only three cleaners worked the booking", () => {
+    expect(
+      resolveTeamPayoutParticipantIds({
+        rosterRows: [
+          { cleaner_id: ID_A },
+          { cleaner_id: ID_B },
+          { cleaner_id: ID_C },
+        ],
+        activeTeamMemberIds: [ID_A, ID_B, ID_C, ID_D, ID_E, ID_F],
+      }),
+    ).toEqual([ID_A, ID_B, ID_C]);
+  });
+
+  it("deduplicates booking roster participants", () => {
+    expect(
+      resolveTeamPayoutParticipantIds({
+        rosterRows: [{ cleaner_id: ID_A }, { cleaner_id: ID_A }, { cleaner_id: ID_B }],
+        activeTeamMemberIds: [ID_A, ID_B, ID_C],
       }),
     ).toEqual([ID_A, ID_B]);
   });
