@@ -2,6 +2,7 @@ import {
   expectedSupabaseRefForDeployment,
   isCustomerProductionHost,
   resolveDeploymentEnvironment,
+  SHALEAN_SUPABASE_REFS,
   supabaseRefFromUrl,
   type EnvLike,
   type ShaleanDeploymentEnv,
@@ -17,6 +18,7 @@ export type EnvironmentSafetyIssue = {
     | "paystack_mode_unknown"
     | "paystack_public_secret_mismatch"
     | "supabase_ref_mismatch"
+    | "supabase_production_ref_in_non_production"
     | "customer_host_outside_production";
   message: string;
 };
@@ -122,6 +124,13 @@ export function collectEnvironmentSafetyIssues(env: EnvLike = process.env): Envi
     });
   }
 
+  if (deployment !== "production" && actualRef === SHALEAN_SUPABASE_REFS.production) {
+    issues.push({
+      code: "supabase_production_ref_in_non_production",
+      message: `${deployment} must not connect to the production Supabase project.`,
+    });
+  }
+
   const host = (env.VERCEL_URL ?? env.NEXT_PUBLIC_SITE_URL ?? "").trim();
   let hostname: string | null = null;
   try {
@@ -143,7 +152,8 @@ export function assertEnvironmentPaymentSafety(env: EnvLike = process.env): Envi
   const issues = collectEnvironmentSafetyIssues(env).filter((i) =>
     i.code.startsWith("paystack_") ||
     i.code === "env_identity_unknown" ||
-    i.code === "supabase_ref_mismatch",
+    i.code === "supabase_ref_mismatch" ||
+    i.code === "supabase_production_ref_in_non_production",
   );
   return issues[0] ?? null;
 }
