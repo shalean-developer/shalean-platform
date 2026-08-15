@@ -8,27 +8,15 @@
 -- minute-level scheduler this adds at most about one additional minute of poll
 -- latency while halving scheduled HTTP invocations.
 
-do $cron$
-declare
-  r record;
-begin
-  if not exists (select 1 from pg_extension where extname = 'pg_cron') then
-    raise notice 'pg_cron not installed — skip retry-failed-jobs reschedule';
-    return;
-  end if;
+-- Remove the existing canonical job if present. `cron.unschedule(jobid)` is safe
+-- to call for each matching row and avoids a DO/dollar-quote block entirely.
+select cron.unschedule(jobid)
+from cron.job
+where jobname = 'retry-failed-jobs';
 
-  for r in
-    select jobid
-    from cron.job
-    where jobname = 'retry-failed-jobs'
-  loop
-    perform cron.unschedule(r.jobid);
-  end loop;
-
-  perform cron.schedule(
-    'retry-failed-jobs',
-    '*/2 * * * *',
-    $$select public.invoke_nextjs_cron('/api/cron/retry-failed-jobs');$$
-  );
-end;
-$cron$;
+-- Recreate the canonical job at the lower-cost cadence.
+select cron.schedule(
+  'retry-failed-jobs',
+  '*/2 * * * *',
+  $$select public.invoke_nextjs_cron('/api/cron/retry-failed-jobs');$$
+);
