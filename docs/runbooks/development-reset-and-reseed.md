@@ -3,7 +3,7 @@
 **Environment:** local Supabase only.  
 **Never** run development reset/reseed commands against production (`tchayecuvzssixyxlvfu`) or the retired staging project (`gbgnemlpyykyhpqqbgru`).
 
-The former cloud development branch/project has been retired as part of CR-03 cost reduction. Development should now run on the Supabase CLI local stack.
+The former cloud development branch/project has been retired as part of CR-03 cost reduction. Development now runs on the Supabase CLI local stack.
 
 ## Preconditions
 
@@ -33,22 +33,26 @@ Use the local anon/service-role keys printed by `npx supabase status`. Never cop
 ## Reset schema from migrations
 
 ```bash
-npx supabase db reset
+npx supabase db reset --local
 ```
 
-This rebuilds the local database from repository migrations and seed configuration. It must not require a remote project ref.
+This rebuilds the local database from repository migrations. The explicit `--local` flag is required in this runbook so the command cannot accidentally target a linked remote database.
 
 Do **not** use `supabase db push` for routine development. Do **not** replay `supabase/migrations-legacy`.
 
-## Seed development data
+## Seed local development data
 
-Prefer repository seed scripts that support the local stack. If a script requires `--env development`, verify it resolves to local Supabase before running it.
+Do not use `scripts/env/seed-nonprod.mjs --env development`; that is a legacy remote-environment script and is not part of the local-only workflow.
+
+For the ENV-03 catalog/fixture SQL that is safe to apply to the local database, run:
 
 ```bash
-node scripts/env/seed-nonprod.mjs --env development
+npx supabase db query --local -f supabase/seeds/nonprod/env03_catalog_and_fixtures.sql
 ```
 
-Use synthetic test users and fixtures only. Never import production customer data into the local development database unless a separately approved, sanitized workflow is introduced.
+This command targets the local database explicitly. Use synthetic test data only. Never import production customer data into local development unless a separately approved, sanitized workflow is introduced.
+
+If a future fixture requires Auth API users, add a dedicated local-safe seed helper that obtains local credentials from `npx supabase status -o env`; do not revive a hosted development project merely to seed test users.
 
 ## Run the web app
 
@@ -79,6 +83,7 @@ Use `npx supabase stop --no-backup` when you explicitly want to discard the loca
 
 - Production ref remains `tchayecuvzssixyxlvfu`.
 - Normal development must not use `supabase link` to production.
+- Runtime environment safety rejects hosted `*.supabase.co` project URLs when the app resolves to `development` or `local`.
 - Never place production service-role keys in local committed files.
 - Any remote migration/application step must be performed through the governed production deployment workflow, not from the local reset/reseed procedure.
 
@@ -89,5 +94,6 @@ Local development is disposable and can always be recreated from migrations plus
 ```bash
 npx supabase stop --no-backup
 npx supabase start
-npx supabase db reset
+npx supabase db reset --local
+npx supabase db query --local -f supabase/seeds/nonprod/env03_catalog_and_fixtures.sql
 ```
