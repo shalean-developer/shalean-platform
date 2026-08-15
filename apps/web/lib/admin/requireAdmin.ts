@@ -161,7 +161,7 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
       : ["incident.manage"];
   }
 
-  if (path.includes("/pricing-catalog-audit")) return ["pricing.manage"];
+  if (path.startsWith("/api/admin/pricing-")) return ["pricing.manage"];
   if (path.includes("/workforce/training-compliance")) {
     return read ? ["cleaner.view"] : ["cleaner.edit"];
   }
