@@ -3,6 +3,10 @@
  *
  * Prefer explicit `SHALEAN_APP_ENV` (production | staging | development).
  * Fall back to Vercel git branch, then VERCEL_ENV, then local.
+ *
+ * Note: the dedicated Supabase development project was retired in August 2026.
+ * The `development` identity remains valid for local/preview safety labelling,
+ * but it no longer has a canonical remote Supabase project ref.
  */
 
 export type ShaleanDeploymentEnv =
@@ -12,13 +16,11 @@ export type ShaleanDeploymentEnv =
   | "preview"
   | "local";
 
-/** Canonical Supabase project refs for governed environments (never secrets). */
+/** Canonical Supabase project refs for active governed remote environments (never secrets). */
 export const SHALEAN_SUPABASE_REFS = {
   production: "tchayecuvzssixyxlvfu",
-  /** Persistent dedicated project (ENV-03). Legacy ephemeral branch: gfvdiczqyrvlmynvgegd */
+  /** Persistent dedicated staging project. */
   staging: "gbgnemlpyykyhpqqbgru",
-  /** Persistent dedicated project (ENV-03). Legacy ephemeral branch: hborcpvarvgynjsjnfei */
-  development: "mbvixuzfvzbooiurvxwz",
 } as const;
 
 export type EnvLike = Record<string, string | undefined>;
@@ -40,7 +42,9 @@ export function resolveDeploymentEnvironment(env: EnvLike = process.env): Shalea
   const ref = (env.VERCEL_GIT_COMMIT_REF ?? "").trim().toLowerCase();
   if (ref === "main" || ref === "master") return "production";
   if (ref === "staging") return "staging";
-  if (ref === "development") return "development";
+  // The Git `development` branch is now a normal Vercel Preview deployment.
+  // It must not imply a dedicated remote Supabase project.
+  if (ref === "development") return "preview";
 
   const vercelEnv = (env.VERCEL_ENV ?? "").trim().toLowerCase();
   if (vercelEnv === "production") return "production";
@@ -96,7 +100,7 @@ export function expectedSupabaseRefForDeployment(
 ): string | null {
   if (deployment === "production") return SHALEAN_SUPABASE_REFS.production;
   if (deployment === "staging") return SHALEAN_SUPABASE_REFS.staging;
-  if (deployment === "development") return SHALEAN_SUPABASE_REFS.development;
+  // Development/preview/local are intentionally unbound from a canonical remote project.
   return null;
 }
 
