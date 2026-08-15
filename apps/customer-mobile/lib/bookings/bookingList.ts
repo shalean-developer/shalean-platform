@@ -2,10 +2,10 @@ import { johannesburgNowParts } from "@shalean/utils";
 import { canonicalDbBookingStatus } from "@shalean/types";
 import type { CustomerBookingRow } from "@/services/types/customerBookings";
 
-/** List excludes unpaid checkouts; they belong in payment recovery flows. */
+/** Customer-owned pending-payment bookings stay listable so payment recovery is reachable from My Bookings. */
 export function isListableBooking(row: CustomerBookingRow): boolean {
   const status = canonicalDbBookingStatus(row.status);
-  return status !== "pending_payment";
+  return status !== "payment_expired";
 }
 
 export function isPastBooking(row: CustomerBookingRow, todayYmd?: string): boolean {
