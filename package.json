@@ -7,7 +7,7 @@
   "scripts": {
     "dev:local:start": "npx supabase start",
     "dev:local:status": "npx supabase status",
-    "dev:local:env": "npx supabase status -o env",
+    "dev:local:env": "node scripts/configure-local-dev-env.mjs",
     "dev:local:check": "node scripts/check-local-dev-env.mjs",
     "dev:local:web": "node scripts/check-local-dev-env.mjs && npm --prefix apps/web run dev",
     "dev:local:reset": "npx supabase db reset --local",
