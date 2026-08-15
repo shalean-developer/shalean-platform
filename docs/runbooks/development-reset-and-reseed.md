@@ -10,7 +10,7 @@ The former cloud development branch/project has been retired as part of CR-03 co
 - Node.js 20 or newer.
 - Docker Desktop or another Docker-compatible runtime is running.
 - Supabase CLI is available through `npx supabase`.
-- `apps/web/.env.local` contains local-only values and is gitignored.
+- `apps/web/.env.local` is gitignored and must contain local-only values.
 - Do not `supabase link` during normal local development.
 
 ## First-time setup
@@ -19,25 +19,13 @@ From the repository root:
 
 ```bash
 npm run dev:local:start
-cp apps/web/.env.local.example apps/web/.env.local
 npm run dev:local:env
-```
-
-On Windows PowerShell, use:
-
-```powershell
-Copy-Item apps/web/.env.local.example apps/web/.env.local
-```
-
-Copy the local `ANON_KEY` and `SERVICE_ROLE_KEY` values printed by `npm run dev:local:env` into the matching fields in `apps/web/.env.local`.
-
-Then verify the safety boundary:
-
-```bash
 npm run dev:local:check
 ```
 
-The check fails if the app is configured for a hosted `*.supabase.co` URL, a non-local host, the wrong API port, or missing local keys.
+`npm run dev:local:env` captures the local Supabase CLI environment internally and writes the required local URL/keys directly to `apps/web/.env.local`. It does **not** print the anon or service-role key to terminal output. On macOS/Linux it also applies restrictive file permissions where supported.
+
+The environment check fails if the app is configured for a hosted `*.supabase.co` URL, a non-local host, the wrong API port, or missing local keys.
 
 ## Daily start
 
@@ -45,6 +33,7 @@ Terminal 1:
 
 ```bash
 npm run dev:local:start
+npm run dev:local:env
 npm run dev:local:check
 npm run dev:local:web
 ```
@@ -71,7 +60,7 @@ npm run dev:local:seed:catalog
 npm run dev:local:stop
 ```
 
-`dev:local:reset` explicitly uses `supabase db reset --local`; the explicit `--local` flag prevents accidentally resetting a linked remote database.
+`dev:local:env` refreshes local credentials in the ignored `.env.local` without echoing secret values. `dev:local:reset` explicitly uses `supabase db reset --local`; the explicit `--local` flag prevents accidentally resetting a linked remote database.
 
 Do **not** use `supabase db push` for routine development. Do **not** replay `supabase/migrations-legacy`.
 
@@ -109,6 +98,7 @@ npm run dev:local:clean
 - Normal development must not use `supabase link` to production.
 - Runtime environment safety rejects hosted `*.supabase.co` project URLs when the app resolves to `development` or `local`.
 - `npm run dev:local:web` runs the local environment checker before starting Next.js.
+- Local service-role credentials are written only to the gitignored `.env.local` and are not printed by the standard workflow.
 - Never place production service-role keys in local committed files.
 - Any remote migration/application step must be performed through the governed production deployment workflow, not from this local reset/reseed procedure.
 
@@ -119,6 +109,7 @@ Local development is disposable and can always be recreated from migrations plus
 ```bash
 npm run dev:local:clean
 npm run dev:local:start
+npm run dev:local:env
 npm run dev:local:reset
 npm run dev:local:seed:catalog
 npm run dev:local:check
