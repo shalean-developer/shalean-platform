@@ -236,5 +236,11 @@ export async function enqueueProviderWhatsApp(params: {
   if (key) insert.idempotency_key = key;
   const { data, error } = await params.admin.from("whatsapp_queue").insert(insert).select("id").single();
   if (error) return { id: null, error: error.message };
-  return { id: String(data.id) };
+
+  const id = String(data.id);
+  // CR-07B: normal outbound delivery starts immediately. A failed attempt is deliberately
+  // left pending with next_attempt_at by flushWhatsAppJobViaProvider, so the cron remains
+  // a recovery/retry safety net rather than the primary delivery trigger.
+  await flushWhatsAppJobViaProvider(params.admin, id);
+  return { id };
 }
