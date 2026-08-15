@@ -81,6 +81,7 @@ type BookingRow = {
   location: string | null;
   total_paid_zar: number | null;
   amount_paid_cents: number | null;
+  total_price: number | null;
   status: string | null;
   completed_at?: string | null;
   cleaner_id: string | null;
@@ -1199,7 +1200,7 @@ export default function BookingsPage() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-sm font-semibold text-slate-800">
-                          {formatZar(b.amount_paid_cents, b.total_paid_zar)}
+                          {formatZar(b.amount_paid_cents, b.total_price ?? b.total_paid_zar)}
                         </span>
                       </td>
                       <td className="px-4 py-3">
