@@ -7,14 +7,14 @@ import {
 
 describe("dashboardVisibilityContract", () => {
   describe("explainCustomerDashboardVisibility", () => {
-    it("hides pending_payment for owner", () => {
+    it("shows pending_payment for owner so payment recovery stays reachable", () => {
       const r = explainCustomerDashboardVisibility(
         { status: "pending_payment", user_id: "u1", customer_email: null },
         "u1",
         "",
       );
-      expect(r.visible).toBe(false);
-      expect(r.reason).toContain("excludes");
+      expect(r.visible).toBe(true);
+      expect(r.reason).toContain("pending_payment_recovery");
     });
 
     it("hides payment_expired", () => {
