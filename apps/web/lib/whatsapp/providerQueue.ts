@@ -203,6 +203,11 @@ export async function enqueueProviderWhatsApp(params: {
   context?: Record<string, unknown>;
   idempotencyKey?: string | null;
   priority?: number;
+  /**
+   * New single-message sends default to an immediate provider attempt. Bulk callers must
+   * pass false so the HTTP request only persists the batch and the worker drains it later.
+   */
+  immediate?: boolean;
 }): Promise<{ id: string | null; error?: string }> {
   const phoneDigits = digits(params.phone);
   if (phoneDigits.length < 10 || phoneDigits.length > 15) return { id: null, error: "invalid_phone" };
@@ -236,5 +241,12 @@ export async function enqueueProviderWhatsApp(params: {
   if (key) insert.idempotency_key = key;
   const { data, error } = await params.admin.from("whatsapp_queue").insert(insert).select("id").single();
   if (error) return { id: null, error: error.message };
-  return { id: String(data.id) };
+
+  const id = String(data.id);
+  if (params.immediate !== false) {
+    // CR-07B: normal single-message outbound delivery starts immediately. A failed attempt
+    // stays pending with next_attempt_at, while the cron remains the retry/recovery safety net.
+    await flushWhatsAppJobViaProvider(params.admin, id);
+  }
+  return { id };
 }

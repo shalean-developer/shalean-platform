@@ -110,6 +110,9 @@ export async function POST(request: Request) {
           days_since_last_booking: candidate.daysSinceLastBooking,
         },
         priority: -5,
+        // Bulk campaigns must only persist rows inside this request. The worker drains them
+        // afterwards so a provider slowdown cannot make a 250-recipient POST time out mid-batch.
+        immediate: false,
       });
       if (outcome.id) queued += 1;
       else failures.push({ phone: candidate.phoneE164, error: outcome.error ?? "queue_failed" });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { enqueueProviderWhatsApp, flushWhatsAppJobViaProvider } from "@/lib/whatsapp/providerQueue";
+import { enqueueProviderWhatsApp } from "@/lib/whatsapp/providerQueue";
 import { getWhatsAppProviderName } from "@/lib/whatsapp/providers";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import type { WhatsAppQueuePayload } from "@/lib/whatsapp/types";
@@ -60,22 +60,32 @@ export async function POST(request: Request) {
     context: { source: "admin_whatsapp_test", recipient_role: recipientRole },
     idempotencyKey,
     priority: 100,
+    immediate: true,
   });
 
   if (!queued.id) return NextResponse.json({ error: queued.error || "Failed to queue WhatsApp test." }, { status: 400 });
 
-  const result = await flushWhatsAppJobViaProvider(admin, queued.id);
   const { data: row } = await admin.from("whatsapp_queue")
-    .select("id,status,provider,provider_message_id,meta_message_id,delivery_status,last_error,attempts,phone_e164,recipient_role,created_at,sent_at")
+    .select("id,status,provider,provider_message_id,meta_message_id,delivery_status,last_error,attempts,phone_e164,recipient_role,created_at,sent_at,next_attempt_at")
     .eq("id", queued.id).maybeSingle();
 
+  const status = String((row as { status?: unknown } | null)?.status ?? "");
+  const error = String((row as { last_error?: unknown } | null)?.last_error ?? "") || null;
+  const sent = status === "sent";
+
   await logSystemEvent({
-    level: result.ok ? "info" : "warn",
+    level: sent ? "info" : "warn",
     source: "admin_whatsapp_test",
-    message: result.ok ? "Admin WhatsApp test sent" : "Admin WhatsApp test failed",
-    context: { queue_id: queued.id, provider, mode, recipient_role: recipientRole, phone_tail: phone.replace(/\D/g, "").slice(-4), error: result.error ?? null },
+    message: sent ? "Admin WhatsApp test sent" : "Admin WhatsApp test queued for retry",
+    context: { queue_id: queued.id, provider, mode, recipient_role: recipientRole, phone_tail: phone.replace(/\D/g, "").slice(-4), status, error },
   });
 
-  if (!result.ok) return NextResponse.json({ ok: false, error: result.error || "WhatsApp test failed.", queue: row ?? null }, { status: 502 });
+  if (!sent) {
+    return NextResponse.json({
+      ok: false,
+      error: error || "WhatsApp test was not sent immediately and remains queued for retry.",
+      queue: row ?? null,
+    }, { status: 502 });
+  }
   return NextResponse.json({ ok: true, provider, queue: row ?? null });
 }

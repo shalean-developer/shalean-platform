@@ -1,5 +1,6 @@
 import "./cr06HighFrequencyCadence.test";
 import "./cr07aWhatsappWorkerConsolidation.test";
+import "./cr07bWhatsappImmediateProcessing.test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
