@@ -24,7 +24,6 @@ import {
   resolvePricingServiceRow,
 } from "@/lib/booking-v2/resolvePricingServiceSlug";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
-import type { BookingV2ServiceDefinition } from "@/lib/booking-v2/bookingV2CatalogTypes";
 
 export type {
   LiveExtra,
@@ -91,12 +90,12 @@ function normalizeExtraSlug(id: string): string {
 }
 
 function buildExtrasForService(
-  serviceDef: BookingV2ServiceDefinition,
+  serviceSlug: ServiceSlug,
   dbExtras: Record<string, DbExtraRow>,
 ): LiveExtra[] {
   return Object.entries(dbExtras)
     .filter(([slug]) => !BOOKING_V2_INTERNAL_EXTRA_SLUGS.has(slug))
-    .filter(([, row]) => row.service_slugs.includes(serviceDef.slug))
+    .filter(([, row]) => row.service_slugs.includes(serviceSlug))
     .filter(([, row]) => Number.isFinite(row.price) && row.price > 0)
     .sort((a, b) => a[1].sort_order - b[1].sort_order || a[0].localeCompare(b[0]))
     .map(([slug, row]) => ({
@@ -224,7 +223,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         : resolvePricingServiceRow(dbServices, dbSlug)) ??
       resolvePricingServiceRow(dbServices, "standard");
 
-    const extras = buildExtrasForService(serviceDef, dbExtras);
+    const extras = buildExtrasForService(slug, dbExtras);
     const rates = ratesFromDbRow(dbSvc, staticFallback);
 
     catalog[slug] = {
@@ -285,23 +284,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
           dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
           dbSvc?.max_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.maxHours,
         ),
-        extras: buildExtrasForService(
-          {
-            slug,
-            pricingSlug: dbSlug,
-            label: staticFallback.label,
-            shortLabel: staticFallback.shortLabel,
-            description: staticFallback.description,
-            cleanerMode: staticFallback.cleanerMode,
-            extraTypes: [],
-            extraSlugs: [],
-            showEquipmentQuestion: slug === "regular-cleaning",
-            showCleaningProductsQuestion: slug === "regular-cleaning",
-            allowsExtraCleaner: false,
-            step1Questions: staticFallback.step1Questions,
-          },
-          dbExtras,
-        ),
+        extras: buildExtrasForService(slug, dbExtras),
       };
     }
   }
