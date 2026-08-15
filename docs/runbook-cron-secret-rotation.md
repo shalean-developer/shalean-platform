@@ -1,26 +1,39 @@
 # Runbook: `CRON_SECRET` rotation & Supabase pg_cron alignment
 
-All production schedulers run in **Supabase `pg_cron` + `pg_net`**, not Vercel. HTTP crons call Next.js `/api/cron/*` via `public.invoke_nextjs_cron()` (migration `20261005_consolidate_all_http_crons_in_supabase.sql`).
+All production schedulers run in **Supabase `pg_cron` + `pg_net`**, not Vercel. HTTP crons call Next.js `/api/cron/*` via `public.invoke_nextjs_cron()`.
 
-`apps/web/vercel.json` has **no** `crons` block. If **Vercel → shalean-platform → Settings → Cron Jobs** still lists jobs, delete them so only Supabase triggers schedules (avoids duplicate runs and Hobby limits).
+`apps/web/vercel.json` has **no** `crons` block. If **Vercel → shalean-platform → Settings → Cron Jobs** still lists jobs, delete them so only Supabase triggers schedules.
 
-Routes authenticate with **`CRON_SECRET`** via `verifyCronSecret` (`apps/web/lib/cron/verifyCronSecret.ts`): accept **`Authorization: Bearer <secret>`** (scheme case-insensitive per RFC 7235; token trimmed) or **`x-cron-secret: <secret>`** (trimmed, exact match).
+Routes authenticate with **`CRON_SECRET`** via `verifyCronSecret` (`apps/web/lib/cron/verifyCronSecret.ts`): accept **`Authorization: Bearer <secret>`** or **`x-cron-secret: <secret>`**.
+
+---
+
+## Canonical production cron runtime
+
+Production HTTP crons are scheduled in Supabase and invoke the Next.js application through `public.invoke_nextjs_cron()`.
+
+For WhatsApp specifically, CR-07A retired the duplicate Supabase Edge Function worker. The canonical runtime is:
+
+- `apps/web/app/api/cron/whatsapp-worker/route.ts`
+- `apps/web/lib/whatsapp/providerQueue.ts`
+
+Do **not** deploy or cut over to `supabase/functions/whatsapp-worker`; that executable worker has been retired. Historical Edge Function migration documents are design history only and are not an active production procedure.
 
 ---
 
 ## One-time: move crons from Vercel to Supabase
 
-1. **Apply migrations** through `20261005` (and later) on production Supabase.
+1. Apply current governed migrations on production Supabase.
 2. From `apps/web`, generate setup SQL:
    ```bash
    node scripts/print-setup-supabase-crons.sql.mjs
    ```
 3. Paste output into **Supabase Dashboard → SQL Editor → Run**.
 4. In **Vercel → shalean-platform → Settings → Cron Jobs**, **delete all** cron jobs.
-5. Keep **`CRON_SECRET`** on Vercel (API routes still validate it when Supabase calls in).
-6. Verify: `node scripts/check-cron-health.mjs` (from `apps/web`).
+5. Keep **`CRON_SECRET`** on Vercel because API routes validate it when Supabase calls in.
+6. Verify with `node scripts/check-cron-health.mjs` from `apps/web`.
 
-Set the singleton row (SQL Editor):
+Set the singleton row:
 
 ```sql
 update public.cron_http_targets
@@ -38,61 +51,10 @@ from cron.job
 order by jobname;
 ```
 
----
-
-## Edge Function cron cutover (Phase 1+)
-
-Background workers are migrating from Vercel `/api/cron/*` to **Supabase Edge Functions**. See `docs/backend-migration-architecture.md`.
-
-### Prerequisites
-
-1. Apply migration `20261054_invoke_edge_cron.sql`.
-2. Deploy function: `supabase functions deploy whatsapp-worker --project-ref <ref>`
-3. Set Edge secrets (Dashboard → Edge Functions → Secrets) — mirror `supabase/functions/.env.example`.
-4. Update `cron_http_targets`:
+For `whatsapp-worker`, the command must continue to invoke the Next.js route, for example:
 
 ```sql
-update public.cron_http_targets
-set edge_base_url = 'https://<project-ref>.supabase.co/functions/v1',
-    cron_secret = '<same value as Vercel CRON_SECRET>',
-    updated_at = now()
-where singleton;
-```
-
-### Shadow verification (before pg_cron cutover)
-
-**Do not reschedule pg_cron until shadow checks pass.** Vercel route stays active.
-
-Manual invoke (replace URL and secret):
-
-```bash
-curl -sS -X POST "https://<project-ref>.supabase.co/functions/v1/whatsapp-worker?metrics=1" \
-  -H "Authorization: Bearer <CRON_SECRET>" \
-  -H "Content-Type: application/json"
-```
-
-Compare `cron_runs` / `system_logs` for `job_name = 'whatsapp-worker'` and `runtime = supabase_edge` vs existing Vercel entries.
-
-### Cutover single job
-
-```sql
-select cron.unschedule('whatsapp-worker');
-select cron.schedule(
-  'whatsapp-worker',
-  '* * * * *',
-  $$select public.invoke_edge_cron('whatsapp-worker');$$
-);
-```
-
-### Rollback
-
-```sql
-select cron.unschedule('whatsapp-worker');
-select cron.schedule(
-  'whatsapp-worker',
-  '* * * * *',
-  $$select public.invoke_nextjs_cron('/api/cron/whatsapp-worker');$$
-);
+select public.invoke_nextjs_cron('/api/cron/whatsapp-worker');
 ```
 
 ---
@@ -100,7 +62,7 @@ select cron.schedule(
 ## When to rotate
 
 - Any chance the value was copied into chat, tickets, or logs.
-- After intermittent **`Unauthorized`** responses — rotate once traffic is pinned to a single production deployment with one env definition.
+- After intermittent **`Unauthorized`** responses once traffic is pinned to a single production deployment with one env definition.
 
 ---
 
@@ -117,14 +79,14 @@ Store it in your password manager as the new production cron secret.
 ## Step 2 — Vercel (Next.js env only)
 
 1. **Settings → Environment Variables**
-2. Set **`CRON_SECRET`** for **Production** (still required by API routes; Vercel no longer triggers crons).
+2. Set **`CRON_SECRET`** for **Production**.
 3. **Redeploy Production** after changes.
 
 ---
 
 ## Step 3 — Supabase
 
-Update the singleton config (no need to reschedule individual jobs):
+Update the singleton config; individual jobs do not need to be rescheduled:
 
 ```sql
 update public.cron_http_targets
@@ -133,7 +95,7 @@ set cron_secret = '<NEW_SECRET>',
 where singleton;
 ```
 
-Confirm **`app_base_url`** points at production (no trailing slash on host).
+Confirm **`app_base_url`** points at production with no trailing slash.
 
 ---
 
@@ -172,7 +134,7 @@ Local helper: `node apps/web/scripts/check-cron-health.mjs` (reads `.env.local`)
 
 ---
 
-## SQL-only crons (no HTTP)
+## SQL-only crons
 
 These stay in Postgres and do **not** use `cron_http_targets`:
 
@@ -191,3 +153,4 @@ These stay in Postgres and do **not** use `cron_http_targets`:
 ## Related
 
 - Payments & bookings: `docs/runbook-payments.md`
+- WhatsApp worker retirement: `supabase/functions/whatsapp-worker/README.md`

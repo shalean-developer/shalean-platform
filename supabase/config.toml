@@ -1,4 +1,4 @@
-# Shalean Platform — Supabase local config (Edge Functions + migrations).
+# Shalean Platform — Supabase local config (migrations + local services).
 # See docs/backend-migration-architecture.md
 # Active migrations: supabase/migrations (14-digit filenames only).
 # Archive (ignored by CLI): supabase/migrations-legacy
@@ -18,8 +18,3 @@ major_version = 15
 [studio]
 enabled = true
 port = 54323
-
-# Per-function only — top-level [functions] verify_jwt = bool breaks Preview parse
-# ("functions[verify_jwt] expected a map or struct, got bool").
-[functions.whatsapp-worker]
-verify_jwt = false
