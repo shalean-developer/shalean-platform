@@ -27,6 +27,22 @@ describe("priorityPermissionsForRequest", () => {
     expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/cleaner-report-feedback"))).toEqual(["cleaner.view"]);
   });
 
+  it("maps the full Pricing API family to pricing.manage", () => {
+    for (const [path, method] of [
+      ["/api/admin/pricing-services", "GET"],
+      ["/api/admin/pricing-services", "PATCH"],
+      ["/api/admin/pricing-extras", "GET"],
+      ["/api/admin/pricing-extras", "POST"],
+      ["/api/admin/pricing-booking-config", "GET"],
+      ["/api/admin/pricing-booking-config", "PATCH"],
+      ["/api/admin/pricing-catalog-audit", "GET"],
+    ] as const) {
+      expect(priorityPermissionsForRequest(new Request(`https://example.test${path}`, { method }))).toEqual([
+        "pricing.manage",
+      ]);
+    }
+  });
+
   it("allows mixed Marketing and customer review readers", () => {
     expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/reviews"))).toEqual([
       "customer.view",
