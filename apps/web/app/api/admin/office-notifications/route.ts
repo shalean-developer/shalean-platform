@@ -32,6 +32,13 @@ type DashboardRollup = {
   sms_failed: number | string | null;
 };
 
+type SupabaseErrorLike = {
+  code?: string | null;
+  message?: string | null;
+  details?: string | null;
+  hint?: string | null;
+};
+
 function parseLogLimit(raw: string | null): number {
   const n = Number.parseInt(raw ?? "", 10);
   if (!Number.isFinite(n)) return DEFAULT_LOG_LIMIT;
@@ -66,6 +73,16 @@ function channelStatsFromRollup(rollup: DashboardRollup): OfficeNotificationChan
     channelStat("whatsapp", safeCount(rollup.whatsapp_sent), safeCount(rollup.whatsapp_failed)),
     channelStat("sms", safeCount(rollup.sms_sent), safeCount(rollup.sms_failed)),
   ];
+}
+
+function isMissingRollupRpcError(error: SupabaseErrorLike | null | undefined): boolean {
+  if (!error) return false;
+  if (String(error.code ?? "").toUpperCase() === "PGRST202") return true;
+  const text = `${error.message ?? ""} ${error.details ?? ""} ${error.hint ?? ""}`.toLowerCase();
+  return (
+    text.includes("could not find the function") ||
+    (text.includes("office_notifications_dashboard_rollup") && text.includes("schema cache"))
+  );
 }
 
 export async function GET(request: Request) {
@@ -103,12 +120,21 @@ export async function GET(request: Request) {
   if (cleanersRes.error) return NextResponse.json({ error: cleanersRes.error.message }, { status: 500 });
   if (todayBookingsRes.error) return NextResponse.json({ error: todayBookingsRes.error.message }, { status: 500 });
 
-  // Additive migration rollout safety: use the legacy raw queries only when the new RPC is not available yet.
-  let rollup = !rollupRes.error ? ((rollupRes.data?.[0] ?? null) as DashboardRollup | null) : null;
+  const rollupRpcMissing = isMissingRollupRpcError(rollupRes.error);
+  if (rollupRes.error && !rollupRpcMissing) {
+    return NextResponse.json({ error: rollupRes.error.message }, { status: 500 });
+  }
+
+  // Additive migration rollout safety: use the legacy raw queries only when the new RPC is not in PostgREST yet.
+  const rollup = !rollupRes.error ? ((rollupRes.data?.[0] ?? null) as DashboardRollup | null) : null;
+  if (!rollup && !rollupRpcMissing) {
+    return NextResponse.json({ error: "Office notifications rollup returned no data." }, { status: 500 });
+  }
+
   let fallbackTodayRows: OfficeNotificationLogRow[] = [];
   let fallbackCustomerRows: Array<{ customer_email: string | null }> = [];
 
-  if (!rollup) {
+  if (rollupRpcMissing) {
     const [todayFallbackRes, customerFallbackRes] = await Promise.all([
       admin
         .from("notification_logs")
