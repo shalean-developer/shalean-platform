@@ -7,6 +7,14 @@ export type SystemLogLevel = "error" | "warn" | "info";
 /** Operational severity; `critical` is stored in DB as `error` with a `[CRITICAL]` prefix (system_logs.level check). */
 export type OperationalIssueLevel = "error" | "warn" | "critical";
 
+const SEO_AUTOMATION_HISTORY_JOBS = new Set([
+  "gsc-sync",
+  "seo-optimization",
+  "sitemap-health",
+  "robots-health",
+  "seo-competitors",
+]);
+
 /**
  * Persists a row to `system_logs` when Supabase is configured. Never throws.
  *
@@ -15,8 +23,10 @@ export type OperationalIssueLevel = "error" | "warn" | "critical";
  */
 /**
  * Persists every cron run to `cron_runs` for health/recency monitoring.
- * Only error runs are mirrored into `system_logs`; successful idle ticks stay out of the
- * high-volume operational event table. Safe to call from cron routes; never throws.
+ * Errors are mirrored into `system_logs`. Successful SEO automation runs are also mirrored
+ * because the SEO Command Centre currently consumes their rich context/metrics from
+ * `system_logs`; other successful idle ticks stay out of the high-volume event table.
+ * Safe to call from cron routes; never throws.
  */
 export async function logCronRun(params: {
   jobName: string;
@@ -26,9 +36,9 @@ export async function logCronRun(params: {
 }): Promise<void> {
   const detail = (params.message ?? "").trim().slice(0, 8000);
   try {
-    if (params.status === "error") {
+    if (params.status === "error" || SEO_AUTOMATION_HISTORY_JOBS.has(params.jobName)) {
       await logSystemEvent({
-        level: "error",
+        level: params.status === "error" ? "error" : "info",
         source: "cron_run",
         message: params.jobName,
         context: {
