@@ -14,8 +14,9 @@ export type OperationalIssueLevel = "error" | "warn" | "critical";
  * (ms from trigger to log write; compare with row `created_at` for end-to-end delivery latency).
  */
 /**
- * Persists a row to `cron_runs` and mirrors a compact line into `system_logs` (source `cron_run`).
- * Safe to call from cron routes; never throws.
+ * Persists every cron run to `cron_runs` for health/recency monitoring.
+ * Only error runs are mirrored into `system_logs`; successful idle ticks stay out of the
+ * high-volume operational event table. Safe to call from cron routes; never throws.
  */
 export async function logCronRun(params: {
   jobName: string;
@@ -25,16 +26,18 @@ export async function logCronRun(params: {
 }): Promise<void> {
   const detail = (params.message ?? "").trim().slice(0, 8000);
   try {
-    await logSystemEvent({
-      level: params.status === "error" ? "error" : "info",
-      source: "cron_run",
-      message: params.jobName,
-      context: {
-        status: params.status,
-        detail: detail || undefined,
-        ...(params.context ?? {}),
-      },
-    });
+    if (params.status === "error") {
+      await logSystemEvent({
+        level: "error",
+        source: "cron_run",
+        message: params.jobName,
+        context: {
+          status: params.status,
+          detail: detail || undefined,
+          ...(params.context ?? {}),
+        },
+      });
+    }
     const supabase = getSupabaseAdmin();
     if (!supabase) return;
     const { error } = await supabase.from("cron_runs").insert({
