@@ -10,8 +10,11 @@ const DEFAULT_BATCH_SIZE = 5_000;
 const DEFAULT_MAX_BATCHES = 10;
 
 function boundedInteger(value: string | undefined, fallback: number, min: number, max: number): number {
-  const parsed = Number(value ?? fallback);
-  return Number.isFinite(parsed) ? Math.min(max, Math.max(min, Math.round(parsed))) : fallback;
+  const raw = value?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(max, Math.max(min, Math.round(parsed)));
 }
 
 /**
