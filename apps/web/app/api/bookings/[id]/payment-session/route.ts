@@ -132,11 +132,14 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   if (session.status === "failed") {
+    // Fail closed on a missing booking row. Step4Payment treats HTTP 401 as a hard stop
+    // and will NOT fall back to Paystack Inline. This prevents a customer from being
+    // charged against a booking id that cannot be durably read by the server.
     const http =
       session.errorCode === "PAYMENT_ACCESS_DENIED"
         ? 403
         : session.errorCode === "PAYMENT_BOOKING_NOT_FOUND"
-          ? 404
+          ? 401
           : session.errorCode === "PAYMENT_ALREADY_COMPLETED"
             ? 409
             : session.retryable
@@ -146,7 +149,10 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
       {
         status: "failed",
         bookingId: session.bookingId,
-        error: session.error,
+        error:
+          session.errorCode === "PAYMENT_BOOKING_NOT_FOUND"
+            ? "We could not verify your booking for payment. No payment was started. Please sign in again and retry your booking."
+            : session.error,
         errorCode: session.errorCode,
         retryable: session.retryable,
       },
