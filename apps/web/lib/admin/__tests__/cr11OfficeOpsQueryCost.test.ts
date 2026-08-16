@@ -7,22 +7,24 @@ function read(path: string) {
 }
 
 describe("CR-11 Office Ops query cost contract", () => {
-  it("does not fetch 10,000 raw cron rows for the 30-day booking-engine uptime strip", () => {
+  it("uses a daily aggregate for normal 30-day cron history and keeps the raw 10k path fallback-only", () => {
     const collector = read("lib/admin/collectOfficeOpsHealthSignals.ts");
-    expect(collector).toContain('admin.rpc("office_ops_booking_cron_success_days"');
+    expect(collector).toContain('admin.rpc("office_ops_booking_cron_daily_status"');
     expect(collector).toContain('.eq("status", "error")');
     expect(collector).toContain("OFFICE_OPS_CRON_ERROR_LIMIT = 2_000");
-
-    const cronRunsBlock = collector.match(/admin\s*\.from\("cron_runs"\)[\s\S]*?\.limit\(([^)]+)\)/)?.[0] ?? "";
-    expect(cronRunsBlock).not.toContain("10000");
+    expect(collector).toContain("OFFICE_OPS_CRON_FALLBACK_LIMIT = 10_000");
+    expect(collector).toContain("if (bookingCronDailyStatusRes.error)");
+    expect(collector).toContain("formatIsoInJohannesburgYmd");
+    expect(collector).toContain("representedErrorDays");
   });
 
-  it("aggregates booking-engine successes by Johannesburg day in SQL", () => {
+  it("aggregates booking-engine success and error presence by Johannesburg day in SQL", () => {
     const migration = read("../../supabase/migrations/20260816034500_cr11_aggregate_office_ops_cron_success_days.sql");
-    expect(migration).toContain("office_ops_booking_cron_success_days");
+    expect(migration).toContain("office_ops_booking_cron_daily_status");
     expect(migration).toContain("at time zone 'Africa/Johannesburg'");
+    expect(migration).toContain("in ('success', 'error')");
     expect(migration).toContain("group by");
     expect(migration).toContain("'retry-failed-jobs'");
-    expect(migration).toContain("grant execute on function public.office_ops_booking_cron_success_days(timestamptz) to service_role");
+    expect(migration).toContain("grant execute on function public.office_ops_booking_cron_daily_status(timestamptz) to service_role");
   });
 });
