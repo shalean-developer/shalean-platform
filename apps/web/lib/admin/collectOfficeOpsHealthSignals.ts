@@ -16,6 +16,7 @@ import {
 import { runProductionHealthScan, type ProductionHealthSummary } from "@/lib/observability/productionHealthMetrics";
 
 export const OFFICE_OPS_HISTORY_DAYS_MS = 30 * 86_400_000;
+const OFFICE_OPS_CRON_ERROR_LIMIT = 2_000;
 
 export type { OfficeOpsSystemErrorRow };
 
@@ -58,7 +59,8 @@ export async function collectOfficeOpsHealthSignals(
     productionHealthResult,
     acknowledgements,
     systemLogsRes,
-    cronRunsRes,
+    cronErrorsRes,
+    bookingCronSuccessDaysRes,
     paymentDriftRes,
     notificationLogsRes,
     flagsRes,
@@ -78,9 +80,11 @@ export async function collectOfficeOpsHealthSignals(
     admin
       .from("cron_runs")
       .select("created_at, status, message, job_name")
+      .eq("status", "error")
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
-      .limit(10000),
+      .limit(OFFICE_OPS_CRON_ERROR_LIMIT),
+    admin.rpc("office_ops_booking_cron_success_days", { p_since: sinceIso }),
     admin
       .from("failed_jobs")
       .select("created_at, type")
@@ -102,9 +106,9 @@ export async function collectOfficeOpsHealthSignals(
       ? applyOpsHealthAcknowledgements(productionHealthResult.summary, acknowledgements).visibleSummary
       : null;
 
-  const cronRunRows = (cronRunsRes.data ?? []) as OfficeOpsCronRunRow[];
-  const cronErrorRows = filterCronErrorRows(
-    cronRunRows.filter((row) => String(row.status ?? "").trim().toLowerCase() === "error"),
+  const cronErrorRows = filterCronErrorRows((cronErrorsRes.data ?? []) as OfficeOpsCronRunRow[]);
+  const cronSuccessRows = filterBookingEngineCronSuccesses(
+    (bookingCronSuccessDaysRes.data ?? []) as OfficeOpsCronRunRow[],
   );
 
   return {
@@ -118,7 +122,7 @@ export async function collectOfficeOpsHealthSignals(
     dbOk: !dbRes.error,
     systemErrorRows: (systemLogsRes.data ?? []) as OfficeOpsSystemErrorRow[],
     cronErrorRows,
-    cronSuccessRows: filterBookingEngineCronSuccesses(cronRunRows),
+    cronSuccessRows,
     paymentDriftRows: (paymentDriftRes.data ?? []) as Array<{ created_at: string | null }>,
     notificationRows: (notificationLogsRes.data ?? []) as Array<{
       created_at: string | null;
