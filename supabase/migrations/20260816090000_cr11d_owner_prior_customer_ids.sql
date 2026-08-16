@@ -1,17 +1,17 @@
--- CR-11D: return only distinct prior customer ids for Owner Command Centre retention analytics.
+-- CR-11D: return the complete distinct prior-customer set in one row so PostgREST row caps cannot truncate retention history.
 
 create or replace function public.owner_prior_customer_ids(
   p_before timestamptz
 )
 returns table (
-  customer_id uuid
+  customer_ids uuid[]
 )
 language sql
 stable
 security definer
 set search_path = public
 as $$
-  select distinct b.customer_id
+  select coalesce(array_agg(distinct b.customer_id order by b.customer_id), '{}'::uuid[])
   from public.bookings b
   where b.payment_status = 'success'
     and b.payment_completed_at is not null
