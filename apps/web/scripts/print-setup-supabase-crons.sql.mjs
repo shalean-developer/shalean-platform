@@ -69,7 +69,7 @@ const HTTP_JOBS = [
   ["generate-payouts", "0 6 * * 1", "/api/cron/generate-payouts"],
   ["create-payout-run", "0 7 * * 1", "/api/cron/create-payout-run"],
   ["freeze-payouts", "0 8 * * 1", "/api/cron/freeze-payouts"],
-  ["prune-system-logs", "0 4 * * 0", "/api/cron/prune-system-logs"],
+  ["prune-system-logs", "0 4 * * *", "/api/cron/prune-system-logs"],
 ];
 
 const LEGACY_NAMES = [
