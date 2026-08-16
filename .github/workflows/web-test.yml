@@ -96,7 +96,7 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: npm run test -- lib/security/__tests__/p0MandatoryAal2Contract.test.ts lib/security/__tests__/p0PrivilegedMfaRolloutContract.test.ts
 
-      - name: Revenue path tests (booking, dispatch, cleaner API, cron locks)
+      - name: Revenue path tests (booking, dispatch, cleaner API, cron locks, cost gates)
         if: steps.filter.outputs.run_suite == 'true'
         run: >-
           npm run test --
@@ -106,6 +106,8 @@ jobs:
           app/api/cleaner/__tests__/cleanerJobsTeamApi.test.ts
           lib/cron/__tests__/h15CronLockOverlapPrevention.test.ts
           lib/cron/__tests__/cr05RetryFailedJobsCadence.test.ts
+          lib/cron/__tests__/cr10VercelBuildGate.test.ts
+          lib/admin/__tests__/cr11OfficeOpsQueryCost.test.ts
           lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts
 
       - name: Focused marketing / Meta compliance unit tests
