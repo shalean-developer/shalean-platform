@@ -45,10 +45,8 @@ function isMissingPriorCustomerRpcError(error: { code?: string | null; message?:
 async function loadPriorCustomerIds(admin: SupabaseClient, priorEndIso: string): Promise<Set<string>> {
   const rpcRes = await admin.rpc("owner_prior_customer_ids", { p_before: priorEndIso });
   if (!rpcRes.error) {
-    const ids = (rpcRes.data ?? [])
-      .map((row: { customer_id?: string | null }) => row.customer_id)
-      .filter((id: string | null | undefined): id is string => Boolean(id));
-    return new Set(ids);
+    const row = (rpcRes.data?.[0] ?? null) as { customer_ids?: string[] | null } | null;
+    return new Set((row?.customer_ids ?? []).filter((id): id is string => typeof id === "string" && id.length > 0));
   }
 
   // Additive migration rollout safety only. Operational failures must not trigger the old 20k-row read.
