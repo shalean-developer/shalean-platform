@@ -3,6 +3,7 @@ import "./cr07aWhatsappWorkerConsolidation.test";
 import "./cr07bWhatsappImmediateProcessing.test";
 import "./cr08SocialPublishCadence.test";
 import "./cr09IdleCronLogging.test";
+import "./cr16SystemLogPruning.test";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";

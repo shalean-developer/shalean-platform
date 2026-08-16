@@ -6,12 +6,23 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const DEFAULT_RETENTION_DAYS = 30;
+const DEFAULT_BATCH_SIZE = 5_000;
+const DEFAULT_MAX_BATCHES = 10;
+
+function boundedInteger(value: string | undefined, fallback: number, min: number, max: number): number {
+  const raw = value?.trim();
+  if (!raw) return fallback;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return Math.min(max, Math.max(min, Math.round(parsed)));
+}
 
 /**
- * Vercel Cron: `Authorization: Bearer CRON_SECRET`.
- * Prunes `system_logs` older than `SYSTEM_LOG_RETENTION_DAYS` (default 30, max 365) via `prune_system_logs`.
+ * Daily retention maintenance for `system_logs`.
  *
- * Suggested schedule: weekly — POST /api/cron/prune-system-logs
+ * Deletes expired rows in bounded batches through `prune_system_logs_batch`, avoiding the
+ * statement timeouts caused by one very large DELETE. Defaults to at most 50k rows/run
+ * (10 x 5k) while preserving the existing 30-day retention policy.
  */
 export async function POST(request: Request) {
   const secret = process.env.CRON_SECRET?.trim();
@@ -27,26 +38,65 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Supabase not configured." }, { status: 503 });
   }
 
-  const envDays = Number(process.env.SYSTEM_LOG_RETENTION_DAYS ?? DEFAULT_RETENTION_DAYS);
-  const retentionDays =
-    Number.isFinite(envDays) && envDays > 0 ? Math.min(365, Math.max(1, Math.round(envDays))) : DEFAULT_RETENTION_DAYS;
+  const retentionDays = boundedInteger(
+    process.env.SYSTEM_LOG_RETENTION_DAYS,
+    DEFAULT_RETENTION_DAYS,
+    1,
+    365,
+  );
+  const batchSize = boundedInteger(
+    process.env.SYSTEM_LOG_PRUNE_BATCH_SIZE,
+    DEFAULT_BATCH_SIZE,
+    100,
+    10_000,
+  );
+  const maxBatches = boundedInteger(
+    process.env.SYSTEM_LOG_PRUNE_MAX_BATCHES,
+    DEFAULT_MAX_BATCHES,
+    1,
+    20,
+  );
 
-  const { data, error } = await admin.rpc("prune_system_logs", { p_retention_days: retentionDays });
-  if (error) {
-    await reportOperationalIssue("error", "cron/prune-system-logs", error.message, { retentionDays });
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  let deleted = 0;
+  let batches = 0;
+
+  for (let i = 0; i < maxBatches; i += 1) {
+    const { data, error } = await admin.rpc("prune_system_logs_batch", {
+      p_retention_days: retentionDays,
+      p_batch_size: batchSize,
+    });
+
+    if (error) {
+      await reportOperationalIssue("error", "cron/prune-system-logs", error.message, {
+        retentionDays,
+        batchSize,
+        maxBatches,
+        batches,
+        deleted,
+      });
+      return NextResponse.json(
+        { error: error.message, deleted, batches, retentionDays, batchSize, maxBatches },
+        { status: 500 },
+      );
+    }
+
+    const batchDeleted = typeof data === "number" ? data : Number(data ?? 0);
+    deleted += Number.isFinite(batchDeleted) ? batchDeleted : 0;
+    batches += 1;
+
+    if (batchDeleted < batchSize) break;
   }
 
-  const deleted = typeof data === "number" ? data : Number(data ?? 0);
+  if (deleted > 0) {
+    await logSystemEvent({
+      level: "info",
+      source: "cron/prune-system-logs",
+      message: `Pruned ${deleted} system_logs row(s) older than ${retentionDays}d`,
+      context: { deleted, batches, retentionDays, batchSize, maxBatches },
+    });
+  }
 
-  await logSystemEvent({
-    level: "info",
-    source: "cron/prune-system-logs",
-    message: `Pruned system_logs older than ${retentionDays}d`,
-    context: { deleted, retentionDays },
-  });
-
-  return NextResponse.json({ ok: true, deleted, retentionDays });
+  return NextResponse.json({ ok: true, deleted, batches, retentionDays, batchSize, maxBatches });
 }
 
 export async function GET(request: Request) {
