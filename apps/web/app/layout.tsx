@@ -50,6 +50,11 @@ export default function RootLayout({
           name="ahrefs-site-verification"
           content="ce24dbc2c9078f8de7611b6589ba9e92f8a3b8d5fe5b5971adebcf9de3238b9c"
         />
+        <script
+          src="https://analytics.ahrefs.com/analytics.js"
+          data-key="q/bjTagLIl4JOoJFbBFE/A"
+          async
+        />
       </head>
       <body className="min-h-full flex flex-col">
         <AppNotificationProviders>
