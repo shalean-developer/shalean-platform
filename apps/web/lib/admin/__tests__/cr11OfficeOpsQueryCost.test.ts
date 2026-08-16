@@ -43,4 +43,21 @@ describe("CR-11 Office Ops query cost contract", () => {
     expect(migration).toContain("count(*) filter");
     expect(migration).toContain("grant execute on function public.office_notifications_dashboard_rollup(timestamptz) to service_role");
   });
+
+  it("uses one cached booking trust rollup on the normal public booking path", () => {
+    const route = read("app/api/booking/trust-stats/route.ts");
+    expect(route).toContain('admin.rpc("booking_trust_stats_rollup"');
+    expect(route).toContain("s-maxage=300");
+    expect(route).toContain("ROLLUP_FALLBACK_TODAY_LIMIT = 1_000");
+    expect(route).toContain("ROLLUP_FALLBACK_WEEK_LIMIT = 5_000");
+    expect(route).toContain("isMissingRollupRpcError");
+  });
+
+  it("aggregates booking trust counters in SQL", () => {
+    const migration = read("../../supabase/migrations/20260816083000_cr11c_booking_trust_stats_rollup.sql");
+    expect(migration).toContain("booking_trust_stats_rollup");
+    expect(migration).toContain("count(*) filter");
+    expect(migration).toContain("completed_this_week");
+    expect(migration).toContain("grant execute on function public.booking_trust_stats_rollup(timestamptz, timestamptz) to service_role");
+  });
 });
