@@ -7,10 +7,12 @@ function read(path: string) {
 }
 
 describe("CR-09 idle cron logging", () => {
-  it("keeps successful cron health rows without mirroring them into system_logs", () => {
+  it("keeps cron health rows while suppressing non-SEO successful mirrors", () => {
     const systemLog = read("lib/logging/systemLog.ts");
-    expect(systemLog).toContain('if (params.status === "error")');
+    expect(systemLog).toContain('SEO_AUTOMATION_HISTORY_JOBS.has(params.jobName)');
     expect(systemLog).toContain('.from("cron_runs").insert');
+    expect(systemLog).toContain('"gsc-sync"');
+    expect(systemLog).toContain('"seo-optimization"');
   });
 
   it("does not persist idle WhatsApp worker success ticks", () => {
