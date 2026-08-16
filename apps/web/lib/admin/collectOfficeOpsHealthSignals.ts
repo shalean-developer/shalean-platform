@@ -3,11 +3,13 @@ import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { OfficeOpsSystemErrorRow } from "@/lib/admin/officeOpsHealth";
 import {
+  BOOKING_ENGINE_CRON_JOBS,
   filterBookingEngineCronSuccesses,
   isCronRunNoiseMessage,
   type OfficeOpsCronErrorRow,
   type OfficeOpsCronRunRow,
 } from "@/lib/admin/officeOpsHealthFilters";
+import { formatIsoInJohannesburgYmd } from "@/lib/booking/dateInJohannesburg";
 import {
   applyOpsHealthAcknowledgements,
   listOpsHealthAcknowledgements,
@@ -17,6 +19,8 @@ import { runProductionHealthScan, type ProductionHealthSummary } from "@/lib/obs
 
 export const OFFICE_OPS_HISTORY_DAYS_MS = 30 * 86_400_000;
 const OFFICE_OPS_CRON_ERROR_LIMIT = 2_000;
+const OFFICE_OPS_CRON_FALLBACK_LIMIT = 10_000;
+const BOOKING_ENGINE_CRON_JOB_NAMES = [...BOOKING_ENGINE_CRON_JOBS];
 
 export type { OfficeOpsSystemErrorRow };
 
@@ -45,6 +49,11 @@ function filterCronErrorRows(
   return rows.filter((row) => !isCronRunNoiseMessage(row.message)) as OfficeOpsCronErrorRow[];
 }
 
+function cronDayJobKey(row: { created_at?: string | null; job_name?: string | null }): string | null {
+  if (!row.created_at || !row.job_name) return null;
+  return `${formatIsoInJohannesburgYmd(row.created_at)}|${row.job_name}`;
+}
+
 export async function collectOfficeOpsHealthSignals(
   admin: SupabaseClient,
   scanLimit: number,
@@ -60,7 +69,7 @@ export async function collectOfficeOpsHealthSignals(
     acknowledgements,
     systemLogsRes,
     cronErrorsRes,
-    bookingCronSuccessDaysRes,
+    bookingCronDailyStatusRes,
     paymentDriftRes,
     notificationLogsRes,
     flagsRes,
@@ -84,7 +93,7 @@ export async function collectOfficeOpsHealthSignals(
       .gte("created_at", sinceIso)
       .order("created_at", { ascending: false })
       .limit(OFFICE_OPS_CRON_ERROR_LIMIT),
-    admin.rpc("office_ops_booking_cron_success_days", { p_since: sinceIso }),
+    admin.rpc("office_ops_booking_cron_daily_status", { p_since: sinceIso }),
     admin
       .from("failed_jobs")
       .select("created_at, type")
@@ -101,15 +110,42 @@ export async function collectOfficeOpsHealthSignals(
     admin.from("notification_runtime_flags").select("whatsapp_disabled_until, customer_outbound_paused_until").eq("id", 1).maybeSingle(),
   ]);
 
+  let bookingCronDailyRows = (bookingCronDailyStatusRes.data ?? []) as OfficeOpsCronRunRow[];
+  if (bookingCronDailyStatusRes.error) {
+    const fallbackRes = await admin
+      .from("cron_runs")
+      .select("created_at, status, message, job_name")
+      .in("job_name", BOOKING_ENGINE_CRON_JOB_NAMES)
+      .in("status", ["success", "error"])
+      .gte("created_at", sinceIso)
+      .order("created_at", { ascending: false })
+      .limit(OFFICE_OPS_CRON_FALLBACK_LIMIT);
+
+    if (fallbackRes.error) {
+      throw new Error(
+        `Unable to load booking cron history: ${bookingCronDailyStatusRes.error.message}; fallback: ${fallbackRes.error.message}`,
+      );
+    }
+    bookingCronDailyRows = (fallbackRes.data ?? []) as OfficeOpsCronRunRow[];
+  }
+
   const productionHealth =
     productionHealthResult.ok
       ? applyOpsHealthAcknowledgements(productionHealthResult.summary, acknowledgements).visibleSummary
       : null;
 
-  const cronErrorRows = filterCronErrorRows((cronErrorsRes.data ?? []) as OfficeOpsCronRunRow[]);
-  const cronSuccessRows = filterBookingEngineCronSuccesses(
-    (bookingCronSuccessDaysRes.data ?? []) as OfficeOpsCronRunRow[],
+  const detailedCronErrorRows = filterCronErrorRows((cronErrorsRes.data ?? []) as OfficeOpsCronRunRow[]);
+  const representedErrorDays = new Set(
+    detailedCronErrorRows.map(cronDayJobKey).filter((key): key is string => Boolean(key)),
   );
+  const dailyCronErrorRows = filterCronErrorRows(
+    bookingCronDailyRows.filter((row) => String(row.status ?? "").trim().toLowerCase() === "error"),
+  ).filter((row) => {
+    const key = cronDayJobKey(row);
+    return key != null && !representedErrorDays.has(key);
+  });
+  const cronErrorRows = [...detailedCronErrorRows, ...dailyCronErrorRows];
+  const cronSuccessRows = filterBookingEngineCronSuccesses(bookingCronDailyRows);
 
   return {
     fetchedAt,
