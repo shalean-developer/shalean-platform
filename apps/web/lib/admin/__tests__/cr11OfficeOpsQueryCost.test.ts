@@ -61,12 +61,11 @@ describe("CR-11 Office Ops query cost contract", () => {
     expect(migration).toContain("grant execute on function public.booking_trust_stats_rollup(timestamptz, timestamptz) to service_role");
   });
 
-  it("uses distinct prior customer ids for Owner Command Centre retention on the normal path", () => {
-    const loader = read("lib/admin/loadOwnerCommandCentre.ts");
+  it("uses distinct prior customer ids for Owner Command Centre retention on the fallback path", () => {
+    const loader = read("lib/admin/ownerCommandCentreAnalyticsRollup.ts");
     expect(loader).toContain('admin.rpc("owner_prior_customer_ids"');
     expect(loader).toContain("customer_ids?: string[]");
     expect(loader).toContain("PRIOR_CUSTOMER_FALLBACK_LIMIT = 20_000");
-    expect(loader).toContain("isMissingPriorCustomerRpcError");
     expect(loader).toContain("loadPriorCustomerIds(admin, priorEndIso)");
   });
 
@@ -77,5 +76,24 @@ describe("CR-11 Office Ops query cost contract", () => {
     expect(migration).toContain("array_agg(distinct b.customer_id");
     expect(migration).toContain("b.payment_status = 'success'");
     expect(migration).toContain("grant execute on function public.owner_prior_customer_ids(timestamptz) to service_role");
+  });
+
+  it("uses one Owner Command Centre analytics rollup row on the normal path", () => {
+    const loader = read("lib/admin/ownerCommandCentreAnalyticsRollup.ts");
+    const commandCentre = read("lib/admin/loadOwnerCommandCentre.ts");
+    expect(loader).toContain('admin.rpc("owner_command_centre_analytics_rollup"');
+    expect(loader).toContain("OWNER_ANALYTICS_FALLBACK_LIMIT = 15_000");
+    expect(loader).toContain("Additive migration rollout safety only");
+    expect(commandCentre).toContain("loadOwnerCommandCentreAnalyticsRollup(admin, window, now)");
+    expect(commandCentre).not.toContain('.limit(15000)');
+  });
+
+  it("aggregates Owner Command Centre analytics and service counts in SQL", () => {
+    const migration = read("../../supabase/migrations/20260816093000_cr11e_owner_command_centre_analytics_rollup.sql");
+    expect(migration).toContain("owner_command_centre_analytics_rollup");
+    expect(migration).toContain("returning_customers bigint");
+    expect(migration).toContain("service_pairs jsonb");
+    expect(migration).toContain("jsonb_agg");
+    expect(migration).toContain("grant execute on function public.owner_command_centre_analytics_rollup(timestamptz, timestamptz) to service_role");
   });
 });
