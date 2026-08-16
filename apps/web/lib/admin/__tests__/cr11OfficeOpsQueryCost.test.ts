@@ -27,4 +27,20 @@ describe("CR-11 Office Ops query cost contract", () => {
     expect(migration).toContain("'retry-failed-jobs'");
     expect(migration).toContain("grant execute on function public.office_ops_booking_cron_daily_status(timestamptz) to service_role");
   });
+
+  it("uses a server-side Office Notifications rollup on the normal path", () => {
+    const route = read("app/api/admin/office-notifications/route.ts");
+    expect(route).toContain('admin.rpc("office_notifications_dashboard_rollup"');
+    expect(route).toContain("Additive migration rollout safety");
+    expect(route).toContain("ROLLUP_FALLBACK_TODAY_LIMIT = 20_000");
+    expect(route).toContain("ROLLUP_FALLBACK_CUSTOMER_LIMIT = 10_000");
+  });
+
+  it("aggregates notification counters and unique customers in SQL", () => {
+    const migration = read("../../supabase/migrations/20260816080000_cr11b_office_notification_dashboard_rollup.sql");
+    expect(migration).toContain("office_notifications_dashboard_rollup");
+    expect(migration).toContain("count(distinct lower(trim(b.customer_email)))");
+    expect(migration).toContain("count(*) filter");
+    expect(migration).toContain("grant execute on function public.office_notifications_dashboard_rollup(timestamptz) to service_role");
+  });
 });
