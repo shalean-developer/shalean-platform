@@ -51,7 +51,7 @@ async function verifyConfiguredCronTargetSecret(request: Request): Promise<boole
  * MKT-001B.2 — Process durable social publish jobs.
  *
  * Auth: Bearer CRON_SECRET or x-cron-secret (pg_cron / pg_net).
- * Primary schedule: Supabase pg_cron every 5 minutes (migration).
+ * Primary schedule: Supabase pg_cron (migration-controlled).
  * Backup: Vercel daily cron (Hobby-safe) also registered in vercel.json.
  */
 export async function POST(request: Request) {
@@ -104,23 +104,28 @@ export async function POST(request: Request) {
       }
     }
 
-    await logSystemEvent({
-      level: errors.length > 0 ? "warn" : "info",
-      source: "cron/process-social-publish-jobs",
-      message: "process_social_publish_jobs",
-      context: {
-        claimVia: claimed.via,
-        recoveredLeases: recovered.recovered,
-        claimed: claimed.jobs.length,
-        processed,
-        succeeded,
-        retryable,
-        deadLetter,
-        providerCalls,
-        errorCount: errors.length,
-        errors: errors.slice(0, 10),
-      },
-    });
+    const meaningfulActivity =
+      recovered.recovered > 0 || claimed.jobs.length > 0 || processed > 0 || errors.length > 0;
+
+    if (meaningfulActivity) {
+      await logSystemEvent({
+        level: errors.length > 0 ? "warn" : "info",
+        source: "cron/process-social-publish-jobs",
+        message: "process_social_publish_jobs",
+        context: {
+          claimVia: claimed.via,
+          recoveredLeases: recovered.recovered,
+          claimed: claimed.jobs.length,
+          processed,
+          succeeded,
+          retryable,
+          deadLetter,
+          providerCalls,
+          errorCount: errors.length,
+          errors: errors.slice(0, 10),
+        },
+      });
+    }
 
     await logCronRun({
       jobName: "process-social-publish-jobs",
