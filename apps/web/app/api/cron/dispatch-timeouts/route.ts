@@ -27,13 +27,6 @@ export async function GET(request: Request) {
   }
 
   const timestamp = new Date().toISOString();
-  await logSystemEvent({
-    level: "info",
-    source: "cron",
-    message: "cron.start",
-    context: { route: ROUTE, timestamp },
-  });
-
   let lockResult: Awaited<ReturnType<typeof withCronLock<Awaited<ReturnType<typeof runDispatchTimeouts>>>>>;
   try {
     /* H-15: shared lock with dispatch-expiry — same engine, two URLs. */
@@ -45,33 +38,30 @@ export async function GET(request: Request) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await reportOperationalIssue("error", ROUTE, `runDispatchTimeouts threw: ${msg}`, { timestamp });
-    await logSystemEvent({
-      level: "info",
-      source: "cron",
-      message: "cron.complete",
-      context: { route: ROUTE, result: { ok: false, error: msg } },
-    });
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 
   if (lockResult.skipped) {
-    await logSystemEvent({
-      level: "info",
-      source: "cron",
-      message: "cron.complete",
-      context: { route: ROUTE, result: { ok: true, skipped: true, reason: lockResult.reason } },
-    });
     return NextResponse.json({ ok: true, skipped: true, reason: lockResult.reason });
   }
 
   const stats = lockResult.ranIt;
+  const meaningfulActivity =
+    stats.errors > 0 ||
+    stats.expired > 0 ||
+    stats.scanned > 0 ||
+    stats.offerCapHits > 0 ||
+    stats.strandedEnqueued > 0 ||
+    stats.reassignmentQueued > 0;
 
-  await logSystemEvent({
-    level: "info",
-    source: "cron",
-    message: "cron.complete",
-    context: { route: ROUTE, result: { ok: true, ...stats } },
-  });
+  if (meaningfulActivity) {
+    await logSystemEvent({
+      level: stats.errors > 0 ? "warn" : "info",
+      source: "cron",
+      message: "cron.complete",
+      context: { route: ROUTE, result: { ok: stats.errors === 0, ...stats } },
+    });
+  }
 
   return NextResponse.json({ ok: true, ...stats });
 }

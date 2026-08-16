@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { processWhatsAppPendingBatchViaProvider } from "@/lib/whatsapp/providerQueue";
-import { logSystemEvent } from "@/lib/logging/systemLog";
+import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -31,12 +31,16 @@ export async function POST(request: Request) {
     const limit = Number.isFinite(limitRaw) ? limitRaw : 15;
     const includeQueueMetrics = sp.get("metrics") === "1";
     const result = await processWhatsAppPendingBatchViaProvider({ admin, limit, includeQueueMetrics });
-    await logSystemEvent({
-      level: "info",
-      source: "cron/whatsapp-worker",
-      message: `Processed ${result.processed} queue job(s) via ${result.worker_meta.provider}`,
-      context: result,
-    });
+
+    if (result.processed > 0 || result.failed > 0) {
+      await logSystemEvent({
+        level: result.failed > 0 ? "warn" : "info",
+        source: "cron/whatsapp-worker",
+        message: `Processed ${result.processed} queue job(s) via ${result.worker_meta.provider}`,
+        context: result,
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       processed: result.processed,
@@ -47,6 +51,7 @@ export async function POST(request: Request) {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
+    await reportOperationalIssue("error", "cron/whatsapp-worker", `Worker failed: ${msg}`);
     return NextResponse.json({ ok: false, error: msg }, { status: 500 });
   }
 }
