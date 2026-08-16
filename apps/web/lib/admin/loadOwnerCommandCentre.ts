@@ -45,7 +45,10 @@ function isMissingPriorCustomerRpcError(error: { code?: string | null; message?:
 async function loadPriorCustomerIds(admin: SupabaseClient, priorEndIso: string): Promise<Set<string>> {
   const rpcRes = await admin.rpc("owner_prior_customer_ids", { p_before: priorEndIso });
   if (!rpcRes.error) {
-    return new Set((rpcRes.data ?? []).map((row: { customer_id?: string | null }) => row.customer_id).filter((id): id is string => Boolean(id)));
+    const ids = (rpcRes.data ?? [])
+      .map((row: { customer_id?: string | null }) => row.customer_id)
+      .filter((id: string | null | undefined): id is string => Boolean(id));
+    return new Set(ids);
   }
 
   // Additive migration rollout safety only. Operational failures must not trigger the old 20k-row read.
@@ -60,7 +63,7 @@ async function loadPriorCustomerIds(admin: SupabaseClient, priorEndIso: string):
     .lt("payment_completed_at", priorEndIso)
     .limit(PRIOR_CUSTOMER_FALLBACK_LIMIT);
   if (fallback.error) throw new Error(fallback.error.message);
-  return extractPriorCustomerIds(fallback.data ?? []);
+  return new Set(extractPriorCustomerIds(fallback.data ?? []));
 }
 async function loadEligiblePayoutCents(admin: SupabaseClient): Promise<number> {
   const { data, error } = await admin.from("bookings").select("cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents").eq("payout_status", "eligible");
