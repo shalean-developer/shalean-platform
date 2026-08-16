@@ -45,7 +45,12 @@ export default function RootLayout({
       lang="en"
       className={`${geistSans.variable} h-full antialiased`}
     >
-      <head />
+      <head>
+        <meta
+          name="ahrefs-site-verification"
+          content="ce24dbc2c9078f8de7611b6589ba9e92f8a3b8d5fe5b5971adebcf9de3238b9c"
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         <AppNotificationProviders>
           <NonProductionBanner />
