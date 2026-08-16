@@ -64,15 +64,17 @@ describe("CR-11 Office Ops query cost contract", () => {
   it("uses distinct prior customer ids for Owner Command Centre retention on the normal path", () => {
     const loader = read("lib/admin/loadOwnerCommandCentre.ts");
     expect(loader).toContain('admin.rpc("owner_prior_customer_ids"');
+    expect(loader).toContain("customer_ids?: string[]");
     expect(loader).toContain("PRIOR_CUSTOMER_FALLBACK_LIMIT = 20_000");
     expect(loader).toContain("isMissingPriorCustomerRpcError");
     expect(loader).toContain("loadPriorCustomerIds(admin, priorEndIso)");
   });
 
-  it("deduplicates prior customers in SQL for Owner retention analytics", () => {
+  it("deduplicates all prior customers into one SQL array row so PostgREST row caps cannot truncate retention", () => {
     const migration = read("../../supabase/migrations/20260816090000_cr11d_owner_prior_customer_ids.sql");
     expect(migration).toContain("owner_prior_customer_ids");
-    expect(migration).toContain("select distinct b.customer_id");
+    expect(migration).toContain("customer_ids uuid[]");
+    expect(migration).toContain("array_agg(distinct b.customer_id");
     expect(migration).toContain("b.payment_status = 'success'");
     expect(migration).toContain("grant execute on function public.owner_prior_customer_ids(timestamptz) to service_role");
   });
