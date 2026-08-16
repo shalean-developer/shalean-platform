@@ -18,6 +18,7 @@ const ANALYTICS_BOOKING_SELECT = "id, created_at, updated_at, status, payment_st
 const SCHEDULE_BOOKING_SELECT = "id,date,time,status,cleaner_id,selected_cleaner_id,team_id,is_team_job,payment_status,payment_completed_at,payment_method,total_paid_zar,amount_paid_cents,total_price,refunded_at,refund_status,billing_type,is_monthly_billing_booking,monthly_invoice_id";
 const PERMISSION_CHANGE_EVENT = /permission|role|assignment|grant|revoke/i;
 const CRITICAL_AUDIT_EVENT = /critical|denied|forbidden|breach|security_alert/i;
+const PRIOR_CUSTOMER_FALLBACK_LIMIT = 20_000;
 
 function monthRangesMtd(today: string) {
   const [year, month, day] = today.split("-").map(Number);
@@ -35,6 +36,31 @@ function monthRangesMtd(today: string) {
 function growthPercent(current: number, previous: number): number | null {
   if (previous === 0) return current > 0 ? 100 : null;
   return Math.round(((current - previous) / previous) * 10000) / 100;
+}
+function isMissingPriorCustomerRpcError(error: { code?: string | null; message?: string | null } | null): boolean {
+  if (!error) return false;
+  if (error.code === "PGRST202" || error.code === "42883") return true;
+  return /could not find the function|function .*owner_prior_customer_ids.* does not exist/i.test(error.message ?? "");
+}
+async function loadPriorCustomerIds(admin: SupabaseClient, priorEndIso: string): Promise<Set<string>> {
+  const rpcRes = await admin.rpc("owner_prior_customer_ids", { p_before: priorEndIso });
+  if (!rpcRes.error) {
+    return new Set((rpcRes.data ?? []).map((row: { customer_id?: string | null }) => row.customer_id).filter((id): id is string => Boolean(id)));
+  }
+
+  // Additive migration rollout safety only. Operational failures must not trigger the old 20k-row read.
+  if (!isMissingPriorCustomerRpcError(rpcRes.error)) throw new Error(rpcRes.error.message);
+
+  const fallback = await admin
+    .from("bookings")
+    .select("customer_id, payment_status, payment_completed_at")
+    .eq("payment_status", "success")
+    .not("payment_completed_at", "is", null)
+    .not("customer_id", "is", null)
+    .lt("payment_completed_at", priorEndIso)
+    .limit(PRIOR_CUSTOMER_FALLBACK_LIMIT);
+  if (fallback.error) throw new Error(fallback.error.message);
+  return extractPriorCustomerIds(fallback.data ?? []);
 }
 async function loadEligiblePayoutCents(admin: SupabaseClient): Promise<number> {
   const { data, error } = await admin.from("bookings").select("cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents").eq("payout_status", "eligible");
@@ -60,7 +86,6 @@ export async function loadOwnerCommandCentre(admin: SupabaseClient, viewerUserId
   const financePromise = Promise.all([loadFinancialDashboard(admin,mtd.current.from,mtd.current.to), loadFinancialDashboard(admin,mtd.previous.from,mtd.previous.to)]).then(([finance,prev])=>{
     sections.businessHealth.grossMarginCents=finance.profit.gross_margin_cents; sections.businessHealth.netOperatingPositionCents=finance.profit.net_profit_cents; sections.businessHealth.previousMonthComparisonPct=growthPercent(finance.profit.customer_revenue_cents,prev.profit.customer_revenue_cents);
     sections.cashFlow.outstandingCustomerPaymentsCents=finance.executive_kpis.outstanding_customer_payments_cents; sections.cashFlow.cleanerLiabilitiesCents=finance.executive_kpis.pending_cleaner_payouts_cents;
-    // Cash uses the finance dashboard's authoritative balance source: Zoho when configured and reachable, otherwise active manual accounts.
     sections.cashFlow.netCashPositionCents=finance.executive_kpis.cash_in_bank_cents+finance.executive_kpis.petty_cash_balance_cents;
     sections.summaries.financial={customerRevenueCents:finance.profit.customer_revenue_cents,grossMarginCents:finance.profit.gross_margin_cents,netProfitCents:finance.profit.net_profit_cents,outstandingCustomerPaymentsCents:finance.executive_kpis.outstanding_customer_payments_cents};
     if(finance.untrusted_incomplete_team.booking_count>0&&finance.profit.customer_revenue_cents===0&&finance.untrusted_incomplete_team.customer_revenue_cents>0){sections.businessHealth.grossMarginCents=null;sections.businessHealth.netOperatingPositionCents=null;sections.summaries.financial.grossMarginCents=null;sections.summaries.financial.netProfitCents=null;}
@@ -69,6 +94,23 @@ export async function loadOwnerCommandCentre(admin: SupabaseClient, viewerUserId
   const payoutPromise=Promise.all([listMoneyActionProposals(admin,{status:"pending",limit:100,offset:0,viewerUserId}),loadEligiblePayoutCents(admin)]).then(([p,eligible])=>{if(!p.ok){sectionErrors.payoutApprovals=p.error;return;}let amount=0,overdue=0;const nowMs=now.getTime();for(const i of p.items){if(i.proposed_total_cents!=null&&Number.isFinite(i.proposed_total_cents))amount+=i.proposed_total_cents;if(i.expires_at&&Date.parse(i.expires_at)<nowMs)overdue++;}sections.payoutApprovals.pendingApprovalAmountCents=amount;sections.payoutApprovals.pendingProposalCount=p.total;sections.payoutApprovals.overdueApprovalCount=overdue;sections.payoutApprovals.eligibleAmountCents=eligible;}).catch((e:unknown)=>{sectionErrors.payoutApprovals=e instanceof Error?e.message:"Failed to load payout approvals.";});
   const securityPromise=loadSecurityCounts(admin).then(s=>{sections.security.criticalAuditAlerts=s.criticalAuditAlerts;sections.security.recentPermissionChanges=s.recentPermissionChanges;sections.security.failedLoginAlerts=null;sections.security.pendingAccessReviews=null;}).catch((e:unknown)=>{sectionErrors.security=e instanceof Error?e.message:"Failed to load security audit.";});
   const todayPromise=Promise.all([loadTodayBookings(admin,today),loadOfficePayoutPeriodReport(admin,today,today),loadOpsExceptionCount(admin)]).then(([bookings,dayReport,exceptions])=>{const stats=computeOfficeTodayScheduleStats(bookings);const vf=computeOfficeVisitDayFinance(bookings);sections.todaySnapshot.totalBookings=stats.total;sections.todaySnapshot.completed=stats.completed;sections.todaySnapshot.inProgress=stats.inProgress;sections.todaySnapshot.pendingOrUnallocated=stats.unassigned+stats.upcoming;sections.todaySnapshot.cancelled=stats.cancelled;sections.todaySnapshot.revenueZar=vf.completedPaidValueZar;sections.todaySnapshot.cleanerEarningsCents=dayReport.totals.earned_cents;sections.todaySnapshot.estimatedGrossProfitCents=stats.completed>0&&dayReport.totals.visit_count===0?null:dayReport.totals.company_earnings_cents;sections.todaySnapshot.lateOrExceptionCount=exceptions;sections.businessHealth.completedBookingsToday=stats.completed;}).catch((e:unknown)=>{sectionErrors.todaySnapshot=e instanceof Error?e.message:"Failed to load today's snapshot.";});
-  const summariesPromise=(async()=>{const window=officeAnalyticsWindowFromParams(null,null,now);const sinceIso=officeAnalyticsFetchStartIso(window);const priorEndIso=priorCustomerQueryEndIso(window);const [b,p,c,a]=await Promise.all([admin.from("bookings").select(ANALYTICS_BOOKING_SELECT).or(`created_at.gte.${sinceIso},payment_completed_at.gte.${sinceIso}`).order("created_at",{ascending:false}).limit(15000),admin.from("bookings").select("customer_id, payment_status, payment_completed_at").eq("payment_status","success").not("payment_completed_at","is",null).not("customer_id","is",null).lt("payment_completed_at",priorEndIso).limit(20000),admin.from("cleaners").select("id,is_active,is_available,status",{count:"exact"}).or("is_active.is.null,is_active.eq.true").limit(5000),admin.from("cleaner_applications").select("id",{count:"exact",head:true}).eq("status","pending")]);if(b.error)throw new Error(b.error.message);if(p.error)throw new Error(p.error.message);if(c.error)throw new Error(c.error.message);const an=computeOfficeAnalyticsSummary((b.data??[]) as OfficeAnalyticsBookingRow[],extractPriorCustomerIds(p.data??[]),now,window);sections.summaries.customers={retentionPct:an.kpis.customerRetentionPct,totalBookingsWindow:an.kpis.totalBookings,avgBookingValueZar:an.kpis.avgBookingValueZar};sections.summaries.bookingServices=an.servicePopularity.slice(0,8).map(r=>({label:r.name,count:r.count,revenueZar:null}));const cleaners=c.data??[];sections.summaries.workforce={activeCleaners:c.count??cleaners.length,availableToday:cleaners.filter(x=>x.is_available===true&&!['offline','paused','suspended'].includes(String(x.status??'').trim().toLowerCase())).length,pendingApplications:a.error?null:(a.count??0)};})().catch((e:unknown)=>{sectionErrors.summaries=sectionErrors.summaries??(e instanceof Error?e.message:"Failed to load owner summaries.");});
+  const summariesPromise=(async()=>{
+    const window=officeAnalyticsWindowFromParams(null,null,now);
+    const sinceIso=officeAnalyticsFetchStartIso(window);
+    const priorEndIso=priorCustomerQueryEndIso(window);
+    const [b,priorCustomerIds,c,a]=await Promise.all([
+      admin.from("bookings").select(ANALYTICS_BOOKING_SELECT).or(`created_at.gte.${sinceIso},payment_completed_at.gte.${sinceIso}`).order("created_at",{ascending:false}).limit(15000),
+      loadPriorCustomerIds(admin, priorEndIso),
+      admin.from("cleaners").select("id,is_active,is_available,status",{count:"exact"}).or("is_active.is.null,is_active.eq.true").limit(5000),
+      admin.from("cleaner_applications").select("id",{count:"exact",head:true}).eq("status","pending")
+    ]);
+    if(b.error)throw new Error(b.error.message);
+    if(c.error)throw new Error(c.error.message);
+    const an=computeOfficeAnalyticsSummary((b.data??[]) as OfficeAnalyticsBookingRow[],priorCustomerIds,now,window);
+    sections.summaries.customers={retentionPct:an.kpis.customerRetentionPct,totalBookingsWindow:an.kpis.totalBookings,avgBookingValueZar:an.kpis.avgBookingValueZar};
+    sections.summaries.bookingServices=an.servicePopularity.slice(0,8).map(r=>({label:r.name,count:r.count,revenueZar:null}));
+    const cleaners=c.data??[];
+    sections.summaries.workforce={activeCleaners:c.count??cleaners.length,availableToday:cleaners.filter(x=>x.is_available===true&&!['offline','paused','suspended'].includes(String(x.status??'').trim().toLowerCase())).length,pendingApplications:a.error?null:(a.count??0)};
+  })().catch((e:unknown)=>{sectionErrors.summaries=sectionErrors.summaries??(e instanceof Error?e.message:"Failed to load owner summaries.");});
   await Promise.all([revenuePromise,financePromise,expensesPromise,payoutPromise,securityPromise,todayPromise,summariesPromise]); return {ok:true,generatedAt:now.toISOString(),sources:OWNER_COMMAND_CENTRE_SOURCES,...sections,sectionErrors};
 }
