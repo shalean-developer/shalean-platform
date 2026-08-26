@@ -1,13 +1,28 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { loadCustomerBookingRowsForUser } from "@/lib/customer/customerBookingsForUser";
+import {
+  loadCustomerBookingRowsForUser,
+  type CustomerBookingsScope,
+} from "@/lib/customer/customerBookingsForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+const VALID_SCOPES = new Set<CustomerBookingsScope>(["all", "upcoming", "past"]);
+
+function positiveInteger(value: string | null): number | undefined {
+  if (!value) return undefined;
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : undefined;
+}
+
 /**
  * Canonical customer bookings list: stable JSON shape for apps (vs direct Supabase reads).
+ *
+ * Backward compatibility: without `scope`, this returns the legacy unpaged list.
+ * The account bookings page uses `scope=upcoming|past&page=...&pageSize=...` so only
+ * the requested rows are loaded and enriched server-side.
  */
 export async function GET(request: Request) {
   const authHeader = request.headers.get("authorization");
@@ -33,11 +48,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
+  const requestUrl = new URL(request.url);
+  const scopeRaw = requestUrl.searchParams.get("scope");
+  const scope = scopeRaw && VALID_SCOPES.has(scopeRaw as CustomerBookingsScope)
+    ? (scopeRaw as CustomerBookingsScope)
+    : undefined;
+
+  if (scopeRaw && !scope) {
+    return NextResponse.json({ error: "Invalid bookings scope." }, { status: 400 });
+  }
+
   const out = await loadCustomerBookingRowsForUser(admin, userData.user.id, {
     viewerEmail: typeof userData.user.email === "string" ? userData.user.email : null,
+    scope,
+    page: positiveInteger(requestUrl.searchParams.get("page")),
+    pageSize: positiveInteger(requestUrl.searchParams.get("pageSize")),
   });
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: out.status });
   }
-  return NextResponse.json({ bookings: out.bookings });
+  return NextResponse.json({ bookings: out.bookings, pagination: out.pagination ?? null });
 }
