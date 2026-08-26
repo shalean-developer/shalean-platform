@@ -3,12 +3,8 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
+import { customerCanAccessBookingRow } from "@/lib/customer/customerBookingOwnership";
 import {
-  customerCanAccessBookingRow,
-  mergeCustomerBookingListsByCreatedAtDesc,
-} from "@/lib/customer/customerBookingOwnership";
-import {
-  bookingCustomerKey,
   normalizeBookingCustomerIdentity,
   type BookingCustomerOwnershipColumn,
 } from "@/lib/booking/bookingCustomerIdentity";
@@ -30,44 +26,29 @@ import {
 } from "@/lib/customer/customerCleanerNameEnrichment";
 import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 
-async function enrichCustomerBookingRowFromSavedAddress(
-  admin: SupabaseClient,
-  row: BookingRow,
-): Promise<BookingRow> {
-  const ownerId = bookingCustomerKey(row);
-  if (row.location?.trim() || !ownerId) return row;
-  const suburb = row.suburb?.trim();
-  if (!suburb) return row;
+export type CustomerBookingsScope = "all" | "upcoming" | "past";
 
-  const { data, error } = await admin
-    .from("customer_saved_addresses")
-    .select("line1, suburb, city, created_at")
-    .eq("user_id", ownerId)
-    .eq("suburb", suburb)
-    .order("created_at", { ascending: false })
-    .limit(3);
-
-  if (error || !data?.length) return row;
-
-  const bookingCreatedMs = Date.parse(row.created_at);
-  const picked =
-    data.find((addr) => {
-      const createdMs = Date.parse(String((addr as { created_at?: string }).created_at ?? ""));
-      return Number.isFinite(bookingCreatedMs) && Number.isFinite(createdMs) && Math.abs(createdMs - bookingCreatedMs) < 5 * 60 * 1000;
-    }) ?? data[0];
-
-  const line1 = typeof (picked as { line1?: unknown }).line1 === "string" ? (picked as { line1: string }).line1.trim() : "";
-  if (!line1) return row;
-  return { ...row, location: line1 };
-}
-
-export type LoadCustomerBookingsOptions = {
-  /** When set, also returns matching email-orphan bookings with no ownership id (legacy repair). */
-  viewerEmail?: string | null;
+export type CustomerBookingsPagination = {
+  scope: CustomerBookingsScope;
+  page: number;
+  pageSize: number;
+  total: number;
+  pageCount: number;
 };
 
-/** Max rows returned to customer dashboard / account booking lists. */
+export type LoadCustomerBookingsOptions = {
+  /** Authenticated email used only to repair legacy email-owned rows. */
+  viewerEmail?: string | null;
+  /** Omit for legacy unpaged callers. */
+  scope?: CustomerBookingsScope;
+  page?: number;
+  pageSize?: number;
+};
+
+/** Legacy maximum retained for callers that have not moved to pagination yet. */
 export const CUSTOMER_BOOKINGS_LIST_LIMIT = 500;
+export const CUSTOMER_BOOKINGS_DEFAULT_PAGE_SIZE = 10;
+export const CUSTOMER_BOOKINGS_MAX_PAGE_SIZE = 50;
 
 let cachedBookingOwnershipColumn: BookingCustomerOwnershipColumn | null = null;
 
@@ -99,95 +80,215 @@ export async function resolveBookingOwnershipColumn(admin: SupabaseClient): Prom
   return cachedBookingOwnershipColumn;
 }
 
+function johannesburgToday(): string {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Africa/Johannesburg",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(new Date());
+  const year = parts.find((p) => p.type === "year")?.value ?? "";
+  const month = parts.find((p) => p.type === "month")?.value ?? "";
+  const day = parts.find((p) => p.type === "day")?.value ?? "";
+  return `${year}-${month}-${day}`;
+}
+
+function normalizePage(value: unknown): number {
+  const n = Number(value);
+  return Number.isInteger(n) && n > 0 ? n : 1;
+}
+
+function normalizePageSize(value: unknown): number {
+  const n = Number(value);
+  if (!Number.isInteger(n) || n <= 0) return CUSTOMER_BOOKINGS_DEFAULT_PAGE_SIZE;
+  return Math.min(n, CUSTOMER_BOOKINGS_MAX_PAGE_SIZE);
+}
+
+/**
+ * Permanently converges old booking ownership onto `customer_id` once the
+ * authenticated user proves either the legacy `user_id` or exact auth email.
+ * This keeps recovery support without carrying legacy ownership indefinitely.
+ */
+async function repairLegacyCustomerOwnership(
+  admin: SupabaseClient,
+  userId: string,
+  viewerNorm: string,
+  ownershipColumn: BookingCustomerOwnershipColumn,
+): Promise<void> {
+  if (ownershipColumn !== "customer_id") return;
+
+  const legacyUserUpdate = await admin
+    .from("bookings")
+    .update({ customer_id: userId })
+    .is("customer_id", null)
+    .eq("user_id", userId)
+    .select("id");
+
+  if (legacyUserUpdate.error && !isUnknownColumnError(legacyUserUpdate.error, "user_id")) {
+    void reportOperationalIssue("warn", "customer/bookings/ownership_repair_user_id", legacyUserUpdate.error.message, {
+      userId,
+    });
+  } else if (legacyUserUpdate.data?.length) {
+    metrics.increment("customer.bookings.ownership_repaired_user_id", { count: legacyUserUpdate.data.length });
+  }
+
+  if (viewerNorm.length < 3) return;
+
+  const emailUpdate = await admin
+    .from("bookings")
+    .update({ customer_id: userId })
+    .is("customer_id", null)
+    .eq("customer_email", viewerNorm)
+    .select("id");
+
+  if (emailUpdate.error) {
+    void reportOperationalIssue("warn", "customer/bookings/ownership_repair_email", emailUpdate.error.message, { userId });
+  } else if (emailUpdate.data?.length) {
+    metrics.increment("customer.bookings.ownership_repaired_email", { count: emailUpdate.data.length });
+  }
+}
+
 async function loadOwnedCustomerBookingRows(
   admin: SupabaseClient,
   userId: string,
   ownershipColumn: BookingCustomerOwnershipColumn,
-): Promise<{ data: unknown[] | null; error: { message: string } | null }> {
+  options?: LoadCustomerBookingsOptions,
+): Promise<{ data: unknown[] | null; error: { message: string } | null; count: number | null }> {
   const select = buildCustomerBookingSelect(ownershipColumn);
-  return admin
+  const scope = options?.scope ?? "all";
+  const paged = options?.scope !== undefined;
+  const page = normalizePage(options?.page);
+  const pageSize = normalizePageSize(options?.pageSize);
+  const today = johannesburgToday();
+
+  let query = admin
     .from("bookings")
-    .select(select)
+    .select(select, { count: paged ? "exact" : undefined })
     .eq(ownershipColumn, userId)
-    // A customer must still see a booking while payment is outstanding so the
-    // account can show the Awaiting payment state and payment recovery actions.
-    // Only terminal/expired checkout attempts are excluded from the live list.
-    .neq("status", "payment_expired")
-    .order("created_at", { ascending: false })
-    .limit(CUSTOMER_BOOKINGS_LIST_LIMIT);
+    .neq("status", "payment_expired");
+
+  if (scope === "upcoming") {
+    query = query
+      .gte("date", today)
+      .not("status", "in", "(completed,cancelled,failed)")
+      .order("date", { ascending: true })
+      .order("time", { ascending: true })
+      .order("created_at", { ascending: false });
+  } else if (scope === "past") {
+    query = query
+      .or(`date.lt.${today},status.in.(completed,cancelled,failed)`)
+      .order("date", { ascending: false, nullsFirst: false })
+      .order("time", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false });
+  } else {
+    query = query.order("created_at", { ascending: false });
+  }
+
+  if (paged) {
+    const from = (page - 1) * pageSize;
+    return query.range(from, from + pageSize - 1);
+  }
+
+  return query.limit(CUSTOMER_BOOKINGS_LIST_LIMIT);
 }
 
-async function loadOrphanCustomerBookingRows(
+async function enrichRowsWithSavedAddresses(
   admin: SupabaseClient,
-  viewerNorm: string,
-  ownershipColumn: BookingCustomerOwnershipColumn,
-): Promise<{ data: unknown[] | null; error: { message: string } | null }> {
-  const select = buildCustomerBookingSelect(ownershipColumn);
-  return admin
-    .from("bookings")
-    .select(select)
-    .eq("customer_email", viewerNorm)
-    .is(ownershipColumn, null)
-    .neq("status", "payment_expired")
+  rows: BookingRow[],
+  userId: string,
+): Promise<void> {
+  const missing = rows.filter((row) => !row.location?.trim() && row.suburb?.trim());
+  if (missing.length === 0) return;
+
+  const suburbs = Array.from(new Set(missing.map((row) => row.suburb!.trim()).filter(Boolean)));
+  if (suburbs.length === 0) return;
+
+  const { data, error } = await admin
+    .from("customer_saved_addresses")
+    .select("line1, suburb, city, created_at")
+    .eq("user_id", userId)
+    .in("suburb", suburbs)
     .order("created_at", { ascending: false })
-    .limit(100);
+    .limit(Math.min(Math.max(suburbs.length * 10, 20), 200));
+
+  if (error || !data?.length) {
+    if (error) {
+      void reportOperationalIssue("warn", "customer/bookings/address_enrichment", error.message, {
+        userId,
+        bookingCount: missing.length,
+      });
+    }
+    return;
+  }
+
+  const bySuburb = new Map<string, Array<{ line1?: unknown; suburb?: unknown; created_at?: unknown }>>();
+  for (const raw of data as Array<{ line1?: unknown; suburb?: unknown; created_at?: unknown }>) {
+    const suburb = typeof raw.suburb === "string" ? raw.suburb.trim() : "";
+    if (!suburb) continue;
+    const list = bySuburb.get(suburb) ?? [];
+    list.push(raw);
+    bySuburb.set(suburb, list);
+  }
+
+  for (const row of missing) {
+    const suburb = row.suburb?.trim() ?? "";
+    const candidates = bySuburb.get(suburb) ?? [];
+    if (candidates.length === 0) continue;
+    const bookingCreatedMs = Date.parse(row.created_at);
+    const picked =
+      candidates.find((addr) => {
+        const createdMs = Date.parse(String(addr.created_at ?? ""));
+        return Number.isFinite(bookingCreatedMs) && Number.isFinite(createdMs) && Math.abs(createdMs - bookingCreatedMs) < 5 * 60 * 1000;
+      }) ?? candidates[0];
+    const line1 = typeof picked?.line1 === "string" ? picked.line1.trim() : "";
+    if (line1) row.location = line1;
+  }
 }
 
 export async function loadCustomerBookingRowsForUser(
   admin: SupabaseClient,
   userId: string,
   options?: LoadCustomerBookingsOptions,
-): Promise<{ ok: true; bookings: BookingRow[] } | { ok: false; error: string; status: number }> {
+): Promise<
+  | { ok: true; bookings: BookingRow[]; pagination?: CustomerBookingsPagination }
+  | { ok: false; error: string; status: number }
+> {
   const viewerNorm = normalizeEmail(String(options?.viewerEmail ?? ""));
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
 
-  const { data: byUserId, error } = await loadOwnedCustomerBookingRows(admin, userId, ownershipColumn);
+  await repairLegacyCustomerOwnership(admin, userId, viewerNorm, ownershipColumn);
+
+  const { data, error, count } = await loadOwnedCustomerBookingRows(admin, userId, ownershipColumn, options);
 
   if (error) {
     void reportOperationalIssue("error", "customer/bookings", error.message, { userId, ownershipColumn });
     return { ok: false, error: "Could not load bookings.", status: 500 };
   }
 
-  let mergedRaw = ((byUserId ?? []) as unknown as BookingRow[]).map((row) =>
-    normalizeBookingCustomerIdentity(row),
-  );
+  const rows = ((data ?? []) as unknown as BookingRow[])
+    .map((row) => normalizeBookingCustomerIdentity(row))
+    .map((row) => normalizeCustomerBookingRow(row))
+    .filter((row) => customerCanAccessBookingRow(row, userId, viewerNorm))
+    .map((row) => attachCanonicalCustomerBookingLifecycle(row));
 
-  if (viewerNorm.length >= 3) {
-    const { data: byEmailOrphan, error: orphanErr } = await loadOrphanCustomerBookingRows(
-      admin,
-      viewerNorm,
-      ownershipColumn,
-    );
-
-    if (orphanErr) {
-      void reportOperationalIssue("warn", "customer/bookings/email_orphan", orphanErr.message, { userId });
-    } else if (byEmailOrphan && byEmailOrphan.length > 0) {
-      metrics.increment("customer.bookings.email_orphan_merge_rows", { count: byEmailOrphan.length });
-      mergedRaw = mergeCustomerBookingListsByCreatedAtDesc(
-        mergedRaw as unknown as Array<{ id: string; created_at?: string | null }>,
-        (byEmailOrphan as unknown as BookingRow[]).map((row) => normalizeBookingCustomerIdentity(row)) as unknown as Array<{
-          id: string;
-          created_at?: string | null;
-        }>,
-      ) as unknown as BookingRow[];
-    }
-  }
-
-  const rows = mergedRaw
-    .map((r) => normalizeCustomerBookingRow(r))
-    .filter((r) => customerCanAccessBookingRow(r, userId, viewerNorm))
-    .slice(0, CUSTOMER_BOOKINGS_LIST_LIMIT)
-    .map((r) => attachCanonicalCustomerBookingLifecycle(r));
-
-  // M-15: enrich team-job rows (cleaner_id null, payout_owner_cleaner_id set)
-  // with the lead cleaner's display name so the dashboard reviews modal/list
-  // can show "Reviewing X's clean". Roster-safe: the IN(...) lookup only
-  // contains lead UUIDs already on the row payload — never `team_members`.
-  // Skipped entirely for solo-cleaner pages (no extra round-trip).
   await enrichRowsWithCleanerDisplayNames(admin, rows, userId);
+  await enrichRowsWithSavedAddresses(admin, rows, userId);
 
-  for (let i = 0; i < rows.length; i += 1) {
-    rows[i] = await enrichCustomerBookingRowFromSavedAddress(admin, rows[i]!);
+  if (options?.scope !== undefined) {
+    const page = normalizePage(options.page);
+    const pageSize = normalizePageSize(options.pageSize);
+    const total = Math.max(0, count ?? rows.length);
+    return {
+      ok: true,
+      bookings: rows,
+      pagination: {
+        scope: options.scope,
+        page,
+        pageSize,
+        total,
+        pageCount: Math.max(1, Math.ceil(total / pageSize)),
+      },
+    };
   }
 
   return { ok: true, bookings: rows };
@@ -250,6 +351,8 @@ export async function loadCustomerBookingRowForUser(
   const viewerNorm = normalizeEmail(String(options?.viewerEmail ?? ""));
 
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  await repairLegacyCustomerOwnership(admin, userId, viewerNorm, ownershipColumn);
+
   const select = buildCustomerBookingSelect(ownershipColumn);
   const { data, error } = await admin.from("bookings").select(select).eq("id", id).maybeSingle();
 
@@ -270,6 +373,6 @@ export async function loadCustomerBookingRowForUser(
   }
   const enriched = attachCanonicalCustomerBookingLifecycle(row);
   await enrichRowsWithCleanerDisplayNames(admin, [enriched], userId);
-  const withAddress = await enrichCustomerBookingRowFromSavedAddress(admin, enriched);
-  return { ok: true, booking: withAddress };
+  await enrichRowsWithSavedAddresses(admin, [enriched], userId);
+  return { ok: true, booking: enriched };
 }
