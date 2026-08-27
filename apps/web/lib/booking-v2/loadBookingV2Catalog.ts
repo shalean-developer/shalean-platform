@@ -24,6 +24,7 @@ import {
   resolvePricingServiceRow,
 } from "@/lib/booking-v2/resolvePricingServiceSlug";
 import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
+import { assertAuthoritativePricingClientAvailable } from "@/lib/booking-v2/authoritativePricingClientAvailability";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
 export type {
@@ -144,6 +145,10 @@ const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
 
 export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   const admin = getSupabaseAdmin();
+  assertAuthoritativePricingClientAvailable({
+    adminAvailable: Boolean(admin),
+    nodeEnv: process.env.NODE_ENV,
+  });
 
   const dbServices: Record<string, DbServiceRow> = {};
   const dbExtras: Record<string, DbExtraRow> = {};
