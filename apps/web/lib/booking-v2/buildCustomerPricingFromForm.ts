@@ -1,4 +1,4 @@
-import { SERVICE_CONFIG, serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
+import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
 import { buildAuthoritativeQuotePersistPatch } from "@/lib/booking/quote/bookingQuotePersistence";
@@ -8,6 +8,7 @@ import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 import { resolveMovingPricingSlug } from "@/lib/booking-v2/resolvePricingServiceSlug";
+import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
 
 export type BuildCustomerPricingFromFormParams = {
   serviceSlug: BookingV2FormData["serviceSlug"];
@@ -78,7 +79,7 @@ export function buildCustomerTotalInputFromForm(
   const showEquipmentQuestion =
     liveConfig?.showEquipmentQuestion ??
     liveConfig?.showCleaningProductsQuestion ??
-    serviceShowsEquipmentQuestion(serviceSlug);
+    serviceRequiresCustomerEquipmentChoice(serviceSlug);
 
   const catalogSource: LiveServiceConfig =
     liveConfig ?? {

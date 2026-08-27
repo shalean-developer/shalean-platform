@@ -10,7 +10,8 @@ import { SERVICE_PRICING_CONTRACTS } from "@/lib/booking-v2/servicePricingContra
  * quote appears "not calculating".
  *
  * Move-in / move-out prefer their own rows when present; otherwise fall back to
- * shared `move`, then standard.
+ * the shared `move` row. A service must never borrow another service's pricing
+ * row (for example Deep using Standard) when its own row is missing.
  */
 export const PRICING_SERVICE_SLUG_ALIASES: Readonly<Record<string, readonly string[]>> = {
   standard: ["standard", "standard-cleaning", "regular", "regular-cleaning"],
@@ -49,10 +50,7 @@ export function resolvePricingServiceRow<T>(
   return null;
 }
 
-/**
- * Resolve move pricing row: prefer move-in / move-out when moveType is set and
- * that row exists; else shared `move`; else null (caller may fall back to standard).
- */
+/** Resolve move pricing row: preferred move variant, then shared `move`, then null. */
 export function resolveMovingPricingSlug(
   moveType: string | number | boolean | null | undefined,
 ): "move-in" | "move-out" | "move" {
@@ -74,6 +72,21 @@ export function resolveMovingPricingServiceRow<T>(
     resolvePricingServiceRow(dbServices, preferred) ??
     resolvePricingServiceRow(dbServices, "move")
   );
+}
+
+/**
+ * Resolve the DB row for a Booking V2 service without cross-service fallback.
+ * Missing rows return null so the caller may use that service's own explicit
+ * static fallback, never a different service's live price.
+ */
+export function resolveBookingV2PricingServiceRow<T>(
+  dbServices: Record<string, T>,
+  serviceSlug: ServiceSlug,
+): T | null {
+  if (serviceSlug === "moving-cleaning") {
+    return resolveMovingPricingServiceRow(dbServices, null);
+  }
+  return resolvePricingServiceRow(dbServices, DB_SLUG_MAP[serviceSlug]);
 }
 
 /** Engine pricing slug for a booking-v2 service (before DB alias resolution). */
