@@ -6,20 +6,11 @@ import { summarizeInventory, type InventoryItem } from "@/lib/admin/inventory";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function canManage(admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>, userId: string) {
-  for (const permission of ["expense.manage", "booking.assign", "finance.full.view"]) {
-    const { data } = await admin.rpc("admin_has_permission", { p_user_id: userId, p_permission: permission, p_branch_id: null, p_team_id: null });
-    if (data === true) return true;
-  }
-  return false;
-}
-
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await canManage(admin, auth.userId))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
 
   const [itemsResult, movementsResult, issuesResult] = await Promise.all([
     admin.from("inventory_items").select("*").order("name"),
@@ -37,7 +28,6 @@ export async function POST(request: Request) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await canManage(admin, auth.userId))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   const sku = String(body.sku ?? "").trim().toUpperCase();
@@ -53,4 +43,3 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: error.code === "23505" ? 409 : 500 });
   return NextResponse.json({ ok: true, id: data.id }, { status: 201 });
 }
-
