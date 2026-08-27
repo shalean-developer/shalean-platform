@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BookingCustomerOwnershipColumn } from "@/lib/booking/bookingCustomerIdentity";
+import { paymentCustomerIdentityMismatch } from "@/lib/booking/paymentCustomerIdentityGuard";
 
 export type PaymentFinalizationPersistedBookingRow = {
   id: string;
@@ -33,6 +34,52 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
     ownershipColumn,
   } = params;
   const select = paymentFinalizationSelect(ownershipColumn);
+
+  // SR-03A: the pending booking is the identity anchor. Payment finalization may
+  // fill missing legacy identity, but it must never overwrite a conflicting
+  // customer email or auth owner supplied by Paystack snapshot/metadata.
+  const identityResult = await supabase
+    .from("bookings")
+    .select(`customer_email, ${ownershipColumn}`)
+    .eq("id", existingPendingPaymentId)
+    .eq("status", "pending_payment")
+    .maybeSingle();
+
+  if (identityResult.error) {
+    return { data: null, error: identityResult.error };
+  }
+
+  if (identityResult.data && typeof identityResult.data === "object") {
+    const existingIdentityRow = identityResult.data as Record<string, unknown>;
+    const mismatch = paymentCustomerIdentityMismatch(
+      {
+        customerEmail:
+          typeof existingIdentityRow.customer_email === "string"
+            ? existingIdentityRow.customer_email
+            : null,
+        customerAuthId:
+          typeof existingIdentityRow[ownershipColumn] === "string"
+            ? String(existingIdentityRow[ownershipColumn])
+            : null,
+      },
+      {
+        customerEmail: typeof row.customer_email === "string" ? row.customer_email : null,
+        customerAuthId:
+          typeof row[ownershipColumn] === "string" ? String(row[ownershipColumn]) : null,
+      },
+    );
+
+    if (mismatch) {
+      return {
+        data: null,
+        error: {
+          code: "PAYMENT_CUSTOMER_IDENTITY_MISMATCH",
+          message: `Payment customer ${mismatch} does not match the pending booking.`,
+        },
+      };
+    }
+  }
+
   const result =
     pendingFinalizeMatch === "id"
       ? await supabase
