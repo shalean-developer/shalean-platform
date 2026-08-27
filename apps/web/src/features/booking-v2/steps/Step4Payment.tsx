@@ -484,6 +484,18 @@ function PaymentSection({
         }
         if (sessJson.status === "ready" && sessJson.authorizationUrl?.trim()) {
           if (sessJson.message) setError(sessJson.message);
+          trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
+            service: serviceSlug,
+            service_type: serviceSlug,
+            serviceAreaName: values.suburb ?? null,
+            finalPrice: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+            extras: values.selectedExtras ?? null,
+          }, {
+            service_type: serviceSlug,
+            suburb: values.suburb ?? null,
+            estimated_price: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+            booking_id: pendingBookingId,
+          });
           window.location.assign(sessJson.authorizationUrl.trim());
           return;
         }
@@ -639,19 +651,6 @@ function PaymentSection({
         return;
       }
 
-      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
-        service: serviceSlug,
-        service_type: serviceSlug,
-        serviceAreaName: values.suburb ?? null,
-        finalPrice: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
-        extras: values.selectedExtras ?? null,
-      }, {
-        service_type: serviceSlug,
-        suburb: values.suburb ?? null,
-        estimated_price: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
-        booking_id: bookingId,
-      });
-
       // Server-side Paystack session (persists authorization_url). Redirect is more reliable than
       // Inline popups on mobile / in-app browsers, and enables `/pay` recovery after refresh.
       const sessRes = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/payment-session`, {
@@ -684,6 +683,18 @@ function PaymentSection({
 
       if (sessJson.status === "ready" && sessJson.authorizationUrl?.trim()) {
         if (sessJson.message) setError(sessJson.message);
+        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
+          service: serviceSlug,
+          service_type: serviceSlug,
+          serviceAreaName: values.suburb ?? null,
+          finalPrice: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+          extras: values.selectedExtras ?? null,
+        }, {
+          service_type: serviceSlug,
+          suburb: values.suburb ?? null,
+          estimated_price: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+          booking_id: bookingId,
+        });
         window.location.assign(sessJson.authorizationUrl.trim());
         return;
       }
