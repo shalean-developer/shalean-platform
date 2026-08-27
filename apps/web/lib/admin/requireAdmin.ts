@@ -124,7 +124,7 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   }
 
   if (path.includes("/quality/inspections")) {
-    return read ? ["cleaner.view", "incident.manage"] : ["incident.manage"];
+    return read ? ["incident.manage", "booking.view", "cleaner.view"] : ["incident.manage"];
   }
   if (
     path.includes("/cleaner-applications") ||
@@ -168,10 +168,12 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
       : ["cleaner.edit", "incident.manage"];
   }
 
+  if (path.includes("/cleaner-performance")) {
+    return read ? ["cleaner.view", "team.view"] : ["cleaner.edit"];
+  }
   if (
     path === "/api/admin/cleaners" ||
-    path.includes("/cleaner-report-feedback") ||
-    path.includes("/cleaner-performance")
+    path.includes("/cleaner-report-feedback")
   ) {
     return read ? ["cleaner.view"] : ["cleaner.edit"];
   }
