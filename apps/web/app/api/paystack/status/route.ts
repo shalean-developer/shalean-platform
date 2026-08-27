@@ -7,7 +7,8 @@ export const dynamic = "force-dynamic";
 
 /**
  * **Responsibility:** Read-only DB lookup by Paystack reference / internal id — **no** Paystack HTTP call and **no** finalize.
- * Use after payment resolution (e.g. `/api/paystack/verify` or legacy `/api/payments/verify`). `lib/booking/paystackRouteResponsibilityContract.ts`
+ * Use after payment resolution through the canonical `/api/paystack/verify` or webhook flow.
+ * See `lib/booking/paystackRouteResponsibilityContract.ts`.
  */
 export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
