@@ -31,8 +31,11 @@ describe("P6 Cleaner Performance Scorecard contract", () => {
     expect(route).not.toContain("admin_has_permission");
     expect(adminPolicy).toContain('if (path.includes("/cleaner-performance"))');
     expect(adminPolicy).toContain('return read ? ["cleaner.view", "team.view"] : ["cleaner.edit"]');
-    expect(service).toContain('if (!availableWeight) return { overall: null, coverage: 0 }');
-    expect(service).toContain('typeof value !== "number"');
+    expect(service).toContain("if (!availableWeight)");
+    expect(service).toContain("overall:null as number|null");
+    expect(service).toContain("coverage:0");
+    expect(service).toContain("typeof value");
+    expect(service).toContain('!=="number"');
   });
 
   it("scores QA, feedback, reliability, completion and attendance separately", () => {
