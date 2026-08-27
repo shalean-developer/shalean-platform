@@ -20,11 +20,13 @@ export function bookingPaidAmountColumnsFromCents(amountCents: number): BookingP
   return {
     amount_paid_cents: cents,
     total_paid_cents: cents,
-    total_paid_zar: Math.round(cents / 100),
+    // Preserve the exact monetary value represented by cents. Rounding to a
+    // whole rand makes the legacy ZAR mirror disagree with the cents SoT.
+    total_paid_zar: cents / 100,
   };
 }
 
-/** Same helper from whole-ZAR settled amounts. */
+/** Same helper from ZAR settled amounts. */
 export function bookingPaidAmountColumnsFromZar(amountZar: number): BookingPaidAmountColumns {
   const zar = Number(amountZar);
   const cents = Number.isFinite(zar) ? Math.max(0, Math.round(zar * 100)) : 0;
