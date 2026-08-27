@@ -24,15 +24,26 @@ describe("payment finalization booking command convergence (Phase 1F)", () => {
     expect(src).toContain("finalizePendingPaymentBookingFromPaystack");
     expect(src).toContain("ownershipColumn");
     expect(src).toContain("paymentFinalizationSelect");
-    expect(src).toMatch(/\.from\("bookings"\)[\s\S]*?\.update\(row\)[\s\S]*?\.eq\("id",\s*existingPendingPaymentId\)[\s\S]*?\.eq\("status",\s*"pending_payment"\)[\s\S]*?\.select\(select\)[\s\S]*?\.maybeSingle\(\)/);
-    expect(src).toMatch(/\.from\("bookings"\)[\s\S]*?\.update\(row\)[\s\S]*?\.eq\("paystack_reference",\s*paystackReference\)[\s\S]*?\.eq\("status",\s*"pending_payment"\)[\s\S]*?\.select\(select\)[\s\S]*?\.maybeSingle\(\)/);
+    expect(src).toContain("normalizePaystackFinalizationPaidAmountRow");
+    expect(src).toContain("bookingPaidAmountColumnsFromCents");
+    expect(src).toMatch(/\.from\("bookings"\)[\s\S]*?\.update\(normalizedRow\)[\s\S]*?\.eq\("id",\s*existingPendingPaymentId\)[\s\S]*?\.eq\("status",\s*"pending_payment"\)[\s\S]*?\.select\(select\)[\s\S]*?\.maybeSingle\(\)/);
+    expect(src).toMatch(/\.from\("bookings"\)[\s\S]*?\.update\(normalizedRow\)[\s\S]*?\.eq\("paystack_reference",\s*paystackReference\)[\s\S]*?\.eq\("status",\s*"pending_payment"\)[\s\S]*?\.select\(select\)[\s\S]*?\.maybeSingle\(\)/);
   });
 
   it("owns the Paystack finalized booking insert shape", () => {
     const src = readFileSync(command, "utf8");
 
     expect(src).toContain("insertFinalizedBookingFromPaystack");
-    expect(src).toMatch(/\.from\("bookings"\)[\s\S]*?\.insert\(params\.row\)[\s\S]*?\.select\(paymentFinalizationSelect\(params\.ownershipColumn\)\)[\s\S]*?\.maybeSingle\(\)/);
+    expect(src).toContain("const normalizedRow = normalizePaystackFinalizationPaidAmountRow(params.row)");
+    expect(src).toMatch(/\.from\("bookings"\)[\s\S]*?\.insert\(normalizedRow\)[\s\S]*?\.select\(paymentFinalizationSelect\(params\.ownershipColumn\)\)[\s\S]*?\.maybeSingle\(\)/);
+  });
+
+  it("normalizes Paystack paid amount mirrors at the DB write boundary", () => {
+    const src = readFileSync(command, "utf8");
+
+    expect(src).toContain("amount_paid_cents");
+    expect(src).toContain("bookingPaidAmountColumnsFromCents(amountCents)");
+    expect(src).toContain("...bookingPaidAmountColumnsFromCents(amountCents)");
   });
 
   it("owns the manual mark-paid guarded update shape", () => {

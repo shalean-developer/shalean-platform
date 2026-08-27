@@ -6,19 +6,27 @@ import {
 } from "@/lib/booking/bookingPaidAmountColumns";
 
 describe("bookingPaidAmountColumns", () => {
-  it("keeps cents and zar in sync from cents SoT", () => {
+  it("keeps cents and zar exactly in sync from cents SoT", () => {
     expect(bookingPaidAmountColumnsFromCents(12_550)).toEqual({
       amount_paid_cents: 12_550,
       total_paid_cents: 12_550,
-      total_paid_zar: 126,
+      total_paid_zar: 125.5,
     });
   });
 
-  it("rounds zar input to cents then mirrors", () => {
+  it("rounds zar input to cents then mirrors the exact settled value", () => {
     expect(bookingPaidAmountColumnsFromZar(99.4)).toEqual({
       amount_paid_cents: 9940,
       total_paid_cents: 9940,
-      total_paid_zar: 99,
+      total_paid_zar: 99.4,
+    });
+  });
+
+  it("preserves cents instead of rounding the legacy ZAR mirror to whole rands", () => {
+    expect(bookingPaidAmountColumnsFromCents(180_250)).toEqual({
+      amount_paid_cents: 180_250,
+      total_paid_cents: 180_250,
+      total_paid_zar: 1802.5,
     });
   });
 
