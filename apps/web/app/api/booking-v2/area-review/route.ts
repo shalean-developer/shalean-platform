@@ -122,7 +122,7 @@ export async function POST(request: Request) {
       service_slug: canonicalServiceSlug,
       status: "area_review",
       payment_status: "pending",
-      dispatch_status: null,
+      dispatch_status: "unassigned",
       fulfillment_mode: "area_review",
       fulfillment_reason: "no_active_cleaner_coverage",
       location: data.address,
