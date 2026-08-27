@@ -14,15 +14,6 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 type Params = { params: Promise<{ id: string }> };
 
-async function hasQaPermission(admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>, userId: string, write: boolean) {
-  const permissions = write ? ["incident.manage"] : ["incident.manage", "booking.view", "cleaner.view"];
-  for (const permission of permissions) {
-    const { data } = await admin.rpc("admin_has_permission", { p_user_id: userId, p_permission: permission, p_branch_id: null, p_team_id: null });
-    if (data === true) return true;
-  }
-  return false;
-}
-
 async function loadInspectionAndCheckScope(
   admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
   inspectionId: string,
@@ -46,7 +37,6 @@ export async function GET(request: Request, { params }: Params) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await hasQaPermission(admin, auth.userId, false))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   const { id } = await params;
   const access = await loadInspectionAndCheckScope(admin, id, auth.userId);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
@@ -62,7 +52,6 @@ export async function PATCH(request: Request, { params }: Params) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await hasQaPermission(admin, auth.userId, true))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   const { id } = await params;
   const access = await loadInspectionAndCheckScope(admin, id, auth.userId);
   if (!access.ok) return NextResponse.json({ error: access.error }, { status: access.status });
