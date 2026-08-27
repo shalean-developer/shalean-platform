@@ -1,5 +1,12 @@
+import fs from "node:fs";
+import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { priorityPermissionsForRequest } from "@/lib/admin/requireAdmin";
+
+const membershipsRoute = fs.readFileSync(
+  path.join(process.cwd(), "app/api/admin/memberships/route.ts"),
+  "utf8",
+);
 
 describe("SR-05B2B marketing and communications RBAC alignment", () => {
   it("keeps templates, promotions and notification retries on their approved mappings", () => {
@@ -26,16 +33,19 @@ describe("SR-05B2B marketing and communications RBAC alignment", () => {
     ).toEqual(["marketing.view"]);
   });
 
-  it("separates membership reads from customer-account mutations", () => {
+  it("keeps membership reads centralized and splits plan from customer mutations", () => {
     expect(priorityPermissionsForRequest(new Request("https://example.test/api/admin/memberships"))).toEqual([
       "marketing.view",
       "customer.view",
     ]);
-    expect(
-      priorityPermissionsForRequest(
-        new Request("https://example.test/api/admin/memberships", { method: "POST" }),
-      ),
-    ).toEqual(["customer.edit"]);
+
+    expect(membershipsRoute).toContain("requireAdminPermissionFromRequest(request, requiredPermission)");
+    expect(membershipsRoute).toContain('action === "create_plan" || action === "update_plan"');
+    expect(membershipsRoute).toContain('? "content.publish"');
+    expect(membershipsRoute).toContain(
+      'action === "assign_membership" || action === "set_membership_status"',
+    );
+    expect(membershipsRoute).toContain('? "customer.edit"');
   });
 
   it("requires publishing authority to change referral programme settings", () => {
