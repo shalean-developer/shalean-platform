@@ -5,15 +5,6 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function canManage(admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>, userId: string, write: boolean) {
-  const permissions = write ? ["booking.assign", "expense.manage"] : ["booking.assign", "booking.view", "expense.manage", "finance.full.view"];
-  for (const permission of permissions) {
-    const { data } = await admin.rpc("admin_has_permission", { p_user_id: userId, p_permission: permission, p_branch_id: null, p_team_id: null });
-    if (data === true) return true;
-  }
-  return false;
-}
-
 const value = (input: unknown) => String(input ?? "").trim();
 const nullable = (input: unknown) => value(input) || null;
 
@@ -22,7 +13,6 @@ export async function GET(request: Request) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await canManage(admin, auth.userId, false))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   const [vehicles, drivers, runs, fleetSummary] = await Promise.all([
     admin.from("fleet_vehicles").select("*").order("registration"),
     admin.from("transport_drivers").select("id,full_name,phone").eq("is_active", true).order("full_name"),
@@ -41,7 +31,6 @@ export async function POST(request: Request) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await canManage(admin, auth.userId, true))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   const action = value(body.action);
