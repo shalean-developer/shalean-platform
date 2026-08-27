@@ -190,11 +190,21 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
       ? ["template.manage", "content.draft", "marketing.view"]
       : ["template.manage", "content.draft"];
   }
+
+  // SR-05B2B: these routes need explicit semantics rather than inheriting
+  // generic marketing action-name matching.
+  if (path.includes("/seo/gsc-sync")) return ["marketing.view"];
+  if (path.includes("/memberships")) {
+    return read ? ["marketing.view", "customer.view"] : ["customer.edit"];
+  }
+  if (path.includes("/referrals/settings")) {
+    return read ? ["marketing.view"] : ["content.publish"];
+  }
+
   if (
     path.includes("/promotions") ||
     path.includes("/marketing-automation") ||
     path.includes("/social-accounts") ||
-    path.includes("/memberships") ||
     path.includes("/referrals/") ||
     path.includes("/marketing/")
   ) {
