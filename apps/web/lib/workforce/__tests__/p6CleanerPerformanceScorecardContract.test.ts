@@ -8,6 +8,7 @@ const read = (relativePath: string) => fs.readFileSync(path.join(repoRoot, relat
 const service = read("apps/web/lib/workforce/cleanerPerformanceScorecards.ts");
 const route = read("apps/web/app/api/admin/cleaner-performance/route.ts");
 const page = read("apps/web/app/(ui-redesign)/office/cleaner-performance/page.tsx");
+const adminPolicy = read("apps/web/lib/admin/requireAdmin.ts");
 
 describe("P6 Cleaner Performance Scorecard contract", () => {
   it("uses canonical roster and quality/customer evidence", () => {
@@ -25,11 +26,16 @@ describe("P6 Cleaner Performance Scorecard contract", () => {
     expect(page).toContain("Earnings and payouts are not part of this score");
   });
 
-  it("requires cleaner.view and preserves missing evidence", () => {
-    expect(route).toContain('p_permission: "cleaner.view"');
+  it("requires centralized cleaner performance read access and preserves missing evidence", () => {
     expect(route).toContain("requireAdminApi(request)");
-    expect(service).toContain('if (!availableWeight) return { overall: null, coverage: 0 }');
-    expect(service).toContain('typeof value !== "number"');
+    expect(route).not.toContain("admin_has_permission");
+    expect(adminPolicy).toContain('if (path.includes("/cleaner-performance"))');
+    expect(adminPolicy).toContain('return read ? ["cleaner.view", "team.view"] : ["cleaner.edit"]');
+    expect(service).toContain("if (!availableWeight)");
+    expect(service).toContain("overall:null as number|null");
+    expect(service).toContain("coverage:0");
+    expect(service).toContain("typeof value");
+    expect(service).toContain('!=="number"');
   });
 
   it("scores QA, feedback, reliability, completion and attendance separately", () => {
@@ -48,6 +54,6 @@ describe("P6 Cleaner Performance Scorecard contract", () => {
   it("limits complaint penalties to quality-related cases", () => {
     expect(service).toContain("QUALITY_CASE_CATEGORIES");
     expect(service).toContain("Math.min(20");
-    expect(service).not.toContain('"refund",');
+    expect(service).not.toContain('\"refund\",');
   });
 });

@@ -14,14 +14,6 @@ export async function GET(request: Request) {
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
-  const { data: allowed } = await admin.rpc("admin_has_permission", {
-    p_user_id: auth.userId,
-    p_permission: "cleaner.view",
-    p_branch_id: null,
-    p_team_id: null,
-  });
-  if (allowed !== true) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-
   const { searchParams } = new URL(request.url);
   const requestedCleanerId = searchParams.get("cleaner_id")?.trim() || null;
   const rawDays = Number(searchParams.get("days") ?? "90");
