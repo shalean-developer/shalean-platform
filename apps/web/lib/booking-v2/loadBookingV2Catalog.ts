@@ -45,6 +45,32 @@ type DbServiceRow = {
   max_hours: number;
 };
 
+type PricingCatalogReadError = { message: string; code?: string | null } | null;
+
+/**
+ * SR-04C: live pricing is authoritative whenever Supabase is configured.
+ * A failed read must never be converted into a successfully loaded static quote,
+ * because confirm would then sign stale/default pricing as if it came from the DB.
+ */
+export function assertAuthoritativePricingCatalogReads(params: {
+  servicesError: PricingCatalogReadError;
+  extrasError: PricingCatalogReadError;
+  configError: PricingCatalogReadError;
+}): void {
+  const failures = [
+    ["pricing_services", params.servicesError],
+    ["pricing_extras", params.extrasError],
+    ["pricing_booking_config", params.configError],
+  ] as const;
+  const failed = failures.filter(([, error]) => Boolean(error));
+  if (!failed.length) return;
+
+  const detail = failed
+    .map(([table, error]) => `${table}: ${error?.message ?? "unknown read error"}`)
+    .join("; ");
+  throw new Error(`Authoritative booking pricing could not be read (${detail})`);
+}
+
 function ratesFromDbRow(dbSvc: DbServiceRow | null | undefined, staticFallback: { basePrice: number }) {
   return {
     basePrice: dbSvc?.base_price && dbSvc.base_price > 0 ? dbSvc.base_price : staticFallback.basePrice,
@@ -124,7 +150,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   let configJson: unknown = null;
 
   if (admin) {
-    const [{ data: svcRows }, { data: extRows }, { data: configRow }] = await Promise.all([
+    const [servicesResult, extrasResult, configResult] = await Promise.all([
       admin
         .from("pricing_services")
         .select(
@@ -139,6 +165,16 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         .order("sort_order", { ascending: true }),
       admin.from("pricing_booking_config").select("config").eq("id", "default").maybeSingle(),
     ]);
+
+    assertAuthoritativePricingCatalogReads({
+      servicesError: servicesResult.error,
+      extrasError: extrasResult.error,
+      configError: configResult.error,
+    });
+
+    const svcRows = servicesResult.data;
+    const extRows = extrasResult.data;
+    const configRow = configResult.data;
 
     if (svcRows) {
       for (const raw of svcRows) {
