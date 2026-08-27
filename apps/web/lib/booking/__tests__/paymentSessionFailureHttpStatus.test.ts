@@ -8,7 +8,7 @@ describe("paymentSessionFailureHttpStatus", () => {
         errorCode: "PAYMENT_BOOKING_NOT_FOUND",
         retryable: false,
       }),
-    ).toBe(401);
+    ).toBe(404);
   });
 
   it("preserves retryable initialization failures as 503", () => {
