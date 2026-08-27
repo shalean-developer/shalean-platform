@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { requireAdminPermissionFromRequest } from "@/lib/admin/requirePermission";
 import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -30,12 +31,6 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireAdminApi(request);
-  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
-
-  const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-
   let body: Record<string, unknown>;
   try {
     body = (await request.json()) as Record<string, unknown>;
@@ -43,7 +38,25 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid body." }, { status: 400 });
   }
 
-  if (body.action === "create_plan") {
+  const action = String(body.action ?? "");
+  const requiredPermission =
+    action === "create_plan" || action === "update_plan"
+      ? "content.publish"
+      : action === "assign_membership" || action === "set_membership_status"
+        ? "customer.edit"
+        : null;
+
+  if (!requiredPermission) {
+    return NextResponse.json({ error: "Unknown action." }, { status: 400 });
+  }
+
+  const auth = await requireAdminPermissionFromRequest(request, requiredPermission);
+  if (!auth.ok) return auth.response;
+
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+
+  if (action === "create_plan") {
     const { data, error } = await admin
       .from("membership_plans")
       .insert({
@@ -62,7 +75,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ plan: data }, { status: 201 });
   }
 
-  if (body.action === "update_plan") {
+  if (action === "update_plan") {
     const id = String(body.id ?? "");
     const { data, error } = await admin
       .from("membership_plans")
@@ -83,7 +96,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ plan: data });
   }
 
-  if (body.action === "assign_membership") {
+  if (action === "assign_membership") {
     const userId = String(body.user_id ?? "");
     const planId = String(body.plan_id ?? "");
     if (!userId || !planId) {
@@ -103,22 +116,18 @@ export async function POST(request: Request) {
     return NextResponse.json({ membership: data }, { status: 201 });
   }
 
-  if (body.action === "set_membership_status") {
-    const id = String(body.id ?? "");
-    const status = String(body.status ?? "");
-    const { data, error } = await admin
-      .from("customer_memberships")
-      .update({
-        status,
-        cancelled_at: status === "cancelled" ? new Date().toISOString() : null,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", id)
-      .select("*")
-      .single();
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json({ membership: data });
-  }
-
-  return NextResponse.json({ error: "Unknown action." }, { status: 400 });
+  const id = String(body.id ?? "");
+  const status = String(body.status ?? "");
+  const { data, error } = await admin
+    .from("customer_memberships")
+    .update({
+      status,
+      cancelled_at: status === "cancelled" ? new Date().toISOString() : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  return NextResponse.json({ membership: data });
 }
