@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BookingCustomerOwnershipColumn } from "@/lib/booking/bookingCustomerIdentity";
+import { bookingPaidAmountColumnsFromCents } from "@/lib/booking/bookingPaidAmountColumns";
 import { paymentCustomerIdentityMismatch } from "@/lib/booking/paymentCustomerIdentityGuard";
 
 export type PaymentFinalizationPersistedBookingRow = {
@@ -15,6 +16,23 @@ type DbError = { message: string; code?: string };
 
 function paymentFinalizationSelect(ownershipColumn: BookingCustomerOwnershipColumn): string {
   return `id, created_at, ${ownershipColumn}`;
+}
+
+/**
+ * Successful Paystack settlement uses `amount_paid_cents` as the collected-cash SoT.
+ * Normalize legacy mirror columns at the persistence boundary so callers cannot write
+ * `total_paid_cents` / `total_paid_zar` values that disagree with settled cents.
+ */
+export function normalizePaystackFinalizationPaidAmountRow(
+  row: Record<string, unknown>,
+): Record<string, unknown> {
+  const raw = row.amount_paid_cents;
+  const amountCents = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(amountCents)) return row;
+  return {
+    ...row,
+    ...bookingPaidAmountColumnsFromCents(amountCents),
+  };
 }
 
 export async function finalizePendingPaymentBookingFromPaystack(params: {
@@ -80,18 +98,19 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
     }
   }
 
+  const normalizedRow = normalizePaystackFinalizationPaidAmountRow(row);
   const result =
     pendingFinalizeMatch === "id"
       ? await supabase
           .from("bookings")
-          .update(row)
+          .update(normalizedRow)
           .eq("id", existingPendingPaymentId)
           .eq("status", "pending_payment")
           .select(select)
           .maybeSingle()
       : await supabase
           .from("bookings")
-          .update(row)
+          .update(normalizedRow)
           .eq("paystack_reference", paystackReference)
           .eq("status", "pending_payment")
           .select(select)
@@ -111,9 +130,10 @@ export async function insertFinalizedBookingFromPaystack(params: {
   row: Record<string, unknown>;
   ownershipColumn: BookingCustomerOwnershipColumn;
 }): Promise<{ data: PaymentFinalizationPersistedBookingRow | null; error: DbError | null }> {
+  const normalizedRow = normalizePaystackFinalizationPaidAmountRow(params.row);
   const { data, error } = await params.supabase
     .from("bookings")
-    .insert(params.row)
+    .insert(normalizedRow)
     .select(paymentFinalizationSelect(params.ownershipColumn))
     .maybeSingle();
 
