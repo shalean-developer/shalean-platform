@@ -45,6 +45,15 @@ describe("paystackRouteResponsibilityContract guardrails", () => {
     expect(src).not.toContain("runPaystackVerifyFinalizePipeline");
   });
 
+  it("AI booking agent keeps quote mode but cannot initialize customer payment", () => {
+    const src = readApiRoute("ai", "booking-agent", "route.ts");
+    expect(src).toContain("AI_BOOKING_AGENT_PAY_RETIRED");
+    expect(src).toContain('bookingPath: "/book"');
+    expect(src).toContain("buildBookingAgentQuote");
+    expect(src).not.toContain("processPaystackInitializeBody");
+    expect(src).not.toContain("api.paystack.co");
+  });
+
   it("GET /api/paystack/status remains the active read-only status route", () => {
     const src = readApiRoute("paystack", "status", "route.ts");
     expect(src).toContain("findBookingIdStatusForPaystackReference");
