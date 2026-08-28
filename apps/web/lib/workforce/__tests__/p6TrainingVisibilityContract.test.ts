@@ -38,4 +38,11 @@ describe("P6 training/compliance visibility", () => {
     expect(cleanerManagement).toContain("/office/workforce/training");
     expect(cleanerManagement).toContain("/office/cleaner-performance");
   });
+
+  it("explains missing compliance evidence in the Office readiness table", () => {
+    expect(officeTraining).toContain("missingComplianceEvidence: boolean");
+    expect(officeTraining).toContain("row.missingComplianceEvidence");
+    expect(officeTraining).toContain('"No evidence"');
+    expect(officeTraining).toContain('"Current"');
+  });
 });
