@@ -3,18 +3,19 @@ import { HomeFeatureCard } from "@/components/marketing-home/primitives/HomeFeat
 import { HomeProofCard } from "@/components/marketing-home/primitives/HomeProofCard";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
 import { HomeSectionHeader } from "@/components/marketing-home/primitives/HomeSectionHeader";
+import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
 
 export function RDP03HomepagePrimitivesShowcase() {
   return (
     <section className="border-t border-border bg-background">
       <div className="mx-auto w-full max-w-[var(--ui-container-wide)] px-[var(--ui-page-gutter)] pt-[var(--ui-space-10)]">
         <div className="flex flex-wrap items-center gap-[var(--ui-space-2)]">
-          <span className="rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-primary-foreground">RD-P03C</span>
-          <span className="rounded-[var(--ui-radius-pill)] bg-secondary px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-secondary-foreground">HOMEPAGE PRIMITIVES</span>
-          <span className="rounded-[var(--ui-radius-pill)] bg-warning px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-warning-foreground">LOCAL VALIDATION</span>
+          <span className="rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-primary-foreground">RD-P03</span>
+          <span className="rounded-[var(--ui-radius-pill)] bg-secondary px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-secondary-foreground">HOMEPAGE SYSTEM</span>
+          <span className="rounded-[var(--ui-radius-pill)] bg-warning px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-warning-foreground">CLOSURE VALIDATION</span>
         </div>
-        <h1 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] text-foreground">Reusable homepage section primitives</h1>
-        <p className="mt-[var(--ui-space-2)] max-w-3xl text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">Development-only specimens for section framing, headings, feature cards and proof cards. The live homepage does not consume these primitives yet.</p>
+        <h1 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] text-foreground">Reusable homepage section system</h1>
+        <p className="mt-[var(--ui-space-2)] max-w-3xl text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">Development-only specimens for the section framing, heading, feature-card, proof-card and final-conversion patterns now used by the live homepage redesign.</p>
       </div>
 
       <HomeSection className="mt-[var(--ui-space-6)] border-y border-border" tone="muted">
@@ -36,10 +37,14 @@ export function RDP03HomepagePrimitivesShowcase() {
         </div>
       </HomeSection>
 
-      <div className="mx-auto w-full max-w-[var(--ui-container-wide)] px-[var(--ui-page-gutter)] pb-[var(--ui-space-12)]">
+      <div className="border-y border-border">
+        <MarketingHomeFinalCta />
+      </div>
+
+      <div className="mx-auto w-full max-w-[var(--ui-container-wide)] px-[var(--ui-page-gutter)] py-[var(--ui-space-12)]">
         <div className="rounded-[var(--ui-radius-lg)] border border-border bg-muted p-[var(--ui-space-4)]">
-          <p className="text-[length:var(--ui-text-small)] font-semibold text-foreground">RD-P03C boundary</p>
-          <p className="mt-[var(--ui-space-1)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">These primitives do not own service data, pricing, booking state, reviews, CMS queries, FAQ behaviour, promotion APIs, analytics or SEO authority.</p>
+          <p className="text-[length:var(--ui-text-small)] font-semibold text-foreground">RD-P03 boundary</p>
+          <p className="mt-[var(--ui-space-1)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">The reusable homepage system owns presentation only. Service data, pricing, booking state, reviews, CMS queries, FAQ behaviour, location data, promotion APIs, analytics and SEO authority remain outside these primitives.</p>
         </div>
       </div>
     </section>
