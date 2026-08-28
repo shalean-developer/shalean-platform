@@ -19,7 +19,7 @@ const DropdownMenuSubTrigger = forwardRef<
     ref={ref}
     className={cn(
       "flex cursor-default select-none items-center rounded-lg px-2 py-1.5 text-sm outline-none",
-      "focus:bg-zinc-100 data-[state=open]:bg-zinc-100",
+      "focus:bg-accent focus:text-accent-foreground data-[state=open]:bg-accent data-[state=open]:text-accent-foreground",
       inset && "pl-8",
       className,
     )}
@@ -36,7 +36,7 @@ const DropdownMenuSubContent = forwardRef<
 >(({ className, ...props }, ref) => (
   <DropdownMenuPrimitive.SubContent
     ref={ref}
-    className={cn("z-50 min-w-[8rem] overflow-hidden rounded-xl border border-zinc-200 bg-white p-1 text-zinc-900 shadow-lg", className)}
+    className={cn("z-50 min-w-[8rem] overflow-hidden rounded-xl border border-border bg-popover p-1 text-popover-foreground shadow-lg", className)}
     {...props}
   />
 ));
@@ -51,7 +51,7 @@ const DropdownMenuContent = forwardRef<
       ref={ref}
       sideOffset={sideOffset}
       className={cn(
-        "z-50 min-w-[180px] overflow-hidden rounded-xl border border-zinc-200 bg-white py-2 text-zinc-900 shadow-lg",
+        "z-50 min-w-[180px] overflow-hidden rounded-xl border border-border bg-popover py-2 text-popover-foreground shadow-lg",
         className,
       )}
       {...props}
@@ -68,7 +68,7 @@ const DropdownMenuItem = forwardRef<
     ref={ref}
     className={cn(
       "relative flex cursor-pointer select-none items-center px-4 py-2 text-sm outline-none transition-colors",
-      "focus:bg-zinc-100 data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
+      "focus:bg-accent focus:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50",
       inset && "pl-8",
       className,
     )}
@@ -81,7 +81,7 @@ const DropdownMenuSeparator = forwardRef<
   ElementRef<typeof DropdownMenuPrimitive.Separator>,
   ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Separator>
 >(({ className, ...props }, ref) => (
-  <DropdownMenuPrimitive.Separator ref={ref} className={cn("-mx-1 my-1 h-px bg-zinc-100", className)} {...props} />
+  <DropdownMenuPrimitive.Separator ref={ref} className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />
 ));
 DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 
@@ -94,7 +94,7 @@ const DropdownMenuLabel = forwardRef<
 DropdownMenuLabel.displayName = DropdownMenuPrimitive.Label.displayName;
 
 function DropdownMenuShortcut({ className, ...props }: HTMLAttributes<HTMLSpanElement>) {
-  return <span className={cn("ml-auto text-xs tracking-widest text-zinc-400", className)} {...props} />;
+  return <span className={cn("ml-auto text-xs tracking-widest text-muted-foreground", className)} {...props} />;
 }
 
 export {
