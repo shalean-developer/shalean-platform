@@ -68,13 +68,18 @@ export async function refreshQualityInspectionScore(
 ) {
   const { data: inspection, error: inspectionError } = await admin
     .from("quality_inspections")
-    .select("id, booking_id")
+    .select("id, booking_id, status, signed_off_at")
     .eq("id", inspectionId)
     .maybeSingle();
   if (inspectionError) return { ok: false as const, error: inspectionError.message };
   if (!inspection) return { ok: false as const, error: "Inspection not found." };
 
-  const bookingId = String((inspection as { booking_id: string }).booking_id);
+  const inspectionState = inspection as {
+    booking_id: string;
+    status?: QualityInspectionStatus | null;
+    signed_off_at?: string | null;
+  };
+  const bookingId = String(inspectionState.booking_id);
   const { data: booking, error: bookingError } = await admin
     .from("bookings")
     .select("service_slug, service")
@@ -91,18 +96,9 @@ export async function refreshQualityInspectionScore(
   const requiredSet = new Set(required);
 
   const [{ data: checklistRows }, { data: photoRows }, { data: defectRows }] = await Promise.all([
-    admin
-      .from("booking_service_checklists")
-      .select("section_key, completed")
-      .eq("booking_id", bookingId),
-    admin
-      .from("booking_service_photos")
-      .select("section_key, photo_type")
-      .eq("booking_id", bookingId),
-    admin
-      .from("quality_inspection_defects")
-      .select("severity, status")
-      .eq("inspection_id", inspectionId),
+    admin.from("booking_service_checklists").select("section_key, completed").eq("booking_id", bookingId),
+    admin.from("booking_service_photos").select("section_key, photo_type").eq("booking_id", bookingId),
+    admin.from("quality_inspection_defects").select("severity, status").eq("inspection_id", inspectionId),
   ]);
 
   const completed = new Set<string>();
@@ -144,7 +140,8 @@ export async function refreshQualityInspectionScore(
   if (unresolvedCritical || overallScore < 60) recommendedStatus = "failed";
   else if (overallScore < 85 || defectPenalty > 0) recommendedStatus = "rework_required";
 
-  const patch = {
+  const shouldRealignSignedOffStatus = Boolean(inspectionState.signed_off_at) && inspectionState.status !== "closed";
+  const patch: Record<string, unknown> = {
     checklist_required_count: required.length,
     checklist_completed_count: completed.size,
     before_photo_sections_count: before.size,
@@ -155,6 +152,8 @@ export async function refreshQualityInspectionScore(
     overall_score: overallScore,
     updated_at: new Date().toISOString(),
   };
+  if (shouldRealignSignedOffStatus) patch.status = recommendedStatus;
+
   const { data: updated, error: updateError } = await admin
     .from("quality_inspections")
     .update(patch)
@@ -167,7 +166,7 @@ export async function refreshQualityInspectionScore(
     inspection_id: inspectionId,
     event_type: "score_refreshed",
     actor_user_id: actorUserId,
-    payload: { ...patch, recommended_status: recommendedStatus },
+    payload: { ...patch, recommended_status: recommendedStatus, status_realigned: shouldRealignSignedOffStatus },
   });
 
   return { ok: true as const, inspection: updated, recommendedStatus };
