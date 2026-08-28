@@ -64,6 +64,7 @@ export async function GET(request: Request) {
             ready: cleaner.ready,
             overdueTraining: cleaner.overdueTraining,
             nonCompliant: cleaner.nonCompliant,
+            missingComplianceEvidence: cleaner.missingComplianceEvidence,
             trainingAssigned: cleaner.trainingAssigned,
             trainingCompleted: cleaner.trainingCompleted,
             complianceRecords: cleaner.complianceRecords,
