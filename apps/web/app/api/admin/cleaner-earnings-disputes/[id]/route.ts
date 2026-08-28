@@ -18,6 +18,9 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+
   const { id } = await ctx.params;
   if (!/^[0-9a-f-]{36}$/i.test(String(id ?? "").trim())) {
     return NextResponse.json({ error: "Invalid dispute id." }, { status: 400 });
@@ -42,32 +45,6 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (note.length > 8000) {
     return NextResponse.json({ error: "admin_response too long." }, { status: 400 });
   }
-
-  const adjustmentAmountCents =
-    nextStatus === "resolved" &&
-    body.adjustment_amount_cents != null &&
-    Number.isFinite(Number(body.adjustment_amount_cents)) &&
-    Math.round(Number(body.adjustment_amount_cents)) !== 0
-      ? Math.round(Number(body.adjustment_amount_cents))
-      : null;
-  const adjReason = typeof body.adjustment_reason === "string" ? body.adjustment_reason.trim() : "";
-
-  if (adjustmentAmountCents != null && adjReason.length < 2) {
-    return NextResponse.json({ error: "adjustment_reason required when posting an adjustment." }, { status: 400 });
-  }
-
-  // Resolving the operational dispute and changing cleaner financial entitlement
-  // are separate authorities. An earnings adjustment requires payout preparation
-  // permission in addition to dispute.resolve, and is checked before any write.
-  if (adjustmentAmountCents != null) {
-    const adjustmentAuth = await requireAdminApi(request, ["payout.prepare"]);
-    if (!adjustmentAuth.ok) {
-      return NextResponse.json({ error: adjustmentAuth.error }, { status: adjustmentAuth.status });
-    }
-  }
-
-  const admin = getSupabaseAdmin();
-  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   const { data: existing, error: exErr } = await admin
     .from("cleaner_earnings_disputes")
@@ -129,11 +106,17 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-  if (adjustmentAmountCents != null) {
+  const adjRaw = body.adjustment_amount_cents;
+  const adjReason = typeof body.adjustment_reason === "string" ? body.adjustment_reason.trim() : "";
+  if (nextStatus === "resolved" && adjRaw != null && Number.isFinite(Number(adjRaw)) && Math.round(Number(adjRaw)) !== 0) {
+    if (adjReason.length < 2) {
+      return NextResponse.json({ error: "adjustment_reason required when posting an adjustment." }, { status: 400 });
+    }
+    const amount = Math.round(Number(adjRaw));
     const { error: adjErr } = await admin.from("cleaner_earnings_adjustments").insert({
       cleaner_id: row.cleaner_id,
       booking_id: row.booking_id,
-      amount_cents: adjustmentAmountCents,
+      amount_cents: amount,
       reason: adjReason.slice(0, 4000),
       dispute_id: id,
       created_by: isUuid ? adminUserId : null,
