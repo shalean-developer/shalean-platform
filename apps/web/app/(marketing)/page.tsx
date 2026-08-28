@@ -36,7 +36,7 @@ export default function MarketingHomePage() {
   const bookingHref = marketingHomeBookingHref();
 
   return (
-    <div className="bg-white text-slate-900">
+    <div className="bg-background text-foreground">
       <MarketingHomeHeader bookingHref={bookingHref} />
       <main className={marketingHomeMainPadding}>
         <MarketingHomeHeroSection />
