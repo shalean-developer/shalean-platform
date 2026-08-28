@@ -18,6 +18,12 @@ describe("P6 supervisor quality/performance scope", () => {
     expect(scope).toContain('booking_cleaners');
   });
 
+  it("keeps future-dated team membership endings active until they actually expire", () => {
+    expect(scope).not.toContain('.is("active_to", null)');
+    expect(scope).toContain("active_to?: string | null");
+    expect(scope).toContain("if (row.active_to && row.active_to <= now) continue;");
+  });
+
   it("scopes cleaner performance to supervisor cleaner IDs", () => {
     expect(perf).toContain("resolveSupervisorTeamScope");
     expect(perf).toContain("cleanerIds: supervisorScope.isSupervisor");
