@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { PublicPageContainer } from "@/components/nav/PublicPageContainer";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   getPromotionBySlug,
@@ -181,17 +182,17 @@ export default async function CampaignLandingPage({ params }: Props) {
     "Standard Shalean terms apply. Offer subject to eligibility and availability.";
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900">
+    <div className="min-h-screen bg-background text-foreground">
       <header
         className="relative overflow-hidden text-white"
         style={{
           background: `linear-gradient(135deg, ${promo.display_config.colours?.primary ?? "#0B1F4A"}, ${promo.display_config.colours?.accent ?? "#2563EB"})`,
         }}
       >
-        <div className="mx-auto flex max-w-5xl flex-col gap-6 px-4 py-16 md:py-24">
+        <PublicPageContainer size="content" className="flex flex-col gap-6 py-16 md:py-24">
           <p className="text-sm font-semibold uppercase tracking-[0.2em] text-white/80">Shalean</p>
           {offerExpired ? (
-            <p className="inline-flex w-fit rounded-full bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
+            <p className="inline-flex w-fit rounded-[var(--ui-radius-pill)] bg-white/20 px-3 py-1 text-xs font-semibold uppercase tracking-wide">
               Offer ended — you can still book online
             </p>
           ) : null}
@@ -205,7 +206,7 @@ export default async function CampaignLandingPage({ params }: Props) {
               promo.description}
           </p>
           {promo.promo_code ? (
-            <p className="inline-flex w-fit rounded-full bg-white/15 px-4 py-2 font-mono text-sm">
+            <p className="inline-flex w-fit rounded-[var(--ui-radius-pill)] bg-white/15 px-4 py-2 font-mono text-sm">
               Promo code: {promo.promo_code}
             </p>
           ) : null}
@@ -213,21 +214,21 @@ export default async function CampaignLandingPage({ params }: Props) {
           <div className="flex flex-wrap gap-3">
             <Link
               href={bookHref}
-              className="rounded-full bg-white px-6 py-3 text-sm font-semibold text-slate-900"
+              className="rounded-[var(--ui-radius-pill)] bg-white px-6 py-3 text-sm font-semibold text-slate-900"
             >
               {structured.cta ?? promo.cta_label ?? promo.display_config.cta ?? "Book now"}
             </Link>
             <Link
               href="/"
-              className="rounded-full border border-white/40 px-6 py-3 text-sm font-semibold text-white"
+              className="rounded-[var(--ui-radius-pill)] border border-white/40 px-6 py-3 text-sm font-semibold text-white"
             >
               Back home
             </Link>
           </div>
-        </div>
+        </PublicPageContainer>
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-12 px-4 py-12">
+      <PublicPageContainer size="content" className="space-y-12 py-12">
         <section>
           <h2 className="text-2xl font-bold">Benefits</h2>
           <ul className="mt-4 grid gap-3 sm:grid-cols-2">
@@ -236,7 +237,7 @@ export default async function CampaignLandingPage({ params }: Props) {
               "Easy online booking",
               "Transparent pricing",
             ]).map((b) => (
-              <li key={b} className="rounded-2xl border border-slate-200 bg-white p-4 text-sm">
+              <li key={b} className="rounded-[var(--ui-radius-2xl)] border border-border bg-card p-4 text-sm text-card-foreground">
                 {b}
               </li>
             ))}
@@ -245,7 +246,7 @@ export default async function CampaignLandingPage({ params }: Props) {
 
         <section>
           <h2 className="text-2xl font-bold">Services included</h2>
-          <ul className="mt-4 list-disc space-y-1 pl-5 text-slate-700">
+          <ul className="mt-4 list-disc space-y-1 pl-5 text-muted-foreground">
             {(structured.servicesIncluded ?? ["Standard home cleaning"]).map((s) => (
               <li key={s}>{s}</li>
             ))}
@@ -253,14 +254,14 @@ export default async function CampaignLandingPage({ params }: Props) {
         </section>
 
         {promo.qr_code_data_url ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-6">
+          <section className="rounded-[var(--ui-radius-2xl)] border border-border bg-card p-6 text-card-foreground">
             <h2 className="text-xl font-bold">Scan to book</h2>
-            <p className="mt-1 text-sm text-slate-500">QR code for this campaign landing page.</p>
+            <p className="mt-1 text-sm text-muted-foreground">QR code for this campaign landing page.</p>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={promo.qr_code_data_url}
               alt="Campaign QR code"
-              className="mt-4 h-40 w-40 rounded-lg border border-slate-100"
+              className="mt-4 h-40 w-40 rounded-[var(--ui-radius-lg)] border border-border"
             />
           </section>
         ) : null}
@@ -270,23 +271,23 @@ export default async function CampaignLandingPage({ params }: Props) {
             <h2 className="text-2xl font-bold">FAQs</h2>
             <div className="mt-4 space-y-3">
               {(structured.faqs ?? []).map((f) => (
-                <details key={f.q} className="rounded-2xl border border-slate-200 bg-white p-4">
+                <details key={f.q} className="rounded-[var(--ui-radius-2xl)] border border-border bg-card p-4 text-card-foreground">
                   <summary className="cursor-pointer font-medium">{f.q}</summary>
-                  <p className="mt-2 text-sm text-slate-600">{f.a}</p>
+                  <p className="mt-2 text-sm text-muted-foreground">{f.a}</p>
                 </details>
               ))}
             </div>
           </section>
         ) : null}
 
-        <section className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-600">
-          <h2 className="text-lg font-bold text-slate-900">Terms & conditions</h2>
+        <section className="rounded-[var(--ui-radius-2xl)] border border-border bg-card p-6 text-sm text-muted-foreground">
+          <h2 className="text-lg font-bold text-card-foreground">Terms & conditions</h2>
           <div
             className="mt-3 prose prose-sm max-w-none"
             dangerouslySetInnerHTML={{ __html: safeTermsHtml }}
           />
         </section>
-      </main>
+      </PublicPageContainer>
     </div>
   );
 }
