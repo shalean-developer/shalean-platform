@@ -45,6 +45,7 @@ export async function loadTrainingComplianceSummary(admin: SupabaseClient, clean
       if (!assignment.due_at || Date.parse(assignment.due_at) < now || status === "expired") overdueTraining += 1;
     }
 
+    const missingComplianceEvidence = complianceRows.length === 0;
     const nonCompliant = complianceRows.filter((a) => {
       const row = a as { status?: string; expires_at?: string | null };
       const status = String(row.status ?? "");
@@ -61,8 +62,9 @@ export async function loadTrainingComplianceSummary(admin: SupabaseClient, clean
       trainingCompleted: assignments.filter((a) => String((a as { status?: string }).status) === "completed").length,
       overdueTraining,
       complianceRecords: complianceRows.length,
+      missingComplianceEvidence,
       nonCompliant,
-      ready: overdueTraining === 0 && nonCompliant === 0,
+      ready: overdueTraining === 0 && !missingComplianceEvidence && nonCompliant === 0,
     };
   });
   return { cleaners: rows, modules: modules ?? [] };
