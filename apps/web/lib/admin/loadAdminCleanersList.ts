@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { cleanerManagementStatus } from "@/lib/admin/cleanerManagementStatus";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 
 export type AdminCleanerListRow = {
@@ -66,11 +67,16 @@ const SELECT_BASE = `
 export type LoadAdminCleanersListOptions = {
   search?: string;
   excludeTeamId?: string;
-  /** `all` | `available` (is_available) | `high_rated` (rating ≥ 4). */
+  /** `all` | `available` (dispatchable active rows) | `high_rated` (rating ≥ 4). */
   filter?: "all" | "available" | "high_rated";
   /** Optional cap for typeahead pickers; omit to return every matching row. */
   limit?: number;
 };
+
+function projectOfficeStatus(row: AdminCleanerListRow): AdminCleanerListRow {
+  const status = cleanerManagementStatus(row);
+  return { ...row, status, is_available: status !== "offline" };
+}
 
 /** Loads every cleaner row from `public.cleaners` (paginated), with optional filters. */
 export async function loadAdminCleanersList(
@@ -106,7 +112,7 @@ export async function loadAdminCleanersList(
   const fetchPage = async (columns: string, from: number, pageSize: number) => {
     let q = admin.from("cleaners").select(columns);
     if (rosterFilter === "available") {
-      q = q.eq("is_available", true);
+      q = q.eq("is_available", true).neq("is_active", false);
     } else if (rosterFilter === "high_rated") {
       q = q.gte("rating", 4);
     }
@@ -138,7 +144,7 @@ export async function loadAdminCleanersList(
     if (res.error) throw new Error(res.error.message);
 
     const rows = (Array.isArray(res.data) ? res.data : []) as unknown as AdminCleanerListRow[];
-    all.push(...rows);
+    all.push(...rows.map(projectOfficeStatus));
     if (rows.length < take) break;
     if (hardLimit != null && all.length >= hardLimit) break;
   }

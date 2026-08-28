@@ -1,6 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { requireAdminUser } from "@/lib/auth/evaluateAdminAccess";
+import { requireAdminApi } from "@/lib/auth/requireAdminApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { regenerateCleanerAvailabilityFromStoredWeekdays } from "@/lib/cleaner/regenerateCleanerAvailabilityFromStoredWeekdays";
 import { syncCleanerBusyFromBookings } from "@/lib/cleaner/syncCleanerStatus";
@@ -15,37 +14,23 @@ export const dynamic = "force-dynamic";
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 function isCleanerUuid(id: string): boolean { return UUID_RE.test(id); }
 
-async function requireAdminFromRequest(request: Request) {
-  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim() ?? "";
-  if (!token) return { ok: false as const, response: NextResponse.json({ error: "Missing authorization." }, { status: 401 }) };
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !anon) return { ok: false as const, response: NextResponse.json({ error: "Server configuration error." }, { status: 503 }) };
-  const pub = createClient(url, anon);
-  const { data: { user }, error: sessionErr } = await pub.auth.getUser(token);
-  if (sessionErr || !user?.id) return { ok: false as const, response: NextResponse.json({ error: "Invalid or expired session." }, { status: 401 }) };
-  const adminAuth = await requireAdminUser(user);
-  if (!adminAuth.ok) return { ok: false as const, response: NextResponse.json({ error: adminAuth.error }, { status: adminAuth.status }) };
-  const admin = getSupabaseAdmin();
-  if (!admin) return { ok: false as const, response: NextResponse.json({ error: "Server configuration error." }, { status: 503 }) };
-  return { ok: true as const, admin };
-}
-
 export async function GET(request: Request, ctx: { params: Promise<{ id: string }> }) {
   const { id } = await ctx.params;
   if (!id) return NextResponse.json({ error: "Missing cleaner id." }, { status: 400 });
   if (!isCleanerUuid(id)) return NextResponse.json({ error: "Invalid cleaner id." }, { status: 400 });
-  const auth = await requireAdminFromRequest(request);
-  if (!auth.ok) return auth.response;
-  await syncCleanerBusyFromBookings(auth.admin, id);
-  const { data, error } = await auth.admin.from("cleaners").select("id, full_name, phone, email, rating, jobs_completed, is_available, is_active, status, city_id, location, availability_start, availability_end, availability_weekdays, auth_user_id, joined_at, created_at").eq("id", id).maybeSingle();
+  const auth = await requireAdminApi(request, ["cleaner.view"]);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
+  await syncCleanerBusyFromBookings(admin, id);
+  const { data, error } = await admin.from("cleaners").select("id, full_name, phone, email, rating, jobs_completed, is_available, is_active, status, city_id, location, availability_start, availability_end, availability_weekdays, auth_user_id, joined_at, created_at").eq("id", id).maybeSingle();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Cleaner not found." }, { status: 404 });
 
   const bookingFields = "id, booking_reference, service, date, time, status, location";
   const [directResult, rosterResult] = await Promise.all([
-    auth.admin.from("bookings").select(bookingFields).eq("cleaner_id", id).order("date", { ascending: false }).order("time", { ascending: false }).limit(20),
-    auth.admin.from("booking_cleaners").select("booking_id").eq("cleaner_id", id).limit(100),
+    admin.from("bookings").select(bookingFields).eq("cleaner_id", id).order("date", { ascending: false }).order("time", { ascending: false }).limit(20),
+    admin.from("booking_cleaners").select("booking_id").eq("cleaner_id", id).limit(100),
   ]);
   if (directResult.error) return NextResponse.json({ error: directResult.error.message }, { status: 500 });
   if (rosterResult.error) return NextResponse.json({ error: rosterResult.error.message }, { status: 500 });
@@ -54,7 +39,7 @@ export async function GET(request: Request, ctx: { params: Promise<{ id: string 
   const rosterBookingIds = (rosterResult.data ?? []).map((row) => String(row.booking_id ?? "").trim()).filter((bookingId) => bookingId && !directIds.has(bookingId));
   let rosterBookings: typeof directBookings = [];
   if (rosterBookingIds.length > 0) {
-    const rosterBookingsResult = await auth.admin.from("bookings").select(bookingFields).in("id", rosterBookingIds).order("date", { ascending: false }).order("time", { ascending: false }).limit(20);
+    const rosterBookingsResult = await admin.from("bookings").select(bookingFields).in("id", rosterBookingIds).order("date", { ascending: false }).order("time", { ascending: false }).limit(20);
     if (rosterBookingsResult.error) return NextResponse.json({ error: rosterBookingsResult.error.message }, { status: 500 });
     rosterBookings = rosterBookingsResult.data ?? [];
   }
@@ -66,9 +51,10 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
   if (!id) return NextResponse.json({ error: "Missing cleaner id." }, { status: 400 });
   if (!isCleanerUuid(id)) return NextResponse.json({ error: "Invalid cleaner id." }, { status: 400 });
-  const auth = await requireAdminFromRequest(request);
-  if (!auth.ok) return auth.response;
-  const admin = auth.admin;
+  const auth = await requireAdminApi(request, ["cleaner.edit"]);
+  if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
+  const admin = getSupabaseAdmin();
+  if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
 
   let body: { status?: string; full_name?: string; phone?: string; location?: string | null; availability_start?: string | null; availability_end?: string | null; is_available?: boolean; is_active?: boolean; availability_weekdays?: string[]; joined_at?: string | null };
   try { body = (await request.json()) as typeof body; }
