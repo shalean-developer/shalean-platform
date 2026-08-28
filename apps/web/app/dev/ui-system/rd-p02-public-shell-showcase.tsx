@@ -6,8 +6,8 @@ const shellRules = [
   { title: "Canonical header", detail: "SiteHeader owns the shared public logo, primary navigation, Services dropdown, quote/book actions and mobile drawer presentation." },
   { title: "Canonical footer", detail: "SiteFooter owns public footer navigation, contact details, social links and the existing analytics-aware WhatsApp/phone interactions." },
   { title: "Shared container", detail: "PublicPageContainer provides RD-P01 wide/content widths plus the canonical page gutter without forcing page-specific body layouts to migrate in one step." },
-  { title: "Route ownership preserved", detail: "GlobalTopNav, MarketingHomeHeader and existing page-level footer wrappers remain route-level entry points during incremental migration." },
-  { title: "Tracking preserved", detail: "Public-shell entry points keep their existing CTA source strings and footer interaction analytics semantics." },
+  { title: "Route ownership preserved", detail: "GlobalTopNav and MarketingHomeHeader remain route-level header entry points; MarketingLayout and MarketingHomeFooter now consume SiteFooter directly." },
+  { title: "Compatibility boundary", detail: "FooterSection remains a compatibility wrapper for unmigrated callers. LegalPageShell keeps its existing narrow reading container and wrapper until a separately safe migration is available." },
   { title: "Business logic excluded", detail: "The public shell must not own booking state, payment logic, Supabase access, RBAC, account sessions or Office permissions." },
 ];
 
@@ -16,12 +16,12 @@ export function RDP02PublicShellShowcase() {
     <section className="mx-auto w-full max-w-[var(--ui-container-wide)] px-[var(--ui-page-gutter)] py-[var(--ui-space-10)]">
       <div className="mb-[var(--ui-space-6)]">
         <div className="flex flex-wrap items-center gap-[var(--ui-space-2)]">
-          <span className="rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-primary-foreground">RD-P02C</span>
+          <span className="rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-primary-foreground">RD-P02D</span>
           <span className="rounded-[var(--ui-radius-pill)] bg-secondary px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-secondary-foreground">PUBLIC SHELL</span>
-          <span className="rounded-[var(--ui-radius-pill)] bg-warning px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-warning-foreground">LOCAL VALIDATION</span>
+          <span className="rounded-[var(--ui-radius-pill)] bg-warning px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-warning-foreground">CLOSURE VALIDATION</span>
         </div>
         <h1 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] text-foreground">Canonical public shell</h1>
-        <p className="mt-[var(--ui-space-2)] max-w-3xl text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">Active RD-P02 catalogue showing the canonical SiteHeader, PublicPageContainer and SiteFooter used by the public shell.</p>
+        <p className="mt-[var(--ui-space-2)] max-w-3xl text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">RD-P02 closure catalogue showing the canonical SiteHeader, PublicPageContainer and SiteFooter plus the remaining compatibility boundary.</p>
       </div>
 
       <div className="overflow-hidden rounded-[var(--ui-radius-xl)] border border-border bg-card shadow-[var(--ui-shadow-md)]">
