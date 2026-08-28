@@ -1,20 +1,11 @@
 import "server-only";
 
-
-
 import type { SupabaseClient } from "@supabase/supabase-js";
-
 import { normalizeOfficePayoutPeriodRange } from "@/lib/admin/payouts/officePayoutPeriodReport";
-
 import {
-
   loadExistingPaystackRefs,
-
   loadPaidPaystackEntitiesInRange,
-
 } from "@/lib/payments/paystackPaymentGaps";
-
-
 
 export type ReconciliationRow = {
   gateway_reference: string;
@@ -66,129 +57,69 @@ export type PaymentReconciliationPayload = {
   rows: ReconciliationRow[];
 };
 
-
-
 async function resolveSourceAmountCents(
-
   admin: SupabaseClient,
-
   entityType: string,
-
   entityId: string,
-
 ): Promise<number | null> {
-
   if (entityType === "booking") {
-
     const { data } = await admin
-
       .from("bookings")
-
       .select("amount_paid_cents, total_paid_cents, total_paid_zar")
-
       .eq("id", entityId)
-
       .maybeSingle();
-
     if (!data) return null;
-
     return (
-
       data.amount_paid_cents ??
-
       data.total_paid_cents ??
-
       (data.total_paid_zar != null ? Math.round(Number(data.total_paid_zar) * 100) : null)
-
     );
-
   }
 
   if (entityType === "monthly_invoice") {
-
     const { data } = await admin
-
       .from("monthly_invoices")
-
       .select("amount_paid_cents")
-
       .eq("id", entityId)
-
       .maybeSingle();
-
     if (!data) return null;
-
     const paid = Math.round(Number(data.amount_paid_cents ?? 0));
-
     return paid > 0 ? paid : null;
-
   }
 
   if (entityType === "sales_document") {
-
     const { data } = await admin
-
       .from("sales_documents")
-
       .select("amount_paid_cents")
-
       .eq("id", entityId)
-
       .maybeSingle();
-
     if (!data) return null;
-
     const paid = Math.round(Number(data.amount_paid_cents ?? 0));
-
     return paid > 0 ? paid : null;
-
   }
 
   return null;
-
 }
-
-
 
 async function resolveSourceReference(
-
   admin: SupabaseClient,
-
   entityType: string,
-
   entityId: string,
-
 ): Promise<string | null> {
-
   if (entityType === "booking") {
-
     const { data } = await admin.from("bookings").select("paystack_reference").eq("id", entityId).maybeSingle();
-
     return data?.paystack_reference ?? null;
-
   }
-
   if (entityType === "monthly_invoice") {
-
     const { data } = await admin.from("monthly_invoices").select("paystack_reference").eq("id", entityId).maybeSingle();
-
     return data?.paystack_reference ?? null;
-
   }
-
   if (entityType === "sales_document") {
-
     const { data } = await admin.from("sales_documents").select("paystack_reference").eq("id", entityId).maybeSingle();
-
     return data?.paystack_reference ?? null;
-
   }
-
   return null;
-
 }
-
-
 
 async function resolveZohoInvoiceId(
   admin: SupabaseClient,
@@ -211,39 +142,25 @@ async function resolveZohoInvoiceId(
 }
 
 export async function loadPaymentReconciliation(
-
   admin: SupabaseClient,
-
   fromRaw?: string | null,
-
   toRaw?: string | null,
-
 ): Promise<PaymentReconciliationPayload> {
-
   const { from, to } = normalizeOfficePayoutPeriodRange(fromRaw, toRaw);
 
-
-
+  // SR-08D: the canonical ledger contains both gateway and offline/manual
+  // settlements. Reconciliation must start from the whole ledger, then apply
+  // gateway-specific validation only to Paystack rows.
   const { data: transactions } = await admin
-
     .from("payment_transactions")
-
     .select(
       "id, gateway, gateway_reference, entity_type, entity_id, amount_cents, processing_fee_cents, net_settlement_cents, settlement_status, fee_calculation_method, expense_id, booking_id, paid_at, external_accounting_id, sync_status",
     )
-
-    .eq("gateway", "paystack")
-
     .gte("paid_at", `${from}T00:00:00`)
-
     .lte("paid_at", `${to}T23:59:59`)
-
     .order("paid_at", { ascending: false });
 
-
-
   const rows: ReconciliationRow[] = [];
-
   let missingExpense = 0;
   let amountMismatch = 0;
   let failedZohoSync = 0;
@@ -251,6 +168,7 @@ export async function loadPaymentReconciliation(
 
   for (const tx of transactions ?? []) {
     const issues: string[] = [];
+    const isPaystack = tx.gateway === "paystack";
     let expenseAmount: number | null = null;
     let zohoExpenseId: string | null = null;
     let expenseSyncStatus: string | null = null;
@@ -266,18 +184,18 @@ export async function loadPaymentReconciliation(
       zohoExpenseId = exp?.external_accounting_id ?? null;
       expenseSyncStatus = exp?.sync_status ?? null;
 
-      if (expenseAmount != null && expenseAmount !== tx.processing_fee_cents) {
+      if (isPaystack && expenseAmount != null && expenseAmount !== tx.processing_fee_cents) {
         issues.push("fee_expense_amount_mismatch");
         amountMismatch += 1;
       }
-      if ((tx.processing_fee_cents ?? 0) > 0 && exp?.sync_status === "failed") {
+      if (isPaystack && (tx.processing_fee_cents ?? 0) > 0 && exp?.sync_status === "failed") {
         issues.push("zoho_expense_sync_failed");
         failedZohoSync += 1;
       }
-      if ((tx.processing_fee_cents ?? 0) > 0 && !exp?.external_accounting_id && exp?.sync_status !== "synced") {
+      if (isPaystack && (tx.processing_fee_cents ?? 0) > 0 && !exp?.external_accounting_id && exp?.sync_status !== "synced") {
         issues.push("missing_zoho_expense");
       }
-    } else if ((tx.processing_fee_cents ?? 0) > 0) {
+    } else if (isPaystack && (tx.processing_fee_cents ?? 0) > 0) {
       issues.push("missing_fee_expense");
       missingExpense += 1;
     }
@@ -295,30 +213,27 @@ export async function loadPaymentReconciliation(
     }
 
     const zohoInvoiceId = await resolveZohoInvoiceId(admin, tx.entity_type, tx.entity_id);
-
-
-
     const sourceAmount = await resolveSourceAmountCents(admin, tx.entity_type, tx.entity_id);
 
-    if (sourceAmount != null && sourceAmount !== tx.amount_cents) {
-
+    // Paystack rows currently represent the entity charge and must match the
+    // source amount. Manual rows can represent only the remaining balance on a
+    // partially-paid invoice, so a cumulative source amount greater than the
+    // individual manual transaction is valid; only an over-recorded manual
+    // transaction is a reconciliation mismatch.
+    if (
+      sourceAmount != null &&
+      (isPaystack ? sourceAmount !== tx.amount_cents : tx.amount_cents > sourceAmount)
+    ) {
       issues.push("entity_amount_mismatch");
-
       amountMismatch += 1;
-
     }
 
-
-
-    const sourceRef = await resolveSourceReference(admin, tx.entity_type, tx.entity_id);
-
-    if (sourceRef && sourceRef !== tx.gateway_reference) {
-
-      issues.push("reference_mismatch");
-
+    if (isPaystack) {
+      const sourceRef = await resolveSourceReference(admin, tx.entity_type, tx.entity_id);
+      if (sourceRef && sourceRef !== tx.gateway_reference) {
+        issues.push("reference_mismatch");
+      }
     }
-
-
 
     rows.push({
       gateway_reference: tx.gateway_reference,
@@ -341,65 +256,38 @@ export async function loadPaymentReconciliation(
       expense_sync_status: expenseSyncStatus,
       issues,
     });
-
   }
 
-
-
+  // Missing-ledger discovery remains Paystack-specific because those source
+  // entities expose Paystack references. Manual/offline payments are now
+  // already present through the canonical payment_transactions query above.
   const paidEntities = await loadPaidPaystackEntitiesInRange(admin, from, to);
-
   const ledgerRefs = await loadExistingPaystackRefs(
-
     admin,
-
     paidEntities.map((e) => e.gateway_reference),
-
   );
 
-
-
   const missingByEntity = { booking: 0, monthly_invoice: 0, sales_document: 0 };
-
   const seenRefs = new Set(rows.map((r) => r.gateway_reference));
 
-
-
   for (const entity of paidEntities) {
-
     if (ledgerRefs.has(entity.gateway_reference) || seenRefs.has(entity.gateway_reference)) continue;
 
-
-
     missingByEntity[entity.entity_type] += 1;
-
     seenRefs.add(entity.gateway_reference);
-
     rows.push({
-
       gateway_reference: entity.gateway_reference,
-
       gateway: "paystack",
-
       entity_type: entity.entity_type,
-
       entity_id: entity.entity_id,
-
       paid_at: entity.paid_at,
-
       payment_amount_cents: null,
-
       payment_processing_fee_cents: null,
-
       payment_net_settlement_cents: null,
-
       payment_settlement_status: null,
-
       payment_fee_method: null,
-
       expense_id: null,
-
       expense_amount_cents: null,
-
       booking_amount_cents: entity.amount_cents,
       zoho_payment_id: null,
       zoho_expense_id: null,
@@ -408,24 +296,14 @@ export async function loadPaymentReconciliation(
       expense_sync_status: null,
       issues: ["missing_payment_transaction"],
     });
-
   }
 
-
-
   const missingPaymentRecord =
-
     missingByEntity.booking + missingByEntity.monthly_invoice + missingByEntity.sales_document;
 
-
-
   const totalGross = (transactions ?? []).reduce((s, t) => s + (t.amount_cents ?? 0), 0);
-
   const totalFees = (transactions ?? []).reduce((s, t) => s + (t.processing_fee_cents ?? 0), 0);
-
   const totalNet = (transactions ?? []).reduce((s, t) => s + (t.net_settlement_cents ?? 0), 0);
-
-
 
   const { data: failedSyncs } = await admin
     .from("accounting_sync_records")
@@ -452,5 +330,3 @@ export async function loadPaymentReconciliation(
     rows: rows.sort((a, b) => (b.paid_at ?? "").localeCompare(a.paid_at ?? "")),
   };
 }
-
-
