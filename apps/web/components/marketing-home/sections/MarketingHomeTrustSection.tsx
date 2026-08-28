@@ -1,35 +1,41 @@
-import { ShieldCheck, Leaf, BadgeCheck, CalendarCheck } from "lucide-react";
+import { ShieldCheck, CalendarDays, MapPin, ReceiptText } from "lucide-react";
 
 const TRUST_CARDS = [
   {
     Icon: ShieldCheck,
-    title: "Background checked",
-    subtitle: "All our cleaners are thoroughly vetted for your peace of mind.",
+    title: "Background-checked cleaners",
+    subtitle: "Cleaners are vetted before they are available for customer bookings.",
   },
   {
-    Icon: Leaf,
-    title: "Eco-friendly products",
-    subtitle: "We use safe, non-toxic products that are tough on dirt, gentle on your home.",
+    Icon: CalendarDays,
+    title: "Serving Cape Town since 2022",
+    subtitle: "Shalean has provided professional cleaning services since 2022.",
   },
   {
-    Icon: BadgeCheck,
-    title: "Satisfaction guarantee",
-    subtitle: "If you're not 100% happy, we'll come back and make it right.",
+    Icon: MapPin,
+    title: "Cape Town service coverage",
+    subtitle: "Home, apartment, office and specialist cleaning across supported Cape Town areas.",
   },
   {
-    Icon: CalendarCheck,
-    title: "Flexible & reliable",
-    subtitle: "Book online in minutes and choose a time that works for you.",
+    Icon: ReceiptText,
+    title: "Transparent booking totals",
+    subtitle: "Customers can review the quoted cleaning total before confirming checkout.",
   },
 ] as const;
 
 export function MarketingHomeTrustSection() {
   return (
-    <section className="bg-[#1e4fd4] py-10 md:py-14">
+    <section className="bg-[#1e4fd4] py-10 md:py-14" aria-labelledby="homepage-trust-heading">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <h2 className="mx-auto max-w-3xl text-center text-lg font-bold leading-snug tracking-tight text-white sm:text-2xl">
-          Trusted by homeowners, tenants and Airbnb hosts across Cape Town
-        </h2>
+        <div className="mx-auto max-w-3xl text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-100">Why customers trust Shalean</p>
+          <h2
+            id="homepage-trust-heading"
+            className="mt-2 text-lg font-bold leading-snug tracking-tight text-white sm:text-2xl"
+          >
+            Clear service facts, not vague promises
+          </h2>
+        </div>
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
           {TRUST_CARDS.map(({ Icon, title, subtitle }) => (
