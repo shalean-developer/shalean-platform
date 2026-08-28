@@ -44,6 +44,15 @@ export function useDashboardSummary(): {
     }
     setLoading(true);
     setError(null);
+
+    // SR-07C: converge any legacy email-only bookings onto canonical customer
+    // ownership before deriving account summary and invoice state. The claim is
+    // idempotent and fail-closed for rows already owned by another account.
+    // Keep the summary readable if the compatibility repair itself fails.
+    await dashboardFetchJson<{ ok?: boolean; claimed?: number }>("/api/customer/bookings", {
+      method: "POST",
+    });
+
     const out = await dashboardFetchJson<DashboardSummaryPayload>("/api/dashboard/summary", { method: "GET" });
     if (!out.ok) {
       setError(out.error);
