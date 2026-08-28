@@ -72,6 +72,28 @@ export type LoadAdminCleanersListOptions = {
   limit?: number;
 };
 
+/**
+ * Office Cleaner Management intentionally exposes only Available / Busy /
+ * Offline. Lifecycle inactivity and any non-dispatch state therefore collapse
+ * to Offline, while Busy stays distinct from Available.
+ */
+export function normalizeAdminCleanerOfficeStatus(row: AdminCleanerListRow): AdminCleanerListRow {
+  const rawStatus = String(row.status ?? "").trim().toLowerCase();
+  const lifecycleActive = row.is_active !== false;
+  const dispatchAvailable = row.is_available === true;
+
+  if (!lifecycleActive || !dispatchAvailable) {
+    return { ...row, status: "offline", is_available: false };
+  }
+  if (rawStatus === "busy") {
+    return { ...row, status: "busy", is_available: true };
+  }
+  if (rawStatus === "available") {
+    return { ...row, status: "available", is_available: true };
+  }
+  return { ...row, status: "offline", is_available: false };
+}
+
 /** Loads every cleaner row from `public.cleaners` (paginated), with optional filters. */
 export async function loadAdminCleanersList(
   admin: SupabaseClient,
@@ -106,7 +128,7 @@ export async function loadAdminCleanersList(
   const fetchPage = async (columns: string, from: number, pageSize: number) => {
     let q = admin.from("cleaners").select(columns);
     if (rosterFilter === "available") {
-      q = q.eq("is_available", true);
+      q = q.eq("is_available", true).neq("is_active", false);
     } else if (rosterFilter === "high_rated") {
       q = q.gte("rating", 4);
     }
@@ -138,7 +160,7 @@ export async function loadAdminCleanersList(
     if (res.error) throw new Error(res.error.message);
 
     const rows = (Array.isArray(res.data) ? res.data : []) as unknown as AdminCleanerListRow[];
-    all.push(...rows);
+    all.push(...rows.map(normalizeAdminCleanerOfficeStatus));
     if (rows.length < take) break;
     if (hardLimit != null && all.length >= hardLimit) break;
   }
