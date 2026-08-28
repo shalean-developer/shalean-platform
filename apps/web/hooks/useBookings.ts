@@ -7,6 +7,17 @@ import type { BookingRow, DashboardBooking } from "@/lib/dashboard/types";
 import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import { useUser } from "@/hooks/useUser";
 
+async function claimCustomerBookingOwnershipForAccount(
+  userId: string,
+  claimedForUserRef: { current: string | null },
+): Promise<void> {
+  if (claimedForUserRef.current === userId) return;
+  const out = await dashboardFetchJson<{ ok?: boolean; claimed?: number }>("/api/customer/bookings", {
+    method: "POST",
+  });
+  if (out.ok) claimedForUserRef.current = userId;
+}
+
 export function useBookings(): {
   bookings: DashboardBooking[];
   loading: boolean;
@@ -21,6 +32,7 @@ export function useBookings(): {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const realtimeDebounceRef = useRef<number | null>(null);
+  const ownershipClaimedForUserRef = useRef<string | null>(null);
 
   const fetchBookings = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -34,6 +46,7 @@ export function useBookings(): {
       setError(null);
     }
 
+    await claimCustomerBookingOwnershipForAccount(userId, ownershipClaimedForUserRef);
     const out = await dashboardFetchJson<{ bookings?: BookingRow[] }>("/api/customer/bookings");
     if (!out.ok) {
       setError(out.error);
@@ -63,7 +76,6 @@ export function useBookings(): {
       }, 400);
     };
 
-    /** Realtime tracks `customer_id` (production) and `user_id` (legacy dev); email-orphan rows do not subscribe. */
     const channel = sb
       .channel(`customer-dashboard-bookings-${userId}`)
       .on(
@@ -139,6 +151,7 @@ export function useBookingDetail(id: string | undefined): {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const detailDebounceRef = useRef<number | null>(null);
+  const detailOwnershipClaimedForUserRef = useRef<string | null>(null);
 
   const fetchOne = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
@@ -152,6 +165,7 @@ export function useBookingDetail(id: string | undefined): {
       setError(null);
     }
 
+    await claimCustomerBookingOwnershipForAccount(detailUserId, detailOwnershipClaimedForUserRef);
     const out = await dashboardFetchJson<{ booking?: BookingRow }>(`/api/customer/bookings/${encodeURIComponent(id)}`);
     if (!out.ok) {
       setError(out.error);
