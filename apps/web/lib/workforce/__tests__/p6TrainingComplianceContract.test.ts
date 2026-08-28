@@ -25,11 +25,18 @@ describe("P6 workforce training/compliance", () => {
     expect(migration).toContain("'move-cleaning'");
   });
 
-  it("fails readiness closed for missing required training and expired compliance", () => {
+  it("fails readiness closed for missing required training, missing compliance evidence and expired compliance", () => {
     expect(service).toContain("requiredModuleIds");
     expect(service).toContain("if (!assignment)");
+    expect(service).toContain("const missingComplianceEvidence = complianceRows.length === 0");
+    expect(service).toContain("!missingComplianceEvidence");
     expect(service).toContain("expires_at");
     expect(service).toContain("status !== \"valid\"");
+  });
+
+  it("exposes missing compliance evidence instead of silently calling the cleaner ready", () => {
+    expect(service).toContain("missingComplianceEvidence,");
+    expect(service).toContain("ready: overdueTraining === 0 && !missingComplianceEvidence && nonCompliant === 0");
   });
 
   it("derives assignment expiry from module validity on completion", () => {
