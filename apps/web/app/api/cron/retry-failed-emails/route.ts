@@ -41,6 +41,9 @@ export async function GET(request: Request) {
         messageType: row.message_type,
         campaignId: row.campaign_id,
       },
+      // SR-09A: this attempt belongs to the claimed original row. Do not fan out
+      // a second recovery row for each retry attempt.
+      recordRecovery: false,
     });
 
     const retryCount = Number(row.retry_count ?? 0) + 1;
