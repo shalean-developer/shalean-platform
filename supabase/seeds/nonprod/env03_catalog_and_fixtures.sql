@@ -5,6 +5,27 @@
 
 BEGIN;
 
+-- The marketing homepage reads these two catalog tables through the anonymous
+-- Supabase server client. Current local migrations do not carry the legacy
+-- public-read policies, so make this non-production seed self-contained.
+ALTER TABLE public.services ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS services_select_public ON public.services;
+CREATE POLICY services_select_public
+  ON public.services
+  FOR SELECT
+  TO anon, authenticated
+  USING (is_active = true);
+GRANT SELECT ON public.services TO anon, authenticated;
+
+ALTER TABLE public.pricing_services ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS pricing_services_select_public_nonprod ON public.pricing_services;
+CREATE POLICY pricing_services_select_public_nonprod
+  ON public.pricing_services
+  FOR SELECT
+  TO anon, authenticated
+  USING (is_active = true);
+GRANT SELECT ON public.pricing_services TO anon, authenticated;
+
 -- Normalize the two legacy ENV-03 catalogue rows when this seed is reapplied to an
 -- existing local database. If a canonical row already exists under another id,
 -- remove only the stale ENV-03 fixture so the canonical row remains authoritative.
