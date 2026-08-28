@@ -22,6 +22,13 @@ type SafeResendPayload = {
   attachments?: unknown[];
   tags?: { name: string; value: string }[];
   context?: EmailContext;
+  /** Retry workers set this false so the original recovery row remains the single source of truth. */
+  recordRecovery?: boolean;
+};
+
+type SafeResendResult = {
+  data: { id: string } | null;
+  error: { message: string; name?: string } | null;
 };
 
 function contextTags(context: EmailContext | undefined): { name: string; value: string }[] {
@@ -38,11 +45,14 @@ function firstRecipient(to: string | string[]): string {
   return (Array.isArray(to) ? to[0] : to)?.trim().toLowerCase() ?? "";
 }
 
+function thrownResendError(error: unknown): SafeResendResult {
+  const message = error instanceof Error ? error.message : String(error);
+  const name = error instanceof Error ? error.name : "resend_send_threw";
+  return { data: null, error: { message, name } };
+}
+
 /** Resend wrapper with recipient validation, context tags, Audience sync and durable recovery records. */
-export async function safeResendSend(payload: SafeResendPayload): Promise<{
-  data: { id: string } | null;
-  error: { message: string; name?: string } | null;
-}> {
+export async function safeResendSend(payload: SafeResendPayload): Promise<SafeResendResult> {
   const recipientSafety = validateEmailRecipients(payload.to);
   if (!recipientSafety.allowed) return { data: null, error: { message: recipientSafety.reason, name: "recipient_blocked" } };
 
@@ -52,12 +62,26 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
   const decision = decideOutboundEmail(payload.to);
   if (!decision.allowed) return { data: null, error: { message: decision.reason, name: "outbound_blocked" } };
 
-  const { context, tags = [], ...sendPayload } = payload;
+  const { context, tags = [], recordRecovery = true, ...sendPayload } = payload;
   const mergedTags = [...tags, ...contextTags(context)].filter((tag, index, all) =>
     all.findIndex((candidate) => candidate.name === tag.name) === index,
   );
   const subject = applyOutboundSubjectPrefix(payload.subject, decision.subjectPrefix);
-  const result = await resend.emails.send({ ...sendPayload, subject, tags: mergedTags } as Parameters<typeof resend.emails.send>[0]);
+
+  let result: SafeResendResult;
+  try {
+    const resendResult = await resend.emails.send({
+      ...sendPayload,
+      subject,
+      tags: mergedTags,
+    } as Parameters<typeof resend.emails.send>[0]);
+    result = {
+      data: resendResult.data ? { id: resendResult.data.id } : null,
+      error: resendResult.error ? { message: resendResult.error.message, name: resendResult.error.name } : null,
+    };
+  } catch (error) {
+    result = thrownResendError(error);
+  }
 
   const recipientEmail = firstRecipient(payload.to);
   if (result.data?.id && context?.customerId && recipientEmail) {
@@ -72,7 +96,7 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
     });
   }
 
-  const admin = getSupabaseAdmin();
+  const admin = recordRecovery ? getSupabaseAdmin() : null;
   if (admin) {
     const retryable = !payload.attachments?.length;
     await admin.from("email_outbound_messages").insert({
@@ -96,8 +120,5 @@ export async function safeResendSend(payload: SafeResendPayload): Promise<{
     });
   }
 
-  return {
-    data: result.data ? { id: result.data.id } : null,
-    error: result.error ? { message: result.error.message, name: result.error.name } : null,
-  };
+  return result;
 }
