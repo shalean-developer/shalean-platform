@@ -68,14 +68,14 @@ export async function resolveSupervisorTeamScope(
   const { data: members, error: memberError } = await admin
     .from("team_members")
     .select("team_id, cleaner_id, active_from, active_to")
-    .in("team_id", teamIds)
-    .is("active_to", null);
+    .in("team_id", teamIds);
   if (memberError) throw new Error(memberError.message);
 
   const cleanerIds = new Set<string>();
   for (const raw of members ?? []) {
-    const row = raw as { cleaner_id?: string | null; active_from?: string | null };
+    const row = raw as { cleaner_id?: string | null; active_from?: string | null; active_to?: string | null };
     if (row.active_from && row.active_from > now) continue;
+    if (row.active_to && row.active_to <= now) continue;
     const cleanerId = String(row.cleaner_id ?? "").trim();
     if (cleanerId) cleanerIds.add(cleanerId);
   }
