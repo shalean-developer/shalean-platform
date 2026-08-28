@@ -29,6 +29,62 @@
   --warning-foreground: #451a03;
   --overlay: rgb(9 9 11 / 0.6);
 
+  /* RD-P01B canonical typography roles */
+  --ui-text-caption: 0.75rem;
+  --ui-text-small: 0.875rem;
+  --ui-text-body: 1rem;
+  --ui-text-lead: 1.125rem;
+  --ui-text-card-title: 1.125rem;
+  --ui-text-section-title: 1.5rem;
+  --ui-text-page-title: clamp(2rem, 3vw, 2.5rem);
+  --ui-leading-tight: 1.2;
+  --ui-leading-body: 1.6;
+  --ui-leading-relaxed: 1.75;
+
+  /* RD-P01B canonical spacing scale */
+  --ui-space-1: 0.25rem;
+  --ui-space-2: 0.5rem;
+  --ui-space-3: 0.75rem;
+  --ui-space-4: 1rem;
+  --ui-space-5: 1.25rem;
+  --ui-space-6: 1.5rem;
+  --ui-space-8: 2rem;
+  --ui-space-10: 2.5rem;
+  --ui-space-12: 3rem;
+  --ui-space-16: 4rem;
+  --ui-space-20: 5rem;
+  --ui-space-24: 6rem;
+
+  /* RD-P01B canonical radius scale */
+  --ui-radius-sm: 0.375rem;
+  --ui-radius-md: 0.5rem;
+  --ui-radius-lg: 0.75rem;
+  --ui-radius-xl: 1rem;
+  --ui-radius-2xl: 1.5rem;
+  --ui-radius-pill: 9999px;
+
+  /* RD-P01B canonical elevation scale */
+  --ui-shadow-sm: 0 1px 2px rgb(0 0 0 / 0.06);
+  --ui-shadow-md: 0 4px 12px rgb(0 0 0 / 0.08);
+  --ui-shadow-lg: 0 12px 28px rgb(0 0 0 / 0.12);
+  --ui-shadow-xl: 0 20px 48px rgb(0 0 0 / 0.16);
+
+  /* RD-P01B canonical content/container widths */
+  --ui-container-sm: 40rem;
+  --ui-container-md: 48rem;
+  --ui-container-lg: 64rem;
+  --ui-container-content: 68.75rem;
+  --ui-container-wide: 80rem;
+  --ui-page-gutter: clamp(1rem, 3vw, 2rem);
+
+  /* RD-P01B canonical layer scale */
+  --ui-z-base: 0;
+  --ui-z-sticky: 20;
+  --ui-z-dropdown: 40;
+  --ui-z-overlay: 50;
+  --ui-z-toast: 60;
+  --ui-z-max: 100;
+
   /* Sidebar / dashboard chrome (Zoho Books–style light nav) */
   --sidebar-bg: #f8f9fb;
   --sidebar-fg: #313949;
@@ -139,9 +195,7 @@ body {
 .office-nav-flyout {
   background-color: var(--sidebar-flyout-bg);
   border: 1px solid var(--sidebar-border);
-  box-shadow:
-    0 4px 6px -1px rgb(0 0 0 / 0.08),
-    0 12px 28px -4px rgb(0 0 0 / 0.12);
+  box-shadow: var(--ui-shadow-lg);
   color: var(--sidebar-fg);
 }
 
