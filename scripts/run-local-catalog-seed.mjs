@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 const root = process.cwd();
 const node = process.execPath;
@@ -140,6 +141,25 @@ function splitSqlStatements(sql) {
   return statements;
 }
 
+function runLocalQueryFile(filePath) {
+  if (process.platform === "win32") {
+    const comspec = process.env.ComSpec || process.env.COMSPEC || "cmd.exe";
+    // SQL is passed through a temporary file, not interpolated into the shell command.
+    // Double quotes around the path are sufficient for the generated temp path.
+    const command = `npx supabase db query --local -f "${filePath}"`;
+    execFileSync(comspec, ["/d", "/s", "/c", command], {
+      cwd: root,
+      stdio: "inherit",
+    });
+    return;
+  }
+
+  execFileSync(npx, ["supabase", "db", "query", "--local", "-f", filePath], {
+    cwd: root,
+    stdio: "inherit",
+  });
+}
+
 try {
   execFileSync(node, [envCheck], { cwd: root, stdio: "inherit" });
 } catch {
@@ -165,26 +185,31 @@ const statements = splitSqlStatements(sql).filter((statement) => {
 
 if (statements.length === 0) fail("seed file contained no executable statements.");
 
+const tempRoot = mkdtempSync(join(tmpdir(), "shalean-local-catalog-"));
 console.log(`[local-catalog-seed] Applying ${statements.length} statements to local Supabase...`);
 
-for (let index = 0; index < statements.length; index += 1) {
-  const statement = statements[index];
-  const preview = statement
-    .replace(/--[^\n]*(?:\n|$)/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-    .slice(0, 90);
+try {
+  for (let index = 0; index < statements.length; index += 1) {
+    const statement = statements[index];
+    const preview = statement
+      .replace(/--[^\n]*(?:\n|$)/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+      .slice(0, 90);
 
-  console.log(`[local-catalog-seed] ${index + 1}/${statements.length}: ${preview}${preview.length === 90 ? "..." : ""}`);
+    console.log(`[local-catalog-seed] ${index + 1}/${statements.length}: ${preview}${preview.length === 90 ? "..." : ""}`);
 
-  try {
-    execFileSync(npx, ["supabase", "db", "query", "--local", statement], {
-      cwd: root,
-      stdio: "inherit",
-    });
-  } catch {
-    fail(`statement ${index + 1} failed. The seed is idempotent; fix the error and rerun this command.`);
+    const statementPath = join(tempRoot, `statement-${String(index + 1).padStart(2, "0")}.sql`);
+    writeFileSync(statementPath, `${statement};\n`, "utf8");
+
+    try {
+      runLocalQueryFile(statementPath);
+    } catch {
+      fail(`statement ${index + 1} failed. The seed is idempotent; fix the error and rerun this command.`);
+    }
   }
+} finally {
+  rmSync(tempRoot, { recursive: true, force: true });
 }
 
 console.log("[local-catalog-seed] OK: local catalogue seed applied successfully.");
