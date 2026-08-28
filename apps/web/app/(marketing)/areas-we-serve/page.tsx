@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
-import { FooterSection } from "@/components/home/sections/FooterSection";
 import { AreasWeServeView } from "@/components/marketing-home/AreasWeServeView";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
+import { SiteFooter } from "@/components/nav/SiteFooter";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { clipSerpTitle } from "@/lib/seo/metaTitle";
@@ -39,10 +39,10 @@ export default function AreasWeServePage() {
   const bookingHref = marketingHomeBookingHref();
 
   return (
-    <div className="bg-white text-slate-900">
+    <div className="bg-background text-foreground">
       <MarketingHomeHeader bookingHref={bookingHref} />
       <AreasWeServeView />
-      <FooterSection />
+      <SiteFooter />
     </div>
   );
 }
