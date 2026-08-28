@@ -80,6 +80,11 @@ export default function TrainingScreen() {
           <Text className="mt-2 text-sm text-ink-muted">
             {cleaner?.overdueTraining ?? 0} training item{(cleaner?.overdueTraining ?? 0) === 1 ? "" : "s"} overdue or missing · {cleaner?.nonCompliant ?? 0} compliance item{(cleaner?.nonCompliant ?? 0) === 1 ? "" : "s"} needing attention
           </Text>
+          {cleaner?.missingComplianceEvidence ? (
+            <Text className="mt-2 text-sm text-warning">
+              Compliance evidence has not been added yet, so readiness cannot be confirmed.
+            </Text>
+          ) : null}
         </SectionCard>
 
         <SectionCard title="Assigned training">
