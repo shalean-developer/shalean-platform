@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { CleaningPricesCapeTownPage } from "@/components/marketing-pricing/CleaningPricesCapeTownPage";
-import { FooterSection } from "@/components/home/sections/FooterSection";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
-import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
+import { SiteFooter } from "@/components/nav/SiteFooter";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { getHomePageData } from "@/lib/home/data";
 import { buildHubCleaningServiceLinks } from "@/lib/marketing/hubCleaningServiceLinks";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -44,7 +44,7 @@ export default async function CleaningPricesCapeTownRoutePage() {
   const seoLocationLinks = buildHubCleaningServiceLinks(locations);
 
   return (
-    <div className="bg-white text-zinc-900">
+    <div className="bg-background text-foreground">
       <GrowthTracking
         event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{
@@ -57,7 +57,7 @@ export default async function CleaningPricesCapeTownRoutePage() {
       <main>
         <CleaningPricesCapeTownPage seoLocationLinks={seoLocationLinks} />
       </main>
-      <FooterSection />
+      <SiteFooter />
     </div>
   );
 }
