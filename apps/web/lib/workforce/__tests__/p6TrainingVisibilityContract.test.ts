@@ -7,6 +7,7 @@ const read = (p: string) => fs.readFileSync(path.join(repoRoot, p), "utf8");
 
 const selfRoute = read("apps/web/app/api/cleaner/training-compliance/route.ts");
 const mobileTraining = read("apps/mobile/app/(cleaner)/training.tsx");
+const mobileTypes = read("apps/mobile/services/types/cleanerTrainingCompliance.ts");
 const officeTraining = read("apps/web/app/(ui-redesign)/office/workforce/training/page.tsx");
 const cleanerManagement = read("apps/web/app/(ui-redesign)/office/cleaners/page.tsx");
 
@@ -23,6 +24,13 @@ describe("P6 training/compliance visibility", () => {
     expect(mobileTraining).toContain("Assigned training");
     expect(mobileTraining).toContain("Compliance");
     expect(mobileTraining).toContain("Training tips");
+  });
+
+  it("carries missing compliance evidence through the cleaner-facing contract", () => {
+    expect(selfRoute).toContain("missingComplianceEvidence: cleaner.missingComplianceEvidence");
+    expect(mobileTypes).toContain("missingComplianceEvidence: boolean");
+    expect(mobileTraining).toContain("cleaner?.missingComplianceEvidence");
+    expect(mobileTraining).toContain("readiness cannot be confirmed");
   });
 
   it("exposes workforce readiness to Office cleaner management", () => {
