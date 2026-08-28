@@ -101,8 +101,14 @@ export async function bookingBelongsToSupervisorScope(
 
   const row = booking as { team_id?: string | null; assigned_team_id?: string | null };
   const teamId = String(row.team_id ?? row.assigned_team_id ?? "").trim();
-  if (teamId && scope.teamIds.includes(teamId)) return true;
 
+  // When the booking has an explicit team assignment, that assignment is the
+  // canonical ownership boundary. Do not widen supervisor access through a
+  // roster overlap with a cleaner from another team.
+  if (teamId) return scope.teamIds.includes(teamId);
+
+  // Legacy/solo bookings without an explicit team may still be scoped through
+  // their canonical cleaner roster.
   const { data: roster, error: rosterError } = await admin
     .from("booking_cleaners")
     .select("cleaner_id")
