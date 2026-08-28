@@ -36,6 +36,10 @@ export type CleanerPerformanceScorecard = {
   };
 };
 
+export type CleanerOfferEvidence = {
+  status: string | null;
+};
+
 const WEIGHTS = { quality: 30, customerFeedback: 25, reliability: 20, completion: 15, attendance: 10 } as const;
 const QUALITY_CASE_CATEGORIES = new Set(["complaint", "service_quality", "quality", "damage", "missed_service", "cleaning_quality"]);
 
@@ -61,9 +65,15 @@ function scheduledStartIso(date:string|null,time:string|null):number|null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(d)||!/^\d{2}:\d{2}$/.test(t)) return null;
   const ms=Date.parse(`${d}T${t}:00+02:00`); return Number.isFinite(ms)?ms:null;
 }
-function normalizedRate(value:number|null|undefined):number|null {
-  if (typeof value!=="number"||!Number.isFinite(value)) return null;
-  return clamp(value<=1?value*100:value);
+
+export function scoreOfferReliability(offers: CleanerOfferEvidence[]): { score: number | null; totalOffers: number; acceptedOffers: number } {
+  const totalOffers=offers.length;
+  const acceptedOffers=offers.filter((offer)=>String(offer.status??"").trim().toLowerCase()==="accepted").length;
+  return {
+    score: totalOffers ? clamp((acceptedOffers/totalOffers)*100) : null,
+    totalOffers,
+    acceptedOffers,
+  };
 }
 
 export async function loadCleanerPerformanceScorecards(
@@ -76,7 +86,7 @@ export async function loadCleanerPerformanceScorecards(
   const fromYmd=fromIso.slice(0,10); const toYmd=toIso.slice(0,10);
 
   let cleanerQuery=admin.from("cleaners")
-    .select("id, full_name, status, is_active, total_offers, accepted_offers, acceptance_rate, acceptance_rate_recent")
+    .select("id, full_name, status, is_active")
     .order("full_name",{ascending:true});
   if (input?.cleanerId) cleanerQuery=cleanerQuery.eq("id",input.cleanerId);
   else if (input?.cleanerIds) {
@@ -86,7 +96,7 @@ export async function loadCleanerPerformanceScorecards(
   }
   const {data:cleanerRows,error:cleanerError}=await cleanerQuery;
   if (cleanerError) throw new Error(cleanerError.message);
-  const cleaners=(cleanerRows??[]) as Array<{id:string;full_name:string|null;status:string|null;is_active:boolean|null;total_offers:number|null;accepted_offers:number|null;acceptance_rate:number|null;acceptance_rate_recent:number|null}>;
+  const cleaners=(cleanerRows??[]) as Array<{id:string;full_name:string|null;status:string|null;is_active:boolean|null}>;
   const cleanerIds=cleaners.map((c)=>c.id);
   if (!cleanerIds.length) return { scorecards:[], from:fromIso, to:toIso };
 
@@ -105,17 +115,20 @@ export async function loadCleanerPerformanceScorecards(
   }
   const bookingById=new Map(bookings.filter((b)=>b.is_test!==true).map((b)=>[b.id,b]));
   const periodBookingIds=[...bookingById.keys()];
-  const [reviewsResult,qaResult,casesResult]=await Promise.all([
+  const [reviewsResult,qaResult,casesResult,offersResult]=await Promise.all([
     admin.from("reviews").select("cleaner_id, rating, created_at").in("cleaner_id",cleanerIds).gte("created_at",fromIso).lte("created_at",toIso),
     periodBookingIds.length?admin.from("quality_inspections").select("booking_id, overall_score, status, signed_off_at, created_at").in("booking_id",periodBookingIds).in("status",["passed","rework_required","failed","closed"]):Promise.resolve({data:[],error:null}),
     periodBookingIds.length?admin.from("customer_care_cases").select("booking_id, category, status, created_at").in("booking_id",periodBookingIds).gte("created_at",fromIso).lte("created_at",toIso):Promise.resolve({data:[],error:null}),
+    admin.from("dispatch_offers").select("cleaner_id, status, created_at").in("cleaner_id",cleanerIds).gte("created_at",fromIso).lte("created_at",toIso),
   ]);
   if (reviewsResult.error) throw new Error(reviewsResult.error.message);
   if (qaResult.error) throw new Error(qaResult.error.message);
   if (casesResult.error) throw new Error(casesResult.error.message);
+  if (offersResult.error) throw new Error(offersResult.error.message);
   const reviews=(reviewsResult.data??[]) as Array<{cleaner_id:string;rating:number;created_at:string}>;
   const inspections=(qaResult.data??[]) as Array<{booking_id:string;overall_score:number|null;status:string;signed_off_at:string|null;created_at:string}>;
   const cases=(casesResult.data??[]) as Array<{booking_id:string|null;category:string;status:string;created_at:string}>;
+  const offers=(offersResult.data??[]) as Array<{cleaner_id:string;status:string|null;created_at:string}>;
   const bookingToCleaners=new Map<string,Set<string>>();
   for (const r of roster) { if (!bookingById.has(r.booking_id)) continue; const set=bookingToCleaners.get(r.booking_id)??new Set<string>(); set.add(r.cleaner_id); bookingToCleaners.set(r.booking_id,set); }
 
@@ -131,8 +144,7 @@ export async function loadCleanerPerformanceScorecards(
     const myInspectionScores:number[]=[];
     for (const inspection of inspections) if (inspection.overall_score!=null&&bookingToCleaners.get(inspection.booking_id)?.has(cleaner.id)) myInspectionScores.push(Number(inspection.overall_score));
     const qualityAvg=mean(myInspectionScores); const qualityScore=qualityAvg==null?null:clamp(qualityAvg);
-    const totalOffers=Math.max(0,Number(cleaner.total_offers??0)); const acceptedOffers=Math.max(0,Number(cleaner.accepted_offers??0));
-    let reliabilityScore=normalizedRate(cleaner.acceptance_rate_recent); if (reliabilityScore==null) reliabilityScore=normalizedRate(cleaner.acceptance_rate); if (reliabilityScore==null&&totalOffers>0) reliabilityScore=clamp((acceptedOffers/totalOffers)*100);
+    const reliability=scoreOfferReliability(offers.filter((offer)=>offer.cleaner_id===cleaner.id));
     let attendanceObserved=0,onTime=0;
     for (const b of myBookings) { if (!b.started_at) continue; const scheduled=scheduledStartIso(b.date,b.time); const actual=Date.parse(b.started_at); if (scheduled==null||!Number.isFinite(actual)) continue; attendanceObserved++; if (actual<=scheduled+15*60_000) onTime++; }
     const attendanceScore=attendanceObserved?clamp((onTime/attendanceObserved)*100):null;
@@ -142,12 +154,12 @@ export async function loadCleanerPerformanceScorecards(
     const components={
       quality:{score:qualityScore,weight:WEIGHTS.quality,evidenceCount:myInspectionScores.length,label:"QA inspections"},
       customerFeedback:{score:feedbackScore,weight:WEIGHTS.customerFeedback,evidenceCount:myReviews.length,label:"Customer reviews"},
-      reliability:{score:reliabilityScore,weight:WEIGHTS.reliability,evidenceCount:totalOffers,label:"Offer reliability"},
+      reliability:{score:reliability.score,weight:WEIGHTS.reliability,evidenceCount:reliability.totalOffers,label:"Offer reliability"},
       completion:{score:completionScore,weight:WEIGHTS.completion,evidenceCount:eligibleCompletion.length,label:"Assigned-job completion"},
       attendance:{score:attendanceScore,weight:WEIGHTS.attendance,evidenceCount:attendanceObserved,label:"On-time start evidence"},
     };
     const weighted=weightedScore(Object.values(components),complaintPenalty);
-    return { cleanerId:cleaner.id,cleanerName:String(cleaner.full_name??"Cleaner").trim()||"Cleaner",status:cleaner.status??null,overallScore:weighted.overall,grade:gradeFor(weighted.overall),evidenceCoverage:weighted.coverage,period:{from:fromIso,to:toIso},components,complaints:{qualityRelatedCases,openQualityCases,penalty:complaintPenalty},facts:{rosterAssignments:myRoster.length,completedBookings:completed.length,reviews:myReviews.length,qaInspections:myInspectionScores.length,attendanceObservations:attendanceObserved,totalOffers,acceptedOffers} };
+    return { cleanerId:cleaner.id,cleanerName:String(cleaner.full_name??"Cleaner").trim()||"Cleaner",status:cleaner.status??null,overallScore:weighted.overall,grade:gradeFor(weighted.overall),evidenceCoverage:weighted.coverage,period:{from:fromIso,to:toIso},components,complaints:{qualityRelatedCases,openQualityCases,penalty:complaintPenalty},facts:{rosterAssignments:myRoster.length,completedBookings:completed.length,reviews:myReviews.length,qaInspections:myInspectionScores.length,attendanceObservations:attendanceObserved,totalOffers:reliability.totalOffers,acceptedOffers:reliability.acceptedOffers} };
   });
   cards.sort((a,b)=>a.overallScore==null&&b.overallScore==null?a.cleanerName.localeCompare(b.cleanerName):a.overallScore==null?1:b.overallScore==null?-1:b.overallScore-a.overallScore||a.cleanerName.localeCompare(b.cleanerName));
   return { scorecards:cards, from:fromIso, to:toIso };
