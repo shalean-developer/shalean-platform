@@ -12,7 +12,11 @@ import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { cn } from "@/lib/utils";
 import { SiteTopBar } from "@/components/nav/SiteTopBar";
 import { shouldHideGlobalTopNav } from "@/lib/marketing/globalTopNavVisibility";
-import { MARKETING_HEADER_SERVICE_LINKS } from "@/lib/marketing/marketingHomeHeaderNav";
+import {
+  MARKETING_HEADER_NAV_LINKS,
+  MARKETING_HEADER_SERVICE_LINKS,
+  marketingHeaderNavLinkClass,
+} from "@/lib/marketing/marketingHomeHeaderNav";
 import {
   marketingHeaderLogoLinkClass,
   marketingHeaderLogoImageClass,
@@ -21,23 +25,8 @@ import {
   marketingMobileHeaderActionsClass,
   marketingMobileMenuButtonClass,
 } from "@/lib/marketing/marketingMobileLayout";
-import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
 
 const bookingHref = "/book";
-const pricingHref = CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF;
-
-type NavLink = { label: string; href: string; dropdown?: boolean };
-
-const navLinks: NavLink[] = [
-  { label: "Services", href: "/services", dropdown: true },
-  { label: "Pricing", href: pricingHref },
-  { label: "About", href: "/about" },
-  { label: "FAQ", href: "/faq" },
-  { label: "Contact", href: "/contact" },
-];
-
-const navLinkClass =
-  "flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-blue-50 hover:text-blue-700";
 
 export function GlobalTopNav() {
   const pathname = usePathname() ?? "";
@@ -68,26 +57,22 @@ export function GlobalTopNav() {
 
   return (
     <header className="sticky top-0 z-50">
-      {/* Top info bar */}
       <SiteTopBar />
 
-      {/* Main nav card */}
       <div className="bg-white/95 px-3 py-2 shadow-sm backdrop-blur sm:px-5">
         <div className="mx-auto flex w-full max-w-7xl items-center gap-3 lg:justify-between">
-          {/* Logo */}
           <Link href="/" className={marketingHeaderLogoLinkClass} aria-label="Shalean home">
             <ShaleanNavLogo className={marketingHeaderLogoImageClass} intrinsicHeight={80} priority />
           </Link>
 
-          {/* Desktop nav */}
           <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Primary">
-            {navLinks.map(({ label, href, dropdown }) => {
+            {MARKETING_HEADER_NAV_LINKS.map(({ label, href, dropdown }) => {
               if (dropdown) {
                 return (
                   <div key={label} ref={servicesRef} className="relative">
                     <button
                       type="button"
-                      className={cn(navLinkClass, servicesOpen && "bg-blue-50 text-blue-700")}
+                      className={cn(marketingHeaderNavLinkClass, servicesOpen && "bg-blue-50 text-blue-700")}
                       onClick={() => setServicesOpen((v) => !v)}
                       aria-expanded={servicesOpen}
                       suppressHydrationWarning
@@ -123,14 +108,13 @@ export function GlobalTopNav() {
                 );
               }
               return (
-                <Link key={label} href={href} className={navLinkClass}>
+                <Link key={label} href={href} className={marketingHeaderNavLinkClass}>
                   {label}
                 </Link>
               );
             })}
           </nav>
 
-          {/* Desktop right CTAs */}
           <div className="hidden items-center gap-3 lg:flex">
             <GetFreeQuoteLink source="nav_desktop" variant="nav" className="hidden xl:inline-flex" />
             <GrowthCtaLink
@@ -144,7 +128,6 @@ export function GlobalTopNav() {
             </GrowthCtaLink>
           </div>
 
-          {/* Mobile right */}
           <div className={marketingMobileHeaderActionsClass}>
             <MarketingMobileHeaderBookButton bookingHref={bookingHref} source="nav_mobile_book" />
             <button
@@ -162,7 +145,6 @@ export function GlobalTopNav() {
         </div>
       </div>
 
-      {/* Mobile drawer — links stay in HTML when collapsed for crawlers */}
       <div
         id="mobile-nav"
         className={cn(
@@ -175,7 +157,7 @@ export function GlobalTopNav() {
       >
         <div className="flex flex-col gap-1">
           <GetFreeQuoteLink source="nav_mobile_menu" variant="outline" className="mb-2 w-full" />
-          {navLinks.map(({ label, href, dropdown }) =>
+          {MARKETING_HEADER_NAV_LINKS.map(({ label, href, dropdown }) =>
             dropdown ? (
               <MarketingMobileServicesNav
                 key={label}
