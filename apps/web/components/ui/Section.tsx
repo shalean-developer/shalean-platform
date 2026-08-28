@@ -14,19 +14,23 @@ type Props = {
 };
 
 const spacingClass = {
-  default: "py-10 md:py-20",
-  tight: "py-8 md:py-12",
+  default: "py-[var(--ui-space-10)] md:py-[var(--ui-space-20)]",
+  tight: "py-[var(--ui-space-8)] md:py-[var(--ui-space-12)]",
 } as const;
 
 /**
- * Marketing / hub content width (~1100px) — use with landing pages, `/services`, etc.
+ * Canonical public/content container. Keep page-specific overrides in className when a surface needs a narrower width.
  */
 export function Section({ children, className, spacing = "default", as: Tag = "div", id, "aria-labelledby": labelledBy }: Props) {
   return (
     <Tag
       id={id}
       aria-labelledby={labelledBy}
-      className={cn("mx-auto w-full max-w-[1100px] px-4 sm:px-6", spacingClass[spacing], className)}
+      className={cn(
+        "mx-auto w-full max-w-[var(--ui-container-content)] px-[var(--ui-page-gutter)]",
+        spacingClass[spacing],
+        className,
+      )}
     >
       {children}
     </Tag>
