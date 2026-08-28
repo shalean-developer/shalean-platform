@@ -25,10 +25,10 @@ function OfficeSkeleton() {
       <div className="h-16 animate-pulse border-b border-slate-200 bg-white" />
       <div className="flex flex-1">
         <div className="hidden w-[220px] animate-pulse bg-[--sidebar-bg] md:block" />
-        <div className="flex-1 space-y-4 p-6">
-          <div className="h-8 w-64 animate-pulse rounded-lg bg-slate-200" />
-          <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />
-          <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="flex-1 space-y-[var(--ui-space-4)] p-[var(--ui-space-6)]">
+          <div className="h-8 w-64 animate-pulse rounded-[var(--ui-radius-lg)] bg-slate-200" />
+          <div className="h-40 animate-pulse rounded-[var(--ui-radius-2xl)] bg-slate-100" />
+          <div className="h-40 animate-pulse rounded-[var(--ui-radius-2xl)] bg-slate-100" />
         </div>
       </div>
     </div>
@@ -49,15 +49,15 @@ function DeniedGate({
   onRetry: () => void;
 }) {
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
+    <main className="flex min-h-screen items-center justify-center px-[var(--ui-page-gutter)]">
+      <div className="w-full max-w-md rounded-[var(--ui-radius-2xl)] border border-border bg-card p-[var(--ui-space-6)] text-center shadow-[var(--ui-shadow-sm)]">
         <h1 className="text-lg font-semibold text-foreground">Admin access required</h1>
         {errorMessage ? (
           <>
             <p className="mt-2 text-sm text-muted-foreground">{errorMessage}</p>
             <button
               type="button"
-              className="mt-5 inline-flex w-full items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
+              className="mt-5 inline-flex w-full items-center justify-center rounded-[var(--ui-radius-xl)] border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
               onClick={onRetry}
             >
               Try again
@@ -77,7 +77,7 @@ function DeniedGate({
             </p>
             <Link
               href={`/login?redirect=${encodeURIComponent(redirectTarget)}`}
-              className="mt-5 inline-flex w-full items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
+              className="mt-5 inline-flex w-full items-center justify-center rounded-[var(--ui-radius-xl)] border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
             >
               Use a different account
             </Link>
@@ -87,7 +87,7 @@ function DeniedGate({
             <p className="mt-2 text-sm text-muted-foreground">Sign in with an allowlisted admin account to continue.</p>
             <Link
               href={`/login?redirect=${encodeURIComponent(redirectTarget)}`}
-              className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+              className="mt-5 inline-flex w-full items-center justify-center rounded-[var(--ui-radius-xl)] bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
             >
               Login as Admin
             </Link>
@@ -226,7 +226,7 @@ export function OfficeShell({ children }: { children: ReactNode }) {
         <aside
           ref={sidebarRef}
           className={cn(
-            "relative z-20 hidden shrink-0 flex-col border-r border-[--sidebar-border] bg-[--sidebar-bg] transition-[width] duration-200 md:flex",
+            "relative z-[var(--ui-z-sticky)] hidden shrink-0 flex-col border-r border-[--sidebar-border] bg-[--sidebar-bg] transition-[width] duration-200 md:flex",
             sidebarCollapsed ? "w-[72px]" : "w-[220px]",
           )}
         >
@@ -244,14 +244,14 @@ export function OfficeShell({ children }: { children: ReactNode }) {
 
         {/* Mobile drawer */}
         {mobileOpen ? (
-          <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+          <div className="fixed inset-0 z-[var(--ui-z-overlay)] md:hidden" role="dialog" aria-modal="true">
             <button
               type="button"
               className="absolute inset-0 bg-black/50 backdrop-blur-sm"
               aria-label="Close menu"
               onClick={() => setMobileOpen(false)}
             />
-            <div className="absolute left-0 top-16 h-[calc(100%-4rem)] w-[min(100%,18rem)] shadow-xl">
+            <div className="absolute left-0 top-16 h-[calc(100%-4rem)] w-[min(100%,18rem)] shadow-[var(--ui-shadow-xl)]">
               <OfficeSidebarContent
                 userLabel={userLabel}
                 onLogout={() => void handleLogout()}
@@ -263,7 +263,7 @@ export function OfficeShell({ children }: { children: ReactNode }) {
 
         {/* Main content */}
         <main className="min-w-0 flex-1">
-          <div className="mx-auto w-full max-w-[1600px] p-4 pb-8 md:p-6">{children}</div>
+          <div className="mx-auto w-full max-w-[1600px] px-[var(--ui-page-gutter)] py-[var(--ui-space-6)] pb-[var(--ui-space-8)]">{children}</div>
         </main>
       </div>
 
