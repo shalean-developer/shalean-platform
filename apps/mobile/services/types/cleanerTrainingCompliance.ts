@@ -38,6 +38,7 @@ export type CleanerTrainingComplianceResponse = {
     ready: boolean;
     overdueTraining: number;
     nonCompliant: number;
+    missingComplianceEvidence: boolean;
     trainingAssigned: number;
     trainingCompleted: number;
     complianceRecords: number;
