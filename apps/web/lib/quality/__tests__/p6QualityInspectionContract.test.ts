@@ -37,6 +37,14 @@ describe("P6 Quality Assurance & Inspection contract", () => {
     expect(service).toContain('recommendedStatus = "rework_required"');
   });
 
+  it("keeps signed-off inspection status aligned with refreshed evidence", () => {
+    expect(service).toContain('select("id, booking_id, status, signed_off_at")');
+    expect(service).toContain("shouldRealignSignedOffStatus");
+    expect(service).toContain('inspectionState.status !== "closed"');
+    expect(service).toContain("patch.status = recommendedStatus");
+    expect(service).toContain("status_realigned: shouldRealignSignedOffStatus");
+  });
+
   it("supports defect/rework resolution and score refresh", () => {
     expect(detailRoute).toContain('action === "add_defect"');
     expect(detailRoute).toContain('action === "resolve_defect"');
