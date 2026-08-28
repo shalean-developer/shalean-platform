@@ -50,7 +50,38 @@ export async function markMonthlyInvoicePaidManual(
   const total = Math.max(0, Math.round(Number(row.total_amount_cents ?? 0)));
   const prevPaid = Math.max(0, Math.round(Number(row.amount_paid_cents ?? 0)));
   const remaining = Math.max(0, total - prevPaid);
+  if (remaining <= 0) return { ok: false, error: "nothing_to_record_manual_payment" };
+
   const nowIso = new Date().toISOString();
+  const manualReference = `manual:monthly_invoice:${row.id}`;
+
+  const { error: ledgerErr } = await admin.from("payment_transactions").insert({
+    gateway: "other",
+    gateway_reference: manualReference,
+    gateway_transaction_id: null,
+    entity_type: "monthly_invoice",
+    entity_id: row.id,
+    amount_cents: remaining,
+    currency_code: "ZAR",
+    processing_fee_cents: 0,
+    processing_fee_vat_cents: 0,
+    net_settlement_cents: remaining,
+    fee_calculation_method: "manual",
+    settlement_status: "settled",
+    settlement_date: todayYmdJhb(),
+    payment_channel: "manual_eft",
+    paid_at: nowIso,
+    sync_status: "not_synced",
+  });
+  if (ledgerErr) return { ok: false, error: ledgerErr.message };
+
+  const rollbackLedger = async () => {
+    await admin
+      .from("payment_transactions")
+      .delete()
+      .eq("gateway", "other")
+      .eq("gateway_reference", manualReference);
+  };
 
   const { count: bookingCnt, error: cntErr } = await admin
     .from("bookings")
@@ -78,13 +109,16 @@ export async function markMonthlyInvoicePaidManual(
       booking_count_settled: bookingCountSettled,
       balance_cents_after: 0,
       actor: `admin:${params.adminEmail}`,
-      reference: "manual",
+      reference: manualReference,
       ...(noteTrim ? { note: noteTrim } : {}),
       settled: "full",
     },
     { source: "monthly_invoice/admin_manual" },
   );
-  if (!appendRes.ok) return { ok: false, error: appendRes.error };
+  if (!appendRes.ok) {
+    await rollbackLedger();
+    return { ok: false, error: appendRes.error };
+  }
 
   const capPaid = total;
 
@@ -99,7 +133,10 @@ export async function markMonthlyInvoicePaidManual(
     .eq("id", row.id)
     .in("status", ["sent", "partially_paid", "overdue"]);
 
-  if (upInv) return { ok: false, error: upInv.message };
+  if (upInv) {
+    await rollbackLedger();
+    return { ok: false, error: upInv.message };
+  }
 
   const { data: bookings, error: bErr } = await admin
     .from("bookings")
@@ -119,7 +156,7 @@ export async function markMonthlyInvoicePaidManual(
       cleaner_payout_cents: number | null;
     }[],
     source: "monthly_invoice/admin_manual",
-    reference: "manual",
+    reference: manualReference,
   });
   if (!childSettlement.ok) {
     return { ok: false, error: childSettlement.error };
@@ -133,6 +170,7 @@ export async function markMonthlyInvoicePaidManual(
       invoice_id: row.id,
       admin_email: params.adminEmail,
       amount_recorded_cents: remaining,
+      payment_reference: manualReference,
       note: noteTrim,
     },
   });
@@ -151,7 +189,7 @@ export async function markMonthlyInvoicePaidManual(
           zohoInvoiceId,
           amountZar: capPaid / 100,
           paymentDate: todayYmdJhb(),
-          reference: `manual_${row.id.slice(0, 8)}`,
+          reference: manualReference,
           customerEmail: contactRes.contact.email,
           customerName: contactRes.contact.name,
         });
