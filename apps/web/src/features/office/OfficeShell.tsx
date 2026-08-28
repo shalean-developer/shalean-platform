@@ -101,7 +101,10 @@ function DeniedGate({
 export function OfficeShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { state: roleState, retry } = useRoleRouteGuard({ requiredRole: "admin" });
+  const { state: roleState, retry } = useRoleRouteGuard({
+    requiredRole: "admin",
+    allowLocalhostDevBypass: true,
+  });
   const [gate, setGate] = useState<Gate>("ready");
   const [userLabel, setUserLabel] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
