@@ -2,6 +2,7 @@ import "server-only";
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
+import { cleanerManagementStatus } from "@/lib/admin/cleanerManagementStatus";
 import { isUnknownColumnError } from "@/lib/cleaner/cleanerMeDb";
 
 export type AdminCleanerListRow = {
@@ -66,32 +67,15 @@ const SELECT_BASE = `
 export type LoadAdminCleanersListOptions = {
   search?: string;
   excludeTeamId?: string;
-  /** `all` | `available` (is_available) | `high_rated` (rating ≥ 4). */
+  /** `all` | `available` (dispatchable active rows) | `high_rated` (rating ≥ 4). */
   filter?: "all" | "available" | "high_rated";
   /** Optional cap for typeahead pickers; omit to return every matching row. */
   limit?: number;
 };
 
-/**
- * Office Cleaner Management intentionally exposes only Available / Busy /
- * Offline. Lifecycle inactivity and any non-dispatch state therefore collapse
- * to Offline, while Busy stays distinct from Available.
- */
-export function normalizeAdminCleanerOfficeStatus(row: AdminCleanerListRow): AdminCleanerListRow {
-  const rawStatus = String(row.status ?? "").trim().toLowerCase();
-  const lifecycleActive = row.is_active !== false;
-  const dispatchAvailable = row.is_available === true;
-
-  if (!lifecycleActive || !dispatchAvailable) {
-    return { ...row, status: "offline", is_available: false };
-  }
-  if (rawStatus === "busy") {
-    return { ...row, status: "busy", is_available: true };
-  }
-  if (rawStatus === "available") {
-    return { ...row, status: "available", is_available: true };
-  }
-  return { ...row, status: "offline", is_available: false };
+function projectOfficeStatus(row: AdminCleanerListRow): AdminCleanerListRow {
+  const status = cleanerManagementStatus(row);
+  return { ...row, status, is_available: status !== "offline" };
 }
 
 /** Loads every cleaner row from `public.cleaners` (paginated), with optional filters. */
@@ -160,7 +144,7 @@ export async function loadAdminCleanersList(
     if (res.error) throw new Error(res.error.message);
 
     const rows = (Array.isArray(res.data) ? res.data : []) as unknown as AdminCleanerListRow[];
-    all.push(...rows.map(normalizeAdminCleanerOfficeStatus));
+    all.push(...rows.map(projectOfficeStatus));
     if (rows.length < take) break;
     if (hardLimit != null && all.length >= hardLimit) break;
   }
