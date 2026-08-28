@@ -139,6 +139,7 @@ export async function refundMonthlyInvoicePayment(
   if (!resolved.ok) return { ok: false, error: resolved.error };
   const { chargeRef, chargeAmount } = resolved;
   const refundAmount = chargeAmount > 0 ? chargeAmount : amountCents;
+  let actualRefundAmountCents = amountCents;
   const pastedRefundRef = params.refundReference?.trim() || null;
   const nowIso = new Date().toISOString();
 
@@ -150,6 +151,7 @@ export async function refundMonthlyInvoicePayment(
   if (params.recordOnly) {
     refundReference = pastedRefundRef ?? chargeRef ?? `manual:${row.id}`;
   } else if (chargeRef) {
+    actualRefundAmountCents = refundAmount;
     const refundRes = await refundPaystackTransaction({
       transactionReference: chargeRef,
       amountCents: refundAmount > 0 ? refundAmount : undefined,
@@ -169,7 +171,7 @@ export async function refundMonthlyInvoicePayment(
     invoiceId: row.id,
     chargeRef,
     refundReference,
-    amountCents,
+    amountCents: actualRefundAmountCents,
     refundedAtIso: nowIso,
     note: params.note,
   });
@@ -193,7 +195,7 @@ export async function refundMonthlyInvoicePayment(
   await appendMonthlyInvoiceSnapshotEvent(admin, row.id, {
     kind: "payment_refunded",
     at: nowIso,
-    amount_cents: amountCents,
+    amount_cents: actualRefundAmountCents,
     amount_paid_cents_after: 0,
     total_amount_cents: total,
     balance_cents_after: total,
@@ -217,7 +219,7 @@ export async function refundMonthlyInvoicePayment(
       alreadyReversedOnPaystack,
       refundReference,
       chargeReference: chargeRef,
-      amountCents,
+      amountCents: actualRefundAmountCents,
       payoutEligibleBookings: reversal.payoutEligible,
     },
   });
@@ -226,7 +228,7 @@ export async function refundMonthlyInvoicePayment(
     entityType: "monthly_invoice",
     entityId: row.id,
     refundReference,
-    amountCents,
+    amountCents: actualRefundAmountCents,
     currencyCode: "ZAR",
   }).catch(() => undefined);
 
