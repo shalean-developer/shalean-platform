@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { loadPaymentReconciliation } from "@/lib/admin/payments/loadPaymentReconciliation";
-import { requireAdminApi } from "@/lib/auth/requireAdminApi";
+import { requireFinanceApi } from "@/lib/auth/requireFinanceApi";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const auth = await requireAdminApi(request, ["payment.reconcile"]);
+  const auth = await requireFinanceApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
 
   const admin = getSupabaseAdmin();
