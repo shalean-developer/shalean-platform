@@ -22,6 +22,12 @@ function score(value: number | null | undefined): string {
   return value == null ? "—" : `${Math.round(value)}%`;
 }
 
+function dateLabel(raw: string | null | undefined): string {
+  if (!raw) return "—";
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? raw : date.toLocaleDateString("en-ZA", { dateStyle: "medium" });
+}
+
 export default function PerformanceScreen() {
   const router = useRouter();
   const { syncNow } = useConnectivity();
@@ -62,7 +68,10 @@ export default function PerformanceScreen() {
           <>
             <SectionCard title="Performance score">
               <View className="flex-row gap-2"><Metric label="Overall" value={score(card?.overallScore)} /><Metric label="Grade" value={card?.grade ?? "—"} /><Metric label="Evidence" value={score(card?.evidenceCoverage)} /></View>
-              <Text className="mt-3 text-sm text-ink-muted">This score is based on QA inspections, customer reviews, reliability, completed assignments and on-time start evidence. Earnings do not affect it.</Text>
+              <Text className="mt-3 text-caption text-ink-muted">
+                {performance?.meta.days ?? 90}-day window · {dateLabel(performance?.from ?? card?.period.from)} to {dateLabel(performance?.to ?? card?.period.to)}
+              </Text>
+              <Text className="mt-2 text-sm text-ink-muted">This score is based on QA inspections, customer reviews, reliability, completed assignments and on-time start evidence. Earnings do not affect it.</Text>
             </SectionCard>
             <SectionCard title="Score breakdown">
               <View className="gap-3"><ScoreRow label="Quality inspections" value={card?.components.quality.score} evidence={card?.components.quality.evidenceCount} /><ScoreRow label="Customer reviews" value={card?.components.customerFeedback.score} evidence={card?.components.customerFeedback.evidenceCount} /><ScoreRow label="Reliability" value={card?.components.reliability.score} evidence={card?.components.reliability.evidenceCount} /><ScoreRow label="Completion" value={card?.components.completion.score} evidence={card?.components.completion.evidenceCount} /><ScoreRow label="On-time starts" value={card?.components.attendance.score} evidence={card?.components.attendance.evidenceCount} /></View>
