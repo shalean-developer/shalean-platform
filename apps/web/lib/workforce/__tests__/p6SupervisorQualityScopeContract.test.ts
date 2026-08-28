@@ -30,4 +30,12 @@ describe("P6 supervisor quality/performance scope", () => {
     expect(qaDetail).toContain("loadInspectionAndCheckScope");
     expect(qaDetail).toContain("bookingBelongsToSupervisorScope");
   });
+
+  it("treats an explicit booking team as authoritative before roster fallback", () => {
+    expect(scope).toContain("if (teamId) return scope.teamIds.includes(teamId);");
+    expect(scope.indexOf("if (teamId) return scope.teamIds.includes(teamId);")).toBeLessThan(
+      scope.indexOf('.from("booking_cleaners")'),
+    );
+    expect(scope).toContain("Legacy/solo bookings without an explicit team may still be scoped through");
+  });
 });
