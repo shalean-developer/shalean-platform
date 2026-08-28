@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { FoundationScaleShowcase } from "./foundation-scale-showcase";
 import { RDP01B5Showcase } from "./rd-p01b5-showcase";
 import { RDP02PublicShellShowcase } from "./rd-p02-public-shell-showcase";
+import { RDP03HomepagePrimitivesShowcase } from "./rd-p03-homepage-primitives-showcase";
 import { UISystemShowcase } from "./ui-system-showcase";
 
 export const metadata: Metadata = {
@@ -16,6 +17,7 @@ export const metadata: Metadata = {
 export default function UISystemPage() {
   return (
     <>
+      <RDP03HomepagePrimitivesShowcase />
       <RDP02PublicShellShowcase />
       <FoundationScaleShowcase />
       <RDP01B5Showcase />
