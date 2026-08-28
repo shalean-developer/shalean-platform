@@ -33,6 +33,10 @@ export function shouldHideGlobalTopNav(pathname: string): boolean {
 
   if (usesMarketingHomeHeader(path)) return true;
 
+  // Development catalogues need an isolated presentation surface. The root
+  // non-production warning remains visible, but customer marketing chrome does not.
+  if (path === "/dev" || path.startsWith("/dev/")) return true;
+
   if (isAuthShellRoute(path)) return true;
 
   if (path.startsWith("/admin")) return true;
