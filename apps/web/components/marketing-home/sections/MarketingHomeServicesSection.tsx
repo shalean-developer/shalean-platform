@@ -2,7 +2,6 @@ import Image from "next/image";
 import { UserCheck, Sprout, Clock3, BadgeCheck } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { marketingLandingImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
-import type { MarketingHomeServiceCard } from "@/lib/marketing/marketingHomeServicePresentation";
 
 const mimg = marketingLandingImage;
 
@@ -35,11 +34,7 @@ const BENEFITS = [
 
 const waHref = "https://wa.me/27825915525?text=Hi%20Shalean%20Cleaning%20Services";
 
-type Props = {
-  serviceCards: MarketingHomeServiceCard[];
-};
-
-export function MarketingHomeServicesSection({ serviceCards: _serviceCards }: Props) {
+export function MarketingHomeServicesSection() {
   const bookHref = marketingHomeBookingHref();
 
   return (
