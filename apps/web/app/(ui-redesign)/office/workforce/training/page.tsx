@@ -11,6 +11,7 @@ type CleanerRow = {
   trainingCompleted: number;
   overdueTraining: number;
   complianceRecords: number;
+  missingComplianceEvidence: boolean;
   nonCompliant: number;
   ready: boolean;
 };
@@ -89,7 +90,7 @@ export default function WorkforceTrainingPage() {
                 <th className="px-4 py-3">Readiness</th>
                 <th className="px-4 py-3">Training</th>
                 <th className="px-4 py-3">Missing / overdue</th>
-                <th className="px-4 py-3">Compliance issues</th>
+                <th className="px-4 py-3">Compliance</th>
               </tr>
             </thead>
             <tbody>
@@ -99,7 +100,13 @@ export default function WorkforceTrainingPage() {
                   <td className="px-4 py-3">{row.ready ? "Ready" : "Action needed"}</td>
                   <td className="px-4 py-3">{row.trainingCompleted}/{row.trainingAssigned}</td>
                   <td className="px-4 py-3">{row.overdueTraining}</td>
-                  <td className="px-4 py-3">{row.nonCompliant}</td>
+                  <td className="px-4 py-3">
+                    {row.missingComplianceEvidence
+                      ? "No evidence"
+                      : row.nonCompliant > 0
+                        ? `${row.nonCompliant} issue${row.nonCompliant === 1 ? "" : "s"}`
+                        : "Current"}
+                  </td>
                 </tr>
               ))}
               {!loading && cleaners.length === 0 ? (
