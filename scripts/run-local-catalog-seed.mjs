@@ -144,13 +144,17 @@ function splitSqlStatements(sql) {
 function runLocalQueryFile(filePath) {
   if (process.platform === "win32") {
     const comspec = process.env.ComSpec || process.env.COMSPEC || "cmd.exe";
-    // SQL is passed through a temporary file, not interpolated into the shell command.
-    // Double quotes around the path are sufficient for the generated temp path.
-    const command = `npx supabase db query --local -f "${filePath}"`;
-    execFileSync(comspec, ["/d", "/s", "/c", command], {
-      cwd: root,
-      stdio: "inherit",
-    });
+    // Pass each token separately. In particular, do not embed quotes around the
+    // absolute temp path: Supabase's --file parser would treat those quotes as
+    // part of the filename.
+    execFileSync(
+      comspec,
+      ["/d", "/c", "npx", "supabase", "db", "query", "--local", "-f", filePath],
+      {
+        cwd: root,
+        stdio: "inherit",
+      },
+    );
     return;
   }
 
