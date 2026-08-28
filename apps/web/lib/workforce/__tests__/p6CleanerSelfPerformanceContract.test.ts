@@ -30,6 +30,15 @@ describe("P6 cleaner self performance convergence", () => {
     expect(mobileScreen).toContain("Retry performance score");
   });
 
+  it("shows the canonical score period beside cleaner performance", () => {
+    expect(route).toContain("meta: { days }");
+    expect(route).toContain("from: result.from");
+    expect(route).toContain("to: result.to");
+    expect(mobileScreen).toContain("performance?.meta.days");
+    expect(mobileScreen).toContain("performance?.from ?? card?.period.from");
+    expect(mobileScreen).toContain("performance?.to ?? card?.period.to");
+  });
+
   it("mounts canonical performance through the active web stats row", () => {
     expect(webCard).toContain("useCanonicalCleanerPerformance");
     expect(webCard).toContain("Performance");
