@@ -6,6 +6,7 @@ import { MarketingHomeDbSectionsFallback } from "@/components/marketing-home/Mar
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingHomeStickyCtaClient } from "@/components/marketing-home/MarketingHomeStickyCtaClient";
 import { MarketingStickyTrustBadge } from "@/components/marketing-home/MarketingStickyTrustBadge";
+import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
 import { PromotionFeaturedCard } from "@/components/promotions/PromotionFeaturedCard";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -43,6 +44,7 @@ export default function MarketingHomePage() {
         <Suspense fallback={<MarketingHomeDbSectionsFallback />}>
           <MarketingHomeDbSections />
         </Suspense>
+        <MarketingHomeFinalCta />
       </main>
       <FooterSection stackFloats />
       <MarketingStickyTrustBadge />
