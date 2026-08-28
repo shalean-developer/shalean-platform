@@ -69,6 +69,30 @@ export type MarketingHomeService = {
   features: string[];
 };
 
+const MARKETING_SERVICE_KEY_BY_SLUG: Record<string, MarketingHomeServiceKey> = {
+  standard: "standard",
+  "standard-cleaning": "standard",
+  "regular-cleaning": "standard",
+  deep: "deep",
+  "deep-cleaning": "deep",
+  move: "move",
+  move_cleaning: "move",
+  "move-cleaning": "move",
+  "moving-cleaning": "move",
+  "move-in-out": "move",
+  airbnb: "airbnb",
+  "airbnb-cleaning": "airbnb",
+  office: "office",
+  "office-cleaning": "office",
+  carpet: "carpet",
+  "carpet-cleaning": "carpet",
+};
+
+function normalizeMarketingServiceKey(value: string | null): MarketingHomeServiceKey | null {
+  if (!value) return null;
+  return MARKETING_SERVICE_KEY_BY_SLUG[value] ?? null;
+}
+
 function text(row: DbRow, keys: string[]): string | null {
   for (const key of keys) {
     const value = row[key];
@@ -127,14 +151,13 @@ async function readRows(table: string): Promise<DbRow[]> {
 }
 
 function mapMarketingHomeService(row: DbRow, _index: number): MarketingHomeService | null {
-  const rawId = text(row, ["slug", "service_id", "id", "key"]);
-  const id = rawId === "move_cleaning" || rawId === "move-in-out" ? "move" : rawId;
+  const id = normalizeMarketingServiceKey(text(row, ["slug", "service_id", "id", "key"]));
   if (!id || !MARKETING_HOME_SERVICE_IDS.has(id)) return null;
   const title = text(row, ["title", "name", "label"]);
   const description = text(row, ["description", "summary", "short_description", "blurb"]);
   if (!title || !description) return null;
   return {
-    id: id as MarketingHomeServiceKey,
+    id,
     title,
     description,
     price: null,
@@ -170,9 +193,8 @@ function applyPricingCatalogToMarketingServices(
 }
 
 function mapService(row: DbRow, _index: number): HomeService | null {
-  const rawId = text(row, ["slug", "service_id", "id", "key"]);
-  const id = rawId === "move_cleaning" || rawId === "move-in-out" ? "move" : rawId;
-  if (!id || !WIDGET_SERVICE_IDS.has(id)) return null;
+  const id = normalizeMarketingServiceKey(text(row, ["slug", "service_id", "id", "key"]));
+  if (!id || id === "office" || !WIDGET_SERVICE_IDS.has(id)) return null;
   const title = text(row, ["title", "name", "label"]);
   const description = text(row, ["description", "summary", "short_description", "blurb"]);
   if (!title || !description) return null;
