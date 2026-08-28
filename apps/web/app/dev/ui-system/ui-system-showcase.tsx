@@ -77,6 +77,13 @@ const tokenSamples = [
   { name: "Destructive", className: "bg-destructive", value: "--destructive" },
 ];
 
+const spacingSamples = [
+  { label: "p-2", className: "p-2" },
+  { label: "p-4", className: "p-4" },
+  { label: "p-6", className: "p-6" },
+  { label: "p-8", className: "p-8" },
+] as const;
+
 function Specimen({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
     <Card className="overflow-hidden">
@@ -166,7 +173,7 @@ export function UISystemShowcase() {
             <Specimen title="Spacing, radius and elevation" description="Existing Tailwind values are visualised only; a canonical scale is still planned.">
               <div className="space-y-5">
                 <div className="flex flex-wrap items-end gap-4">
-                  {[2, 4, 6, 8].map((space) => <div key={space} className="text-center"><div className={`bg-zinc-200 p-${space} dark:bg-zinc-800`}><div className="h-6 w-10 bg-primary" /></div><div className="mt-1 text-xs">p-{space}</div></div>)}
+                  {spacingSamples.map((sample) => <div key={sample.label} className="text-center"><div className={`bg-zinc-200 ${sample.className} dark:bg-zinc-800`}><div className="h-6 w-10 bg-primary" /></div><div className="mt-1 text-xs">{sample.label}</div></div>)}
                 </div>
                 <div className="grid grid-cols-3 gap-3"><div className="h-16 rounded-md border bg-white" /><div className="h-16 rounded-xl border bg-white" /><div className="h-16 rounded-2xl border bg-white" /></div>
                 <div className="grid grid-cols-3 gap-3"><div className="h-16 rounded-xl border bg-white shadow-sm" /><div className="h-16 rounded-xl border bg-white shadow-md" /><div className="h-16 rounded-xl border bg-white shadow-xl" /></div>
