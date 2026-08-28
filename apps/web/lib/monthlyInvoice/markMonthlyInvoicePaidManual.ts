@@ -187,7 +187,7 @@ export async function markMonthlyInvoicePaidManual(
       if (contactRes.ok) {
         const payRes = await markZohoInvoicePaid({
           zohoInvoiceId,
-          amountZar: capPaid / 100,
+          amountZar: remaining / 100,
           paymentDate: todayYmdJhb(),
           reference: manualReference,
           customerEmail: contactRes.contact.email,
