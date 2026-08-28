@@ -36,6 +36,8 @@ export async function markCleanerPayoutPaid(
   if (testErr) return { ok: false, error: testErr.message };
   if ((testBookings?.length ?? 0) > 0) return { ok: false, error: "Cannot mark test payout as paid." };
 
+  // SR-08C: the database trigger attached to this parent update converges direct,
+  // roster-member, and team-member paid state inside this same transaction.
   const { data: updated, error } = await admin
     .from("cleaner_payouts")
     .update({ status: "paid", paid_at: new Date().toISOString(), payment_status: "success" })
@@ -44,9 +46,6 @@ export async function markCleanerPayoutPaid(
     .select("id");
   if (error) return { ok: false, error: error.message };
   if (!updated?.length) return { ok: false, error: "Payout was already updated or is no longer approved." };
-
-  const { error: bookingSyncErr } = await admin.rpc("mark_bookings_paid_for_cleaner_payout", { p_payout_id: payoutId });
-  if (bookingSyncErr) return { ok: false, error: bookingSyncErr.message };
 
   void logSystemEvent({ level: "info", source: "PAYOUT_MARKED_PAID", message: "Cleaner payout batch marked paid", context: { payoutId, actorUserId: actor } });
   void logPayoutAuditEvent(admin, { eventType: "payout_manual_mark_paid", actorUserId: actor, payoutId, newValues: { status: "paid", payment_status: "success" } });
