@@ -109,7 +109,7 @@ export async function markMonthlyInvoicePaidManual(
       booking_count_settled: bookingCountSettled,
       balance_cents_after: 0,
       actor: `admin:${params.adminEmail}`,
-      reference: manualReference,
+      reference: "manual",
       ...(noteTrim ? { note: noteTrim } : {}),
       settled: "full",
     },
