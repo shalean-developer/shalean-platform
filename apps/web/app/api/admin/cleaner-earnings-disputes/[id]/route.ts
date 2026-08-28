@@ -50,6 +50,11 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     Math.round(Number(body.adjustment_amount_cents)) !== 0
       ? Math.round(Number(body.adjustment_amount_cents))
       : null;
+  const adjReason = typeof body.adjustment_reason === "string" ? body.adjustment_reason.trim() : "";
+
+  if (adjustmentAmountCents != null && adjReason.length < 2) {
+    return NextResponse.json({ error: "adjustment_reason required when posting an adjustment." }, { status: 400 });
+  }
 
   // Resolving the operational dispute and changing cleaner financial entitlement
   // are separate authorities. An earnings adjustment requires payout preparation
@@ -124,11 +129,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
 
   if (upErr) return NextResponse.json({ error: upErr.message }, { status: 500 });
 
-  const adjReason = typeof body.adjustment_reason === "string" ? body.adjustment_reason.trim() : "";
   if (adjustmentAmountCents != null) {
-    if (adjReason.length < 2) {
-      return NextResponse.json({ error: "adjustment_reason required when posting an adjustment." }, { status: 400 });
-    }
     const { error: adjErr } = await admin.from("cleaner_earnings_adjustments").insert({
       cleaner_id: row.cleaner_id,
       booking_id: row.booking_id,
