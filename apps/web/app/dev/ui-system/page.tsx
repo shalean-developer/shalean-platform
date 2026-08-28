@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { FoundationScaleShowcase } from "./foundation-scale-showcase";
 import { UISystemShowcase } from "./ui-system-showcase";
 
 export const metadata: Metadata = {
@@ -11,5 +12,10 @@ export const metadata: Metadata = {
 };
 
 export default function UISystemPage() {
-  return <UISystemShowcase />;
+  return (
+    <>
+      <FoundationScaleShowcase />
+      <UISystemShowcase />
+    </>
+  );
 }
