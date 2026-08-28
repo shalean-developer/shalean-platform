@@ -54,6 +54,7 @@ function buildAdmin(opts: {
   const captured = {
     invoiceUpdates: [] as Record<string, unknown>[],
     bookingUpdates: [] as Array<{ bookingId: string; patch: Record<string, unknown> }>,
+    paymentTransactions: [] as Record<string, unknown>[],
   };
   const failing = new Set(opts.failingBookingIds ?? []);
 
@@ -74,6 +75,19 @@ function buildAdmin(opts: {
               }),
             };
           },
+        };
+      }
+      if (table === "payment_transactions") {
+        return {
+          insert: async (row: Record<string, unknown>) => {
+            captured.paymentTransactions.push(row);
+            return { error: null };
+          },
+          delete: () => ({
+            eq: () => ({
+              eq: async () => ({ error: null }),
+            }),
+          }),
         };
       }
       if (table === "bookings") {
@@ -123,7 +137,7 @@ describe("markMonthlyInvoicePaidManual settlement aggregation", () => {
     else process.env.ZOHO_REFRESH_TOKEN = prevRefresh;
   });
 
-  it("marks the invoice paid and settles all child bookings", async () => {
+  it("marks the invoice paid, records the manual cash ledger, and settles all child bookings", async () => {
     const children: BookingChild[] = [
       {
         id: "booking-1",
@@ -158,6 +172,20 @@ describe("markMonthlyInvoicePaidManual settlement aggregation", () => {
     });
 
     expect(result).toEqual({ ok: true });
+    expect(captured.paymentTransactions).toEqual([
+      expect.objectContaining({
+        gateway: "other",
+        gateway_reference: "manual:monthly_invoice:invoice-1",
+        entity_type: "monthly_invoice",
+        entity_id: "invoice-1",
+        amount_cents: 110_000,
+        net_settlement_cents: 110_000,
+        fee_calculation_method: "manual",
+        settlement_status: "settled",
+        settlement_date: "2026-07-11",
+        payment_channel: "manual_eft",
+      }),
+    ]);
     expect(captured.invoiceUpdates.some((u) => u.status === "paid")).toBe(true);
     expect(captured.bookingUpdates.map((u) => u.bookingId)).toEqual(["booking-1", "booking-2"]);
     expect(captured.bookingUpdates[0].patch).toMatchObject({
@@ -168,7 +196,33 @@ describe("markMonthlyInvoicePaidManual settlement aggregation", () => {
     expect(markZohoInvoicePaid).not.toHaveBeenCalled();
   });
 
-  it("syncs payment to Zoho when a linked invoice exists", async () => {
+  it("records only the remaining amount for a partially paid invoice", async () => {
+    const { admin, captured } = buildAdmin({
+      invoice: {
+        id: "invoice-partial",
+        status: "partially_paid",
+        total_amount_cents: 80_000,
+        amount_paid_cents: 30_000,
+        is_closed: false,
+      },
+      children: [],
+    });
+
+    const result = await markMonthlyInvoicePaidManual(admin as never, {
+      invoiceId: "invoice-partial",
+      adminEmail: "ops@example.com",
+      adminUserId: "admin-1",
+    });
+
+    expect(result).toEqual({ ok: true });
+    expect(captured.paymentTransactions[0]).toMatchObject({
+      amount_cents: 50_000,
+      net_settlement_cents: 50_000,
+      gateway_reference: "manual:monthly_invoice:invoice-partial",
+    });
+  });
+
+  it("syncs payment to Zoho using the canonical manual reference", async () => {
     process.env.ZOHO_CLIENT_ID = "client";
     process.env.ZOHO_REFRESH_TOKEN = "refresh";
 
@@ -208,7 +262,7 @@ describe("markMonthlyInvoicePaidManual settlement aggregation", () => {
       zohoInvoiceId: "zoho-inv-1",
       amountZar: 500,
       paymentDate: "2026-07-11",
-      reference: "manual_invoice-",
+      reference: "manual:monthly_invoice:invoice-zoho",
       customerEmail: "customer@example.com",
       customerName: "Customer",
     });
@@ -281,6 +335,7 @@ describe("markMonthlyInvoicePaidManual settlement aggregation", () => {
       ok: false,
       error: "monthly_invoice_child_settlement_partial:invoice-2:settled=1:failed=1",
     });
+    expect(captured.paymentTransactions).toHaveLength(1);
     expect(captured.invoiceUpdates.some((u) => u.status === "paid")).toBe(true);
     expect(captured.bookingUpdates.map((u) => u.bookingId)).toEqual(["booking-1", "booking-2"]);
     expect(markZohoInvoicePaid).not.toHaveBeenCalled();
