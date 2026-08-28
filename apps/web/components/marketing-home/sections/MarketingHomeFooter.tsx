@@ -1,5 +1,5 @@
-import { FooterSection } from "@/components/home/sections/FooterSection";
+import { SiteFooter } from "@/components/nav/SiteFooter";
 
 export function MarketingHomeFooter() {
-  return <FooterSection />;
+  return <SiteFooter />;
 }
