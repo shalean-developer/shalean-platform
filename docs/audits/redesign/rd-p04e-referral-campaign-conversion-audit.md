@@ -1,10 +1,13 @@
 # RD-P04E — Referral and campaign conversion audit
 
-Status: In progress — local validation pending
+Status: PASSED / CLOSED
+Branch: `design/rd04-platform-redesign`
 
 ## Scope
 
-Audit and selectively normalize `/refer` and `/campaigns/[slug]` without changing referral attribution, campaign analytics, booking destinations, metadata/JSON-LD, promotion eligibility, or submission/business logic.
+Audit and selectively normalize `/refer` and the customer-facing promotion conversion family without changing referral attribution, campaign analytics, booking destinations, metadata/JSON-LD, promotion eligibility, or submission/business logic.
+
+The customer-facing campaign URL migration was subsequently split into RD-P04E2, where canonical public URLs moved from `/campaigns/[slug]` to `/offers/[slug]` while legacy `/campaigns/*` compatibility was preserved.
 
 ## Referral route
 
@@ -26,48 +29,44 @@ Behavior that remains authoritative and unchanged:
 
 Selective presentation changes:
 
-- Suspense/loading states now use semantic background/foreground tokens.
-- Both referral experiences now use the canonical `SiteFooter` rather than the legacy `FooterSection` compatibility wrapper.
-- Root shells now use semantic `background` / `foreground` roles.
+- Suspense/loading states use semantic background/foreground tokens.
+- Both referral experiences use the canonical `SiteFooter` rather than the legacy `FooterSection` compatibility wrapper.
+- Root shells use semantic background/foreground roles.
 - Page-specific referral sections, gradients, content hierarchy, share controls, and referral CTA behavior remain intentionally domain-specific.
 
-## Campaign route
+## Campaign / offer boundary
 
-`/campaigns/[slug]` is a dynamic, promotion-backed conversion route.
+The promotion-backed conversion route preserves:
 
-Behavior that remains authoritative and unchanged:
+- Promotion lookup via `getPromotionBySlug()` through the Supabase admin client.
+- Dynamic metadata from promotion content / `meta_seo` when available.
+- Soft fallback promo behavior for shared URLs that predate or outlive database rows.
+- Ended/expired URLs remaining on the landing page rather than redirecting away.
+- `recordPromotionEvent(..., eventType: "landing_visit")` as the campaign visit analytics path.
+- Booking CTA `/book?promo=<promo-code-or-slug>`.
+- Campaign-specific CTA labels and colours from promotion configuration/content.
+- Terms HTML sanitization with `sanitizeCampaignTermsHtml()`.
+- QR, FAQ, benefits, included-services, promotion countdown/client behavior and fallback content.
 
-- Promotion lookup remains `getPromotionBySlug()` through the Supabase admin client.
-- Dynamic metadata still comes from promotion content / `meta_seo` content when available.
-- Soft fallback promo behavior remains intact for shared URLs that predate or outlive database rows.
-- Ended/expired campaign URLs still remain on the landing page rather than redirecting away.
-- `recordPromotionEvent(..., eventType: "landing_visit")` remains the campaign visit analytics path.
-- Booking CTA remains `/book?promo=<promo-code-or-slug>`.
-- Campaign-specific CTA labels and colours still come from promotion configuration/content.
-- Terms HTML is still sanitized at render with `sanitizeCampaignTermsHtml()`.
-- QR, FAQ, benefits, included-services, promotion countdown/client behavior and fallback content remain unchanged.
-
-Selective presentation changes:
-
-- Root uses semantic background/foreground roles.
-- Hero and main content now use `PublicPageContainer` instead of route-local `max-w-5xl px-4` wrappers.
-- Repeated campaign cards use semantic card/border/muted roles and canonical radius tokens.
-- Campaign-configured hero gradient colours remain untouched because they are campaign content, not global shell styling.
+RD-P04E2 owns the canonical `/offers/[slug]` migration and legacy `/campaigns/[slug]` redirect compatibility.
 
 ## Boundary decisions
 
-Do not replace referral or campaign-specific business logic with generic marketing components. `MarketingHomeHeader` remains on referral experiences because referral booking hrefs may carry attribution. Campaign pages intentionally keep their own campaign hero rather than forcing the standard SiteHeader into the conversion surface.
+Do not replace referral or campaign-specific business logic with generic marketing components. `MarketingHomeHeader` remains on referral experiences because referral booking hrefs may carry attribution. Promotion landing pages keep their campaign/offer-specific hero rather than forcing the standard SiteHeader into the conversion surface.
 
 No production deployment, Supabase mutation, promotion mutation, referral mutation, booking mutation, or payment change is part of RD-P04E.
 
-## Validation gate
+## Validation result
 
-Before closure:
+Passed:
 
-1. `npm run typecheck` passes.
-2. `/refer` renders on desktop and mobile for the normal referrer experience.
-3. A referred-friend URL still produces a booking href carrying the stored referral.
-4. Referral sharing/copy controls remain usable.
-5. At least one `/campaigns/<slug>` page renders with campaign hero, CTA, terms, and any available countdown/QR/FAQ content.
-6. Campaign Book CTA still includes `?promo=`.
-7. No duplicate public footer or horizontal overflow is visible.
+1. Latest completed-slice typecheck was clean.
+2. `referralShareUrls.test.ts` + `client.test.ts` passed: 2 files / 10 tests.
+3. `/refer` returned 200 on the clean local Next process.
+4. A real referrer share URL used the canonical `https://shalean.co.za/refer?ref=<REALCODE>` form.
+5. A referred-friend URL rendered the invited-friend experience.
+6. `Book Your First Clean` retained the same referral code into `/book?ref=<REALCODE>`.
+7. Referral share/copy behavior was functionally confirmed through the supplied copied public URL.
+8. No booking/payment completion was required and no production mutation was performed.
+
+RD-P04E is therefore **PASSED / CLOSED**. RD-P04E2 remains the separate authority for customer-facing offer URL migration validation.
