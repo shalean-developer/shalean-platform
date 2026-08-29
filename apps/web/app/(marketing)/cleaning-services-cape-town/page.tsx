@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
+import { PublicPageContainer } from "@/components/nav/PublicPageContainer";
 import { BlogLinks } from "@/components/locations/cape-town-cleaning-services/BlogLinks";
 import { FAQSection } from "@/components/locations/cape-town-cleaning-services/FAQSection";
 import { FinalCTA } from "@/components/locations/cape-town-cleaning-services/FinalCTA";
@@ -57,8 +58,8 @@ export default function CleaningServicesCapeTownPage() {
           primary_kw: "cleaning services cape town",
         }}
       />
-      <main className="bg-zinc-50/80 pb-20 pt-8 dark:bg-zinc-950">
-        <div className="mx-auto max-w-6xl space-y-16 px-4">
+      <main className="bg-background text-foreground">
+        <PublicPageContainer size="wide" className="space-y-16 pb-20 pt-8">
           <HeroSection />
           <TrustBar />
           <QuickAnswer />
@@ -69,7 +70,7 @@ export default function CleaningServicesCapeTownPage() {
           <BlogLinks />
           <FAQSection />
           <FinalCTA />
-        </div>
+        </PublicPageContainer>
       </main>
     </MarketingLayout>
   );
