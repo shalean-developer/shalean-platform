@@ -29,7 +29,7 @@ export function MarketingHomeHeroSection() {
 
   return (
     <HomeSection className="overflow-hidden border-b border-border py-[var(--ui-space-10)] md:py-[var(--ui-space-14)] lg:py-[5rem]">
-      <div className="grid items-center gap-[var(--ui-space-10)] lg:grid-cols-[minmax(0,0.94fr)_minmax(0,1.06fr)] lg:gap-[var(--ui-space-14)] xl:gap-[var(--ui-space-16)]">
+      <div className="grid items-center gap-[var(--ui-space-10)] lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-[var(--ui-space-14)] xl:gap-[var(--ui-space-16)]">
         <div className="flex flex-col items-start text-left">
           <div className="inline-flex items-center rounded-full bg-muted p-1 text-[length:var(--ui-text-body)] text-foreground">
             <Link
@@ -107,14 +107,14 @@ export function MarketingHomeHeroSection() {
           </p>
         </div>
 
-        <div className="relative mx-auto w-full max-w-[720px] lg:mx-0 lg:max-w-none">
-          <div className="relative aspect-[1.12/1] w-full overflow-hidden rounded-[32px] bg-muted shadow-[var(--ui-shadow-lg)]">
+        <div className="relative mx-auto w-full max-w-[660px] lg:mx-0 lg:justify-self-end">
+          <div className="relative aspect-[1.13/1] w-full overflow-hidden rounded-[32px] bg-muted shadow-[var(--ui-shadow-lg)]">
             <Image
               src={HERO_MAIN}
               alt="Professional house cleaning service in a bright modern kitchen in Cape Town"
               fill
               className="object-cover object-center"
-              sizes="(max-width: 1024px) 100vw, 52vw"
+              sizes="(max-width: 1024px) 100vw, 660px"
               priority
               fetchPriority="high"
             />
