@@ -37,6 +37,9 @@
   --ui-text-card-title: 1.125rem;
   --ui-text-section-title: 1.5rem;
   --ui-text-page-title: clamp(2rem, 3vw, 2.5rem);
+  --ui-text-hero-title: clamp(2.75rem, 4.5vw, 4rem);
+  --ui-leading-hero: 1;
+  --ui-tracking-hero-title: -0.04em;
   --ui-leading-tight: 1.2;
   --ui-leading-body: 1.6;
   --ui-leading-relaxed: 1.75;
