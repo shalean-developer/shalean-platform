@@ -68,9 +68,83 @@
   row-gap: var(--ui-space-4);
 }
 
+.step2.step2 {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.step2 > :global(.space-y-8) {
+  color: var(--foreground);
+}
+
+.step2 > :global(.space-y-8) > hr {
+  display: none;
+}
+
+.step2 > :global(.space-y-8) > section {
+  border: 1px solid var(--border);
+  border-radius: var(--ui-radius-xl);
+  background: var(--card);
+  padding: var(--ui-space-4);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step2 > :global(.space-y-8) > section h3 {
+  color: var(--muted-foreground);
+}
+
+.step2 label,
+.step2 :global(.text-slate-700),
+.step2 :global(.text-slate-800),
+.step2 :global(.text-slate-900) {
+  color: var(--foreground);
+}
+
+.step2 :global(.text-slate-400),
+.step2 :global(.text-slate-500),
+.step2 :global(.text-slate-600) {
+  color: var(--muted-foreground);
+}
+
+.step2 input:not([type="checkbox"]):not([type="radio"]),
+.step2 select {
+  min-height: 2.75rem;
+  border-color: var(--border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step2 input:focus,
+.step2 select:focus {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.step2 button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.step2 :global(.rounded-2xl.border.border-slate-200.bg-white),
+.step2 :global(.rounded-xl.border.border-slate-200.bg-white),
+.step2 :global(.rounded-xl.border.border-dashed.border-slate-200.bg-slate-50) {
+  border-color: var(--border);
+  background: var(--background);
+}
+
+.step2 > :global(.space-y-8) > section > :global(.grid) {
+  row-gap: var(--ui-space-4);
+}
+
 @media (min-width: 640px) {
   .step1 > :global(.space-y-8) > section,
-  .step1 > :global(.space-y-8) > :global(.space-y-4) {
+  .step1 > :global(.space-y-8) > :global(.space-y-4),
+  .step2 > :global(.space-y-8) > section {
     padding: var(--ui-space-5);
   }
 }
