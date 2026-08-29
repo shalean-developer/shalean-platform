@@ -4,8 +4,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --primary: #2563eb;
-  --primary-foreground: #ffffff;
+  --primary: #6382f7;
+  --primary-foreground: #171717;
 
   /* Canonical semantic UI tokens */
   --secondary: #18181b;
@@ -18,7 +18,7 @@
   --popover-foreground: #09090b;
   --border: #e4e4e7;
   --input: #e4e4e7;
-  --ring: #2563eb;
+  --ring: #6382f7;
   --accent: #f4f4f5;
   --accent-foreground: #18181b;
   --destructive: #dc2626;
@@ -95,7 +95,7 @@
   --sidebar-hover: #eef1f6;
   --sidebar-flyout-bg: #ffffff;
 
-  /* Brand navy (SiteTopBar) */
+  /* Supporting brand blues */
   --navy-from: #0d1b69;
   --navy-to: #1a3dbd;
 }
@@ -133,8 +133,8 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
-    --primary: #2563eb;
-    --primary-foreground: #ffffff;
+    --primary: #6382f7;
+    --primary-foreground: #171717;
     --secondary: #f4f4f5;
     --secondary-foreground: #18181b;
     --muted: #27272a;
@@ -145,7 +145,7 @@
     --popover-foreground: #fafafa;
     --border: #27272a;
     --input: #3f3f46;
-    --ring: #60a5fa;
+    --ring: #6382f7;
     --accent: #27272a;
     --accent-foreground: #fafafa;
     --destructive: #ef4444;
