@@ -46,9 +46,7 @@ export function ShaleanColorPaletteShowcase() {
             <span className="rounded-full border border-border px-3 py-1">Development reference</span>
           </div>
           <h1 className="mt-4 text-[length:var(--ui-text-page-title)] font-bold leading-[var(--ui-leading-tight)] tracking-tight">Shalean color palette</h1>
-          <p className="mt-3 text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
-            Shalean Primary (#6382F7) is the main brand/action colour. Navy and Royal remain supporting blues for depth and emphasis; use restrained blue tints for selected surfaces and the neutral/status colours below for product UI.
-          </p>
+          <p className="mt-3 text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">Shalean Primary (#6382F7) is the main brand/action colour. Navy and Royal remain supporting blues for depth and emphasis; use restrained blue tints for selected surfaces and the neutral/status colours below for product UI.</p>
         </div>
         <div className="mt-8">
           <div className="mb-3 flex items-end justify-between gap-4"><div><h2 className="text-[length:var(--ui-text-section-title)] font-semibold">Core brand</h2><p className="mt-1 text-sm text-muted-foreground">Primary Shalean identity and supporting blue roles.</p></div></div>
