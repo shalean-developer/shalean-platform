@@ -48,9 +48,9 @@ export function MarketingHomeHeroSection() {
             </Link>
           </div>
 
-          <h1 className="mt-[var(--ui-space-8)] max-w-[700px] text-[clamp(2.75rem,5.2vw,4.75rem)] font-semibold leading-[0.98] tracking-[-0.05em] text-foreground">
-            <span className="block text-primary">{HERO_HEADLINE_ACCENT}</span>
-            <span className="block">{HERO_HEADLINE_REST}</span>
+          <h1 className="mt-[var(--ui-space-8)] text-[clamp(2rem,4.6vw,4rem)] font-semibold leading-[0.98] tracking-[-0.05em] text-foreground">
+            <span className="block whitespace-nowrap text-primary">{HERO_HEADLINE_ACCENT}</span>
+            <span className="block whitespace-nowrap">{HERO_HEADLINE_REST}</span>
           </h1>
 
           <div className="mt-[var(--ui-space-7)] flex flex-col gap-[var(--ui-space-4)]">
