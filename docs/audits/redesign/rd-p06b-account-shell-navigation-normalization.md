@@ -1,8 +1,10 @@
 # RD-P06B — Account shell + navigation normalization
 
-Status: IMPLEMENTED — CI / LOCAL VISUAL VALIDATION PENDING
+Status: IMPLEMENTED — CI PASSED / LOCAL VISUAL VALIDATION PENDING
 Branch: `design/rd04-platform-redesign`
 Validation base: `validation/rd-p06b-base` @ `e3a44de427c9d3bab0207d01ecffe593e0db520e`
+Validated implementation head: `ff665976c2320e23a9787b9a0567d0a77356595b`
+Validation PR: #460 — draft, validation only, close unmerged after local visual approval.
 Scope: presentation-only normalization of the canonical customer account shell/navigation. No production deployment, Supabase mutation, auth/RBAC behavior change, booking/payment mutation, customer ownership change, invoice/payment-state change, or support-case mutation.
 
 ## Governing authority
@@ -58,16 +60,58 @@ RD-P06B does not change:
 - any page-specific account business logic;
 - any production configuration/data.
 
-## Validation gate
+## Diff-scope proof
 
-Before RD-P06B can close:
+Comparison from `e3a44de427c9d3bab0207d01ecffe593e0db520e` to implementation head `ff665976c2320e23a9787b9a0567d0a77356595b` contains exactly three files:
 
-1. base-to-head diff must remain shell/navigation + audit/validation only;
-2. standard exact-head web CI must pass, including typecheck/build and existing payment/booking regressions;
-3. desktop local account shell visual must confirm sidebar/header/content alignment, active states and no duplicate support strip;
-4. mobile local visual must confirm bottom navigation, safe-area spacing and no horizontal overflow;
-5. navigation destinations and sign-out behavior remain unchanged by source/diff review;
-6. no production deployment or production data mutation is performed.
+1. `apps/web/src/features/account/AccountNav.tsx`
+2. `apps/web/src/features/account/AccountShell.tsx`
+3. `docs/audits/redesign/rd-p06b-account-shell-navigation-normalization.md`
+
+No page-body, customer API, booking/payment, Supabase or profile/support mutation file is in the implementation diff.
+
+## Exact-head CI evidence
+
+### migration-governance
+
+Workflow run: `33251968350`
+Conclusion: **success**.
+
+### web-test
+
+Workflow run: `33251968372`
+Job: `99099078148`
+Conclusion: **success**.
+
+The exact implementation head passed:
+
+- PR-head SHA equality check;
+- dependency audit;
+- critical payment/referral tests;
+- privileged Office email security contract;
+- revenue-path tests;
+- marketing/Meta compliance tests;
+- blog governance;
+- TypeScript typecheck;
+- Booking core ESLint;
+- SEO/canonical/Search Console readiness gates;
+- production Next.js build;
+- local production server start;
+- internal-link crawl;
+- location/compliance route matrix.
+
+Vercel status on the same implementation head was also successful. This is preview/status evidence only; no production deployment was performed by RD-P06B.
+
+## Remaining validation gate
+
+RD-P06B remains open until:
+
+1. the audit-only final head reruns the exact-head repository guards successfully;
+2. desktop local account shell visual confirms sidebar/header/content alignment, active states and no duplicate support strip;
+3. mobile local visual confirms bottom navigation, safe-area spacing and no horizontal overflow;
+4. navigation destinations and sign-out behavior remain unchanged by source/diff review;
+5. no production deployment or production data mutation is performed;
+6. validation PR #460 is closed without merge after approval.
 
 ## Local visual checklist
 
@@ -97,4 +141,4 @@ Mobile:
 
 ## Current decision
 
-RD-P06B is implemented but **not closed** until CI and local visual validation pass.
+RD-P06B is **implemented and CI-passed**, but remains **open pending final audit-only exact-head CI confirmation and local desktop/mobile visual approval**.
