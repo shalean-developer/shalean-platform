@@ -25,10 +25,7 @@ function ColorCard({ name, hex, css, use }: { name: string; hex: string; css: st
     <article className="overflow-hidden rounded-[var(--ui-radius-xl)] border border-border bg-card shadow-[var(--ui-shadow-sm)]">
       <div className="h-24" style={{ background: css }} aria-hidden />
       <div className="p-4">
-        <div className="flex items-start justify-between gap-3">
-          <h3 className="text-sm font-semibold text-foreground">{name}</h3>
-          <code className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{hex}</code>
-        </div>
+        <div className="flex items-start justify-between gap-3"><h3 className="text-sm font-semibold text-foreground">{name}</h3><code className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{hex}</code></div>
         <p className="mt-2 text-xs leading-5 text-muted-foreground">{use}</p>
       </div>
     </article>
@@ -40,32 +37,13 @@ export function ShaleanColorPaletteShowcase() {
     <section className="border-b border-border bg-background px-[var(--ui-page-gutter)] py-[var(--ui-space-10)] text-foreground">
       <div className="mx-auto w-full max-w-[var(--ui-container-wide)]">
         <div className="max-w-3xl">
-          <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide">
-            <span className="rounded-full bg-primary px-3 py-1 text-primary-foreground">SHALEAN BRAND</span>
-            <span className="rounded-full border border-border px-3 py-1">Canonical palette</span>
-            <span className="rounded-full border border-border px-3 py-1">Development reference</span>
-          </div>
+          <div className="flex flex-wrap gap-2 text-xs font-semibold uppercase tracking-wide"><span className="rounded-full bg-primary px-3 py-1 text-primary-foreground">SHALEAN BRAND</span><span className="rounded-full border border-border px-3 py-1">Canonical palette</span><span className="rounded-full border border-border px-3 py-1">Development reference</span></div>
           <h1 className="mt-4 text-[length:var(--ui-text-page-title)] font-bold leading-[var(--ui-leading-tight)] tracking-tight">Shalean color palette</h1>
           <p className="mt-3 text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">Shalean Primary (#6382F7) is the main brand/action colour. Navy and Royal remain supporting blues for depth and emphasis; use restrained blue tints for selected surfaces and the neutral/status colours below for product UI.</p>
         </div>
-        <div className="mt-8">
-          <div className="mb-3 flex items-end justify-between gap-4"><div><h2 className="text-[length:var(--ui-text-section-title)] font-semibold">Core brand</h2><p className="mt-1 text-sm text-muted-foreground">Primary Shalean identity and supporting blue roles.</p></div></div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{coreColors.map((color) => <ColorCard key={color.name} {...color} />)}</div>
-        </div>
-        <div className="mt-8 grid gap-8 lg:grid-cols-[2fr_1fr]">
-          <div><h2 className="text-[length:var(--ui-text-section-title)] font-semibold">Neutrals</h2><p className="mt-1 text-sm text-muted-foreground">Typography, surfaces, borders and low-emphasis UI.</p><div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{neutralColors.map((color) => <ColorCard key={color.name} {...color} />)}</div></div>
-          <div><h2 className="text-[length:var(--ui-text-section-title)] font-semibold">System states</h2><p className="mt-1 text-sm text-muted-foreground">Reserved for status meaning rather than decoration.</p><div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">{stateColors.map((color) => <ColorCard key={color.name} {...color} />)}</div></div>
-        </div>
-        <div className="mt-8 rounded-[var(--ui-radius-xl)] border border-border bg-card p-5 shadow-[var(--ui-shadow-sm)]">
-          <h2 className="text-sm font-semibold">Recommended header combination</h2>
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <span className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground">Primary / Log in</span>
-            <span className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground brightness-95">Primary hover</span>
-            <span className="rounded-full bg-muted px-5 py-2.5 text-sm font-semibold text-foreground">Nav hover</span>
-            <span className="rounded-full border-2 border-primary px-5 py-2.5 text-sm font-semibold text-foreground">Focus ring</span>
-          </div>
-          <p className="mt-3 text-xs leading-5 text-muted-foreground">Use dark Ink text on Shalean Primary for small controls; white text does not provide enough contrast at normal button-text sizes on #6382F7.</p>
-        </div>
+        <div className="mt-8"><div className="mb-3 flex items-end justify-between gap-4"><div><h2 className="text-[length:var(--ui-text-section-title)] font-semibold">Core brand</h2><p className="mt-1 text-sm text-muted-foreground">Primary Shalean identity and supporting blue roles.</p></div></div><div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">{coreColors.map((color) => <ColorCard key={color.name} {...color} />)}</div></div>
+        <div className="mt-8 grid gap-8 lg:grid-cols-[2fr_1fr]"><div><h2 className="text-[length:var(--ui-text-section-title)] font-semibold">Neutrals</h2><p className="mt-1 text-sm text-muted-foreground">Typography, surfaces, borders and low-emphasis UI.</p><div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">{neutralColors.map((color) => <ColorCard key={color.name} {...color} />)}</div></div><div><h2 className="text-[length:var(--ui-text-section-title)] font-semibold">System states</h2><p className="mt-1 text-sm text-muted-foreground">Reserved for status meaning rather than decoration.</p><div className="mt-4 grid gap-4 sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">{stateColors.map((color) => <ColorCard key={color.name} {...color} />)}</div></div></div>
+        <div className="mt-8 rounded-[var(--ui-radius-xl)] border border-border bg-card p-5 shadow-[var(--ui-shadow-sm)]"><h2 className="text-sm font-semibold">Recommended header combination</h2><div className="mt-4 flex flex-wrap items-center gap-3"><span className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground">Primary / Log in</span><span className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground brightness-95">Primary hover</span><span className="rounded-full bg-muted px-5 py-2.5 text-sm font-semibold text-foreground">Nav hover</span><span className="rounded-full border-2 border-primary px-5 py-2.5 text-sm font-semibold text-foreground">Focus ring</span></div><p className="mt-3 text-xs leading-5 text-muted-foreground">Use dark Ink text on Shalean Primary for small controls; white text does not provide enough contrast at normal button-text sizes on #6382F7.</p></div>
       </div>
     </section>
   );
