@@ -30,35 +30,71 @@ import {
 } from "@/lib/customer/customerCleanerNameEnrichment";
 import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 
-async function enrichCustomerBookingRowFromSavedAddress(
+type SavedAddressRow = {
+  user_id: string | null;
+  line1: string | null;
+  suburb: string | null;
+  city: string | null;
+  created_at: string | null;
+};
+
+function savedAddressLookupKey(userId: string, suburb: string): string {
+  return `${userId}\u0000${suburb.toLowerCase()}`;
+}
+
+async function enrichCustomerBookingRowsFromSavedAddresses(
   admin: SupabaseClient,
-  row: BookingRow,
-): Promise<BookingRow> {
-  const ownerId = bookingCustomerKey(row);
-  if (row.location?.trim() || !ownerId) return row;
-  const suburb = row.suburb?.trim();
-  if (!suburb) return row;
+  rows: BookingRow[],
+): Promise<void> {
+  const candidates = rows
+    .map((row, index) => ({
+      index,
+      row,
+      ownerId: bookingCustomerKey(row),
+      suburb: row.suburb?.trim() ?? "",
+    }))
+    .filter(({ row, ownerId, suburb }) => !row.location?.trim() && Boolean(ownerId) && Boolean(suburb));
+
+  if (candidates.length === 0) return;
+
+  const ownerIds = Array.from(new Set(candidates.map(({ ownerId }) => ownerId!).filter(Boolean)));
+  const suburbs = Array.from(new Set(candidates.map(({ suburb }) => suburb).filter(Boolean)));
+  if (ownerIds.length === 0 || suburbs.length === 0) return;
 
   const { data, error } = await admin
     .from("customer_saved_addresses")
-    .select("line1, suburb, city, created_at")
-    .eq("user_id", ownerId)
-    .eq("suburb", suburb)
-    .order("created_at", { ascending: false })
-    .limit(3);
+    .select("user_id, line1, suburb, city, created_at")
+    .in("user_id", ownerIds)
+    .in("suburb", suburbs)
+    .order("created_at", { ascending: false });
 
-  if (error || !data?.length) return row;
+  if (error || !data?.length) return;
 
-  const bookingCreatedMs = Date.parse(row.created_at);
-  const picked =
-    data.find((addr) => {
-      const createdMs = Date.parse(String((addr as { created_at?: string }).created_at ?? ""));
-      return Number.isFinite(bookingCreatedMs) && Number.isFinite(createdMs) && Math.abs(createdMs - bookingCreatedMs) < 5 * 60 * 1000;
-    }) ?? data[0];
+  const addressRowsByOwnerAndSuburb = new Map<string, SavedAddressRow[]>();
+  for (const raw of data as SavedAddressRow[]) {
+    const userId = typeof raw.user_id === "string" ? raw.user_id.trim() : "";
+    const suburb = typeof raw.suburb === "string" ? raw.suburb.trim() : "";
+    if (!userId || !suburb) continue;
+    const key = savedAddressLookupKey(userId, suburb);
+    const existing = addressRowsByOwnerAndSuburb.get(key);
+    if (existing) existing.push(raw);
+    else addressRowsByOwnerAndSuburb.set(key, [raw]);
+  }
 
-  const line1 = typeof (picked as { line1?: unknown }).line1 === "string" ? (picked as { line1: string }).line1.trim() : "";
-  if (!line1) return row;
-  return { ...row, location: line1 };
+  for (const { row, ownerId, suburb } of candidates) {
+    const matches = addressRowsByOwnerAndSuburb.get(savedAddressLookupKey(ownerId!, suburb));
+    if (!matches?.length) continue;
+
+    const bookingCreatedMs = Date.parse(row.created_at);
+    const picked =
+      matches.find((addr) => {
+        const createdMs = Date.parse(String(addr.created_at ?? ""));
+        return Number.isFinite(bookingCreatedMs) && Number.isFinite(createdMs) && Math.abs(createdMs - bookingCreatedMs) < 5 * 60 * 1000;
+      }) ?? matches[0];
+
+    const line1 = typeof picked?.line1 === "string" ? picked.line1.trim() : "";
+    if (line1) row.location = line1;
+  }
 }
 
 export type LoadCustomerBookingsOptions = {
@@ -186,9 +222,7 @@ export async function loadCustomerBookingRowsForUser(
   // Skipped entirely for solo-cleaner pages (no extra round-trip).
   await enrichRowsWithCleanerDisplayNames(admin, rows, userId);
 
-  for (let i = 0; i < rows.length; i += 1) {
-    rows[i] = await enrichCustomerBookingRowFromSavedAddress(admin, rows[i]!);
-  }
+  await enrichCustomerBookingRowsFromSavedAddresses(admin, rows);
 
   return { ok: true, bookings: rows };
 }
@@ -270,6 +304,6 @@ export async function loadCustomerBookingRowForUser(
   }
   const enriched = attachCanonicalCustomerBookingLifecycle(row);
   await enrichRowsWithCleanerDisplayNames(admin, [enriched], userId);
-  const withAddress = await enrichCustomerBookingRowFromSavedAddress(admin, enriched);
-  return { ok: true, booking: withAddress };
+  await enrichCustomerBookingRowsFromSavedAddresses(admin, [enriched]);
+  return { ok: true, booking: enriched };
 }
