@@ -9,6 +9,7 @@ import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import { MarketingMobileHeaderBookButton } from "@/components/marketing-home/MarketingMobileHeaderBookButton";
 import { MarketingMobileServicesNav } from "@/components/marketing/MarketingMobileServicesNav";
+import { SiteTopBarAccount } from "@/components/nav/SiteTopBarAccount";
 import {
   MARKETING_HEADER_NAV_LINKS,
   MARKETING_HEADER_SERVICE_LINKS,
@@ -38,6 +39,8 @@ type SiteHeaderProps = {
   closeMenusOnPathChange?: boolean;
   desktopQuoteClassName?: string;
   logoPriority?: boolean;
+  actionMode?: "growth" | "auth";
+  alignNavLeft?: boolean;
 };
 
 export function SiteHeader({
@@ -47,11 +50,14 @@ export function SiteHeader({
   closeMenusOnPathChange = false,
   desktopQuoteClassName,
   logoPriority = false,
+  actionMode = "growth",
+  alignNavLeft = false,
 }: SiteHeaderProps) {
   const pathname = usePathname() ?? "";
   const [mobileOpen, setMobileOpen] = useState(false);
   const [servicesOpen, setServicesOpen] = useState(false);
   const servicesRef = useRef<HTMLDivElement>(null);
+  const authMode = actionMode === "auth";
 
   useEffect(() => {
     if (!closeMenusOnPathChange) return;
@@ -77,7 +83,12 @@ export function SiteHeader({
 
   return (
     <div className="border-b border-border bg-background/95 px-3 py-2 shadow-[var(--ui-shadow-sm)] backdrop-blur sm:px-5">
-      <div className="mx-auto flex w-full max-w-[var(--ui-container-wide)] items-center gap-3 lg:justify-between">
+      <div
+        className={cn(
+          "mx-auto flex w-full max-w-[var(--ui-container-wide)] items-center gap-3",
+          alignNavLeft ? "lg:justify-start" : "lg:justify-between",
+        )}
+      >
         <Link href="/" className={marketingHeaderLogoLinkClass} aria-label="Shalean home">
           <ShaleanNavLogo
             className={marketingHeaderLogoImageClass}
@@ -86,7 +97,10 @@ export function SiteHeader({
           />
         </Link>
 
-        <nav className="hidden items-center gap-0.5 lg:flex" aria-label="Primary">
+        <nav
+          className={cn("hidden items-center gap-0.5 lg:flex", alignNavLeft && "lg:ml-2")}
+          aria-label="Primary"
+        >
           {MARKETING_HEADER_NAV_LINKS.map(({ label, href, dropdown }) => {
             if (dropdown) {
               return (
@@ -142,25 +156,35 @@ export function SiteHeader({
           })}
         </nav>
 
-        <div className="hidden items-center gap-3 lg:flex">
-          <GetFreeQuoteLink
-            source={tracking.desktopQuote}
-            variant="nav"
-            className={desktopQuoteClassName}
-          />
-          <GrowthCtaLink
-            href={bookingHref}
-            source={tracking.desktopBook}
-            className="inline-flex items-center gap-2 rounded-[var(--ui-radius-lg)] bg-primary px-[var(--ui-space-5)] py-[var(--ui-space-2)] text-[length:var(--ui-text-small)] font-semibold text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          >
-            <CalendarDays className="h-4 w-4" />
-            Book Now
-            <ArrowRight className="h-4 w-4" />
-          </GrowthCtaLink>
-        </div>
+        {authMode ? (
+          <div className="ml-auto hidden items-center lg:flex">
+            <SiteTopBarAccount variant="header" />
+          </div>
+        ) : (
+          <div className="hidden items-center gap-3 lg:flex">
+            <GetFreeQuoteLink
+              source={tracking.desktopQuote}
+              variant="nav"
+              className={desktopQuoteClassName}
+            />
+            <GrowthCtaLink
+              href={bookingHref}
+              source={tracking.desktopBook}
+              className="inline-flex items-center gap-2 rounded-[var(--ui-radius-lg)] bg-primary px-[var(--ui-space-5)] py-[var(--ui-space-2)] text-[length:var(--ui-text-small)] font-semibold text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            >
+              <CalendarDays className="h-4 w-4" />
+              Book Now
+              <ArrowRight className="h-4 w-4" />
+            </GrowthCtaLink>
+          </div>
+        )}
 
         <div className={marketingMobileHeaderActionsClass}>
-          <MarketingMobileHeaderBookButton bookingHref={bookingHref} source={tracking.mobileBook} />
+          {authMode ? (
+            <SiteTopBarAccount variant="header" />
+          ) : (
+            <MarketingMobileHeaderBookButton bookingHref={bookingHref} source={tracking.mobileBook} />
+          )}
           <button
             type="button"
             className={marketingMobileMenuButtonClass}
@@ -186,11 +210,13 @@ export function SiteHeader({
         aria-hidden={!mobileOpen}
       >
         <div className="flex flex-col gap-1">
-          <GetFreeQuoteLink
-            source={tracking.mobileQuote}
-            variant="outline"
-            className="mb-2 w-full"
-          />
+          {!authMode ? (
+            <GetFreeQuoteLink
+              source={tracking.mobileQuote}
+              variant="outline"
+              className="mb-2 w-full"
+            />
+          ) : null}
           {MARKETING_HEADER_NAV_LINKS.map(({ label, href, dropdown }) =>
             dropdown ? (
               <MarketingMobileServicesNav
