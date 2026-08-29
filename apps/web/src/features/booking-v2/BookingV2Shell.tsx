@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import { useFormContext } from "react-hook-form";
 import styles from "./BookingV2Shell.module.css";
 import { Button } from "@/components/ui/button";
 import { BookingV2Provider, useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
@@ -12,6 +13,7 @@ import { Step3Review } from "@/src/features/booking-v2/steps/Step3Review";
 import { Step4Payment } from "@/src/features/booking-v2/steps/Step4Payment";
 import { PromotionBookingBanner } from "@/components/promotions/PromotionBookingBanner";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
+import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { useBookingV2FunnelTelemetry } from "@/src/features/booking-v2/hooks/useBookingV2FunnelTelemetry";
 import { useBookingV2Pricing } from "@/src/features/booking-v2/hooks/useBookingV2Pricing";
 import { useClientMounted } from "@/src/features/booking-v2/hooks/useClientMounted";
@@ -57,6 +59,8 @@ function BookingV2LoadingShell() {
 function BookingV2Inner() {
   const mounted = useClientMounted();
   const { currentStep, goToStep, goNext, goBack, serviceSlug } = useBookingV2();
+  const { watch } = useFormContext<BookingV2FormData>();
+  const reviewTime = watch("time")?.trim() ?? "";
   useBookingV2Pricing();
   useBookingV2FunnelTelemetry(currentStep, serviceSlug);
 
@@ -74,6 +78,7 @@ function BookingV2Inner() {
   const showSidebarSummary = currentStep <= 2;
   /** Steps 3–4 already use section cards — avoid card-in-card chrome that squeezes mobile. */
   const useOuterStepCard = currentStep <= 2;
+  const reviewTimeMissing = currentStep === 3 && !reviewTime;
 
   return (
     <div className="min-h-dvh bg-muted/35 text-foreground">
@@ -96,6 +101,7 @@ function BookingV2Inner() {
             )}
 
             <div
+              data-review-time-missing={reviewTimeMissing ? "true" : undefined}
               className={
                 useOuterStepCard
                   ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${currentStep === 1 ? styles.step1 : currentStep === 2 ? styles.step2 : ""}`
@@ -103,6 +109,7 @@ function BookingV2Inner() {
               }
             >
               <PromotionBookingBanner />
+              {reviewTimeMissing ? <span className="sr-only">No time selected.</span> : null}
               {stepContent}
             </div>
 
