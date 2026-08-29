@@ -28,8 +28,8 @@ export function MarketingHomeHeroSection() {
   preload(HERO_MAIN, { as: "image", fetchPriority: "high" });
 
   return (
-    <HomeSection className="overflow-hidden border-b border-border pt-[var(--ui-space-4)] pb-[var(--ui-space-10)] md:pt-[var(--ui-space-6)] md:pb-[var(--ui-space-14)] lg:pt-[var(--ui-space-8)] lg:pb-[5rem]">
-      <div className="grid items-center gap-[var(--ui-space-10)] lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-[var(--ui-space-14)] xl:gap-[var(--ui-space-16)]">
+    <HomeSection className="overflow-hidden border-b border-border pt-[var(--ui-space-4)] pb-[var(--ui-space-10)] md:pt-[var(--ui-space-6)] md:pb-[var(--ui-space-12)] lg:pt-[var(--ui-space-8)] lg:pb-[5rem] [&>div]:max-w-[108rem]">
+      <div className="grid items-center gap-[var(--ui-space-10)] lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-[var(--ui-space-12)] xl:gap-[var(--ui-space-16)]">
         <div className="flex flex-col items-start text-left">
           <div className="inline-flex items-center rounded-full bg-muted p-1 text-[length:var(--ui-text-body)] text-foreground">
             <Link
@@ -98,13 +98,6 @@ export function MarketingHomeHeroSection() {
             <span className="text-[length:var(--ui-text-body)] font-normal text-foreground">{avg}</span>
             <span className="text-[length:var(--ui-text-body)] font-normal text-muted-foreground">{googleReviewsBasedOnCountLine()}</span>
           </div>
-
-          <p className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-body)] font-normal text-muted-foreground">
-            Looking for cleaning work?{" "}
-            <Link href="/cleaner/apply" className="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">
-              Apply Now
-            </Link>
-          </p>
         </div>
 
         <div className="relative mx-auto w-full max-w-[660px] lg:mx-0 lg:justify-self-end">
