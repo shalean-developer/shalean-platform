@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { AlertTriangle, Award, CheckCircle2, ClipboardCheck, Loader2, RefreshCw, Star, Users } from "lucide-react";
+import { OfficeZohoPageHeader, OfficeZohoSecondaryButton } from "@/components/admin/office/OfficeZohoChrome";
 import { useAdminData } from "@/hooks/useAdminData";
 
 type ComponentScore = { score: number | null; weight: number; evidenceCount: number; label: string };
@@ -64,19 +65,29 @@ export default function CleanerPerformancePage() {
 
   return (
     <main className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Workforce quality</p>
-          <h1 className="mt-1 text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Cleaner Performance Scorecards</h1>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">One read-only score from canonical roster, QA, reviews, execution and Customer Care evidence. Earnings and payouts are not part of this score.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <select value={days} onChange={(e) => setDays(Number(e.target.value))} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700">
-            <option value={30}>30 days</option><option value={90}>90 days</option><option value={180}>180 days</option><option value={365}>365 days</option>
-          </select>
-          <button type="button" onClick={() => void refetch()} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />Refresh</button>
-        </div>
-      </header>
+      <OfficeZohoPageHeader
+        title="Cleaner Performance Scorecards"
+        subtitle="Workforce quality — one read-only score from canonical roster, QA, reviews, execution and Customer Care evidence. Earnings and payouts are not part of this score."
+        actions={
+          <>
+            <select
+              value={days}
+              onChange={(e) => setDays(Number(e.target.value))}
+              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm"
+              aria-label="Scorecard period"
+            >
+              <option value={30}>30 days</option>
+              <option value={90}>90 days</option>
+              <option value={180}>180 days</option>
+              <option value={365}>365 days</option>
+            </select>
+            <OfficeZohoSecondaryButton onClick={() => void refetch()}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              Refresh
+            </OfficeZohoSecondaryButton>
+          </>
+        }
+      />
 
       {error ? <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div> : null}
 
