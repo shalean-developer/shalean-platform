@@ -86,13 +86,13 @@ function fallbackPromo(slug: string): PromotionRow {
 
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const { slug } = await params;
-  if (!slug?.trim()) return { title: "Offer | Shalean" };
+  if (!slug?.trim()) return { title: "Campaign | Shalean" };
   const admin = getSupabaseAdmin();
-  if (!admin) return { title: "Offer | Shalean" };
+  if (!admin) return { title: "Campaign | Shalean" };
   try {
     const promo = await getPromotionBySlug(admin, slug);
     if (!promo || promo.status === "ended" || promo.status === "expired") {
-      return { title: "Offer | Shalean" };
+      return { title: "Campaign | Shalean" };
     }
     let title = `${promo.name} | Shalean`;
     let description = promo.description ?? undefined;
@@ -109,7 +109,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     }
     return { title, description };
   } catch {
-    return { title: "Offer | Shalean" };
+    return { title: "Campaign | Shalean" };
   }
 }
 
@@ -254,11 +254,11 @@ export default async function OfferLandingPage({ params }: Props) {
         {promo.qr_code_data_url ? (
           <section className="rounded-[var(--ui-radius-2xl)] border border-border bg-card p-6 text-card-foreground">
             <h2 className="text-xl font-bold">Scan to book</h2>
-            <p className="mt-1 text-sm text-muted-foreground">QR code for this offer landing page.</p>
+            <p className="mt-1 text-sm text-muted-foreground">QR code for this campaign landing page.</p>
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={promo.qr_code_data_url}
-              alt="Offer QR code"
+              alt="Campaign QR code"
               className="mt-4 h-40 w-40 rounded-[var(--ui-radius-lg)] border border-border"
             />
           </section>
