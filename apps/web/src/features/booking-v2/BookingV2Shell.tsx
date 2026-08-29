@@ -3,7 +3,6 @@
 import { Suspense } from "react";
 import { useFormContext } from "react-hook-form";
 import styles from "./BookingV2Shell.module.css";
-import reviewFixStyles from "./BookingV2ReviewFollowup.module.css";
 import { Button } from "@/components/ui/button";
 import { BookingV2Provider, useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { BookingV2Header } from "@/src/features/booking-v2/components/BookingV2Header";
@@ -106,7 +105,7 @@ function BookingV2Inner() {
               className={
                 useOuterStepCard
                   ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${currentStep === 1 ? styles.step1 : currentStep === 2 ? styles.step2 : ""}`
-                  : `min-w-0 ${currentStep === 3 ? `${styles.step3} ${reviewFixStyles.reviewFollowup}` : ""}`
+                  : `min-w-0 ${currentStep === 3 ? styles.step3 : ""}`
               }
             >
               <PromotionBookingBanner />
