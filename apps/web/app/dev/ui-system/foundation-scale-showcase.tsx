@@ -1,4 +1,5 @@
 const typographyRoles = [
+  ["Hero title", "--ui-text-hero-title", "--ui-leading-hero"],
   ["Page title", "--ui-text-page-title", "--ui-leading-tight"],
   ["Section title", "--ui-text-section-title", "--ui-leading-tight"],
   ["Card title", "--ui-text-card-title", "--ui-leading-tight"],
@@ -64,7 +65,15 @@ export function FoundationScaleShowcase() {
                     <span className="text-sm font-medium">{label}</span>
                     <TokenCode>{sizeToken}</TokenCode>
                   </div>
-                  <div style={{ fontSize: `var(${sizeToken})`, lineHeight: `var(${lineToken})` }}>Shalean reusable interface typography</div>
+                  <div
+                    style={{
+                      fontSize: `var(${sizeToken})`,
+                      lineHeight: `var(${lineToken})`,
+                      letterSpacing: label === "Hero title" ? "var(--ui-tracking-hero-title)" : undefined,
+                    }}
+                  >
+                    Shalean reusable interface typography
+                  </div>
                 </div>
               ))}
             </div>
