@@ -101,6 +101,9 @@ export function ShaleanColorPaletteShowcase() {
             <span className="rounded-full bg-muted px-5 py-2.5 text-sm font-semibold text-foreground">Nav hover</span>
             <span className="rounded-full border-2 border-primary px-5 py-2.5 text-sm font-semibold text-foreground">Focus ring</span>
           </div>
+          <p className="mt-3 text-xs leading-5 text-muted-foreground">
+            Use dark Ink text on Shalean Primary for small controls; white text does not provide enough contrast at normal button-text sizes on #6382F7.
+          </p>
         </div>
       </div>
     </section>
