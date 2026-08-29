@@ -38,6 +38,7 @@ try {
     cwd: root,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
+    shell: process.platform === "win32",
   });
 } catch {
   console.error("[local-dev-env] ERROR: unable to read local Supabase status. Run `npm run dev:local:start` first.");
