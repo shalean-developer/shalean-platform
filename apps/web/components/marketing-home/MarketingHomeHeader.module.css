@@ -5,6 +5,18 @@
   pointer-events: auto !important;
 }
 
+/* Homepage-only wide header canvas, closer to the current reference proportions. */
+.root > div > div:first-child {
+  max-width: 112rem !important;
+}
+
+/* The desktop reference keeps the header visually quiet; service search remains in mobile/menu flows. */
+@media (min-width: 80rem) {
+  .root div:has(> div > input[aria-label="Search Shalean cleaning services"]) {
+    display: none !important;
+  }
+}
+
 /* Homepage header top-level navigation and text actions use canonical Body text at normal weight. */
 .root nav[aria-label="Primary"] > a,
 .root nav[aria-label="Primary"] > div > button,
