@@ -98,7 +98,7 @@ function BookingV2Inner() {
             <div
               className={
                 useOuterStepCard
-                  ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${currentStep === 1 ? styles.step1 : ""}`
+                  ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${currentStep === 1 ? styles.step1 : currentStep === 2 ? styles.step2 : ""}`
                   : "min-w-0"
               }
             >
