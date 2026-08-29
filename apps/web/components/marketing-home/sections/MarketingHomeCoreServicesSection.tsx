@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, Building2, House, Luggage, type LucideIcon } from "lucide-react";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
+import { MarketingSectionHeader } from "@/components/marketing-home/primitives/MarketingSectionHeader";
 import type { MarketingHomeServiceCard } from "@/lib/marketing/marketingHomeServicePresentation";
 
 type Props = {
@@ -53,20 +54,15 @@ export function MarketingHomeCoreServicesSection({ cards }: Props) {
   return (
     <HomeSection
       id="our-services"
-      className="scroll-mt-24 rounded-t-[32px] !bg-[#f7f0e4] md:py-[var(--ui-space-20)] dark:!bg-[#171512]"
+      containerSize="marketing"
+      className="scroll-mt-24 rounded-t-[var(--ui-radius-marketing)] !bg-[var(--marketing-surface-warm)] md:py-[var(--ui-space-20)]"
       aria-label="Cleaning services"
     >
-      <header className="mx-auto max-w-5xl text-center">
-        <p className="text-[length:var(--ui-text-body)] font-medium uppercase tracking-[0.08em] text-foreground/75">
-          What we offer
-        </p>
-        <h2 className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-page-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
-          Cleaning services for every kind of space.
-        </h2>
-        <p className="mx-auto mt-[var(--ui-space-4)] max-w-4xl text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-foreground/75">
-          From regular home cleaning to moves, stays, workplaces and specialist carpet care, choose the group that fits what you need.
-        </p>
-      </header>
+      <MarketingSectionHeader
+        eyebrow="What we offer"
+        title="Cleaning services for every kind of space."
+        description="From regular home cleaning to moves, stays, workplaces and specialist carpet care, choose the group that fits what you need."
+      />
 
       <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-8)] md:grid-cols-3">
         {groups.map((group) => {
@@ -75,7 +71,7 @@ export function MarketingHomeCoreServicesSection({ cards }: Props) {
           return (
             <article
               key={group.id}
-              className="flex min-h-[360px] flex-col items-center rounded-[32px] bg-card px-[var(--ui-space-6)] py-[var(--ui-space-10)] text-center text-card-foreground shadow-[var(--ui-shadow-lg)] transition-transform duration-200 hover:-translate-y-1"
+              className="flex min-h-[360px] flex-col items-center rounded-[var(--ui-radius-marketing)] bg-card px-[var(--ui-space-6)] py-[var(--ui-space-10)] text-center text-card-foreground shadow-[var(--ui-shadow-lg)] transition-transform duration-200 hover:-translate-y-1"
             >
               <div className="relative flex h-24 w-24 items-center justify-center" aria-hidden>
                 <span className="absolute h-16 w-16 rounded-full bg-primary/15" />
