@@ -14,6 +14,10 @@ import {
   Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  OfficeZohoPageHeader,
+  OfficeZohoSecondaryButton,
+} from "@/components/admin/office/OfficeZohoChrome";
 import { useAdminData } from "@/hooks/useAdminData";
 import { DIRECT_BOOKING_FLOW_LANDING, landingDisplayName } from "@/lib/admin/landingPageAttribution";
 
@@ -94,23 +98,19 @@ export default function ConversionPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Conversion</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Session-based conversion from analytics events{sinceLabel ? ` · since ${sinceLabel}` : ""}.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            void seo.refetch();
-          }}
-          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm hover:bg-slate-50"
-        >
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Refresh
-        </button>
-      </div>
+      <OfficeZohoPageHeader
+        title="Conversion"
+        subtitle={`Session-based conversion from analytics events${sinceLabel ? ` · since ${sinceLabel}` : ""}.`}
+        actions={
+          <OfficeZohoSecondaryButton
+            onClick={() => {
+              void seo.refetch();
+            }}
+          >
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Refresh
+          </OfficeZohoSecondaryButton>
+        }
+      />
 
       {error ? (
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
