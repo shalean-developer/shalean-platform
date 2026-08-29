@@ -56,7 +56,7 @@ export function MarketingHomeHeroSection() {
           <div className="mt-[var(--ui-space-7)] flex flex-col gap-[var(--ui-space-4)]">
             {HERO_BENEFITS.map((label) => (
               <div key={label} className="flex items-center gap-3 text-[length:var(--ui-text-lead)] font-normal text-foreground">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/12 text-primary">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                   <Check className="h-4 w-4" strokeWidth={2.4} aria-hidden />
                 </span>
                 <span>{label}</span>
