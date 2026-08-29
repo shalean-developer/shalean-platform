@@ -240,17 +240,17 @@ export default function AccountHelpPage() {
 
       <Card className="border-destructive/25 bg-destructive/5">
         <CardContent className="p-5">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-4 min-[640px]:grid-cols-[auto_minmax(0,1fr)_auto] min-[640px]:items-start">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-destructive text-destructive-foreground">
               <AlertTriangle className="h-5 w-5" strokeWidth={1.75} aria-hidden />
             </div>
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0">
               <p className="font-semibold text-foreground">Urgent booking issue?</p>
               <p className="mt-1 text-sm text-muted-foreground">
                 If your cleaner hasn&apos;t arrived or there&apos;s an emergency, contact us immediately on WhatsApp.
               </p>
             </div>
-            <Button asChild variant="destructive" className="w-full shrink-0 sm:w-auto">
+            <Button asChild variant="destructive" className="col-span-2 w-full min-[640px]:col-span-1 min-[640px]:w-auto">
               <a
                 href="https://wa.me/27825915525?text=URGENT%3A%20I%20need%20help%20with%20my%20booking"
                 target="_blank"
