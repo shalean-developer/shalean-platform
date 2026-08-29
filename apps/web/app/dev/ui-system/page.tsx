@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { FoundationScaleShowcase } from "./foundation-scale-showcase";
+import { MarketingHomeSystemShowcase } from "./marketing-home-system-showcase";
 import { RDP01B5Showcase } from "./rd-p01b5-showcase";
 import { RDP02PublicShellShowcase } from "./rd-p02-public-shell-showcase";
 import { RDP03HomepagePrimitivesShowcase } from "./rd-p03-homepage-primitives-showcase";
@@ -19,6 +20,7 @@ export default function UISystemPage() {
   return (
     <>
       <ShaleanColorPaletteShowcase />
+      <MarketingHomeSystemShowcase />
       <RDP03HomepagePrimitivesShowcase />
       <RDP02PublicShellShowcase />
       <FoundationScaleShowcase />
