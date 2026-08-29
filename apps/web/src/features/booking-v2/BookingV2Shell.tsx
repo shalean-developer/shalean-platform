@@ -105,7 +105,7 @@ function BookingV2Inner() {
               className={
                 useOuterStepCard
                   ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${currentStep === 1 ? styles.step1 : currentStep === 2 ? styles.step2 : ""}`
-                  : `min-w-0 ${currentStep === 3 ? styles.step3 : ""}`
+                  : `min-w-0 ${currentStep === 3 ? styles.step3 : currentStep === 4 ? styles.step4 : ""}`
               }
             >
               <PromotionBookingBanner />
