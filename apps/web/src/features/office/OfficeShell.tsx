@@ -144,6 +144,18 @@ export function OfficeShell({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
+    if (!mobileOpen) return;
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMobileOpen(false);
+      }
+    };
+    document.addEventListener("keydown", down);
+    return () => document.removeEventListener("keydown", down);
+  }, [mobileOpen]);
+
+  useEffect(() => {
     if (roleState.status === "unauthenticated" || roleState.status === "missing_profile") {
       setGate("denied");
     }
