@@ -149,7 +149,6 @@ export function OfficeShell({ children }: { children: ReactNode }) {
     }
   }, [roleState.status]);
 
-  // Realtime subscription — fires a custom window event when any booking changes
   useEffect(() => {
     if (gate !== "ready" || roleState.status !== "ready") return;
     const sb = getSupabaseBrowser();
@@ -171,7 +170,6 @@ export function OfficeShell({ children }: { children: ReactNode }) {
     };
   }, [gate, roleState.status]);
 
-  // Global Cmd+K shortcut
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -228,7 +226,6 @@ export function OfficeShell({ children }: { children: ReactNode }) {
       />
 
       <div className="flex min-h-0 flex-1">
-        {/* Desktop sidebar */}
         <aside
           ref={sidebarRef}
           className={cn(
@@ -248,9 +245,13 @@ export function OfficeShell({ children }: { children: ReactNode }) {
           </div>
         </aside>
 
-        {/* Mobile drawer */}
         {mobileOpen ? (
-          <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+          <div
+            className="fixed inset-0 z-50 md:hidden"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Office navigation"
+          >
             <button
               type="button"
               className="absolute inset-0 bg-black/50 backdrop-blur-sm"
@@ -267,7 +268,6 @@ export function OfficeShell({ children }: { children: ReactNode }) {
           </div>
         ) : null}
 
-        {/* Main content */}
         <main className="min-w-0 flex-1">
           <div className="mx-auto w-full max-w-[1600px] p-4 pb-8 md:p-6">{children}</div>
         </main>
