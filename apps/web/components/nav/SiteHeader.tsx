@@ -157,46 +157,55 @@ export function SiteHeader({
         </nav>
 
         {authMode ? (
-          <div className="ml-auto hidden items-center lg:flex">
+          <div className="ml-auto flex items-center gap-2">
             <SiteTopBarAccount variant="header" />
+            <button
+              type="button"
+              className={cn(marketingMobileMenuButtonClass, "lg:hidden")}
+              onClick={() => setMobileOpen((value) => !value)}
+              aria-expanded={mobileOpen}
+              aria-controls={mobileNavId}
+              aria-label={mobileOpen ? "Close menu" : "Open menu"}
+              suppressHydrationWarning
+            >
+              {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+            </button>
           </div>
         ) : (
-          <div className="hidden items-center gap-3 lg:flex">
-            <GetFreeQuoteLink
-              source={tracking.desktopQuote}
-              variant="nav"
-              className={desktopQuoteClassName}
-            />
-            <GrowthCtaLink
-              href={bookingHref}
-              source={tracking.desktopBook}
-              className="inline-flex items-center gap-2 rounded-[var(--ui-radius-lg)] bg-primary px-[var(--ui-space-5)] py-[var(--ui-space-2)] text-[length:var(--ui-text-small)] font-semibold text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            >
-              <CalendarDays className="h-4 w-4" />
-              Book Now
-              <ArrowRight className="h-4 w-4" />
-            </GrowthCtaLink>
-          </div>
-        )}
+          <>
+            <div className="hidden items-center gap-3 lg:flex">
+              <GetFreeQuoteLink
+                source={tracking.desktopQuote}
+                variant="nav"
+                className={desktopQuoteClassName}
+              />
+              <GrowthCtaLink
+                href={bookingHref}
+                source={tracking.desktopBook}
+                className="inline-flex items-center gap-2 rounded-[var(--ui-radius-lg)] bg-primary px-[var(--ui-space-5)] py-[var(--ui-space-2)] text-[length:var(--ui-text-small)] font-semibold text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                <CalendarDays className="h-4 w-4" />
+                Book Now
+                <ArrowRight className="h-4 w-4" />
+              </GrowthCtaLink>
+            </div>
 
-        <div className={marketingMobileHeaderActionsClass}>
-          {authMode ? (
-            <SiteTopBarAccount variant="header" />
-          ) : (
-            <MarketingMobileHeaderBookButton bookingHref={bookingHref} source={tracking.mobileBook} />
-          )}
-          <button
-            type="button"
-            className={marketingMobileMenuButtonClass}
-            onClick={() => setMobileOpen((value) => !value)}
-            aria-expanded={mobileOpen}
-            aria-controls={mobileNavId}
-            aria-label={mobileOpen ? "Close menu" : "Open menu"}
-            suppressHydrationWarning
-          >
-            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </button>
-        </div>
+            <div className={marketingMobileHeaderActionsClass}>
+              <MarketingMobileHeaderBookButton bookingHref={bookingHref} source={tracking.mobileBook} />
+              <button
+                type="button"
+                className={marketingMobileMenuButtonClass}
+                onClick={() => setMobileOpen((value) => !value)}
+                aria-expanded={mobileOpen}
+                aria-controls={mobileNavId}
+                aria-label={mobileOpen ? "Close menu" : "Open menu"}
+                suppressHydrationWarning
+              >
+                {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+              </button>
+            </div>
+          </>
+        )}
       </div>
 
       <div
