@@ -1,9 +1,11 @@
 # RD-P05G — Booking UI closure audit
 
-Status: IN PROGRESS
+Status: PASSED / CLOSED
 Branch: `design/rd04-platform-redesign`
 Validation base: `validation/rd-p05g-base` @ `050a3b034945fd92339e5b5da0da2bef71817bcc`
-Scope: verification-only closure audit for RD-P05 Booking UI. No runtime redesign change is authorized by this slice.
+Validated implementation head: `c44480a78d430598d34b7170befc0102882d212c`
+Validation PR: #457 — validation only; close unmerged.
+Scope: verification-only closure audit for RD-P05 Booking UI. No runtime redesign change was authorized or made by this slice.
 
 ## Governing authority
 
@@ -27,15 +29,15 @@ The governed service flows are:
 
 ## Pre-closure evidence review
 
-RD-P05B, RD-P05C, RD-P05E and RD-P05F are recorded as `PASSED / CLOSED`.
+RD-P05B, RD-P05C, RD-P05E and RD-P05F were already recorded as `PASSED / CLOSED`.
 
-RD-P05D had also completed its exact-head validation and validation-only PR #444 was closed unmerged, but its audit text still carried the earlier `LOCAL VALIDATION PENDING` status. RD-P05G reconciles that documentation-only inconsistency to `PASSED / CLOSED`; no Step 2 runtime code is changed by the correction.
+RD-P05D had also completed its exact-head validation and validation-only PR #444 was closed unmerged, but its audit text still carried the earlier `LOCAL VALIDATION PENDING` status. RD-P05G reconciled that documentation-only inconsistency to `PASSED / CLOSED`; no Step 2 runtime code changed.
 
-The current RD-P05F closure head `050a3b034945fd92339e5b5da0da2bef71817bcc` is therefore the pinned P05G baseline.
+The RD-P05F closure head `050a3b034945fd92339e5b5da0da2bef71817bcc` was pinned as the P05G baseline.
 
-## Authority that must remain unchanged
+## Authority preserved
 
-RD-P05G must not modify:
+RD-P05G did not modify:
 
 - `BookingV2Context` draft persistence, URL step routing, validation or rebook/prefill behavior;
 - `step1Schema` or `buildStep2Schema` validation contracts;
@@ -47,14 +49,14 @@ RD-P05G must not modify:
 
 ## Closure validation implementation
 
-RD-P05G adds validation/evidence only:
+RD-P05G changed only verification/documentation files relative to the pinned baseline:
 
-- `apps/web/e2e/smoke/booking-v2-closure.spec.ts`
 - `.github/workflows/booking-v2-closure-smoke.yml`
-- this closure audit record
-- documentation-only reconciliation of the completed RD-P05D audit status.
+- `apps/web/e2e/smoke/booking-v2-closure.spec.ts`
+- `docs/audits/redesign/rd-p05d-step2-schedule-normalization.md`
+- `docs/audits/redesign/rd-p05g-booking-ui-closure.md`
 
-No runtime TSX/CSS/business-logic file is intended to change in RD-P05G.
+No Booking V2 runtime TSX/CSS/business-logic file is present in the base-to-implementation-head diff.
 
 ## Dedicated closure smoke
 
@@ -95,25 +97,74 @@ For every governed service:
 - `pendingBookingId` remains null;
 - no booking confirmation/payment mutation is attempted.
 
-## Full regression gate
+## Initial closure-run finding
 
-The dedicated P05G workflow also reruns the existing non-mutating Booking V2 regression specs:
+The first P05G closure run exposed only a test timing defect: the URL assertion could read `step=3` immediately after clicking Review → Payment before the Next.js route transition completed. The booking runtime itself was not changed in response.
 
-- RD-P05D Step 2 schedule smoke;
-- RD-P05E Step 3 review smoke;
-- RD-P05F Step 4 payment smoke.
+The fix was test-only:
 
-The workflow uses exact PR-head checkout, verifies the SHA, runs TypeScript typecheck, installs Chromium, and executes the closure + Step 2/3/4 Playwright suites on the local Next.js test server with browser Supabase configuration disabled.
+- parameter/step verification now uses `expect.poll` until the transition settles;
+- Review/Payment heading waits were given the same bounded 10-second CI tolerance.
 
-The standard repository `web-test` remains required as the broader payment/referral/typecheck/lint/build/crawl guard.
+No runtime file changed as part of that correction.
 
-## Closure criteria
+## Exact-head validation evidence
 
-RD-P05G may be marked `PASSED / CLOSED` only when:
+Validated implementation head: `c44480a78d430598d34b7170befc0102882d212c`.
 
-1. the base-to-head diff is verification/documentation-only with no booking runtime code change;
-2. dedicated all-six closure smoke is green;
-3. Step 2, Step 3 and Step 4 non-mutating regressions are green;
-4. standard `web-test` and migration governance are green on the exact validation head;
-5. no real booking/payment, Paystack launch, Supabase mutation or production deployment occurs;
-6. the validation-only PR is closed without merge.
+### Booking V2 closure workflow
+
+Workflow run: `33250392419`
+Job: `99094966611`
+Conclusion: **success**
+
+The exact-head checkout and SHA equality checks passed. TypeScript typecheck passed. The combined closure + regression suite reported:
+
+- **20 passed / 20 total**;
+- booking hub desktop/mobile closure coverage;
+- all six governed services on Step 1 desktop/mobile;
+- all six services for draft reload + Review ↔ Payment + query-parameter retention;
+- RD-P05D Step 2 schedule regressions;
+- RD-P05E Step 3 review regressions;
+- RD-P05F Step 4 payment regressions.
+
+No forbidden API mutation was attempted by the closure scenarios. No auth form was submitted, no booking was confirmed, no payment session was started and no Paystack flow was launched.
+
+### Standard web gate
+
+Workflow run: `33250392543`
+Conclusion: **success**
+
+The standard repository gate passed on the same exact implementation head, including:
+
+- production dependency audit;
+- critical payment/referral tests;
+- privileged Office email security contract;
+- revenue-path tests;
+- marketing/Meta compliance tests;
+- blog route governance;
+- TypeScript typecheck;
+- Booking core ESLint;
+- SEO/canonical/Search Console readiness gates;
+- production-mode Next.js build;
+- local internal-link crawl;
+- location/compliance route matrix.
+
+### Migration governance
+
+Workflow run: `33250392439`
+Conclusion: **success**.
+
+### Diff-scope proof
+
+Comparison from the pinned P05G base `050a3b034945fd92339e5b5da0da2bef71817bcc` to implementation head `c44480a78d430598d34b7170befc0102882d212c` contained exactly four files, all validation/documentation artifacts listed above. No booking runtime code was changed by RD-P05G.
+
+## Closure decision
+
+RD-P05G is **PASSED / CLOSED** subject only to the final audit-only head rerunning the same exact-head guards before validation PR #457 is closed unmerged.
+
+The RD-P05 Booking UI sequence has therefore satisfied its governed implementation and regression evidence across the hub, Details, Schedule, Review and Payment presentation slices without altering canonical booking/payment authority.
+
+## Authority boundary
+
+No production deployment, Vercel configuration change, Supabase schema/data mutation, production customer traffic, real booking confirmation, Paystack launch or payment completion was performed or authorized by RD-P05G.
