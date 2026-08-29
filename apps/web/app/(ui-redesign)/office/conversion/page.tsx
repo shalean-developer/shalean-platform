@@ -9,13 +9,12 @@ import {
   RefreshCw,
   AlertCircle,
   Loader2,
-  ChevronLeft,
-  ChevronRight,
   Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   OfficeZohoPageHeader,
+  OfficeZohoPagination,
   OfficeZohoSecondaryButton,
 } from "@/components/admin/office/OfficeZohoChrome";
 import { useAdminData } from "@/hooks/useAdminData";
@@ -236,46 +235,17 @@ export default function ConversionPage() {
               {search.trim() ? ` matching “${search.trim()}”` : ""}
               {seo.data?.rowsLoaded != null ? ` · ${seo.data.rowsLoaded.toLocaleString()} events` : ""}
             </p>
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-xs text-slate-500">
-                Rows
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setPage(1);
-                  }}
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
-                >
-                  {PAGE_SIZE_OPTIONS.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <span className="text-xs font-medium text-slate-500">
-                Page {safePage} of {totalPages}
-              </span>
-              <button
-                type="button"
-                disabled={safePage <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Prev
-              </button>
-              <button
-                type="button"
-                disabled={safePage >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-              >
-                Next
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <OfficeZohoPagination
+              page={safePage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
           </div>
         ) : null}
       </div>
