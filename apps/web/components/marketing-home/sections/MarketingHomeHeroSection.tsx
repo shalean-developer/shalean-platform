@@ -48,12 +48,12 @@ export function MarketingHomeHeroSection() {
             </Link>
           </div>
 
-          <h1 className="mt-[var(--ui-space-8)] text-[clamp(2rem,4.6vw,4rem)] font-semibold leading-[0.98] tracking-[-0.05em] text-foreground">
+          <h1 className="mt-[var(--ui-space-6)] text-[clamp(2rem,4.6vw,4rem)] font-semibold leading-[0.98] tracking-[-0.05em] text-foreground">
             <span className="block whitespace-nowrap text-primary">{HERO_HEADLINE_ACCENT}</span>
             <span className="block whitespace-nowrap">{HERO_HEADLINE_REST}</span>
           </h1>
 
-          <div className="mt-[var(--ui-space-7)] flex flex-col gap-[var(--ui-space-4)]">
+          <div className="mt-[var(--ui-space-5)] flex flex-col gap-[var(--ui-space-3)]">
             {HERO_BENEFITS.map((label) => (
               <div key={label} className="flex items-center gap-3 text-[length:var(--ui-text-lead)] font-normal text-foreground">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
@@ -64,7 +64,7 @@ export function MarketingHomeHeroSection() {
             ))}
           </div>
 
-          <div className="mt-[var(--ui-space-8)] flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
+          <div className="mt-[var(--ui-space-6)] flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             <Link
               href={bookHref}
               data-growth-cta-source="marketing_hero_see_price"
@@ -81,7 +81,7 @@ export function MarketingHomeHeroSection() {
             </Link>
           </div>
 
-          <div className="mt-[var(--ui-space-7)] flex flex-wrap items-center gap-2.5">
+          <div className="mt-[var(--ui-space-3)] flex flex-wrap items-center gap-2.5">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-card shadow-[var(--ui-shadow-sm)] ring-1 ring-border">
               <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
                 <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4" />
@@ -99,7 +99,7 @@ export function MarketingHomeHeroSection() {
             <span className="text-[length:var(--ui-text-body)] font-normal text-muted-foreground">{googleReviewsBasedOnCountLine()}</span>
           </div>
 
-          <p className="mt-[var(--ui-space-5)] text-[length:var(--ui-text-body)] font-normal text-muted-foreground">
+          <p className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-body)] font-normal text-muted-foreground">
             Looking for cleaning work?{" "}
             <Link href="/cleaner/apply" className="text-foreground underline decoration-border underline-offset-4 hover:decoration-foreground">
               Apply Now
