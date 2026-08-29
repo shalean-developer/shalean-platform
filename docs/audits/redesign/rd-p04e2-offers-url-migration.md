@@ -1,6 +1,7 @@
 # RD-P04E2 — Customer-facing offer URL migration
 
-Status: In Progress — local validation pending
+Status: PASSED / CLOSED
+Branch: `design/rd04-platform-redesign`
 
 ## Decision
 
@@ -24,11 +25,20 @@ Status: In Progress — local validation pending
 - No booking, pricing, payment, Supabase schema, or promotion eligibility changes.
 - No production deployment.
 
-## Validation
+## Validation result
 
-1. `npm run typecheck`
-2. promotion URL unit tests
-3. `/offers/<known-slug>` renders the same landing content
-4. `/campaigns/<known-slug>` returns a permanent redirect to `/offers/<known-slug>`
-5. legacy query parameters survive the redirect
-6. booking CTA still contains `?promo=` and promotion identity
+Passed:
+
+1. Completed-slice typecheck was clean.
+2. Promotion URL helper tests passed 5/5.
+3. `/offers/spring-cleaning-special` returned 200 locally on a clean Next process.
+4. `/offers/rd-p04e2-definitely-not-a-real-offer` returned 200, confirming soft fallback behavior.
+5. `/campaigns/spring-cleaning-special?utm_source=test` returned `308 Permanent Redirect`.
+6. Redirect location preserved the query parameter: `/offers/spring-cleaning-special?utm_source=test`.
+7. Booking attribution and promotion identity remain owned by `/book?promo=...`.
+
+RD-P04E2 is **PASSED / CLOSED** for URL migration behavior.
+
+## Closure-audit note
+
+RD-P04F identified a small metadata-parity question that does not invalidate the URL migration behavior: the generic missing/expired fallback title changed from `Campaign | Shalean` to `Offer | Shalean`, and generic QR wording changed from campaign to offer terminology. Because the compatibility requirement said to preserve campaign metadata/content, RD-P04F keeps the overall RD-P04 stage open until that terminology drift is either restored or explicitly approved as intentional.
