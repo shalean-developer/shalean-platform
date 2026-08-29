@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { MaidServicesCapeTownPage } from "@/components/marketing-maid/MaidServicesCapeTownPage";
-import { FooterSection } from "@/components/home/sections/FooterSection";
+import { SiteFooter } from "@/components/nav/SiteFooter";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
@@ -43,7 +43,7 @@ export default async function MaidServicesCapeTownRoutePage() {
   const seoLocationLinks = buildHubCleaningServiceLinks(locations);
 
   return (
-    <div className="bg-white text-zinc-900">
+    <div className="bg-background text-foreground">
       <GrowthTracking
         event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{
@@ -56,7 +56,7 @@ export default async function MaidServicesCapeTownRoutePage() {
       <main>
         <MaidServicesCapeTownPage seoLocationLinks={seoLocationLinks} />
       </main>
-      <FooterSection />
+      <SiteFooter />
     </div>
   );
 }
