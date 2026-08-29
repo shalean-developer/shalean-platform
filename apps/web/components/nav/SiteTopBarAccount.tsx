@@ -111,7 +111,7 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
             : "rounded-lg border border-white/35 px-3 py-1 text-xs text-white hover:bg-white/10",
         )}
       >
-        Log in
+        Log In
       </Link>
     );
   }
