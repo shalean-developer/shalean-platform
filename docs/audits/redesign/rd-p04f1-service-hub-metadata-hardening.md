@@ -1,57 +1,65 @@
 # RD-P04F1 — Service-hub + metadata-parity closure hardening
 
-Status: IMPLEMENTED — local validation pending
+Status: VALIDATION PENDING — redirect topology corrected
 Branch: `design/rd04-platform-redesign`
-Implementation head: `d7def8dafcd79e3449e635eb534eaab0473962ad`
 Scope: presentation/metadata compatibility only; no production deployment or data mutation.
 
-## Changes
+## Runtime correction discovered during validation
 
-### `/maid-services-cape-town`
+Local validation showed:
 
-- Replaced route-level `bg-white text-zinc-900` with semantic `bg-background text-foreground`.
-- Replaced the `FooterSection` compatibility wrapper with canonical `SiteFooter`.
-- Preserved `MarketingHomeHeader`, `MaidServicesCapeTownPage`, metadata, analytics, booking href, homepage/location data and service/location link authority unchanged.
+- `/maid-services-cape-town` returns `308`;
+- `/cleaning-services-cape-town` returns `308`;
+- both redirect to the canonical `/services` hub through `resolveLegacyMarketingExactRedirect()` in `proxy.ts`.
 
-Commit: `3d56d222` — `RD-P04F1: normalize maid services shell`
+The exact redirect matrix confirms both paths are intentional permanent legacy aliases:
 
-### `/cleaning-services-cape-town`
+- `/cleaning-services-cape-town` → `/services`
+- `/maid-services-cape-town` → `/services`
 
-- Replaced route-level zinc surface styling with semantic `bg-background text-foreground`.
-- Replaced generic `max-w-6xl px-4` wrapper with canonical `PublicPageContainer size="wide"` while preserving the existing section spacing.
-- Kept `MarketingLayout` and every domain section component unchanged.
-- Preserved metadata, JSON-LD, analytics, services, pricing, locations, blog links, FAQ and conversion behavior.
+Because the proxy resolves these redirects before page rendering, the route files at those legacy paths are not active customer-facing conversion surfaces. The initial RD-P04F closure audit incorrectly treated their dormant presentation code as runtime blockers.
 
-Commit: `9e36942f` — `RD-P04F1: normalize cleaning services hub shell`
+## Corrective action
 
-### `/offers/[slug]` fallback metadata/content parity
+The two presentation-only edits made to the unreachable legacy page files were reverted:
 
-- Restored generic fallback metadata title to `Campaign | Shalean`, matching the pre-migration campaign route.
-- Restored generic QR copy to `QR code for this campaign landing page.` and alt text to `Campaign QR code`.
-- Kept canonical `/offers/[slug]` routing, `/book?promo=` attribution, promotion lookup, analytics, content-driven metadata, terms sanitization, fallback soft landing and configured campaign colours unchanged.
+- `ba9773e6` — revert unreachable maid alias styling
+- `13af9b17` — revert unreachable cleaning-services alias styling
+
+No SEO redirect behavior was changed.
+
+The canonical active service hub is `/services`. Static review confirms it already uses `MarketingLayout`, which resolves to canonical `SiteFooter`, while its section-level blue/zinc presentation remains domain-specific service-hub composition. No additional service-hub code change is required for this closure slice; it requires visual smoke validation only.
+
+## `/offers/[slug]` fallback metadata/content parity
+
+The valid F1 hardening remains in place:
+
+- fallback metadata title restored to `Campaign | Shalean`, matching the pre-migration campaign route;
+- generic QR copy restored to `QR code for this campaign landing page.`;
+- QR alt text restored to `Campaign QR code`.
+
+Canonical `/offers/[slug]` routing, `/book?promo=` attribution, promotion lookup, `landing_visit`, content-driven metadata, terms sanitization, fallback soft landing and configured campaign colours remain unchanged.
 
 Commit: `d7def8da` — `RD-P04F1: restore offer metadata parity`
 
-## Diff boundary
+## Validation evidence received
 
-Comparison from the RD-P04F audit baseline (`fa6ebd7f`) to implementation head (`d7def8da`) contains exactly three modified files:
+- Local branch pulled successfully to the F1 implementation series.
+- `npm --prefix apps/web run typecheck` passed cleanly.
+- `/offers/spring-cleaning-special` returned `200`.
+- unknown `/offers/rd-p04f1-fallback-check` returned `200`.
+- `/campaigns/spring-cleaning-special?utm_source=test` returned `308` with location `/offers/spring-cleaning-special?utm_source=test`.
+- `/maid-services-cape-town` and `/cleaning-services-cape-town` returned the expected legacy `308` responses.
 
-1. `apps/web/app/(marketing)/maid-services-cape-town/page.tsx`
-2. `apps/web/app/(marketing)/cleaning-services-cape-town/page.tsx`
-3. `apps/web/app/(marketing)/offers/[slug]/page.tsx`
+## Remaining closure gate
 
-No booking, payment, referral rules, promotion eligibility, API, RBAC, Supabase schema/data or production configuration changes are included.
-
-## Validation gate
-
-Before RD-P04 can close:
-
-1. Pull branch head `d7def8da` locally.
-2. Run `npm --prefix apps/web run typecheck`.
-3. Verify `/maid-services-cape-town` on desktop and mobile: one canonical header/footer, unchanged body content and CTA destinations, no horizontal overflow.
-4. Verify `/cleaning-services-cape-town` on desktop and mobile: section hierarchy unchanged, canonical gutters, no clipping/overflow and one canonical footer.
-5. Verify `/offers/spring-cleaning-special` returns 200 and still renders its landing content.
-6. Verify an unknown `/offers/<slug>` returns 200 and fallback metadata resolves to `Campaign | Shalean`.
-7. Verify `/campaigns/spring-cleaning-special?utm_source=test` remains a 308 to `/offers/spring-cleaning-special?utm_source=test`.
+1. Pull the latest branch after the corrective reverts.
+2. Confirm `/services` returns `200`.
+3. Visually smoke `/services` on desktop and mobile for one public header/footer, intact service hierarchy/CTAs, no clipping or horizontal overflow, and usable sticky mobile CTA.
+4. Optionally inspect the unknown-offer document title and confirm the fallback title is `Campaign | Shalean`.
 
 If these gates pass, mark RD-P04F1 and RD-P04 `PASSED / CLOSED`, then proceed to RD-P05.
+
+## Authority boundary
+
+No booking, payment, pricing, referral rules, promotion eligibility, API, RBAC, Supabase schema/data, SEO redirect topology or production configuration changes are authorized or included.
