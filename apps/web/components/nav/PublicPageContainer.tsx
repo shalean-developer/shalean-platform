@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 
 type PublicPageContainerProps = HTMLAttributes<HTMLDivElement> & {
   children: ReactNode;
-  size?: "content" | "wide";
+  size?: "content" | "wide" | "marketing";
 };
 
 export function PublicPageContainer({
@@ -15,7 +15,9 @@ export function PublicPageContainer({
   const maxWidth =
     size === "content"
       ? "max-w-[var(--ui-container-content)]"
-      : "max-w-[var(--ui-container-wide)]";
+      : size === "marketing"
+        ? "max-w-[var(--ui-container-marketing)]"
+        : "max-w-[var(--ui-container-wide)]";
 
   return (
     <div
