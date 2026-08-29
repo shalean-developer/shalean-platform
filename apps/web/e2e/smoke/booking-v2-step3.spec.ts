@@ -174,7 +174,7 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await expect(page.getByText("Claremont, Cape Town, 7708", { exact: true })).toBeVisible();
     await expect(page.getByText(/Recurring · Weekly/)).toBeVisible();
     await expect(page.getByText("Alice Test", { exact: true })).toBeVisible();
-    await expect(page.getByText("Inside Oven", { exact: true })).toBeVisible();
+    await expect(page.getByText("inside-oven", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Price breakdown" })).toBeVisible();
     await expectReviewPrice(page);
 
