@@ -290,7 +290,7 @@ export async function retryNotificationFromLog(row: NotificationLogRowForRetry):
           typeof payload.idempotency_key === "string" && payload.idempotency_key.trim()
             ? `admin_retry:${row.id}:${payload.idempotency_key}`
             : `admin_retry:${row.id}`,
-        priorAttempts: Number.isFinite(priorAttempts) && priorAttempts > 0 ? 0 : 0,
+        priorAttempts: Number.isFinite(priorAttempts) && priorAttempts > 0 ? Math.floor(priorAttempts) : 0,
         app: payload.app === "cleaner" ? "cleaner" : "customer",
       },
     );
