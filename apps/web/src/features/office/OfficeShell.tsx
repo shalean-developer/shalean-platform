@@ -63,7 +63,7 @@ function DeniedGate({
             <p className="mt-2 text-sm text-muted-foreground">{errorMessage}</p>
             <button
               type="button"
-              className="mt-5 inline-flex w-full items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
+              className="mt-5 inline-flex w-full items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
               onClick={onRetry}
             >
               Try again
@@ -83,7 +83,7 @@ function DeniedGate({
             </p>
             <Link
               href={`/login?redirect=${encodeURIComponent(redirectTarget)}`}
-              className="mt-5 inline-flex w-full items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
+              className="mt-5 inline-flex w-full items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Use a different account
             </Link>
@@ -93,7 +93,7 @@ function DeniedGate({
             <p className="mt-2 text-sm text-muted-foreground">Sign in with an allowlisted admin account to continue.</p>
             <Link
               href={`/login?redirect=${encodeURIComponent(redirectTarget)}`}
-              className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+              className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-600 focus-visible:ring-offset-2"
             >
               Login as Admin
             </Link>
