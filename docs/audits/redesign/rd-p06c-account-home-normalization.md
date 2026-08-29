@@ -1,8 +1,10 @@
 # RD-P06C — Account home normalization
 
-Status: IMPLEMENTED — CI / LOCAL VISUAL VALIDATION PENDING
+Status: IMPLEMENTED — CI PASSED / LOCAL VISUAL VALIDATION PENDING
 Branch: `design/rd04-platform-redesign`
 Validation base: `validation/rd-p06c-base` @ `006bb3a36a4df92487d4e4b2df89af43357785c1`
+Validated implementation head: `d9cd55f924b1ed5b8741f5f588e33d55a89ff62f`
+Validation PR: #464 — draft, validation only; close unmerged after final local visual approval and exact-head closure evidence.
 Scope: presentation-only normalization of `/account`. No production deployment, Supabase mutation, auth/RBAC change, booking mutation, invoice/payment-state change, property mutation, support mutation, or customer-data authority change.
 
 ## Governing authority
@@ -77,18 +79,58 @@ RD-P06C does not change:
 - auth/session/Supabase behavior;
 - any production configuration or data.
 
-## Validation gate
+## Diff-scope proof
 
-RD-P06C can close only after:
+Comparison from `006bb3a36a4df92487d4e4b2df89af43357785c1` to implementation head `d9cd55f924b1ed5b8741f5f588e33d55a89ff62f` contains exactly three files:
 
-1. base-to-head diff remains Account Home presentation + reusable TrustBar + audit/validation only;
-2. exact-head migration governance passes;
-3. exact-head standard web CI passes, including typecheck, payment/referral/revenue regressions, production build and crawl;
-4. local desktop `/account` visual confirms quick actions, upcoming state, monthly overview, recent bookings and secondary rail are aligned with no shell regression;
-5. local mobile `/account` visual confirms readable quick-action/trust content, sensible stacking, no horizontal overflow and no bottom-nav overlap;
-6. no production deployment or production-data/Supabase mutation is performed;
-7. validation PR is closed without merge after final exact-head closure evidence.
+1. `apps/web/app/(ui-redesign)/account/page.tsx`
+2. `apps/web/components/account/TrustBar.tsx`
+3. `docs/audits/redesign/rd-p06c-account-home-normalization.md`
+
+No AccountShell/AccountNav, hook, API, Supabase, booking/payment mutation, profile, property write or support API file is in the implementation diff.
+
+## Exact-head CI evidence
+
+### migration-governance
+
+Workflow run: `33254682062`
+Conclusion: **success**.
+
+### web-test
+
+Workflow run: `33254682134`
+Job: `99106225287`
+Conclusion: **success**.
+
+The exact implementation head passed:
+
+- PR-head SHA equality check;
+- dependency audit;
+- critical payment/referral tests;
+- privileged Office email security contract;
+- revenue-path tests;
+- marketing/Meta compliance tests;
+- blog governance;
+- TypeScript typecheck;
+- Booking core ESLint;
+- SEO/canonical/Search Console readiness gates;
+- production Next.js build;
+- local production server start;
+- internal-link crawl;
+- location/compliance route matrix.
+
+No production deployment or production-data/Supabase mutation was performed by RD-P06C.
+
+## Remaining validation gate
+
+RD-P06C remains open until:
+
+1. this audit-only head reruns the exact-head repository guards successfully;
+2. local desktop `/account` visual confirms quick actions, upcoming state, monthly overview, recent bookings and secondary rail are aligned with no shell regression;
+3. local mobile `/account` visual confirms readable quick-action/trust content, sensible stacking, no horizontal overflow and no bottom-nav overlap;
+4. no production deployment or production-data/Supabase mutation is performed;
+5. after visual approval, final closure evidence is recorded and validation PR #464 is closed without merge.
 
 ## Current decision
 
-RD-P06C is implemented but **not closed** until exact-head CI and local desktop/mobile visual validation pass.
+RD-P06C is **implemented and CI-passed**, but remains **open pending audit-only exact-head CI and local desktop/mobile visual validation**.
