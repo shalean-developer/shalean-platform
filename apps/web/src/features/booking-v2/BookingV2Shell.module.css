@@ -145,6 +145,43 @@
   color: var(--foreground);
 }
 
+.step3 > :global(.space-y-5) {
+  counter-reset: review-section;
+}
+
+.step3 > :global(.space-y-5) > :global(.rounded-2xl.border.border-slate-100.bg-white) {
+  counter-increment: review-section;
+}
+
+.step3
+  > :global(.space-y-5)
+  > :global(.rounded-2xl.border.border-slate-100.bg-white)
+  > :global(.flex)
+  > :global(.flex.min-w-0.items-center.gap-2\.5)
+  > span:first-child {
+  display: none;
+}
+
+.step3
+  > :global(.space-y-5)
+  > :global(.rounded-2xl.border.border-slate-100.bg-white)
+  > :global(.flex)
+  > :global(.flex.min-w-0.items-center.gap-2\.5)::before {
+  content: counter(review-section);
+  display: flex;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex: 0 0 1.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 0.6875rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .step3 > :global(.space-y-5) > :global(.text-center) h2 {
   color: var(--foreground);
   font-size: var(--ui-text-section-title);
@@ -216,6 +253,45 @@
 .step3 > :global(.space-y-5) > :global(.grid) > :global(.rounded-xl.border.bg-white) {
   border-radius: var(--ui-radius-lg);
   box-shadow: var(--ui-shadow-sm);
+}
+
+.step3[data-review-time-missing="true"]
+  :global(.grid.grid-cols-2.gap-3)
+  > div:nth-child(2)
+  > p:last-child {
+  visibility: hidden;
+  font-size: 0;
+}
+
+.step3[data-review-time-missing="true"]
+  :global(.grid.grid-cols-2.gap-3)
+  > div:nth-child(2)
+  > p:last-child::after {
+  content: "Not selected";
+  visibility: visible;
+  color: var(--muted-foreground);
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.25rem;
+}
+
+.step3 :global([data-equipment-role="detail"]) {
+  padding-left: 1rem;
+  color: var(--muted-foreground);
+}
+
+.step3 :global([data-equipment-role="subtotal"]) {
+  margin-top: 0.5rem;
+  border-top: 1px dashed var(--border);
+  padding-top: 0.5rem;
+  color: var(--foreground);
+  font-weight: 600;
+}
+
+.step3 :global([data-equipment-role="subtotal"]) > span:first-child::before {
+  content: "Subtotal · ";
+  color: var(--muted-foreground);
+  font-weight: 500;
 }
 
 .step3 input:not([type="checkbox"]):not([type="radio"]),
