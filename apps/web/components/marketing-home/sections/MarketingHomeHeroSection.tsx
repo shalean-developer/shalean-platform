@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { preload } from "react-dom";
-import { BadgeCheck, Check, Star } from "lucide-react";
+import { BadgeCheck, Check, MapPin, Star } from "lucide-react";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
 import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
 import { GET_FREE_QUOTE_HREF } from "@/lib/marketing/getFreeQuote";
@@ -31,20 +31,16 @@ export function MarketingHomeHeroSection() {
     <HomeSection className="overflow-hidden border-b border-border pt-[var(--ui-space-4)] pb-[var(--ui-space-10)] md:pt-[var(--ui-space-6)] md:pb-[var(--ui-space-12)] lg:pt-[var(--ui-space-8)] lg:pb-[5rem] [&>div]:max-w-[108rem]">
       <div className="grid items-center gap-[var(--ui-space-10)] lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:items-stretch lg:gap-[var(--ui-space-12)] xl:gap-[var(--ui-space-16)]">
         <div className="flex flex-col items-start text-left lg:h-full lg:justify-between">
-          <div className="inline-flex items-center rounded-full bg-muted p-1 text-[length:var(--ui-text-body)] text-foreground">
+          <div className="inline-flex items-center gap-3 text-[length:var(--ui-text-body)] text-foreground">
+            <span className="inline-flex min-h-12 items-center gap-2 rounded-full bg-muted px-5 py-2.5 font-medium">
+              <MapPin className="h-4 w-4 text-primary" strokeWidth={2.2} aria-hidden />
+              Cape Town, ZA
+            </span>
             <Link
-              href={bookHref}
-              data-growth-cta-source="marketing_hero_mode_book"
-              className="rounded-full border border-border bg-background px-5 py-2.5 font-normal shadow-[var(--ui-shadow-sm)] transition hover:bg-card focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              href="/areas-we-serve"
+              className="inline-flex min-h-12 items-center px-2 py-2.5 font-normal text-muted-foreground underline decoration-border underline-offset-4 transition hover:text-foreground hover:decoration-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              Book a Service
-            </Link>
-            <Link
-              href={GET_FREE_QUOTE_HREF}
-              data-quote-cta-source="marketing_hero_mode_quote"
-              className="rounded-full px-5 py-2.5 font-normal text-muted-foreground transition hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Request a Quote
+              Change city
             </Link>
           </div>
 
