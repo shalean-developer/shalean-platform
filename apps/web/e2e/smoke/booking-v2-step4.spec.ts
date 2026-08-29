@@ -137,7 +137,7 @@ test.describe("RD-P05F — Booking V2 Step 4 payment presentation smoke", () => 
     await expect(page.getByRole("heading", { name: "Payment", exact: true })).toBeVisible();
     await expect(page.getByText("Sign in or create an account to complete your booking.", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Sign in to confirm your booking", exact: true })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Sign in", exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Create account", exact: true })).toBeVisible();
     await expect(page.getByLabel("Email address")).toBeVisible();
     await expect(page.getByLabel("Password")).toBeVisible();
@@ -149,7 +149,7 @@ test.describe("RD-P05F — Booking V2 Step 4 payment presentation smoke", () => 
     await expect(page.getByLabel(/Phone number/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Create account & continue", exact: true })).toBeVisible();
 
-    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    await page.getByRole("button", { name: "Sign in", exact: true }).first().click();
     await expect(page.getByRole("heading", { name: "Sign in to confirm your booking", exact: true })).toBeVisible();
 
     await expectDraft(page, {
