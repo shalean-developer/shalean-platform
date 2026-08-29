@@ -1,12 +1,12 @@
 # RD-P05C — Step 1 Details normalization
 
-Status: IMPLEMENTED — LOCAL VALIDATION PENDING
+Status: PASSED / CLOSED
 Branch: `design/rd04-platform-redesign`
 Scope: presentation-only normalization of Booking V2 Step 1. No production deployment or data mutation.
 
 ## Authority preserved
 
-RD-P05C does not modify:
+RD-P05C did not modify:
 
 - `Step1Details.tsx` field definitions, visibility gates, extras toggle behavior or React Hook Form registrations;
 - `PropertyAddressSection.tsx` saved/custom address modes, suburb resolution, contact-phone validation, unsupported-area handling or profile/address prefill;
@@ -41,25 +41,33 @@ Commit: `4090d656` — `RD-P05C: scope Step 1 presentation normalization`
 
 ## Diff-scope verification
 
-Comparison from RD-P05B closure head `cfe9ab53` to the RD-P05C implementation head shows exactly two files changed:
+Comparison from RD-P05B closure head `cfe9ab53` to the RD-P05C implementation head showed exactly two files changed:
 
 1. `apps/web/src/features/booking-v2/BookingV2Shell.module.css` — added presentation-only Step 1 styles;
 2. `apps/web/src/features/booking-v2/BookingV2Shell.tsx` — one CSS-module import plus one conditional Step 1 class.
 
-`Step1Details`, `PropertyAddressSection`, `EquipmentSection`, service-question controls, room-count controls and all business-logic files are unchanged.
+`Step1Details`, `PropertyAddressSection`, `EquipmentSection`, service-question controls, room-count controls and all business-logic files remained unchanged.
 
-## Local validation gate
+## Validation evidence
 
-Before RD-P05C can close:
+RD-P05C local validation passed on 2026-08-29:
 
-1. pull the latest branch and run `npm --prefix apps/web run typecheck`;
-2. confirm `/book/regular-cleaning` returns `200`;
-3. desktop + mobile smoke Step 1 for section-card hierarchy, labels, room selectors, address, equipment fee state, access/parking/gate fields and navigation;
-4. if a configured service exposes extras, smoke one extras-bearing Step 1 and verify selected/unselected extras remain readable and clickable;
-5. verify changing a harmless Step 1 field still updates the UI and that Back/Continue remain functional, but do not complete a booking or payment.
+- `npm --prefix apps/web run typecheck` completed with no TypeScript errors;
+- `GET /book/regular-cleaning` returned `200`;
+- desktop Step 1 smoke passed: clear About the clean / Property address / Equipment / access-information hierarchy, intact room selectors, saved-address presentation, contact phone, equipment-fee display, summary sidebar and navigation;
+- mobile Step 1 smoke passed: the same hierarchy stacks cleanly, controls remain within the viewport with no visible horizontal overflow, the collapsed Booking summary remains available, and Continue / Back to services remain reachable;
+- selected property type, room counts, pets/equipment toggle state and calculated equipment logistics fee rendered correctly, demonstrating the existing Step 1 state/pricing presentation remained intact;
+- no optional extras were exposed by the active regular-cleaning live configuration during this validation, so the conditional extras-only smoke gate was not applicable to this booking state;
+- browser inspector overlays visible in the screenshots were development tooling rather than application UI.
 
-If these pass, mark RD-P05C `PASSED / CLOSED` and proceed to RD-P05D — Step 2 Schedule normalization.
+Because RD-P05C changed only scoped presentation CSS plus a conditional shell class, the previously validated booking navigation/state handlers remained untouched.
+
+## Closure decision
+
+RD-P05C is **PASSED / CLOSED**.
+
+Next controlled slice: **RD-P05D — Step 2 Schedule normalization**, presentation-only. Preserve scheduling/availability authority, date/window rules, cleaner/team selection, recurring behavior, pricing impacts, draft persistence and booking state.
 
 ## Authority boundary
 
-No production deployment, Vercel configuration change, Supabase data/schema mutation, booking creation, payment completion or production customer traffic is authorized by RD-P05C.
+No production deployment, Vercel configuration change, Supabase data/schema mutation, booking creation, payment completion or production customer traffic was performed or authorized by RD-P05C.
