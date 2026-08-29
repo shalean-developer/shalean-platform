@@ -24,4 +24,4 @@ export const MARKETING_HEADER_SERVICE_LINKS = MARKETING_SERVICE_NAV_LINKS.map(
 );
 
 export const marketingHeaderNavLinkClass =
-  "flex items-center gap-1 rounded-lg px-3 py-2 text-sm font-medium text-slate-700 transition-colors duration-150 hover:bg-blue-50 hover:text-blue-700";
+  "flex items-center gap-1 rounded-[var(--ui-radius-md)] px-[var(--ui-space-3)] py-[var(--ui-space-2)] text-[length:var(--ui-text-small)] font-medium text-foreground transition-colors duration-150 hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
