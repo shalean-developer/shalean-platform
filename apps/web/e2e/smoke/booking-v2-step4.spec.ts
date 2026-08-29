@@ -140,7 +140,7 @@ test.describe("RD-P05F — Booking V2 Step 4 payment presentation smoke", () => 
     await expect(page.getByRole("button", { name: "Sign in", exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Create account", exact: true })).toBeVisible();
     await expect(page.getByLabel("Email address")).toBeVisible();
-    await expect(page.getByLabel("Password")).toBeVisible();
+    await expect(page.locator("#si-password")).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "Create account", exact: true }).click();
