@@ -28,7 +28,10 @@ export function MarketingHomeHeroSection() {
   preload(HERO_MAIN, { as: "image", fetchPriority: "high" });
 
   return (
-    <HomeSection className="overflow-hidden border-b border-border pt-[var(--ui-space-4)] pb-[var(--ui-space-10)] md:pt-[var(--ui-space-6)] md:pb-[var(--ui-space-12)] lg:pt-[var(--ui-space-8)] lg:pb-[5rem] [&>div]:max-w-[108rem]">
+    <HomeSection
+      containerSize="marketing"
+      className="overflow-hidden border-b border-border pt-[var(--ui-space-4)] pb-[var(--ui-space-10)] md:pt-[var(--ui-space-6)] md:pb-[var(--ui-space-12)] lg:pt-[var(--ui-space-8)] lg:pb-[5rem]"
+    >
       <div className="grid items-center gap-[var(--ui-space-10)] lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:items-stretch lg:gap-[var(--ui-space-12)] xl:gap-[var(--ui-space-16)]">
         <div className="flex flex-col items-start text-left lg:h-full lg:justify-between">
           <div className="inline-flex flex-wrap items-center gap-x-3 gap-y-2 text-[length:var(--ui-text-body)] text-foreground">
@@ -102,7 +105,7 @@ export function MarketingHomeHeroSection() {
         </div>
 
         <div className="relative mx-auto w-full max-w-[580px] lg:mx-0 lg:justify-self-end">
-          <div className="relative aspect-[1.13/1] w-full overflow-hidden rounded-[32px] bg-muted shadow-[var(--ui-shadow-lg)]">
+          <div className="relative aspect-[1.13/1] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-lg)]">
             <Image
               src={HERO_MAIN}
               alt="Professional house cleaning service in a bright modern kitchen in Cape Town"
