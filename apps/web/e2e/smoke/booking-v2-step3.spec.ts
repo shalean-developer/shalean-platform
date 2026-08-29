@@ -165,14 +165,26 @@ async function expectReviewPrice(page: Page) {
 }
 
 async function expectReviewSectionNumbers(page: Page, titles: string[]) {
-  for (const [index, title] of titles.entries()) {
+  const headingOrder = (await page.locator("h3").allTextContents()).map((text) => text.trim());
+  let previousIndex = -1;
+
+  for (const title of titles) {
+    const nextIndex = headingOrder.indexOf(title, previousIndex + 1);
+    expect(nextIndex, `${title} should follow the previous review section`).toBeGreaterThan(previousIndex);
+    previousIndex = nextIndex;
+
     const heading = page.getByRole("heading", { name: title, exact: true });
     await expect(heading).toBeVisible();
     const labelRow = heading.locator("xpath=..");
-    const counterContent = await labelRow.evaluate((element) =>
+    const legacyNumber = labelRow.locator("span").first();
+    await expect(legacyNumber).toHaveCSS("display", "none");
+
+    // Chromium exposes the authored counter token here rather than the rendered digit.
+    // DOM order + one counter increment per ReviewSection makes the visual sequence deterministic.
+    const counterRule = await labelRow.evaluate((element) =>
       window.getComputedStyle(element, "::before").content,
     );
-    expect(counterContent.replace(/[\"']/g, "")).toBe(String(index + 1));
+    expect(counterRule.replace(/[\"']/g, "")).toBe("counter(review-section)");
   }
 }
 
