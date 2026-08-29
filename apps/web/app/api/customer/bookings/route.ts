@@ -1,7 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { claimCustomerBookingOwnership } from "@/lib/customer/claimCustomerBookingOwnership";
-import { loadCustomerBookingRowsForUser } from "@/lib/customer/customerBookingsForUser";
+import {
+  CUSTOMER_BOOKINGS_PAGE_DEFAULT_LIMIT,
+  CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT,
+  loadCustomerBookingPageForUser,
+} from "@/lib/customer/customerBookingPageForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -40,8 +44,17 @@ async function authenticateCustomer(request: Request): Promise<
   };
 }
 
+function parsePageLimit(url: URL): number {
+  const raw = url.searchParams.get("limit");
+  if (!raw) return CUSTOMER_BOOKINGS_PAGE_DEFAULT_LIMIT;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) return CUSTOMER_BOOKINGS_PAGE_DEFAULT_LIMIT;
+  return Math.min(parsed, CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT);
+}
+
 /**
- * Canonical customer bookings list: stable JSON shape for apps (vs direct Supabase reads).
+ * Canonical customer bookings list. The response is cursor-paged so account
+ * consumers can progressively load older bookings without an unbounded query.
  */
 export async function GET(request: Request) {
   const auth = await authenticateCustomer(request);
@@ -52,13 +65,16 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
-  const out = await loadCustomerBookingRowsForUser(admin, auth.user.id, {
+  const url = new URL(request.url);
+  const out = await loadCustomerBookingPageForUser(admin, auth.user.id, {
     viewerEmail: auth.user.email,
+    cursor: url.searchParams.get("cursor"),
+    limit: parsePageLimit(url),
   });
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: out.status });
   }
-  return NextResponse.json({ bookings: out.bookings });
+  return NextResponse.json({ bookings: out.bookings, pageInfo: out.pageInfo });
 }
 
 /**

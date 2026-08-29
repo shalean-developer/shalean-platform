@@ -7,6 +7,16 @@ import type { BookingRow, DashboardBooking } from "@/lib/dashboard/types";
 import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import { useUser } from "@/hooks/useUser";
 
+type CustomerBookingsPageInfo = {
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+type CustomerBookingsPageResponse = {
+  bookings?: BookingRow[];
+  pageInfo?: CustomerBookingsPageInfo;
+};
+
 async function claimCustomerBookingOwnershipForAccount(
   userId: string,
   claimedForUserRef: { current: string | null },
@@ -18,11 +28,21 @@ async function claimCustomerBookingOwnershipForAccount(
   if (out.ok) claimedForUserRef.current = userId;
 }
 
+function mergeBookingRows(existing: BookingRow[], incoming: BookingRow[]): BookingRow[] {
+  const byId = new Map<string, BookingRow>();
+  for (const row of existing) byId.set(row.id, row);
+  for (const row of incoming) byId.set(row.id, row);
+  return Array.from(byId.values());
+}
+
 export function useBookings(): {
   bookings: DashboardBooking[];
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  loadMore: () => Promise<void>;
   cancelBooking: (id: string) => Promise<{ ok: true } | { ok: false; message: string }>;
   rescheduleBooking: (id: string, date: string, time: string) => Promise<{ ok: true } | { ok: false; message: string }>;
 } {
@@ -30,14 +50,24 @@ export function useBookings(): {
   const userId = user?.id;
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const realtimeDebounceRef = useRef<number | null>(null);
   const ownershipClaimedForUserRef = useRef<string | null>(null);
+
+  const applyPageInfo = useCallback((pageInfo: CustomerBookingsPageInfo | undefined) => {
+    setNextCursor(typeof pageInfo?.nextCursor === "string" ? pageInfo.nextCursor : null);
+    setHasMore(pageInfo?.hasMore === true && Boolean(pageInfo.nextCursor));
+  }, []);
 
   const fetchBookings = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
     if (!userId) {
       setRows([]);
+      setNextCursor(null);
+      setHasMore(false);
       setLoading(false);
       return;
     }
@@ -47,15 +77,37 @@ export function useBookings(): {
     }
 
     await claimCustomerBookingOwnershipForAccount(userId, ownershipClaimedForUserRef);
-    const out = await dashboardFetchJson<{ bookings?: BookingRow[] }>("/api/customer/bookings");
+    const out = await dashboardFetchJson<CustomerBookingsPageResponse>("/api/customer/bookings?limit=25");
     if (!out.ok) {
       setError(out.error);
-      setRows([]);
+      if (!silent) {
+        setRows([]);
+        setNextCursor(null);
+        setHasMore(false);
+      }
     } else {
       setRows(Array.isArray(out.data.bookings) ? out.data.bookings : []);
+      applyPageInfo(out.data.pageInfo);
+      setError(null);
     }
     if (!silent) setLoading(false);
-  }, [userId]);
+  }, [applyPageInfo, userId]);
+
+  const loadMore = useCallback(async () => {
+    if (!userId || !hasMore || !nextCursor || loadingMore) return;
+    setLoadingMore(true);
+    setError(null);
+    const query = `/api/customer/bookings?limit=25&cursor=${encodeURIComponent(nextCursor)}`;
+    const out = await dashboardFetchJson<CustomerBookingsPageResponse>(query);
+    if (!out.ok) {
+      setError(out.error);
+    } else {
+      const incoming = Array.isArray(out.data.bookings) ? out.data.bookings : [];
+      setRows((current) => mergeBookingRows(current, incoming));
+      applyPageInfo(out.data.pageInfo);
+    }
+    setLoadingMore(false);
+  }, [applyPageInfo, hasMore, loadingMore, nextCursor, userId]);
 
   useEffect(() => {
     if (userLoading) return;
@@ -130,8 +182,11 @@ export function useBookings(): {
   return {
     bookings,
     loading: userLoading || loading,
+    loadingMore,
+    hasMore,
     error,
     refetch: refetchBookings,
+    loadMore,
     cancelBooking,
     rescheduleBooking,
   };
