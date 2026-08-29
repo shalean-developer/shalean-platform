@@ -1,12 +1,12 @@
 # RD-P05B — Booking shell + `/book` hub normalization
 
-Status: IMPLEMENTED — LOCAL VALIDATION PENDING
+Status: PASSED / CLOSED
 Branch: `design/rd04-platform-redesign`
 Scope: presentation-only normalization of the booking entry hub and shared booking shell. No production deployment or data mutation.
 
 ## Authority preserved
 
-RD-P05B does not modify:
+RD-P05B did not modify:
 
 - `BookingV2Context` state, localStorage draft persistence, URL step routing or rebook/prefill behavior;
 - Step 1–4 form fields, validation schemas or question visibility rules;
@@ -78,19 +78,26 @@ Comparison from RD-P05A head `811afaed` to the implementation head showed exactl
 
 No Step 1–4, context, pricing, booking API or payment file changed in RD-P05B.
 
-## Local validation gate
+## Final local validation evidence
 
-Before RD-P05B can close:
+RD-P05B passed the local validation gate:
 
-1. pull the latest `design/rd04-platform-redesign` head;
-2. run `npm --prefix apps/web run typecheck`;
-3. with the local-only web server running, confirm `/book` and one canonical flow such as `/book/regular-cleaning` return `200`;
-4. desktop + mobile smoke `/book` for six service cards, live prices, header/account/phone controls, quote CTA, focus/spacing and no overflow;
-5. desktop + mobile smoke `/book/regular-cleaning` Step 1 for header/stepper/shell/summary/nav presentation only;
-6. verify Back to services returns to `/book` and no booking/payment completion is performed.
+- `npm --prefix apps/web run typecheck` exited cleanly with no TypeScript errors;
+- `GET /book` returned `200`;
+- `GET /book/regular-cleaning` returned `200`;
+- desktop `/book` smoke confirmed six service cards, live prices, trust strip, header/account/phone controls and quote CTA with no visible horizontal overflow;
+- mobile `/book` smoke confirmed single-column service-card stacking, readable prices/CTAs, usable quote fallback and no visible horizontal overflow;
+- desktop `/book/regular-cleaning` Step 1 smoke confirmed aligned booking header + four-step progress indicator, main form/summary separation, Back/Continue navigation and stable shell spacing;
+- mobile Step 1 smoke confirmed header/stepper fit at narrow width, collapsed summary accessibility, field controls within the viewport, and reachable full-width Continue / Back to services controls;
+- browser element-inspector overlays and Next.js development “Compiling…” badges observed during validation were development tooling, not product UI;
+- no booking or payment was completed during validation.
 
-If these pass, mark RD-P05B `PASSED / CLOSED` and proceed to RD-P05C — Step 1 Details normalization.
+## Closure decision
+
+RD-P05B is `PASSED / CLOSED`.
+
+Next controlled slice: **RD-P05C — Step 1 Details normalization**.
 
 ## Authority boundary
 
-No production deployment, Vercel configuration change, Supabase data/schema mutation, booking creation, payment completion or production customer traffic is authorized by RD-P05B.
+No production deployment, Vercel configuration change, Supabase data/schema mutation, booking creation, payment completion or production customer traffic was authorized or performed by RD-P05B.
