@@ -1,6 +1,5 @@
 import StructuredData from "@/components/home/StructuredData";
 import { MarketingHomeCoreServicesSection } from "@/components/marketing-home/sections/MarketingHomeCoreServicesSection";
-import { MarketingHomeAboutSection } from "@/components/marketing-home/sections/MarketingHomeAboutSection";
 import { MarketingAreasSection } from "@/components/marketing-home/sections/MarketingAreasSection";
 import { MarketingHomeFaqSection } from "@/components/marketing-home/sections/MarketingHomeFaqSection";
 import { MarketingHomeHowItWorksSection } from "@/components/marketing-home/sections/MarketingHomeHowItWorksSection";
@@ -20,7 +19,6 @@ export async function MarketingHomeDbSections() {
       <MarketingHomeCoreServicesSection cards={serviceCards} />
       <MarketingHomeTrustSection />
       <MarketingHomeHowItWorksSection />
-      <MarketingHomeAboutSection />
       <MarketingHomeServicesSection />
       <MarketingHomeFaqSection faqs={faqs} />
       <MarketingAreasSection locations={locations} />
