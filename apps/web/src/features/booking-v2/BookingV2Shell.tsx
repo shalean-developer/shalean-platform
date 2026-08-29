@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense } from "react";
+import { Button } from "@/components/ui/button";
 import { BookingV2Provider, useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { BookingV2Header } from "@/src/features/booking-v2/components/BookingV2Header";
 import { BookingV2SummaryPanel } from "@/src/features/booking-v2/components/BookingV2SummaryPanel";
@@ -16,35 +17,35 @@ import { useClientMounted } from "@/src/features/booking-v2/hooks/useClientMount
 
 function BookingV2LoadingShell() {
   return (
-    <div className="min-h-dvh bg-slate-50" aria-busy="true" aria-label="Loading booking form">
-      <div className="sticky top-0 z-40 border-b border-slate-100 bg-white/95 px-3 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] sm:px-6 lg:px-8">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3">
-          <div className="h-8 w-28 animate-pulse rounded bg-slate-200" />
-          <div className="mx-auto hidden h-8 max-w-sm flex-1 animate-pulse rounded-full bg-slate-100 sm:block" />
-          <div className="h-8 w-16 animate-pulse rounded bg-slate-100" />
+    <div className="min-h-dvh bg-muted/35 text-foreground" aria-busy="true" aria-label="Loading booking form">
+      <div className="sticky top-0 z-40 border-b border-border bg-background/95 pt-[max(0.75rem,env(safe-area-inset-top))] backdrop-blur-md">
+        <div className="mx-auto flex max-w-[var(--ui-container-wide)] items-center justify-between gap-3 px-[var(--ui-page-gutter)] py-3">
+          <div className="h-8 w-28 animate-pulse rounded-lg bg-muted" />
+          <div className="mx-auto hidden h-8 max-w-sm flex-1 animate-pulse rounded-full bg-muted sm:block" />
+          <div className="h-8 w-16 animate-pulse rounded-lg bg-muted" />
         </div>
       </div>
-      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <div className="mx-auto max-w-[var(--ui-container-content)] px-[var(--ui-page-gutter)] py-4 sm:py-8">
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[1fr_minmax(280px,340px)]">
-          <div className="rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6 md:p-8">
+          <div className="rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8">
             <div className="animate-pulse space-y-6">
-              <div className="mx-auto h-7 w-40 rounded bg-slate-200" />
-              <div className="mx-auto h-4 w-72 max-w-full rounded bg-slate-100" />
+              <div className="mx-auto h-7 w-40 rounded bg-muted" />
+              <div className="mx-auto h-4 w-72 max-w-full rounded bg-muted" />
               <div className="grid grid-cols-2 gap-2 pt-2 sm:grid-cols-3">
                 {[0, 1, 2].map((i) => (
-                  <div key={i} className="h-10 rounded-xl bg-slate-100" />
+                  <div key={i} className="h-10 rounded-xl bg-muted" />
                 ))}
               </div>
               <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
                 {[0, 1, 2].map((i) => (
-                  <div key={i} className="h-10 rounded-xl bg-slate-100" />
+                  <div key={i} className="h-10 rounded-xl bg-muted" />
                 ))}
               </div>
-              <div className="h-10 rounded-xl bg-slate-100" />
+              <div className="h-10 rounded-xl bg-muted" />
             </div>
           </div>
           <div className="hidden lg:block">
-            <div className="h-72 animate-pulse rounded-2xl border border-slate-100 bg-white shadow-sm" />
+            <div className="h-72 animate-pulse rounded-[var(--ui-radius-xl)] border border-border bg-card shadow-[var(--ui-shadow-sm)]" />
           </div>
         </div>
       </div>
@@ -74,16 +75,16 @@ function BookingV2Inner() {
   const useOuterStepCard = currentStep <= 2;
 
   return (
-    <div className="min-h-dvh bg-slate-50">
+    <div className="min-h-dvh bg-muted/35 text-foreground">
       <BookingV2Header serviceSlug={serviceSlug} currentStep={currentStep} onStepClick={goToStep} />
 
       {/* Main content — single document scroll; fluid padding for ≤390px */}
-      <div className="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-8 lg:px-8">
+      <div className="mx-auto max-w-[var(--ui-container-content)] px-[var(--ui-page-gutter)] py-4 sm:py-8">
         <div
           className={
             showSidebarSummary
               ? "grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[1fr_minmax(280px,340px)]"
-              : "mx-auto max-w-2xl"
+              : "mx-auto max-w-[var(--ui-container-sm)]"
           }
         >
           <div className="min-w-0">
@@ -96,7 +97,7 @@ function BookingV2Inner() {
             <div
               className={
                 useOuterStepCard
-                  ? "rounded-2xl border border-slate-100 bg-white p-4 shadow-sm sm:p-6 md:p-8"
+                  ? "rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8"
                   : "min-w-0"
               }
             >
@@ -106,24 +107,25 @@ function BookingV2Inner() {
 
             {/* Inline nav — natural flow (no nested scroll / fixed bar) */}
             <div className="mt-4 flex flex-col-reverse gap-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
-              <button
-                type="button"
+              <Button
+                variant="outline"
+                size="lg"
                 onClick={goBack}
                 suppressHydrationWarning
-                className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-slate-200 bg-white px-5 py-2.5 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto"
+                className="w-full rounded-xl bg-card shadow-[var(--ui-shadow-sm)] sm:w-auto"
               >
                 {currentStep === 1 ? "← Back to services" : "← Back"}
-              </button>
+              </Button>
 
               {currentStep < 4 && (
-                <button
-                  type="button"
+                <Button
+                  size="lg"
                   onClick={goNext}
                   suppressHydrationWarning
-                  className="inline-flex min-h-11 w-full items-center justify-center rounded-xl bg-blue-600 px-6 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto"
+                  className="w-full rounded-xl sm:w-auto"
                 >
                   {currentStep === 3 ? "Proceed to payment →" : "Continue →"}
-                </button>
+                </Button>
               )}
             </div>
           </div>
