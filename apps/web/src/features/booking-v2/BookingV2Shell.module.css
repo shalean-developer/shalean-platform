@@ -1,0 +1,76 @@
+.step1.step1 {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.step1 > :global(.space-y-8) {
+  color: var(--foreground);
+}
+
+.step1 > :global(.space-y-8) > hr {
+  display: none;
+}
+
+.step1 > :global(.space-y-8) > section,
+.step1 > :global(.space-y-8) > :global(.space-y-4) {
+  border: 1px solid var(--border);
+  border-radius: var(--ui-radius-xl);
+  background: var(--card);
+  padding: var(--ui-space-4);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step1 > :global(.space-y-8) > section h3 {
+  color: var(--muted-foreground);
+}
+
+.step1 label {
+  color: var(--foreground);
+}
+
+.step1 input:not([type="checkbox"]):not([type="radio"]),
+.step1 textarea,
+.step1 select {
+  min-height: 2.75rem;
+  border-color: var(--border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step1 textarea {
+  min-height: 6rem;
+}
+
+.step1 input::placeholder,
+.step1 textarea::placeholder {
+  color: var(--muted-foreground);
+}
+
+.step1 input:focus,
+.step1 textarea:focus,
+.step1 select:focus {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.step1 button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.step1 > :global(.space-y-8) > section > :global(.grid),
+.step1 > :global(.space-y-8) > :global(.space-y-4) > :global(.grid) {
+  row-gap: var(--ui-space-4);
+}
+
+@media (min-width: 640px) {
+  .step1 > :global(.space-y-8) > section,
+  .step1 > :global(.space-y-8) > :global(.space-y-4) {
+    padding: var(--ui-space-5);
+  }
+}
