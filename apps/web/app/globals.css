@@ -64,6 +64,7 @@
   --ui-radius-lg: 0.75rem;
   --ui-radius-xl: 1rem;
   --ui-radius-2xl: 1.5rem;
+  --ui-radius-marketing: 2rem;
   --ui-radius-pill: 9999px;
 
   /* RD-P01B canonical elevation scale */
@@ -78,7 +79,21 @@
   --ui-container-lg: 64rem;
   --ui-container-content: 68.75rem;
   --ui-container-wide: 80rem;
+  --ui-container-marketing: 112rem;
   --ui-page-gutter: clamp(1rem, 3vw, 2rem);
+
+  /* Homepage marketing presentation surfaces. These are decorative, not status colours. */
+  --marketing-surface-warm: #f7f0e4;
+  --marketing-surface-soft-yellow: #fffaf0;
+  --marketing-surface-soft-blush: #fff4f6;
+  --marketing-surface-soft-aqua: #eefaf8;
+  --marketing-surface-soft-lavender: #f7f3ff;
+  --marketing-surface-step-yellow: #f8dfa0;
+  --marketing-surface-step-pink: #f3addf;
+  --marketing-surface-step-aqua: #afe0df;
+  --marketing-accent-rose: #ec6f86;
+  --marketing-accent-teal: #38a991;
+  --marketing-accent-violet: #8060e8;
 
   /* RD-P01B canonical layer scale */
   --ui-z-base: 0;
@@ -158,6 +173,14 @@
     --warning: #fbbf24;
     --warning-foreground: #451a03;
     --overlay: rgb(0 0 0 / 0.68);
+    --marketing-surface-warm: #171512;
+    --marketing-surface-soft-yellow: #2f291b;
+    --marketing-surface-soft-blush: #302227;
+    --marketing-surface-soft-aqua: #1f302d;
+    --marketing-surface-soft-lavender: #282334;
+    --marketing-surface-step-yellow: #5b4a23;
+    --marketing-surface-step-pink: #59324e;
+    --marketing-surface-step-aqua: #274c4b;
   }
 }
 
