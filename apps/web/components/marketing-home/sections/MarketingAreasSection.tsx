@@ -2,6 +2,7 @@ import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { ArrowRight, ArrowUpRight, MapPin } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
+import { MarketingSectionHeader } from "@/components/marketing-home/primitives/MarketingSectionHeader";
 import type { HomeLocation } from "@/lib/home/data";
 import {
   LOCATIONS_INDEX_REGION_ORDER,
@@ -68,26 +69,21 @@ export function MarketingAreasSection({ locations }: Props) {
   return (
     <HomeSection
       id="locations"
-      className="scroll-mt-24 !bg-[#f7f0e4] md:py-[var(--ui-space-20)] dark:!bg-[#171512]"
+      containerSize="marketing"
+      className="scroll-mt-24 !bg-[var(--marketing-surface-warm)] md:py-[var(--ui-space-20)]"
       aria-label="Areas we serve"
     >
-      <header className="mx-auto max-w-5xl text-center">
-        <p className="text-[length:var(--ui-text-body)] font-medium uppercase tracking-[0.08em] text-foreground/75">
-          Areas We Serve
-        </p>
-        <h2 className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-page-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
-          Cleaning services across Cape Town.
-        </h2>
-        <p className="mx-auto mt-[var(--ui-space-4)] max-w-3xl text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-foreground/75">
-          Choose your part of Cape Town to explore nearby suburbs. Add your address at checkout to confirm availability for your home or office.
-        </p>
-      </header>
+      <MarketingSectionHeader
+        eyebrow="Areas We Serve"
+        title="Cleaning services across Cape Town."
+        description="Choose your part of Cape Town to explore nearby suburbs. Add your address at checkout to confirm availability for your home or office."
+      />
 
       <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-2 xl:grid-cols-5">
         {regionGroups.map(({ region, description, locations: featuredLocations }) => (
           <article
             key={region}
-            className="flex min-h-[360px] flex-col rounded-[32px] bg-card p-[var(--ui-space-6)] text-card-foreground shadow-[var(--ui-shadow-lg)] transition-transform duration-200 hover:-translate-y-1"
+            className="flex min-h-[360px] flex-col rounded-[var(--ui-radius-marketing)] bg-card p-[var(--ui-space-6)] text-card-foreground shadow-[var(--ui-shadow-lg)] transition-transform duration-200 hover:-translate-y-1"
           >
             <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/15" aria-hidden>
               <MapPin className="h-8 w-8 text-foreground" strokeWidth={1.6} />
@@ -129,7 +125,7 @@ export function MarketingAreasSection({ locations }: Props) {
       </div>
 
       {otherAreas.length > 0 ? (
-        <div className="mt-[var(--ui-space-8)] rounded-[32px] border border-border bg-card p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
+        <div className="mt-[var(--ui-space-8)] rounded-[var(--ui-radius-marketing)] border border-border bg-card p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
           <h3 className="text-[length:var(--ui-text-card-title)] font-semibold text-foreground">Other Cape Town areas</h3>
           <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
             Live service areas that are not yet mapped to one of the regional location hubs.
