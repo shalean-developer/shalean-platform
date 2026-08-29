@@ -5,6 +5,10 @@ import { Activity, AlertTriangle, Users, Calendar, RefreshCw, AlertCircle, Loade
 import { cn } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
 import type { OfficeOperationsSummary } from "@/lib/admin/officeOperations";
+import {
+  OfficeZohoPageHeader,
+  OfficeZohoSecondaryButton,
+} from "@/components/admin/office/OfficeZohoChrome";
 
 const PRIORITY_MAP: Record<string, { cls: string; label: string }> = {
   critical: { cls: "bg-red-100 text-red-700", label: "Critical" },
@@ -22,19 +26,15 @@ export default function OperationsPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Operations</h1>
-          <p className="mt-0.5 text-sm text-slate-500">Daily operational control center — live bookings, issues and supply.</p>
-        </div>
-        <button
-          type="button"
-          onClick={() => void refetch()}
-          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm hover:bg-slate-50"
-        >
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Refresh
-        </button>
-      </div>
+      <OfficeZohoPageHeader
+        title="Operations"
+        subtitle="Daily operational control center — live bookings, issues and supply."
+        actions={
+          <OfficeZohoSecondaryButton onClick={() => void refetch()} className="px-3 py-2">
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Refresh
+          </OfficeZohoSecondaryButton>
+        }
+      />
 
       {error ? (
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
