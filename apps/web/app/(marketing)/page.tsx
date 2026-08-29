@@ -1,12 +1,12 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeDbSections } from "@/components/marketing-home/MarketingHomeDbSections";
 import { MarketingHomeDbSectionsFallback } from "@/components/marketing-home/MarketingHomeDbSectionsFallback";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingHomeStickyCtaClient } from "@/components/marketing-home/MarketingHomeStickyCtaClient";
 import { MarketingStickyTrustBadge } from "@/components/marketing-home/MarketingStickyTrustBadge";
 import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
+import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
 import { PromotionFeaturedCard } from "@/components/promotions/PromotionFeaturedCard";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -36,7 +36,7 @@ export default function MarketingHomePage() {
   const bookingHref = marketingHomeBookingHref();
 
   return (
-    <div className="bg-background text-foreground">
+    <div className="min-h-screen bg-background text-foreground">
       <MarketingHomeHeader bookingHref={bookingHref} />
       <main className={marketingHomeMainPadding}>
         <MarketingHomeHeroSection />
@@ -46,7 +46,7 @@ export default function MarketingHomePage() {
         </Suspense>
         <MarketingHomeFinalCta />
       </main>
-      <FooterSection stackFloats />
+      <MarketingHomeFooter stackFloats />
       <MarketingStickyTrustBadge />
       <MarketingHomeStickyCtaClient />
     </div>
