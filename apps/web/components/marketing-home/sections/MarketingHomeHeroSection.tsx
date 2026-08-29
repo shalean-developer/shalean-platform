@@ -100,14 +100,14 @@ export function MarketingHomeHeroSection() {
           </div>
         </div>
 
-        <div className="relative mx-auto w-full max-w-[620px] lg:mx-0 lg:justify-self-end">
+        <div className="relative mx-auto w-full max-w-[600px] lg:mx-0 lg:justify-self-end">
           <div className="relative aspect-[1.13/1] w-full overflow-hidden rounded-[32px] bg-muted shadow-[var(--ui-shadow-lg)]">
             <Image
               src={HERO_MAIN}
               alt="Professional house cleaning service in a bright modern kitchen in Cape Town"
               fill
               className="object-cover object-center"
-              sizes="(max-width: 1024px) 100vw, 620px"
+              sizes="(max-width: 1024px) 100vw, 600px"
               priority
               fetchPriority="high"
             />
