@@ -46,7 +46,7 @@ export function MarketingHomeHeroSection() {
           </div>
 
           <div className="mt-[var(--ui-space-6)] lg:mt-0">
-            <h1 className="text-[clamp(2rem,4.6vw,4rem)] font-semibold leading-[0.98] tracking-[-0.05em] text-foreground">
+            <h1 className="text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
               <span className="block whitespace-nowrap text-primary">{HERO_HEADLINE_ACCENT}</span>
               <span className="block whitespace-nowrap">{HERO_HEADLINE_REST}</span>
             </h1>
