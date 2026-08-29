@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { AlertTriangle, Award, CheckCircle2, ClipboardCheck, Loader2, RefreshCw, Star, Users } from "lucide-react";
 import { OfficeZohoPageHeader, OfficeZohoSecondaryButton } from "@/components/admin/office/OfficeZohoChrome";
+import { OfficeZohoSelect } from "@/components/admin/office/OfficeZohoSelect";
 import { useAdminData } from "@/hooks/useAdminData";
 
 type ComponentScore = { score: number | null; weight: number; evidenceCount: number; label: string };
@@ -70,17 +71,16 @@ export default function CleanerPerformancePage() {
         subtitle="Workforce quality — one read-only score from canonical roster, QA, reviews, execution and Customer Care evidence. Earnings and payouts are not part of this score."
         actions={
           <>
-            <select
+            <OfficeZohoSelect
               value={days}
               onChange={(e) => setDays(Number(e.target.value))}
-              className="rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm"
               aria-label="Scorecard period"
             >
               <option value={30}>30 days</option>
               <option value={90}>90 days</option>
               <option value={180}>180 days</option>
               <option value={365}>365 days</option>
-            </select>
+            </OfficeZohoSelect>
             <OfficeZohoSecondaryButton onClick={() => void refetch()}>
               <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
               Refresh
