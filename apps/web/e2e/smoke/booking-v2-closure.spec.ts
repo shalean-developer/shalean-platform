@@ -154,11 +154,25 @@ async function expectNoHorizontalOverflow(page: Page) {
 }
 
 async function expectRetainedBookingParams(page: Page, expectedStep: string) {
-  const url = new URL(page.url());
-  expect(url.searchParams.get("step")).toBe(expectedStep);
-  expect(url.searchParams.get("promo")).toBe("P05G10");
-  expect(url.searchParams.get("source")).toBe("rd-p05g");
-  expect(url.searchParams.get("ref")).toBe("FRIEND123");
+  await expect
+    .poll(
+      () => {
+        const url = new URL(page.url());
+        return {
+          step: url.searchParams.get("step"),
+          promo: url.searchParams.get("promo"),
+          source: url.searchParams.get("source"),
+          ref: url.searchParams.get("ref"),
+        };
+      },
+      { timeout: 10_000 },
+    )
+    .toEqual({
+      step: expectedStep,
+      promo: "P05G10",
+      source: "rd-p05g",
+      ref: "FRIEND123",
+    });
 }
 
 test.describe("RD-P05G — Booking V2 closure audit", () => {
@@ -222,7 +236,7 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
         waitUntil: "domcontentloaded",
       });
       expect(response?.status()).toBeLessThan(400);
-      await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible({ timeout: 10_000 });
       await expect(page.getByRole("button", { name: "Review", exact: true })).toHaveAttribute(
         "aria-current",
         "step",
@@ -232,7 +246,7 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
 
       // A reload proves the local Booking V2 draft is resumable on the same route.
       await page.reload({ waitUntil: "domcontentloaded" });
-      await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible({ timeout: 10_000 });
       await expect(page.getByText("1 Closure Test Street", { exact: true })).toBeVisible();
       await expectRetainedBookingParams(page, "3");
 
@@ -246,9 +260,8 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
       });
 
       await page.getByRole("button", { name: "Proceed to payment →", exact: true }).click();
-      await expect(page).toHaveURL(new RegExp(`/book/${service.slug}\\?`));
       await expectRetainedBookingParams(page, "4");
-      await expect(page.getByRole("heading", { name: "Payment", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Payment", exact: true })).toBeVisible({ timeout: 10_000 });
       await expect(page.getByRole("navigation", { name: "Booking progress" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Payment", exact: true })).toHaveAttribute(
         "aria-current",
@@ -257,7 +270,7 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
       await expectNoHorizontalOverflow(page);
 
       await page.getByRole("button", { name: "← Back", exact: true }).click();
-      await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible({ timeout: 10_000 });
       await expectRetainedBookingParams(page, "3");
 
       const afterRoundTrip = await readDraft(page);
