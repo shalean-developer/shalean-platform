@@ -66,7 +66,7 @@ export default function CleanerPerformancePage() {
   }, [rows]);
 
   return (
-    <main className="space-y-6">
+    <div className="space-y-6">
       <OfficeZohoPageHeader
         title="Cleaner Performance Scorecards"
         subtitle="Workforce quality — one read-only score from canonical roster, QA, reviews, execution and Customer Care evidence. Earnings and payouts are not part of this score."
@@ -107,6 +107,6 @@ export default function CleanerPerformancePage() {
           <div className="overflow-x-auto"><table className="w-full min-w-[1180px] text-sm"><thead className="bg-slate-50 text-left text-xs font-semibold uppercase tracking-wide text-slate-500"><tr><th className="px-5 py-3">Cleaner</th><th className="px-5 py-3">Overall</th><th className="px-5 py-3">QA</th><th className="px-5 py-3">Reviews</th><th className="px-5 py-3">Reliability</th><th className="px-5 py-3">Completion</th><th className="px-5 py-3">Attendance</th><th className="px-5 py-3">Evidence</th><th className="px-5 py-3">Quality cases</th></tr></thead><tbody className="divide-y divide-slate-100">{rows.map((r) => <tr key={r.cleanerId} className="hover:bg-slate-50/70"><td className="px-5 py-4"><p className="font-semibold text-slate-900">{r.cleanerName}</p><p className="text-xs text-slate-500">{r.facts.completedBookings} completed · {r.facts.rosterAssignments} roster assignments</p></td><td className="px-5 py-4"><div className="flex items-center gap-2"><span className="text-lg font-bold tabular-nums text-slate-950">{pct(r.overallScore)}</span><OfficeZohoStatusBadge tone={gradeTone(r.grade)}>{r.grade}</OfficeZohoStatusBadge></div></td><td className="px-5 py-4"><span className="font-semibold">{pct(r.components.quality.score)}</span><p className="text-xs text-slate-400">{r.components.quality.evidenceCount} inspections</p></td><td className="px-5 py-4"><span className="inline-flex items-center gap-1 font-semibold"><Star className="h-3.5 w-3.5" />{pct(r.components.customerFeedback.score)}</span><p className="text-xs text-slate-400">{r.facts.reviews} reviews</p></td><td className="px-5 py-4 font-semibold">{pct(r.components.reliability.score)}</td><td className="px-5 py-4 font-semibold">{pct(r.components.completion.score)}</td><td className="px-5 py-4"><span className="font-semibold">{pct(r.components.attendance.score)}</span><p className="text-xs text-slate-400">{r.facts.attendanceObservations} timed starts</p></td><td className="px-5 py-4"><span className="font-semibold">{r.evidenceCoverage}%</span></td><td className="px-5 py-4"><span className={r.complaints.openQualityCases ? "font-semibold text-red-700" : "text-slate-600"}>{r.complaints.qualityRelatedCases} total / {r.complaints.openQualityCases} open</span>{r.complaints.penalty ? <p className="text-xs text-red-500">−{r.complaints.penalty} pts</p> : null}</td></tr>)}</tbody></table></div>
         )}
       </OfficeZohoTableShell>
-    </main>
+    </div>
   );
 }
