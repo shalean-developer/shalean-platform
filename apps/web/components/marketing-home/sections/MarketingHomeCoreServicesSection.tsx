@@ -78,7 +78,7 @@ export function MarketingHomeCoreServicesSection({ cards }: Props) {
               className="flex min-h-[360px] flex-col items-center rounded-[32px] bg-card px-[var(--ui-space-6)] py-[var(--ui-space-10)] text-center text-card-foreground shadow-[var(--ui-shadow-lg)] transition-transform duration-200 hover:-translate-y-1"
             >
               <div className="relative flex h-24 w-24 items-center justify-center" aria-hidden>
-                <span className="absolute h-16 w-16 rounded-full bg-primary/18" />
+                <span className="absolute h-16 w-16 rounded-full bg-primary/15" />
                 <GroupIcon className="relative h-14 w-14 text-foreground" strokeWidth={1.55} />
               </div>
 
