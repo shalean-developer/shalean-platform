@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
 import { PromotionCountdown } from "./PromotionCountdown";
 import { promoBookingHref, trackPromoEvent } from "./promoCta";
 
@@ -49,44 +50,50 @@ export function PromotionFeaturedCard() {
   const accent = promo.colours?.accent ?? "#059669";
 
   return (
-    <section className="mx-auto max-w-6xl px-4 py-10">
+    <HomeSection containerSize="marketing" className="py-[var(--ui-space-8)] md:py-[var(--ui-space-10)]">
       <div
-        className="overflow-hidden rounded-3xl text-white"
+        className="overflow-hidden rounded-[var(--ui-radius-marketing)] text-white shadow-[var(--ui-shadow-md)]"
         style={{
           background: `linear-gradient(135deg, ${primary}, ${accent})`,
         }}
       >
-        <div className="grid gap-6 p-6 md:grid-cols-[1.2fr_0.8fr] md:p-10">
-          <div className="space-y-4">
-            <p className="text-sm font-semibold uppercase tracking-wide text-white/80">
+        <div className="grid gap-[var(--ui-space-6)] p-[var(--ui-space-6)] md:grid-cols-[1.2fr_0.8fr] md:p-[var(--ui-space-10)]">
+          <div>
+            <p className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.16em] text-white/80">
               Featured promotion
             </p>
             {promo.offerLabel ? (
-              <p className="text-3xl font-bold tracking-tight md:text-4xl">{promo.offerLabel}</p>
+              <p className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-page-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight">
+                {promo.offerLabel}
+              </p>
             ) : null}
-            <h2 className="text-2xl font-semibold md:text-3xl">{promo.headline}</h2>
+            <h2 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)]">
+              {promo.headline}
+            </h2>
             {promo.subheadline ? (
-              <p className="max-w-xl text-white/90">{promo.subheadline}</p>
+              <p className="mt-[var(--ui-space-3)] max-w-xl text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-white/90">
+                {promo.subheadline}
+              </p>
             ) : null}
             {promo.promoCode ? (
-              <p className="inline-flex rounded-full bg-white/15 px-3 py-1 font-mono text-sm">
+              <p className="mt-[var(--ui-space-4)] inline-flex rounded-[var(--ui-radius-pill)] bg-white/15 px-[var(--ui-space-3)] py-[var(--ui-space-1)] font-mono text-[length:var(--ui-text-small)]">
                 {promo.promoCode}
               </p>
             ) : null}
             {promo.countdown ? (
-              <PromotionCountdown endsAt={promo.endsAt} className="pt-2" />
+              <PromotionCountdown endsAt={promo.endsAt} className="pt-[var(--ui-space-4)]" />
             ) : null}
-            <div className="flex flex-wrap gap-3 pt-1">
+            <div className="mt-[var(--ui-space-5)] flex flex-wrap gap-[var(--ui-space-3)]">
               <Link
                 href={promoBookingHref(promo.promoCode)}
-                className="inline-flex rounded-full bg-white px-5 py-2.5 text-sm font-semibold text-slate-900"
+                className="inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-lg)] bg-white px-[var(--ui-space-5)] text-[length:var(--ui-text-small)] font-semibold text-foreground shadow-[var(--ui-shadow-sm)] transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 onClick={() => trackPromoEvent(promo.id, "click")}
               >
                 {promo.cta || "Book now"}
               </Link>
               <Link
                 href={promo.landingPagePath}
-                className="inline-flex rounded-full border border-white/40 bg-white/10 px-5 py-2.5 text-sm font-semibold text-white hover:bg-white/20"
+                className="inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-lg)] border border-white/40 bg-white/10 px-[var(--ui-space-5)] text-[length:var(--ui-text-small)] font-semibold text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 onClick={() => trackPromoEvent(promo.id, "landing_visit")}
               >
                 Learn more
@@ -98,15 +105,15 @@ export function PromotionFeaturedCard() {
             <img
               src={promo.heroImageUrl}
               alt=""
-              className="h-48 w-full rounded-2xl object-cover md:h-full"
+              className="h-48 w-full rounded-[var(--ui-radius-2xl)] object-cover md:h-full"
             />
           ) : (
-            <div className="flex min-h-[12rem] items-center justify-center rounded-2xl bg-white/10 text-sm text-white/80">
+            <div className="flex min-h-[12rem] items-center justify-center rounded-[var(--ui-radius-2xl)] bg-white/10 text-[length:var(--ui-text-small)] text-white/80">
               Shalean Campaign
             </div>
           )}
         </div>
       </div>
-    </section>
+    </HomeSection>
   );
 }
