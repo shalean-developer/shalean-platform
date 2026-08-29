@@ -327,10 +327,141 @@
   outline-offset: 2px;
 }
 
+.step4 {
+  color: var(--foreground);
+}
+
+.step4 > :global(.space-y-6) > div:first-child {
+  text-align: center;
+}
+
+.step4 > :global(.space-y-6) > div:first-child h2 {
+  color: var(--foreground);
+  font-size: var(--ui-text-section-title);
+  line-height: var(--ui-leading-tight);
+}
+
+.step4 > :global(.space-y-6) > :global(.space-y-6) {
+  border: 1px solid var(--border);
+  border-radius: var(--ui-radius-xl);
+  background: var(--card);
+  padding: var(--ui-space-4);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step4 h3,
+.step4 label,
+.step4 :global(.text-slate-700),
+.step4 :global(.text-slate-800),
+.step4 :global(.text-slate-900) {
+  color: var(--foreground);
+}
+
+.step4 :global(.text-slate-400),
+.step4 :global(.text-slate-500),
+.step4 :global(.text-slate-600) {
+  color: var(--muted-foreground);
+}
+
+.step4 :global(.text-blue-500),
+.step4 :global(.text-blue-600),
+.step4 :global(.text-blue-700),
+.step4 :global(.text-blue-800),
+.step4 :global(.text-blue-900) {
+  color: var(--primary);
+}
+
+.step4 :global(.bg-blue-600),
+.step4 :global(.bg-slate-900) {
+  background: var(--primary);
+}
+
+.step4 :global(.bg-blue-100) {
+  background: color-mix(in srgb, var(--primary) 12%, var(--card));
+}
+
+.step4 :global(.border-slate-100),
+.step4 :global(.border-slate-200) {
+  border-color: var(--border);
+}
+
+.step4 :global(.bg-slate-50) {
+  background: color-mix(in srgb, var(--muted) 72%, var(--card));
+}
+
+.step4 :global(.rounded-2xl.border.border-slate-100.bg-slate-50) {
+  border-radius: var(--ui-radius-xl);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step4 :global(.flex.rounded-xl.border.border-slate-200.p-1) {
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--muted) 68%, var(--card));
+  padding: 0.25rem;
+}
+
+.step4 input:not([type="checkbox"]):not([type="radio"]),
+.step4 textarea,
+.step4 select {
+  min-height: 2.75rem;
+  border-color: var(--border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step4 input::placeholder,
+.step4 textarea::placeholder {
+  color: var(--muted-foreground);
+}
+
+.step4 input:focus,
+.step4 textarea:focus,
+.step4 select:focus {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.step4 button {
+  min-height: 2.75rem;
+}
+
+.step4 button:focus-visible,
+.step4 a:focus-visible,
+.step4 input:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.step4 :global(.rounded-xl.border.border-emerald-100.bg-emerald-50),
+.step4 :global(.rounded-xl.border.border-amber-100.bg-amber-50),
+.step4 :global(.rounded-xl.border.border-red-100.bg-red-50) {
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step4 :global(.flex.w-full.items-center.justify-center.gap-2.rounded-xl.bg-blue-600) {
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step4 :global(.flex.flex-col.gap-2) {
+  border-top: 1px solid var(--border);
+  padding-top: var(--ui-space-4);
+}
+
+.step4 :global(.text-center.text-xs.text-slate-400) {
+  color: var(--muted-foreground);
+  line-height: 1.5;
+}
+
 @media (min-width: 640px) {
   .step1 > :global(.space-y-8) > section,
   .step1 > :global(.space-y-8) > :global(.space-y-4),
-  .step2 > :global(.space-y-8) > section {
+  .step2 > :global(.space-y-8) > section,
+  .step4 > :global(.space-y-6) > :global(.space-y-6) {
     padding: var(--ui-space-5);
   }
 }
