@@ -231,7 +231,7 @@ export async function loadCustomerBookingPageForUser(
     return { ok: false, error: "Could not load bookings.", status: 500 };
   }
 
-  let rawRows = ((owned.data ?? []) as BookingRow[]).map((row) => normalizeBookingCustomerIdentity(row));
+  const rawRows = ((owned.data ?? []) as BookingRow[]).map((row) => normalizeBookingCustomerIdentity(row));
   if (viewerNorm.length >= 3) {
     const orphan = await loadSourceRows(admin, {
       ownershipColumn,
