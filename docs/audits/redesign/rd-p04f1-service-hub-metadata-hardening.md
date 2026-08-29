@@ -1,6 +1,6 @@
 # RD-P04F1 — Service-hub + metadata-parity closure hardening
 
-Status: VALIDATION PENDING — redirect topology corrected
+Status: VALIDATION PENDING — final services visual smoke
 Branch: `design/rd04-platform-redesign`
 Scope: presentation/metadata compatibility only; no production deployment or data mutation.
 
@@ -28,7 +28,23 @@ The two presentation-only edits made to the unreachable legacy page files were r
 
 No SEO redirect behavior was changed.
 
-The canonical active service hub is `/services`. Static review confirms it already uses `MarketingLayout`, which resolves to canonical `SiteFooter`, while its section-level blue/zinc presentation remains domain-specific service-hub composition. No additional service-hub code change is required for this closure slice; it requires visual smoke validation only.
+The canonical active service hub is `/services`. Desktop visual validation confirmed the main page structure, header/footer, cards, trust strip, accordions, areas and final CTA section render without visible horizontal overflow.
+
+### CTA contrast correction
+
+Desktop validation exposed a real reusable CTA styling defect: the final inverse `Book now` CTA combined the primary variant's `text-white` utility with page-level `text-blue-900`, which could render white text on a white button because the project utility combiner does not resolve conflicting Tailwind classes.
+
+The fix was made centrally in `ServicesCtaButton` so an explicitly requested inverse primary treatment does not also inject the conflicting primary colour utilities. Tracking, navigation and CTA semantics are unchanged.
+
+Commit: `47da09b8` — `RD-P04F1: fix inverse CTA text contrast`
+
+### Six-primary-service hierarchy correction
+
+Desktop validation also showed Window Cleaning as a seventh full primary booking card. The public hierarchy requires six primary services, with Window Cleaning retained as subordinate specialist guidance rather than promoted as a seventh primary service.
+
+`ServiceCard` now recognises the Window Cleaning guide and renders it as a full-width `Specialist add-on guide` callout with a guide link instead of the standard primary booking-card treatment. The six primary services remain unchanged. The Window Cleaning SEO guide remains available and its learn-more analytics remain intact.
+
+Commit: `fcfa92e4` — `RD-P04F1: keep window cleaning subordinate`
 
 ## `/offers/[slug]` fallback metadata/content parity
 
@@ -45,18 +61,26 @@ Commit: `d7def8da` — `RD-P04F1: restore offer metadata parity`
 ## Validation evidence received
 
 - Local branch pulled successfully to the F1 implementation series.
-- `npm --prefix apps/web run typecheck` passed cleanly.
+- `npm --prefix apps/web run typecheck` passed cleanly before the final CTA/service-hierarchy presentation fixes.
 - `/offers/spring-cleaning-special` returned `200`.
 - unknown `/offers/rd-p04f1-fallback-check` returned `200`.
 - `/campaigns/spring-cleaning-special?utm_source=test` returned `308` with location `/offers/spring-cleaning-special?utm_source=test`.
-- `/maid-services-cape-town` and `/cleaning-services-cape-town` returned the expected legacy `308` responses.
+- `/maid-services-cape-town` and `/cleaning-services-cape-town` returned expected `308` responses to `/services`.
+- Desktop `/services` screenshot confirmed the CTA contrast fix after `47da09b8` and otherwise stable page composition.
 
 ## Remaining closure gate
 
-1. Pull the latest branch after the corrective reverts.
-2. Confirm `/services` returns `200`.
-3. Visually smoke `/services` on desktop and mobile for one public header/footer, intact service hierarchy/CTAs, no clipping or horizontal overflow, and usable sticky mobile CTA.
-4. Optionally inspect the unknown-offer document title and confirm the fallback title is `Campaign | Shalean`.
+1. Pull the latest branch including `fcfa92e4`.
+2. Run `npm --prefix apps/web run typecheck` on the latest head.
+3. Confirm `/services` returns `200`.
+4. Visually smoke `/services` on desktop and mobile for:
+   - exactly six primary service cards;
+   - Window Cleaning shown as a subordinate specialist guide rather than a seventh primary booking card;
+   - visible `Book now` text in the final inverse CTA;
+   - one public header/footer;
+   - no clipping or horizontal overflow;
+   - usable sticky mobile CTA.
+5. Optionally inspect the unknown-offer document title and confirm the fallback title is `Campaign | Shalean`.
 
 If these gates pass, mark RD-P04F1 and RD-P04 `PASSED / CLOSED`, then proceed to RD-P05.
 
