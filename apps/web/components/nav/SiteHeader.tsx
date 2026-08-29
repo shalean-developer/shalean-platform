@@ -45,12 +45,12 @@ type SiteHeaderProps = {
 };
 
 const SERVICE_MENU_DETAILS: Record<string, string> = {
-  "Standard Cleaning": "Reliable recurring or once-off home cleaning.",
-  "Deep Cleaning": "A more detailed top-to-bottom clean.",
-  "Move In / Out Cleaning": "Prepare a home for moving day or handover.",
-  "Office Cleaning": "Professional cleaning for workplaces and teams.",
-  "Airbnb Cleaning": "Fast, guest-ready turnover cleaning.",
-  "Carpet Cleaning": "Refresh carpets and soft floor surfaces.",
+  "Standard Cleaning": "Once-off or recurring home cleaning.",
+  "Deep Cleaning": "Detailed cleaning for the whole home.",
+  "Move In / Out Cleaning": "Cleaning for move-in, move-out and handover.",
+  "Office Cleaning": "Cleaning for offices and workplaces.",
+  "Airbnb Cleaning": "Turnover cleaning for short-term stays.",
+  "Carpet Cleaning": "Professional carpet cleaning.",
 };
 
 export function SiteHeader({
@@ -198,42 +198,41 @@ export function SiteHeader({
                         <div className="grid grid-cols-[220px_minmax(0,1fr)] gap-2 p-2">
                           <div className="flex flex-col rounded-[22px] bg-muted p-5">
                             <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
-                              Cleaning services
+                              Services
                             </p>
                             <h3 className="mt-3 text-xl font-bold leading-tight text-foreground">
-                              Find the right clean for your space.
+                              Choose the cleaning service you need.
                             </h3>
                             <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                              Compare the main Shalean cleaning options and choose the service that fits your home, move, stay or workplace.
+                              Home, move, Airbnb and workplace cleaning in Cape Town.
                             </p>
-                            <div className="mt-4 space-y-2 text-sm text-foreground">
-                              <p>See the right service faster</p>
-                              <p>Understand each cleaning type</p>
-                              <p>Continue to canonical service pages</p>
-                            </div>
+
+                            <Link
+                              href={bookingHref}
+                              className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                              onClick={() => setServicesOpen(false)}
+                              tabIndex={servicesOpen ? 0 : -1}
+                            >
+                              Book a Service
+                              <ArrowRight className="h-4 w-4" aria-hidden />
+                            </Link>
 
                             {allServicesLink ? (
                               <Link
                                 href={allServicesLink[1]}
-                                className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="mt-3 text-center text-sm font-semibold text-foreground underline-offset-4 hover:underline"
                                 onClick={() => setServicesOpen(false)}
                                 tabIndex={servicesOpen ? 0 : -1}
                               >
                                 View all services
-                                <ArrowRight className="h-4 w-4" aria-hidden />
                               </Link>
                             ) : null}
                           </div>
 
                           <div className="p-3">
-                            <div className="flex items-center justify-between gap-4 px-2 pb-2">
-                              <div>
-                                <p className="text-sm font-bold text-foreground">Popular services</p>
-                                <p className="mt-0.5 text-xs text-muted-foreground">Choose one to see service details.</p>
-                              </div>
-                              <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
-                                6 primary
-                              </span>
+                            <div className="px-2 pb-2">
+                              <p className="text-sm font-bold text-foreground">Cleaning services</p>
+                              <p className="mt-0.5 text-xs text-muted-foreground">Choose a service to see details.</p>
                             </div>
 
                             <div className="mt-1 grid grid-cols-2 gap-1">
@@ -266,7 +265,7 @@ export function SiteHeader({
                                 >
                                   <span>
                                     <span className="font-semibold text-foreground">Window Cleaning</span>
-                                    <span className="ml-2 text-xs text-muted-foreground">Additional cleaning service</span>
+                                    <span className="ml-2 text-xs text-muted-foreground">Additional service</span>
                                   </span>
                                   <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
                                 </Link>
@@ -330,7 +329,7 @@ export function SiteHeader({
                     openService(filteredServices[0][1]);
                   }
                 }}
-                placeholder="Search cleaning services"
+                placeholder="Search services"
                 className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
                 aria-label="Search Shalean cleaning services"
                 aria-expanded={serviceSearchOpen}
