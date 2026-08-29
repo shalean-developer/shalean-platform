@@ -79,8 +79,13 @@ function reviewDraft(serviceSlug: string, cleanerMode: CleanerMode): Record<stri
   };
 }
 
-async function seedDraft(page: Page, serviceSlug: string, cleanerMode: CleanerMode) {
-  const draft = reviewDraft(serviceSlug, cleanerMode);
+async function seedDraft(
+  page: Page,
+  serviceSlug: string,
+  cleanerMode: CleanerMode,
+  overrides: Record<string, unknown> = {},
+) {
+  const draft = { ...reviewDraft(serviceSlug, cleanerMode), ...overrides };
   await page.addInitScript(
     ({ key, value }) => {
       window.localStorage.setItem(key, JSON.stringify(value));
@@ -159,6 +164,18 @@ async function expectReviewPrice(page: Page) {
   await expect(page.getByText(`R${amount.toLocaleString("en-ZA")}`, { exact: true }).first()).toBeVisible();
 }
 
+async function expectReviewSectionNumbers(page: Page, titles: string[]) {
+  for (const [index, title] of titles.entries()) {
+    const heading = page.getByRole("heading", { name: title, exact: true });
+    await expect(heading).toBeVisible();
+    const labelRow = heading.locator("xpath=..");
+    const counterContent = await labelRow.evaluate((element) =>
+      window.getComputedStyle(element, "::before").content,
+    );
+    expect(counterContent.replace(/[\"']/g, "")).toBe(String(index + 1));
+  }
+}
+
 test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
   test("regular review preserves customer, schedule, cleaner, pricing, draft and payment transition", async ({ page }) => {
     await seedDraft(page, "regular-cleaning", "individual_cleaners");
@@ -172,10 +189,19 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await expect(page.getByText("Regular Cleaning", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("1 Review Test Street", { exact: true })).toBeVisible();
     await expect(page.getByText("Claremont, Cape Town, 7708", { exact: true })).toBeVisible();
+    await expect(page.getByText("08:30", { exact: true })).toBeVisible();
     await expect(page.getByText(/Recurring · Weekly/)).toBeVisible();
     await expect(page.getByText("Alice Test", { exact: true })).toBeVisible();
     await expect(page.getByText("inside-oven", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Price breakdown" })).toBeVisible();
+    await expectReviewSectionNumbers(page, [
+      "Location",
+      "Equipment",
+      "Clean details",
+      "Schedule",
+      "Cleaner preference",
+      "Add-ons",
+    ]);
     await expectReviewPrice(page);
 
     await expectDraft(page, {
@@ -215,7 +241,15 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
     await expect(page.getByText("Deep Cleaning", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("RD Team Alpha", { exact: true })).toBeVisible();
+    await expect(page.getByText("08:30", { exact: true })).toBeVisible();
     await expect(page.getByText(/Recurring · Weekly/)).toBeVisible();
+    await expectReviewSectionNumbers(page, [
+      "Location",
+      "Equipment",
+      "Clean details",
+      "Schedule",
+      "Add-ons",
+    ]);
     await expectReviewPrice(page);
 
     await expectDraft(page, {
@@ -229,5 +263,27 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=4/);
 
     expect(forbiddenMutations, "Team review smoke must not submit a booking or payment mutation").toEqual([]);
+  });
+
+  test("review labels a missing time clearly without mutating the draft", async ({ page }) => {
+    await seedDraft(page, "regular-cleaning", "individual_cleaners", { time: "" });
+    const forbiddenMutations = await installNonMutatingApiSandbox(page);
+
+    const response = await page.goto("/book/regular-cleaning?step=3", { waitUntil: "domcontentloaded" });
+    expect(response?.status()).toBeLessThan(400);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=3/);
+    await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
+    await expect(page.getByText("No time selected.", { exact: true })).toBeAttached();
+
+    const scheduleHeading = page.getByRole("heading", { name: "Schedule", exact: true });
+    const scheduleSection = scheduleHeading.locator("xpath=../../..");
+    const timeValue = scheduleSection.locator(".grid.grid-cols-2.gap-3 > div:nth-child(2) > p:last-child");
+    const fallbackContent = await timeValue.evaluate((element) =>
+      window.getComputedStyle(element, "::after").content,
+    );
+    expect(fallbackContent.replace(/[\"']/g, "")).toBe("Not selected");
+
+    await expectDraft(page, { time: "" });
+    expect(forbiddenMutations, "Missing-time presentation check must remain read-only").toEqual([]);
   });
 });
