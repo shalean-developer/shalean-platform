@@ -1,15 +1,15 @@
 # RD-P05F — Step 4 Payment presentation normalization
 
-Status: IMPLEMENTED / CI PASSED / LOCAL VISUAL VALIDATION PENDING
+Status: PASSED / CLOSED
 Branch: `design/rd04-platform-redesign`
 Validation base: `validation/rd-p05f-base` @ `2e9ca72bb5565ed310185132ad831c170c26bdea`
 Validated implementation head: `d042f871a8dc4f5e81ab544abd53dccae3f96054`
-Validation PR: #454 — validation only; do not merge.
+Validation PR: #454 — validation only; close unmerged.
 Scope: presentation-only Booking V2 Step 4 normalization. No production deployment, production data mutation, booking/payment behavior change, Supabase mutation, pricing authority change, or real payment completion.
 
 ## Governing authority
 
-RD-P05A requires Step 4 to be redesigned last and presentation-first. RD-P05F must preserve exactly:
+RD-P05A requires Step 4 to be redesigned last and presentation-first. RD-P05F preserved exactly:
 
 - sign-in / sign-up authentication requirements and form contracts;
 - persisted booking recovery and pending booking ID behavior;
@@ -89,17 +89,33 @@ Passed on that exact head:
 - `booking-v2-step4-smoke` — success, non-mutating;
 - `web-test` — success, including production dependency audit, critical payments/referrals tests, revenue-path tests, typecheck, Booking core ESLint, SEO gates, production-mode Next.js build, local internal-link crawl and route-matrix checks.
 
+The audit-only follow-up head `6fa253aac6208d0d6879d5ef739ca44ceeab19a4` also passed migration governance, Step 2, Step 3, Step 4 and the full `web-test` gate.
+
 The base-to-head diff contains only the two shell presentation files, the Step 4 test/workflow and this audit document. `Step4Payment.tsx` is not in the diff.
 
-## Remaining gate
+## Local visual validation
 
-A local visual smoke is still required before formal RD-P05F closure. Check the Payment screen on the pulled exact head without signing in/submitting auth, confirming a booking, launching Paystack or completing payment.
+Local visual validation was supplied and approved on 2026-08-29 from the test environment Payment screen.
 
-Recommended local routes:
+Observed and accepted:
 
-- `/book/regular-cleaning?step=4`
-- optionally one team service such as `/book/deep-cleaning?step=4` for visual consistency only.
+- clear Payment → Confirm & pay hierarchy;
+- readable service/address and fee breakdown;
+- promo input and referral-warning state remain visually contained;
+- total-to-pay amount and secure payment CTA are prominent;
+- trust points and Terms/Privacy links remain visible;
+- Back navigation remains visually distinct;
+- no visible horizontal overflow, clipping or nested-scroll defect;
+- no booking/payment action was required to approve the presentation.
 
-## Closure criteria
+The screenshot showed an authenticated test-session Payment state. This is acceptable as a visual-only gate because CI separately validates the unauthenticated auth-gate presentation without submitting authentication or payment requests.
 
-RD-P05F may be marked PASSED / CLOSED only after the local Payment presentation is visually confirmed on the validated branch without completing a booking or payment. After that, the next formal slice is RD-P05G — Booking UI closure audit.
+## Closure
+
+RD-P05F is PASSED / CLOSED.
+
+No booking was confirmed for this closure, no payment was initiated or completed, no Paystack session was launched, no Supabase schema/data mutation occurred, and no production deployment/customer traffic was authorised.
+
+Validation PR #454 must be closed without merge after the final audit-only exact-head checks are green.
+
+Next formal slice: **RD-P05G — Booking UI closure audit**.
