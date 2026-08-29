@@ -76,8 +76,8 @@ export function SiteHeader({
   }, [servicesOpen]);
 
   return (
-    <div className="bg-white/95 px-3 py-2 shadow-sm backdrop-blur sm:px-5">
-      <div className="mx-auto flex w-full max-w-7xl items-center gap-3 lg:justify-between">
+    <div className="border-b border-border bg-background/95 px-3 py-2 shadow-[var(--ui-shadow-sm)] backdrop-blur sm:px-5">
+      <div className="mx-auto flex w-full max-w-[var(--ui-container-wide)] items-center gap-3 lg:justify-between">
         <Link href="/" className={marketingHeaderLogoLinkClass} aria-label="Shalean home">
           <ShaleanNavLogo
             className={marketingHeaderLogoImageClass}
@@ -95,7 +95,7 @@ export function SiteHeader({
                     type="button"
                     className={cn(
                       marketingHeaderNavLinkClass,
-                      servicesOpen && "bg-blue-50 text-blue-700",
+                      servicesOpen && "bg-accent text-accent-foreground",
                     )}
                     onClick={() => setServicesOpen((value) => !value)}
                     aria-expanded={servicesOpen}
@@ -111,7 +111,7 @@ export function SiteHeader({
                   </button>
                   <div
                     className={cn(
-                      "absolute left-0 top-full z-50 mt-1.5 w-52 rounded-xl border border-blue-100 bg-white py-1.5 shadow-lg transition-[opacity,visibility] duration-150",
+                      "absolute left-0 top-full z-50 mt-1.5 w-52 rounded-[var(--ui-radius-xl)] border border-border bg-popover py-1.5 text-popover-foreground shadow-[var(--ui-shadow-lg)] transition-[opacity,visibility] duration-150",
                       servicesOpen
                         ? "visible opacity-100"
                         : "invisible pointer-events-none opacity-0",
@@ -122,7 +122,7 @@ export function SiteHeader({
                       <Link
                         key={item}
                         href={itemHref}
-                        className="block px-4 py-2 text-sm text-slate-700 hover:bg-blue-50 hover:text-blue-700"
+                        className="block px-4 py-2 text-[length:var(--ui-text-small)] text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
                         onClick={() => setServicesOpen(false)}
                         tabIndex={servicesOpen ? 0 : -1}
                       >
@@ -151,7 +151,7 @@ export function SiteHeader({
           <GrowthCtaLink
             href={bookingHref}
             source={tracking.desktopBook}
-            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+            className="inline-flex items-center gap-2 rounded-[var(--ui-radius-lg)] bg-primary px-[var(--ui-space-5)] py-[var(--ui-space-2)] text-[length:var(--ui-text-small)] font-semibold text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             <CalendarDays className="h-4 w-4" />
             Book Now
@@ -178,7 +178,7 @@ export function SiteHeader({
       <div
         id={mobileNavId}
         className={cn(
-          "border-t border-blue-100 bg-white shadow-md lg:hidden",
+          "border-t border-border bg-background shadow-[var(--ui-shadow-md)] lg:hidden",
           mobileOpen
             ? cn("visible px-4 py-4 opacity-100", marketingMobileDrawerOpenPadding)
             : "invisible max-h-0 overflow-hidden opacity-0",
