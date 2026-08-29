@@ -1,6 +1,6 @@
 # RD-P04F1 — Service-hub + metadata-parity closure hardening
 
-Status: VALIDATION PENDING — final services visual smoke
+Status: PASSED / CLOSED
 Branch: `design/rd04-platform-redesign`
 Scope: presentation/metadata compatibility only; no production deployment or data mutation.
 
@@ -28,7 +28,7 @@ The two presentation-only edits made to the unreachable legacy page files were r
 
 No SEO redirect behavior was changed.
 
-The canonical active service hub is `/services`. Desktop visual validation confirmed the main page structure, header/footer, cards, trust strip, accordions, areas and final CTA section render without visible horizontal overflow.
+The canonical active service hub is `/services`.
 
 ### CTA contrast correction
 
@@ -58,32 +58,24 @@ Canonical `/offers/[slug]` routing, `/book?promo=` attribution, promotion lookup
 
 Commit: `d7def8da` — `RD-P04F1: restore offer metadata parity`
 
-## Validation evidence received
+## Final validation evidence
 
-- Local branch pulled successfully to the F1 implementation series.
-- `npm --prefix apps/web run typecheck` passed cleanly before the final CTA/service-hierarchy presentation fixes.
+- Latest local branch head validated at `799fcb7d` before this closure-record commit.
+- `npm --prefix apps/web run typecheck` passed cleanly on the latest implementation head.
+- `/services` returned `200` with the local Next.js server running.
 - `/offers/spring-cleaning-special` returned `200`.
 - unknown `/offers/rd-p04f1-fallback-check` returned `200`.
 - `/campaigns/spring-cleaning-special?utm_source=test` returned `308` with location `/offers/spring-cleaning-special?utm_source=test`.
 - `/maid-services-cape-town` and `/cleaning-services-cape-town` returned expected `308` responses to `/services`.
-- Desktop `/services` screenshot confirmed the CTA contrast fix after `47da09b8` and otherwise stable page composition.
+- Refreshed desktop `/services` screenshot confirmed visible `Book now` text after the CTA contrast fix and stable page composition.
+- Final mobile `/services` screenshot confirmed the six primary service cards stack correctly, Window Cleaning is separated as the subordinate specialist guide, the layout remains within the mobile viewport without visible horizontal overflow, the final CTA remains usable, and the mobile footer/sticky booking treatment remains intact.
 
-## Remaining closure gate
+## Closure decision
 
-1. Pull the latest branch including `fcfa92e4`.
-2. Run `npm --prefix apps/web run typecheck` on the latest head.
-3. Confirm `/services` returns `200`.
-4. Visually smoke `/services` on desktop and mobile for:
-   - exactly six primary service cards;
-   - Window Cleaning shown as a subordinate specialist guide rather than a seventh primary booking card;
-   - visible `Book now` text in the final inverse CTA;
-   - one public header/footer;
-   - no clipping or horizontal overflow;
-   - usable sticky mobile CTA.
-5. Optionally inspect the unknown-offer document title and confirm the fallback title is `Campaign | Shalean`.
+RD-P04F1 is `PASSED / CLOSED`.
 
-If these gates pass, mark RD-P04F1 and RD-P04 `PASSED / CLOSED`, then proceed to RD-P05.
+RD-P04 public conversion pages now have reconciled audit evidence, preserved referral/promotion attribution, restored metadata parity, correct legacy redirect topology, correct six-primary-service hierarchy, and validated desktop/mobile conversion presentation. RD-P04 is therefore `PASSED / CLOSED` and the programme may proceed to RD-P05 — Booking UI.
 
 ## Authority boundary
 
-No booking, payment, pricing, referral rules, promotion eligibility, API, RBAC, Supabase schema/data, SEO redirect topology or production configuration changes are authorized or included.
+No booking, payment, pricing, referral rules, promotion eligibility, API, RBAC, Supabase schema/data, SEO redirect topology or production configuration changes were authorized or included.
