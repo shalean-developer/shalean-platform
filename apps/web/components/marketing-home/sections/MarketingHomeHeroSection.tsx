@@ -28,7 +28,7 @@ export function MarketingHomeHeroSection() {
   preload(HERO_MAIN, { as: "image", fetchPriority: "high" });
 
   return (
-    <HomeSection className="overflow-hidden border-b border-border py-[var(--ui-space-10)] md:py-[var(--ui-space-14)] lg:py-[5rem]">
+    <HomeSection className="overflow-hidden border-b border-border pt-[var(--ui-space-4)] pb-[var(--ui-space-10)] md:pt-[var(--ui-space-6)] md:pb-[var(--ui-space-14)] lg:pt-[var(--ui-space-8)] lg:pb-[5rem]">
       <div className="grid items-center gap-[var(--ui-space-10)] lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)] lg:gap-[var(--ui-space-14)] xl:gap-[var(--ui-space-16)]">
         <div className="flex flex-col items-start text-left">
           <div className="inline-flex items-center rounded-full bg-muted p-1 text-[length:var(--ui-text-body)] text-foreground">
