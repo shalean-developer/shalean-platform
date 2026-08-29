@@ -15,7 +15,26 @@ type CustomerPriceBreakdownProps = {
   showTotal?: boolean;
   totalLabel?: string;
   compact?: boolean;
+  groupEquipmentBreakdown?: boolean;
 };
+
+type EquipmentLineRole = "detail" | "subtotal" | "standard";
+
+function getEquipmentLineRole(
+  item: PricingLineItem,
+  groupEquipmentBreakdown: boolean,
+): EquipmentLineRole {
+  if (!groupEquipmentBreakdown) return "standard";
+
+  const label = item.label.toLowerCase();
+  if (label.includes("equipment base") || label.includes("distance charge")) {
+    return "detail";
+  }
+  if (label.includes("equipment logistics")) {
+    return "subtotal";
+  }
+  return "standard";
+}
 
 export function CustomerPriceBreakdown({
   pricing,
@@ -23,6 +42,7 @@ export function CustomerPriceBreakdown({
   showTotal = false,
   totalLabel = "Estimated total",
   compact = false,
+  groupEquipmentBreakdown = false,
 }: CustomerPriceBreakdownProps) {
   const breakdown = pricing
     ? Array.isArray(pricing)
@@ -41,21 +61,35 @@ export function CustomerPriceBreakdown({
   return (
     <div className={cn("space-y-1.5", className)}>
       <ul className={cn("space-y-1.5", compact && "space-y-1")}>
-        {visibleLines.map((item, i) => (
-          <li
-            key={`${item.label}-${i}`}
-            className={cn(
-              "flex items-center justify-between gap-2 text-slate-600",
-              compact ? "text-xs" : "text-sm",
-              item.amountZar < 0 && "text-emerald-700",
-            )}
-          >
-            <span className="min-w-0 truncate">{item.label}</span>
-            <span className={cn("shrink-0 tabular-nums font-medium", item.amountZar < 0 && "text-emerald-700")}>
-              {formatZar(item.amountZar)}
-            </span>
-          </li>
-        ))}
+        {visibleLines.map((item, i) => {
+          const equipmentRole = getEquipmentLineRole(item, groupEquipmentBreakdown);
+          return (
+            <li
+              key={`${item.label}-${i}`}
+              className={cn(
+                "flex items-center justify-between gap-2 text-slate-600",
+                compact ? "text-xs" : "text-sm",
+                item.amountZar < 0 && "text-emerald-700",
+                equipmentRole === "detail" && "pl-4 text-slate-500",
+                equipmentRole === "subtotal" &&
+                  "mt-2 border-t border-dashed border-slate-200 pt-2 font-semibold text-slate-700",
+              )}
+            >
+              <span className="min-w-0 truncate">
+                {equipmentRole === "subtotal" ? "Equipment subtotal" : item.label}
+              </span>
+              <span
+                className={cn(
+                  "shrink-0 tabular-nums font-medium",
+                  item.amountZar < 0 && "text-emerald-700",
+                  equipmentRole === "subtotal" && "font-semibold text-slate-800",
+                )}
+              >
+                {formatZar(item.amountZar)}
+              </span>
+            </li>
+          );
+        })}
       </ul>
       {showTotal ? (
         <div
