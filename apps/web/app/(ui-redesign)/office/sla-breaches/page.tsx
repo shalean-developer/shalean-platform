@@ -5,6 +5,7 @@ import { useState } from "react";
 import { AlertTriangle, Clock, UserCheck, Flag, Search, RefreshCw, AlertCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
+import { OfficeZohoPageHeader, OfficeZohoSecondaryButton } from "@/components/admin/office/OfficeZohoChrome";
 
 type BreachRow = {
   id: string;
@@ -47,9 +48,9 @@ function severityFromMinutes(mins: number): "critical" | "high" | "medium" {
 }
 
 const SEV_MAP = {
-  critical: { label: "Critical", cls: "bg-red-100 text-red-700",     dotColor: "bg-red-500" },
-  high:     { label: "High",     cls: "bg-orange-100 text-orange-700", dotColor: "bg-orange-500" },
-  medium:   { label: "Medium",   cls: "bg-yellow-100 text-yellow-700", dotColor: "bg-yellow-500" },
+  critical: { label: "Critical", cls: "bg-red-100 text-red-700", dotColor: "bg-red-500" },
+  high: { label: "High", cls: "bg-orange-100 text-orange-700", dotColor: "bg-orange-500" },
+  medium: { label: "Medium", cls: "bg-yellow-100 text-yellow-700", dotColor: "bg-yellow-500" },
 };
 
 export default function SlaBreachesPage() {
@@ -82,27 +83,23 @@ export default function SlaBreachesPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">SLA Breaches</h1>
-          <p className="mt-0.5 text-sm text-slate-500">Priority queue — act on the oldest items first.</p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => void refetch()}
-            className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 hover:bg-slate-50 shadow-sm"
-          >
-            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          </button>
-          <Link
-            href="/office/bookings"
-            className="flex items-center gap-2 rounded-xl bg-red-600 px-4 py-2 text-sm font-bold text-white hover:bg-red-700 shadow-sm"
-          >
-            <UserCheck className="h-4 w-4" /> Assign all unassigned
-          </Link>
-        </div>
-      </div>
+      <OfficeZohoPageHeader
+        title="SLA Breaches"
+        subtitle="Priority queue — act on the oldest items first."
+        actions={
+          <>
+            <OfficeZohoSecondaryButton onClick={() => void refetch()} aria-label="Refresh SLA breaches">
+              <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            </OfficeZohoSecondaryButton>
+            <Link
+              href="/office/bookings"
+              className="flex items-center gap-2 rounded-md bg-red-600 px-4 py-2 text-sm font-bold text-white shadow-sm hover:bg-red-700"
+            >
+              <UserCheck className="h-4 w-4" /> Assign all unassigned
+            </Link>
+          </>
+        }
+      />
 
       {error ? (
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
@@ -127,9 +124,7 @@ export default function SlaBreachesPage() {
               Oldest breach: {formatOverdue(oldestMinutes)}. Immediate action required.
             </p>
           </div>
-          <div className="text-xs font-semibold text-red-600 bg-red-100 rounded-full px-3 py-1">
-            Priority queue
-          </div>
+          <div className="rounded-full bg-red-100 px-3 py-1 text-xs font-semibold text-red-600">Priority queue</div>
         </div>
       ) : !loading && breaches.length === 0 ? (
         <div className="flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
@@ -140,9 +135,9 @@ export default function SlaBreachesPage() {
 
       <div className="grid grid-cols-3 gap-3">
         {[
-          { label: "Critical", count: loading ? "—" : criticalCount,    color: "text-red-600",    bg: "bg-red-50" },
-          { label: "High",     count: loading ? "—" : highCount,        color: "text-orange-600", bg: "bg-orange-50" },
-          { label: "Unassigned",count: loading ? "—" : unassignedCount, color: "text-slate-700",  bg: "bg-slate-50" },
+          { label: "Critical", count: loading ? "—" : criticalCount, color: "text-red-600", bg: "bg-red-50" },
+          { label: "High", count: loading ? "—" : highCount, color: "text-orange-600", bg: "bg-orange-50" },
+          { label: "Unassigned", count: loading ? "—" : unassignedCount, color: "text-slate-700", bg: "bg-slate-50" },
         ].map((k) => (
           <div key={k.label} className={cn("rounded-2xl border border-slate-100 p-4 shadow-sm", k.bg)}>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{k.label}</p>
@@ -151,16 +146,16 @@ export default function SlaBreachesPage() {
         ))}
       </div>
 
-      <div className="rounded-2xl bg-white border border-slate-100 shadow-sm">
+      <div className="rounded-2xl border border-slate-100 bg-white shadow-sm">
         <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 px-4 py-3">
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative min-w-[200px] flex-1">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
               placeholder="Search breaches…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm placeholder:text-slate-400 focus:outline-none focus:border-blue-300"
+              className="w-full rounded-xl border border-slate-200 bg-slate-50 py-2 pl-9 pr-4 text-sm placeholder:text-slate-400 focus:border-blue-300 focus:outline-none"
             />
           </div>
           <div className="flex gap-1">
@@ -188,9 +183,7 @@ export default function SlaBreachesPage() {
               </div>
             ))
           ) : filtered.length === 0 ? (
-            <div className="py-12 text-center text-sm text-slate-400">
-              No SLA breaches match your filter.
-            </div>
+            <div className="py-12 text-center text-sm text-slate-400">No SLA breaches match your filter.</div>
           ) : (
             filtered.map((b) => {
               const sev = severityFromMinutes(b.overdueMinutes);
@@ -201,7 +194,7 @@ export default function SlaBreachesPage() {
               return (
                 <div
                   key={b.id}
-                  className="flex items-start gap-4 px-5 py-4 hover:bg-slate-50/50 transition-colors group"
+                  className="group flex items-start gap-4 px-5 py-4 transition-colors hover:bg-slate-50/50"
                 >
                   <div
                     className={cn(
@@ -218,12 +211,8 @@ export default function SlaBreachesPage() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-xs font-mono font-bold text-blue-600">
-                        {b.id.slice(0, 8).toUpperCase()}
-                      </span>
-                      <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-bold", s.cls)}>
-                        {s.label}
-                      </span>
+                      <span className="font-mono text-xs font-bold text-blue-600">{b.id.slice(0, 8).toUpperCase()}</span>
+                      <span className={cn("rounded-full px-2.5 py-0.5 text-[11px] font-bold", s.cls)}>{s.label}</span>
                     </div>
                     <p className="mt-0.5 text-sm font-semibold text-slate-800">
                       {b.customer_name ?? b.customer_email ?? "Unknown"} —{" "}
@@ -237,24 +226,22 @@ export default function SlaBreachesPage() {
                           {b.time ? ` at ${b.time.slice(0, 5)}` : ""}
                         </span>
                       )}
-                      <span className="font-bold text-red-600 flex items-center gap-1">
+                      <span className="flex items-center gap-1 font-bold text-red-600">
                         <Flag className="h-3 w-3" />
                         {formatOverdue(b.overdueMinutes)}
                       </span>
                       <span>
                         Assignment:{" "}
-                        <span className={isUnassigned ? "font-bold text-orange-600" : "text-slate-700"}>
-                          {assignment}
-                        </span>
+                        <span className={isUnassigned ? "font-bold text-orange-600" : "text-slate-700"}>{assignment}</span>
                       </span>
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-col gap-1.5 sm:flex-row">
                     <a
                       href={`/office/bookings/${b.id}`}
-                      className="rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-blue-700 transition-colors whitespace-nowrap"
+                      className="whitespace-nowrap rounded-lg bg-blue-600 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-blue-700"
                     >
-                      <UserCheck className="h-3.5 w-3.5 inline mr-1" />
+                      <UserCheck className="mr-1 inline h-3.5 w-3.5" />
                       Assign now
                     </a>
                   </div>
