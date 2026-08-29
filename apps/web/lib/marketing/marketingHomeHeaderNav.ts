@@ -14,9 +14,9 @@ export type MarketingHeaderNavLink = { label: string; href: string; dropdown?: b
 export const MARKETING_HEADER_NAV_LINKS: MarketingHeaderNavLink[] = [
   { label: "Services", href: MARKETING_HEADER_NAV.services, dropdown: true },
   { label: "Pricing", href: MARKETING_HEADER_NAV.pricing },
-  { label: "About", href: MARKETING_HEADER_NAV.about },
-  { label: "FAQ", href: MARKETING_HEADER_NAV.help },
-  { label: "Contact", href: MARKETING_HEADER_NAV.contact },
+  { label: "About Us", href: MARKETING_HEADER_NAV.about },
+  { label: "Help Centre", href: MARKETING_HEADER_NAV.help },
+  { label: "Contact Us", href: MARKETING_HEADER_NAV.contact },
 ];
 
 export const MARKETING_HEADER_SERVICE_LINKS = MARKETING_SERVICE_NAV_LINKS.map(
