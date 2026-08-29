@@ -81,7 +81,7 @@ async function enrichCustomerBookingRowsFromSavedAddresses(
     else addressRowsByOwnerAndSuburb.set(key, [raw]);
   }
 
-  for (const { index, row, ownerId, suburb } of candidates) {
+  for (const { row, ownerId, suburb } of candidates) {
     const matches = addressRowsByOwnerAndSuburb.get(savedAddressLookupKey(ownerId!, suburb));
     if (!matches?.length) continue;
 
@@ -93,7 +93,7 @@ async function enrichCustomerBookingRowsFromSavedAddresses(
       }) ?? matches[0];
 
     const line1 = typeof picked?.line1 === "string" ? picked.line1.trim() : "";
-    if (line1) rows[index] = { ...row, location: line1 };
+    if (line1) row.location = line1;
   }
 }
 
