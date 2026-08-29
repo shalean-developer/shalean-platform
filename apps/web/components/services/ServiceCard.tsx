@@ -29,6 +29,47 @@ export function ServiceCard({
   className,
   seoHubTrack,
 }: Props) {
+  const isWindowCleaningGuide = learnMoreHref.endsWith("/window-cleaning-cape-town");
+
+  if (isWindowCleaningGuide) {
+    return (
+      <aside
+        className={cn(
+          "sm:col-span-2 lg:col-span-3 flex flex-col gap-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-6 md:flex-row md:items-center md:justify-between",
+          className,
+        )}
+        aria-label="Window Cleaning guide"
+      >
+        <div className="flex items-start gap-4">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-blue-700 ring-1 ring-blue-100">
+            {icon}
+          </div>
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Specialist add-on guide</p>
+            <h3 className="mt-1 text-lg font-bold tracking-tight text-blue-950">{title}</h3>
+            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600">{description}</p>
+          </div>
+        </div>
+        <Link
+          href={learnMoreHref}
+          className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-white px-5 text-sm font-semibold text-blue-900 transition hover:border-blue-300 hover:bg-blue-50"
+          onClick={() => {
+            if (seoHubTrack) {
+              trackSeoServiceCardClick({
+                click_type: "learn_more",
+                service_name: title,
+                surface: "services_hub",
+                href: learnMoreHref,
+              });
+            }
+          }}
+        >
+          View Window Cleaning guide
+        </Link>
+      </aside>
+    );
+  }
+
   return (
     <article
       className={cn(
