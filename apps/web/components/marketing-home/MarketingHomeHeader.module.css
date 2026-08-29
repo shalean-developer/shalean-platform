@@ -5,16 +5,18 @@
   pointer-events: auto !important;
 }
 
-/* Homepage header top-level navigation and text actions use the canonical Body role. */
+/* Homepage header top-level navigation and text actions use canonical Body text at normal weight. */
 .root nav[aria-label="Primary"] > a,
 .root nav[aria-label="Primary"] > div > button,
 .root a[href^="/auth/login"] {
   font-size: var(--ui-text-body) !important;
   line-height: var(--ui-leading-body) !important;
+  font-weight: 400 !important;
 }
 
-/* Keep dropdown/service descriptions compact; primary menu actions use Body. */
+/* Keep dropdown/service descriptions compact; primary menu actions also use normal-weight Body text. */
 .root nav[aria-label="Primary"] > div > div a[class*="rounded-full"] {
   font-size: var(--ui-text-body) !important;
   line-height: var(--ui-leading-body) !important;
+  font-weight: 400 !important;
 }
