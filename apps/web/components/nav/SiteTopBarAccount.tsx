@@ -92,7 +92,7 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
         className={cn(
           "shrink-0 animate-pulse",
           headerVariant
-            ? "h-9 w-[4.5rem] rounded-full bg-muted"
+            ? "h-11 w-[4.75rem] rounded-full bg-muted"
             : "h-7 w-14 rounded-lg bg-white/20",
         )}
         aria-hidden
@@ -107,7 +107,7 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
         className={cn(
           "shrink-0 font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
           headerVariant
-            ? "inline-flex min-h-10 items-center justify-center rounded-full bg-foreground px-4 py-2 text-sm text-background hover:opacity-80"
+            ? "inline-flex min-h-11 items-center justify-center rounded-full bg-foreground px-5 py-2.5 text-sm text-background hover:opacity-85"
             : "rounded-lg border border-white/35 px-3 py-1 text-xs text-white hover:bg-white/10",
         )}
       >
@@ -124,12 +124,12 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
           className={cn(
             "inline-flex items-center justify-center rounded-full outline-none transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
             headerVariant
-              ? "h-10 w-10 ring-1 ring-border hover:bg-accent"
+              ? "h-11 w-11 ring-1 ring-border hover:bg-muted"
               : "h-8 w-8 ring-2 ring-white/25 hover:ring-white/50 focus-visible:ring-white/60",
           )}
           aria-label="Account menu"
         >
-          <Avatar className={cn(headerVariant ? "h-9 w-9 border-border" : "h-7 w-7 border-white/30")}>
+          <Avatar className={cn(headerVariant ? "h-10 w-10 border-border" : "h-7 w-7 border-white/30")}>
             {avatarPhoto ? <AvatarImage src={avatarPhoto} alt="" referrerPolicy="no-referrer" /> : null}
             <AvatarFallback
               className={cn(
@@ -142,8 +142,8 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
           </Avatar>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[220px]">
-        <DropdownMenuLabel className="px-4">
+      <DropdownMenuContent align="end" className="min-w-[220px] rounded-2xl p-2 shadow-[var(--ui-shadow-lg)]">
+        <DropdownMenuLabel className="px-3 py-2">
           <span className="block truncate text-sm">{avatarName}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -176,7 +176,7 @@ function SiteTopBarAccountFallback({ variant }: { variant: SiteTopBarAccountVari
       className={cn(
         "shrink-0 animate-pulse",
         variant === "header"
-          ? "h-9 w-[4.5rem] rounded-full bg-muted"
+          ? "h-11 w-[4.75rem] rounded-full bg-muted"
           : "h-7 w-14 rounded-lg bg-white/20",
       )}
       aria-hidden
