@@ -44,6 +44,15 @@ type SiteHeaderProps = {
   visualMode?: "default" | "dribbble";
 };
 
+const SERVICE_MENU_DETAILS: Record<string, string> = {
+  "Standard Cleaning": "Reliable recurring or once-off home cleaning.",
+  "Deep Cleaning": "A more detailed top-to-bottom clean.",
+  "Move In / Out Cleaning": "Prepare a home for moving day or handover.",
+  "Office Cleaning": "Professional cleaning for workplaces and teams.",
+  "Airbnb Cleaning": "Fast, guest-ready turnover cleaning.",
+  "Carpet Cleaning": "Refresh carpets and soft floor surfaces.",
+};
+
 export function SiteHeader({
   bookingHref,
   mobileNavId,
@@ -73,6 +82,14 @@ export function SiteHeader({
       label.toLowerCase().includes(query),
     ).slice(0, 6);
   }, [serviceSearchQuery]);
+
+  const primaryServiceLinks = MARKETING_HEADER_SERVICE_LINKS.slice(0, 6);
+  const windowCleaningLink = MARKETING_HEADER_SERVICE_LINKS.find(
+    ([label]) => label === "Window Cleaning",
+  );
+  const allServicesLink = MARKETING_HEADER_SERVICE_LINKS.find(
+    ([label]) => label === "All Services",
+  );
 
   useEffect(() => {
     if (!closeMenusOnPathChange) return;
@@ -167,31 +184,120 @@ export function SiteHeader({
                         )}
                       />
                     </button>
-                    <div
-                      className={cn(
-                        "absolute left-0 top-full z-50 mt-2 w-56 border border-border bg-popover py-2 text-popover-foreground shadow-[var(--ui-shadow-lg)] transition-[opacity,visibility] duration-150",
-                        dribbbleMode ? "rounded-2xl" : "rounded-[var(--ui-radius-xl)]",
-                        servicesOpen
-                          ? "visible opacity-100"
-                          : "invisible pointer-events-none opacity-0",
-                      )}
-                      aria-hidden={!servicesOpen}
-                    >
-                      {MARKETING_HEADER_SERVICE_LINKS.map(([item, itemHref]) => (
-                        <Link
-                          key={item}
-                          href={itemHref}
-                          className={cn(
-                            "block px-4 py-2 text-[length:var(--ui-text-small)] text-popover-foreground transition-colors",
-                            dribbbleMode ? "mx-2 rounded-xl hover:bg-muted" : "hover:bg-accent hover:text-accent-foreground",
-                          )}
-                          onClick={() => setServicesOpen(false)}
-                          tabIndex={servicesOpen ? 0 : -1}
-                        >
-                          {item}
-                        </Link>
-                      ))}
-                    </div>
+
+                    {dribbbleMode ? (
+                      <div
+                        className={cn(
+                          "absolute left-0 top-full z-50 mt-3 w-[640px] overflow-hidden rounded-[28px] bg-popover text-popover-foreground shadow-[0_24px_70px_rgba(0,0,0,0.16)] ring-1 ring-black/5 transition-[opacity,visibility,transform] duration-150",
+                          servicesOpen
+                            ? "visible translate-y-0 opacity-100"
+                            : "invisible pointer-events-none -translate-y-1 opacity-0",
+                        )}
+                        aria-hidden={!servicesOpen}
+                      >
+                        <div className="grid grid-cols-[220px_minmax(0,1fr)] gap-2 p-2">
+                          <div className="flex flex-col rounded-[22px] bg-muted p-5">
+                            <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                              Cleaning services
+                            </p>
+                            <h3 className="mt-3 text-xl font-bold leading-tight text-foreground">
+                              Find the right clean for your space.
+                            </h3>
+                            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                              Compare the main Shalean cleaning options and choose the service that fits your home, move, stay or workplace.
+                            </p>
+                            <div className="mt-4 space-y-2 text-sm text-foreground">
+                              <p>See the right service faster</p>
+                              <p>Understand each cleaning type</p>
+                              <p>Continue to canonical service pages</p>
+                            </div>
+
+                            {allServicesLink ? (
+                              <Link
+                                href={allServicesLink[1]}
+                                className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                onClick={() => setServicesOpen(false)}
+                                tabIndex={servicesOpen ? 0 : -1}
+                              >
+                                View all services
+                                <ArrowRight className="h-4 w-4" aria-hidden />
+                              </Link>
+                            ) : null}
+                          </div>
+
+                          <div className="p-3">
+                            <div className="flex items-center justify-between gap-4 px-2 pb-2">
+                              <div>
+                                <p className="text-sm font-bold text-foreground">Popular services</p>
+                                <p className="mt-0.5 text-xs text-muted-foreground">Choose one to see service details.</p>
+                              </div>
+                              <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
+                                6 primary
+                              </span>
+                            </div>
+
+                            <div className="mt-1 grid grid-cols-2 gap-1">
+                              {primaryServiceLinks.map(([item, itemHref]) => (
+                                <Link
+                                  key={item}
+                                  href={itemHref}
+                                  className="group rounded-2xl px-3 py-3 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  onClick={() => setServicesOpen(false)}
+                                  tabIndex={servicesOpen ? 0 : -1}
+                                >
+                                  <span className="flex items-center justify-between gap-2 text-sm font-semibold text-foreground">
+                                    {item}
+                                    <ArrowRight className="h-3.5 w-3.5 -translate-x-1 opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" aria-hidden />
+                                  </span>
+                                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                                    {SERVICE_MENU_DETAILS[item] ?? "Explore this cleaning service."}
+                                  </span>
+                                </Link>
+                              ))}
+                            </div>
+
+                            {windowCleaningLink ? (
+                              <div className="mt-3 border-t border-border pt-3">
+                                <Link
+                                  href={windowCleaningLink[1]}
+                                  className="flex items-center justify-between rounded-2xl px-3 py-2.5 text-sm transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  onClick={() => setServicesOpen(false)}
+                                  tabIndex={servicesOpen ? 0 : -1}
+                                >
+                                  <span>
+                                    <span className="font-semibold text-foreground">Window Cleaning</span>
+                                    <span className="ml-2 text-xs text-muted-foreground">Additional cleaning service</span>
+                                  </span>
+                                  <ArrowRight className="h-4 w-4 text-muted-foreground" aria-hidden />
+                                </Link>
+                              </div>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div
+                        className={cn(
+                          "absolute left-0 top-full z-50 mt-2 w-56 rounded-[var(--ui-radius-xl)] border border-border bg-popover py-2 text-popover-foreground shadow-[var(--ui-shadow-lg)] transition-[opacity,visibility] duration-150",
+                          servicesOpen
+                            ? "visible opacity-100"
+                            : "invisible pointer-events-none opacity-0",
+                        )}
+                        aria-hidden={!servicesOpen}
+                      >
+                        {MARKETING_HEADER_SERVICE_LINKS.map(([item, itemHref]) => (
+                          <Link
+                            key={item}
+                            href={itemHref}
+                            className="block px-4 py-2 text-[length:var(--ui-text-small)] text-popover-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+                            onClick={() => setServicesOpen(false)}
+                            tabIndex={servicesOpen ? 0 : -1}
+                          >
+                            {item}
+                          </Link>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               }
