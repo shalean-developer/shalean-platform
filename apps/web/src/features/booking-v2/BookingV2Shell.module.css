@@ -141,6 +141,116 @@
   row-gap: var(--ui-space-4);
 }
 
+.step3 {
+  color: var(--foreground);
+}
+
+.step3 > :global(.space-y-5) > :global(.text-center) h2 {
+  color: var(--foreground);
+  font-size: var(--ui-text-section-title);
+  line-height: var(--ui-leading-tight);
+}
+
+.step3 :global(.text-slate-700),
+.step3 :global(.text-slate-800),
+.step3 :global(.text-slate-900) {
+  color: var(--foreground);
+}
+
+.step3 :global(.text-slate-400),
+.step3 :global(.text-slate-500),
+.step3 :global(.text-slate-600) {
+  color: var(--muted-foreground);
+}
+
+.step3 :global(.text-blue-500),
+.step3 :global(.text-blue-600),
+.step3 :global(.text-blue-700),
+.step3 :global(.text-blue-800),
+.step3 :global(.text-blue-900),
+.step3 :global([class~="text-blue-700/80"]) {
+  color: var(--primary);
+}
+
+.step3 :global(.border-slate-100),
+.step3 :global(.border-slate-200) {
+  border-color: var(--border);
+}
+
+.step3 :global(.bg-white) {
+  background: var(--card);
+}
+
+.step3 :global(.bg-slate-50),
+.step3 :global([class~="bg-slate-50/60"]) {
+  background: color-mix(in srgb, var(--muted) 76%, var(--card));
+}
+
+.step3 :global(.bg-slate-100) {
+  background: var(--accent);
+}
+
+.step3 :global(.bg-blue-600) {
+  background: var(--primary);
+}
+
+.step3 :global(.bg-blue-50) {
+  background: color-mix(in srgb, var(--primary) 8%, var(--card));
+}
+
+.step3 :global(.border-blue-100) {
+  border-color: color-mix(in srgb, var(--primary) 22%, var(--border));
+}
+
+.step3 :global(.border-blue-600) {
+  border-color: var(--primary);
+}
+
+.step3 > :global(.space-y-5) > :global(.rounded-2xl.border.bg-white),
+.step3 > :global(.space-y-5) > :global(.rounded-2xl.border.border-blue-100.bg-blue-50) {
+  border-radius: var(--ui-radius-xl);
+  box-shadow: var(--ui-shadow-sm);
+  overflow: hidden;
+}
+
+.step3 > :global(.space-y-5) > :global(.grid) > :global(.rounded-xl.border.bg-white) {
+  border-radius: var(--ui-radius-lg);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step3 input:not([type="checkbox"]):not([type="radio"]),
+.step3 textarea,
+.step3 select {
+  min-height: 2.75rem;
+  border-color: var(--border);
+  border-radius: var(--ui-radius-lg);
+  background: var(--background);
+  color: var(--foreground);
+  box-shadow: var(--ui-shadow-sm);
+}
+
+.step3 textarea {
+  min-height: 6rem;
+}
+
+.step3 input::placeholder,
+.step3 textarea::placeholder {
+  color: var(--muted-foreground);
+}
+
+.step3 input:focus,
+.step3 textarea:focus,
+.step3 select:focus {
+  border-color: var(--ring);
+  outline: none;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ring) 18%, transparent);
+}
+
+.step3 button:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
 @media (min-width: 640px) {
   .step1 > :global(.space-y-8) > section,
   .step1 > :global(.space-y-8) > :global(.space-y-4),
