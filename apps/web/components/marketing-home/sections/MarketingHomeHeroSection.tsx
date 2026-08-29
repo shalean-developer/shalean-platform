@@ -48,7 +48,7 @@ export function MarketingHomeHeroSection() {
             </Link>
           </div>
 
-          <h1 className="mt-[var(--ui-space-8)] max-w-[760px] text-[clamp(3.25rem,6.4vw,6rem)] font-semibold leading-[0.96] tracking-[-0.055em] text-foreground">
+          <h1 className="mt-[var(--ui-space-8)] max-w-[700px] text-[clamp(2.75rem,5.2vw,4.75rem)] font-semibold leading-[0.98] tracking-[-0.05em] text-foreground">
             <span className="block text-primary">{HERO_HEADLINE_ACCENT}</span>
             <span className="block">{HERO_HEADLINE_REST}</span>
           </h1>
