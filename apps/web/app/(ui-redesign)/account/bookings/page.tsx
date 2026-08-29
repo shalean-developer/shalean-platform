@@ -24,9 +24,7 @@ import { useBookings } from "@/hooks/useBookings";
 import { useReviews } from "@/hooks/useReviews";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { isUpcomingBookingRow } from "@/lib/dashboard/bookingUtils";
-import {
-  canCustomerModifyDashboardBooking,
-} from "@/lib/dashboard/dashboardBookingOperational";
+import { canCustomerModifyDashboardBooking } from "@/lib/dashboard/dashboardBookingOperational";
 import {
   isBookingPendingCustomerReview,
   leaveReviewHrefForBooking,
@@ -38,7 +36,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { CUSTOMER_ACCOUNT_BOOK_PATH } from "@/lib/customer/customerAccountPaths";
 import { cn } from "@/lib/utils";
-
 
 const BOOKINGS_PER_PAGE = 5;
 
@@ -98,9 +95,18 @@ function QuickLink({ href, label, icon: Icon }: { href: string; label: string; i
   );
 }
 
-
 export default function AccountBookingsPage() {
-  const { bookings, loading, error, refetch, cancelBooking, rescheduleBooking } = useBookings();
+  const {
+    bookings,
+    loading,
+    loadingMore,
+    hasMore,
+    error,
+    refetch,
+    loadMore,
+    cancelBooking,
+    rescheduleBooking,
+  } = useBookings();
   const { reviews, loading: revLoading, error: revError } = useReviews();
   const { summary, loading: summaryLoading } = useDashboardSummary();
   const [view, setView] = useState<"cards" | "table">("cards");
@@ -187,31 +193,21 @@ export default function AccountBookingsPage() {
 
   return (
     <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-      {/* ── Left column: bookings ─────────────────────────────────── */}
       <div className="min-w-0 flex-1 space-y-5">
-        {/* Page header */}
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold tracking-tight text-gray-900">My Bookings</h1>
             <p className="mt-1 text-sm text-gray-500">Upcoming and past cleans.</p>
           </div>
-          <Button
-            asChild
-            className="rounded-xl bg-blue-600 px-5 text-white shadow-sm hover:bg-blue-700"
-          >
+          <Button asChild className="rounded-xl bg-blue-600 px-5 text-white shadow-sm hover:bg-blue-700">
             <Link href={CUSTOMER_ACCOUNT_BOOK_PATH}>Book a clean</Link>
           </Button>
         </div>
 
-        {/* Error banner */}
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
             {error}{" "}
-            <button
-              type="button"
-              className="font-semibold underline"
-              onClick={() => void refetch()}
-            >
+            <button type="button" className="font-semibold underline" onClick={() => void refetch()}>
               Retry
             </button>
           </div>
@@ -223,7 +219,6 @@ export default function AccountBookingsPage() {
           </div>
         ) : null}
 
-        {/* Pending review banner */}
         {pendingReviewCount > 0 && firstPendingReviewBookingId ? (
           <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -235,14 +230,8 @@ export default function AccountBookingsPage() {
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
-              <Button
-                asChild
-                size="sm"
-                className="rounded-xl bg-amber-600 text-white hover:bg-amber-700"
-              >
-                <Link href={`/review?booking=${encodeURIComponent(firstPendingReviewBookingId)}`}>
-                  Leave a review
-                </Link>
+              <Button asChild size="sm" className="rounded-xl bg-amber-600 text-white hover:bg-amber-700">
+                <Link href={`/review?booking=${encodeURIComponent(firstPendingReviewBookingId)}`}>Leave a review</Link>
               </Button>
               <Button asChild size="sm" variant="outline" className="rounded-xl">
                 <Link href="/account/reviews">All reviews</Link>
@@ -251,9 +240,7 @@ export default function AccountBookingsPage() {
           </div>
         ) : null}
 
-        {/* View toggle + Tabs */}
         <div className="space-y-4">
-          {/* View toggle */}
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -283,7 +270,6 @@ export default function AccountBookingsPage() {
             </button>
           </div>
 
-          {/* Tabs */}
           <Tabs defaultValue="upcoming" className="w-full">
             <TabsList className="inline-flex rounded-xl border border-gray-100 bg-white p-1 shadow-sm">
               <TabsTrigger
@@ -320,11 +306,7 @@ export default function AccountBookingsPage() {
                   <p className="mt-1 text-sm text-gray-500">
                     Schedule a clean and it will show here with reminders and cleaner updates.
                   </p>
-                  <Button
-                    asChild
-                    size="sm"
-                    className="mt-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700"
-                  >
+                  <Button asChild size="sm" className="mt-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700">
                     <Link href={CUSTOMER_ACCOUNT_BOOK_PATH}>
                       <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                       Book your next clean
@@ -345,20 +327,12 @@ export default function AccountBookingsPage() {
                       </li>
                     ))}
                   </ul>
-                  <Pagination
-                    page={safeUpcomingPage}
-                    pageCount={upcomingPageCount}
-                    onPage={setUpcomingPage}
-                  />
+                  <Pagination page={safeUpcomingPage} pageCount={upcomingPageCount} onPage={setUpcomingPage} />
                 </>
               ) : (
                 <>
                   <CustomerBookingsTable bookings={pagedUpcoming} {...tableProps} />
-                  <Pagination
-                    page={safeUpcomingPage}
-                    pageCount={upcomingPageCount}
-                    onPage={setUpcomingPage}
-                  />
+                  <Pagination page={safeUpcomingPage} pageCount={upcomingPageCount} onPage={setUpcomingPage} />
                 </>
               )}
             </TabsContent>
@@ -370,9 +344,7 @@ export default function AccountBookingsPage() {
                     <CalendarDays className="h-7 w-7 text-gray-400" strokeWidth={1.5} />
                   </div>
                   <h3 className="font-semibold text-gray-900">No past bookings yet</h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Completed and cancelled visits appear here.
-                  </p>
+                  <p className="mt-1 text-sm text-gray-500">Completed and cancelled visits appear here.</p>
                 </div>
               ) : view === "cards" ? (
                 <>
@@ -399,15 +371,28 @@ export default function AccountBookingsPage() {
               )}
             </TabsContent>
           </Tabs>
+
+          {hasMore ? (
+            <div className="flex justify-center pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+              >
+                {loadingMore ? "Loading older bookings…" : "Load older bookings"}
+              </Button>
+            </div>
+          ) : bookings.length > 0 ? (
+            <p className="text-center text-xs text-gray-400">All available bookings are loaded.</p>
+          ) : null}
         </div>
 
-        {/* Trust bar */}
         <TrustBar />
       </div>
 
-      {/* ── Right sidebar ─────────────────────────────────────────── */}
       <div className="w-full shrink-0 space-y-3 xl:w-64">
-        {/* This month overview */}
         <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-bold text-gray-900">This month overview</h2>
           {summaryLoading ? (
@@ -418,47 +403,14 @@ export default function AccountBookingsPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-2">
-              <StatCard
-                compact
-                icon={CalendarDays}
-                iconBg="bg-blue-100"
-                iconColor="text-blue-600"
-                value={bookingsThisMonthCount}
-                label="Bookings"
-                sublabel={ym ? `in ${ym}` : "this month"}
-              />
-              <StatCard
-                compact
-                icon={CheckCircle2}
-                iconBg="bg-green-100"
-                iconColor="text-green-600"
-                value={completedThisMonthCount}
-                label="Completed"
-                sublabel="this month"
-              />
-              <StatCard
-                compact
-                icon={Clock}
-                iconBg="bg-orange-100"
-                iconColor="text-orange-500"
-                value={hoursBookedThisMonth}
-                label="Hours booked"
-                sublabel="this month"
-              />
-              <StatCard
-                compact
-                icon={DollarSign}
-                iconBg="bg-violet-100"
-                iconColor="text-violet-600"
-                value={formatZarFromCents(totalSpentThisMonthCents)}
-                label="Total spent"
-                sublabel="this month"
-              />
+              <StatCard compact icon={CalendarDays} iconBg="bg-blue-100" iconColor="text-blue-600" value={bookingsThisMonthCount} label="Bookings" sublabel={ym ? `in ${ym}` : "this month"} />
+              <StatCard compact icon={CheckCircle2} iconBg="bg-green-100" iconColor="text-green-600" value={completedThisMonthCount} label="Completed" sublabel="this month" />
+              <StatCard compact icon={Clock} iconBg="bg-orange-100" iconColor="text-orange-500" value={hoursBookedThisMonth} label="Hours booked" sublabel="this month" />
+              <StatCard compact icon={DollarSign} iconBg="bg-violet-100" iconColor="text-violet-600" value={formatZarFromCents(totalSpentThisMonthCents)} label="Total spent" sublabel="this month" />
             </div>
           )}
         </div>
 
-        {/* Quick links */}
         <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
           <h2 className="mb-2 text-sm font-bold text-gray-900">Quick links</h2>
           <div className="divide-y divide-gray-50">
@@ -469,7 +421,6 @@ export default function AccountBookingsPage() {
           </div>
         </div>
 
-        {/* Help card */}
         <HelpCard compact />
       </div>
     </div>
