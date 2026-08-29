@@ -5,9 +5,9 @@
   pointer-events: auto !important;
 }
 
-/* Homepage-only wide header canvas, closer to the current reference proportions. */
+/* Homepage-only marketing canvas, shared with the hero and large marketing sections. */
 .root > div > div:first-child {
-  max-width: 112rem !important;
+  max-width: var(--ui-container-marketing) !important;
 }
 
 /* The desktop reference keeps the header visually quiet; service search remains in mobile/menu flows. */
