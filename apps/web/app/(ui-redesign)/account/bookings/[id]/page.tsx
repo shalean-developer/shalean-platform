@@ -258,7 +258,7 @@ export default function AccountBookingDetailPage() {
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
-        <main className="min-w-0 space-y-6">
+        <div className="min-w-0 space-y-6">
           <Card className="overflow-hidden">
             <CardHeader
               className="flex flex-row flex-wrap items-start justify-between gap-3 pb-3"
@@ -404,7 +404,7 @@ export default function AccountBookingDetailPage() {
               </ol>
             </CardContent>
           </Card>
-        </main>
+        </div>
 
         <aside className="min-w-0 space-y-4 xl:sticky xl:top-24" aria-label="Booking summary and actions">
           <Card>
@@ -518,7 +518,7 @@ export default function AccountBookingDetailPage() {
                   rel="noopener noreferrer"
                 >
                   <MessageCircle className="h-5 w-5" aria-hidden />
-                  Contact support
+                  Contact support (WhatsApp)
                 </a>
               </Button>
             </CardContent>
