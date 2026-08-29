@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useId, useState, type ComponentType } from "react";
+import { useId, useState } from "react";
 import {
   AlertTriangle,
   BookOpen,
@@ -15,6 +15,7 @@ import {
   Search,
   Sparkles,
   Users,
+  type LucideIcon,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -23,7 +24,7 @@ import { cn } from "@/lib/utils";
 
 type FaqCategory = {
   id: string;
-  icon: ComponentType<{ className?: string; strokeWidth?: number; "aria-hidden"?: boolean }>;
+  icon: LucideIcon;
   iconTone: string;
   title: string;
   items: { q: string; a: string }[];
@@ -170,7 +171,7 @@ function ContactOption({
   title: string;
   value: string;
   detail: string;
-  icon: ComponentType<{ className?: string; strokeWidth?: number; "aria-hidden"?: boolean }>;
+  icon: LucideIcon;
   iconTone: string;
   external?: boolean;
 }) {
