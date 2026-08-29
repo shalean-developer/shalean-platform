@@ -1,12 +1,15 @@
 # RD-P05D — Step 2 Schedule normalization
 
-Status: IMPLEMENTED — LOCAL VALIDATION PENDING
+Status: PASSED / CLOSED
 Branch: `design/rd04-platform-redesign`
+Validation base: `validation/rd-p05d-base` @ `56a052199e9a534d4e7afb0d35875ff7246dbb4e`
+Validated closure head: `b602513e048d3e9379ffdc9e85e871608d12f777`
+Validation PR: #444 — validation only; closed unmerged.
 Scope: presentation-only normalization of Booking V2 Step 2. No production deployment or data mutation.
 
 ## Authority preserved
 
-RD-P05D does not modify:
+RD-P05D did not modify:
 
 - `Step2Schedule.tsx` date rules, booking-type state, recurring-frequency/day behavior or React Hook Form registrations;
 - `useBookingV2ScheduleAvailability` live availability requests, fulfillment mode, slot filtering or service-area requirements;
@@ -18,7 +21,7 @@ RD-P05D does not modify:
 
 ## Implementation
 
-RD-P05D extends the shared shell CSS module with a Step-2-only presentation scope rather than editing the schedule components.
+RD-P05D extended the shared shell CSS module with a Step-2-only presentation scope rather than editing schedule components.
 
 ### `BookingV2Shell.module.css`
 
@@ -32,7 +35,10 @@ The Step 2 scope:
 - preserves 44px minimum form-control height and adds consistent focus-visible treatment;
 - keeps compact mobile padding and increases section padding from `sm` upward.
 
-Commit: `f42108b9` — `RD-P05D: add Step 2 presentation scope`
+Implementation commits:
+
+- `f42108b9` — `RD-P05D: add Step 2 presentation scope`
+- `66572994` — `RD-P05D: scope Step 2 presentation normalization`
 
 ### `BookingV2Shell.tsx`
 
@@ -40,30 +46,44 @@ The shared shell applies the Step 2 presentation class only when `currentStep ==
 
 No schedule handler, Step 1/3/4 rendering condition, navigation callback, summary condition, provider, pricing hook or telemetry hook changed.
 
-Commit: `66572994` — `RD-P05D: scope Step 2 presentation normalization`
-
 ## Diff-scope verification
 
-Comparison from RD-P05C closure head `56a05219` to the RD-P05D implementation head shows exactly two files changed:
+Comparison from RD-P05C closure head `56a052199e9a534d4e7afb0d35875ff7246dbb4e` through the RD-P05D implementation kept runtime scope to:
 
 1. `apps/web/src/features/booking-v2/BookingV2Shell.module.css` — Step-2-only presentation styles;
 2. `apps/web/src/features/booking-v2/BookingV2Shell.tsx` — one conditional Step 2 CSS-module class.
 
-`Step2Schedule`, availability hooks, `TimeSlotPicker`, cleaner/team selectors and all business-logic files are unchanged.
+`Step2Schedule`, availability hooks, `TimeSlotPicker`, cleaner/team selectors and business-logic files remained unchanged.
 
-## Local validation gate
+## Validation evidence
 
-Before RD-P05D can close:
+Validation-only PR #444 was pinned to the RD-P05C closure base and closed without merge after validation.
 
-1. pull the latest branch and run `npm --prefix apps/web run typecheck`;
-2. confirm `/book/regular-cleaning?step=2` or an equivalent saved Step 2 flow returns `200`;
-3. desktop + mobile smoke regular-cleaning Step 2 for booking type, calendar, time slots, cleaner count/preference, summary and Back/Continue navigation;
-4. toggle Once-off / Recurring and verify recurring frequency/day/date controls remain usable without completing a booking;
-5. if practical, smoke one team-mode service such as deep or moving cleaning and confirm team availability presentation still renders;
-6. do not create a booking, complete payment, mutate production data or deploy production.
+The exact RD-P05D closure head `b602513e048d3e9379ffdc9e85e871608d12f777` passed:
 
-If these pass, mark RD-P05D `PASSED / CLOSED` and proceed to RD-P05E — Step 3 Review normalization.
+- `migration-governance`;
+- the dedicated `booking-v2-step2-smoke` browser gate;
+- the standard web validation gate used by the slice.
+
+The non-mutating Step 2 browser smoke proved:
+
+1. Regular Cleaning can toggle Once-off → Recurring → Once-off → Recurring while preserving form state;
+2. weekly frequency and weekday selection persist in the Booking V2 draft;
+3. a future date and available time can be selected through the existing scheduling/availability contracts;
+4. cleaner count changes still update pricing through existing pricing authority;
+5. a preferred cleaner can be selected and persists through Step 2 → Step 3 → browser Back;
+6. Back from Step 2 returns to Step 1 with the draft intact;
+7. Deep Cleaning team mode can choose a date/time and an available team, then advance to Review;
+8. every non-analytics `/api/**` mutation is blocked/recorded and the tests assert that no forbidden mutation was attempted.
+
+No booking was created and no payment was initiated or completed during this validation.
+
+## Closure decision
+
+RD-P05D is **PASSED / CLOSED**.
+
+This status correction was reconciled during RD-P05G because the audit text had remained at its pre-validation “local validation pending” state even though the validation PR and exact-head browser evidence had already closed successfully.
 
 ## Authority boundary
 
-No production deployment, Vercel configuration change, Supabase data/schema mutation, booking creation, payment completion or production customer traffic is authorized by RD-P05D.
+No production deployment, Vercel configuration change, Supabase data/schema mutation, booking creation, payment completion or production customer traffic was performed or authorized by RD-P05D.
