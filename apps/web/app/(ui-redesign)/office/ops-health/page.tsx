@@ -19,6 +19,10 @@ import { cn } from "@/lib/utils";
 import { OpsHealthFullPanel } from "@/components/admin/OpsHealthFullPanel";
 import { useAdminData } from "@/hooks/useAdminData";
 import {
+  OfficeZohoPageHeader,
+  OfficeZohoSecondaryButton,
+} from "@/components/admin/office/OfficeZohoChrome";
+import {
   OFFICE_OPS_SERVICE_ICONS,
   OFFICE_OPS_STATUS_CONFIG,
   OFFICE_OPS_UPTIME_BAR_CLASS,
@@ -67,33 +71,25 @@ export default function OpsHealthPage() {
 
   const issueBreakdown = data?.unified.issueBreakdown;
   const banner = data ? resolveOpsHealthBanner(data) : null;
+  const opsHealthSubtitle = issueBreakdown && ((data?.kpis.issuesNow ?? 0) > 0 || issueBreakdown.critical > 0)
+    ? `Live service status from production scans, cron runs, system logs, and notification delivery. Issue breakdown: ${issueBreakdown.critical > 0 ? `${issueBreakdown.critical} Critical · ` : ""}${issueBreakdown.high} High · ${issueBreakdown.medium} Medium · ${issueBreakdown.low} Low`
+    : "Live service status from production scans, cron runs, system logs, and notification delivery.";
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Ops Health</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Live service status from production scans, cron runs, system logs, and notification delivery.
-          </p>
-          {issueBreakdown && ((data?.kpis.issuesNow ?? 0) > 0 || issueBreakdown.critical > 0) ? (
-            <p className="mt-2 text-xs font-semibold text-slate-600">
-              Issue breakdown:{" "}
-              {issueBreakdown.critical > 0 ? `${issueBreakdown.critical} Critical · ` : ""}
-              {issueBreakdown.high} High · {issueBreakdown.medium} Medium · {issueBreakdown.low} Low
-            </p>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          onClick={() => void refetch()}
-          disabled={loading}
-          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-        >
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
-          Refresh all
-        </button>
-      </div>
+      <OfficeZohoPageHeader
+        title="Ops Health"
+        subtitle={opsHealthSubtitle}
+        actions={
+          <OfficeZohoSecondaryButton
+            onClick={() => void refetch()}
+            disabled={loading}
+          >
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+            Refresh all
+          </OfficeZohoSecondaryButton>
+        }
+      />
 
       {error ? (
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
