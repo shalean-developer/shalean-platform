@@ -1,0 +1,6 @@
+.root nav[aria-label="Primary"] > div:hover > div {
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: auto !important;
+}
