@@ -30,19 +30,19 @@ export function MarketingSectionHeader({
     >
       <p
         className={cn(
-          "text-[length:var(--ui-text-body)] font-medium uppercase tracking-[0.08em]",
-          eyebrowTone === "brand" ? "text-primary" : "text-foreground/75",
+          "text-[length:var(--ui-text-small)] font-semibold uppercase tracking-[0.14em]",
+          eyebrowTone === "brand" ? "text-primary" : "text-foreground/60",
         )}
       >
         {eyebrow}
       </p>
-      <h2 className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-page-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+      <h2 className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-page-title)] font-semibold leading-[1.08] tracking-[-0.03em] text-foreground md:text-[length:var(--ui-text-hero-title)]">
         {title}
       </h2>
       {description ? (
         <div
           className={cn(
-            "mt-[var(--ui-space-4)] max-w-4xl text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-muted-foreground",
+            "mt-[var(--ui-space-5)] max-w-3xl text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-muted-foreground",
             centered && "mx-auto",
           )}
         >
