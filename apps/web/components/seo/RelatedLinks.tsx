@@ -8,8 +8,6 @@ import { nearbyProgrammaticLocations, PROGRAMMATIC_LOCATIONS } from "@/lib/seo/l
 import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH } from "@/lib/seo/capeTownLocations";
 import { CAPE_TOWN_SERVICE_SEO, type CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
-import { linkInNavClassName } from "@/lib/ui/linkClassNames";
-import { cn } from "@/lib/utils";
 
 const CAPE_TOWN_SEO_HUB_LABEL = "Cleaning services Cape Town (city hub)";
 
@@ -17,11 +15,8 @@ export type RelatedLinksPlacement = "blog" | "location" | "service" | "services_
 
 type Props = {
   placement: RelatedLinksPlacement;
-  /** On a service SEO page, omit so other service hubs surface (2+ links). */
   currentServiceSlug?: CapeTownSeoServiceSlug;
-  /** On a location SEO page, omit so other suburb hubs surface (2+ links). */
   currentLocationSlug?: string;
-  /** Blog articles: stronger local “near me” framing and booking hint. */
   emphasizeLocalBooking?: boolean;
 };
 
@@ -71,9 +66,7 @@ function capeTownHubFirst(
   placement: RelatedLinksPlacement,
   currentLocationSlug: string | undefined,
 ): { slug: string; href: string; label: string }[] {
-  if (SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS) {
-    return [];
-  }
+  if (SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS) return [];
   if (placement === "blog") {
     return [{ slug: "cape-town-hub", href: CAPE_TOWN_LOCATIONS_OVERVIEW_PATH, label: CAPE_TOWN_SEO_HUB_LABEL }];
   }
@@ -86,10 +79,6 @@ function capeTownHubFirst(
   return [];
 }
 
-/**
- * Structured internal links: 3 service hubs, 3 location hubs, booking CTA.
- * Use on blog, location, service, and services hub pages so crawl paths stay dense.
- */
 export function RelatedLinks({
   placement,
   currentServiceSlug,
@@ -101,30 +90,36 @@ export function RelatedLinks({
   const nearbyCount = placement === "location" && currentLocationSlug ? 3 : placement === "blog" ? 2 : 3;
   const locations = [...hubRows, ...pickLocationLinks(currentLocationSlug, nearbyCount)];
   const bookingSource = `related_links_${placement}`;
-
   const localBlog = placement === "blog" && emphasizeLocalBooking;
 
   return (
     <section
-      className="not-prose rounded-2xl border border-zinc-200 bg-zinc-50/90 px-6 py-8 shadow-sm"
+      className="not-prose rounded-[var(--ui-radius-marketing)] border border-border bg-card p-[var(--ui-space-8)] text-card-foreground shadow-[var(--ui-shadow-sm)]"
       aria-labelledby="related-links-heading"
     >
-      <h2 id="related-links-heading" className="text-lg font-bold tracking-tight text-zinc-900">
+      <p className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-primary">Keep exploring</p>
+      <h2
+        id="related-links-heading"
+        className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground"
+      >
         {localBlog ? "Cleaners near you in Cape Town" : "Related links"}
       </h2>
-      <p className="mt-2 text-sm leading-relaxed text-zinc-600">
+      <p className="mt-[var(--ui-space-3)] max-w-2xl text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
         {localBlog
-          ? "Jump to a suburb hub or service guide—then continue to booking with the same upfront pricing flow."
-          : "Discover more Shalean guides across Cape Town—each page is built for search and booking clarity."}
+          ? "Jump to a suburb hub or service guide, then continue to booking with the same pricing flow."
+          : "Continue through Shalean service and location guides without losing your path back to booking."}
       </p>
 
-      <div className="mt-6 grid gap-8 sm:grid-cols-2">
+      <div className="mt-[var(--ui-space-8)] grid gap-[var(--ui-space-8)] sm:grid-cols-2">
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Services</h3>
-          <ul className="mt-3 space-y-2">
+          <h3 className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-foreground/55">Services</h3>
+          <ul className="mt-[var(--ui-space-3)] space-y-[var(--ui-space-3)]">
             {services.map((row) => (
               <li key={row.slug}>
-                <SafeInternalLink href={CAPE_TOWN_SERVICE_SEO[row.slug].path} className={cn(linkInNavClassName, "text-sm font-medium")}>
+                <SafeInternalLink
+                  href={CAPE_TOWN_SERVICE_SEO[row.slug].path}
+                  className="text-[length:var(--ui-text-small)] font-medium text-foreground transition hover:text-primary hover:underline hover:underline-offset-4"
+                >
                   {row.label}
                 </SafeInternalLink>
               </li>
@@ -132,11 +127,14 @@ export function RelatedLinks({
           </ul>
         </div>
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">Areas</h3>
-          <ul className="mt-3 space-y-2">
+          <h3 className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-foreground/55">Areas</h3>
+          <ul className="mt-[var(--ui-space-3)] space-y-[var(--ui-space-3)]">
             {locations.map((row) => (
               <li key={row.slug}>
-                <SafeInternalLink href={row.href} className={cn(linkInNavClassName, "text-sm font-medium")}>
+                <SafeInternalLink
+                  href={row.href}
+                  className="text-[length:var(--ui-text-small)] font-medium text-foreground transition hover:text-primary hover:underline hover:underline-offset-4"
+                >
                   {row.label}
                 </SafeInternalLink>
               </li>
@@ -145,16 +143,13 @@ export function RelatedLinks({
         </div>
       </div>
 
-      <div className="mt-8 border-t border-zinc-200 pt-6 text-center">
-        <p className="text-sm font-medium text-zinc-800">
-          {localBlog ? "See live slots for your address" : "Ready to book?"}
-        </p>
+      <div className="mt-[var(--ui-space-8)] border-t border-border pt-[var(--ui-space-6)]">
         <GrowthCtaLink
           href="/book"
           source={bookingSource}
-          className="mt-3 inline-flex min-h-11 items-center justify-center rounded-full bg-blue-600 px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          className="inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-medium text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
         >
-          {localBlog ? "Get instant quote" : "Book a cleaning in Cape Town"}
+          {localBlog ? "See instant price" : "Book a cleaning in Cape Town"}
         </GrowthCtaLink>
       </div>
     </section>
