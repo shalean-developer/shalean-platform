@@ -292,7 +292,7 @@ export default function ServicesHubPage() {
                     Window Cleaning
                   </h3>
                   <p className="mt-[var(--ui-space-2)] max-w-2xl text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
-                    Window Cleaning remains a specialist guide rather than a seventh primary service. Open it when glass, frames or tracks form part of your scope.
+                    Need dedicated window cleaning? See what&apos;s covered for glass, frames and tracks. For interior glass as part of another clean, choose the Interior windows add-on where available.
                   </p>
                 </div>
               </div>
