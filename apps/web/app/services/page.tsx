@@ -170,6 +170,13 @@ const PRICING_FACTORS = [
   },
 ] as const;
 
+const SERVICES_EXPLORE_LINKS = [
+  { href: CAPE_TOWN_PRICING_AUTHORITY_HREF, label: "Cleaning prices" },
+  { href: CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF, label: "Cape Town cleaning cost guide" },
+  { href: "/blog", label: "Cleaning guides" },
+  { href: "/faq", label: "Cleaning FAQs" },
+] as const;
+
 export default function ServicesHubPage() {
   const jsonLdStr = JSON.stringify(hubPageJsonLd).replace(/</g, "\\u003c");
   const serviceDetails = [
@@ -415,10 +422,14 @@ export default function ServicesHubPage() {
               eyebrow="Explore more"
               eyebrowTone="brand"
               title="Useful links for your next step"
-              description="Find pricing, booking help, cleaning guides and FAQs without repeating the service and suburb choices already shown above."
+              description="Find pricing, cleaning guides and FAQs without adding another booking prompt."
             />
             <div className="border-t border-border pt-[var(--ui-space-6)]">
-              <SeoInternalLinksBlock title="Popular Shalean destinations" showTitle={false} />
+              <SeoInternalLinksBlock
+                title="Popular Shalean destinations"
+                showTitle={false}
+                items={SERVICES_EXPLORE_LINKS}
+              />
             </div>
           </div>
         </HomeSection>
