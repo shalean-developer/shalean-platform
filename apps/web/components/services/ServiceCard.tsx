@@ -81,7 +81,7 @@ export function ServiceCard({
   return (
     <article
       className={cn(
-        "flex min-h-[360px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card p-[var(--ui-space-7)] text-card-foreground shadow-[var(--ui-shadow-md)] transition duration-200 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[var(--ui-shadow-lg)]",
+        "flex min-h-[360px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card p-[var(--ui-space-8)] text-card-foreground shadow-[var(--ui-shadow-md)] transition duration-200 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[var(--ui-shadow-lg)]",
         className,
       )}
     >
@@ -94,7 +94,7 @@ export function ServiceCard({
       <p className="mt-[var(--ui-space-3)] flex-1 text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
         {description}
       </p>
-      <div className="mt-[var(--ui-space-7)] flex flex-wrap items-center gap-[var(--ui-space-3)]">
+      <div className="mt-[var(--ui-space-8)] flex flex-wrap items-center gap-[var(--ui-space-3)]">
         <CTAButton
           href={bookHref}
           variant="primary"
