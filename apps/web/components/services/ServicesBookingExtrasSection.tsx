@@ -1,0 +1,127 @@
+import Link from "next/link";
+import { ArrowRight, Sparkles } from "lucide-react";
+import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
+import {
+  SERVICE_CONFIG,
+  type ServiceSlug,
+} from "@/src/features/booking-v2/config/serviceConfig";
+
+const EXTRAS_SERVICE_ORDER: readonly ServiceSlug[] = [
+  "regular-cleaning",
+  "deep-cleaning",
+  "moving-cleaning",
+  "airbnb-cleaning",
+  "office-cleaning",
+  "carpet-cleaning",
+] as const;
+
+const PUBLIC_SERVICE_LABELS: Record<ServiceSlug, string> = {
+  "regular-cleaning": "Standard Cleaning",
+  "deep-cleaning": "Deep Cleaning",
+  "moving-cleaning": "Move In / Out Cleaning",
+  "airbnb-cleaning": "Airbnb Cleaning",
+  "office-cleaning": "Office Cleaning",
+  "carpet-cleaning": "Carpet Cleaning",
+};
+
+function formatZar(value: number): string {
+  return `R${Math.round(value).toLocaleString("en-ZA")}`;
+}
+
+export async function ServicesBookingExtrasSection() {
+  let catalog;
+
+  try {
+    ({ catalog } = await loadBookingV2Catalog());
+  } catch {
+    return null;
+  }
+
+  const groups = EXTRAS_SERVICE_ORDER.map((slug) => ({
+    slug,
+    label: PUBLIC_SERVICE_LABELS[slug],
+    icon: SERVICE_CONFIG[slug].icon,
+    extras: catalog[slug].extras,
+  })).filter((group) => group.extras.length > 0);
+
+  if (groups.length === 0) return null;
+
+  return (
+    <section
+      aria-labelledby="services-extras-heading"
+      className="rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-[#F7FAFF] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]"
+    >
+      <div className="max-w-3xl">
+        <p className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-primary">
+          Optional extras
+        </p>
+        <h3
+          id="services-extras-heading"
+          className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground"
+        >
+          Add more to your clean
+        </h3>
+        <p className="mt-[var(--ui-space-3)] max-w-2xl text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
+          These are the same add-ons currently offered in the booking flow. Choose your service first, then select only the extras you need before checkout.
+        </p>
+      </div>
+
+      <div className="mt-[var(--ui-space-8)] grid gap-[var(--ui-space-5)] md:grid-cols-2 xl:grid-cols-3">
+        {groups.map(({ slug, label, icon: ServiceIcon, extras }) => (
+          <article
+            key={slug}
+            className="flex flex-col rounded-[var(--ui-radius-xl)] border border-[#DBEAFE] bg-card p-[var(--ui-space-5)] text-card-foreground shadow-[var(--ui-shadow-sm)]"
+          >
+            <div className="flex items-center gap-[var(--ui-space-3)]">
+              <span
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-primary"
+                aria-hidden
+              >
+                <ServiceIcon className="h-5 w-5" strokeWidth={1.8} />
+              </span>
+              <h4 className="text-[length:var(--ui-text-body)] font-semibold text-foreground">{label}</h4>
+            </div>
+
+            <div className="mt-[var(--ui-space-5)] divide-y divide-border border-y border-border">
+              {extras.map((extra) => (
+                <div key={extra.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-[var(--ui-space-3)] py-[var(--ui-space-4)]">
+                  <div>
+                    <div className="flex flex-wrap items-center gap-[var(--ui-space-2)]">
+                      <p className="text-[length:var(--ui-text-small)] font-medium text-foreground">{extra.label}</p>
+                      {extra.isPopular ? (
+                        <span className="inline-flex items-center gap-1 rounded-[var(--ui-radius-pill)] bg-[#EFF6FF] px-2 py-0.5 text-[length:var(--ui-text-caption)] font-medium text-primary">
+                          <Sparkles className="h-3 w-3" aria-hidden />
+                          Popular
+                        </span>
+                      ) : null}
+                    </div>
+                    {extra.description ? (
+                      <p className="mt-1 text-[length:var(--ui-text-caption)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                        {extra.description}
+                      </p>
+                    ) : null}
+                  </div>
+                  <p className="whitespace-nowrap text-[length:var(--ui-text-small)] font-semibold text-primary">
+                    {formatZar(extra.priceZar)}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <Link
+              href={`/book/${slug}`}
+              className="mt-auto inline-flex min-h-11 items-center gap-[var(--ui-space-2)] pt-[var(--ui-space-5)] text-[length:var(--ui-text-small)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Book with extras
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
+          </article>
+        ))}
+      </div>
+
+      <p className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-caption)] leading-[var(--ui-leading-body)] text-muted-foreground">
+        Add-on availability and price follow the service you choose and are confirmed again in the booking flow before payment.
+      </p>
+    </section>
+  );
+}
