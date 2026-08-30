@@ -214,23 +214,23 @@ export default function ServicesHubPage() {
 
         <HomeSection
           containerSize="marketing"
-          className="overflow-hidden bg-background pt-[var(--ui-space-8)] pb-[var(--ui-space-16)] md:pt-[var(--ui-space-12)] md:pb-[var(--ui-space-20)] lg:pt-[var(--ui-space-16)] lg:pb-[var(--ui-space-24)]"
+          className="overflow-hidden bg-background pt-[var(--ui-space-6)] pb-[var(--ui-space-10)] md:pt-[var(--ui-space-8)] md:pb-[var(--ui-space-12)] lg:pt-[var(--ui-space-10)] lg:pb-[var(--ui-space-16)]"
         >
           <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-[#F7FAFF] shadow-[var(--ui-shadow-lg)]">
-            <div className="grid lg:min-h-[560px] lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
-              <div className="flex flex-col justify-center p-[var(--ui-space-6)] sm:p-[var(--ui-space-10)] lg:p-[var(--ui-space-12)] xl:p-[var(--ui-space-16)]">
+            <div className="grid lg:min-h-[480px] lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
+              <div className="flex flex-col justify-center p-[var(--ui-space-6)] sm:p-[var(--ui-space-8)] lg:p-[var(--ui-space-10)] xl:p-[var(--ui-space-12)]">
                 <div className="max-w-2xl">
                   <p className="inline-flex items-center rounded-[var(--ui-radius-pill)] border border-[#DBEAFE] bg-white px-[var(--ui-space-4)] py-[var(--ui-space-2)] text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-primary shadow-[var(--ui-shadow-sm)]">
                     Cape Town cleaning services
                   </p>
 
-                  <h1 className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
+                  <h1 className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
                     <span className="block">Professional</span>
                     <span className="block text-primary">Cleaning Services</span>
                     <span className="mt-[var(--ui-space-2)] block">in Cape Town</span>
                   </h1>
 
-                  <div className="mt-[var(--ui-space-8)] flex w-full flex-col gap-[var(--ui-space-3)] sm:w-auto sm:flex-row">
+                  <div className="mt-[var(--ui-space-6)] flex w-full flex-col gap-[var(--ui-space-3)] sm:w-auto sm:flex-row">
                     <CTAButton
                       href="/book"
                       variant="primary"
@@ -246,7 +246,7 @@ export default function ServicesHubPage() {
                   </div>
                 </div>
 
-                <div className="mt-[var(--ui-space-10)] grid gap-[var(--ui-space-3)] border-t border-[#DBEAFE] pt-[var(--ui-space-6)] sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                <div className="mt-[var(--ui-space-8)] grid gap-[var(--ui-space-3)] border-t border-[#DBEAFE] pt-[var(--ui-space-5)] sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
                   {[
                     "Vetted and trained cleaners",
                     "See your price before checkout",
@@ -262,7 +262,7 @@ export default function ServicesHubPage() {
                 </div>
               </div>
 
-              <div className="relative min-h-[340px] bg-muted sm:min-h-[430px] lg:min-h-full">
+              <div className="relative min-h-[280px] bg-muted sm:min-h-[360px] lg:min-h-full">
                 <Image
                   src="/images/marketing/standard-cleaning-cape-town-kitchen.webp"
                   alt="Professional home cleaning in a bright Cape Town kitchen and living space"
