@@ -55,7 +55,7 @@ export function MarketingHomeCoreServicesSection({ cards }: Props) {
     <HomeSection
       id="our-services"
       containerSize="marketing"
-      className="scroll-mt-24 !bg-[var(--marketing-surface-warm)] md:py-[var(--ui-space-20)]"
+      className="scroll-mt-24 !bg-[#F4F6FA] md:py-[var(--ui-space-20)]"
       aria-label="Cleaning services"
     >
       <MarketingSectionHeader
@@ -71,9 +71,9 @@ export function MarketingHomeCoreServicesSection({ cards }: Props) {
           return (
             <article
               key={group.id}
-              className="flex min-h-[400px] flex-col rounded-[var(--ui-radius-marketing)] border border-border/70 bg-card p-[var(--ui-space-8)] text-card-foreground shadow-[var(--ui-shadow-md)] transition-transform duration-200 hover:-translate-y-1"
+              className="flex min-h-[400px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card p-[var(--ui-space-8)] text-card-foreground shadow-[var(--ui-shadow-md)] transition-transform duration-200 hover:-translate-y-1"
             >
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#EFF6FF] text-primary" aria-hidden>
                 <GroupIcon className="h-8 w-8" strokeWidth={1.7} />
               </div>
 
@@ -90,7 +90,7 @@ export function MarketingHomeCoreServicesSection({ cards }: Props) {
                     <Link
                       key={id}
                       href={href}
-                      className="group/service flex min-h-14 items-center justify-between gap-[var(--ui-space-3)] rounded-[var(--ui-radius-xl)] border border-border bg-background px-[var(--ui-space-4)] text-[length:var(--ui-text-small)] transition hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="group/service flex min-h-14 items-center justify-between gap-[var(--ui-space-3)] rounded-[var(--ui-radius-xl)] border border-[#DBEAFE] bg-background px-[var(--ui-space-4)] text-[length:var(--ui-text-small)] transition hover:border-primary/40 hover:bg-[#EFF6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       <span className="font-medium text-foreground">{title}</span>
                       <span className="flex shrink-0 items-center gap-[var(--ui-space-2)] text-[length:var(--ui-text-caption)] text-muted-foreground transition-colors group-hover/service:text-primary">
