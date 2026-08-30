@@ -56,7 +56,6 @@ const HUB_SERVICE_SLUGS: CapeTownSeoServiceSlug[] = [
   "airbnb-cleaning-cape-town",
   "office-cleaning-cape-town",
   "carpet-cleaning-cape-town",
-  "window-cleaning-cape-town",
 ];
 
 const title = generateCtrTitle({
