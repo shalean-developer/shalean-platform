@@ -16,6 +16,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { cn } from "@/lib/utils";
+
+type SiteTopBarAccountVariant = "topbar" | "header";
 
 function userDisplayName(user: User | null): string {
   const meta = user?.user_metadata as Record<string, unknown> | undefined;
@@ -40,7 +43,7 @@ function avatarImageUrl(user: User | null): string | null {
   return null;
 }
 
-function SiteTopBarAccountInner() {
+function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
@@ -74,6 +77,7 @@ function SiteTopBarAccountInner() {
   const avatarName = user ? userDisplayName(user) : "Cleaner account";
   const avatarPhoto = user ? avatarImageUrl(user) : null;
   const avatarInitial = avatarLetter(user, cleanerLoggedIn);
+  const headerVariant = variant === "header";
 
   async function handleLogout() {
     if (user) await signOut();
@@ -83,14 +87,29 @@ function SiteTopBarAccountInner() {
   }
 
   if (loading) {
-    return <div className="h-7 w-14 shrink-0 animate-pulse rounded-lg bg-white/20" aria-hidden />;
+    return (
+      <div
+        className={cn(
+          "shrink-0 animate-pulse",
+          headerVariant
+            ? "h-11 w-[4.75rem] rounded-full bg-primary/25"
+            : "h-7 w-14 rounded-lg bg-white/20",
+        )}
+        aria-hidden
+      />
+    );
   }
 
   if (!loggedIn) {
     return (
       <Link
         href={loginHref}
-        className="shrink-0 rounded-lg border border-white/35 px-3 py-1 text-xs font-semibold text-white transition hover:bg-white/10"
+        className={cn(
+          "shrink-0 font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+          headerVariant
+            ? "inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm text-primary-foreground shadow-[var(--ui-shadow-sm)] hover:brightness-95"
+            : "rounded-lg border border-white/35 px-3 py-1 text-xs text-white hover:bg-white/10",
+        )}
       >
         Log In
       </Link>
@@ -102,19 +121,29 @@ function SiteTopBarAccountInner() {
       <DropdownMenuTrigger asChild>
         <button
           type="button"
-          className="inline-flex h-8 w-8 items-center justify-center rounded-full outline-none ring-2 ring-white/25 transition hover:ring-white/50 focus-visible:ring-white/60"
+          className={cn(
+            "inline-flex items-center justify-center rounded-full outline-none transition focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
+            headerVariant
+              ? "h-11 w-11 ring-1 ring-border hover:bg-primary/10"
+              : "h-8 w-8 ring-2 ring-white/25 hover:ring-white/50 focus-visible:ring-white/60",
+          )}
           aria-label="Account menu"
         >
-          <Avatar className="h-7 w-7 border-white/30">
+          <Avatar className={cn(headerVariant ? "h-10 w-10 border-border" : "h-7 w-7 border-white/30")}>
             {avatarPhoto ? <AvatarImage src={avatarPhoto} alt="" referrerPolicy="no-referrer" /> : null}
-            <AvatarFallback className="bg-white/15 text-xs font-semibold text-white">
+            <AvatarFallback
+              className={cn(
+                "text-xs font-semibold",
+                headerVariant ? "bg-primary text-primary-foreground" : "bg-white/15 text-white",
+              )}
+            >
               {avatarInitial}
             </AvatarFallback>
           </Avatar>
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-[220px]">
-        <DropdownMenuLabel className="px-4">
+      <DropdownMenuContent align="end" className="min-w-[220px] rounded-2xl p-2 shadow-[var(--ui-shadow-lg)]">
+        <DropdownMenuLabel className="px-3 py-2">
           <span className="block truncate text-sm">{avatarName}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
@@ -141,14 +170,24 @@ function SiteTopBarAccountInner() {
   );
 }
 
-function SiteTopBarAccountFallback() {
-  return <div className="h-7 w-14 shrink-0 animate-pulse rounded-lg bg-white/20" aria-hidden />;
+function SiteTopBarAccountFallback({ variant }: { variant: SiteTopBarAccountVariant }) {
+  return (
+    <div
+      className={cn(
+        "shrink-0 animate-pulse",
+        variant === "header"
+          ? "h-11 w-[4.75rem] rounded-full bg-primary/25"
+          : "h-7 w-14 rounded-lg bg-white/20",
+      )}
+      aria-hidden
+    />
+  );
 }
 
-export function SiteTopBarAccount() {
+export function SiteTopBarAccount({ variant = "topbar" }: { variant?: SiteTopBarAccountVariant }) {
   return (
-    <Suspense fallback={<SiteTopBarAccountFallback />}>
-      <SiteTopBarAccountInner />
+    <Suspense fallback={<SiteTopBarAccountFallback variant={variant} />}>
+      <SiteTopBarAccountInner variant={variant} />
     </Suspense>
   );
 }

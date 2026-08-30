@@ -34,8 +34,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FormField } from "@/components/ui/form-field";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Select } from "@/components/ui/select";
 import { EmptyState } from "@/components/dashboard/empty-state";
 import { useDashboardToast } from "@/components/dashboard/dashboard-toast-context";
@@ -139,22 +139,39 @@ export default function AccountBookingDetailPage() {
 
   if (loading) {
     return (
-      <div className="space-y-4 animate-pulse">
-        <div className="h-8 w-48 rounded-xl bg-muted" />
-        <div className="h-56 rounded-2xl bg-muted" />
-        <div className="h-40 rounded-2xl bg-muted" />
+      <div className="space-y-5" aria-hidden>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />
+            <div className="h-4 w-56 animate-pulse rounded bg-muted" />
+          </div>
+          <div className="h-10 w-full animate-pulse rounded-xl bg-muted sm:w-24" />
+        </div>
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem]">
+          <div className="space-y-6">
+            <div className="h-48 animate-pulse rounded-2xl border border-border bg-card" />
+            <div className="h-44 animate-pulse rounded-2xl border border-border bg-card" />
+            <div className="h-56 animate-pulse rounded-2xl border border-border bg-card" />
+          </div>
+          <div className="space-y-4">
+            <div className="h-52 animate-pulse rounded-2xl border border-border bg-card" />
+            <div className="h-36 animate-pulse rounded-2xl border border-border bg-card" />
+          </div>
+        </div>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="space-y-3">
-        <p className="text-sm text-red-600">{error}</p>
-        <Button type="button" variant="outline" className="rounded-xl" onClick={() => void refetch()}>
-          Retry
-        </Button>
-      </div>
+      <Card className="border-destructive/30 bg-destructive/5">
+        <CardContent className="space-y-3 p-5" role="alert">
+          <p className="text-sm font-medium text-destructive">{error}</p>
+          <Button type="button" variant="outline" className="rounded-xl" onClick={() => void refetch()}>
+            Retry
+          </Button>
+        </CardContent>
+      </Card>
     );
   }
 
@@ -221,72 +238,75 @@ export default function AccountBookingDetailPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between gap-4">
-        <div>
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-2xl font-bold tracking-tight text-foreground">Booking details</h1>
           <p className="mt-1 text-sm text-muted-foreground">{when}</p>
         </div>
-        <Button asChild variant="outline" className="rounded-xl">
-          <Link href="/account/bookings">Back</Link>
+        <Button asChild variant="outline" className="w-full rounded-xl sm:w-auto">
+          <Link href="/account/bookings">Back to bookings</Link>
         </Button>
-      </div>
+      </header>
 
       {preferredDispatchNotice ? (
-        <p className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+        <div
+          role="status"
+          className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-relaxed text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
+        >
           {preferredDispatchNotice}
-        </p>
+        </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="space-y-6 lg:col-span-2">
-          <Card className="rounded-2xl border-border shadow-sm">
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
+        <div className="min-w-0 space-y-6">
+          <Card className="overflow-hidden">
             <CardHeader
-              className="flex flex-row flex-wrap items-start justify-between gap-3 pb-2"
+              className="flex flex-row flex-wrap items-start justify-between gap-3 pb-3"
               {...customerBookingDetailHeaderDataAttributes(booking)}
             >
-              <div>
-                <CardTitle className="text-xl">{booking.serviceName}</CardTitle>
+              <div className="min-w-0">
+                <CardTitle className="text-xl text-foreground">{booking.serviceName}</CardTitle>
                 <p className="mt-1 text-sm text-muted-foreground">Ref {bookingRef}</p>
               </div>
               <CustomerBookingStatusBadge booking={booking} />
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex flex-wrap gap-4 text-sm text-muted-foreground">
+              <div className="flex flex-wrap gap-x-5 gap-y-2 text-sm text-muted-foreground">
                 {booking.scheduleConfirmed ? (
                   <>
                     <span className="inline-flex items-center gap-2">
-                      <Calendar className="h-4 w-4 text-blue-600" />
+                      <Calendar className="h-4 w-4 text-primary" aria-hidden />
                       {booking.date}
                     </span>
                     <span className="inline-flex items-center gap-2">
-                      <Clock className="h-4 w-4 text-blue-600" />
+                      <Clock className="h-4 w-4 text-primary" aria-hidden />
                       {booking.time}
                       {booking.durationHours != null ? ` · ${booking.durationHours}h` : ""}
                     </span>
                   </>
                 ) : (
                   <span className="inline-flex items-center gap-2 text-amber-800 dark:text-amber-200">
-                    <Calendar className="h-4 w-4" />
+                    <Calendar className="h-4 w-4" aria-hidden />
                     Date & time to be confirmed
                   </span>
                 )}
               </div>
-              <p className="flex items-start gap-2 text-sm text-foreground">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-                {formatBookingLocation(booking)}
-              </p>
+              <div className="flex items-start gap-2 text-sm text-foreground">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+                <span className="min-w-0 break-words">{formatBookingLocation(booking)}</span>
+              </div>
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-border shadow-sm">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Rooms & extras</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div>
-                <p className="text-xs font-semibold uppercase text-muted-foreground">Rooms</p>
+            <CardContent className="grid gap-6 sm:grid-cols-2">
+              <section>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rooms</p>
                 {booking.rooms.length > 0 ? (
-                  <ul className="mt-2 list-inside list-disc text-sm text-foreground">
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-foreground">
                     {booking.rooms.map((r) => (
                       <li key={r}>{r}</li>
                     ))}
@@ -294,11 +314,11 @@ export default function AccountBookingDetailPage() {
                 ) : (
                   <p className="mt-2 text-sm text-muted-foreground">No room details on file.</p>
                 )}
-              </div>
-              <div>
-                <p className="text-xs font-semibold uppercase text-muted-foreground">Extras</p>
+              </section>
+              <section>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Extras</p>
                 {booking.extras.length > 0 ? (
-                  <ul className="mt-2 list-inside list-disc text-sm text-foreground">
+                  <ul className="mt-2 list-inside list-disc space-y-1 text-sm text-foreground">
                     {booking.extras.map((e) => (
                       <li key={e}>{e}</li>
                     ))}
@@ -306,21 +326,21 @@ export default function AccountBookingDetailPage() {
                 ) : (
                   <p className="mt-2 text-sm text-muted-foreground">No extras selected.</p>
                 )}
-              </div>
+              </section>
             </CardContent>
           </Card>
 
           {booking.cleanDetails.length > 0 ? (
-            <Card className="rounded-2xl border-border shadow-sm">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Clean details</CardTitle>
               </CardHeader>
               <CardContent>
-                <dl className="grid gap-3 sm:grid-cols-2">
+                <dl className="grid gap-4 sm:grid-cols-2">
                   {booking.cleanDetails.map((line) => (
-                    <div key={`${line.label}-${line.value}`}>
-                      <dt className="text-xs font-semibold uppercase text-muted-foreground">{line.label}</dt>
-                      <dd className="mt-1 text-sm text-foreground">{line.value}</dd>
+                    <div key={`${line.label}-${line.value}`} className="min-w-0">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{line.label}</dt>
+                      <dd className="mt-1 break-words text-sm text-foreground">{line.value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -329,16 +349,16 @@ export default function AccountBookingDetailPage() {
           ) : null}
 
           {booking.accessNotes.length > 0 ? (
-            <Card className="rounded-2xl border-border shadow-sm">
+            <Card>
               <CardHeader>
                 <CardTitle className="text-base">Access & arrival</CardTitle>
               </CardHeader>
               <CardContent>
-                <dl className="space-y-3">
+                <dl className="space-y-4">
                   {booking.accessNotes.map((line) => (
-                    <div key={`${line.label}-${line.value}`}>
-                      <dt className="text-xs font-semibold uppercase text-muted-foreground">{line.label}</dt>
-                      <dd className="mt-1 text-sm text-foreground">{line.value}</dd>
+                    <div key={`${line.label}-${line.value}`} className="min-w-0">
+                      <dt className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{line.label}</dt>
+                      <dd className="mt-1 break-words text-sm text-foreground">{line.value}</dd>
                     </div>
                   ))}
                 </dl>
@@ -346,7 +366,7 @@ export default function AccountBookingDetailPage() {
             </Card>
           ) : null}
 
-          <Card className="rounded-2xl border-border shadow-sm">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Booking timeline</CardTitle>
             </CardHeader>
@@ -354,11 +374,11 @@ export default function AccountBookingDetailPage() {
               <ol className="space-y-4">
                 {timeline.map((step, i) => (
                   <li key={step.label} className="flex gap-4">
-                    <div className="flex flex-col items-center">
+                    <div className="flex flex-col items-center" aria-hidden>
                       <span
                         className={
                           step.done
-                            ? "flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white"
+                            ? "flex h-9 w-9 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground"
                             : "flex h-9 w-9 items-center justify-center rounded-full border-2 border-border bg-muted text-xs font-bold text-muted-foreground"
                         }
                       >
@@ -366,11 +386,11 @@ export default function AccountBookingDetailPage() {
                       </span>
                       {i < timeline.length - 1 ? <span className="mt-1 h-8 w-px grow bg-border" /> : null}
                     </div>
-                    <div className="pt-1">
+                    <div className="min-w-0 pt-1">
                       <p
                         className={
                           step.tone === "danger"
-                            ? "font-semibold text-red-600"
+                            ? "font-semibold text-destructive"
                             : step.done
                               ? "font-semibold text-foreground"
                               : "font-medium text-muted-foreground"
@@ -386,8 +406,8 @@ export default function AccountBookingDetailPage() {
           </Card>
         </div>
 
-        <div className="space-y-6">
-          <Card className="rounded-2xl border-border shadow-sm">
+        <aside className="min-w-0 space-y-4 xl:sticky xl:top-24" aria-label="Booking summary and actions">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Price breakdown</CardTitle>
               {booking.priceDisplayFromCheckout ? (
@@ -398,37 +418,37 @@ export default function AccountBookingDetailPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {booking.priceLines.map((line, index) => (
-                <div key={`${booking.id}-price-${index}-${line.label}`} className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">{line.label}</span>
-                  <span className="tabular-nums font-medium text-foreground">{formatZarLine(line.amountZar)}</span>
+                <div key={`${booking.id}-price-${index}-${line.label}`} className="flex items-start justify-between gap-4 text-sm">
+                  <span className="min-w-0 text-muted-foreground">{line.label}</span>
+                  <span className="shrink-0 tabular-nums font-medium text-foreground">{formatZarLine(line.amountZar)}</span>
                 </div>
               ))}
               <Separator />
-              <div className="flex justify-between text-base font-bold">
+              <div className="flex items-center justify-between gap-4 text-base font-bold text-foreground">
                 <span>Total</span>
-                <span className="tabular-nums text-blue-600">{formatZarLine(booking.priceZar)}</span>
+                <span className="shrink-0 tabular-nums text-primary">{formatZarLine(booking.priceZar)}</span>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="rounded-2xl border-border shadow-sm">
+          <Card>
             <CardHeader>
               <CardTitle className="text-base">Cleaner</CardTitle>
             </CardHeader>
             <CardContent>
               {booking.cleaner ? (
-                <div className="flex items-center gap-3">
-                  <Avatar className="h-12 w-12">
+                <div className="flex min-w-0 items-center gap-3">
+                  <Avatar className="h-12 w-12 shrink-0">
                     <AvatarFallback className="text-base">{booking.cleaner.initials}</AvatarFallback>
                   </Avatar>
-                  <div>
-                    <p className="font-semibold text-foreground">{booking.cleaner.name}</p>
+                  <div className="min-w-0">
+                    <p className="break-words font-semibold text-foreground">{booking.cleaner.name}</p>
                     {booking.cleaner.phone ? (
                       <a
                         href={`tel:${booking.cleaner.phone}`}
-                        className="mt-1 inline-flex items-center gap-1 text-sm text-blue-600 hover:underline"
+                        className="mt-1 inline-flex max-w-full items-center gap-1 break-all text-sm text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                       >
-                        <Phone className="h-3.5 w-3.5" />
+                        <Phone className="h-3.5 w-3.5 shrink-0" aria-hidden />
                         {booking.cleaner.phone}
                       </a>
                     ) : null}
@@ -444,74 +464,82 @@ export default function AccountBookingDetailPage() {
             </CardContent>
           </Card>
 
-          <div className="flex flex-col gap-3">
-            {modifiable ? (
-              <>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="w-full rounded-xl"
-                  onClick={() => {
-                    setResDate(current.date);
-                    setResTime(current.time);
-                    setRescheduleOpen(true);
-                  }}
-                >
-                  Reschedule
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">Manage booking</CardTitle>
+              <p className="text-xs text-muted-foreground">Available actions depend on this booking&apos;s current state.</p>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {modifiable ? (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="w-full rounded-xl"
+                    onClick={() => {
+                      setResDate(current.date);
+                      setResTime(current.time);
+                      setRescheduleOpen(true);
+                    }}
+                  >
+                    Reschedule
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="w-full rounded-xl border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    disabled={invoiceClosed}
+                    onClick={() => setCancelOpen(true)}
+                  >
+                    Cancel booking
+                  </Button>
+                </>
+              ) : null}
+              {showRebook ? (
+                <Button asChild variant="outline" size="lg" className="w-full rounded-xl">
+                  <Link href={rebookBookUrlFromBookingRow(current.raw)}>Rebook this clean</Link>
                 </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="lg"
-                  className="w-full rounded-xl text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30"
-                  disabled={invoiceClosed}
-                  onClick={() => setCancelOpen(true)}
-                >
-                  Cancel booking
+              ) : null}
+              {reviewHref ? (
+                <Button asChild variant="outline" size="lg" className="w-full rounded-xl">
+                  <Link href={reviewHref}>Leave review</Link>
                 </Button>
-              </>
-            ) : null}
-            {showRebook ? (
-              <Button asChild variant="outline" size="lg" className="w-full rounded-xl">
-                <Link href={rebookBookUrlFromBookingRow(current.raw)}>Rebook this clean</Link>
-              </Button>
-            ) : null}
-            {reviewHref ? (
-              <Button asChild variant="outline" size="lg" className="w-full rounded-xl text-amber-800">
-                <Link href={reviewHref}>Leave review</Link>
-              </Button>
-            ) : null}
-            <Button
-              asChild
-              size="lg"
-              className="w-full rounded-xl bg-[#25D366] text-white hover:bg-[#20bd5a]"
-            >
-              <a
-                href={`https://wa.me/${wa}?text=${encodeURIComponent(`Hi Shalean — question about booking ${bookingRef}`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              ) : null}
+              <Button
+                asChild
+                size="lg"
+                className="w-full rounded-xl bg-[#25D366] text-white hover:bg-[#20bd5a] focus-visible:outline-[#128C7E]"
               >
-                <MessageCircle className="h-5 w-5" />
-                Contact support (WhatsApp)
-              </a>
-            </Button>
-          </div>
-        </div>
+                <a
+                  href={`https://wa.me/${wa}?text=${encodeURIComponent(`Hi Shalean — question about booking ${bookingRef}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <MessageCircle className="h-5 w-5" aria-hidden />
+                  Contact support (WhatsApp)
+                </a>
+              </Button>
+            </CardContent>
+          </Card>
+        </aside>
       </div>
 
       <Dialog open={cancelOpen} onOpenChange={setCancelOpen}>
-        <DialogContent className="rounded-2xl">
+        <DialogContent className="rounded-2xl sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Cancel this booking?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-foreground">{customerCancelBookingHint(current.raw)}</p>
-          <p className="mt-2 text-sm text-muted-foreground">This will mark your visit as cancelled.</p>
+          <div className="space-y-2">
+            <p className="text-sm text-foreground">{customerCancelBookingHint(current.raw)}</p>
+            <p className="text-sm text-muted-foreground">This will mark your visit as cancelled.</p>
+          </div>
           <DialogFooter>
             <Button type="button" variant="outline" className="rounded-xl" onClick={() => setCancelOpen(false)} disabled={busy}>
               Keep booking
             </Button>
-            <Button type="button" className="rounded-xl bg-red-600 hover:bg-red-700" onClick={() => void confirmCancel()} disabled={busy}>
+            <Button type="button" variant="destructive" className="rounded-xl" onClick={() => void confirmCancel()} disabled={busy}>
               {busy ? "Working…" : "Yes, cancel"}
             </Button>
           </DialogFooter>
@@ -519,13 +547,12 @@ export default function AccountBookingDetailPage() {
       </Dialog>
 
       <Dialog open={rescheduleOpen} onOpenChange={setRescheduleOpen}>
-        <DialogContent className="rounded-2xl">
+        <DialogContent className="rounded-2xl sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Reschedule</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-3 py-2 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="res-d">Date</Label>
+          <div className="grid gap-4 py-2 sm:grid-cols-2">
+            <FormField label="Date" htmlFor="res-d">
               <Input
                 id="res-d"
                 type="date"
@@ -540,9 +567,8 @@ export default function AccountBookingDetailPage() {
                   }
                 }}
               />
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="res-t">Time</Label>
+            </FormField>
+            <FormField label="Time" htmlFor="res-t">
               <Select id="res-t" value={resTime.trim().slice(0, 5)} onChange={(e) => setResTime(e.target.value)} className="w-full">
                 {rescheduleSlots.length === 0 ? (
                   <option value="">No times left</option>
@@ -554,7 +580,7 @@ export default function AccountBookingDetailPage() {
                   ))
                 )}
               </Select>
-            </div>
+            </FormField>
           </div>
           {crossMonthBlocked ? (
             <p className="text-sm font-medium text-amber-800 dark:text-amber-200">

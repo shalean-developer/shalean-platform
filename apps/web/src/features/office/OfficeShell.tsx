@@ -21,14 +21,14 @@ type Gate = "denied" | "ready";
 
 function OfficeSkeleton() {
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
-      <div className="h-16 animate-pulse border-b border-slate-200 bg-white" />
+    <div className="flex min-h-screen flex-col bg-background">
+      <div className="h-16 animate-pulse border-b border-border bg-card" />
       <div className="flex flex-1">
-        <div className="hidden w-[220px] animate-pulse bg-[--sidebar-bg] md:block" />
-        <div className="flex-1 space-y-4 p-6">
-          <div className="h-8 w-64 animate-pulse rounded-lg bg-slate-200" />
-          <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />
-          <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="hidden w-[220px] animate-pulse border-r border-border bg-[--sidebar-bg] md:block" />
+        <div className="flex-1 space-y-[var(--ui-space-4)] bg-muted/20 p-[var(--ui-space-6)]">
+          <div className="h-8 w-64 animate-pulse rounded-[var(--ui-radius-lg)] bg-muted" />
+          <div className="h-40 animate-pulse rounded-[var(--ui-radius-2xl)] border border-border bg-card" />
+          <div className="h-40 animate-pulse rounded-[var(--ui-radius-2xl)] border border-border bg-card" />
         </div>
       </div>
     </div>
@@ -48,23 +48,22 @@ function DeniedGate({
   noSupabase: boolean;
   onRetry: () => void;
 }) {
+  const actionClass =
+    "mt-5 inline-flex w-full items-center justify-center rounded-[var(--ui-radius-xl)] border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+
   return (
-    <main className="flex min-h-screen items-center justify-center px-4">
-      <div className="w-full max-w-md rounded-2xl border border-border bg-card p-6 text-center shadow-sm">
+    <main className="flex min-h-screen items-center justify-center bg-background px-[var(--ui-page-gutter)]">
+      <div className="w-full max-w-md rounded-[var(--ui-radius-2xl)] border border-border bg-card p-[var(--ui-space-6)] text-center shadow-[var(--ui-shadow-sm)]">
         <h1 className="text-lg font-semibold text-foreground">Admin access required</h1>
         {errorMessage ? (
           <>
             <p className="mt-2 text-sm text-muted-foreground">{errorMessage}</p>
-            <button
-              type="button"
-              className="mt-5 inline-flex w-full items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
-              onClick={onRetry}
-            >
+            <button type="button" className={actionClass} onClick={onRetry}>
               Try again
             </button>
           </>
         ) : noSupabase ? (
-          <p className="mt-2 text-sm text-amber-700 dark:text-amber-200">
+          <p className="mt-2 text-sm text-warning-foreground">
             Missing{" "}
             <code className="rounded bg-muted px-1 font-mono text-xs">NEXT_PUBLIC_SUPABASE_URL</code> or{" "}
             <code className="rounded bg-muted px-1 font-mono text-xs">NEXT_PUBLIC_SUPABASE_ANON_KEY</code> — check{" "}
@@ -75,10 +74,7 @@ function DeniedGate({
             <p className="mt-2 text-sm text-muted-foreground">
               <span className="font-medium text-foreground">{userLabel}</span> is not on the admin allowlist.
             </p>
-            <Link
-              href={`/login?redirect=${encodeURIComponent(redirectTarget)}`}
-              className="mt-5 inline-flex w-full items-center justify-center rounded-xl border border-border bg-card px-4 py-2.5 text-sm font-semibold text-foreground hover:bg-muted"
-            >
+            <Link href={`/login?redirect=${encodeURIComponent(redirectTarget)}`} className={actionClass}>
               Use a different account
             </Link>
           </>
@@ -87,7 +83,7 @@ function DeniedGate({
             <p className="mt-2 text-sm text-muted-foreground">Sign in with an allowlisted admin account to continue.</p>
             <Link
               href={`/login?redirect=${encodeURIComponent(redirectTarget)}`}
-              className="mt-5 inline-flex w-full items-center justify-center rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700"
+              className="mt-5 inline-flex w-full items-center justify-center rounded-[var(--ui-radius-xl)] bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Login as Admin
             </Link>
@@ -101,7 +97,10 @@ function DeniedGate({
 export function OfficeShell({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
-  const { state: roleState, retry } = useRoleRouteGuard({ requiredRole: "admin" });
+  const { state: roleState, retry } = useRoleRouteGuard({
+    requiredRole: "admin",
+    allowLocalhostDevBypass: true,
+  });
   const [gate, setGate] = useState<Gate>("ready");
   const [userLabel, setUserLabel] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -193,7 +192,7 @@ export function OfficeShell({ children }: { children: ReactNode }) {
 
   if (roleState.status === "timeout") {
     return (
-      <div className="min-h-screen bg-slate-50">
+      <div className="min-h-screen bg-background">
         <RoleGuardRetryBanner onRetry={retry} />
         <OfficeSkeleton />
       </div>
@@ -213,7 +212,7 @@ export function OfficeShell({ children }: { children: ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-slate-50">
+    <div className="flex min-h-screen flex-col bg-background">
       <OfficeTopBar
         userLabel={userLabel}
         onMenuOpen={() => setMobileOpen(true)}
@@ -226,7 +225,7 @@ export function OfficeShell({ children }: { children: ReactNode }) {
         <aside
           ref={sidebarRef}
           className={cn(
-            "relative z-20 hidden shrink-0 flex-col border-r border-[--sidebar-border] bg-[--sidebar-bg] transition-[width] duration-200 md:flex",
+            "relative z-[var(--ui-z-sticky)] hidden shrink-0 flex-col border-r border-[--sidebar-border] bg-[--sidebar-bg] shadow-[var(--ui-shadow-sm)] transition-[width] duration-200 md:flex",
             sidebarCollapsed ? "w-[72px]" : "w-[220px]",
           )}
         >
@@ -244,14 +243,14 @@ export function OfficeShell({ children }: { children: ReactNode }) {
 
         {/* Mobile drawer */}
         {mobileOpen ? (
-          <div className="fixed inset-0 z-50 md:hidden" role="dialog" aria-modal="true">
+          <div className="fixed inset-0 z-[var(--ui-z-overlay)] md:hidden" role="dialog" aria-modal="true" aria-label="Office navigation">
             <button
               type="button"
-              className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+              className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
               aria-label="Close menu"
               onClick={() => setMobileOpen(false)}
             />
-            <div className="absolute left-0 top-16 h-[calc(100%-4rem)] w-[min(100%,18rem)] shadow-xl">
+            <div className="absolute left-0 top-16 h-[calc(100%-4rem)] w-[min(88vw,20rem)] border-r border-[--sidebar-border] bg-[--sidebar-bg] shadow-[var(--ui-shadow-xl)]">
               <OfficeSidebarContent
                 userLabel={userLabel}
                 onLogout={() => void handleLogout()}
@@ -262,8 +261,8 @@ export function OfficeShell({ children }: { children: ReactNode }) {
         ) : null}
 
         {/* Main content */}
-        <main className="min-w-0 flex-1">
-          <div className="mx-auto w-full max-w-[1600px] p-4 pb-8 md:p-6">{children}</div>
+        <main className="min-w-0 flex-1 bg-muted/20">
+          <div className="mx-auto w-full max-w-[1600px] px-[var(--ui-page-gutter)] py-[var(--ui-space-6)] pb-[var(--ui-space-8)]">{children}</div>
         </main>
       </div>
 

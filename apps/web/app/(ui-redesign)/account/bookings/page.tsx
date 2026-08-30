@@ -11,12 +11,12 @@ import {
   Home,
   Repeat,
   FileText,
-  ChevronLeft,
   ChevronRight,
   LayoutGrid,
   Table2,
   Sparkles,
 } from "lucide-react";
+import { AccountPagination } from "@/components/account/AccountPagination";
 import { StatCard } from "@/components/account/StatCard";
 import { HelpCard } from "@/components/account/HelpCard";
 import { TrustBar } from "@/components/account/TrustBar";
@@ -24,9 +24,7 @@ import { useBookings } from "@/hooks/useBookings";
 import { useReviews } from "@/hooks/useReviews";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { isUpcomingBookingRow } from "@/lib/dashboard/bookingUtils";
-import {
-  canCustomerModifyDashboardBooking,
-} from "@/lib/dashboard/dashboardBookingOperational";
+import { canCustomerModifyDashboardBooking } from "@/lib/dashboard/dashboardBookingOperational";
 import {
   isBookingPendingCustomerReview,
   leaveReviewHrefForBooking,
@@ -36,68 +34,67 @@ import { BookingCard } from "@/components/dashboard/booking-card";
 import { CustomerBookingsTable } from "@/components/dashboard/customer-bookings-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { CUSTOMER_ACCOUNT_BOOK_PATH } from "@/lib/customer/customerAccountPaths";
 import { cn } from "@/lib/utils";
 
-
 const BOOKINGS_PER_PAGE = 5;
 
-function Pagination({
-  page,
-  pageCount,
-  onPage,
+function QuickLink({
+  href,
+  label,
+  icon: Icon,
 }: {
-  page: number;
-  pageCount: number;
-  onPage: (p: number) => void;
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
 }) {
-  if (pageCount <= 1) return null;
-  return (
-    <nav className="mt-4 flex items-center justify-between gap-2" aria-label="Bookings pagination">
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="rounded-xl"
-        disabled={page <= 1}
-        onClick={() => onPage(page - 1)}
-      >
-        <ChevronLeft className="mr-1 h-4 w-4" />
-        Previous
-      </Button>
-      <span className="text-sm text-gray-500">
-        Page {page} of {pageCount}
-      </span>
-      <Button
-        type="button"
-        variant="outline"
-        size="sm"
-        className="rounded-xl"
-        disabled={page >= pageCount}
-        onClick={() => onPage(page + 1)}
-      >
-        Next
-        <ChevronRight className="ml-1 h-4 w-4" />
-      </Button>
-    </nav>
-  );
-}
-
-function QuickLink({ href, label, icon: Icon }: { href: string; label: string; icon: React.ComponentType<{ className?: string; strokeWidth?: number; }> }) {
   return (
     <Link
       href={href}
-      className="flex items-center justify-between rounded-lg px-2 py-2 text-xs font-medium text-gray-700 transition hover:bg-gray-50"
+      className="group flex min-h-10 items-center justify-between gap-3 rounded-xl px-2.5 py-2 text-sm font-medium text-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
-      <span className="flex items-center gap-2.5">
-        <Icon className="h-4 w-4 shrink-0 text-blue-500" strokeWidth={1.75} />
-        {label}
+      <span className="flex min-w-0 items-center gap-2.5">
+        <Icon className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.75} aria-hidden />
+        <span className="min-w-0">{label}</span>
       </span>
-      <ChevronRight className="h-3.5 w-3.5 shrink-0 text-gray-300" />
+      <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
     </Link>
   );
 }
 
+function BookingsEmptyState({ kind }: { kind: "upcoming" | "past" }) {
+  const upcoming = kind === "upcoming";
+
+  return (
+    <Card className="p-8 text-center">
+      <div
+        className={cn(
+          "mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl",
+          upcoming ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground",
+        )}
+      >
+        <CalendarDays className="h-7 w-7" strokeWidth={1.5} aria-hidden />
+      </div>
+      <h3 className="font-semibold text-foreground">
+        {upcoming ? "No upcoming bookings" : "No past bookings yet"}
+      </h3>
+      <p className="mx-auto mt-1 max-w-md text-sm text-muted-foreground">
+        {upcoming
+          ? "Schedule a clean and it will show here with reminders and cleaner updates."
+          : "Completed and cancelled visits appear here."}
+      </p>
+      {upcoming ? (
+        <Button asChild size="sm" className="mt-4 rounded-xl">
+          <Link href={CUSTOMER_ACCOUNT_BOOK_PATH}>
+            <Sparkles className="h-3.5 w-3.5" aria-hidden />
+            Book your next clean
+          </Link>
+        </Button>
+      ) : null}
+    </Card>
+  );
+}
 
 export default function AccountBookingsPage() {
   const { bookings, loading, error, refetch, cancelBooking, rescheduleBooking } = useBookings();
@@ -171,15 +168,22 @@ export default function AccountBookingsPage() {
 
   if (loading) {
     return (
-      <div className="flex flex-col gap-6 xl:flex-row">
-        <div className="flex-1 space-y-4">
-          <div className="h-10 w-48 animate-pulse rounded-xl bg-gray-100" />
-          <div className="h-40 animate-pulse rounded-2xl bg-gray-100" />
-          <div className="h-40 animate-pulse rounded-2xl bg-gray-100" />
+      <div className="flex flex-col gap-6 xl:flex-row xl:items-start" aria-hidden>
+        <div className="min-w-0 flex-1 space-y-5">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-2">
+              <div className="h-8 w-44 animate-pulse rounded-lg bg-muted" />
+              <div className="h-4 w-60 animate-pulse rounded bg-muted" />
+            </div>
+            <div className="h-10 w-28 animate-pulse rounded-xl bg-muted" />
+          </div>
+          <div className="h-12 animate-pulse rounded-2xl border border-border bg-card" />
+          <div className="h-52 animate-pulse rounded-2xl border border-border bg-card" />
+          <div className="h-52 animate-pulse rounded-2xl border border-border bg-card" />
         </div>
-        <div className="w-full animate-pulse space-y-4 xl:w-64">
-          <div className="h-48 rounded-2xl bg-gray-100" />
-          <div className="h-40 rounded-2xl bg-gray-100" />
+        <div className="w-full shrink-0 space-y-3 xl:w-72">
+          <div className="h-48 animate-pulse rounded-2xl border border-border bg-card" />
+          <div className="h-48 animate-pulse rounded-2xl border border-border bg-card" />
         </div>
       </div>
     );
@@ -187,29 +191,26 @@ export default function AccountBookingsPage() {
 
   return (
     <div className="flex flex-col gap-6 xl:flex-row xl:items-start">
-      {/* ── Left column: bookings ─────────────────────────────────── */}
       <div className="min-w-0 flex-1 space-y-5">
-        {/* Page header */}
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-gray-900">My Bookings</h1>
-            <p className="mt-1 text-sm text-gray-500">Upcoming and past cleans.</p>
+        <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">My Bookings</h1>
+            <p className="mt-1 text-sm text-muted-foreground">Upcoming and past cleans.</p>
           </div>
-          <Button
-            asChild
-            className="rounded-xl bg-blue-600 px-5 text-white shadow-sm hover:bg-blue-700"
-          >
+          <Button asChild className="w-full rounded-xl sm:w-auto">
             <Link href={CUSTOMER_ACCOUNT_BOOK_PATH}>Book a clean</Link>
           </Button>
-        </div>
+        </header>
 
-        {/* Error banner */}
         {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <div
+            role="alert"
+            className="rounded-2xl border border-destructive/30 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+          >
             {error}{" "}
             <button
               type="button"
-              className="font-semibold underline"
+              className="font-semibold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               onClick={() => void refetch()}
             >
               Retry
@@ -218,92 +219,91 @@ export default function AccountBookingsPage() {
         ) : null}
 
         {revError ? (
-          <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+          <div role="alert" className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
             Could not load reviews: {revError}
           </div>
         ) : null}
 
-        {/* Pending review banner */}
         {pendingReviewCount > 0 && firstPendingReviewBookingId ? (
-          <div className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <p className="font-semibold text-amber-900">Rate your cleaning experience</p>
-              <p className="mt-0.5 text-sm text-amber-700/90">
+          <Card className="flex flex-col gap-3 border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <p className="font-semibold text-amber-950">Rate your cleaning experience</p>
+              <p className="mt-0.5 text-sm text-amber-800">
                 {pendingReviewCount === 1
                   ? "One completed visit waiting for a quick review."
                   : `${pendingReviewCount} completed visits waiting for a quick review.`}
               </p>
             </div>
             <div className="flex shrink-0 flex-wrap gap-2">
-              <Button
-                asChild
-                size="sm"
-                className="rounded-xl bg-amber-600 text-white hover:bg-amber-700"
-              >
+              <Button asChild size="sm" className="rounded-xl">
                 <Link href={`/review?booking=${encodeURIComponent(firstPendingReviewBookingId)}`}>
                   Leave a review
                 </Link>
               </Button>
-              <Button asChild size="sm" variant="outline" className="rounded-xl">
+              <Button asChild size="sm" variant="outline" className="rounded-xl bg-background/70">
                 <Link href="/account/reviews">All reviews</Link>
               </Button>
             </div>
-          </div>
+          </Card>
         ) : null}
 
-        {/* View toggle + Tabs */}
-        <div className="space-y-4">
-          {/* View toggle */}
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setView("cards")}
-              className={cn(
-                "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition",
-                view === "cards"
-                  ? "border-blue-200 bg-blue-50 text-blue-700"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
-              )}
-            >
-              <LayoutGrid className="h-4 w-4" strokeWidth={1.75} />
-              Cards
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("table")}
-              className={cn(
-                "flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition",
-                view === "table"
-                  ? "border-blue-200 bg-blue-50 text-blue-700"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50",
-              )}
-            >
-              <Table2 className="h-4 w-4" strokeWidth={1.75} />
-              Table
-            </button>
+        <section className="space-y-4" aria-labelledby="booking-list-heading">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 id="booking-list-heading" className="text-base font-semibold text-foreground">
+                Booking history
+              </h2>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Switch between upcoming and past visits, then choose cards or table view.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2" role="group" aria-label="Bookings view">
+              <Button
+                type="button"
+                variant={view === "cards" ? "default" : "outline"}
+                size="sm"
+                className="rounded-xl"
+                aria-pressed={view === "cards"}
+                onClick={() => setView("cards")}
+              >
+                <LayoutGrid className="h-4 w-4" aria-hidden />
+                Cards
+              </Button>
+              <Button
+                type="button"
+                variant={view === "table" ? "default" : "outline"}
+                size="sm"
+                className="rounded-xl"
+                aria-pressed={view === "table"}
+                onClick={() => setView("table")}
+              >
+                <Table2 className="h-4 w-4" aria-hidden />
+                Table
+              </Button>
+            </div>
           </div>
 
-          {/* Tabs */}
           <Tabs defaultValue="upcoming" className="w-full">
-            <TabsList className="inline-flex rounded-xl border border-gray-100 bg-white p-1 shadow-sm">
+            <TabsList className="grid w-full grid-cols-2 rounded-xl border border-border bg-card p-1 shadow-sm sm:inline-grid sm:w-auto">
               <TabsTrigger
                 value="upcoming"
-                className="rounded-lg px-5 py-2 text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
+                className="rounded-lg px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
               >
                 Upcoming
                 {upcoming.length > 0 ? (
-                  <span className="ml-1.5 rounded-full bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums data-[state=active]:bg-white/20">
+                  <span className="ml-1.5 rounded-full bg-current/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
                     {upcoming.length}
                   </span>
                 ) : null}
               </TabsTrigger>
               <TabsTrigger
                 value="past"
-                className="rounded-lg px-5 py-2 text-sm font-medium data-[state=active]:bg-blue-600 data-[state=active]:text-white data-[state=active]:shadow-sm"
+                className="rounded-lg px-4 py-2 text-sm font-medium data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
               >
                 Past
                 {past.length > 0 ? (
-                  <span className="ml-1.5 rounded-full bg-blue-500/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums data-[state=active]:bg-white/20">
+                  <span className="ml-1.5 rounded-full bg-current/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
                     {past.length}
                   </span>
                 ) : null}
@@ -312,25 +312,7 @@ export default function AccountBookingsPage() {
 
             <TabsContent value="upcoming" className="mt-4">
               {upcoming.length === 0 ? (
-                <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
-                    <CalendarDays className="h-7 w-7 text-blue-500" strokeWidth={1.5} />
-                  </div>
-                  <h3 className="font-semibold text-gray-900">No upcoming bookings</h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Schedule a clean and it will show here with reminders and cleaner updates.
-                  </p>
-                  <Button
-                    asChild
-                    size="sm"
-                    className="mt-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700"
-                  >
-                    <Link href={CUSTOMER_ACCOUNT_BOOK_PATH}>
-                      <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                      Book your next clean
-                    </Link>
-                  </Button>
-                </div>
+                <BookingsEmptyState kind="upcoming" />
               ) : view === "cards" ? (
                 <>
                   <ul className="space-y-4">
@@ -345,19 +327,21 @@ export default function AccountBookingsPage() {
                       </li>
                     ))}
                   </ul>
-                  <Pagination
+                  <AccountPagination
                     page={safeUpcomingPage}
                     pageCount={upcomingPageCount}
                     onPage={setUpcomingPage}
+                    label="Upcoming bookings pagination"
                   />
                 </>
               ) : (
                 <>
                   <CustomerBookingsTable bookings={pagedUpcoming} {...tableProps} />
-                  <Pagination
+                  <AccountPagination
                     page={safeUpcomingPage}
                     pageCount={upcomingPageCount}
                     onPage={setUpcomingPage}
+                    label="Upcoming bookings pagination"
                   />
                 </>
               )}
@@ -365,15 +349,7 @@ export default function AccountBookingsPage() {
 
             <TabsContent value="past" className="mt-4">
               {past.length === 0 ? (
-                <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
-                  <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-50">
-                    <CalendarDays className="h-7 w-7 text-gray-400" strokeWidth={1.5} />
-                  </div>
-                  <h3 className="font-semibold text-gray-900">No past bookings yet</h3>
-                  <p className="mt-1 text-sm text-gray-500">
-                    Completed and cancelled visits appear here.
-                  </p>
-                </div>
+                <BookingsEmptyState kind="past" />
               ) : view === "cards" ? (
                 <>
                   <ul className="space-y-4">
@@ -389,31 +365,38 @@ export default function AccountBookingsPage() {
                       </li>
                     ))}
                   </ul>
-                  <Pagination page={safePastPage} pageCount={pastPageCount} onPage={setPastPage} />
+                  <AccountPagination
+                    page={safePastPage}
+                    pageCount={pastPageCount}
+                    onPage={setPastPage}
+                    label="Past bookings pagination"
+                  />
                 </>
               ) : (
                 <>
                   <CustomerBookingsTable bookings={pagedPast} {...tableProps} />
-                  <Pagination page={safePastPage} pageCount={pastPageCount} onPage={setPastPage} />
+                  <AccountPagination
+                    page={safePastPage}
+                    pageCount={pastPageCount}
+                    onPage={setPastPage}
+                    label="Past bookings pagination"
+                  />
                 </>
               )}
             </TabsContent>
           </Tabs>
-        </div>
+        </section>
 
-        {/* Trust bar */}
         <TrustBar />
       </div>
 
-      {/* ── Right sidebar ─────────────────────────────────────────── */}
-      <div className="w-full shrink-0 space-y-3 xl:w-64">
-        {/* This month overview */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-          <h2 className="mb-3 text-sm font-bold text-gray-900">This month overview</h2>
+      <aside className="w-full shrink-0 space-y-3 xl:w-72" aria-label="Booking account shortcuts">
+        <Card className="p-4">
+          <h2 className="mb-3 text-sm font-semibold text-foreground">This month overview</h2>
           {summaryLoading ? (
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2" aria-hidden>
               {[...Array(4)].map((_, i) => (
-                <div key={i} className="h-20 animate-pulse rounded-xl bg-gray-100" />
+                <div key={i} className="h-20 animate-pulse rounded-xl bg-muted" />
               ))}
             </div>
           ) : (
@@ -456,22 +439,20 @@ export default function AccountBookingsPage() {
               />
             </div>
           )}
-        </div>
+        </Card>
 
-        {/* Quick links */}
-        <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-          <h2 className="mb-2 text-sm font-bold text-gray-900">Quick links</h2>
-          <div className="divide-y divide-gray-50">
+        <Card className="p-4">
+          <h2 className="mb-2 text-sm font-semibold text-foreground">Quick links</h2>
+          <div className="divide-y divide-border">
             <QuickLink href={rescheduleQuickLinkHref} label="Reschedule a booking" icon={CalendarClock} />
             <QuickLink href="/account/addresses" label="Add a new property" icon={Home} />
             <QuickLink href="/account/recurring" label="Manage recurring plans" icon={Repeat} />
             <QuickLink href="/account/invoices" label="View all invoices" icon={FileText} />
           </div>
-        </div>
+        </Card>
 
-        {/* Help card */}
         <HelpCard compact />
-      </div>
+      </aside>
     </div>
   );
 }

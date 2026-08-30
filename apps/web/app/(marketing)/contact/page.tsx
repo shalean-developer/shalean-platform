@@ -15,8 +15,9 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { ContactPageForm } from "@/components/contact/ContactPageForm";
-import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
+import { PublicPageContainer } from "@/components/nav/PublicPageContainer";
+import { SiteFooter } from "@/components/nav/SiteFooter";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
@@ -180,109 +181,111 @@ export default function ContactPage() {
   const bookingHref = marketingHomeBookingHref();
 
   return (
-    <div className="bg-white text-slate-900">
+    <div className="bg-background text-foreground">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: contactJsonLdHtml }} />
       <MarketingHomeHeader bookingHref={bookingHref} />
-      <main className={`mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-16 ${marketingWhatsAppFloatMainPadding}`}>
-        <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Contact</p>
-        <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-          Contact Shalean Cleaning Services in Cape Town
-        </h1>
-        <p className="mt-4 max-w-2xl text-base leading-relaxed text-slate-600">
-          Choose the path that matches your question—new bookings, account help, payments, or general support. Our
-          Cape Town team is here Mon–Sat, 8am–6pm.
-        </p>
-
-        <section className="mt-10" aria-labelledby="journeys-heading">
-          <h2 id="journeys-heading" className="text-lg font-bold text-slate-900 sm:text-xl">
-            How can we help?
-          </h2>
-          <ul className="mt-5 grid gap-4 sm:grid-cols-2">
-            {journeyCards.map(({ icon: Icon, title, description, href, cta, external }) => (
-              <li key={title}>
-                <a
-                  href={href}
-                  {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                  className="group flex h-full flex-col rounded-2xl border border-slate-200 bg-white p-5 shadow-sm transition hover:border-blue-200 hover:shadow-md"
-                >
-                  <Icon className="h-5 w-5 text-blue-600" aria-hidden />
-                  <h3 className="mt-3 font-semibold text-slate-900">{title}</h3>
-                  <p className="mt-1 flex-1 text-sm leading-relaxed text-slate-600">{description}</p>
-                  <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-blue-600 group-hover:underline">
-                    {cta}
-                    <ArrowRight className="h-4 w-4" aria-hidden />
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-4 text-sm text-slate-600">
-            Not signed in yet?{" "}
-            <Link href="/login" className="font-semibold text-blue-600 hover:underline">
-              Log in
-            </Link>{" "}
-            to manage bookings, or browse the{" "}
-            <Link href="/faq" className="font-semibold text-blue-600 hover:underline">
-              Help Centre
-            </Link>
-            .
+      <main className={marketingWhatsAppFloatMainPadding}>
+        <PublicPageContainer size="content" className="py-10 sm:py-16">
+          <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Contact</p>
+          <h1 className="mt-2 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+            Contact Shalean Cleaning Services in Cape Town
+          </h1>
+          <p className="mt-4 max-w-2xl text-base leading-relaxed text-muted-foreground">
+            Choose the path that matches your question—new bookings, account help, payments, or general support. Our
+            Cape Town team is here Mon–Sat, 8am–6pm.
           </p>
-        </section>
 
-        <section className="mt-12" aria-labelledby="reach-heading">
-          <h2 id="reach-heading" className="text-lg font-bold text-slate-900 sm:text-xl">
-            Reach us directly
-          </h2>
-          <ul className="mt-5 space-y-4">
-            {contactMethods.map(({ icon: Icon, label, value, href, external, note }) => (
-              <li key={label}>
-                <a
-                  href={href}
-                  {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                  className="flex items-start gap-4 rounded-xl border border-slate-200 bg-slate-50 px-5 py-4 transition hover:border-blue-200 hover:bg-blue-50/50"
-                >
-                  <Icon className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden />
-                  <span>
-                    <span className="block text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</span>
-                    <span className="mt-1 block text-base font-semibold text-slate-900">{value}</span>
-                    <span className="mt-1 block text-sm text-slate-500">{note}</span>
-                  </span>
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
+          <section className="mt-10" aria-labelledby="journeys-heading">
+            <h2 id="journeys-heading" className="text-lg font-bold text-foreground sm:text-xl">
+              How can we help?
+            </h2>
+            <ul className="mt-5 grid gap-4 sm:grid-cols-2">
+              {journeyCards.map(({ icon: Icon, title, description, href, cta, external }) => (
+                <li key={title}>
+                  <a
+                    href={href}
+                    {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    className="group flex h-full flex-col rounded-[var(--ui-radius-2xl)] border border-border bg-card p-5 shadow-[var(--ui-shadow-sm)] transition hover:border-blue-200 hover:shadow-[var(--ui-shadow-md)]"
+                  >
+                    <Icon className="h-5 w-5 text-blue-600" aria-hidden />
+                    <h3 className="mt-3 font-semibold text-card-foreground">{title}</h3>
+                    <p className="mt-1 flex-1 text-sm leading-relaxed text-muted-foreground">{description}</p>
+                    <span className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-blue-600 group-hover:underline">
+                      {cta}
+                      <ArrowRight className="h-4 w-4" aria-hidden />
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-4 text-sm text-muted-foreground">
+              Not signed in yet?{" "}
+              <Link href="/login" className="font-semibold text-blue-600 hover:underline">
+                Log in
+              </Link>{" "}
+              to manage bookings, or browse the{" "}
+              <Link href="/faq" className="font-semibold text-blue-600 hover:underline">
+                Help Centre
+              </Link>
+              .
+            </p>
+          </section>
 
-        <section
-          className="mt-10 rounded-2xl border border-blue-100 bg-blue-50/40 px-5 py-5 sm:px-6"
-          aria-labelledby="hours-heading"
-        >
-          <div className="flex items-start gap-3">
-            <Clock className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden />
-            <div>
-              <h2 id="hours-heading" className="font-semibold text-slate-900">
-                Office hours & response times
-              </h2>
-              <p className="mt-2 text-sm leading-relaxed text-slate-600">
-                <strong className="font-semibold text-slate-800">Mon–Sat, 8am–6pm</strong> (SAST). Phone and
-                WhatsApp enquiries are typically answered the same day during these hours. Email replies within{" "}
-                <strong className="font-semibold text-slate-800">one business day</strong>.
-              </p>
-              <p className="mt-2 text-sm text-slate-500">
-                Service area: Cape Town, South Africa. For privacy enquiries:{" "}
-                <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="text-blue-600 hover:underline">
-                  {CUSTOMER_SUPPORT_EMAIL}
-                </a>
-              </p>
+          <section className="mt-12" aria-labelledby="reach-heading">
+            <h2 id="reach-heading" className="text-lg font-bold text-foreground sm:text-xl">
+              Reach us directly
+            </h2>
+            <ul className="mt-5 space-y-4">
+              {contactMethods.map(({ icon: Icon, label, value, href, external, note }) => (
+                <li key={label}>
+                  <a
+                    href={href}
+                    {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                    className="flex items-start gap-4 rounded-[var(--ui-radius-xl)] border border-border bg-muted px-5 py-4 transition hover:border-blue-200 hover:bg-accent"
+                  >
+                    <Icon className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden />
+                    <span>
+                      <span className="block text-xs font-semibold uppercase tracking-wide text-muted-foreground">{label}</span>
+                      <span className="mt-1 block text-base font-semibold text-foreground">{value}</span>
+                      <span className="mt-1 block text-sm text-muted-foreground">{note}</span>
+                    </span>
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+
+          <section
+            className="mt-10 rounded-[var(--ui-radius-2xl)] border border-blue-100 bg-blue-50/40 px-5 py-5 sm:px-6"
+            aria-labelledby="hours-heading"
+          >
+            <div className="flex items-start gap-3">
+              <Clock className="mt-0.5 h-5 w-5 shrink-0 text-blue-600" aria-hidden />
+              <div>
+                <h2 id="hours-heading" className="font-semibold text-foreground">
+                  Office hours & response times
+                </h2>
+                <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                  <strong className="font-semibold text-foreground">Mon–Sat, 8am–6pm</strong> (SAST). Phone and
+                  WhatsApp enquiries are typically answered the same day during these hours. Email replies within{" "}
+                  <strong className="font-semibold text-foreground">one business day</strong>.
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Service area: Cape Town, South Africa. For privacy enquiries:{" "}
+                  <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="text-blue-600 hover:underline">
+                    {CUSTOMER_SUPPORT_EMAIL}
+                  </a>
+                </p>
+              </div>
             </div>
-          </div>
-        </section>
+          </section>
 
-        <div className="mt-12">
-          <ContactPageForm />
-        </div>
+          <div className="mt-12">
+            <ContactPageForm />
+          </div>
+        </PublicPageContainer>
       </main>
-      <FooterSection />
+      <SiteFooter />
     </div>
   );
 }

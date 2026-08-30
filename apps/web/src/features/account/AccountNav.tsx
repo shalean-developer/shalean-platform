@@ -12,6 +12,7 @@ import {
   Gift,
   HelpCircle,
   Home,
+  LifeBuoy,
   LogOut,
   MapPin,
   MessageCircle,
@@ -109,6 +110,34 @@ function displayName(email: string | undefined, fullName: string | undefined): s
   return fullName?.trim() || email?.split("@")[0] || "Account";
 }
 
+function AccountNavLink({ item, pathname }: { item: NavItem; pathname: string }) {
+  const { href, label, icon: Icon, exact } = item;
+  const active = isNavActive(pathname, href, exact);
+
+  return (
+    <Link
+      href={href}
+      aria-current={active ? "page" : undefined}
+      className={cn(
+        "group flex min-h-10 items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+        "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring",
+        active
+          ? "bg-primary/10 text-primary"
+          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground",
+      )}
+    >
+      <Icon
+        className={cn(
+          "h-4 w-4 shrink-0 transition-colors",
+          active ? "text-primary" : "text-muted-foreground group-hover:text-accent-foreground",
+        )}
+        strokeWidth={1.75}
+      />
+      <span className="min-w-0 truncate">{label}</span>
+    </Link>
+  );
+}
+
 function LogoutDialog({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -126,34 +155,23 @@ function LogoutDialog({ children }: { children: ReactNode }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-gray-600 transition-colors hover:bg-red-50 hover:text-red-600"
+        className="flex min-h-10 w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         {children}
       </button>
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="rounded-2xl sm:max-w-sm">
+        <DialogContent className="rounded-2xl border-border sm:max-w-sm">
           <DialogHeader>
             <DialogTitle>Sign out of Shalean?</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-muted-foreground">
             Are you sure you want to log out? You&apos;ll need to sign in again to access your account.
           </p>
           <DialogFooter className="flex-col-reverse gap-2 sm:flex-row">
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-xl"
-              onClick={() => setOpen(false)}
-              disabled={busy}
-            >
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={busy}>
               Cancel
             </Button>
-            <Button
-              type="button"
-              className="rounded-xl bg-red-600 hover:bg-red-700"
-              onClick={() => void handleLogout()}
-              disabled={busy}
-            >
+            <Button type="button" variant="destructive" onClick={() => void handleLogout()} disabled={busy}>
               {busy ? "Signing out…" : "Log out"}
             </Button>
           </DialogFooter>
@@ -171,79 +189,62 @@ export function AccountSidebar() {
   const name = displayName(user?.email, meta?.full_name);
 
   return (
-    <aside className="fixed left-0 top-0 z-40 hidden h-full w-64 flex-col border-r border-gray-100 bg-white md:flex">
-      {/* Logo */}
-      <div className="flex h-16 items-center border-b border-gray-100 px-5">
-        <Link href="/" className="flex min-w-0 items-center" aria-label="Shalean home">
-          <ShaleanNavLogo className="h-8 w-auto" intrinsicHeight={64} />
+    <aside className="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-border bg-card md:flex">
+      <div className="flex h-16 items-center border-b border-border px-5">
+        <Link
+          href="/"
+          className="flex min-w-0 items-center rounded-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+          aria-label="Shalean home"
+        >
+          <ShaleanNavLogo className="h-7 w-auto" intrinsicHeight={64} />
         </Link>
       </div>
 
-      {/* Nav groups */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4" aria-label="Account navigation">
-        {NAV.map((section, si) => (
-          <div key={si} className={si > 0 ? "mt-5" : ""}>
+      <nav className="scrollbar-hide flex-1 overflow-y-auto px-3 py-4" aria-label="Account navigation">
+        {NAV.map((section, sectionIndex) => (
+          <div key={section.title ?? "home"} className={sectionIndex > 0 ? "mt-5" : ""}>
             {section.title ? (
-              <p className="mb-1 px-3 text-[10px] font-semibold uppercase tracking-widest text-gray-400">
+              <p className="mb-1 px-3 text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-muted-foreground/80">
                 {section.title}
               </p>
             ) : null}
             <div className="space-y-0.5">
-              {section.items.map(({ href, label, icon: Icon, exact }) => {
-                const active = isNavActive(pathname, href, exact);
-                return (
-                  <Link
-                    key={href}
-                    href={href}
-                    className={cn(
-                      "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
-                      active
-                        ? "bg-blue-50 text-blue-700"
-                        : "text-gray-600 hover:bg-gray-50 hover:text-gray-900",
-                    )}
-                  >
-                    <Icon
-                      className={cn("h-4 w-4 shrink-0", active ? "text-blue-600" : "text-gray-400")}
-                      strokeWidth={1.75}
-                    />
-                    {label}
-                  </Link>
-                );
-              })}
+              {section.items.map((item) => (
+                <AccountNavLink key={item.href} item={item} pathname={pathname} />
+              ))}
             </div>
           </div>
         ))}
 
-        {/* Log out */}
         <div className="mt-2">
           <LogoutDialog>
-            <LogOut className="h-4 w-4 shrink-0 text-gray-400" strokeWidth={1.75} />
+            <LogOut className="h-4 w-4 shrink-0" strokeWidth={1.75} />
             Log out
           </LogoutDialog>
         </div>
       </nav>
 
-      {/* User profile card */}
-      <div className="border-t border-gray-100 p-3">
+      <div className="border-t border-border p-3">
         <Link
           href="/account/profile"
-          className="flex items-center gap-3 rounded-xl px-3 py-2.5 transition hover:bg-gray-50"
+          aria-current={isNavActive(pathname, "/account/profile") ? "page" : undefined}
+          className="group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-colors hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
         >
-          <Avatar className="h-8 w-8 shrink-0">
-            <AvatarFallback className="bg-blue-600 text-xs font-semibold text-white">{initials}</AvatarFallback>
+          <Avatar className="h-9 w-9 shrink-0">
+            <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">{initials}</AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-gray-900">{name}</p>
-            <p className="text-xs text-blue-600">View profile</p>
+            <p className="truncate text-sm font-medium text-foreground">{name}</p>
+            <p className="text-xs text-muted-foreground group-hover:text-accent-foreground">View profile</p>
           </div>
-          <ChevronRight className="h-4 w-4 shrink-0 text-gray-300" />
+          <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />
         </Link>
       </div>
     </aside>
   );
 }
 
-export function AccountTopBar() {
+export function AccountHeader() {
   const router = useRouter();
   const { user } = useUser();
   const meta = user?.user_metadata as { full_name?: string } | undefined;
@@ -258,107 +259,114 @@ export function AccountTopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-30 flex min-h-[5rem] items-center justify-between gap-4 border-b border-gray-100 bg-white px-6">
-      {/* Greeting */}
-      <div>
-        <h1 className="text-xl font-bold text-gray-900">
-          Welcome back, {firstName} 👋
-        </h1>
-        <p className="mt-0.5 text-sm text-gray-500">Here&apos;s what&apos;s happening with your account.</p>
-      </div>
+    <header className="sticky top-0 z-30 border-b border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85">
+      <div className="mx-auto flex min-h-16 w-full max-w-[var(--ui-container-wide)] items-center justify-between gap-4 px-[var(--ui-page-gutter)] py-3">
+        <div className="min-w-0">
+          <p className="truncate text-base font-semibold text-foreground sm:text-lg">Welcome back, {firstName}</p>
+          <p className="mt-0.5 hidden text-xs text-muted-foreground sm:block">Manage your bookings, billing and account.</p>
+        </div>
 
-      {/* Right: help + bell + avatar */}
-      <div className="flex shrink-0 items-center gap-4">
-        {/* WhatsApp help */}
-        <div className="hidden items-center gap-2 sm:flex">
-          <p className="text-xs text-gray-500">Need help?</p>
+        <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <Button asChild variant="outline" size="sm" className="hidden rounded-full lg:inline-flex">
+            <Link href="/account/cases">
+              <LifeBuoy className="h-4 w-4" />
+              Support cases
+            </Link>
+          </Button>
+
           <a
             href="https://wa.me/27825915525"
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 rounded-full border border-green-200 bg-green-50 px-3 py-1.5 text-xs font-semibold text-green-700 transition hover:bg-green-100"
+            className="hidden min-h-9 items-center gap-1.5 rounded-full border border-success/25 bg-success/10 px-3 text-xs font-semibold text-success transition-colors hover:bg-success/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:flex"
+            aria-label="Contact Shalean support on WhatsApp at 082 591 5525"
           >
             <MessageCircle className="h-3.5 w-3.5" />
             082 591 5525
           </a>
+
+          <Link
+            href="/account/notifications"
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-border bg-background text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            aria-label="Notifications"
+          >
+            <Bell className="h-4 w-4" />
+          </Link>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="flex min-h-9 items-center gap-2 rounded-full border border-border bg-background p-0.5 pr-2.5 transition-colors hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+                aria-label="Account menu"
+              >
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">{initials}</AvatarFallback>
+                </Avatar>
+                <span className="hidden max-w-[7rem] truncate text-sm font-medium text-foreground md:inline">{firstName}</span>
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuItem asChild>
+                <Link href="/account/profile">Profile settings</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="lg:hidden">
+                <Link href="/account/cases">Support cases</Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem asChild>
+                <Link href="/">Back to website</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={() => void handleLogout()}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign out
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
-
-        {/* Bell */}
-        <Link
-          href="/account/notifications"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-gray-200 text-gray-500 transition hover:border-gray-300 hover:bg-gray-50"
-          aria-label="Notifications"
-        >
-          <Bell className="h-4 w-4" />
-        </Link>
-
-        {/* Avatar dropdown */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              className="flex items-center gap-2 rounded-full border border-gray-200 p-0.5 pr-3 transition hover:border-blue-300"
-              aria-label="Account menu"
-            >
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-blue-600 text-xs font-semibold text-white">{initials}</AvatarFallback>
-              </Avatar>
-              <span className="hidden max-w-[110px] truncate text-sm font-medium text-gray-900 sm:inline">
-                {firstName}
-              </span>
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48">
-            <DropdownMenuItem asChild>
-              <Link href="/account/profile">Profile settings</Link>
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem asChild>
-              <Link href="/">Back to website</Link>
-            </DropdownMenuItem>
-            <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => void handleLogout()}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Sign out
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
     </header>
   );
 }
+
+/** Compatibility export for older account-shell imports. */
+export const AccountTopBar = AccountHeader;
 
 export function AccountMobileNav() {
   const pathname = usePathname() ?? "";
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-40 flex border-t border-gray-100 bg-white pb-[env(safe-area-inset-bottom)] md:hidden"
+      className="fixed inset-x-0 bottom-0 z-40 border-t border-border bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur supports-[backdrop-filter]:bg-background/90 md:hidden"
       aria-label="Account mobile navigation"
     >
-      <div className="flex w-full items-stretch justify-around px-1 py-2">
-        {MOBILE_NAV.map(({ href, label, icon: Icon, exact }) => {
+      <div className="mx-auto flex w-full max-w-lg items-stretch justify-around px-1 py-1.5">
+        {MOBILE_NAV.map((item) => {
+          const { href, label, icon: Icon, exact } = item;
           const active = isNavActive(pathname, href, exact);
           const isBook = href === "/account/book";
           return (
             <Link
               key={href}
               href={href}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "flex min-w-[3.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[10px] font-medium",
-                active ? "text-blue-600" : "text-gray-400",
+                "flex min-w-[3.5rem] flex-1 flex-col items-center justify-center gap-0.5 rounded-xl px-1 py-1 text-[0.6875rem] font-medium transition-colors",
+                "focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring",
+                active ? "text-primary" : "text-muted-foreground",
               )}
             >
               <span
                 className={cn(
-                  "flex h-9 w-9 items-center justify-center rounded-xl",
+                  "flex h-9 w-9 items-center justify-center rounded-xl transition-colors",
                   isBook
-                    ? "bg-blue-600 text-white shadow-md shadow-blue-600/30"
+                    ? "bg-primary text-primary-foreground shadow-sm"
                     : active
-                      ? "bg-blue-50"
-                      : "",
+                      ? "bg-primary/10 text-primary"
+                      : "group-hover:bg-accent",
                 )}
               >
-                <Icon className={cn("h-5 w-5", isBook ? "text-white" : "")} strokeWidth={1.75} />
+                <Icon className="h-5 w-5" strokeWidth={1.75} />
               </span>
               <span className="line-clamp-1 text-center leading-tight">{label}</span>
             </Link>

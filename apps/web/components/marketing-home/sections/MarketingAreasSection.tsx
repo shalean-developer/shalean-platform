@@ -1,122 +1,117 @@
+import { ArrowRight, MapPin } from "lucide-react";
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
-import { ArrowUpRight } from "lucide-react";
-import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
-import type { HomeLocation } from "@/lib/home/data";
-import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
-import { marketingPrimaryCtaClassName, marketingPrimaryCtaIconClassName } from "@/lib/marketing/marketingHomeCtaClasses";
-import { mergeSuburbAreaLinks, suburbHrefByDisplayName } from "@/lib/marketing/marketingAreaLinks";
-import { linkInParagraphClassName } from "@/lib/ui/linkClassNames";
-import { cn } from "@/lib/utils";
+import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
+import { MarketingSectionHeader } from "@/components/marketing-home/primitives/MarketingSectionHeader";
+import {
+  LOCATIONS_INDEX_REGION_ORDER,
+  groupCapeTownLocationsByRegion,
+} from "@/lib/locations/locations-index-config";
+import { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
 
-const POPULAR_AREA_NAMES = ["Sea Point", "Claremont", "Constantia", "Bellville", "Durbanville"] as const;
-
-type Props = {
-  locations: HomeLocation[];
+const HOME_REGION_FEATURES: Readonly<Record<string, readonly string[]>> = {
+  "Atlantic Seaboard": ["Sea Point", "Green Point", "Camps Bay"],
+  "Southern Suburbs": ["Claremont", "Rondebosch", "Constantia"],
+  "City Bowl": ["Gardens", "Oranjezicht", "Vredehoek"],
+  "Northern Suburbs": ["Bellville", "Durbanville", "Century City"],
+  Blouberg: ["Table View", "Bloubergstrand", "Milnerton"],
 };
 
-/**
- * Unified areas section — layout aligned with marketing homepage reference:
- * eyebrow + headline / intro column, suburb pill cloud, booking CTA pair.
- */
-export function MarketingAreasSection({ locations }: Props) {
-  const bookHref = marketingHomeBookingHref();
-  const allSuburbs = mergeSuburbAreaLinks(locations);
+function regionAnchor(region: string): string {
+  return region
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9-]/g, "");
+}
 
-  const chipClass = cn(
-    "inline-flex w-full min-w-0 justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-normal leading-snug text-slate-700 shadow-none transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800 sm:px-4 sm:py-2.5 sm:text-sm lg:justify-start lg:px-3 lg:py-2 lg:text-xs xl:px-4 xl:text-sm",
-  );
+export function MarketingAreasSection() {
+  const byRegion = groupCapeTownLocationsByRegion(CAPE_TOWN_LOCATIONS);
+  const regionGroups = LOCATIONS_INDEX_REGION_ORDER.map((region) => {
+    const regionLocations = byRegion.get(region) ?? [];
+    const byName = new Map(regionLocations.map((location) => [location.name, location]));
+    const previewLocations = (HOME_REGION_FEATURES[region] ?? [])
+      .map((name) => byName.get(name))
+      .filter((location): location is (typeof regionLocations)[number] => Boolean(location));
+
+    return { region, previewLocations };
+  });
 
   return (
-    <section id="locations" className="scroll-mt-24 border-t border-slate-100 bg-white py-16 md:py-20 lg:py-14">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid gap-10 lg:grid-cols-2 lg:gap-12 lg:items-start xl:gap-16">
-          <header className="max-w-xl">
-            <p className="text-sm font-medium tracking-wide text-slate-400">— Areas We Serve</p>
-            <h2 className="mt-3 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl md:text-4xl">
-              Cleaning services across Cape Town suburbs
-            </h2>
-          </header>
-
-          <div className="max-w-xl space-y-4 text-sm leading-relaxed text-slate-600 md:text-base lg:pt-1">
-            <p>
-              We currently serve the areas below. Add your address at checkout to confirm availability for your home or
-              office.
-            </p>
-            <p>
-              Browse all{" "}
-              <SafeInternalLink href="/services" className={linkInParagraphClassName}>
-                cleaning services
-              </SafeInternalLink>
-              , read the{" "}
-              <SafeInternalLink href="/blog" className={linkInParagraphClassName}>
-                blog
-              </SafeInternalLink>
-              , or{" "}
-              <SafeInternalLink href="/book" className={linkInParagraphClassName}>
-                book a cleaner online
-              </SafeInternalLink>
-              .
-            </p>
-          </div>
-        </div>
-
-        <div className="mt-10 md:mt-12">
-          <h3 className="text-sm font-bold text-slate-900 md:text-base">Popular cleaning areas</h3>
-          <div className="mt-2 flex flex-wrap gap-2 text-sm md:text-base" aria-label="Popular cleaning areas">
-            {POPULAR_AREA_NAMES.map((name) => {
-              const href = suburbHrefByDisplayName(name);
-              const className =
-                "inline-flex rounded-full border border-slate-200 bg-white px-3 py-1.5 font-medium text-slate-800 shadow-sm transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800";
-              return href ? (
-                <SafeInternalLink key={name} href={href} className={className}>
-                  {name}
-                </SafeInternalLink>
-              ) : (
-                <span key={name} className={className}>
-                  {name}
-                </span>
-              );
-            })}
-          </div>
-        </div>
-
-        <ul
-          className="mt-12 grid grid-cols-1 gap-2 sm:grid-cols-2 sm:gap-3 md:mt-12 md:grid-cols-3 md:gap-3 lg:mt-10 lg:grid-cols-4 lg:gap-2 xl:grid-cols-5 xl:gap-3"
-          aria-label="All Cape Town suburbs we serve"
-        >
-          {allSuburbs.map(({ name, href }) => (
-            <li key={name} className="min-w-0">
-              {href ? (
-                <SafeInternalLink href={href} className={chipClass}>
-                  {name}
-                </SafeInternalLink>
-              ) : (
-                <span className={chipClass}>{name}</span>
-              )}
-            </li>
-          ))}
-        </ul>
-
-        <div className="mt-10 flex flex-wrap items-center gap-2.5 md:gap-3">
-          <GrowthCtaLink href={bookHref} source="marketing_areas_book_cleaner" className={marketingPrimaryCtaClassName}>
-            Book a cleaner
-          </GrowthCtaLink>
-          <GrowthCtaLink
-            href={bookHref}
-            source="marketing_areas_book_cleaner_arrow"
-            className={marketingPrimaryCtaIconClassName}
-          >
-            <span className="sr-only">Book a cleaner</span>
-            <ArrowUpRight size={20} strokeWidth={2.25} aria-hidden />
-          </GrowthCtaLink>
+    <HomeSection
+      id="locations"
+      containerSize="marketing"
+      className="scroll-mt-24 !bg-[#EFF6FF] md:py-[var(--ui-space-24)]"
+      aria-label="Areas we serve"
+    >
+      <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
+        <div className="lg:sticky lg:top-28">
+          <MarketingSectionHeader
+            align="left"
+            eyebrow="Areas we serve"
+            title="Cleaning across Cape Town"
+            description="Explore the main Cape Town regions we serve, then open the full suburb directory to check local coverage."
+          />
           <SafeInternalLink
-            href="/areas-we-serve"
-            className="inline-flex min-h-11 items-center justify-center rounded-xl border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 transition hover:border-blue-300 hover:bg-blue-50 hover:text-blue-800"
+            href="/locations"
+            className="mt-[var(--ui-space-8)] inline-flex min-h-12 items-center justify-center gap-[var(--ui-space-2)] rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-semibold text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             View all suburbs
+            <ArrowRight className="h-4 w-4" aria-hidden />
           </SafeInternalLink>
         </div>
+
+        <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card shadow-[var(--ui-shadow-md)]">
+          {regionGroups.map(({ region, previewLocations }, index) => {
+            const regionHref = `/locations#region-${regionAnchor(region)}`;
+            return (
+              <div
+                key={region}
+                className="group grid min-h-[132px] gap-[var(--ui-space-4)] border-b border-[#DBEAFE] p-[var(--ui-space-6)] transition last:border-b-0 hover:bg-[#DDEBFF] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center md:p-[var(--ui-space-8)]"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EFF6FF] text-primary" aria-hidden>
+                  <MapPin className="h-6 w-6" strokeWidth={1.7} />
+                </div>
+                <div>
+                  <div className="flex items-baseline gap-[var(--ui-space-3)]">
+                    <span className="text-[length:var(--ui-text-caption)] font-semibold tabular-nums text-muted-foreground">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+                      <SafeInternalLink
+                        href={regionHref}
+                        className="rounded-sm transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {region}
+                      </SafeInternalLink>
+                    </h3>
+                  </div>
+                  {previewLocations.length > 0 ? (
+                    <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                      {previewLocations.map((location, locationIndex) => (
+                        <span key={location.slug}>
+                          {locationIndex > 0 ? <span aria-hidden> · </span> : null}
+                          <SafeInternalLink
+                            href={`/locations/${location.slug}`}
+                            className="rounded-sm transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {location.name}
+                          </SafeInternalLink>
+                        </span>
+                      ))}
+                    </p>
+                  ) : null}
+                </div>
+                <SafeInternalLink
+                  href={regionHref}
+                  aria-label={`View ${region} service areas`}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-[#DBEAFE] bg-background text-foreground transition group-hover:border-primary/30 group-hover:bg-primary group-hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                </SafeInternalLink>
+              </div>
+            );
+          })}
+        </div>
       </div>
-    </section>
+    </HomeSection>
   );
 }

@@ -297,7 +297,6 @@ function computeCollapsedFlyoutStyle(
     top,
     left,
     maxHeight: window.innerHeight - viewportPad * 2,
-    backgroundColor: "#ffffff",
   };
 }
 
@@ -330,12 +329,12 @@ function CollapsedModuleFlyout({ module, pathname, position, anchorRef, onClose 
   return createPortal(
     <div
       ref={menuRef}
-      className="office-nav-flyout fixed z-[100] w-52 overflow-y-auto rounded-lg py-1"
+      className="office-nav-flyout fixed z-[100] w-56 overflow-y-auto rounded-[var(--ui-radius-xl)] border border-border bg-card p-1.5 text-card-foreground shadow-[var(--ui-shadow-xl)]"
       style={flyoutStyle}
       role="menu"
       aria-label={`${module.label} submenu`}
     >
-      <p className="sticky top-0 bg-white px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-[#5c6578]">
+      <p className="sticky top-0 bg-card px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
         {module.label}
       </p>
       {(module.children ?? []).map((item) => {
@@ -346,10 +345,13 @@ function CollapsedModuleFlyout({ module, pathname, position, anchorRef, onClose 
             key={item.href}
             href={item.href}
             role="menuitem"
+            aria-current={active ? "page" : undefined}
             onClick={onClose}
             className={cn(
-              "mx-1 flex items-center gap-2 rounded-md px-2.5 py-2 text-[13px] font-medium transition-colors",
-              active ? "bg-[#408df7] text-white" : "text-[#313949] hover:bg-[#eef1f6]",
+              "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
+              active
+                ? "bg-[--sidebar-active] text-[--sidebar-active-fg]"
+                : "text-foreground hover:bg-muted",
             )}
           >
             <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.75} />
@@ -370,7 +372,7 @@ type InlineModuleChildrenProps = {
 
 function InlineModuleChildren({ module, pathname, onClose }: InlineModuleChildrenProps) {
   return (
-    <div className="mb-0.5 ml-[18px] space-y-0.5 border-l border-[--sidebar-border] py-0.5 pl-2">
+    <div className="mb-1 ml-[18px] space-y-0.5 border-l border-[--sidebar-border] py-1 pl-2.5">
       {(module.children ?? []).map((item) => {
         const active = isItemActive(pathname, item.href);
         const Icon = item.icon;
@@ -378,9 +380,10 @@ function InlineModuleChildren({ module, pathname, onClose }: InlineModuleChildre
           <Link
             key={item.href}
             href={item.href}
+            aria-current={active ? "page" : undefined}
             onClick={onClose}
             className={cn(
-              "flex items-center gap-2 rounded-md px-2 py-1.5 text-[12px] font-medium transition-colors",
+              "flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1",
               active
                 ? "bg-[--sidebar-active] text-[--sidebar-active-fg]"
                 : "text-[--sidebar-muted] hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg]",
@@ -441,8 +444,9 @@ function NavModuleRow({
     };
   }, [collapsed, isOpen, sidebarRef]);
 
-  const activeClasses = "bg-[--sidebar-active] text-[--sidebar-active-fg]";
+  const activeClasses = "bg-[--sidebar-active] text-[--sidebar-active-fg] shadow-sm";
   const inactiveClasses = "text-[--sidebar-fg] hover:bg-[--sidebar-hover]";
+  const focusClasses = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1";
 
   if (!hasChildren && module.href) {
     if (collapsed) {
@@ -451,8 +455,10 @@ function NavModuleRow({
           href={module.href}
           onClick={onClose}
           title={module.label}
+          aria-current={active ? "page" : undefined}
           className={cn(
-            "relative flex flex-col items-center gap-1 rounded-lg px-1 py-2.5 text-center transition-colors",
+            "relative flex flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center transition-colors",
+            focusClasses,
             active ? activeClasses : inactiveClasses,
           )}
         >
@@ -466,8 +472,10 @@ function NavModuleRow({
       <Link
         href={module.href}
         onClick={onClose}
+        aria-current={active ? "page" : undefined}
         className={cn(
-          "flex items-center gap-2 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors",
+          "flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-[13px] font-medium transition-colors",
+          focusClasses,
           active ? activeClasses : inactiveClasses,
         )}
       >
@@ -487,7 +495,8 @@ function NavModuleRow({
           aria-haspopup="menu"
           onClick={() => setOpenModuleId(isOpen ? null : module.id)}
           className={cn(
-            "relative flex w-full flex-col items-center gap-1 rounded-lg px-1 py-2.5 text-center transition-colors",
+            "relative flex w-full flex-col items-center gap-1 rounded-xl px-1 py-2.5 text-center transition-colors",
+            focusClasses,
             active || isOpen ? activeClasses : inactiveClasses,
           )}
         >
@@ -521,7 +530,8 @@ function NavModuleRow({
         aria-expanded={isOpen}
         onClick={() => setOpenModuleId(isOpen ? null : module.id)}
         className={cn(
-          "flex w-full items-center gap-1 rounded-lg py-2 pl-1 pr-2.5 text-left text-[13px] font-medium transition-colors",
+          "flex w-full items-center gap-1 rounded-xl py-2 pl-1 pr-2.5 text-left text-[13px] font-medium transition-colors",
+          focusClasses,
           active || isOpen ? activeClasses : inactiveClasses,
         )}
       >
@@ -573,11 +583,11 @@ export function OfficeSidebarContent({
   return (
     <div className="flex h-full flex-col bg-[--sidebar-bg] text-[--sidebar-fg]">
       {onClose ? (
-        <div className="flex shrink-0 items-center justify-end border-b border-[--sidebar-border] px-2 py-2 md:hidden">
+        <div className="flex shrink-0 items-center justify-end border-b border-[--sidebar-border] px-2.5 py-2.5 md:hidden">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-lg p-1.5 text-[--sidebar-muted] hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg]"
+            className="rounded-xl p-1.5 text-[--sidebar-muted] transition-colors hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
             aria-label="Close menu"
           >
             <X className="h-5 w-5" />
@@ -586,10 +596,10 @@ export function OfficeSidebarContent({
       ) : null}
 
       <nav
-        className={cn("flex-1 overflow-y-auto py-2 scrollbar-hide", collapsed ? "px-1" : "px-2")}
+        className={cn("flex-1 overflow-y-auto py-3 scrollbar-hide", collapsed ? "px-1.5" : "px-2.5")}
         aria-label="Office navigation"
       >
-        <div className={cn("space-y-0.5", collapsed && "space-y-1")}>
+        <div className={cn("space-y-1", collapsed && "space-y-1.5")}>
           {OFFICE_NAV_MODULES.map((module) => (
             <NavModuleRow
               key={module.id}
@@ -605,11 +615,11 @@ export function OfficeSidebarContent({
         </div>
       </nav>
 
-      <div className="shrink-0 border-t border-[--sidebar-border] p-1.5">
+      <div className="shrink-0 border-t border-[--sidebar-border] p-2">
         {collapsed && !isMobileDrawer ? (
           <div className="flex flex-col items-center gap-2 py-1">
             <div
-              className="flex h-8 w-8 items-center justify-center rounded-full bg-[--sidebar-active] text-[11px] font-bold text-white"
+              className="flex h-8 w-8 items-center justify-center rounded-full bg-[--sidebar-active] text-[11px] font-bold text-[--sidebar-active-fg] shadow-sm"
               title={userLabel || "Admin"}
             >
               {initials}
@@ -618,7 +628,7 @@ export function OfficeSidebarContent({
               <button
                 type="button"
                 onClick={onToggleCollapsed}
-                className="rounded-lg p-1.5 text-[--sidebar-muted] transition-colors hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg]"
+                className="rounded-xl p-1.5 text-[--sidebar-muted] transition-colors hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                 aria-label="Expand sidebar"
                 title="Expand sidebar"
               >
@@ -628,8 +638,8 @@ export function OfficeSidebarContent({
           </div>
         ) : (
           <div className="space-y-1">
-            <div className="flex items-center gap-1.5 rounded-lg px-1 py-1.5">
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[--sidebar-active] text-[11px] font-bold text-white">
+            <div className="flex items-center gap-2 rounded-xl px-1 py-1.5">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[--sidebar-active] text-[11px] font-bold text-[--sidebar-active-fg] shadow-sm">
                 {initials}
               </div>
               <div className="min-w-0 flex-1">
@@ -639,7 +649,7 @@ export function OfficeSidebarContent({
               <button
                 type="button"
                 onClick={onLogout}
-                className="rounded-lg p-1.5 text-[--sidebar-muted] transition-colors hover:bg-[--sidebar-hover] hover:text-red-500"
+                className="rounded-xl p-1.5 text-[--sidebar-muted] transition-colors hover:bg-[--sidebar-hover] hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                 aria-label="Sign out"
                 title="Sign out"
               >
@@ -651,7 +661,7 @@ export function OfficeSidebarContent({
                 <button
                   type="button"
                   onClick={onToggleCollapsed}
-                  className="rounded-lg border border-[--sidebar-border] bg-white p-1.5 text-[--sidebar-muted] transition-colors hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg]"
+                  className="rounded-xl border border-[--sidebar-border] bg-transparent p-1.5 text-[--sidebar-muted] transition-colors hover:bg-[--sidebar-hover] hover:text-[--sidebar-fg] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                   aria-label="Collapse sidebar"
                   title="Collapse sidebar"
                 >
@@ -680,17 +690,21 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
   const initials = userInitials(userLabel);
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-white px-3 shadow-sm sm:gap-4 sm:px-4">
+    <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center gap-2 border-b border-border bg-background/95 px-3 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:gap-4 sm:px-4">
       <div className="flex min-w-0 items-center gap-2">
         <button
           type="button"
-          className="shrink-0 rounded-lg p-2 text-muted-foreground hover:bg-muted md:hidden"
+          className="shrink-0 rounded-xl p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 md:hidden"
           aria-label="Open navigation"
           onClick={onMenuOpen}
         >
           <Menu className="h-5 w-5" />
         </button>
-        <Link href="/office" aria-label="Shalean office dashboard" className="flex shrink-0 items-center">
+        <Link
+          href="/office"
+          aria-label="Shalean office dashboard"
+          className="flex shrink-0 items-center rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+        >
           <ShaleanNavLogo className="h-7 w-auto max-w-[104px] sm:h-8 sm:max-w-[148px]" intrinsicHeight={120} />
         </Link>
       </div>
@@ -698,27 +712,27 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
       <div className="ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2">
         <button
           type="button"
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-slate-50 text-muted-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/20 sm:w-56 sm:justify-start sm:gap-2 sm:px-3"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-border bg-muted/50 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:w-56 sm:justify-start sm:gap-2 sm:px-3"
           onClick={onCommandPalette}
           aria-label="Search (Cmd+K)"
         >
           <Search className="h-4 w-4 shrink-0" />
           <span className="hidden min-w-0 flex-1 truncate text-left text-sm sm:inline">Search...</span>
-          <kbd className="hidden shrink-0 rounded-md border border-border bg-white px-1.5 py-0.5 text-[10px] font-medium leading-none sm:inline-flex">
+          <kbd className="hidden shrink-0 rounded-md border border-border bg-background px-1.5 py-0.5 text-[10px] font-medium leading-none sm:inline-flex">
             ⌘K
           </kbd>
         </button>
 
         <Link
           href="/office/notifications"
-          className="relative flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted focus:outline-none focus:ring-2 focus:ring-ring/20"
+          className="relative flex h-10 w-10 items-center justify-center rounded-xl text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           aria-label={
             unreadNotifications > 0 ? `Open notifications, ${unreadNotifications} unread` : "Open notifications"
           }
         >
           <Bell className="h-5 w-5" />
           {unreadNotifications > 0 ? (
-            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-white">
+            <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[9px] font-bold leading-none text-destructive-foreground ring-2 ring-background">
               {notificationBadge}
             </span>
           ) : null}
@@ -727,10 +741,10 @@ export function OfficeTopBar({ userLabel, onMenuOpen, onLogout, onCommandPalette
         <button
           type="button"
           onClick={onLogout}
-          className="flex shrink-0 items-center gap-2 rounded-lg px-1.5 py-1.5 transition-colors hover:bg-muted sm:px-2"
+          className="flex shrink-0 items-center gap-2 rounded-xl px-1.5 py-1.5 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 sm:px-2"
           title="Sign out"
         >
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-blue-600 text-xs font-bold text-white">
+          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground shadow-sm">
             {initials}
           </div>
           <div className="hidden text-left sm:block">
@@ -781,11 +795,11 @@ export function OfficeCommandPalette({ open, onClose }: CommandPaletteProps) {
     >
       <button
         type="button"
-        className="absolute inset-0 bg-black/50 backdrop-blur-sm"
+        className="absolute inset-0 bg-foreground/40 backdrop-blur-sm"
         aria-label="Close"
         onClick={closePalette}
       />
-      <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-2xl border border-border bg-card shadow-2xl">
+      <div className="relative z-10 w-full max-w-lg overflow-hidden rounded-[var(--ui-radius-2xl)] border border-border bg-card shadow-[var(--ui-shadow-xl)]">
         <div className="flex items-center gap-3 border-b border-border px-4 py-3">
           <Search className="h-5 w-5 shrink-0 text-muted-foreground" />
           <input
@@ -811,7 +825,7 @@ export function OfficeCommandPalette({ open, onClose }: CommandPaletteProps) {
                   <button
                     key={item.href}
                     type="button"
-                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted"
+                    className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                     onClick={() => {
                       router.push(item.href);
                       closePalette();

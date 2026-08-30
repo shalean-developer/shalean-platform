@@ -46,7 +46,17 @@ export function ServicesCtaButton({
   seoPricingInteraction,
   seoHubServiceCardBook,
 }: Props) {
-  const cls = cn(base, variants[variant], className);
+  // Tailwind utility order is stylesheet-driven, not last-class-wins. When a caller
+  // explicitly requests the established inverse white/blue treatment, avoid layering
+  // the primary blue/white colour utilities underneath it or the text can render white
+  // on a white button.
+  const classTokens = className?.split(/\s+/) ?? [];
+  const requestsInversePrimary =
+    variant === "primary" &&
+    classTokens.includes("bg-white") &&
+    classTokens.includes("text-blue-900");
+  const resolvedVariant = requestsInversePrimary ? "secondary" : variant;
+  const cls = cn(base, variants[resolvedVariant], className);
 
   if (trackSource) {
     return (
