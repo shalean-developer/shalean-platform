@@ -37,50 +37,57 @@ export function MarketingAreasSection() {
     <HomeSection
       id="locations"
       containerSize="marketing"
-      className="scroll-mt-24 !bg-[var(--marketing-surface-warm)] md:py-[var(--ui-space-20)]"
+      className="scroll-mt-24 !bg-[var(--marketing-surface-warm)] md:py-[var(--ui-space-24)]"
       aria-label="Areas we serve"
     >
-      <MarketingSectionHeader
-        eyebrow="Areas we serve"
-        title="Cleaning across Cape Town"
-        description="Explore the main Cape Town regions we serve, then view the full suburb directory for local availability."
-      />
-
-      <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-4)] sm:grid-cols-2 lg:grid-cols-5">
-        {regionGroups.map(({ region, previewNames }) => (
-          <article
-            key={region}
-            className="group flex min-h-[250px] flex-col rounded-[var(--ui-radius-marketing)] border border-border/70 bg-card p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] transition duration-200 hover:-translate-y-1 hover:shadow-[var(--ui-shadow-md)]"
+      <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
+        <div className="lg:sticky lg:top-28">
+          <MarketingSectionHeader
+            align="left"
+            eyebrow="Areas we serve"
+            title="Cleaning across Cape Town"
+            description="Explore the main Cape Town regions we serve, then open the full suburb directory to check local coverage."
+          />
+          <SafeInternalLink
+            href="/areas-we-serve"
+            className="mt-[var(--ui-space-8)] inline-flex min-h-12 items-center justify-center gap-[var(--ui-space-2)] rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-semibold text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
-            <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
-              <MapPin className="h-6 w-6" strokeWidth={1.7} />
-            </div>
-            <h3 className="mt-[var(--ui-space-5)] text-[length:var(--ui-text-card-title)] font-semibold leading-[var(--ui-leading-tight)] text-foreground">
-              {region}
-            </h3>
-            {previewNames.length > 0 ? (
-              <p className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
-                {previewNames.join(" · ")}
-              </p>
-            ) : null}
-            <SafeInternalLink
-              href={`/areas-we-serve#region-${regionAnchor(region)}`}
-              className="mt-auto inline-flex items-center gap-[var(--ui-space-2)] pt-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              Explore region
-              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
-            </SafeInternalLink>
-          </article>
-        ))}
-      </div>
+            View all suburbs
+            <ArrowRight className="h-4 w-4" aria-hidden />
+          </SafeInternalLink>
+        </div>
 
-      <div className="mt-[var(--ui-space-10)] flex justify-center">
-        <SafeInternalLink
-          href="/areas-we-serve"
-          className="inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] border border-border bg-card px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-semibold text-card-foreground shadow-[var(--ui-shadow-sm)] transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          View all suburbs
-        </SafeInternalLink>
+        <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-border bg-card shadow-[var(--ui-shadow-md)]">
+          {regionGroups.map(({ region, previewNames }, index) => (
+            <SafeInternalLink
+              key={region}
+              href={`/areas-we-serve#region-${regionAnchor(region)}`}
+              className="group grid min-h-[132px] gap-[var(--ui-space-4)] border-b border-border p-[var(--ui-space-6)] transition last:border-b-0 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center md:p-[var(--ui-space-8)]"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
+                <MapPin className="h-6 w-6" strokeWidth={1.7} />
+              </div>
+              <div>
+                <div className="flex items-baseline gap-[var(--ui-space-3)]">
+                  <span className="text-[length:var(--ui-text-caption)] font-semibold tabular-nums text-muted-foreground">
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+                    {region}
+                  </h3>
+                </div>
+                {previewNames.length > 0 ? (
+                  <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                    {previewNames.join(" · ")}
+                  </p>
+                ) : null}
+              </div>
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background text-foreground transition group-hover:border-primary/30 group-hover:bg-primary group-hover:text-primary-foreground" aria-hidden>
+                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+              </span>
+            </SafeInternalLink>
+          ))}
+        </div>
       </div>
     </HomeSection>
   );
