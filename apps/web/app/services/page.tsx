@@ -222,9 +222,6 @@ export default function ServicesHubPage() {
                 <span className="block text-primary">Professional Cleaning Services</span>
                 <span className="mt-[var(--ui-space-2)] block">in Cape Town</span>
               </h1>
-              <p className="mt-[var(--ui-space-6)] max-w-xl text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-muted-foreground">
-                Choose a cleaning service for your home, move, short stay or workplace, then see the scope and price before you book.
-              </p>
 
               <div className="mt-[var(--ui-space-10)] space-y-[var(--ui-space-4)]">
                 {[
