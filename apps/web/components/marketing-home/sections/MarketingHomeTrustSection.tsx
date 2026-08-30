@@ -11,7 +11,7 @@ export function MarketingHomeTrustSection() {
     <HomeSection
       containerSize="marketing"
       className="border-y border-border !bg-[var(--marketing-surface-warm)] md:py-[var(--ui-space-20)]"
-      aria-labelledby="homepage-trust-heading"
+      aria-label="Customer proof"
     >
       <MarketingSectionHeader
         eyebrow="Customer proof"
