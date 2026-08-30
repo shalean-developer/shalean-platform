@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { AppWindow, ArrowRight, Check } from "lucide-react";
+import { AppWindow, ArrowRight } from "lucide-react";
 import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
@@ -243,21 +243,6 @@ export default function ServicesHubPage() {
                       Request a quote
                     </GetFreeQuoteLink>
                   </div>
-                </div>
-
-                <div className="mt-[var(--ui-space-8)] grid gap-[var(--ui-space-3)] border-t border-[#DBEAFE] pt-[var(--ui-space-5)] sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
-                  {[
-                    "Vetted and trained cleaners",
-                    "See your price before checkout",
-                    "Clear service scope before the visit",
-                  ].map((line) => (
-                    <div key={line} className="flex items-start gap-[var(--ui-space-3)] text-[length:var(--ui-text-small)] font-medium leading-[var(--ui-leading-body)] text-foreground">
-                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-[var(--ui-shadow-sm)] ring-1 ring-[#DBEAFE]">
-                        <Check className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden />
-                      </span>
-                      <span>{line}</span>
-                    </div>
-                  ))}
                 </div>
               </div>
 
