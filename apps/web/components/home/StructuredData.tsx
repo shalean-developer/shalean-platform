@@ -21,10 +21,11 @@ type StructuredDataProps = {
   faqs: HomeFaq[];
 };
 
-/** Primary service labels for Google rich results (aligned with CleaningService). */
+/** Primary service labels for the homepage-level Service entity. */
 const CORE_SERVICE_TYPES = ["house cleaning", "deep cleaning", "move-out cleaning"] as const;
 
-const CLEANING_SERVICE_ID = `${SITE_ORIGIN}/#cleaningservice`;
+/** Schema.org home-cleaning guidance uses Service with a LocalBusiness provider. */
+const HOME_CLEANING_SERVICE_ID = `${SITE_ORIGIN}/#service`;
 
 const CAPE_TOWN_HOME_CITY = {
   "@type": "City",
@@ -91,10 +92,10 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
     hasOfferCatalog: { "@id": HOME_PAGE_OFFER_CATALOG_ID },
   };
 
-  const cleaningService = {
-    "@type": "CleaningService",
-    "@id": CLEANING_SERVICE_ID,
-    name: "Shalean Cleaning Services",
+  const homeCleaningService = {
+    "@type": "Service",
+    "@id": HOME_CLEANING_SERVICE_ID,
+    name: HOME_PAGE_HEADLINE,
     url: SITE_ORIGIN,
     serviceType: [...CORE_SERVICE_TYPES],
     areaServed,
@@ -119,12 +120,12 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
       canonicalUrl: HOME_CANONICAL,
       name: HOME_PAGE_HEADLINE,
       description: HOME_PAGE_META_DESCRIPTION,
-      primaryEntityId: CLEANING_SERVICE_ID,
+      primaryEntityId: HOME_CLEANING_SERVICE_ID,
       speakableCssSelectors: ["main h1"],
     }),
     localBusiness,
     offerCatalogNode,
-    cleaningService,
+    homeCleaningService,
     ...serviceNodes,
   ];
 
