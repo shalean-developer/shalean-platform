@@ -1,4 +1,3 @@
-import { googleBusinessAggregateRatingSchema } from "@/lib/seo/googleReviews";
 import { HOME_STARTING_PRICE_ZAR } from "@/lib/seo/homePageMeta";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
 import { CUSTOMER_SUPPORT_EMAIL, CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
@@ -26,6 +25,9 @@ const PRIMARY_BUSINESS_GEO = {
 /**
  * Core LocalBusiness node for Shalean — used on homepage graph and standalone on money pages.
  * Telephone/email match `customerSupport` (single source of truth).
+ *
+ * Do not attach Google Business Profile aggregate ratings here. Those ratings are displayed
+ * visibly as third-party trust evidence, but are not Shalean-authored review markup.
  */
 export function buildPrimaryLocalBusinessBase(): Record<string, unknown> {
   const node: Record<string, unknown> = {
@@ -48,7 +50,6 @@ export function buildPrimaryLocalBusinessBase(): Record<string, unknown> {
       addressCountry: "ZA",
     },
     geo: { ...PRIMARY_BUSINESS_GEO },
-    aggregateRating: googleBusinessAggregateRatingSchema(),
     knowsAbout: [
       "House cleaning",
       "Maid services",
@@ -98,7 +99,7 @@ export function buildPrimaryLocalBusinessStandaloneGraphJsonLd(): Record<string,
   };
 }
 
-/** Explicit local service region on `Service` / `CleaningService` nodes (alongside `areaServed`). */
+/** Explicit local service region on Service nodes (alongside `areaServed`). */
 export function capeTownAdministrativeServiceArea(): Record<string, unknown> {
   return { "@type": "AdministrativeArea", name: "Cape Town" };
 }
