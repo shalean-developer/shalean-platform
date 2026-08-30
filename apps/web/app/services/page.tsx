@@ -214,56 +214,63 @@ export default function ServicesHubPage() {
 
         <HomeSection
           containerSize="marketing"
-          className="overflow-hidden bg-background pt-[var(--ui-space-10)] pb-[var(--ui-space-16)] md:pt-[var(--ui-space-16)] md:pb-[var(--ui-space-20)] lg:py-[var(--ui-space-24)]"
+          className="overflow-hidden bg-background pt-[var(--ui-space-8)] pb-[var(--ui-space-16)] md:pt-[var(--ui-space-12)] md:pb-[var(--ui-space-20)] lg:pt-[var(--ui-space-16)] lg:pb-[var(--ui-space-24)]"
         >
-          <div className="grid items-center gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-[var(--ui-space-16)] xl:gap-[var(--ui-space-20)]">
-            <div className="max-w-2xl">
-              <h1 className="text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
-                <span className="block text-primary">Professional Cleaning Services</span>
-                <span className="mt-[var(--ui-space-2)] block">in Cape Town</span>
-              </h1>
+          <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-[#F7FAFF] shadow-[var(--ui-shadow-lg)]">
+            <div className="grid lg:min-h-[560px] lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
+              <div className="flex flex-col justify-center p-[var(--ui-space-6)] sm:p-[var(--ui-space-10)] lg:p-[var(--ui-space-12)] xl:p-[var(--ui-space-16)]">
+                <div className="max-w-2xl">
+                  <p className="inline-flex items-center rounded-[var(--ui-radius-pill)] border border-[#DBEAFE] bg-white px-[var(--ui-space-4)] py-[var(--ui-space-2)] text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-primary shadow-[var(--ui-shadow-sm)]">
+                    Cape Town cleaning services
+                  </p>
 
-              <div className="mt-[var(--ui-space-10)] space-y-[var(--ui-space-4)]">
-                {[
-                  "Vetted and trained cleaners",
-                  "See your price before checkout",
-                  "Clear service scope before the visit",
-                ].map((line) => (
-                  <div key={line} className="flex items-center gap-[var(--ui-space-3)] text-[length:var(--ui-text-lead)] text-foreground">
-                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                      <Check className="h-4 w-4" strokeWidth={2.6} aria-hidden />
-                    </span>
-                    <span>{line}</span>
+                  <h1 className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
+                    <span className="block">Professional</span>
+                    <span className="block text-primary">Cleaning Services</span>
+                    <span className="mt-[var(--ui-space-2)] block">in Cape Town</span>
+                  </h1>
+
+                  <div className="mt-[var(--ui-space-8)] flex w-full flex-col gap-[var(--ui-space-3)] sm:w-auto sm:flex-row">
+                    <CTAButton
+                      href="/book"
+                      variant="primary"
+                      trackSource="services_hub_hero_prices"
+                      seoHubCta={{ cta_location: "hero", cta_label: "See instant price", cta_kind: "get_price" }}
+                      className="min-h-14 px-[var(--ui-space-8)]"
+                    >
+                      See instant price
+                    </CTAButton>
+                    <GetFreeQuoteLink source="services_hub_hero" variant="outline" className="min-h-14 bg-white px-[var(--ui-space-8)]">
+                      Request a quote
+                    </GetFreeQuoteLink>
                   </div>
-                ))}
+                </div>
+
+                <div className="mt-[var(--ui-space-10)] grid gap-[var(--ui-space-3)] border-t border-[#DBEAFE] pt-[var(--ui-space-6)] sm:grid-cols-3 lg:grid-cols-1 xl:grid-cols-3">
+                  {[
+                    "Vetted and trained cleaners",
+                    "See your price before checkout",
+                    "Clear service scope before the visit",
+                  ].map((line) => (
+                    <div key={line} className="flex items-start gap-[var(--ui-space-3)] text-[length:var(--ui-text-small)] font-medium leading-[var(--ui-leading-body)] text-foreground">
+                      <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white text-primary shadow-[var(--ui-shadow-sm)] ring-1 ring-[#DBEAFE]">
+                        <Check className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden />
+                      </span>
+                      <span>{line}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              <div className="mt-[var(--ui-space-10)] flex w-full flex-col gap-[var(--ui-space-3)] sm:w-auto sm:flex-row">
-                <CTAButton
-                  href="/book"
-                  variant="primary"
-                  trackSource="services_hub_hero_prices"
-                  seoHubCta={{ cta_location: "hero", cta_label: "See instant price", cta_kind: "get_price" }}
-                  className="min-h-14 px-[var(--ui-space-8)]"
-                >
-                  See instant price
-                </CTAButton>
-                <GetFreeQuoteLink source="services_hub_hero" variant="outline" className="min-h-14 px-[var(--ui-space-8)]">
-                  Request a quote
-                </GetFreeQuoteLink>
-              </div>
-            </div>
-
-            <div className="relative mx-auto w-full max-w-[520px] lg:mx-0 lg:justify-self-end">
-              <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-xl)] ring-1 ring-border/70">
+              <div className="relative min-h-[340px] bg-muted sm:min-h-[430px] lg:min-h-full">
                 <Image
                   src="/images/marketing/standard-cleaning-cape-town-kitchen.webp"
                   alt="Professional home cleaning in a bright Cape Town kitchen and living space"
                   fill
                   priority
                   fetchPriority="high"
-                  sizes="(max-width: 1024px) 100vw, 520px"
-                  className="object-cover"
+                  sizes="(max-width: 1024px) 100vw, 50vw"
+                  className="object-cover object-center"
                 />
               </div>
             </div>
