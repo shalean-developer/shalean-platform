@@ -9,23 +9,25 @@ export function MarketingHomeFaqAccordion({ faqs }: { faqs: HomeFaq[] }) {
   const [openFaqId, setOpenFaqId] = useState<string | null>(null);
 
   return (
-    <div className="mt-14 overflow-hidden rounded-xl border border-slate-100 bg-white shadow-sm sm:mt-16 lg:mt-20">
+    <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-border bg-card shadow-[var(--ui-shadow-sm)]">
       {faqs.map((faq) => {
         const open = openFaqId === faq.id;
         return (
-          <div key={faq.id} className="border-b border-slate-100 last:border-b-0">
+          <div key={faq.id} className="border-b border-border last:border-b-0">
             <button
               type="button"
-              className="flex w-full items-center justify-between gap-4 px-5 py-4 text-left text-sm font-semibold text-slate-900 transition hover:bg-slate-50/80 sm:px-6 sm:py-5 sm:text-base"
+              className="flex w-full items-center justify-between gap-[var(--ui-space-4)] px-[var(--ui-space-5)] py-[var(--ui-space-5)] text-left text-[length:var(--ui-text-body)] font-medium text-foreground transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-[var(--ui-space-6)] sm:py-[var(--ui-space-6)]"
               onClick={() => setOpenFaqId(open ? null : faq.id)}
               aria-expanded={open}
               suppressHydrationWarning
             >
-              {faq.question}
-              <ChevronDown className={cn("h-5 w-5 shrink-0 text-slate-500 transition", open && "rotate-180")} />
+              <span>{faq.question}</span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <ChevronDown className={cn("h-4 w-4 transition-transform", open && "rotate-180")} aria-hidden />
+              </span>
             </button>
             {open ? (
-              <div className="border-t border-slate-100 bg-slate-50/40 px-5 pb-5 pt-3 text-base leading-relaxed text-slate-600 sm:px-6">
+              <div className="border-t border-border bg-muted/30 px-[var(--ui-space-5)] py-[var(--ui-space-5)] text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground sm:px-[var(--ui-space-6)]">
                 {faq.answer}
               </div>
             ) : null}
