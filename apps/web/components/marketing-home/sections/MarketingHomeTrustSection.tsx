@@ -21,7 +21,7 @@ export function MarketingHomeTrustSection() {
       />
 
       <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-5)] sm:grid-cols-2 xl:grid-cols-4">
-        <article className="flex min-h-[300px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#f2e3b3] bg-[var(--marketing-surface-soft-yellow)] p-[var(--ui-space-7)] shadow-[var(--ui-shadow-sm)]">
+        <article className="flex min-h-[300px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#f2e3b3] bg-[var(--marketing-surface-soft-yellow)] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
           <div className="flex items-center justify-between gap-[var(--ui-space-4)]">
             <div className="flex items-center gap-1" aria-label="Five star rating">
               {Array.from({ length: 5 }).map((_, index) => (
@@ -41,7 +41,7 @@ export function MarketingHomeTrustSection() {
           </div>
         </article>
 
-        <article className="flex min-h-[300px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#f3d7de] bg-[var(--marketing-surface-soft-blush)] p-[var(--ui-space-7)] shadow-[var(--ui-shadow-sm)]">
+        <article className="flex min-h-[300px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#f3d7de] bg-[var(--marketing-surface-soft-blush)] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-background/80" aria-hidden>
             <MessageSquareText className="h-6 w-6 text-[var(--marketing-accent-rose)]" strokeWidth={1.7} />
           </div>
@@ -58,7 +58,7 @@ export function MarketingHomeTrustSection() {
           </div>
         </article>
 
-        <article className="flex min-h-[300px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#cde9e4] bg-[var(--marketing-surface-soft-aqua)] p-[var(--ui-space-7)] shadow-[var(--ui-shadow-sm)]">
+        <article className="flex min-h-[300px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#cde9e4] bg-[var(--marketing-surface-soft-aqua)] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-background/80" aria-hidden>
             <ShieldCheck className="h-7 w-7 text-[var(--marketing-accent-teal)]" strokeWidth={1.65} />
           </div>
@@ -70,7 +70,7 @@ export function MarketingHomeTrustSection() {
           </div>
         </article>
 
-        <article className="flex min-h-[300px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#e2d8f4] bg-[var(--marketing-surface-soft-lavender)] p-[var(--ui-space-7)] shadow-[var(--ui-shadow-sm)]">
+        <article className="flex min-h-[300px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#e2d8f4] bg-[var(--marketing-surface-soft-lavender)] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
           <div className="flex h-12 w-12 items-center justify-center rounded-full bg-background/80" aria-hidden>
             <ReceiptText className="h-7 w-7 text-[var(--marketing-accent-violet)]" strokeWidth={1.65} />
           </div>
