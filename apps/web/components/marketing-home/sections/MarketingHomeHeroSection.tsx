@@ -27,41 +27,41 @@ export function MarketingHomeHeroSection() {
   return (
     <HomeSection
       containerSize="marketing"
-      className="overflow-hidden border-b border-border bg-background pt-[var(--ui-space-8)] pb-[var(--ui-space-12)] md:pt-[var(--ui-space-12)] md:pb-[var(--ui-space-16)] lg:py-[var(--ui-space-20)]"
+      className="overflow-hidden bg-background pt-[var(--ui-space-10)] pb-[var(--ui-space-16)] md:pt-[var(--ui-space-16)] md:pb-[var(--ui-space-20)] lg:py-[var(--ui-space-24)]"
     >
-      <div className="grid items-center gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.82fr)_minmax(0,1.18fr)] lg:gap-[var(--ui-space-16)] xl:gap-[var(--ui-space-20)]">
-        <div className="max-w-2xl">
+      <div className="grid items-center gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:gap-[var(--ui-space-20)]">
+        <div className="max-w-xl">
           <h1 className="text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
             <span className="block text-primary">{HERO_HEADLINE_ACCENT}</span>
-            <span className="mt-[var(--ui-space-1)] block">{HERO_HEADLINE_REST}</span>
+            <span className="mt-[var(--ui-space-2)] block">{HERO_HEADLINE_REST}</span>
           </h1>
 
-          <div className="mt-[var(--ui-space-8)] space-y-[var(--ui-space-3)]">
+          <div className="mt-[var(--ui-space-10)] space-y-[var(--ui-space-4)]">
             {HERO_BENEFITS.map((label) => (
               <div
                 key={label}
                 className="flex items-center gap-[var(--ui-space-3)] text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-foreground"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Check className="h-4 w-4" strokeWidth={2.6} aria-hidden />
                 </span>
                 <span>{label}</span>
               </div>
             ))}
           </div>
 
-          <div className="mt-[var(--ui-space-8)] flex w-full flex-col gap-[var(--ui-space-3)] sm:w-auto sm:flex-row">
+          <div className="mt-[var(--ui-space-10)] flex w-full flex-col gap-[var(--ui-space-3)] sm:w-auto sm:flex-row">
             <Link
               href={bookHref}
               data-growth-cta-source="marketing_hero_see_price"
-              className="inline-flex min-h-14 items-center justify-center rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-8)] text-[length:var(--ui-text-body)] font-medium text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex min-h-14 items-center justify-center rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-8)] text-[length:var(--ui-text-body)] font-medium text-primary-foreground shadow-[var(--ui-shadow-md)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               See instant price
             </Link>
             <Link
               href={GET_FREE_QUOTE_HREF}
               data-quote-cta-source="marketing_hero"
-              className="inline-flex min-h-14 items-center justify-center rounded-[var(--ui-radius-pill)] border border-border bg-background px-[var(--ui-space-8)] text-[length:var(--ui-text-body)] font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex min-h-14 items-center justify-center rounded-[var(--ui-radius-pill)] border border-border bg-card px-[var(--ui-space-8)] text-[length:var(--ui-text-body)] font-medium text-foreground shadow-[var(--ui-shadow-sm)] transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Request a quote
             </Link>
@@ -69,13 +69,13 @@ export function MarketingHomeHeroSection() {
         </div>
 
         <div className="relative w-full lg:justify-self-end">
-          <div className="relative aspect-[4/3] min-h-[360px] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-lg)] sm:min-h-[440px] lg:min-h-[560px]">
+          <div className="relative aspect-[4/3] min-h-[400px] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-xl)] ring-1 ring-border/70 sm:min-h-[480px] lg:min-h-[600px] xl:min-h-[640px]">
             <Image
               src={HERO_MAIN}
               alt="Professional house cleaning service in a bright modern kitchen in Cape Town"
               fill
               className="object-cover object-center"
-              sizes="(max-width: 1024px) 100vw, 60vw"
+              sizes="(max-width: 1024px) 100vw, 64vw"
               priority
               fetchPriority="high"
             />
