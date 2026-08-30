@@ -19,7 +19,7 @@ type Props = {
   currentServiceSlug?: CapeTownSeoServiceSlug;
   currentLocationSlug?: string;
   emphasizeLocalBooking?: boolean;
-  variant?: "card" | "plain";
+  variant?: "card" | "plain" | "inline";
 };
 
 const SERVICE_ROWS: { slug: CapeTownSeoServiceSlug; label: string }[] = [
@@ -95,6 +95,53 @@ export function RelatedLinks({
   const bookingSource = `related_links_${placement}`;
   const localBlog = placement === "blog" && emphasizeLocalBooking;
   const isPlain = variant === "plain";
+  const isInline = variant === "inline";
+
+  if (isInline) {
+    return (
+      <nav aria-label="Related service and location links" className="not-prose">
+        <div className="grid gap-[var(--ui-space-8)] sm:grid-cols-2">
+          <div>
+            <h3 className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-foreground/55">Services</h3>
+            <ul className="mt-[var(--ui-space-3)] space-y-[var(--ui-space-3)]">
+              {services.map((row) => (
+                <li key={row.slug}>
+                  <SafeInternalLink
+                    href={CAPE_TOWN_SERVICE_SEO[row.slug].path}
+                    className="text-[length:var(--ui-text-small)] font-medium text-foreground transition hover:text-primary hover:underline hover:underline-offset-4"
+                  >
+                    {row.label}
+                  </SafeInternalLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <h3 className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-foreground/55">Areas</h3>
+            <ul className="mt-[var(--ui-space-3)] space-y-[var(--ui-space-3)]">
+              {locations.map((row) => (
+                <li key={row.slug}>
+                  <SafeInternalLink
+                    href={row.href}
+                    className="text-[length:var(--ui-text-small)] font-medium text-foreground transition hover:text-primary hover:underline hover:underline-offset-4"
+                  >
+                    {row.label}
+                  </SafeInternalLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </div>
+        <GrowthCtaLink
+          href="/book"
+          source={bookingSource}
+          className="mt-[var(--ui-space-6)] inline-flex min-h-12 items-center text-[length:var(--ui-text-small)] font-medium text-primary transition hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {localBlog ? "See instant price" : "Book a cleaning in Cape Town"}
+        </GrowthCtaLink>
+      </nav>
+    );
+  }
 
   return (
     <section
