@@ -24,7 +24,7 @@ export function MarketingHomeTrustSection() {
         <article className="flex min-h-[470px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#f2e3b3] bg-[var(--marketing-surface-soft-yellow)] p-[var(--ui-space-8)] shadow-[var(--ui-shadow-md)] md:p-[var(--ui-space-10)]">
           <div className="flex items-center justify-between gap-[var(--ui-space-4)]">
             <span className="text-[length:var(--ui-text-small)] font-semibold uppercase tracking-[0.14em] text-foreground/55">
-              Google reviews
+              Google rating
             </span>
             <div className="flex items-center gap-1" aria-label="Five star rating">
               {Array.from({ length: 5 }).map((_, index) => (
@@ -40,27 +40,21 @@ export function MarketingHomeTrustSection() {
             <h3 className="mt-[var(--ui-space-5)] text-[length:var(--ui-text-page-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
               Rated by Cape Town customers
             </h3>
-            <div className="mt-[var(--ui-space-6)] flex flex-wrap items-center gap-x-[var(--ui-space-6)] gap-y-[var(--ui-space-3)]">
-              <div>
-                <p className="text-3xl font-semibold tracking-tight text-foreground tabular-nums">{count}+</p>
-                <p className="mt-1 text-[length:var(--ui-text-small)] text-muted-foreground">Google reviews</p>
-              </div>
-              <Link
-                href="/reviews"
-                className="inline-flex items-center gap-[var(--ui-space-2)] text-[length:var(--ui-text-body)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                Read customer reviews
-                <ArrowRight className="h-4 w-4" aria-hidden />
-              </Link>
-            </div>
+            <Link
+              href="/reviews"
+              className="mt-[var(--ui-space-6)] inline-flex items-center gap-[var(--ui-space-2)] text-[length:var(--ui-text-body)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              Read customer reviews
+              <ArrowRight className="h-4 w-4" aria-hidden />
+            </Link>
           </div>
         </article>
 
-        <div className="grid gap-[var(--ui-space-6)] sm:grid-cols-2 lg:grid-cols-2">
-          <article className="sm:col-span-2 flex min-h-[200px] items-center justify-between gap-[var(--ui-space-6)] rounded-[var(--ui-radius-marketing)] border border-[#f3d7de] bg-[var(--marketing-surface-soft-blush)] p-[var(--ui-space-7,1.75rem)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
+        <div className="grid gap-[var(--ui-space-6)] sm:grid-cols-2">
+          <article className="flex min-h-[200px] items-center justify-between gap-[var(--ui-space-6)] rounded-[var(--ui-radius-marketing)] border border-[#f3d7de] bg-[var(--marketing-surface-soft-blush)] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] sm:col-span-2 md:p-[var(--ui-space-8)]">
             <div>
               <p className="text-5xl font-semibold leading-none tracking-[-0.04em] text-foreground tabular-nums">{count}+</p>
-              <h3 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-card-title)] font-semibold text-foreground">Verified review volume</h3>
+              <h3 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-card-title)] font-semibold text-foreground">Google reviews</h3>
               <p className="mt-[var(--ui-space-2)] max-w-md text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
                 Customer feedback is available on Shalean&apos;s review page.
               </p>
@@ -70,7 +64,7 @@ export function MarketingHomeTrustSection() {
             </div>
           </article>
 
-          <article className="flex min-h-[245px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#cde9e4] bg-[var(--marketing-surface-soft-aqua)] p-[var(--ui-space-7,1.75rem)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
+          <article className="flex min-h-[245px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#cde9e4] bg-[var(--marketing-surface-soft-aqua)] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-background/80 text-[var(--marketing-accent-teal)]" aria-hidden>
               <ShieldCheck className="h-7 w-7" strokeWidth={1.65} />
             </div>
@@ -82,7 +76,7 @@ export function MarketingHomeTrustSection() {
             </div>
           </article>
 
-          <article className="flex min-h-[245px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#e2d8f4] bg-[var(--marketing-surface-soft-lavender)] p-[var(--ui-space-7,1.75rem)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
+          <article className="flex min-h-[245px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#e2d8f4] bg-[var(--marketing-surface-soft-lavender)] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
             <div className="flex h-14 w-14 items-center justify-center rounded-full bg-background/80 text-[var(--marketing-accent-violet)]" aria-hidden>
               <ReceiptText className="h-7 w-7" strokeWidth={1.65} />
             </div>
