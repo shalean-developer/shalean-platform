@@ -28,6 +28,11 @@ function formatZar(value: number): string {
   return `R${Math.round(value).toLocaleString("en-ZA")}`;
 }
 
+function publicExtraLabel(extra: { id: string; label: string }): string {
+  if (extra.id === "interior-windows") return "Interior windows add-on";
+  return extra.label;
+}
+
 export async function ServicesBookingExtrasSection() {
   let catalog: Awaited<ReturnType<typeof loadBookingV2Catalog>>["catalog"] | undefined;
 
@@ -95,7 +100,7 @@ export async function ServicesBookingExtrasSection() {
                 <div key={extra.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-[var(--ui-space-3)] py-[var(--ui-space-4)]">
                   <div>
                     <div className="flex flex-wrap items-center gap-[var(--ui-space-2)]">
-                      <p className="text-[length:var(--ui-text-small)] font-medium text-foreground">{extra.label}</p>
+                      <p className="text-[length:var(--ui-text-small)] font-medium text-foreground">{publicExtraLabel(extra)}</p>
                       {extra.isPopular ? (
                         <span className="inline-flex items-center gap-1 rounded-[var(--ui-radius-pill)] bg-[#EFF6FF] px-2 py-0.5 text-[length:var(--ui-text-caption)] font-medium text-primary">
                           <Sparkles className="h-3 w-3" aria-hidden />
