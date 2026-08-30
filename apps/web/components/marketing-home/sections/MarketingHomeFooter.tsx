@@ -6,13 +6,19 @@ import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import { trackGa4PhoneClick, trackGa4WhatsAppClick } from "@/lib/analytics/ga4Events";
 import { SHALEAN_SOCIAL_LINKS } from "@/lib/brand/shaleanSocialLinks";
 import { MARKETING_FOOTER_SERVICE_LINKS } from "@/lib/marketing/marketingServiceNavLinks";
-import { customerSupportWhatsAppHref } from "@/lib/site/customerSupport";
+import {
+  CUSTOMER_SUPPORT_EMAIL,
+  CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
+  CUSTOMER_SUPPORT_TELEPHONE_TEL,
+  CUSTOMER_SUPPORT_WHATSAPP_DISPLAY,
+  customerSupportWhatsAppHref,
+} from "@/lib/site/customerSupport";
 
 const waHref = customerSupportWhatsAppHref();
 
 const FOOTER_COMPANY = [
   { label: "About Us", href: "/about" },
-  { label: "Areas We Serve", href: "/areas-we-serve" },
+  { label: "Areas We Serve", href: "/locations" },
   { label: "Reviews", href: "/reviews" },
   { label: "Blog", href: "/blog" },
   { label: "Careers", href: "/cleaner/apply" },
@@ -124,24 +130,24 @@ export function MarketingHomeFooter({
               <ul className="mt-[var(--ui-space-5)] space-y-[var(--ui-space-3)] text-[length:var(--ui-text-small)] text-white/75">
                 <li>
                   <a
-                    href="tel:0871535250"
+                    href={CUSTOMER_SUPPORT_TELEPHONE_TEL}
                     onClick={() => trackGa4PhoneClick()}
                     className="flex min-h-10 items-center gap-[var(--ui-space-2)] transition hover:text-white"
                   >
                     <Phone className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                    087 153 5250
+                    {CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}
                   </a>
                 </li>
                 <li>
                   <a href="tel:0825915525" className="flex min-h-10 items-center gap-[var(--ui-space-2)] transition hover:text-white">
                     <Phone className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                    082 591 5525
+                    {CUSTOMER_SUPPORT_WHATSAPP_DISPLAY}
                   </a>
                 </li>
                 <li>
-                  <a href="mailto:hello@shalean.co.za" className="flex min-h-10 items-center gap-[var(--ui-space-2)] transition hover:text-white">
+                  <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="flex min-h-10 items-center gap-[var(--ui-space-2)] transition hover:text-white">
                     <Mail className="h-4 w-4 shrink-0 text-primary" aria-hidden />
-                    hello@shalean.co.za
+                    {CUSTOMER_SUPPORT_EMAIL}
                   </a>
                 </li>
                 <li className="flex min-h-10 items-start gap-[var(--ui-space-2)] pt-[var(--ui-space-2)]">
