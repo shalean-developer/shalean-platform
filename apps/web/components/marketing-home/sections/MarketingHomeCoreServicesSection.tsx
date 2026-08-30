@@ -20,21 +20,21 @@ const SERVICE_GROUPS: readonly ServiceGroup[] = [
   {
     id: "home-cleaning",
     title: "Home Cleaning",
-    description: "Regular home cleaning and deeper whole-home cleaning for everyday living.",
+    description: "Everyday cleaning and deeper whole-home care.",
     icon: House,
     serviceIds: ["standard", "deep"],
   },
   {
     id: "moving-stays",
     title: "Moving & Stays",
-    description: "Cleaning for move-ins, move-outs and guest-ready Airbnb turnovers.",
+    description: "Move cleans and guest-ready Airbnb turnovers.",
     icon: Luggage,
     serviceIds: ["move", "airbnb"],
   },
   {
     id: "workplace-specialist",
     title: "Workplace & Specialist",
-    description: "Professional office cleaning and specialist carpet care for cleaner spaces.",
+    description: "Office cleaning and specialist carpet care.",
     icon: Building2,
     serviceIds: ["office", "carpet"],
   },
@@ -55,43 +55,42 @@ export function MarketingHomeCoreServicesSection({ cards }: Props) {
     <HomeSection
       id="our-services"
       containerSize="marketing"
-      className="scroll-mt-24 rounded-t-[var(--ui-radius-marketing)] !bg-[var(--marketing-surface-warm)] md:py-[var(--ui-space-20)]"
+      className="scroll-mt-24 !bg-[var(--marketing-surface-warm)] md:py-[var(--ui-space-20)]"
       aria-label="Cleaning services"
     >
       <MarketingSectionHeader
-        eyebrow="What we offer"
-        title="Cleaning services for every kind of space."
-        description="From regular home cleaning to moves, stays, workplaces and specialist carpet care, choose the group that fits what you need."
+        eyebrow="Services"
+        title="What do you need cleaned?"
+        description="Choose the type of cleaning that best matches your space."
       />
 
-      <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-8)] md:grid-cols-3">
+      <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
         {groups.map((group) => {
           const GroupIcon = group.icon;
 
           return (
             <article
               key={group.id}
-              className="flex min-h-[360px] flex-col items-center rounded-[var(--ui-radius-marketing)] bg-card px-[var(--ui-space-6)] py-[var(--ui-space-10)] text-center text-card-foreground shadow-[var(--ui-shadow-lg)] transition-transform duration-200 hover:-translate-y-1"
+              className="flex min-h-[400px] flex-col rounded-[var(--ui-radius-marketing)] border border-border/70 bg-card p-[var(--ui-space-8)] text-card-foreground shadow-[var(--ui-shadow-md)] transition-transform duration-200 hover:-translate-y-1"
             >
-              <div className="relative flex h-24 w-24 items-center justify-center" aria-hidden>
-                <span className="absolute h-16 w-16 rounded-full bg-primary/15" />
-                <GroupIcon className="relative h-14 w-14 text-foreground" strokeWidth={1.55} />
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
+                <GroupIcon className="h-8 w-8" strokeWidth={1.7} />
               </div>
 
-              <h3 className="mt-[var(--ui-space-5)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+              <h3 className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
                 {group.title}
               </h3>
-              <p className="mx-auto mt-[var(--ui-space-3)] max-w-xs text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
+              <p className="mt-[var(--ui-space-3)] max-w-sm text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
                 {group.description}
               </p>
 
-              <div className="mt-auto w-full pt-[var(--ui-space-8)]">
-                <div className="divide-y divide-border border-t border-border text-left">
+              <div className="mt-auto pt-[var(--ui-space-8)]">
+                <div className="space-y-[var(--ui-space-3)]">
                   {group.services.map(({ id, title, priceLabel, href }) => (
                     <Link
                       key={id}
                       href={href}
-                      className="group/service flex min-h-14 items-center justify-between gap-[var(--ui-space-3)] py-[var(--ui-space-3)] text-[length:var(--ui-text-small)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                      className="group/service flex min-h-14 items-center justify-between gap-[var(--ui-space-3)] rounded-[var(--ui-radius-xl)] border border-border bg-background px-[var(--ui-space-4)] text-[length:var(--ui-text-small)] transition hover:border-primary/40 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       <span className="font-medium text-foreground">{title}</span>
                       <span className="flex shrink-0 items-center gap-[var(--ui-space-2)] text-[length:var(--ui-text-caption)] text-muted-foreground transition-colors group-hover/service:text-primary">
