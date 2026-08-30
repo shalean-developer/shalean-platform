@@ -25,7 +25,7 @@ const STEPS: readonly HowItWorksStep[] = [
     Icon: Sparkles,
     title: "We clean",
     description: "A vetted Shalean cleaner or team arrives for the service you selected.",
-    surface: "#A9B8FF",
+    surface: "#B8C5FF",
     iconTone: "var(--navy-to)",
   },
   {
