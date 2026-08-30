@@ -308,7 +308,7 @@ export default function ServicesHubPage() {
           className="scroll-mt-24 bg-background md:py-[var(--ui-space-24)]"
           aria-labelledby="services-included-heading"
         >
-          <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
+          <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
             <div className="lg:sticky lg:top-28">
               <MarketingSectionHeader
                 headingId="services-included-heading"
@@ -335,7 +335,7 @@ export default function ServicesHubPage() {
           className="!bg-[#F4F6FA] md:py-[var(--ui-space-24)]"
           aria-labelledby="pricing-heading"
         >
-          <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
+          <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
             <div className="lg:sticky lg:top-28">
               <MarketingSectionHeader
                 headingId="pricing-heading"
@@ -403,7 +403,7 @@ export default function ServicesHubPage() {
 
         <HomeSection
           containerSize="marketing"
-          className="bg-background md:py-[var(--ui-space-20)]"
+          className="bg-background md:py-[var(--ui-space-24)]"
           aria-labelledby="services-explore-heading"
         >
           <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
