@@ -29,11 +29,11 @@ export function MarketingHomeHeroSection() {
       containerSize="marketing"
       className="overflow-hidden bg-background pt-[var(--ui-space-10)] pb-[var(--ui-space-16)] md:pt-[var(--ui-space-16)] md:pb-[var(--ui-space-20)] lg:py-[var(--ui-space-24)]"
     >
-      <div className="grid items-center gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:gap-[var(--ui-space-20)]">
-        <div className="max-w-xl">
+      <div className="grid items-center gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-[var(--ui-space-16)] xl:gap-[var(--ui-space-20)]">
+        <div className="max-w-2xl">
           <h1 className="text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
             <span className="block text-primary">{HERO_HEADLINE_ACCENT}</span>
-            <span className="mt-[var(--ui-space-2)] block">{HERO_HEADLINE_REST}</span>
+            <span className="mt-[var(--ui-space-2)] block lg:whitespace-nowrap">{HERO_HEADLINE_REST}</span>
           </h1>
 
           <div className="mt-[var(--ui-space-10)] space-y-[var(--ui-space-4)]">
@@ -69,13 +69,13 @@ export function MarketingHomeHeroSection() {
         </div>
 
         <div className="relative w-full lg:justify-self-end">
-          <div className="relative aspect-[4/3] min-h-[400px] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-xl)] ring-1 ring-border/70 sm:min-h-[480px] lg:min-h-[600px] xl:min-h-[640px]">
+          <div className="relative aspect-[4/3] min-h-[400px] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-xl)] ring-1 ring-border/70 sm:min-h-[480px] lg:min-h-[580px] xl:min-h-[620px]">
             <Image
               src={HERO_MAIN}
               alt="Professional house cleaning service in a bright modern kitchen in Cape Town"
               fill
               className="object-cover object-center"
-              sizes="(max-width: 1024px) 100vw, 64vw"
+              sizes="(max-width: 1024px) 100vw, 56vw"
               priority
               fetchPriority="high"
             />
