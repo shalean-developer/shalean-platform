@@ -31,8 +31,6 @@ import {
 } from "@/lib/seo/internalLinks";
 import { buildPrimaryLocalBusinessMoneyPageNode } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
-import { generateCtrTitle } from "@/lib/seo/metaTitle";
-import { leadPriceForServiceSlug } from "@/lib/seo/serviceTitleLeadPrice";
 import {
   HOME_OG_IMAGE,
   HOME_OG_IMAGE_ALT,
@@ -57,16 +55,9 @@ const HUB_SERVICE_SLUGS: CapeTownSeoServiceSlug[] = [
   "carpet-cleaning-cape-town",
 ];
 
-const title = generateCtrTitle({
-  base: "Cleaning Services",
-  place: "Cape Town",
-  fromPrice: leadPriceForServiceSlug("standard-cleaning-cape-town"),
-  templateKey: "services-hub",
-  brandSuffix: "Shalean",
-  pageIntent: "hub",
-});
+const title = "Compare Cleaning Services in Cape Town | Shalean";
 const description = clampMetaDescription(
-  "Book trusted cleaners in Cape Town for homes, apartments, and offices. Transparent pricing, flexible scheduling, and instant online booking with Shalean.",
+  "Compare Standard, Deep, Move In/Out, Airbnb, Office and Carpet Cleaning in Cape Town. Check service scope, extras and pricing before you book.",
 );
 const servicesItemListDescription = clampMetaDescription(
   "Main Shalean cleaning service guides for Cape Town customers.",
@@ -79,7 +70,7 @@ const hubPageJsonLd = {
       "@type": "WebPage",
       "@id": `${PAGE_URL}#webpage`,
       url: PAGE_URL,
-      name: "Professional Cleaning Services in Cape Town",
+      name: "Compare Cleaning Services in Cape Town",
       description,
       isPartOf: { "@type": "WebSite", name: "Shalean Cleaning Services", url: SITE },
       breadcrumb: { "@id": `${PAGE_URL}#breadcrumbs` },
@@ -236,6 +227,10 @@ export default function ServicesHubPage() {
                     <span className="block text-primary">Cleaning Services</span>
                     <span className="mt-[var(--ui-space-2)] block">in Cape Town</span>
                   </h1>
+
+                  <p className="mt-[var(--ui-space-5)] max-w-xl text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                    Compare our six primary cleaning services, check what each one covers and review available extras before choosing the right clean for your space.
+                  </p>
 
                   <div className="mt-[var(--ui-space-6)] flex w-full flex-col gap-[var(--ui-space-3)] sm:w-auto sm:flex-row">
                     <CTAButton
