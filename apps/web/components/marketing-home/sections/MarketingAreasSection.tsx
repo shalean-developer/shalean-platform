@@ -27,10 +27,12 @@ export function MarketingAreasSection() {
   const byRegion = groupCapeTownLocationsByRegion(CAPE_TOWN_LOCATIONS);
   const regionGroups = LOCATIONS_INDEX_REGION_ORDER.map((region) => {
     const regionLocations = byRegion.get(region) ?? [];
-    const availableNames = new Set(regionLocations.map((location) => location.name));
-    const previewNames = (HOME_REGION_FEATURES[region] ?? []).filter((name) => availableNames.has(name));
+    const byName = new Map(regionLocations.map((location) => [location.name, location]));
+    const previewLocations = (HOME_REGION_FEATURES[region] ?? [])
+      .map((name) => byName.get(name))
+      .filter((location): location is (typeof regionLocations)[number] => Boolean(location));
 
-    return { region, previewNames };
+    return { region, previewLocations };
   });
 
   return (
@@ -58,35 +60,56 @@ export function MarketingAreasSection() {
         </div>
 
         <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card shadow-[var(--ui-shadow-md)]">
-          {regionGroups.map(({ region, previewNames }, index) => (
-            <SafeInternalLink
-              key={region}
-              href={`/areas-we-serve#region-${regionAnchor(region)}`}
-              className="group grid min-h-[132px] gap-[var(--ui-space-4)] border-b border-[#DBEAFE] p-[var(--ui-space-6)] transition last:border-b-0 hover:bg-[#DDEBFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center md:p-[var(--ui-space-8)]"
-            >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EFF6FF] text-primary" aria-hidden>
-                <MapPin className="h-6 w-6" strokeWidth={1.7} />
-              </div>
-              <div>
-                <div className="flex items-baseline gap-[var(--ui-space-3)]">
-                  <span className="text-[length:var(--ui-text-caption)] font-semibold tabular-nums text-muted-foreground">
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
-                  <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
-                    {region}
-                  </h3>
+          {regionGroups.map(({ region, previewLocations }, index) => {
+            const regionHref = `/areas-we-serve#region-${regionAnchor(region)}`;
+            return (
+              <div
+                key={region}
+                className="group grid min-h-[132px] gap-[var(--ui-space-4)] border-b border-[#DBEAFE] p-[var(--ui-space-6)] transition last:border-b-0 hover:bg-[#DDEBFF] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center md:p-[var(--ui-space-8)]"
+              >
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EFF6FF] text-primary" aria-hidden>
+                  <MapPin className="h-6 w-6" strokeWidth={1.7} />
                 </div>
-                {previewNames.length > 0 ? (
-                  <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
-                    {previewNames.join(" · ")}
-                  </p>
-                ) : null}
+                <div>
+                  <div className="flex items-baseline gap-[var(--ui-space-3)]">
+                    <span className="text-[length:var(--ui-text-caption)] font-semibold tabular-nums text-muted-foreground">
+                      {String(index + 1).padStart(2, "0")}
+                    </span>
+                    <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+                      <SafeInternalLink
+                        href={regionHref}
+                        className="rounded-sm transition hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      >
+                        {region}
+                      </SafeInternalLink>
+                    </h3>
+                  </div>
+                  {previewLocations.length > 0 ? (
+                    <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                      {previewLocations.map((location, locationIndex) => (
+                        <span key={location.slug}>
+                          {locationIndex > 0 ? <span aria-hidden> · </span> : null}
+                          <SafeInternalLink
+                            href={`/locations/${location.slug}`}
+                            className="rounded-sm transition hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                          >
+                            {location.name}
+                          </SafeInternalLink>
+                        </span>
+                      ))}
+                    </p>
+                  ) : null}
+                </div>
+                <SafeInternalLink
+                  href={regionHref}
+                  aria-label={`View ${region} service areas`}
+                  className="flex h-11 w-11 items-center justify-center rounded-full border border-[#DBEAFE] bg-background text-foreground transition group-hover:border-primary/30 group-hover:bg-primary group-hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                </SafeInternalLink>
               </div>
-              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#DBEAFE] bg-background text-foreground transition group-hover:border-primary/30 group-hover:bg-primary group-hover:text-primary-foreground" aria-hidden>
-                <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-              </span>
-            </SafeInternalLink>
-          ))}
+            );
+          })}
         </div>
       </div>
     </HomeSection>
