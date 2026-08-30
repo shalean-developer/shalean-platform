@@ -99,7 +99,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
                   ) : null}
                 </Link>
 
-                <div className="flex flex-1 flex-col p-[var(--ui-space-6)] md:p-[var(--ui-space-7)]">
+                <div className="flex flex-1 flex-col px-6 pb-7 pt-5 md:px-7 md:pb-8 md:pt-6">
                   <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
                     {title}
                   </h3>
@@ -107,7 +107,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
                     {description}
                   </p>
 
-                  <div className="mt-auto pt-[var(--ui-space-6)]">
+                  <div className="mt-auto pt-6">
                     <Link
                       href={href}
                       className="inline-flex min-h-11 items-center gap-[var(--ui-space-2)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
