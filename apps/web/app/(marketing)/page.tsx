@@ -4,7 +4,6 @@ import { MarketingHomeDbSections } from "@/components/marketing-home/MarketingHo
 import { MarketingHomeDbSectionsFallback } from "@/components/marketing-home/MarketingHomeDbSectionsFallback";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingHomeStickyCtaClient } from "@/components/marketing-home/MarketingHomeStickyCtaClient";
-import { MarketingStickyTrustBadge } from "@/components/marketing-home/MarketingStickyTrustBadge";
 import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
 import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
@@ -45,7 +44,6 @@ export default function MarketingHomePage() {
         <MarketingHomeFinalCta />
       </main>
       <MarketingHomeFooter stackFloats />
-      <MarketingStickyTrustBadge />
       <MarketingHomeStickyCtaClient />
     </div>
   );
