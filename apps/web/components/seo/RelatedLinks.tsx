@@ -8,6 +8,7 @@ import { nearbyProgrammaticLocations, PROGRAMMATIC_LOCATIONS } from "@/lib/seo/l
 import { CAPE_TOWN_LOCATIONS_OVERVIEW_PATH } from "@/lib/seo/capeTownLocations";
 import { CAPE_TOWN_SERVICE_SEO, type CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
 import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
+import { cn } from "@/lib/utils";
 
 const CAPE_TOWN_SEO_HUB_LABEL = "Cleaning services Cape Town (city hub)";
 
@@ -18,6 +19,7 @@ type Props = {
   currentServiceSlug?: CapeTownSeoServiceSlug;
   currentLocationSlug?: string;
   emphasizeLocalBooking?: boolean;
+  variant?: "card" | "plain";
 };
 
 const SERVICE_ROWS: { slug: CapeTownSeoServiceSlug; label: string }[] = [
@@ -84,6 +86,7 @@ export function RelatedLinks({
   currentServiceSlug,
   currentLocationSlug,
   emphasizeLocalBooking,
+  variant = "card",
 }: Props) {
   const services = pickServiceLinks(currentServiceSlug);
   const hubRows = capeTownHubFirst(placement, currentLocationSlug);
@@ -91,10 +94,16 @@ export function RelatedLinks({
   const locations = [...hubRows, ...pickLocationLinks(currentLocationSlug, nearbyCount)];
   const bookingSource = `related_links_${placement}`;
   const localBlog = placement === "blog" && emphasizeLocalBooking;
+  const isPlain = variant === "plain";
 
   return (
     <section
-      className="not-prose rounded-[var(--ui-radius-marketing)] border border-border bg-card p-[var(--ui-space-8)] text-card-foreground shadow-[var(--ui-shadow-sm)]"
+      className={cn(
+        "not-prose text-card-foreground",
+        isPlain
+          ? "border-t border-border pt-[var(--ui-space-6)]"
+          : "rounded-[var(--ui-radius-marketing)] border border-border bg-card p-[var(--ui-space-8)] shadow-[var(--ui-shadow-sm)]",
+      )}
       aria-labelledby="related-links-heading"
     >
       <p className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-primary">Keep exploring</p>
@@ -110,7 +119,7 @@ export function RelatedLinks({
           : "Continue through Shalean service and location guides without losing your path back to booking."}
       </p>
 
-      <div className="mt-[var(--ui-space-8)] grid gap-[var(--ui-space-8)] sm:grid-cols-2">
+      <div className={cn("grid gap-[var(--ui-space-8)] sm:grid-cols-2", isPlain ? "mt-[var(--ui-space-6)]" : "mt-[var(--ui-space-8)]")}>
         <div>
           <h3 className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-foreground/55">Services</h3>
           <ul className="mt-[var(--ui-space-3)] space-y-[var(--ui-space-3)]">
@@ -143,11 +152,16 @@ export function RelatedLinks({
         </div>
       </div>
 
-      <div className="mt-[var(--ui-space-8)] border-t border-border pt-[var(--ui-space-6)]">
+      <div className={cn("border-t border-border pt-[var(--ui-space-6)]", isPlain ? "mt-[var(--ui-space-6)]" : "mt-[var(--ui-space-8)]")}>
         <GrowthCtaLink
           href="/book"
           source={bookingSource}
-          className="inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-medium text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+          className={cn(
+            "inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] text-[length:var(--ui-text-small)] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+            isPlain
+              ? "px-0 text-primary hover:underline hover:underline-offset-4"
+              : "bg-primary px-[var(--ui-space-6)] text-primary-foreground shadow-[var(--ui-shadow-sm)] hover:brightness-95",
+          )}
         >
           {localBlog ? "See instant price" : "Book a cleaning in Cape Town"}
         </GrowthCtaLink>
