@@ -10,8 +10,11 @@ export const HOME_OG_IMAGE_HEIGHT = 630;
 
 export const HOME_OG_IMAGE_ALT = "Professional cleaning services in Cape Town";
 
+/** Canonical marketing entry price shared by homepage copy and LocalBusiness schema. */
+export const HOME_STARTING_PRICE_ZAR = 250;
+
 /** Primary keyword phrase — shared by `<title>`, `<h1>`, and JSON-LD WebPage name. */
-export const HOME_PAGE_HEADLINE = "Cleaning Services Cape Town from R250";
+export const HOME_PAGE_HEADLINE = `Cleaning Services Cape Town from R${HOME_STARTING_PRICE_ZAR}`;
 
 /** SERP `<title>` — shorter than legacy; H1 + JSON-LD keep `HOME_PAGE_HEADLINE`. */
 export const HOME_PAGE_TITLE = clipSerpTitle(`${HOME_PAGE_HEADLINE} | Shalean`);
