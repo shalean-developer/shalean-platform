@@ -403,15 +403,24 @@ export default function ServicesHubPage() {
 
         <HomeSection
           containerSize="marketing"
-          className="bg-background !py-[var(--ui-space-12)] md:!py-[var(--ui-space-16)]"
-          aria-label="Explore related Shalean pages"
+          className="bg-background md:py-[var(--ui-space-20)]"
+          aria-labelledby="services-explore-heading"
         >
-          <div className="grid gap-[var(--ui-space-10)] lg:grid-cols-2 lg:gap-[var(--ui-space-16)]">
-            <SeoInternalLinksBlock
-              title="Explore Shalean"
-              className="border-t border-border pt-[var(--ui-space-6)]"
+          <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
+            <MarketingSectionHeader
+              headingId="services-explore-heading"
+              align="left"
+              eyebrow="Explore more"
+              eyebrowTone="brand"
+              title="Keep exploring without losing your place"
+              description="Move between service guides, pricing, suburb coverage and booking support from one quiet navigation region."
             />
-            <RelatedLinks placement="services_hub" variant="plain" />
+            <div className="border-t border-border pt-[var(--ui-space-6)]">
+              <SeoInternalLinksBlock title="Popular Shalean destinations" showTitle={false} />
+              <div className="mt-[var(--ui-space-8)] border-t border-border pt-[var(--ui-space-8)]">
+                <RelatedLinks placement="services_hub" variant="inline" />
+              </div>
+            </div>
           </div>
         </HomeSection>
 
