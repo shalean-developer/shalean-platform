@@ -7,23 +7,25 @@ import { MarketingHomeServicesSection } from "@/components/marketing-home/sectio
 import { MarketingHomeTrustSection } from "@/components/marketing-home/sections/MarketingHomeTrustSection";
 import { PromotionFeaturedCard } from "@/components/promotions/PromotionFeaturedCard";
 import { getMarketingHomeSeoData } from "@/lib/home/data";
+import { MARKETING_HOME_DEFAULT_FAQS } from "@/lib/marketing/marketingHomeFaqs";
 import { buildMarketingHomeServiceCards } from "@/lib/marketing/marketingHomeServicePresentation";
 
 /** CMS-backed services, FAQ, areas, and JSON-LD — streamed after the hero. */
 export async function MarketingHomeDbSections() {
   const { services, locations, faqs } = await getMarketingHomeSeoData();
   const serviceCards = buildMarketingHomeServiceCards(services);
+  const resolvedFaqs = faqs.length > 0 ? faqs : MARKETING_HOME_DEFAULT_FAQS;
 
   return (
     <>
-      <StructuredData services={services} locations={locations} faqs={faqs} />
+      <StructuredData services={services} locations={locations} faqs={resolvedFaqs} />
       <MarketingHomeCoreServicesSection cards={serviceCards} />
       <PromotionFeaturedCard />
       <MarketingHomeHowItWorksSection />
       <MarketingHomeTrustSection />
       <MarketingHomeServicesSection />
       <MarketingAreasSection />
-      <MarketingHomeFaqSection faqs={faqs} />
+      <MarketingHomeFaqSection faqs={resolvedFaqs} />
     </>
   );
 }
