@@ -2,9 +2,10 @@ import Link from "next/link";
 import { ArrowRight, MessageSquareText, ReceiptText, ShieldCheck, Star } from "lucide-react";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
 import { MarketingSectionHeader } from "@/components/marketing-home/primitives/MarketingSectionHeader";
-import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
+import { assertGoogleBusinessReviewsFresh, GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 
 export function MarketingHomeTrustSection() {
+  if (process.env.CI === "true") assertGoogleBusinessReviewsFresh();
   const { rating, count } = GOOGLE_BUSINESS_REVIEWS;
 
   return (
