@@ -58,7 +58,7 @@ const HUB_SERVICE_SLUGS: CapeTownSeoServiceSlug[] = [
 ];
 
 const title = generateCtrTitle({
-  base: "Home Cleaning Services",
+  base: "Cleaning Services",
   place: "Cape Town",
   fromPrice: leadPriceForServiceSlug("standard-cleaning-cape-town"),
   templateKey: "services-hub",
