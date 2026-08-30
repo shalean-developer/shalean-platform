@@ -51,7 +51,7 @@ export function MarketingAreasSection() {
             description="Explore the main Cape Town regions we serve, then open the full suburb directory to check local coverage."
           />
           <SafeInternalLink
-            href="/areas-we-serve"
+            href="/locations"
             className="mt-[var(--ui-space-8)] inline-flex min-h-12 items-center justify-center gap-[var(--ui-space-2)] rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-semibold text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             View all suburbs
@@ -61,7 +61,7 @@ export function MarketingAreasSection() {
 
         <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card shadow-[var(--ui-shadow-md)]">
           {regionGroups.map(({ region, previewLocations }, index) => {
-            const regionHref = `/areas-we-serve#region-${regionAnchor(region)}`;
+            const regionHref = `/locations#region-${regionAnchor(region)}`;
             return (
               <div
                 key={region}
