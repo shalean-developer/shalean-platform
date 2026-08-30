@@ -9,6 +9,9 @@ export function MarketingHomeHeaderBar({ bookingHref }: Props) {
     <SiteHeader
       bookingHref={bookingHref}
       mobileNavId="marketing-home-mobile-nav"
+      actionMode="auth"
+      alignNavLeft
+      visualMode="dribbble"
       tracking={{
         desktopQuote: "marketing_header",
         desktopBook: "marketing_header_book",

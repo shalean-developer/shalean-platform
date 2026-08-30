@@ -7,7 +7,13 @@ import { PublicPageContainer } from "@/components/nav/PublicPageContainer";
 import { trackGa4PhoneClick, trackGa4WhatsAppClick } from "@/lib/analytics/ga4Events";
 import { SHALEAN_SOCIAL_LINKS } from "@/lib/brand/shaleanSocialLinks";
 import { MARKETING_FOOTER_SERVICE_LINKS } from "@/lib/marketing/marketingServiceNavLinks";
-import { customerSupportWhatsAppHref } from "@/lib/site/customerSupport";
+import {
+  CUSTOMER_SUPPORT_EMAIL,
+  CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
+  CUSTOMER_SUPPORT_TELEPHONE_TEL,
+  CUSTOMER_SUPPORT_WHATSAPP_DISPLAY,
+  customerSupportWhatsAppHref,
+} from "@/lib/site/customerSupport";
 
 const waHref = customerSupportWhatsAppHref();
 
@@ -19,7 +25,7 @@ const trackEvent = (eventName: "whatsapp_click" | "phone_click") => {
 const FOOTER_SERVICES = [...MARKETING_FOOTER_SERVICE_LINKS];
 const FOOTER_COMPANY = [
   { label: "About Us", href: "/about" },
-  { label: "Areas We Serve", href: "/areas-we-serve" },
+  { label: "Areas We Serve", href: "/locations" },
   { label: "Reviews", href: "/reviews" },
   { label: "Blog", href: "/blog" },
   { label: "Careers", href: "/cleaner/apply" },
@@ -65,9 +71,9 @@ export function SiteFooter({ stackFloats = false, showFloatingWhatsApp = true }:
             <div>
               <p className="text-xs font-semibold uppercase tracking-widest text-blue-300">Contact Us</p>
               <ul className="mt-4 space-y-2 text-sm sm:space-y-3">
-                <li><a href="tel:0871535250" onClick={() => trackEvent("phone_click")} className="flex min-h-11 items-center gap-2 py-1 transition hover:text-white sm:min-h-0 sm:py-0"><Phone className="h-4 w-4 shrink-0 text-blue-400" aria-hidden />087 153 5250</a></li>
-                <li><a href="tel:0825915525" className="flex min-h-11 items-center gap-2 py-1 transition hover:text-white sm:min-h-0 sm:py-0"><Phone className="h-4 w-4 shrink-0 text-blue-400" aria-hidden />082 591 5525</a></li>
-                <li><a href="mailto:hello@shalean.co.za" className="flex min-h-11 items-center gap-2 py-1 transition hover:text-white sm:min-h-0 sm:py-0"><Mail className="h-4 w-4 shrink-0 text-blue-400" aria-hidden />hello@shalean.co.za</a></li>
+                <li><a href={CUSTOMER_SUPPORT_TELEPHONE_TEL} onClick={() => trackEvent("phone_click")} className="flex min-h-11 items-center gap-2 py-1 transition hover:text-white sm:min-h-0 sm:py-0"><Phone className="h-4 w-4 shrink-0 text-blue-400" aria-hidden />{CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}</a></li>
+                <li><a href="tel:0825915525" className="flex min-h-11 items-center gap-2 py-1 transition hover:text-white sm:min-h-0 sm:py-0"><Phone className="h-4 w-4 shrink-0 text-blue-400" aria-hidden />{CUSTOMER_SUPPORT_WHATSAPP_DISPLAY}</a></li>
+                <li><a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="flex min-h-11 items-center gap-2 py-1 transition hover:text-white sm:min-h-0 sm:py-0"><Mail className="h-4 w-4 shrink-0 text-blue-400" aria-hidden />{CUSTOMER_SUPPORT_EMAIL}</a></li>
                 <li className="flex items-start gap-2"><MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-400" aria-hidden /><span>Cape Town, South Africa</span></li>
               </ul>
             </div>

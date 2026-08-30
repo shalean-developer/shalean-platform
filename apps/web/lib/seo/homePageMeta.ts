@@ -10,14 +10,17 @@ export const HOME_OG_IMAGE_HEIGHT = 630;
 
 export const HOME_OG_IMAGE_ALT = "Professional cleaning services in Cape Town";
 
+/** Canonical marketing entry-price contract, aligned to the active homepage pricing catalog (R350). */
+export const HOME_STARTING_PRICE_ZAR = 350;
+
 /** Primary keyword phrase — shared by `<title>`, `<h1>`, and JSON-LD WebPage name. */
-export const HOME_PAGE_HEADLINE = "Cleaning Services Cape Town from R250";
+export const HOME_PAGE_HEADLINE = `Cleaning Services Cape Town from R${HOME_STARTING_PRICE_ZAR}`;
 
 /** SERP `<title>` — shorter than legacy; H1 + JSON-LD keep `HOME_PAGE_HEADLINE`. */
 export const HOME_PAGE_TITLE = clipSerpTitle(`${HOME_PAGE_HEADLINE} | Shalean`);
 
 export const HOME_PAGE_META_DESCRIPTION = clampMetaDescription(
-  "Book trusted cleaning services in Cape Town. Affordable prices, same-day availability when routing allows, and vetted cleaners. Get a quote in under a minute.",
+  `Book vetted cleaning services in Cape Town from R${HOME_STARTING_PRICE_ZAR}. Compare home, deep, move, Airbnb, office and carpet cleaning and see your price before checkout.`,
 );
 
 export const HOME_CANONICAL = absoluteCanonicalUrl("/");

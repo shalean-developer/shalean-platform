@@ -1,55 +1,86 @@
-import { Fragment } from "react";
-import { MousePointerClick, Sparkles, Home, ArrowRight } from "lucide-react";
-import { HomeFeatureCard } from "@/components/marketing-home/primitives/HomeFeatureCard";
+import { CalendarCheck, House, Sparkles, type LucideIcon } from "lucide-react";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
-import { HomeSectionHeader } from "@/components/marketing-home/primitives/HomeSectionHeader";
+import { MarketingSectionHeader } from "@/components/marketing-home/primitives/MarketingSectionHeader";
 
-const STEPS = [
+type HowItWorksStep = {
+  step: string;
+  Icon: LucideIcon;
+  title: string;
+  description: string;
+  surface: string;
+  iconTone: string;
+};
+
+const STEPS: readonly HowItWorksStep[] = [
   {
-    step: "1",
-    Icon: MousePointerClick,
+    step: "01",
+    Icon: CalendarCheck,
     title: "Book online",
-    desc: "Choose your service, tell us about your space, and pick a time that suits you.",
+    description: "Choose your service, share the details and pick a time that suits you.",
+    surface: "#C9D8FF",
+    iconTone: "var(--navy-from)",
   },
   {
-    step: "2",
+    step: "02",
     Icon: Sparkles,
     title: "We clean",
-    desc: "Our professional team arrives on time and gets to work.",
+    description: "A vetted Shalean cleaner or team arrives for the service you selected.",
+    surface: "#B8C5FF",
+    iconTone: "var(--navy-to)",
   },
   {
-    step: "3",
-    Icon: Home,
+    step: "03",
+    Icon: House,
     title: "You relax",
-    desc: "Come home to a spotless space. Clean and hassle-free, every time.",
+    description: "Enjoy a professionally cleaned space while we take care of the work.",
+    surface: "#EFF6FF",
+    iconTone: "var(--primary)",
   },
 ] as const;
 
 export function MarketingHomeHowItWorksSection() {
   return (
-    <HomeSection id="how-it-works" className="scroll-mt-24 border-t border-border">
-      <HomeSectionHeader
-        align="center"
+    <HomeSection
+      id="how-it-works"
+      containerSize="marketing"
+      className="scroll-mt-24 bg-background md:py-[var(--ui-space-20)]"
+      aria-label="How Shalean cleaning works"
+    >
+      <MarketingSectionHeader
         eyebrow="How it works"
-        title="From booking to a fresh home"
-        description="Simple, fast and hassle-free."
+        title="Simple from booking to clean"
+        description="Three clear steps from choosing a service to enjoying a cleaner space."
       />
 
-      <div className="mt-[var(--ui-space-12)] flex flex-col items-stretch gap-[var(--ui-space-4)] sm:flex-row sm:items-start">
-        {STEPS.map(({ step, Icon, title, desc }, index) => (
-          <Fragment key={step}>
-            <HomeFeatureCard icon={Icon} title={title} className="relative flex flex-1 flex-col">
-              <span className="absolute right-[var(--ui-space-5)] top-[var(--ui-space-5)] flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[length:var(--ui-text-small)] font-bold text-primary-foreground">
+      <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
+        {STEPS.map(({ step, Icon, title, description, surface, iconTone }) => (
+          <article
+            key={step}
+            className="relative flex min-h-[320px] flex-col rounded-[var(--ui-radius-marketing)] border border-black/5 p-[var(--ui-space-8)] text-foreground shadow-[var(--ui-shadow-sm)]"
+            style={{ backgroundColor: surface }}
+          >
+            <div className="flex items-start justify-between gap-[var(--ui-space-4)]">
+              <span className="text-[length:var(--ui-text-small)] font-semibold tracking-[0.12em] text-foreground/60">
                 {step}
               </span>
-              {desc}
-            </HomeFeatureCard>
-            {index < STEPS.length - 1 ? (
-              <div className="hidden items-center justify-center self-center sm:flex" aria-hidden>
-                <ArrowRight className="h-5 w-5 text-muted-foreground/50" />
+              <div
+                className="flex h-14 w-14 items-center justify-center rounded-full bg-background/85 shadow-[var(--ui-shadow-sm)]"
+                style={{ color: iconTone }}
+                aria-hidden
+              >
+                <Icon className="h-7 w-7" strokeWidth={1.65} />
               </div>
-            ) : null}
-          </Fragment>
+            </div>
+
+            <div className="mt-auto pt-[var(--ui-space-12)]">
+              <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight">
+                {title}
+              </h3>
+              <p className="mt-[var(--ui-space-3)] max-w-sm text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-foreground/75">
+                {description}
+              </p>
+            </div>
+          </article>
         ))}
       </div>
     </HomeSection>

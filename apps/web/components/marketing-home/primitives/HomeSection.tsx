@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 type HomeSectionProps = HTMLAttributes<HTMLElement> & {
   children: ReactNode;
-  containerSize?: "content" | "wide";
+  containerSize?: "content" | "wide" | "marketing";
   tone?: "default" | "muted" | "brand";
 };
 

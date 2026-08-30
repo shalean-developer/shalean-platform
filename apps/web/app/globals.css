@@ -4,8 +4,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --primary: #2563eb;
-  --primary-foreground: #ffffff;
+  --primary: #6382f7;
+  --primary-foreground: #171717;
 
   /* Canonical semantic UI tokens */
   --secondary: #18181b;
@@ -18,7 +18,7 @@
   --popover-foreground: #09090b;
   --border: #e4e4e7;
   --input: #e4e4e7;
-  --ring: #2563eb;
+  --ring: #6382f7;
   --accent: #f4f4f5;
   --accent-foreground: #18181b;
   --destructive: #dc2626;
@@ -37,6 +37,9 @@
   --ui-text-card-title: 1.125rem;
   --ui-text-section-title: 1.5rem;
   --ui-text-page-title: clamp(2rem, 3vw, 2.5rem);
+  --ui-text-hero-title: clamp(2.5rem, 3.8vw, 3.5rem);
+  --ui-leading-hero: 1.03;
+  --ui-tracking-hero-title: -0.035em;
   --ui-leading-tight: 1.2;
   --ui-leading-body: 1.6;
   --ui-leading-relaxed: 1.75;
@@ -61,6 +64,7 @@
   --ui-radius-lg: 0.75rem;
   --ui-radius-xl: 1rem;
   --ui-radius-2xl: 1.5rem;
+  --ui-radius-marketing: 2rem;
   --ui-radius-pill: 9999px;
 
   /* RD-P01B canonical elevation scale */
@@ -75,7 +79,21 @@
   --ui-container-lg: 64rem;
   --ui-container-content: 68.75rem;
   --ui-container-wide: 80rem;
+  --ui-container-marketing: 112rem;
   --ui-page-gutter: clamp(1rem, 3vw, 2rem);
+
+  /* Homepage marketing presentation surfaces. These are decorative, not status colours. */
+  --marketing-surface-warm: #f7f0e4;
+  --marketing-surface-soft-yellow: #fffaf0;
+  --marketing-surface-soft-blush: #fff4f6;
+  --marketing-surface-soft-aqua: #eefaf8;
+  --marketing-surface-soft-lavender: #f7f3ff;
+  --marketing-surface-step-yellow: #f8dfa0;
+  --marketing-surface-step-pink: #f3addf;
+  --marketing-surface-step-aqua: #afe0df;
+  --marketing-accent-rose: #ec6f86;
+  --marketing-accent-teal: #38a991;
+  --marketing-accent-violet: #8060e8;
 
   /* RD-P01B canonical layer scale */
   --ui-z-base: 0;
@@ -95,7 +113,7 @@
   --sidebar-hover: #eef1f6;
   --sidebar-flyout-bg: #ffffff;
 
-  /* Brand navy (SiteTopBar) */
+  /* Supporting brand blues */
   --navy-from: #0d1b69;
   --navy-to: #1a3dbd;
 }
@@ -133,8 +151,8 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
-    --primary: #2563eb;
-    --primary-foreground: #ffffff;
+    --primary: #6382f7;
+    --primary-foreground: #171717;
     --secondary: #f4f4f5;
     --secondary-foreground: #18181b;
     --muted: #27272a;
@@ -145,7 +163,7 @@
     --popover-foreground: #fafafa;
     --border: #27272a;
     --input: #3f3f46;
-    --ring: #60a5fa;
+    --ring: #6382f7;
     --accent: #27272a;
     --accent-foreground: #fafafa;
     --destructive: #ef4444;
@@ -155,6 +173,14 @@
     --warning: #fbbf24;
     --warning-foreground: #451a03;
     --overlay: rgb(0 0 0 / 0.68);
+    --marketing-surface-warm: #171512;
+    --marketing-surface-soft-yellow: #2f291b;
+    --marketing-surface-soft-blush: #302227;
+    --marketing-surface-soft-aqua: #1f302d;
+    --marketing-surface-soft-lavender: #282334;
+    --marketing-surface-step-yellow: #5b4a23;
+    --marketing-surface-step-pink: #59324e;
+    --marketing-surface-step-aqua: #274c4b;
   }
 }
 
