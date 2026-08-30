@@ -8,7 +8,6 @@ import { MarketingStickyTrustBadge } from "@/components/marketing-home/Marketing
 import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
 import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
-import { PromotionFeaturedCard } from "@/components/promotions/PromotionFeaturedCard";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { marketingHomeMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import {
@@ -40,7 +39,6 @@ export default function MarketingHomePage() {
       <MarketingHomeHeader bookingHref={bookingHref} />
       <main className={marketingHomeMainPadding}>
         <MarketingHomeHeroSection />
-        <PromotionFeaturedCard />
         <Suspense fallback={<MarketingHomeDbSectionsFallback />}>
           <MarketingHomeDbSections />
         </Suspense>
