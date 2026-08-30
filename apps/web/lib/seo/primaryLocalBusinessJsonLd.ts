@@ -1,4 +1,5 @@
 import { googleBusinessAggregateRatingSchema } from "@/lib/seo/googleReviews";
+import { HOME_STARTING_PRICE_ZAR } from "@/lib/seo/homePageMeta";
 import { SITE_ORIGIN } from "@/lib/site/canonical";
 import { CUSTOMER_SUPPORT_EMAIL, CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
 import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
@@ -35,8 +36,8 @@ export function buildPrimaryLocalBusinessBase(): Record<string, unknown> {
     url: SITE_ORIGIN,
     telephone: CUSTOMER_SUPPORT_TELEPHONE_E164,
     email: CUSTOMER_SUPPORT_EMAIL,
-    /** ZAR entry bands + moderate tier hint for rich results. */
-    priceRange: "$$ - From R280",
+    /** ZAR entry band aligned with the canonical homepage marketing starting price. */
+    priceRange: `$$ - From R${HOME_STARTING_PRICE_ZAR}`,
     openingHours: "Mo-Su 08:00-18:00",
     address: {
       "@type": "PostalAddress",
