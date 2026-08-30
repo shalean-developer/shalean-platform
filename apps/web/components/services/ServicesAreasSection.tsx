@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Search } from "lucide-react";
+import { ArrowRight, Search } from "lucide-react";
 import { useMemo, useState } from "react";
 import type { ServicesHubAreaLink } from "@/lib/services/servicesHubAreas";
 
@@ -27,41 +27,49 @@ export function ServicesAreasSection({ groups }: Props) {
 
   return (
     <div>
-      <div className="relative mt-6 max-w-md">
-        <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-zinc-400" aria-hidden />
+      <div className="relative mt-[var(--ui-space-8)] max-w-lg">
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <input
           type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search suburbs…"
-          className="w-full rounded-xl border border-zinc-200 bg-white py-3 pl-10 pr-3 text-sm text-blue-950 shadow-sm outline-none ring-blue-600/15 placeholder:text-zinc-400 focus:border-blue-400 focus:ring-2 focus:ring-blue-500/30"
+          placeholder="Search Cape Town suburbs…"
+          className="w-full rounded-[var(--ui-radius-pill)] border border-[#DBEAFE] bg-background py-[var(--ui-space-3)] pl-12 pr-[var(--ui-space-4)] text-[length:var(--ui-text-small)] text-foreground shadow-[var(--ui-shadow-sm)] outline-none placeholder:text-muted-foreground focus:border-primary/50 focus:ring-2 focus:ring-ring"
           aria-label="Search suburbs"
           autoComplete="off"
         />
       </div>
 
-      <div className="mt-10 grid gap-10 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="mt-[var(--ui-space-10)] grid gap-[var(--ui-space-5)] md:grid-cols-2 xl:grid-cols-3">
         {filtered.map((g) => (
-          <div key={g.region}>
-            <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-500">{g.region}</h3>
-            <ul className="mt-3 space-y-2">
+          <section
+            key={g.region}
+            className="rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-background p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]"
+          >
+            <h3 className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-primary">
+              {g.region}
+            </h3>
+            <ul className="mt-[var(--ui-space-4)] space-y-[var(--ui-space-1)]">
               {g.items.map((item) => (
                 <li key={item.href}>
                   <Link
                     href={item.href}
-                    className="text-sm font-medium text-blue-900 underline decoration-blue-200 underline-offset-4 transition hover:decoration-blue-600"
+                    className="group flex min-h-11 items-center justify-between gap-[var(--ui-space-3)] rounded-[var(--ui-radius-xl)] px-[var(--ui-space-3)] text-[length:var(--ui-text-small)] font-medium text-foreground transition hover:bg-[#EFF6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    {item.label}
+                    <span>{item.label}</span>
+                    <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground transition group-hover:translate-x-0.5 group-hover:text-primary" aria-hidden />
                   </Link>
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         ))}
       </div>
 
       {filtered.length === 0 ? (
-        <p className="mt-8 text-sm text-zinc-600">No suburbs match &ldquo;{query}&rdquo;. Try another spelling.</p>
+        <p className="mt-[var(--ui-space-8)] text-[length:var(--ui-text-small)] text-muted-foreground">
+          No suburbs match &ldquo;{query}&rdquo;. Try another spelling.
+        </p>
       ) : null}
     </div>
   );
