@@ -41,6 +41,7 @@ type Props = {
   items?: readonly SeoInternalLinksBlockItem[];
   className?: string;
   listClassName?: string;
+  showTitle?: boolean;
 };
 
 /** Reusable crawl + UX block for pricing, services, locations and support paths. */
@@ -49,11 +50,18 @@ export function SeoInternalLinksBlock({
   items = DEFAULT_ITEMS,
   className,
   listClassName,
+  showTitle = true,
 }: Props) {
   return (
     <nav aria-label={title} className={cn("text-[length:var(--ui-text-small)] text-muted-foreground", className)}>
-      <p className="text-[length:var(--ui-text-card-title)] font-semibold text-foreground">{title}</p>
-      <ul className={cn("mt-[var(--ui-space-4)] flex flex-wrap gap-x-[var(--ui-space-4)] gap-y-[var(--ui-space-3)]", listClassName)}>
+      {showTitle ? <p className="text-[length:var(--ui-text-card-title)] font-semibold text-foreground">{title}</p> : null}
+      <ul
+        className={cn(
+          "flex flex-wrap gap-x-[var(--ui-space-4)] gap-y-[var(--ui-space-3)]",
+          showTitle && "mt-[var(--ui-space-4)]",
+          listClassName,
+        )}
+      >
         {items.map((item) => (
           <li key={item.href}>
             <Link
