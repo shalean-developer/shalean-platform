@@ -217,7 +217,7 @@ export default function ServicesHubPage() {
           className="overflow-hidden bg-background pt-[var(--ui-space-6)] pb-[var(--ui-space-10)] md:pt-[var(--ui-space-8)] md:pb-[var(--ui-space-12)] lg:pt-[var(--ui-space-10)] lg:pb-[var(--ui-space-16)]"
         >
           <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-[#F7FAFF] shadow-[var(--ui-shadow-lg)]">
-            <div className="grid lg:min-h-[480px] lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
+            <div className="grid lg:min-h-[460px] lg:grid-cols-[minmax(0,1.02fr)_minmax(0,0.98fr)]">
               <div className="flex flex-col justify-center p-[var(--ui-space-6)] sm:p-[var(--ui-space-8)] lg:p-[var(--ui-space-10)] xl:p-[var(--ui-space-12)]">
                 <div className="max-w-2xl">
                   <p className="inline-flex items-center rounded-[var(--ui-radius-pill)] border border-[#DBEAFE] bg-white px-[var(--ui-space-4)] py-[var(--ui-space-2)] text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-primary shadow-[var(--ui-shadow-sm)]">
@@ -262,7 +262,7 @@ export default function ServicesHubPage() {
                 </div>
               </div>
 
-              <div className="relative min-h-[280px] bg-muted sm:min-h-[360px] lg:min-h-full">
+              <div className="relative min-h-[260px] bg-muted sm:min-h-[340px] lg:min-h-full">
                 <Image
                   src="/images/marketing/standard-cleaning-cape-town-kitchen.webp"
                   alt="Professional home cleaning in a bright Cape Town kitchen and living space"
