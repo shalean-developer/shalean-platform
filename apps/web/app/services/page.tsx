@@ -333,13 +333,13 @@ export default function ServicesHubPage() {
           aria-labelledby="services-types-heading"
         >
           <MarketingSectionHeader
+            headingId="services-types-heading"
             eyebrow="Choose your clean"
             title="Cleaning for homes, stays and workplaces"
             description="Six primary cleaning services share one clear booking path. Window Cleaning remains a specialist guide when your scope needs it."
           />
-          <h2 id="services-types-heading" className="sr-only">Our cleaning services</h2>
 
-          <div className="mt-[var(--ui-space-14)] grid gap-[var(--ui-space-6)] sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] sm:grid-cols-2 lg:grid-cols-3">
             <ServiceCard
               icon={<Sparkles className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
               title="Standard Cleaning"
@@ -402,13 +402,13 @@ export default function ServicesHubPage() {
 
         <HomeSection containerSize="marketing" className="bg-background md:py-[var(--ui-space-20)]" aria-labelledby="how-heading">
           <MarketingSectionHeader
+            headingId="how-heading"
             eyebrow="How it works"
             title="From the right service to a confirmed clean"
             description="The same simple booking path supports every primary service."
           />
-          <h2 id="how-heading" className="sr-only">How cleaning booking works</h2>
 
-          <ol className="mt-[var(--ui-space-14)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
+          <ol className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
             {HOW_STEPS.map(({ step, title: stepTitle, body, Icon, surface }) => (
               <li
                 key={step}
@@ -449,7 +449,7 @@ export default function ServicesHubPage() {
                   trackSource="services_hub_pricing_cta"
                   seoHubCta={{ cta_location: "pricing", cta_label: "Get exact price", cta_kind: "get_price" }}
                   seoPricingInteraction={{ interaction: "get_exact_price_click", label: "Get exact price" }}
-                  className="px-[var(--ui-space-7)]"
+                  className="px-[var(--ui-space-8)]"
                 >
                   Get exact price
                 </CTAButton>
@@ -531,11 +531,11 @@ export default function ServicesHubPage() {
 
         <HomeSection containerSize="marketing" className="!bg-[#EFF6FF] md:py-[var(--ui-space-20)]" aria-labelledby="areas-heading">
           <MarketingSectionHeader
+            headingId="areas-heading"
             eyebrow="Cape Town coverage"
             title="Find cleaning in your suburb"
             description="Browse local hubs for suburb context, then continue into the same Cape Town-wide booking flow."
           />
-          <h2 id="areas-heading" className="sr-only">Areas we serve</h2>
           <ServicesAreasSection groups={areaGroups} />
         </HomeSection>
 
