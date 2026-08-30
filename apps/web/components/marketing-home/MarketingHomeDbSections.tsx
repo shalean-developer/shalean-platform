@@ -22,7 +22,7 @@ export async function MarketingHomeDbSections() {
       <MarketingHomeHowItWorksSection />
       <MarketingHomeTrustSection />
       <MarketingHomeServicesSection />
-      <MarketingAreasSection locations={locations} />
+      <MarketingAreasSection />
       <MarketingHomeFaqSection faqs={faqs} />
     </>
   );
