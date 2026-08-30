@@ -279,6 +279,7 @@ export default function ServicesHubPage() {
 
         <MarketingHomeCoreServicesSection
           cards={primaryServiceCards}
+          layout="individual"
           afterCards={
             <aside className="flex flex-col gap-[var(--ui-space-5)] rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-[#EFF6FF] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] sm:flex-row sm:items-center sm:justify-between md:p-[var(--ui-space-8)]">
               <div className="flex items-start gap-[var(--ui-space-4)]">
