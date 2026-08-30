@@ -12,7 +12,8 @@ import {
 } from "@/lib/seo/homePageMeta";
 import { normalizeSchemaDescription } from "@/lib/seo/metaDescription";
 import { buildWebPageJsonLdNode, buildWebSiteJsonLdNode, pageEntityId } from "@/lib/seo/schemaGraph";
-import { SITE_ORIGIN } from "@/lib/site/canonical";
+import { buildMarketingHomeServiceCards } from "@/lib/marketing/marketingHomeServicePresentation";
+import { absoluteCanonicalUrl, SITE_ORIGIN } from "@/lib/site/canonical";
 
 type StructuredDataProps = {
   services: MarketingHomeService[];
@@ -32,28 +33,38 @@ const CAPE_TOWN_HOME_CITY = {
 } as const;
 
 function buildHomeOfferCatalog(services: MarketingHomeService[]): Record<string, unknown> {
+  const priceById = new Map(services.map((service) => [service.id, service.price]));
+  const canonicalServices = buildMarketingHomeServiceCards(services);
+
   return {
     "@type": "OfferCatalog",
     "@id": HOME_PAGE_OFFER_CATALOG_ID,
     name: "Cleaning services",
     url: SITE_ORIGIN,
-    itemListElement: services.map((service, i) => ({
-      "@type": "ListItem",
-      position: i + 1,
-      item: {
-        "@type": "Offer",
-        itemOffered: {
-          "@type": "Service",
-          "@id": homeBookableServiceJsonLdId(service.id),
+    itemListElement: canonicalServices.map((service, i) => {
+      const price = priceById.get(service.id) ?? null;
+      return {
+        "@type": "ListItem",
+        position: i + 1,
+        item: {
+          "@type": "Offer",
+          itemOffered: {
+            "@type": "Service",
+            "@id": homeBookableServiceJsonLdId(service.id),
+            name: service.title,
+            url: absoluteCanonicalUrl(service.href),
+          },
+          priceCurrency: "ZAR",
+          ...(price != null ? { price } : {}),
         },
-        priceCurrency: "ZAR",
-        ...(service.price != null ? { price: service.price } : {}),
-      },
-    })),
+      };
+    }),
   };
 }
 
 export function StructuredData({ services, locations, faqs }: StructuredDataProps) {
+  const canonicalServices = buildMarketingHomeServiceCards(services);
+
   const locationPlaceRows = locations.map((location) => ({
     "@type": "Place" as const,
     name: location.city ? `${location.name}, ${location.city}` : location.name,
@@ -91,12 +102,12 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
     provider: { "@id": PRIMARY_LOCAL_BUSINESS_ID },
   };
 
-  const serviceNodes = services.map((service) => ({
+  const serviceNodes = canonicalServices.map((service) => ({
     "@type": "Service",
     "@id": homeBookableServiceJsonLdId(service.id),
     name: service.title,
     description: normalizeSchemaDescription(service.description),
-    url: SITE_ORIGIN,
+    url: absoluteCanonicalUrl(service.href),
     areaServed: locationPlaces,
     serviceArea: capeTownAdministrativeServiceArea(),
     provider: { "@id": PRIMARY_LOCAL_BUSINESS_ID },
@@ -109,7 +120,7 @@ export function StructuredData({ services, locations, faqs }: StructuredDataProp
       name: HOME_PAGE_HEADLINE,
       description: HOME_PAGE_META_DESCRIPTION,
       primaryEntityId: CLEANING_SERVICE_ID,
-      speakableCssSelectors: ["main h1", ".marketing-hero-lead"],
+      speakableCssSelectors: ["main h1"],
     }),
     localBusiness,
     offerCatalogNode,
