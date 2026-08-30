@@ -3,6 +3,9 @@ import Image from "next/image";
 import Link from "next/link";
 import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
+import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
+import { MarketingSectionHeader } from "@/components/marketing-home/primitives/MarketingSectionHeader";
+import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
@@ -11,7 +14,6 @@ import { ServiceCard } from "@/components/services/ServiceCard";
 import { ServicesAreasSection } from "@/components/services/ServicesAreasSection";
 import { ServicesHubAccordions } from "@/components/services/ServicesHubAccordions";
 import { CTAButton } from "@/components/ui/CTAButton";
-import { Section } from "@/components/ui/Section";
 import { ServicesStickyMobileCta } from "@/components/services/ServicesStickyMobileCta";
 import { SERVICES_HUB_FAQS } from "@/lib/services/servicesHubFaqs";
 import { getServicesHubAreasByRegion } from "@/lib/services/servicesHubAreas";
@@ -19,7 +21,10 @@ import {
   CAPE_TOWN_SERVICE_SEO,
   type CapeTownSeoServiceSlug,
 } from "@/lib/seo/capeTownSeoPages";
-import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
+import {
+  CAPE_TOWN_PRICING_AUTHORITY_HREF,
+  CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF,
+} from "@/lib/seo/internalLinks";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 import { buildPrimaryLocalBusinessMoneyPageNode } from "@/lib/seo/primaryLocalBusinessJsonLd";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
@@ -159,6 +164,48 @@ export const metadata: Metadata = {
   },
 };
 
+const HOW_STEPS = [
+  {
+    step: "01",
+    title: "Tell us about your space",
+    body: "Add your address, rooms, bathrooms and access notes so the service scope starts with the right details.",
+    Icon: ClipboardList,
+    surface: "#C9D8FF",
+  },
+  {
+    step: "02",
+    title: "Choose the right clean",
+    body: "Compare standard, deep, move, Airbnb, office and specialist cleaning before you continue.",
+    Icon: ListChecks,
+    surface: "#B8C5FF",
+  },
+  {
+    step: "03",
+    title: "See your total and book",
+    body: "Review the price, choose an available slot and adjust extras before completing your booking.",
+    Icon: CalendarCheck,
+    surface: "#EFF6FF",
+  },
+] as const;
+
+const PRICING_FACTORS = [
+  {
+    label: "Service",
+    value: "Start with the right scope",
+    hint: "Standard, deep, move, Airbnb, office, carpet or window cleaning.",
+  },
+  {
+    label: "Property",
+    value: "Add accurate details",
+    hint: "Bedrooms, bathrooms and property details help keep the visit and total realistic.",
+  },
+  {
+    label: "Extras",
+    value: "Choose only what you need",
+    hint: "Review selected extras and every line item before you complete checkout.",
+  },
+] as const;
+
 export default function ServicesHubPage() {
   const jsonLdStr = JSON.stringify(hubPageJsonLd).replace(/</g, "\\u003c");
   const areaGroups = getServicesHubAreasByRegion();
@@ -190,7 +237,7 @@ export default function ServicesHubPage() {
     <MarketingLayout>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: jsonLdStr }} />
 
-      <main className={`bg-white text-zinc-900 ${marketingStickyCtaMainPadding}`}>
+      <main className={`bg-background text-foreground ${marketingStickyCtaMainPadding}`}>
         <GrowthTracking
           event={ANALYTICS_EVENTS.PAGE_VIEW}
           payload={{
@@ -201,329 +248,316 @@ export default function ServicesHubPage() {
             content_group: "services_hub",
           }}
         />
-        {/* Hero */}
-        <Section spacing="tight" className="pt-10 md:pt-14">
-          <div className="grid items-center gap-10 md:grid-cols-2 md:gap-12 lg:gap-14">
-            <div>
-              <h1 className="text-[1.75rem] font-bold leading-tight tracking-tight text-blue-950 sm:text-4xl lg:text-[2.75rem] lg:leading-[1.1]">
-                Professional Cleaning Services in Cape Town
+
+        <HomeSection
+          containerSize="marketing"
+          className="overflow-hidden bg-background pt-[var(--ui-space-10)] pb-[var(--ui-space-16)] md:pt-[var(--ui-space-16)] md:pb-[var(--ui-space-20)] lg:py-[var(--ui-space-24)]"
+        >
+          <div className="grid items-center gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-[var(--ui-space-16)] xl:gap-[var(--ui-space-20)]">
+            <div className="max-w-2xl">
+              <p className="text-[length:var(--ui-text-small)] font-semibold uppercase tracking-[0.14em] text-primary">Services</p>
+              <h1 className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
+                <span className="block text-primary">Professional Cleaning Services</span>
+                <span className="mt-[var(--ui-space-2)] block">in Cape Town</span>
               </h1>
-              <p className="mt-4 max-w-xl text-base leading-relaxed text-zinc-600 sm:text-lg">
-                Book trusted cleaners for your home, apartment, or office — transparent pricing, flexible scheduling, and
-                instant booking.
+              <p className="mt-[var(--ui-space-6)] max-w-xl text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                Choose a cleaning service for your home, move, short stay or workplace, then see the scope and price before you book.
               </p>
-              <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-600 sm:text-base">
-                Short-stay hosts: explore{" "}
-                <Link href={p["airbnb-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  Airbnb cleaning Cape Town
-                </Link>{" "}
-                turnovers or jump straight to{" "}
-                <Link href={p["airbnb-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  Airbnb turnover cleaning
-                </Link>{" "}
-                scope before you sync calendars.
-              </p>
-              <p className="mt-4 max-w-xl text-sm leading-relaxed text-zinc-600 sm:text-base">
-                Need recurring home help? Browse{" "}
-                <Link href={p["standard-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                  standard home cleaning in Cape Town
-                </Link>{" "}
-                for weekly, bi-weekly, or daily domestic cleaning—same instant quote flow as below.
-              </p>
-              <ul className="mt-6 space-y-3">
+
+              <div className="mt-[var(--ui-space-8)] space-y-[var(--ui-space-3)]">
                 {[
-                  "Exact total shown before you pay",
-                  "Same-day availability when routing allows",
-                  "Background-checked cleaners",
+                  "Vetted and trained cleaners",
+                  "See your price before checkout",
+                  "Clear service scope before the visit",
                 ].map((line) => (
-                  <li key={line} className="flex items-start gap-3 text-sm font-medium text-blue-950 sm:text-base">
-                    <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-blue-50 text-blue-700">
-                      <Check className="size-3.5" strokeWidth={2.5} aria-hidden />
+                  <div key={line} className="flex items-center gap-[var(--ui-space-3)] text-[length:var(--ui-text-body)] text-foreground">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden />
                     </span>
-                    {line}
-                  </li>
+                    <span>{line}</span>
+                  </div>
                 ))}
-              </ul>
-              <div className="mt-8 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+              </div>
+
+              <div className="mt-[var(--ui-space-8)] flex w-full flex-col gap-[var(--ui-space-3)] sm:w-auto sm:flex-row">
                 <CTAButton
                   href="/book"
                   variant="primary"
-                  trackSource="services_hub_hero_book"
-                  seoHubCta={{ cta_location: "hero", cta_label: "Book a Cleaner", cta_kind: "book_now" }}
-                  className="min-h-12 rounded-xl px-8"
+                  trackSource="services_hub_hero_prices"
+                  seoHubCta={{ cta_location: "hero", cta_label: "See instant price", cta_kind: "get_price" }}
+                  className="min-h-14 px-[var(--ui-space-8)]"
                 >
-                  Book a Cleaner
+                  See instant price
                 </CTAButton>
+                <GetFreeQuoteLink source="services_hub_hero" variant="outline" className="min-h-14 px-[var(--ui-space-8)]">
+                  Request a quote
+                </GetFreeQuoteLink>
+              </div>
+
+              <p className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                Popular starting points:{" "}
+                <Link href={p["standard-cleaning-cape-town"].path} className="font-medium text-foreground underline decoration-primary/30 underline-offset-4 hover:decoration-primary">
+                  standard home cleaning
+                </Link>
+                {" · "}
+                <Link href={p["airbnb-cleaning-cape-town"].path} className="font-medium text-foreground underline decoration-primary/30 underline-offset-4 hover:decoration-primary">
+                  Airbnb turnover cleaning
+                </Link>
+                {" · "}
+                <Link href={CAPE_TOWN_PRICING_AUTHORITY_HREF} className="font-medium text-foreground underline decoration-primary/30 underline-offset-4 hover:decoration-primary">
+                  cleaning prices
+                </Link>
+              </p>
+            </div>
+
+            <div className="relative mx-auto w-full max-w-[520px] lg:mx-0 lg:justify-self-end">
+              <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-xl)] ring-1 ring-border/70">
+                <Image
+                  src="/images/marketing/standard-cleaning-cape-town-kitchen.webp"
+                  alt="Professional home cleaning in a bright Cape Town kitchen and living space"
+                  fill
+                  priority
+                  fetchPriority="high"
+                  sizes="(max-width: 1024px) 100vw, 520px"
+                  className="object-cover"
+                />
+              </div>
+            </div>
+          </div>
+        </HomeSection>
+
+        <HomeSection
+          id="service-options"
+          containerSize="marketing"
+          className="scroll-mt-24 !bg-[#F4F6FA] md:py-[var(--ui-space-20)]"
+          aria-labelledby="services-types-heading"
+        >
+          <MarketingSectionHeader
+            eyebrow="Choose your clean"
+            title="Cleaning for homes, stays and workplaces"
+            description="Six primary cleaning services share one clear booking path. Window Cleaning remains a specialist guide when your scope needs it."
+          />
+          <h2 id="services-types-heading" className="sr-only">Our cleaning services</h2>
+
+          <div className="mt-[var(--ui-space-14)] grid gap-[var(--ui-space-6)] sm:grid-cols-2 lg:grid-cols-3">
+            <ServiceCard
+              icon={<Sparkles className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+              title="Standard Cleaning"
+              description="Weekly or once-off upkeep for kitchens, bathrooms, floors and everyday surfaces on a clear checklist."
+              learnMoreHref={p["standard-cleaning-cape-town"].path}
+              bookSource="services_hub_card_standard"
+              seoHubTrack
+            />
+            <ServiceCard
+              icon={<Droplets className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+              title="Deep Cleaning"
+              description="A more detailed reset for built-up dirt, grease, grout and areas that need extra attention."
+              learnMoreHref={p["deep-cleaning-cape-town"].path}
+              bookSource="services_hub_card_deep"
+              seoHubTrack
+            />
+            <ServiceCard
+              icon={<DoorOpen className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+              title="Move In / Out Cleaning"
+              description="Handover-focused cleaning for empty or nearly empty homes before moving day, inspection or occupation."
+              learnMoreHref={p["move-out-cleaning-cape-town"].path}
+              bookSource="services_hub_card_moveout"
+              seoHubTrack
+            />
+            <ServiceCard
+              icon={<Home className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+              title="Airbnb Cleaning"
+              description="Guest-ready turnover cleaning between stays with presentation, hygiene and repeatable hosting scope in mind."
+              learnMoreHref={p["airbnb-cleaning-cape-town"].path}
+              bookHref="/book"
+              bookSource="services_hub_card_airbnb"
+              seoHubTrack
+            />
+            <ServiceCard
+              icon={<Building2 className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+              title="Office Cleaning"
+              description="Professional cleaning for desks, kitchens, bathrooms, floors and shared workplace areas."
+              learnMoreHref={p["office-cleaning-cape-town"].path}
+              bookSource="services_hub_card_office"
+              seoHubTrack
+            />
+            <ServiceCard
+              icon={<Layers className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+              title="Carpet Cleaning"
+              description="Refresh carpets and high-traffic soft floor areas as a specialist visit or alongside a wider clean."
+              learnMoreHref={p["carpet-cleaning-cape-town"].path}
+              bookSource="services_hub_card_carpet"
+              seoHubTrack
+            />
+            <ServiceCard
+              icon={<AppWindow className="h-6 w-6" strokeWidth={1.75} aria-hidden />}
+              title="Window Cleaning"
+              description="Interior and exterior glass, frames and tracks for homes and smaller workplaces where the scope allows."
+              learnMoreHref={p["window-cleaning-cape-town"].path}
+              bookSource="services_hub_card_window"
+              seoHubTrack
+            />
+          </div>
+        </HomeSection>
+
+        <HomeSection containerSize="marketing" className="bg-background md:py-[var(--ui-space-20)]" aria-labelledby="how-heading">
+          <MarketingSectionHeader
+            eyebrow="How it works"
+            title="From the right service to a confirmed clean"
+            description="The same simple booking path supports every primary service."
+          />
+          <h2 id="how-heading" className="sr-only">How cleaning booking works</h2>
+
+          <ol className="mt-[var(--ui-space-14)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
+            {HOW_STEPS.map(({ step, title: stepTitle, body, Icon, surface }) => (
+              <li
+                key={step}
+                className="min-h-[300px] rounded-[var(--ui-radius-marketing)] p-[var(--ui-space-8)] shadow-[var(--ui-shadow-sm)]"
+                style={{ backgroundColor: surface }}
+              >
+                <div className="flex items-center justify-between gap-[var(--ui-space-4)]">
+                  <span className="text-[length:var(--ui-text-small)] font-semibold tracking-[0.12em] text-foreground/55">{step}</span>
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full bg-white/70 text-foreground">
+                    <Icon className="h-5 w-5" strokeWidth={1.8} aria-hidden />
+                  </span>
+                </div>
+                <h3 className="mt-[var(--ui-space-10)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+                  {stepTitle}
+                </h3>
+                <p className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-foreground/70">
+                  {body}
+                </p>
+              </li>
+            ))}
+          </ol>
+        </HomeSection>
+
+        <HomeSection containerSize="marketing" className="!bg-[#EFF6FF] md:py-[var(--ui-space-20)]" aria-labelledby="pricing-heading">
+          <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)] lg:gap-[var(--ui-space-16)]">
+            <div>
+              <p className="text-[length:var(--ui-text-small)] font-semibold uppercase tracking-[0.14em] text-primary">Pricing</p>
+              <h2 id="pricing-heading" className="mt-[var(--ui-space-3)] max-w-xl text-[length:var(--ui-text-page-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-[-0.03em] text-foreground">
+                Your price follows the scope you choose
+              </h2>
+              <p className="mt-[var(--ui-space-5)] max-w-xl text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                Service type, property details and extras shape the total. Use the booking flow for the current exact amount rather than relying on a static estimate.
+              </p>
+              <div className="mt-[var(--ui-space-8)] flex flex-wrap gap-[var(--ui-space-3)]">
                 <CTAButton
                   href="/book"
-                  variant="secondary"
-                  trackSource="services_hub_hero_prices"
-                  seoHubCta={{ cta_location: "hero", cta_label: "See Prices", cta_kind: "get_price" }}
-                  className="min-h-12 rounded-xl px-8"
+                  variant="primary"
+                  trackSource="services_hub_pricing_cta"
+                  seoHubCta={{ cta_location: "pricing", cta_label: "Get exact price", cta_kind: "get_price" }}
+                  seoPricingInteraction={{ interaction: "get_exact_price_click", label: "Get exact price" }}
+                  className="px-[var(--ui-space-7)]"
                 >
-                  See Prices
+                  Get exact price
                 </CTAButton>
+                <Link
+                  href={CAPE_TOWN_PRICING_AUTHORITY_HREF}
+                  className="inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] border border-border bg-card px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-medium text-foreground shadow-[var(--ui-shadow-sm)] transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  View cleaning prices
+                </Link>
               </div>
             </div>
-            <div className="relative hidden aspect-square overflow-hidden rounded-2xl bg-zinc-100 shadow-lg ring-1 ring-black/5 md:block">
-              <Image
-                src="/images/marketing/standard-cleaning-cape-town-kitchen.webp"
-                alt="Professional home cleaning — bright kitchen and living space in Cape Town"
-                fill
-                priority
-                sizes="(max-width: 768px) 0vw, 480px"
-                className="object-cover"
-              />
-            </div>
-          </div>
-        </Section>
 
-        {/* Services grid */}
-        <section className="border-t border-zinc-100 bg-zinc-50/80" aria-labelledby="services-types-heading">
-          <Section>
-            <h2 id="services-types-heading" className="text-2xl font-bold tracking-tight text-blue-950 md:text-3xl">
-              Our cleaning services
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm text-zinc-600 md:text-base">
-              Seven Cape Town guides — same booking flow, scoped to how your space is used.{" "}
-              <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                See our cleaning prices in Cape Town
-              </Link>{" "}
-              before you book.
-            </p>
-            <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <ServiceCard
-                icon={<Sparkles className="size-5" strokeWidth={1.75} aria-hidden />}
-                title="Standard Cleaning"
-                description="Weekly or once-off upkeep — kitchens, bathrooms, floors, and dusting on a predictable checklist."
-                learnMoreHref={p["standard-cleaning-cape-town"].path}
-                bookSource="services_hub_card_standard"
-                seoHubTrack
-              />
-              <ServiceCard
-                icon={<Droplets className="size-5" strokeWidth={1.75} aria-hidden />}
-                title="Deep Cleaning"
-                description="Detail-heavy reset for grease, grout, and built-up dust — ideal before guests or after busy stretches."
-                learnMoreHref={p["deep-cleaning-cape-town"].path}
-                bookSource="services_hub_card_deep"
-                seoHubTrack
-              />
-              <ServiceCard
-                icon={<DoorOpen className="size-5" strokeWidth={1.75} aria-hidden />}
-                title="Move-out Cleaning"
-                description="Handover-focused scope for ovens, bathrooms, floors, and inspection-heavy zones."
-                learnMoreHref={p["move-out-cleaning-cape-town"].path}
-                bookSource="services_hub_card_moveout"
-                seoHubTrack
-              />
-              <ServiceCard
-                icon={<Home className="size-5" strokeWidth={1.75} aria-hidden />}
-                title="Airbnb Cleaning"
-                description="Turnover-ready resets between guests — presentation, hygiene, and speed when calendars are tight."
-                learnMoreHref={p["airbnb-cleaning-cape-town"].path}
-                bookHref="/book"
-                bookSource="services_hub_card_airbnb"
-                seoHubTrack
-              />
-              <ServiceCard
-                icon={<Building2 className="size-5" strokeWidth={1.75} aria-hidden />}
-                title="Office Cleaning"
-                description="Small workspaces and studios — desks, kitchens, bathrooms, and floors clients actually see."
-                learnMoreHref={p["office-cleaning-cape-town"].path}
-                bookSource="services_hub_card_office"
-                seoHubTrack
-              />
-              <ServiceCard
-                icon={<Layers className="size-5" strokeWidth={1.75} aria-hidden />}
-                title="Carpet Cleaning"
-                description="Refresh high-traffic rugs and carpets — book standalone or alongside a wider home visit."
-                learnMoreHref={p["carpet-cleaning-cape-town"].path}
-                bookSource="services_hub_card_carpet"
-                seoHubTrack
-              />
-              <ServiceCard
-                icon={<AppWindow className="size-5" strokeWidth={1.75} aria-hidden />}
-                title="Window Cleaning"
-                description="Interior and exterior glass, frames, and tracks — streak-free finishes for homes and small offices."
-                learnMoreHref={p["window-cleaning-cape-town"].path}
-                bookSource="services_hub_card_window"
-                seoHubTrack
-              />
-            </div>
-          </Section>
-        </section>
-
-        {/* How it works */}
-        <section className="border-t border-zinc-100 bg-white" aria-labelledby="how-heading">
-          <Section>
-            <h2 id="how-heading" className="text-2xl font-bold tracking-tight text-blue-950 md:text-3xl">
-              How it works
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm text-zinc-600 md:text-base">Three steps — most people finish in under five minutes.</p>
-            <div className="mt-10 grid gap-8 md:grid-cols-3 md:gap-6">
-              {[
-                {
-                  step: "1",
-                  title: "Enter your details",
-                  body: "Address, rooms, bathrooms, and access notes — so routing and time on site stay accurate.",
-                  Icon: ClipboardList,
-                },
-                {
-                  step: "2",
-                  title: "Choose your service",
-                  body: "Standard, deep, move-out, Airbnb, office, carpet, or window cleaning — compare scope on each guide if you need detail.",
-                  Icon: ListChecks,
-                },
-                {
-                  step: "3",
-                  title: "Book instantly",
-                  body: "See your total, pick a slot, and pay securely online — adjust add-ons until it matches your budget.",
-                  Icon: CalendarCheck,
-                },
-              ].map(({ step, title, body, Icon }) => (
-                <div
-                  key={step}
-                  className="relative rounded-2xl border border-zinc-200 bg-zinc-50/50 p-6 shadow-sm"
+            <div className="grid gap-[var(--ui-space-4)]">
+              {PRICING_FACTORS.map((factor, index) => (
+                <article
+                  key={factor.label}
+                  className="grid gap-[var(--ui-space-4)] rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-background p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] sm:grid-cols-[64px_minmax(0,1fr)] sm:items-start"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-600 text-sm font-bold text-white">
-                      {step}
-                    </span>
-                    <Icon className="size-6 text-blue-800" strokeWidth={1.75} aria-hidden />
+                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#DDEBFF] text-[length:var(--ui-text-small)] font-semibold text-foreground">
+                    0{index + 1}
+                  </span>
+                  <div>
+                    <p className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-primary">{factor.label}</p>
+                    <h3 className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-card-title)] font-semibold text-foreground">{factor.value}</h3>
+                    <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">{factor.hint}</p>
                   </div>
-                  <h3 className="mt-4 text-lg font-bold text-blue-950">{title}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-600">{body}</p>
-                </div>
+                </article>
               ))}
             </div>
-          </Section>
-        </section>
-
-        {/* Pricing preview */}
-        <section className="border-t border-zinc-100 bg-zinc-50/80" aria-labelledby="pricing-heading">
-          <Section>
-            <h2 id="pricing-heading" className="text-2xl font-bold tracking-tight text-blue-950 md:text-3xl">
-              How much does cleaning cost?
-            </h2>
-            <p className="mt-4 max-w-3xl text-base leading-relaxed text-zinc-700">
-              Your total is calculated from the service, property details and extras you select. Use the instant-price flow for the current amount rather than relying on a static estimate.
-            </p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              {[
-                { label: "Service", value: "Choose the right scope", hint: "Standard, deep, move-out, Airbnb, office, carpet or windows." },
-                { label: "Property", value: "Add accurate details", hint: "Rooms and bathrooms keep the visit duration and total honest." },
-                { label: "Extras", value: "Select only what you need", hint: "Review every line item before confirming payment." },
-              ].map((tier) => (
-                <div
-                  key={tier.label}
-                  className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm"
-                >
-                  <p className="text-xs font-semibold uppercase tracking-wider text-zinc-500">{tier.label}</p>
-                  <p className="mt-2 text-lg font-bold text-blue-950">{tier.value}</p>
-                  <p className="mt-2 text-xs leading-relaxed text-zinc-600">{tier.hint}</p>
-                </div>
-              ))}
-            </div>
-            <div className="mt-8">
-              <CTAButton
-                href="/book"
-                variant="primary"
-                trackSource="services_hub_pricing_cta"
-                seoHubCta={{ cta_location: "pricing", cta_label: "Get exact price", cta_kind: "get_price" }}
-                seoPricingInteraction={{ interaction: "get_exact_price_click", label: "Get exact price" }}
-                className="rounded-xl px-8"
-              >
-                Get exact price →
-              </CTAButton>
-            </div>
-          </Section>
-        </section>
-
-        {/* Trust strip */}
-        <section className="border-y border-zinc-200 bg-white" aria-label="Trust signals">
-          <Section spacing="tight">
-            <div className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 py-2 text-sm font-medium text-blue-950 md:justify-between md:text-[15px]">
-              <div className="flex items-center gap-2">
-                <Star className="size-5 fill-amber-400 text-amber-400" aria-hidden />
-                <span>{GOOGLE_BUSINESS_REVIEWS.rating} average rating</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <ShieldCheck className="size-5 text-blue-600" aria-hidden />
-                <span>Background-checked cleaners</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Check className="size-5 text-blue-700" aria-hidden />
-                <span>Thousands of Cape Town homes served</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <Lock className="size-5 text-blue-700" aria-hidden />
-                <span>Secure online booking</span>
-              </div>
-            </div>
-          </Section>
-        </section>
-
-        {/* Accordions */}
-        <section
-          id="included"
-          className="scroll-mt-28 border-t border-zinc-100 bg-white"
-          aria-labelledby="included-heading"
-        >
-          <Section>
-            <ServicesHubAccordions
-              serviceDetails={[...serviceDetails]}
-              faqs={SERVICES_HUB_FAQS}
-              faqAnalytics={{ page_slug: "services", suburb: "Cape Town" }}
-            />
-          </Section>
-        </section>
-
-        {/* Areas */}
-        <section className="border-t border-zinc-100 bg-zinc-50/80" aria-labelledby="areas-heading">
-          <Section>
-            <h2 id="areas-heading" className="text-2xl font-bold tracking-tight text-blue-950 md:text-3xl">
-              Areas we serve
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm text-zinc-600 md:text-base">
-              Browse suburb hubs for local context — each links to the same Cape Town-wide booking flow.
-            </p>
-            <ServicesAreasSection groups={areaGroups} />
-          </Section>
-        </section>
-
-        {/* Final CTA */}
-        <section className="border-t border-blue-900 bg-blue-800 text-white" aria-labelledby="final-cta-heading">
-          <Section className="py-16 md:py-20">
-            <h2 id="final-cta-heading" className="text-2xl font-bold tracking-tight md:text-3xl">
-              Ready to book a cleaner?
-            </h2>
-            <p className="mt-3 max-w-xl text-sm leading-relaxed text-zinc-300 md:text-base">
-              Lock scope and pricing online — adjust rooms and extras until your total matches what you need.
-            </p>
-            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <CTAButton
-                href="/book"
-                variant="primary"
-                trackSource="services_hub_footer_book"
-                seoHubCta={{ cta_location: "footer", cta_label: "Book now", cta_kind: "book_now" }}
-                className="rounded-xl bg-white text-blue-900 hover:bg-blue-50"
-              >
-                Book now
-              </CTAButton>
-              <GetFreeQuoteLink source="services_footer" variant="onDark" className="rounded-xl w-full sm:w-auto" />
-            </div>
-          </Section>
-        </section>
-
-        <Section spacing="tight" className="pb-16 pt-10">
-          <div className="mb-10">
-            <SeoInternalLinksBlock
-              title="Hub navigation"
-              className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm"
-            />
           </div>
-          <RelatedLinks placement="services_hub" />
-        </Section>
+          <p className="mt-[var(--ui-space-8)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
+            Want broader market context before choosing? Read our{" "}
+            <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className="font-medium text-foreground underline decoration-primary/30 underline-offset-4 hover:decoration-primary">
+              Cape Town cleaning cost guide
+            </Link>
+            .
+          </p>
+        </HomeSection>
+
+        <HomeSection containerSize="marketing" className="!bg-[#F4F6FA] md:py-[var(--ui-space-16)]" aria-label="Why customers choose Shalean">
+          <div className="grid gap-[var(--ui-space-4)] sm:grid-cols-2 xl:grid-cols-4">
+            <article className="rounded-[var(--ui-radius-marketing)] bg-background p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
+              <Star className="h-6 w-6 fill-amber-400 text-amber-400" aria-hidden />
+              <p className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-card-title)] font-semibold text-foreground">
+                {GOOGLE_BUSINESS_REVIEWS.rating} / 5 on Google
+              </p>
+              <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] text-muted-foreground">Customer proof you can check independently.</p>
+            </article>
+            <article className="rounded-[var(--ui-radius-marketing)] bg-[#DDEBFF] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
+              <ShieldCheck className="h-6 w-6 text-primary" aria-hidden />
+              <p className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-card-title)] font-semibold text-foreground">Vetted cleaners</p>
+              <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] text-foreground/65">Cleaner readiness is checked before customer allocation.</p>
+            </article>
+            <article className="rounded-[var(--ui-radius-marketing)] bg-[#C9D8FF] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
+              <Check className="h-6 w-6 text-foreground" aria-hidden />
+              <p className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-card-title)] font-semibold text-foreground">Clear scope</p>
+              <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] text-foreground/65">Know what service you selected before the visit starts.</p>
+            </article>
+            <article className="rounded-[var(--ui-radius-marketing)] bg-[#EFF6FF] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
+              <Lock className="h-6 w-6 text-primary" aria-hidden />
+              <p className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-card-title)] font-semibold text-foreground">Secure online booking</p>
+              <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] text-muted-foreground">Review your booking details and total before checkout.</p>
+            </article>
+          </div>
+        </HomeSection>
+
+        <HomeSection
+          id="included"
+          containerSize="marketing"
+          className="scroll-mt-24 bg-background md:py-[var(--ui-space-20)]"
+          aria-label="Service inclusions and frequently asked questions"
+        >
+          <ServicesHubAccordions
+            serviceDetails={[...serviceDetails]}
+            faqs={SERVICES_HUB_FAQS}
+            faqAnalytics={{ page_slug: "services", suburb: "Cape Town" }}
+          />
+        </HomeSection>
+
+        <HomeSection containerSize="marketing" className="!bg-[#EFF6FF] md:py-[var(--ui-space-20)]" aria-labelledby="areas-heading">
+          <MarketingSectionHeader
+            eyebrow="Cape Town coverage"
+            title="Find cleaning in your suburb"
+            description="Browse local hubs for suburb context, then continue into the same Cape Town-wide booking flow."
+          />
+          <h2 id="areas-heading" className="sr-only">Areas we serve</h2>
+          <ServicesAreasSection groups={areaGroups} />
+        </HomeSection>
+
+        <HomeSection containerSize="marketing" className="!bg-[#F4F6FA] md:py-[var(--ui-space-16)]" aria-label="Related Shalean pages">
+          <div className="grid gap-[var(--ui-space-8)] lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+            <SeoInternalLinksBlock
+              title="Explore Shalean"
+              className="rounded-[var(--ui-radius-marketing)] border border-border bg-card p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]"
+            />
+            <div className="rounded-[var(--ui-radius-marketing)] border border-border bg-card p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]">
+              <RelatedLinks placement="services_hub" />
+            </div>
+          </div>
+        </HomeSection>
+
+        <MarketingHomeFinalCta
+          eyebrow="Choose your service"
+          title="Ready to see your cleaning price?"
+          description="Start with the service that fits your space, review the scope and see your total before checkout."
+          ctaLabel="See instant price"
+          ctaSource="services_hub_final_cta"
+        />
       </main>
 
       <ServicesStickyMobileCta />
