@@ -219,7 +219,7 @@ export default function ServicesHubPage() {
           <div className="grid items-center gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-[var(--ui-space-16)] xl:gap-[var(--ui-space-20)]">
             <div className="max-w-2xl">
               <h1 className="text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
-                <span className="block text-primary">Cleaning Services</span>
+                <span className="block text-primary">Professional Cleaning Services</span>
                 <span className="mt-[var(--ui-space-2)] block">in Cape Town</span>
               </h1>
 
