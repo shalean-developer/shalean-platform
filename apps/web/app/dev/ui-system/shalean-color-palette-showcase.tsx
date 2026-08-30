@@ -7,17 +7,18 @@ const coreColors = [
 ] as const;
 
 const marketingCompanionColors = [
-  { name: "Warm Cream", hex: "#F7F0E4", css: "#F7F0E4", use: "Primary warm marketing section surface" },
-  { name: "Warm Sand", hex: "#F2D6A2", css: "#F2D6A2", use: "Restrained warm accent paired with Shalean blue" },
-  { name: "Blue Mist", hex: "#DBEAFE", css: "#DBEAFE", use: "Secondary marketing card surface" },
-  { name: "Blue Ice", hex: "#EFF6FF", css: "#EFF6FF", use: "Low-emphasis marketing card surface" },
+  { name: "Periwinkle Blue", hex: "#A9B8FF", css: "#A9B8FF", use: "Strong secondary marketing card surface" },
+  { name: "Powder Blue", hex: "#C9D8FF", css: "#C9D8FF", use: "Mid-strength blue surface for process and trust cards" },
+  { name: "Sky Mist", hex: "#DDEBFF", css: "#DDEBFF", use: "Soft blue surface for supporting proof and content blocks" },
+  { name: "Blue Ice", hex: "#EFF6FF", css: "#EFF6FF", use: "Low-emphasis brand-tinted section and card surface" },
+  { name: "Cool Cloud", hex: "#F4F6FA", css: "#F4F6FA", use: "Neutral cool marketing section surface" },
   { name: "White", hex: "#FFFFFF", css: "#FFFFFF", use: "Primary page and clean card surface" },
 ] as const;
 
 const neutralColors = [
   { name: "Ink", hex: "#171717", css: "var(--foreground)", use: "Primary text and accessible text on Primary" },
   { name: "Slate", hex: "#71717A", css: "var(--muted-foreground)", use: "Secondary text" },
-  { name: "Cloud", hex: "#F4F4F5", css: "var(--muted)", use: "Soft surfaces and hover states" },
+  { name: "Cloud", hex: "#F4F4F5", css: "var(--muted)", use: "Soft product surfaces and hover states" },
   { name: "Border", hex: "#E4E4E7", css: "var(--border)", use: "Dividers and input outlines" },
   { name: "White", hex: "#FFFFFF", css: "var(--background)", use: "Primary page and card surface" },
 ] as const;
@@ -55,7 +56,7 @@ export function ShaleanColorPaletteShowcase() {
           </div>
           <h1 className="mt-4 text-[length:var(--ui-text-page-title)] font-bold leading-[var(--ui-leading-tight)] tracking-tight">Shalean color palette</h1>
           <p className="mt-3 text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
-            Shalean Primary (#6382F7) is the main brand/action colour. Navy and Royal provide depth; marketing surfaces stay restrained through Warm Cream, Warm Sand, Blue Mist, Blue Ice and White.
+            Shalean Primary (#6382F7) is the main brand/action colour. Navy and Royal provide depth; the official homepage marketing palette stays within the Shalean blue family through Periwinkle Blue, Powder Blue, Sky Mist, Blue Ice, Cool Cloud and White.
           </p>
         </div>
 
@@ -71,12 +72,12 @@ export function ShaleanColorPaletteShowcase() {
 
         <div className="mt-8">
           <div className="mb-3">
-            <h2 className="text-[length:var(--ui-text-section-title)] font-semibold">Marketing companions</h2>
+            <h2 className="text-[length:var(--ui-text-section-title)] font-semibold">Official homepage marketing palette</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Preferred decorative surfaces for the public homepage. Pink, lavender and teal are not part of the default Shalean marketing palette.
+              Use these cool blue and neutral surfaces for homepage storytelling. Warm Sand, pink, lavender and teal are not part of the default Shalean homepage palette.
             </p>
           </div>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             {marketingCompanionColors.map((color) => <ColorCard key={`${color.name}-${color.hex}`} {...color} />)}
           </div>
         </div>
