@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
-import { pricingSlugForMarketingKey } from "@/lib/marketing/marketingHomePricingSlugs";
+import { MARKETING_TO_PRICING_SLUG, pricingSlugForMarketingKey } from "@/lib/marketing/marketingHomePricingSlugs";
+import { HOME_STARTING_PRICE_ZAR } from "@/lib/seo/homePageMeta";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 type DbRow = Record<string, unknown>;
@@ -178,6 +179,29 @@ function activePricingBaseBySlug(rows: DbRow[]): Map<string, number> {
   return map;
 }
 
+/**
+ * Prevent the SEO/H1 "from" price from silently diverging from the live active homepage catalog.
+ * CI/development fails when catalog data is available; production logs loudly instead of hiding drift.
+ */
+function guardHomepageStartingPriceContract(pricingRows: DbRow[]): void {
+  const catalog = activePricingBaseBySlug(pricingRows);
+  if (catalog.size === 0) return;
+
+  const homepageSlugs = new Set(Object.values(MARKETING_TO_PRICING_SLUG));
+  const activeHomepagePrices = [...catalog.entries()]
+    .filter(([slug]) => homepageSlugs.has(slug))
+    .map(([, price]) => price)
+    .filter((price) => Number.isFinite(price) && price > 0);
+  if (activeHomepagePrices.length === 0) return;
+
+  const catalogMinimum = Math.min(...activeHomepagePrices);
+  if (catalogMinimum === HOME_STARTING_PRICE_ZAR) return;
+
+  const message = `[seo] Homepage starting-price contract is R${HOME_STARTING_PRICE_ZAR}, but the active homepage pricing catalog minimum is R${catalogMinimum}. Update the pricing authority and homepage SEO contract together.`;
+  if (process.env.CI === "true" || process.env.NODE_ENV === "development") throw new Error(message);
+  console.error(message);
+}
+
 /** Overlay checkout catalog base prices onto marketing service rows. */
 function applyPricingCatalogToMarketingServices(
   services: MarketingHomeService[],
@@ -271,6 +295,8 @@ export const getMarketingHomeSeoData = cache(
       readRows("locations"),
       readRows("faqs"),
     ]);
+
+    guardHomepageStartingPriceContract(pricingRows);
 
     const services = applyPricingCatalogToMarketingServices(
       servicesRows.map(mapMarketingHomeService).filter((row): row is MarketingHomeService => Boolean(row)),
