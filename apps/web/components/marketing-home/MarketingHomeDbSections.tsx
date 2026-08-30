@@ -22,8 +22,8 @@ export async function MarketingHomeDbSections() {
       <MarketingHomeTrustSection />
       <MarketingHomeHowItWorksSection />
       <MarketingHomeServicesSection />
-      <MarketingHomeFaqSection faqs={faqs} />
       <MarketingAreasSection locations={locations} />
+      <MarketingHomeFaqSection faqs={faqs} />
     </>
   );
 }
