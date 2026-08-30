@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import Link from "next/link";
 import { ArrowRight, Building2, House, Luggage, type LucideIcon } from "lucide-react";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
@@ -6,6 +7,7 @@ import type { MarketingHomeServiceCard } from "@/lib/marketing/marketingHomeServ
 
 type Props = {
   cards: MarketingHomeServiceCard[];
+  afterCards?: ReactNode;
 };
 
 type ServiceGroup = {
@@ -40,7 +42,7 @@ const SERVICE_GROUPS: readonly ServiceGroup[] = [
   },
 ] as const;
 
-export function MarketingHomeCoreServicesSection({ cards }: Props) {
+export function MarketingHomeCoreServicesSection({ cards, afterCards }: Props) {
   if (cards.length === 0) return null;
 
   const cardsById = new Map(cards.map((card) => [card.id, card]));
@@ -105,6 +107,8 @@ export function MarketingHomeCoreServicesSection({ cards }: Props) {
           );
         })}
       </div>
+
+      {afterCards ? <div className="mt-[var(--ui-space-8)]">{afterCards}</div> : null}
     </HomeSection>
   );
 }
