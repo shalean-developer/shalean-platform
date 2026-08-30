@@ -68,14 +68,14 @@ export function MarketingHomeHeroSection() {
           </div>
         </div>
 
-        <div className="relative w-full lg:justify-self-end">
-          <div className="relative aspect-[4/3] min-h-[400px] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-xl)] ring-1 ring-border/70 sm:min-h-[480px] lg:min-h-[580px] xl:min-h-[620px]">
+        <div className="relative mx-auto w-full max-w-[580px] lg:mx-0 lg:justify-self-end">
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-xl)] ring-1 ring-border/70">
             <Image
               src={HERO_MAIN}
               alt="Professional house cleaning service in a bright modern kitchen in Cape Town"
               fill
               className="object-cover object-center"
-              sizes="(max-width: 1024px) 100vw, 56vw"
+              sizes="(max-width: 1024px) 100vw, 580px"
               priority
               fetchPriority="high"
             />
