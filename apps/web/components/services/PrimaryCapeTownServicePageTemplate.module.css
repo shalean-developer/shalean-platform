@@ -1,0 +1,124 @@
+.primaryServicePage :global(main) > :global(section):first-of-type {
+  width: calc(100% - var(--ui-page-gutter, 1rem) - var(--ui-page-gutter, 1rem));
+  max-width: 112rem;
+  margin: var(--ui-space-6) auto var(--ui-space-10);
+  padding: 0;
+  overflow: hidden;
+  border: 1px solid #dbeafe;
+  border-radius: var(--ui-radius-marketing);
+  background: #f7faff;
+  box-shadow: var(--ui-shadow-lg);
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type > div {
+  max-width: none;
+  padding: 0;
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type > div > div {
+  gap: 0;
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  max-width: none;
+  padding: var(--ui-space-6);
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child > p:first-child {
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  border: 1px solid #dbeafe;
+  border-radius: var(--ui-radius-pill);
+  background: #fff;
+  padding: var(--ui-space-2) var(--ui-space-4);
+  box-shadow: var(--ui-shadow-sm);
+  color: #2563eb;
+  font-size: var(--ui-text-caption);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type h1 {
+  margin-top: var(--ui-space-4);
+  color: var(--foreground);
+  font-size: var(--ui-text-hero-title);
+  font-weight: 600;
+  line-height: var(--ui-leading-hero);
+  letter-spacing: var(--ui-tracking-hero-title);
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type h1 ~ p {
+  max-width: 40rem;
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child > div:last-child {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: var(--ui-space-3);
+  margin-top: var(--ui-space-6);
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child > div:last-child > a {
+  min-height: 3.5rem;
+  justify-content: center;
+  border-radius: var(--ui-radius-pill);
+  padding-inline: var(--ui-space-8);
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child > div:last-child > a:nth-child(2) {
+  background: #fff;
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:nth-child(2) {
+  min-height: 260px;
+  aspect-ratio: auto;
+  border-radius: 0;
+  background: var(--muted);
+  box-shadow: none;
+}
+
+.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:nth-child(2) > div {
+  display: none;
+}
+
+@media (min-width: 640px) {
+  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child {
+    padding: var(--ui-space-8);
+  }
+
+  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child > div:last-child {
+    width: auto;
+    flex-direction: row;
+  }
+
+  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:nth-child(2) {
+    min-height: 340px;
+  }
+}
+
+@media (min-width: 1024px) {
+  .primaryServicePage :global(main) > :global(section):first-of-type > div > div {
+    min-height: 460px;
+    grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
+  }
+
+  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child {
+    padding: var(--ui-space-10);
+  }
+
+  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:nth-child(2) {
+    min-height: 100%;
+  }
+}
+
+@media (min-width: 1280px) {
+  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child {
+    padding: var(--ui-space-12);
+  }
+}
