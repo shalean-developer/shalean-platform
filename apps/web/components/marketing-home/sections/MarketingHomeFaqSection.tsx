@@ -16,16 +16,21 @@ export function MarketingHomeFaqSection({ faqs }: Props) {
     <HomeSection
       id="faq"
       containerSize="marketing"
-      className="scroll-mt-24 border-t border-border bg-background md:py-[var(--ui-space-20)]"
+      className="scroll-mt-24 border-t border-border bg-background md:py-[var(--ui-space-24)]"
     >
-      <MarketingSectionHeader
-        eyebrow="FAQ"
-        title="Questions before you book?"
-        description="Straight answers about what is included, payment, trust and what to expect from your booking."
-      />
+      <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
+        <div className="lg:sticky lg:top-28">
+          <MarketingSectionHeader
+            align="left"
+            eyebrow="FAQ"
+            title="Questions before you book?"
+            description="Straight answers about what is included, payment, trust and what to expect from your booking."
+          />
+        </div>
 
-      <div className="mx-auto mt-[var(--ui-space-12)] max-w-5xl">
-        <MarketingHomeFaqAccordion faqs={faqItems} />
+        <div>
+          <MarketingHomeFaqAccordion faqs={faqItems} />
+        </div>
       </div>
     </HomeSection>
   );
