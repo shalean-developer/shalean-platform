@@ -60,6 +60,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards }: Props) {
       className="scroll-mt-24 !bg-[#F4F6FA] md:py-[var(--ui-space-20)]"
       aria-label="Cleaning services"
     >
+      <span id="service-options" className="sr-only" aria-hidden />
       <MarketingSectionHeader
         eyebrow="Services"
         title="What do you need cleaned?"
