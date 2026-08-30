@@ -21,7 +21,7 @@ export function MarketingHomeTrustSection() {
       />
 
       <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] lg:grid-cols-[minmax(0,1.08fr)_minmax(0,0.92fr)]">
-        <article className="flex min-h-[470px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#f2e3b3] bg-[var(--marketing-surface-soft-yellow)] p-[var(--ui-space-8)] shadow-[var(--ui-shadow-md)] md:p-[var(--ui-space-10)]">
+        <article className="flex min-h-[470px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#e4c985] bg-[#fff8e8] p-[var(--ui-space-8)] shadow-[var(--ui-shadow-md)] md:p-[var(--ui-space-10)]">
           <div className="flex items-center justify-between gap-[var(--ui-space-4)]">
             <span className="text-[length:var(--ui-text-small)] font-semibold uppercase tracking-[0.14em] text-foreground/55">
               Google rating
@@ -51,7 +51,7 @@ export function MarketingHomeTrustSection() {
         </article>
 
         <div className="grid gap-[var(--ui-space-6)] sm:grid-cols-2">
-          <article className="flex min-h-[200px] items-center justify-between gap-[var(--ui-space-6)] rounded-[var(--ui-radius-marketing)] border border-[#f3d7de] bg-[var(--marketing-surface-soft-blush)] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] sm:col-span-2 md:p-[var(--ui-space-8)]">
+          <article className="flex min-h-[200px] items-center justify-between gap-[var(--ui-space-6)] rounded-[var(--ui-radius-marketing)] border border-[#dbeafe] bg-[#eff6ff] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] sm:col-span-2 md:p-[var(--ui-space-8)]">
             <div>
               <p className="text-5xl font-semibold leading-none tracking-[-0.04em] text-foreground tabular-nums">{count}+</p>
               <h3 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-card-title)] font-semibold text-foreground">Google reviews</h3>
@@ -59,13 +59,13 @@ export function MarketingHomeTrustSection() {
                 Customer feedback is available on Shalean&apos;s review page.
               </p>
             </div>
-            <div className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-full bg-background/80 text-[var(--marketing-accent-rose)] sm:flex" aria-hidden>
+            <div className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-full bg-background/90 text-primary sm:flex" aria-hidden>
               <MessageSquareText className="h-8 w-8" strokeWidth={1.6} />
             </div>
           </article>
 
-          <article className="flex min-h-[245px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#cde9e4] bg-[var(--marketing-surface-soft-aqua)] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-background/80 text-[var(--marketing-accent-teal)]" aria-hidden>
+          <article className="flex min-h-[245px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#bfdbfe] bg-[#dbeafe] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-background/90 text-[var(--navy-to)]" aria-hidden>
               <ShieldCheck className="h-7 w-7" strokeWidth={1.65} />
             </div>
             <div className="mt-auto pt-[var(--ui-space-8)]">
@@ -76,8 +76,8 @@ export function MarketingHomeTrustSection() {
             </div>
           </article>
 
-          <article className="flex min-h-[245px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#e2d8f4] bg-[var(--marketing-surface-soft-lavender)] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-background/80 text-[var(--marketing-accent-violet)]" aria-hidden>
+          <article className="flex min-h-[245px] flex-col rounded-[var(--ui-radius-marketing)] border border-border bg-card p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#eff6ff] text-[var(--navy-from)]" aria-hidden>
               <ReceiptText className="h-7 w-7" strokeWidth={1.65} />
             </div>
             <div className="mt-auto pt-[var(--ui-space-8)]">
