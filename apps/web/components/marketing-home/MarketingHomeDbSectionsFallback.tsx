@@ -14,7 +14,7 @@ function HeaderSkeleton() {
 export function MarketingHomeDbSectionsFallback() {
   return (
     <>
-      <HomeSection containerSize="marketing" className="!bg-[var(--marketing-surface-warm)]" aria-hidden>
+      <HomeSection containerSize="marketing" className="!bg-[#F4F6FA]" aria-hidden>
         <HeaderSkeleton />
         <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
           {[1, 2, 3].map((i) => (
@@ -27,12 +27,12 @@ export function MarketingHomeDbSectionsFallback() {
         <HeaderSkeleton />
         <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="min-h-[320px] animate-pulse rounded-[var(--ui-radius-marketing)] bg-muted/60" />
+            <div key={i} className="min-h-[320px] animate-pulse rounded-[var(--ui-radius-marketing)] bg-[#DDEBFF]" />
           ))}
         </div>
       </HomeSection>
 
-      <HomeSection containerSize="marketing" className="!bg-[var(--marketing-surface-warm)]" aria-hidden>
+      <HomeSection containerSize="marketing" className="!bg-[#F4F6FA]" aria-hidden>
         <HeaderSkeleton />
         <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-5)] sm:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
