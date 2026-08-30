@@ -13,7 +13,6 @@ import { MarketingAreasSection } from "@/components/marketing-home/sections/Mark
 import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
-import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import {
   ServicesHubFaqs,
@@ -420,14 +419,11 @@ export default function ServicesHubPage() {
               align="left"
               eyebrow="Explore more"
               eyebrowTone="brand"
-              title="Keep exploring without losing your place"
-              description="Move between service guides, pricing, suburb coverage and booking support from one quiet navigation region."
+              title="Useful links for your next step"
+              description="Find pricing, booking help, cleaning guides and FAQs without repeating the service and suburb choices already shown above."
             />
             <div className="border-t border-border pt-[var(--ui-space-6)]">
               <SeoInternalLinksBlock title="Popular Shalean destinations" showTitle={false} />
-              <div className="mt-[var(--ui-space-8)] border-t border-border pt-[var(--ui-space-8)]">
-                <RelatedLinks placement="services_hub" variant="inline" />
-              </div>
             </div>
           </div>
         </HomeSection>
