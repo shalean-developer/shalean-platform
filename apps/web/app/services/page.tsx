@@ -13,7 +13,6 @@ import { MarketingAreasSection } from "@/components/marketing-home/sections/Mark
 import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
-import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import {
   ServicesHubFaqs,
   ServicesHubServiceDetails,
@@ -167,13 +166,6 @@ const PRICING_FACTORS = [
     value: "See the calculated amount before booking",
     hint: "The booking flow combines the service price, property details and any add-ons you selected above.",
   },
-] as const;
-
-const SERVICES_EXPLORE_LINKS = [
-  { href: CAPE_TOWN_PRICING_AUTHORITY_HREF, label: "Cleaning prices" },
-  { href: CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF, label: "Cape Town cleaning cost guide" },
-  { href: "/blog", label: "Cleaning guides" },
-  { href: "/faq", label: "Cleaning FAQs" },
 ] as const;
 
 export default function ServicesHubPage() {
@@ -408,30 +400,6 @@ export default function ServicesHubPage() {
         </HomeSection>
 
         <MarketingAreasSection />
-
-        <HomeSection
-          containerSize="marketing"
-          className="bg-background md:py-[var(--ui-space-24)]"
-          aria-labelledby="services-explore-heading"
-        >
-          <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
-            <MarketingSectionHeader
-              headingId="services-explore-heading"
-              align="left"
-              eyebrow="Explore more"
-              eyebrowTone="brand"
-              title="Useful links for your next step"
-              description="Find pricing, cleaning guides and FAQs without adding another booking prompt."
-            />
-            <div className="border-t border-border pt-[var(--ui-space-6)]">
-              <SeoInternalLinksBlock
-                title="Popular Shalean destinations"
-                showTitle={false}
-                items={SERVICES_EXPLORE_LINKS}
-              />
-            </div>
-          </div>
-        </HomeSection>
 
         <HomeSection
           id="faq"
