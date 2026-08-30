@@ -7,7 +7,7 @@ import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { SEO_REBUILD_SUPPRESS_LOCATION_HUB_LINKS } from "@/lib/seo/seoRebuildPhase1";
 import { cn } from "@/lib/utils";
 
-/** Live pricing education URL (retired `/cleaning-prices-cape-town` hub redirects to this blog). */
+/** Pricing education URL used for supporting cost context. */
 export const SEO_HUB_CLEANING_PRICES_PATH = CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF;
 
 /** Recurring-home intent — standard cleaning service page. */
@@ -43,10 +43,7 @@ type Props = {
   listClassName?: string;
 };
 
-/**
- * Reusable crawl + UX block: keeps pricing ↔ services ↔ locations ↔ quote wired consistently.
- * Drop into service templates, location hubs, or blog footers with optional `items` overrides.
- */
+/** Reusable crawl + UX block for pricing, services, locations and support paths. */
 export function SeoInternalLinksBlock({
   title = "Related pages",
   items = DEFAULT_ITEMS,
@@ -54,12 +51,15 @@ export function SeoInternalLinksBlock({
   listClassName,
 }: Props) {
   return (
-    <nav aria-label={title} className={cn("text-sm text-zinc-700", className)}>
-      <p className="font-semibold text-zinc-900">{title}</p>
-      <ul className={cn("mt-3 flex flex-wrap gap-x-4 gap-y-2", listClassName)}>
+    <nav aria-label={title} className={cn("text-[length:var(--ui-text-small)] text-muted-foreground", className)}>
+      <p className="text-[length:var(--ui-text-card-title)] font-semibold text-foreground">{title}</p>
+      <ul className={cn("mt-[var(--ui-space-4)] flex flex-wrap gap-x-[var(--ui-space-4)] gap-y-[var(--ui-space-3)]", listClassName)}>
         {items.map((item) => (
           <li key={item.href}>
-            <Link href={item.href} className="font-medium text-blue-700 underline-offset-2 hover:underline">
+            <Link
+              href={item.href}
+              className="font-medium text-primary underline decoration-primary/25 underline-offset-4 transition hover:decoration-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               {item.label}
             </Link>
           </li>
