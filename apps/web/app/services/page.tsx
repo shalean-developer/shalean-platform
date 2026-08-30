@@ -5,6 +5,7 @@ import { AppWindow, ArrowRight, Check } from "lucide-react";
 import { GetFreeQuoteLink } from "@/components/marketing/GetFreeQuoteLink";
 import MarketingLayout from "@/components/marketing-home/MarketingLayout";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
+import { MarketingSectionHeader } from "@/components/marketing-home/primitives/MarketingSectionHeader";
 import { MarketingHomeCoreServicesSection } from "@/components/marketing-home/sections/MarketingHomeCoreServicesSection";
 import { MarketingHomeHowItWorksSection } from "@/components/marketing-home/sections/MarketingHomeHowItWorksSection";
 import { MarketingHomeTrustSection } from "@/components/marketing-home/sections/MarketingHomeTrustSection";
@@ -14,7 +15,10 @@ import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
-import { ServicesHubAccordions } from "@/components/services/ServicesHubAccordions";
+import {
+  ServicesHubFaqs,
+  ServicesHubServiceDetails,
+} from "@/components/services/ServicesHubAccordions";
 import { CTAButton } from "@/components/ui/CTAButton";
 import { ServicesStickyMobileCta } from "@/components/services/ServicesStickyMobileCta";
 import { buildMarketingHomeServiceCards } from "@/lib/marketing/marketingHomeServicePresentation";
@@ -299,17 +303,51 @@ export default function ServicesHubPage() {
         />
 
         <MarketingHomeHowItWorksSection />
+        <MarketingHomeTrustSection />
 
-        <HomeSection containerSize="marketing" className="!bg-[#EFF6FF] md:py-[var(--ui-space-24)]" aria-labelledby="pricing-heading">
+        <HomeSection
+          id="included"
+          containerSize="marketing"
+          className="scroll-mt-24 bg-background md:py-[var(--ui-space-24)]"
+          aria-labelledby="services-included-heading"
+        >
           <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
             <div className="lg:sticky lg:top-28">
-              <p className="text-[length:var(--ui-text-small)] font-semibold uppercase tracking-[0.14em] text-primary">Pricing</p>
-              <h2 id="pricing-heading" className="mt-[var(--ui-space-4)] max-w-xl text-[length:var(--ui-text-page-title)] font-semibold leading-[1.08] tracking-[-0.03em] text-foreground md:text-[length:var(--ui-text-hero-title)]">
-                Your price follows the scope you choose
-              </h2>
-              <p className="mt-[var(--ui-space-5)] max-w-xl text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-muted-foreground">
-                Service type, property details and extras shape the total. Use the booking flow for the current amount rather than a static estimate.
-              </p>
+              <MarketingSectionHeader
+                headingId="services-included-heading"
+                align="left"
+                eyebrow="Service scope"
+                eyebrowTone="brand"
+                title="Know what each clean covers"
+                description="Compare the main checklist highlights here, then open the dedicated service guide when you need the full scope and exclusions."
+              />
+              <Link
+                href="#service-options"
+                className="mt-[var(--ui-space-8)] inline-flex items-center gap-[var(--ui-space-2)] text-[length:var(--ui-text-body)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                Compare all services
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
+            </div>
+            <ServicesHubServiceDetails serviceDetails={[...serviceDetails]} />
+          </div>
+        </HomeSection>
+
+        <HomeSection
+          containerSize="marketing"
+          className="!bg-[#F4F6FA] md:py-[var(--ui-space-24)]"
+          aria-labelledby="pricing-heading"
+        >
+          <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
+            <div className="lg:sticky lg:top-28">
+              <MarketingSectionHeader
+                headingId="pricing-heading"
+                align="left"
+                eyebrow="Pricing"
+                eyebrowTone="brand"
+                title="Your price follows the scope you choose"
+                description="Service type, property details and extras shape the total. Use the booking flow for the current amount rather than a static estimate."
+              />
               <div className="mt-[var(--ui-space-8)] flex flex-wrap gap-[var(--ui-space-3)]">
                 <CTAButton
                   href="/book"
@@ -330,20 +368,23 @@ export default function ServicesHubPage() {
               </div>
               <p className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
                 Need broader market context? Read the{" "}
-                <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className="font-medium text-foreground underline decoration-primary/30 underline-offset-4 hover:decoration-primary">
+                <Link
+                  href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF}
+                  className="font-medium text-foreground underline decoration-primary/30 underline-offset-4 hover:decoration-primary"
+                >
                   Cape Town cleaning cost guide
                 </Link>
                 .
               </p>
             </div>
 
-            <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card shadow-[var(--ui-shadow-md)]">
+            <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-[#EFF6FF] shadow-[var(--ui-shadow-sm)]">
               {PRICING_FACTORS.map((factor, index) => (
                 <article
                   key={factor.label}
-                  className="grid min-h-[150px] gap-[var(--ui-space-4)] border-b border-[#DBEAFE] p-[var(--ui-space-6)] last:border-b-0 sm:grid-cols-[64px_minmax(0,1fr)] sm:items-center md:p-[var(--ui-space-8)]"
+                  className="grid min-h-[168px] gap-[var(--ui-space-5)] border-b border-[#DBEAFE] p-[var(--ui-space-6)] last:border-b-0 sm:grid-cols-[72px_minmax(0,1fr)] sm:items-center md:p-[var(--ui-space-8)]"
                 >
-                  <span className="flex h-14 w-14 items-center justify-center rounded-full bg-[#DDEBFF] text-[length:var(--ui-text-small)] font-semibold text-foreground">
+                  <span className="flex h-16 w-16 items-center justify-center rounded-full bg-white text-[length:var(--ui-text-small)] font-semibold text-foreground shadow-[var(--ui-shadow-sm)]">
                     0{index + 1}
                   </span>
                   <div>
@@ -351,7 +392,9 @@ export default function ServicesHubPage() {
                     <h3 className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] text-foreground">
                       {factor.value}
                     </h3>
-                    <p className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">{factor.hint}</p>
+                    <p className="mt-[var(--ui-space-3)] max-w-2xl text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                      {factor.hint}
+                    </p>
                   </div>
                 </article>
               ))}
@@ -359,30 +402,50 @@ export default function ServicesHubPage() {
           </div>
         </HomeSection>
 
-        <MarketingHomeTrustSection />
-
-        <HomeSection
-          id="included"
-          containerSize="marketing"
-          className="scroll-mt-24 bg-background md:py-[var(--ui-space-24)]"
-          aria-label="Service inclusions and frequently asked questions"
-        >
-          <ServicesHubAccordions
-            serviceDetails={[...serviceDetails]}
-            faqs={SERVICES_HUB_FAQS}
-            faqAnalytics={{ page_slug: "services", suburb: "Cape Town" }}
-          />
-        </HomeSection>
-
         <MarketingAreasSection />
 
-        <HomeSection containerSize="marketing" className="!bg-[#F4F6FA] md:py-[var(--ui-space-20)]" aria-label="Related Shalean pages">
-          <div className="grid gap-[var(--ui-space-6)] lg:grid-cols-[minmax(0,0.8fr)_minmax(0,1.2fr)]">
+        <HomeSection
+          containerSize="marketing"
+          className="bg-background !py-[var(--ui-space-12)] md:!py-[var(--ui-space-16)]"
+          aria-label="Explore related Shalean pages"
+        >
+          <div className="grid gap-[var(--ui-space-10)] lg:grid-cols-2 lg:gap-[var(--ui-space-16)]">
             <SeoInternalLinksBlock
               title="Explore Shalean"
-              className="rounded-[var(--ui-radius-marketing)] border border-border bg-card p-[var(--ui-space-8)] shadow-[var(--ui-shadow-sm)]"
+              className="border-t border-border pt-[var(--ui-space-6)]"
             />
-            <RelatedLinks placement="services_hub" />
+            <RelatedLinks placement="services_hub" variant="plain" />
+          </div>
+        </HomeSection>
+
+        <HomeSection
+          id="faq"
+          containerSize="marketing"
+          className="scroll-mt-24 bg-background md:py-[var(--ui-space-24)]"
+          aria-labelledby="services-faq-heading"
+        >
+          <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
+            <div className="lg:sticky lg:top-28">
+              <MarketingSectionHeader
+                headingId="services-faq-heading"
+                align="left"
+                eyebrow="FAQ"
+                eyebrowTone="brand"
+                title="Questions before you book?"
+                description="Quick answers about choosing a service, understanding pricing and completing your booking in Cape Town."
+              />
+              <Link
+                href="/faq"
+                className="mt-[var(--ui-space-8)] inline-flex items-center gap-[var(--ui-space-2)] text-[length:var(--ui-text-body)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                View all FAQs
+                <ArrowRight className="h-4 w-4" aria-hidden />
+              </Link>
+            </div>
+            <ServicesHubFaqs
+              faqs={SERVICES_HUB_FAQS}
+              faqAnalytics={{ page_slug: "services", suburb: "Cape Town" }}
+            />
           </div>
         </HomeSection>
 
