@@ -17,7 +17,7 @@ const STEPS: readonly HowItWorksStep[] = [
     Icon: CalendarCheck,
     title: "Book online",
     description: "Choose your service, share the details and pick a time that suits you.",
-    surface: "#F2D6A2",
+    surface: "#C9D8FF",
     iconTone: "var(--navy-from)",
   },
   {
@@ -25,8 +25,8 @@ const STEPS: readonly HowItWorksStep[] = [
     Icon: Sparkles,
     title: "We clean",
     description: "A vetted Shalean cleaner or team arrives for the service you selected.",
-    surface: "#DBEAFE",
-    iconTone: "var(--primary)",
+    surface: "#A9B8FF",
+    iconTone: "var(--navy-to)",
   },
   {
     step: "03",
@@ -34,7 +34,7 @@ const STEPS: readonly HowItWorksStep[] = [
     title: "You relax",
     description: "Enjoy a professionally cleaned space while we take care of the work.",
     surface: "#EFF6FF",
-    iconTone: "var(--navy-to)",
+    iconTone: "var(--primary)",
   },
 ] as const;
 
