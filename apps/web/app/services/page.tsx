@@ -175,23 +175,33 @@ export default function ServicesHubPage() {
   const serviceDetails = [
     {
       id: "standard",
-      title: "What’s included in standard cleaning",
+      title: "Standard cleaning checklist",
       bullets: p["standard-cleaning-cape-town"].included,
     },
     {
       id: "deep",
-      title: "What’s included in deep cleaning",
+      title: "Deep cleaning checklist",
       bullets: p["deep-cleaning-cape-town"].included,
     },
     {
       id: "moveout",
-      title: "Move in / out checklist highlights",
+      title: "Move in / out checklist",
       bullets: p["move-out-cleaning-cape-town"].included,
     },
     {
       id: "airbnb",
-      title: "Airbnb turnover checklist highlights",
+      title: "Airbnb turnover checklist",
       bullets: p["airbnb-cleaning-cape-town"].included,
+    },
+    {
+      id: "office",
+      title: "Office cleaning checklist",
+      bullets: p["office-cleaning-cape-town"].included,
+    },
+    {
+      id: "carpet",
+      title: "Carpet cleaning checklist",
+      bullets: p["carpet-cleaning-cape-town"].included,
     },
   ] as const;
 
@@ -307,14 +317,14 @@ export default function ServicesHubPage() {
                 align="left"
                 eyebrow="Service scope"
                 eyebrowTone="brand"
-                title="Know what each clean covers"
-                description="Compare the main checklist highlights here, then open the dedicated service guide when you need the full scope and exclusions."
+                title="Compare the scope before you book"
+                description="The service cards above help you choose. Open a checklist here to compare what each of the six primary services includes before booking."
               />
               <Link
                 href="#service-options"
                 className="mt-[var(--ui-space-8)] inline-flex items-center gap-[var(--ui-space-2)] text-[length:var(--ui-text-body)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                Compare all services
+                Back to service cards
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
             </div>
