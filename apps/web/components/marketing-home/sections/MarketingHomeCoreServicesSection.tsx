@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { ArrowRight, Building2, House, Luggage, type LucideIcon } from "lucide-react";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
@@ -69,38 +70,53 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
       />
 
       {layout === "individual" ? (
-        <div className="mt-[var(--ui-space-12)] grid gap-[var(--ui-space-5)] sm:grid-cols-2 xl:grid-cols-3">
-          {cards.map(({ id, title, description, priceLabel, href, icon: ServiceIcon }) => (
+        <div className="mt-[var(--ui-space-12)] grid gap-[var(--ui-space-6)] sm:grid-cols-2 xl:grid-cols-3">
+          {cards.map(({ id, title, description, priceLabel, href, image, imageAlt, icon: ServiceIcon }) => (
             <article
               key={id}
-              className="group flex min-h-[290px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card p-[var(--ui-space-6)] text-card-foreground shadow-[var(--ui-shadow-sm)] transition duration-200 hover:-translate-y-1 hover:border-primary/30 hover:shadow-[var(--ui-shadow-md)] md:p-[var(--ui-space-7)]"
+              className="group flex overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card text-card-foreground shadow-[var(--ui-shadow-sm)] transition duration-200 hover:-translate-y-1 hover:border-primary/30 hover:shadow-[var(--ui-shadow-md)]"
             >
-              <div className="flex items-start justify-between gap-[var(--ui-space-4)]">
-                <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-primary" aria-hidden>
-                  <ServiceIcon className="h-6 w-6" strokeWidth={1.7} />
-                </span>
-                {priceLabel ? (
-                  <span className="rounded-[var(--ui-radius-pill)] bg-[#EFF6FF] px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-medium text-primary">
-                    From {priceLabel}
-                  </span>
-                ) : null}
-              </div>
-
-              <h3 className="mt-[var(--ui-space-5)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
-                {title}
-              </h3>
-              <p className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
-                {description}
-              </p>
-
-              <div className="mt-auto pt-[var(--ui-space-6)]">
+              <div className="flex w-full flex-col">
                 <Link
                   href={href}
-                  className="inline-flex min-h-11 items-center gap-[var(--ui-space-2)] text-[length:var(--ui-text-small)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  aria-label={`View ${title}`}
+                  className="relative block aspect-[16/9] overflow-hidden bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
-                  View service
-                  <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                  <Image
+                    src={image}
+                    alt={imageAlt}
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                    className="object-cover transition duration-300 group-hover:scale-[1.02]"
+                  />
+                  <span className="absolute left-[var(--ui-space-4)] top-[var(--ui-space-4)] flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-primary shadow-[var(--ui-shadow-sm)]" aria-hidden>
+                    <ServiceIcon className="h-5 w-5" strokeWidth={1.8} />
+                  </span>
+                  {priceLabel ? (
+                    <span className="absolute right-[var(--ui-space-4)] top-[var(--ui-space-4)] rounded-[var(--ui-radius-pill)] bg-white/95 px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-medium text-primary shadow-[var(--ui-shadow-sm)]">
+                      From {priceLabel}
+                    </span>
+                  ) : null}
                 </Link>
+
+                <div className="flex flex-1 flex-col p-[var(--ui-space-6)] md:p-[var(--ui-space-7)]">
+                  <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+                    {title}
+                  </h3>
+                  <p className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                    {description}
+                  </p>
+
+                  <div className="mt-auto pt-[var(--ui-space-6)]">
+                    <Link
+                      href={href}
+                      className="inline-flex min-h-11 items-center gap-[var(--ui-space-2)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      View service
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
+                    </Link>
+                  </div>
+                </div>
               </div>
             </article>
           ))}
