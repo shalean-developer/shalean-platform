@@ -2,12 +2,10 @@ import { ArrowRight, MapPin } from "lucide-react";
 import { SafeInternalLink } from "@/components/links/SafeInternalLink";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
 import { MarketingSectionHeader } from "@/components/marketing-home/primitives/MarketingSectionHeader";
-import type { HomeLocation } from "@/lib/home/data";
 import {
   LOCATIONS_INDEX_REGION_ORDER,
   groupCapeTownLocationsByRegion,
 } from "@/lib/locations/locations-index-config";
-import { mergeSuburbAreaLinks } from "@/lib/marketing/marketingAreaLinks";
 import { CAPE_TOWN_LOCATIONS } from "@/lib/seo/capeTownLocations";
 
 const HOME_REGION_FEATURES: Readonly<Record<string, readonly string[]>> = {
@@ -18,10 +16,6 @@ const HOME_REGION_FEATURES: Readonly<Record<string, readonly string[]>> = {
   Blouberg: ["Table View", "Bloubergstrand", "Milnerton"],
 };
 
-type Props = {
-  locations: HomeLocation[];
-};
-
 function regionAnchor(region: string): string {
   return region
     .toLowerCase()
@@ -29,12 +23,8 @@ function regionAnchor(region: string): string {
     .replace(/[^a-z0-9-]/g, "");
 }
 
-export function MarketingAreasSection({ locations }: Props) {
+export function MarketingAreasSection() {
   const byRegion = groupCapeTownLocationsByRegion(CAPE_TOWN_LOCATIONS);
-  const allSuburbs = mergeSuburbAreaLinks(locations);
-  const canonicalNames = new Set(CAPE_TOWN_LOCATIONS.map((location) => location.name.toLowerCase()));
-  const otherAreas = allSuburbs.filter(({ name }) => !canonicalNames.has(name.toLowerCase()));
-
   const regionGroups = LOCATIONS_INDEX_REGION_ORDER.map((region) => {
     const regionLocations = byRegion.get(region) ?? [];
     const availableNames = new Set(regionLocations.map((location) => location.name));
@@ -60,7 +50,7 @@ export function MarketingAreasSection({ locations }: Props) {
         {regionGroups.map(({ region, previewNames }) => (
           <article
             key={region}
-            className="flex min-h-[240px] flex-col rounded-[var(--ui-radius-marketing)] border border-border/70 bg-card p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)]"
+            className="group flex min-h-[250px] flex-col rounded-[var(--ui-radius-marketing)] border border-border/70 bg-card p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] transition duration-200 hover:-translate-y-1 hover:shadow-[var(--ui-shadow-md)]"
           >
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
               <MapPin className="h-6 w-6" strokeWidth={1.7} />
@@ -75,37 +65,14 @@ export function MarketingAreasSection({ locations }: Props) {
             ) : null}
             <SafeInternalLink
               href={`/areas-we-serve#region-${regionAnchor(region)}`}
-              className="mt-auto inline-flex items-center gap-[var(--ui-space-2)] pt-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="mt-auto inline-flex items-center gap-[var(--ui-space-2)] pt-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Explore region
-              <ArrowRight className="h-4 w-4" aria-hidden />
+              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
             </SafeInternalLink>
           </article>
         ))}
       </div>
-
-      {otherAreas.length > 0 ? (
-        <div className="mt-[var(--ui-space-6)] rounded-[var(--ui-radius-xl)] border border-border bg-background/70 p-[var(--ui-space-5)]">
-          <p className="text-[length:var(--ui-text-small)] font-semibold text-foreground">More serviced areas</p>
-          <div className="mt-[var(--ui-space-3)] flex flex-wrap gap-[var(--ui-space-2)]">
-            {otherAreas.map(({ name, href }) =>
-              href ? (
-                <SafeInternalLink
-                  key={name}
-                  href={href}
-                  className="text-[length:var(--ui-text-small)] font-medium text-muted-foreground hover:text-primary hover:underline hover:underline-offset-4"
-                >
-                  {name}
-                </SafeInternalLink>
-              ) : (
-                <span key={name} className="text-[length:var(--ui-text-small)] text-muted-foreground">
-                  {name}
-                </span>
-              ),
-            )}
-          </div>
-        </div>
-      ) : null}
 
       <div className="mt-[var(--ui-space-10)] flex justify-center">
         <SafeInternalLink
