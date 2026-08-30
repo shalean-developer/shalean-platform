@@ -155,18 +155,18 @@ export const metadata: Metadata = {
 const PRICING_FACTORS = [
   {
     label: "Service",
-    value: "Start with the right scope",
-    hint: "Standard, deep, move, Airbnb, office, carpet or window cleaning.",
+    value: "Your service sets the starting point",
+    hint: "Each cleaning type has its own scope and base price.",
   },
   {
     label: "Property",
-    value: "Add accurate details",
-    hint: "Bedrooms, bathrooms and property details help keep the visit and total realistic.",
+    value: "Property size refines the price",
+    hint: "Bedrooms, bathrooms and other property details adjust the cleaning total where applicable.",
   },
   {
-    label: "Extras",
-    value: "Choose only what you need",
-    hint: "Review selected extras and every line item before you complete checkout.",
+    label: "Final total",
+    value: "See the calculated amount before booking",
+    hint: "The booking flow combines the service price, property details and any add-ons you selected above.",
   },
 ] as const;
 
@@ -334,8 +334,8 @@ export default function ServicesHubPage() {
                 align="left"
                 eyebrow="Pricing"
                 eyebrowTone="brand"
-                title="Your price follows the scope you choose"
-                description="Service type, property details and extras shape the total. Use the booking flow for the current amount rather than a static estimate."
+                title="Understand how your cleaning price is built"
+                description="Your service and property details determine the base cleaning amount. The booking flow then shows the current final total before you continue."
               />
               <div className="mt-[var(--ui-space-8)] flex flex-wrap gap-[var(--ui-space-3)]">
                 <CTAButton
