@@ -1,6 +1,6 @@
 import { cache } from "react";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
-import { MARKETING_TO_PRICING_SLUG, pricingSlugForMarketingKey } from "@/lib/marketing/marketingHomePricingSlugs";
+import { pricingSlugForMarketingKey, MARKETING_TO_PRICING_SLUG } from "@/lib/marketing/marketingHomePricingSlugs";
 import { HOME_STARTING_PRICE_ZAR } from "@/lib/seo/homePageMeta";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
@@ -180,7 +180,7 @@ function activePricingBaseBySlug(rows: DbRow[]): Map<string, number> {
 }
 
 /**
- * Prevent the SEO/H1 "from" price from silently diverging from the live active homepage catalog.
+ * Prevent the homepage SEO "from" price from silently diverging from the active homepage catalog.
  * CI/development fails when catalog data is available; production logs loudly instead of hiding drift.
  */
 function guardHomepageStartingPriceContract(pricingRows: DbRow[]): void {
