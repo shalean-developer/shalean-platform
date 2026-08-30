@@ -29,20 +29,28 @@ function formatZar(value: number): string {
 }
 
 export async function ServicesBookingExtrasSection() {
-  let catalog;
+  let catalog: Awaited<ReturnType<typeof loadBookingV2Catalog>>["catalog"] | undefined;
 
   try {
     ({ catalog } = await loadBookingV2Catalog());
   } catch {
-    return null;
+    catalog = undefined;
   }
 
-  const groups = EXTRAS_SERVICE_ORDER.map((slug) => ({
-    slug,
-    label: PUBLIC_SERVICE_LABELS[slug],
-    icon: SERVICE_CONFIG[slug].icon,
-    extras: catalog[slug].extras,
-  })).filter((group) => group.extras.length > 0);
+  const groups = EXTRAS_SERVICE_ORDER.map((slug) => {
+    const liveExtras = catalog?.[slug]?.extras ?? [];
+    const extras =
+      liveExtras.length > 0
+        ? liveExtras
+        : SERVICE_CONFIG[slug].extras.map((extra) => ({ ...extra, isPopular: false }));
+
+    return {
+      slug,
+      label: PUBLIC_SERVICE_LABELS[slug],
+      icon: SERVICE_CONFIG[slug].icon,
+      extras,
+    };
+  }).filter((group) => group.extras.length > 0);
 
   if (groups.length === 0) return null;
 
