@@ -26,7 +26,7 @@ export function MarketingHomeTrustSection() {
             <span className="text-[length:var(--ui-text-small)] font-semibold uppercase tracking-[0.14em] text-foreground/55">
               Google rating
             </span>
-            <div className="flex items-center gap-1" aria-label="Five star rating">
+            <div className="flex items-center gap-1" aria-label={`${rating} out of 5 Google rating`}>
               {Array.from({ length: 5 }).map((_, index) => (
                 <Star key={index} className="h-5 w-5 fill-[#f4b400] text-[#f4b400]" strokeWidth={1.6} />
               ))}
