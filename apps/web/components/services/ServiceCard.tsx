@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import Link from "next/link";
+import { ArrowRight } from "lucide-react";
 import { CTAButton } from "@/components/ui/CTAButton";
 import { trackSeoServiceCardClick } from "@/lib/analytics/track";
 import { cn } from "@/lib/utils";
@@ -35,24 +36,30 @@ export function ServiceCard({
     return (
       <aside
         className={cn(
-          "sm:col-span-2 lg:col-span-3 flex flex-col gap-4 rounded-2xl border border-blue-100 bg-blue-50/60 p-6 md:flex-row md:items-center md:justify-between",
+          "sm:col-span-2 lg:col-span-3 flex flex-col gap-[var(--ui-space-6)] rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-[#EFF6FF] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] md:flex-row md:items-center md:justify-between md:p-[var(--ui-space-8)]",
           className,
         )}
         aria-label="Window Cleaning guide"
       >
-        <div className="flex items-start gap-4">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white text-blue-700 ring-1 ring-blue-100">
+        <div className="flex items-start gap-[var(--ui-space-4)]">
+          <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-background text-primary shadow-[var(--ui-shadow-sm)] ring-1 ring-[#DBEAFE]">
             {icon}
           </div>
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-blue-700">Specialist add-on guide</p>
-            <h3 className="mt-1 text-lg font-bold tracking-tight text-blue-950">{title}</h3>
-            <p className="mt-2 max-w-2xl text-sm leading-relaxed text-zinc-600">{description}</p>
+            <p className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-primary">
+              Specialist add-on guide
+            </p>
+            <h3 className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+              {title}
+            </h3>
+            <p className="mt-[var(--ui-space-2)] max-w-2xl text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
+              {description}
+            </p>
           </div>
         </div>
         <Link
           href={learnMoreHref}
-          className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-xl border border-blue-200 bg-white px-5 text-sm font-semibold text-blue-900 transition hover:border-blue-300 hover:bg-blue-50"
+          className="inline-flex min-h-12 shrink-0 items-center justify-center gap-[var(--ui-space-2)] rounded-[var(--ui-radius-pill)] border border-border bg-card px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-medium text-foreground shadow-[var(--ui-shadow-sm)] transition hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           onClick={() => {
             if (seoHubTrack) {
               trackSeoServiceCardClick({
@@ -64,7 +71,8 @@ export function ServiceCard({
             }
           }}
         >
-          View Window Cleaning guide
+          View guide
+          <ArrowRight className="h-4 w-4" aria-hidden />
         </Link>
       </aside>
     );
@@ -73,16 +81,20 @@ export function ServiceCard({
   return (
     <article
       className={cn(
-        "flex flex-col rounded-2xl border border-zinc-200/90 bg-white p-6 shadow-[0_1px_0_rgba(0,0,0,0.04)] transition hover:border-zinc-300 hover:shadow-md",
+        "flex min-h-[360px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card p-[var(--ui-space-7)] text-card-foreground shadow-[var(--ui-shadow-md)] transition duration-200 hover:-translate-y-1 hover:border-primary/35 hover:shadow-[var(--ui-shadow-lg)]",
         className,
       )}
     >
-      <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-600 text-white">
+      <div className="flex h-14 w-14 items-center justify-center rounded-full bg-[#EFF6FF] text-primary">
         {icon}
       </div>
-      <h3 className="mt-4 text-lg font-bold tracking-tight text-blue-950">{title}</h3>
-      <p className="mt-2 flex-1 text-sm leading-relaxed text-zinc-600">{description}</p>
-      <div className="mt-6 flex flex-col gap-3">
+      <h3 className="mt-[var(--ui-space-5)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+        {title}
+      </h3>
+      <p className="mt-[var(--ui-space-3)] flex-1 text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
+        {description}
+      </p>
+      <div className="mt-[var(--ui-space-7)] flex flex-wrap items-center gap-[var(--ui-space-3)]">
         <CTAButton
           href={bookHref}
           variant="primary"
@@ -93,13 +105,13 @@ export function ServiceCard({
               : undefined
           }
           seoHubServiceCardBook={seoHubTrack ? { service_name: title } : undefined}
-          className="w-full min-h-11 rounded-xl sm:w-auto sm:self-start"
+          className="min-h-12 px-[var(--ui-space-5)]"
         >
           Book now
         </CTAButton>
         <Link
           href={learnMoreHref}
-          className="text-sm font-semibold text-blue-900 underline decoration-blue-200 underline-offset-4 transition hover:decoration-blue-600"
+          className="group inline-flex min-h-12 items-center gap-[var(--ui-space-2)] rounded-[var(--ui-radius-pill)] px-[var(--ui-space-3)] text-[length:var(--ui-text-small)] font-medium text-foreground transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           onClick={() => {
             if (seoHubTrack) {
               trackSeoServiceCardClick({
@@ -112,6 +124,7 @@ export function ServiceCard({
           }}
         >
           Learn more
+          <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
         </Link>
       </div>
     </article>
