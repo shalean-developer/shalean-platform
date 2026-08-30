@@ -1,6 +1,7 @@
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { SeoCapeTownServicePage } from "@/components/seo/SeoCapeTownServicePage";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
+import styles from "./PrimaryCapeTownServicePageTemplate.module.css";
 
 export const PRIMARY_CAPE_TOWN_SERVICE_SLUGS = [
   "standard-cleaning-cape-town",
@@ -30,9 +31,13 @@ type Props = {
  *
  * This typed boundary intentionally excludes Window Cleaning, which remains
  * a subordinate specialist guide rather than a seventh primary service.
- * The underlying SEO renderer stays unchanged while the shared public template
- * is normalized incrementally behind this boundary.
+ * The scoped presentation layer lets the six shared pages normalize against
+ * the public marketing authority without changing the specialist renderer.
  */
 export function PrimaryCapeTownServicePageTemplate(props: Props) {
-  return <SeoCapeTownServicePage {...props} />;
+  return (
+    <div className={styles.primaryServicePage}>
+      <SeoCapeTownServicePage {...props} />
+    </div>
+  );
 }
