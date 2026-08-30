@@ -6,7 +6,7 @@ import { CUSTOMER_SUPPORT_WHATSAPP_URL } from "@/lib/site/customerSupport";
  */
 export const GOOGLE_BUSINESS_REVIEWS = {
   rating: 4.8,
-  count: 129,
+  count: 128,
   verifiedAt: "2026-08-30",
 } as const;
 
