@@ -37,7 +37,7 @@ export function MarketingAreasSection() {
     <HomeSection
       id="locations"
       containerSize="marketing"
-      className="scroll-mt-24 !bg-[var(--marketing-surface-warm)] md:py-[var(--ui-space-24)]"
+      className="scroll-mt-24 !bg-[#EFF6FF] md:py-[var(--ui-space-24)]"
       aria-label="Areas we serve"
     >
       <div className="grid gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.72fr)_minmax(0,1.28fr)] lg:items-start lg:gap-[var(--ui-space-20)]">
@@ -57,14 +57,14 @@ export function MarketingAreasSection() {
           </SafeInternalLink>
         </div>
 
-        <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-border bg-card shadow-[var(--ui-shadow-md)]">
+        <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card shadow-[var(--ui-shadow-md)]">
           {regionGroups.map(({ region, previewNames }, index) => (
             <SafeInternalLink
               key={region}
               href={`/areas-we-serve#region-${regionAnchor(region)}`}
-              className="group grid min-h-[132px] gap-[var(--ui-space-4)] border-b border-border p-[var(--ui-space-6)] transition last:border-b-0 hover:bg-primary/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center md:p-[var(--ui-space-8)]"
+              className="group grid min-h-[132px] gap-[var(--ui-space-4)] border-b border-[#DBEAFE] p-[var(--ui-space-6)] transition last:border-b-0 hover:bg-[#DDEBFF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center md:p-[var(--ui-space-8)]"
             >
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary" aria-hidden>
+              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EFF6FF] text-primary" aria-hidden>
                 <MapPin className="h-6 w-6" strokeWidth={1.7} />
               </div>
               <div>
@@ -82,7 +82,7 @@ export function MarketingAreasSection() {
                   </p>
                 ) : null}
               </div>
-              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-border bg-background text-foreground transition group-hover:border-primary/30 group-hover:bg-primary group-hover:text-primary-foreground" aria-hidden>
+              <span className="flex h-11 w-11 items-center justify-center rounded-full border border-[#DBEAFE] bg-background text-foreground transition group-hover:border-primary/30 group-hover:bg-primary group-hover:text-primary-foreground" aria-hidden>
                 <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
               </span>
             </SafeInternalLink>
