@@ -12,24 +12,24 @@ type HowItWorksStep = {
 
 const STEPS: readonly HowItWorksStep[] = [
   {
-    step: "Step 1",
+    step: "01",
     Icon: CalendarCheck,
     title: "Book online",
-    description: "Choose your service, tell us about your space and pick a time that suits you.",
+    description: "Choose your service, share the details and pick a time that suits you.",
     surface: "var(--marketing-surface-step-yellow)",
   },
   {
-    step: "Step 2",
+    step: "02",
     Icon: Sparkles,
     title: "We clean",
     description: "A vetted Shalean cleaner or team arrives for the service you selected.",
     surface: "var(--marketing-surface-step-pink)",
   },
   {
-    step: "Step 3",
+    step: "03",
     Icon: House,
     title: "You relax",
-    description: "Enjoy a fresh, professionally cleaned space without the usual hassle.",
+    description: "Enjoy a professionally cleaned space while we take care of the work.",
     surface: "var(--marketing-surface-step-aqua)",
   },
 ] as const;
@@ -39,37 +39,38 @@ export function MarketingHomeHowItWorksSection() {
     <HomeSection
       id="how-it-works"
       containerSize="marketing"
-      className="scroll-mt-24 !bg-[var(--marketing-surface-warm)] md:py-[var(--ui-space-20)]"
+      className="scroll-mt-24 bg-background md:py-[var(--ui-space-20)]"
       aria-label="How Shalean cleaning works"
     >
       <MarketingSectionHeader
         eyebrow="How it works"
-        title="From booking to a fresh, clean space."
-        description="Three simple steps make it easy to book the right cleaning service and get on with your day."
+        title="Simple from booking to clean"
+        description="Three clear steps from choosing a service to enjoying a cleaner space."
       />
 
-      <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-8)] md:grid-cols-3">
+      <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
         {STEPS.map(({ step, Icon, title, description, surface }) => (
           <article
             key={step}
-            className="flex min-h-[360px] flex-col items-center rounded-[var(--ui-radius-marketing)] px-[var(--ui-space-6)] py-[var(--ui-space-10)] text-center text-foreground transition-transform duration-200 hover:-translate-y-1"
+            className="relative flex min-h-[320px] flex-col rounded-[var(--ui-radius-marketing)] p-[var(--ui-space-8)] text-foreground shadow-[var(--ui-shadow-sm)]"
             style={{ backgroundColor: surface }}
           >
-            <div className="flex h-24 w-24 items-center justify-center" aria-hidden>
-              <Icon className="h-16 w-16" strokeWidth={1.45} />
+            <div className="flex items-start justify-between gap-[var(--ui-space-4)]">
+              <span className="text-[length:var(--ui-text-small)] font-semibold tracking-[0.12em] text-foreground/60">
+                {step}
+              </span>
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-background/80 shadow-[var(--ui-shadow-sm)]" aria-hidden>
+                <Icon className="h-7 w-7" strokeWidth={1.65} />
+              </div>
             </div>
 
-            <h3 className="mt-[var(--ui-space-5)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
-              {title}
-            </h3>
-            <p className="mx-auto mt-[var(--ui-space-3)] max-w-sm text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-foreground/75">
-              {description}
-            </p>
-
-            <div className="mt-auto w-full pt-[var(--ui-space-8)]">
-              <div className="mx-auto flex min-h-14 max-w-[300px] items-center justify-center rounded-full bg-background px-[var(--ui-space-6)] text-[length:var(--ui-text-body)] font-medium text-foreground shadow-[var(--ui-shadow-sm)]">
-                {step}
-              </div>
+            <div className="mt-auto pt-[var(--ui-space-12)]">
+              <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight">
+                {title}
+              </h3>
+              <p className="mt-[var(--ui-space-3)] max-w-sm text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-foreground/75">
+                {description}
+              </p>
             </div>
           </article>
         ))}
