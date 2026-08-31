@@ -1,28 +1,8 @@
 import Link from "next/link";
 import { ArrowRight, ChevronDown, Sparkles } from "lucide-react";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
-import {
-  SERVICE_CONFIG,
-  type ServiceSlug,
-} from "@/src/features/booking-v2/config/serviceConfig";
-
-const EXTRAS_SERVICE_ORDER: readonly ServiceSlug[] = [
-  "regular-cleaning",
-  "deep-cleaning",
-  "moving-cleaning",
-  "airbnb-cleaning",
-  "office-cleaning",
-  "carpet-cleaning",
-] as const;
-
-const PUBLIC_SERVICE_LABELS: Record<ServiceSlug, string> = {
-  "regular-cleaning": "Standard Cleaning",
-  "deep-cleaning": "Deep Cleaning",
-  "moving-cleaning": "Move In / Out Cleaning",
-  "airbnb-cleaning": "Airbnb Cleaning",
-  "office-cleaning": "Office Cleaning",
-  "carpet-cleaning": "Carpet Cleaning",
-};
+import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
+import { buildAuthoritativePublicExtrasGroups } from "@/lib/services/publicServiceExtras";
 
 function formatZar(value: number): string {
   return `R${Math.round(value).toLocaleString("en-ZA")}`;
@@ -34,28 +14,20 @@ function publicExtraLabel(extra: { id: string; label: string }): string {
 }
 
 export async function ServicesBookingExtrasSection() {
-  let catalog: Awaited<ReturnType<typeof loadBookingV2Catalog>>["catalog"] | undefined;
+  let payload: Awaited<ReturnType<typeof loadBookingV2Catalog>> | undefined;
 
   try {
-    ({ catalog } = await loadBookingV2Catalog());
+    payload = await loadBookingV2Catalog();
   } catch {
-    catalog = undefined;
+    payload = undefined;
   }
 
-  const groups = EXTRAS_SERVICE_ORDER.map((slug) => {
-    const liveExtras = catalog?.[slug]?.extras ?? [];
-    const extras =
-      liveExtras.length > 0
-        ? liveExtras
-        : SERVICE_CONFIG[slug].extras.map((extra) => ({ ...extra, isPopular: false }));
+  if (!payload) return null;
 
-    return {
-      slug,
-      label: PUBLIC_SERVICE_LABELS[slug],
-      icon: SERVICE_CONFIG[slug].icon,
-      extras,
-    };
-  }).filter((group) => group.extras.length > 0);
+  const groups = buildAuthoritativePublicExtrasGroups(
+    payload.catalog,
+    payload.extrasCatalogAuthoritative,
+  );
 
   if (groups.length === 0) return null;
 
@@ -80,11 +52,13 @@ export async function ServicesBookingExtrasSection() {
       </div>
 
       <div className="mt-[var(--ui-space-8)] grid gap-[var(--ui-space-3)] md:grid-cols-2">
-        {groups.map(({ slug, label, icon: ServiceIcon, extras }) => (
-          <details
-            key={slug}
-            className="group overflow-hidden rounded-[var(--ui-radius-xl)] border border-[#DBEAFE] bg-card text-card-foreground shadow-[var(--ui-shadow-sm)]"
-          >
+        {groups.map(({ slug, label, extras }) => {
+          const ServiceIcon = SERVICE_CONFIG[slug].icon;
+          return (
+            <details
+              key={slug}
+              className="group overflow-hidden rounded-[var(--ui-radius-xl)] border border-[#DBEAFE] bg-card text-card-foreground shadow-[var(--ui-shadow-sm)]"
+            >
             <summary className="flex min-h-[76px] cursor-pointer list-none items-center gap-[var(--ui-space-3)] p-[var(--ui-space-5)] transition hover:bg-[#EFF6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden">
               <span
                 className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#EFF6FF] text-primary"
@@ -139,8 +113,9 @@ export async function ServicesBookingExtrasSection() {
                 <ArrowRight className="h-4 w-4" aria-hidden />
               </Link>
             </div>
-          </details>
-        ))}
+            </details>
+          );
+        })}
       </div>
 
       <p className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-caption)] leading-[var(--ui-leading-body)] text-muted-foreground">

@@ -1,7 +1,7 @@
 import type { PublicReviewBannerStats } from "@/lib/home/reviewBannerStats";
 import { SeoCapeTownServicePage } from "@/components/seo/SeoCapeTownServicePage";
 import type { CapeTownSeoServiceSlug } from "@/lib/seo/capeTownSeoPages";
-import styles from "./PrimaryCapeTownServicePageTemplate.module.css";
+import { buildPrimaryCapeTownServiceExtensionSlots } from "./PrimaryCapeTownServiceExtensions";
 
 export const PRIMARY_CAPE_TOWN_SERVICE_SLUGS = [
   "standard-cleaning-cape-town",
@@ -35,9 +35,6 @@ type Props = {
  * the public marketing authority without changing the specialist renderer.
  */
 export function PrimaryCapeTownServicePageTemplate(props: Props) {
-  return (
-    <div className={styles.primaryServicePage}>
-      <SeoCapeTownServicePage {...props} />
-    </div>
-  );
+  const extensionSlots = buildPrimaryCapeTownServiceExtensionSlots(props.slug, "/book");
+  return <SeoCapeTownServicePage {...props} heroVariant="primary" extensionSlots={extensionSlots} />;
 }

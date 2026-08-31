@@ -1,4 +1,4 @@
-.primaryServicePage :global(main) > :global(section):first-of-type {
+.hero {
   width: calc(100% - var(--ui-page-gutter, 1rem) - var(--ui-page-gutter, 1rem));
   max-width: 112rem;
   margin: var(--ui-space-6) auto var(--ui-space-10);
@@ -10,16 +10,18 @@
   box-shadow: var(--ui-shadow-lg);
 }
 
-.primaryServicePage :global(main) > :global(section):first-of-type > div {
+.heroContainer {
   max-width: none;
   padding: 0;
 }
 
-.primaryServicePage :global(main) > :global(section):first-of-type > div > div {
+.heroGrid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 0;
 }
 
-.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child {
+.heroCopy {
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -27,7 +29,7 @@
   padding: var(--ui-space-6);
 }
 
-.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child > p:first-child {
+.heroCopy [data-service-hero-eyebrow] {
   display: inline-flex;
   width: max-content;
   align-items: center;
@@ -43,7 +45,7 @@
   text-transform: uppercase;
 }
 
-.primaryServicePage :global(main) > :global(section):first-of-type h1 {
+.heroCopy h1 {
   margin-top: var(--ui-space-4);
   color: var(--foreground);
   font-size: var(--ui-text-hero-title);
@@ -52,11 +54,11 @@
   letter-spacing: var(--ui-tracking-hero-title);
 }
 
-.primaryServicePage :global(main) > :global(section):first-of-type h1 ~ p {
+.heroCopy h1 ~ p {
   max-width: 40rem;
 }
 
-.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child > div:last-child {
+.heroCopy [data-service-hero-actions] {
   display: flex;
   width: 100%;
   flex-direction: column;
@@ -64,18 +66,16 @@
   margin-top: var(--ui-space-6);
 }
 
-.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child > div:last-child > a {
+.heroCopy [data-service-hero-actions] > a {
   min-height: 3.5rem;
   justify-content: center;
   border-radius: var(--ui-radius-pill);
   padding-inline: var(--ui-space-8);
 }
 
-.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child > div:last-child > a:nth-child(2) {
-  background: #fff;
-}
-
-.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:nth-child(2) {
+.heroMedia {
+  position: relative;
+  width: 100%;
   min-height: 260px;
   aspect-ratio: auto;
   border-radius: 0;
@@ -83,42 +83,42 @@
   box-shadow: none;
 }
 
-.primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:nth-child(2) > div {
+.heroImageOverlay {
   display: none;
 }
 
 @media (min-width: 640px) {
-  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child {
+  .heroCopy {
     padding: var(--ui-space-8);
   }
 
-  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child > div:last-child {
+  .heroCopy [data-service-hero-actions] {
     width: auto;
     flex-direction: row;
   }
 
-  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:nth-child(2) {
+  .heroMedia {
     min-height: 340px;
   }
 }
 
 @media (min-width: 1024px) {
-  .primaryServicePage :global(main) > :global(section):first-of-type > div > div {
+  .heroGrid {
     min-height: 460px;
     grid-template-columns: minmax(0, 1.02fr) minmax(0, 0.98fr);
   }
 
-  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child {
+  .heroCopy {
     padding: var(--ui-space-10);
   }
 
-  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:nth-child(2) {
+  .heroMedia {
     min-height: 100%;
   }
 }
 
 @media (min-width: 1280px) {
-  .primaryServicePage :global(main) > :global(section):first-of-type > div > div > div:first-child {
+  .heroCopy {
     padding: var(--ui-space-12);
   }
 }
