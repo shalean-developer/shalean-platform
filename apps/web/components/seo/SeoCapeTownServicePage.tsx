@@ -56,6 +56,9 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
   const areasShownHrefs = new Set(areasPillLinks.map((l) => l.href));
   const areasSentenceLinks = servicePageExtraLocationSentenceLinks(areasShownHrefs);
   const areaProgrammaticBlogLinks = getAreaProgrammaticBlogLinksForCapeTownService(slug);
+  const additionalAreaGuideLinks = (areaProgrammaticBlogLinks ?? []).filter(
+    (item) => !areasShownHrefs.has(item.href),
+  );
   const pricingEducationBlog = getServicePagePricingEducationBlogLink(slug);
   const secondaryEditorialBlog = getSecondaryEditorialBlogLink(slug);
 
@@ -121,7 +124,7 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
 
   const mergedStandardFaqs =
     slug === "standard-cleaning-cape-town"
-      ? dedupeFaqsByQuestion(STANDARD_CLEANING_SNIPPET_FAQS, data.faqs)
+      ? dedupeFaqsByQuestion(data.faqs, STANDARD_CLEANING_SNIPPET_FAQS).slice(0, 6)
       : null;
 
   const breadcrumbEntity = {
@@ -401,6 +404,23 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
             </SafeInternalLink>{" "}
             and add parking, building access, and suburb details at checkout.
           </p>
+          {additionalAreaGuideLinks.length > 0 ? (
+            <div className="mt-8 border-t border-blue-100 pt-6">
+              <h3 className="text-base font-semibold text-zinc-900">More local cleaning guides</h3>
+              <ul className="mt-4 flex flex-wrap gap-3">
+                {additionalAreaGuideLinks.map((item) => (
+                  <li key={item.href}>
+                    <SafeInternalLink
+                      href={item.href}
+                      className="inline-flex rounded-full border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-800 transition hover:border-blue-400 hover:bg-blue-50"
+                    >
+                      {item.label}
+                    </SafeInternalLink>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </div>
       </section>
 
@@ -423,29 +443,9 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
         </div>
       </section>
 
-      {areaProgrammaticBlogLinks ? (
-        <section className="border-b border-blue-100 bg-blue-50/30 py-16">
-          <div className="mx-auto max-w-4xl px-4">
-            <h2 className="text-2xl font-bold tracking-tight text-zinc-900">Cleaning Services by Area in Cape Town</h2>
-            <ul className="mt-8 flex flex-wrap gap-3">
-              {areaProgrammaticBlogLinks.map((item) => (
-                <li key={item.href}>
-                  <SafeInternalLink
-                    href={item.href}
-                    className="inline-flex rounded-full border border-blue-200 bg-white px-4 py-2 text-sm font-semibold text-blue-800 transition hover:border-blue-400 hover:bg-blue-50"
-                  >
-                    {item.label}
-                  </SafeInternalLink>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </section>
-      ) : null}
-
       <section className="border-b border-zinc-100 py-16">
         <div className="mx-auto max-w-4xl px-4">
-          <RelatedLinks placement="service" currentServiceSlug={slug} />
+          <RelatedLinks placement="service" currentServiceSlug={slug} showBookingCta={false} />
         </div>
       </section>
 
