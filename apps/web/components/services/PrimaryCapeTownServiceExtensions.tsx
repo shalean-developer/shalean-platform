@@ -87,7 +87,6 @@ function StandardAfterHero({ bookingPath }: { bookingPath: string }) {
 
 function StandardComparisonContent() {
   const deepPath = CAPE_TOWN_SERVICE_SEO["deep-cleaning-cape-town"].path;
-  const moveOutPath = CAPE_TOWN_SERVICE_SEO["move-out-cleaning-cape-town"].path;
   return (
     <section
       className="border-b border-blue-100 py-16"
