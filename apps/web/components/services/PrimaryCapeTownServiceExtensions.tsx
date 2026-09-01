@@ -25,8 +25,6 @@ export type PrimaryCapeTownServiceExtensionSlots = {
     title: string;
     description: string;
     primaryLabel: string;
-    showPriceAction?: boolean;
-    showAvailabilityAction?: boolean;
   };
 };
 
@@ -145,26 +143,6 @@ function StandardComparisonContent() {
               recurring standard cleaning in Cape Town
             </SafeInternalLink>
             .
-          </p>
-        </div>
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight text-zinc-900">
-            Popular services
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Explore{" "}
-            <SafeInternalLink href={deepPath} className={linkClass}>
-              deep cleaning services in Cape Town
-            </SafeInternalLink>
-            ,{" "}
-            <SafeInternalLink href={moveOutPath} className={linkClass}>
-              move out cleaning in Cape Town
-            </SafeInternalLink>
-            , and{" "}
-            <SafeInternalLink href="/services" className={linkClass}>
-              all services and pricing
-            </SafeInternalLink>
-            . Add your suburb when you book online.
           </p>
         </div>
       </div>
@@ -318,12 +296,8 @@ export function buildPrimaryCapeTownServiceExtensionSlots(
         faqHeading: "Booking & scope details",
         faqDescription: (
           <>
-            More answers on recurring visits, supplies, and upgrading
-            scope—snippet-focused FAQs live{" "}
-            <SafeInternalLink href="#faqs" className={linkClass}>
-              under pricing above
-            </SafeInternalLink>
-            .
+            See the single FAQ section below for recurring visits, supplies,
+            scope upgrades, and booking conditions.
           </>
         ),
         finalCta: {
@@ -375,10 +349,8 @@ export function buildPrimaryCapeTownServiceExtensionSlots(
         finalCta: {
           title: "Ready to book Airbnb Cleaning?",
           description:
-            "Get an instant price for your Cape Town address, bedrooms, and bathrooms—then choose a time that works.",
+            "Confirm the turnover window, bedrooms, bathrooms, linen, restocking, and access notes before checkout.",
           primaryLabel: "Book Airbnb cleaner",
-          showPriceAction: true,
-          showAvailabilityAction: true,
         },
       };
     case "move-out-cleaning-cape-town":
@@ -410,9 +382,8 @@ export function buildPrimaryCapeTownServiceExtensionSlots(
         finalCta: {
           title: "Ready to move out stress-free?",
           description:
-            "Book your move out cleaning today and leave your property spotless.",
-          primaryLabel: "Book cleaning",
-          showPriceAction: true,
+            "Confirm the property condition, handover deadline, appliance scope, and access details before booking.",
+          primaryLabel: "Book move-out cleaning",
         },
       };
     case "office-cleaning-cape-town":
@@ -422,8 +393,8 @@ export function buildPrimaryCapeTownServiceExtensionSlots(
         finalCta: {
           title: "Ready to book Office Cleaning?",
           description:
-            "Get an instant price for your Cape Town address, bedrooms, and bathrooms—then choose a time that works.",
-          primaryLabel: "Start booking",
+            "Tell us the office size, work areas, access requirements, and preferred service window to begin.",
+          primaryLabel: "Book office cleaning",
         },
       };
     case "carpet-cleaning-cape-town":
@@ -433,8 +404,8 @@ export function buildPrimaryCapeTownServiceExtensionSlots(
         finalCta: {
           title: "Ready to book Carpet Cleaning?",
           description:
-            "Get an instant price for your Cape Town address, bedrooms, and bathrooms—then choose a time that works.",
-          primaryLabel: "Start booking",
+            "Select carpeted rooms, rugs, stains, furniture access, and any approved upholstery extras for your quote.",
+          primaryLabel: "Book carpet cleaning",
         },
       };
     case "deep-cleaning-cape-town":
@@ -444,8 +415,8 @@ export function buildPrimaryCapeTownServiceExtensionSlots(
         finalCta: {
           title: "Ready to book Deep Cleaning?",
           description:
-            "Get an instant price for your Cape Town address, bedrooms, and bathrooms—then choose a time that works.",
-          primaryLabel: "Start booking",
+            "Confirm property size, build-up level, priority areas, and access details for an intensive team clean.",
+          primaryLabel: "Book deep cleaning",
         },
       };
   }
