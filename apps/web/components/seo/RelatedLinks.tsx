@@ -19,6 +19,7 @@ type Props = {
   currentServiceSlug?: CapeTownSeoServiceSlug;
   currentLocationSlug?: string;
   emphasizeLocalBooking?: boolean;
+  showBookingCta?: boolean;
   variant?: "card" | "plain" | "inline";
 };
 
@@ -86,6 +87,7 @@ export function RelatedLinks({
   currentServiceSlug,
   currentLocationSlug,
   emphasizeLocalBooking,
+  showBookingCta = true,
   variant = "card",
 }: Props) {
   const services = pickServiceLinks(currentServiceSlug);
@@ -132,13 +134,15 @@ export function RelatedLinks({
             </ul>
           </div>
         </div>
-        <GrowthCtaLink
-          href="/book"
-          source={bookingSource}
-          className="mt-[var(--ui-space-6)] inline-flex min-h-12 items-center text-[length:var(--ui-text-small)] font-medium text-primary transition hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {localBlog ? "See instant price" : "Book a cleaning in Cape Town"}
-        </GrowthCtaLink>
+        {showBookingCta ? (
+          <GrowthCtaLink
+            href="/book"
+            source={bookingSource}
+            className="mt-[var(--ui-space-6)] inline-flex min-h-12 items-center text-[length:var(--ui-text-small)] font-medium text-primary transition hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {localBlog ? "See instant price" : "Book a cleaning in Cape Town"}
+          </GrowthCtaLink>
+        ) : null}
       </nav>
     );
   }
@@ -199,20 +203,22 @@ export function RelatedLinks({
         </div>
       </div>
 
-      <div className={cn("border-t border-border pt-[var(--ui-space-6)]", isPlain ? "mt-[var(--ui-space-6)]" : "mt-[var(--ui-space-8)]")}>
-        <GrowthCtaLink
-          href="/book"
-          source={bookingSource}
-          className={cn(
-            "inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] text-[length:var(--ui-text-small)] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
-            isPlain
-              ? "px-0 text-primary hover:underline hover:underline-offset-4"
-              : "bg-primary px-[var(--ui-space-6)] text-primary-foreground shadow-[var(--ui-shadow-sm)] hover:brightness-95",
-          )}
-        >
-          {localBlog ? "See instant price" : "Book a cleaning in Cape Town"}
-        </GrowthCtaLink>
-      </div>
+      {showBookingCta ? (
+        <div className={cn("border-t border-border pt-[var(--ui-space-6)]", isPlain ? "mt-[var(--ui-space-6)]" : "mt-[var(--ui-space-8)]")}>
+          <GrowthCtaLink
+            href="/book"
+            source={bookingSource}
+            className={cn(
+              "inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] text-[length:var(--ui-text-small)] font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2",
+              isPlain
+                ? "px-0 text-primary hover:underline hover:underline-offset-4"
+                : "bg-primary px-[var(--ui-space-6)] text-primary-foreground shadow-[var(--ui-shadow-sm)] hover:brightness-95",
+            )}
+          >
+            {localBlog ? "See instant price" : "Book a cleaning in Cape Town"}
+          </GrowthCtaLink>
+        </div>
+      ) : null}
     </section>
   );
 }
