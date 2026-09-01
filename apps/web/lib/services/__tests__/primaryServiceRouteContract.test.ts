@@ -25,7 +25,7 @@ const EXPECTED_ROUTES = [
 const readSource = (path: string) =>
   readFileSync(join(process.cwd(), path), "utf8");
 
-describe("RD-PUBLIC-03G six-route contract", () => {
+describe("RD-PUBLIC-03H1 six-route visual-cleanup contract", () => {
   it("keeps exactly the six governed services inside the shared template", () => {
     expect(PRIMARY_CAPE_TOWN_SERVICE_SLUGS).toEqual(
       EXPECTED_ROUTES.map(([slug]) => slug),
@@ -78,7 +78,24 @@ describe("RD-PUBLIC-03G six-route contract", () => {
     expect(CAPE_TOWN_PRICING_AUTHORITY_HREF).toMatch(/^\//);
     expect(renderer).not.toContain("<SeoInternalLinksBlock");
     expect(renderer.match(/<RelatedLinks/g)).toHaveLength(1);
+    expect(renderer).toContain("showBookingCta={false}");
     expect(renderer).toContain("areasPillLinks.map");
+    expect(renderer).toContain("additionalAreaGuideLinks.map");
+    expect(renderer).not.toContain("Cleaning Services by Area in Cape Town");
+  });
+
+  it("keeps screenshot-driven content responsibilities and page-length controls", () => {
+    const renderer = readSource("components/seo/SeoCapeTownServicePage.tsx");
+    const airbnbExtension = readSource("components/seo/AirbnbCapeTownServiceExtendedContent.tsx");
+    const standard = CAPE_TOWN_SERVICE_SEO["standard-cleaning-cape-town"];
+    const carpet = CAPE_TOWN_SERVICE_SEO["carpet-cleaning-cape-town"];
+
+    expect(renderer).toContain("slice(0, 6)");
+    expect(airbnbExtension).not.toContain("airbnb-short-term-services");
+    expect(airbnbExtension).not.toContain("airbnb-vacation-rental-cpt");
+    expect(airbnbExtension.match(/<section/g)).toHaveLength(5);
+    expect(standard.faqs.some((faq) => faq.a.includes("customer provides"))).toBe(true);
+    expect(carpet.exclusions?.length).toBeGreaterThanOrEqual(4);
   });
 
   it("keeps an accessible mobile booking CTA on every rendered service route", () => {
