@@ -14,7 +14,6 @@ import {
 import { RelatedLinks } from "@/components/seo/RelatedLinks";
 import { ServicePageCommercialIntentSection } from "@/components/seo/ServicePageCommercialIntentSection";
 import type { PrimaryCapeTownServiceExtensionSlots } from "@/components/services/PrimaryCapeTownServiceExtensions";
-import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { SeoBreadcrumbs } from "@/components/seo/SeoBreadcrumbs";
 import { CapeTownServiceHero } from "@/components/services/CapeTownServiceHero";
 import { CAPE_TOWN_SERVICE_SEO, resolveCapeTownServiceSchemaFields } from "@/lib/seo/capeTownSeoPages";
@@ -45,7 +44,6 @@ type Props = {
 export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy", extensionSlots }: Props) {
   const data = CAPE_TOWN_SERVICE_SEO[slug];
   const bookingPath = "/book";
-  const bookingStartPath = "/book";
   const introHeading = data.introSectionHeading ?? "How this service works in Cape Town";
   const includedHeading = data.includedSectionHeading ?? "What's included";
   const areasHeading = data.areasSectionHeading ?? "Areas we serve in Cape Town";
@@ -415,7 +413,7 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
             {extensionSlots?.faqDescription ?? "Straight answers about booking, scope, and what to expect for this service in Cape Town."}
           </p>
           <div className="mt-8 space-y-5">
-            {data.faqs.map((faq) => (
+            {faqSchemaSource.map((faq) => (
               <div key={faq.q} className="rounded-2xl border border-blue-100 bg-white p-5 shadow-sm">
                 <h3 className="font-semibold text-zinc-900">{faq.q}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-zinc-600">{faq.a}</p>
@@ -446,11 +444,7 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
       ) : null}
 
       <section className="border-b border-zinc-100 py-16">
-        <div className="mx-auto max-w-4xl space-y-10 px-4">
-          <SeoInternalLinksBlock
-            title="Hub navigation"
-            className="rounded-2xl border border-zinc-200 bg-zinc-50/90 p-6"
-          />
+        <div className="mx-auto max-w-4xl px-4">
           <RelatedLinks placement="service" currentServiceSlug={slug} />
         </div>
       </section>
@@ -470,31 +464,13 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
           >
             {extensionSlots?.finalCta.primaryLabel ?? (slug === "window-cleaning-cape-town" ? "Book window cleaning" : "Start booking")}
           </GrowthCtaLink>
-          {extensionSlots?.finalCta.showAvailabilityAction || slug === "window-cleaning-cape-town" ? (
-            <>
-              <GrowthCtaLink
-                href={bookingPath}
-                source={`seo_ct_${slug}_footer_price`}
-                className="inline-flex min-h-12 items-center rounded-xl border border-white/40 bg-blue-600 px-6 text-base font-semibold text-white transition hover:bg-blue-500"
-              >
-                Get instant price
-              </GrowthCtaLink>
-              <GrowthCtaLink
-                href={bookingPath}
-                source={`seo_ct_${slug}_footer_avail`}
-                className="inline-flex min-h-12 items-center rounded-xl border border-white/40 bg-blue-600 px-6 text-base font-semibold text-white transition hover:bg-blue-500"
-              >
-                Check availability
-              </GrowthCtaLink>
-            </>
-          ) : null}
-          {extensionSlots?.finalCta.showPriceAction && !extensionSlots.finalCta.showAvailabilityAction ? (
+          {slug === "window-cleaning-cape-town" ? (
             <GrowthCtaLink
               href={bookingPath}
-              source={`seo_ct_${slug}_footer_price`}
+              source={`seo_ct_${slug}_footer_avail`}
               className="inline-flex min-h-12 items-center rounded-xl border border-white/40 bg-blue-600 px-6 text-base font-semibold text-white transition hover:bg-blue-500"
             >
-              Get instant price
+              Check availability
             </GrowthCtaLink>
           ) : null}
         </div>
@@ -508,13 +484,6 @@ export function SeoCapeTownServicePage({ slug, trustStats, heroVariant = "legacy
             className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl bg-blue-600 text-sm font-semibold text-white shadow-md transition hover:bg-blue-700"
           >
             Book now
-          </GrowthCtaLink>
-          <GrowthCtaLink
-            href={bookingStartPath}
-            source={`seo_ct_${slug}_sticky_start`}
-            className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-blue-200 bg-white text-sm font-semibold text-blue-800 transition hover:bg-blue-50"
-          >
-            Get price
           </GrowthCtaLink>
         </div>
       </div>
