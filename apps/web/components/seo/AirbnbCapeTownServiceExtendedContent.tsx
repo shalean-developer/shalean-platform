@@ -120,59 +120,6 @@ export function AirbnbCapeTownServiceExtendedContent({ bookingPath }: { bookingP
         </div>
       </section>
 
-      <section className="border-b border-blue-100 py-16" aria-labelledby="airbnb-short-term-services">
-        <div className={sectionClass}>
-          <h2 id="airbnb-short-term-services" className="text-2xl font-bold tracking-tight text-zinc-900">
-            Short-Term Rental Cleaning Services
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Scope scales with how guests actually use the space: coastal flats pick up sand and balcony grit; City Bowl
-            walk-ups need stair-smart crews; Southern Suburb houses spread mess across mudrooms and multiple baths. The same
-            short-term rental cleaning playbook still prioritises wet areas, high-touch points, and kitchens that read fresh
-            on wide-angle listing shots.
-          </p>
-          <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Holiday home resets and portfolio-wide standards sit alongside turnovers on our{" "}
-            <SafeInternalLink href={SERVICES_HUB} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              professional cleaning services hub
-            </SafeInternalLink>
-            —book the tier that matches guest promises, not guesswork.
-          </p>
-          <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Pair recurring turnovers with an occasional{" "}
-            <SafeInternalLink href={DEEP} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              deep cleaning service for Cape Town homes
-            </SafeInternalLink>{" "}
-            when grout, ovens, or neglected corners start sneaking into reviews—steady cadence beats panic resets.
-          </p>
-        </div>
-      </section>
-
-      <section className="border-b border-blue-100 bg-blue-50/25 py-16" aria-labelledby="airbnb-vacation-rental-cpt">
-        <div className={sectionClass}>
-          <h2 id="airbnb-vacation-rental-cpt" className="text-2xl font-bold tracking-tight text-zinc-900">
-            Vacation Rental Cleaning Cape Town
-          </h2>
-          <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Vacation rental cleaning spans beach-week sand, festival-season dust, and families tracking grit through passages—so
-            scope has to flex without surprises on your payout. We align kitchens, bathrooms, and floors to what guests see in
-            photos, then surface add-ons when balconies, fridges, or linen swaps need explicit time.
-          </p>
-          <p className="mt-4 text-base leading-relaxed text-zinc-600">
-            Coastal pockets such as{" "}
-            <SafeInternalLink href={HUB_SEA_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              Sea Point
-            </SafeInternalLink>{" "}
-            and{" "}
-            <SafeInternalLink href={HUB_GREEN_POINT_LOC} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              Green Point
-            </SafeInternalLink>{" "}
-            often stack humid bathrooms with salty balconies; Southern Suburb lets lean on mudrooms and multi-bath resets.
-            Property managers can brief once per building template—individual hosts can dial bedrooms and baths per stay.
-          </p>
-        </div>
-      </section>
-
       <section className="border-b border-blue-100 bg-blue-50/40 py-16" aria-labelledby="airbnb-checklist-seo">
         <div className={sectionClass}>
           <h2 id="airbnb-checklist-seo" className="text-2xl font-bold tracking-tight text-zinc-900">
