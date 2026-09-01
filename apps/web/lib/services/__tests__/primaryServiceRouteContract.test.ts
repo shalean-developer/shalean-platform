@@ -25,7 +25,7 @@ const EXPECTED_ROUTES = [
 const readSource = (path: string) =>
   readFileSync(join(process.cwd(), path), "utf8");
 
-describe("RD-PUBLIC-03F six-route contract", () => {
+describe("RD-PUBLIC-03G six-route contract", () => {
   it("keeps exactly the six governed services inside the shared template", () => {
     expect(PRIMARY_CAPE_TOWN_SERVICE_SLUGS).toEqual(
       EXPECTED_ROUTES.map(([slug]) => slug),
@@ -76,8 +76,8 @@ describe("RD-PUBLIC-03F six-route contract", () => {
     expect(renderer).toContain("faqSchemaSource.map");
     expect(renderer).toContain("CAPE_TOWN_PRICING_AUTHORITY_HREF");
     expect(CAPE_TOWN_PRICING_AUTHORITY_HREF).toMatch(/^\//);
-    expect(renderer).toContain("<SeoInternalLinksBlock");
-    expect(renderer).toContain("<RelatedLinks");
+    expect(renderer).not.toContain("<SeoInternalLinksBlock");
+    expect(renderer.match(/<RelatedLinks/g)).toHaveLength(1);
     expect(renderer).toContain("areasPillLinks.map");
   });
 
@@ -88,9 +88,8 @@ describe("RD-PUBLIC-03F six-route contract", () => {
     expect(renderer).toContain("md:hidden print:hidden");
     expect(renderer).toContain("env(safe-area-inset-bottom)");
     expect(renderer).toContain('source={`seo_ct_${slug}_sticky_book`}');
-    expect(renderer).toContain('source={`seo_ct_${slug}_sticky_start`}');
+    expect(renderer).not.toContain('source={`seo_ct_${slug}_sticky_start`}');
     expect(renderer).toContain("min-h-12");
     expect(renderer).toContain("Book now");
-    expect(renderer).toContain("Get price");
   });
 });
