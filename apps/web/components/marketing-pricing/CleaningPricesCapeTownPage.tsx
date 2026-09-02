@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
-import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { marketingPrimaryCtaClassName } from "@/lib/marketing/marketingHomeCtaClasses";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { moneyPageExploreAreaHubs, moneyPageSuburbAuthorityKeywordLinks } from "@/lib/seo/moneyPageLocationClusters";
@@ -37,7 +36,7 @@ export const CLEANING_PRICES_CAPE_TOWN_FAQS = [
     idSlug: "from-vs-checkout",
     question: "Do the ‘from’ prices on this page match checkout?",
     answer:
-      "Tiers and home-size anchors here are entry bands for planning. Checkout reflects the exact rooms, baths, add-ons, and tier you select—the number you agree to before payment.",
+      "The starting prices come from Shalean’s active booking catalogue. Checkout reflects the exact rooms, bathrooms, add-ons, and service you select, plus the separately itemised service fee—the number you approve before payment.",
   },
   {
     idSlug: "pick-tier-checkout",
@@ -226,9 +225,9 @@ export function CleaningPricesCapeTownPage({
               Cleaning Prices in Cape Town
             </h1>
             <p className="mt-4 text-base leading-relaxed text-slate-600 sm:text-lg">
-              This page lists Shalean&apos;s <strong className="font-semibold text-slate-800">current from-prices</strong> by tier and
-              home-size anchors. Your checkout total is built from the same fields—bedrooms, bathrooms, service type, frequency, and
-              selected extras—so what you approve before payment is what crews brief against.
+              Compare Shalean&apos;s <strong className="font-semibold text-slate-800">current starting prices</strong> across all six
+              services. The figures come from the active booking catalogue; your exact checkout total reflects the scope, frequency,
+              selected extras, and separately itemised service fee.
             </p>
             <p className="mt-3 text-base leading-relaxed text-slate-700 sm:text-lg">
               Open <strong className="font-semibold text-slate-800">Get instant quote</strong>, walk the steps, then confirm only when
@@ -282,24 +281,9 @@ export function CleaningPricesCapeTownPage({
                 Book a Cleaner
               </GrowthCtaLink>
             </div>
-            <div className="mx-auto mt-6 max-w-xl text-center text-sm font-medium text-slate-800 sm:text-base">
-              <p>Transparent pricing with a separately itemised R{pricingDisplay.serviceFeeZar} service fee.</p>
-              <p className="mt-1">Only pay for what you book.</p>
-              <ul className="mx-auto mt-4 flex max-w-md flex-col gap-1.5 text-left text-slate-700 sm:mx-auto sm:max-w-lg">
-                <li className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  <span>Instant online pricing</span>
-                </li>
-                <li className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  <span>No contracts</span>
-                </li>
-                <li className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  <span>Pay securely online</span>
-                </li>
-              </ul>
-            </div>
+            <p className="mx-auto mt-6 max-w-xl text-sm font-medium text-slate-800 sm:text-base">
+              A separately itemised R{pricingDisplay.serviceFeeZar} service fee is added before payment.
+            </p>
           </div>
         </div>
       </section>
@@ -551,11 +535,7 @@ export function CleaningPricesCapeTownPage({
         </div>
       </section>
 
-      <section className="border-b border-slate-100 bg-slate-50/80 py-14 md:py-16">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <SeoInternalLinksBlock title="Hub navigation" className="rounded-2xl border border-slate-200 bg-slate-50/90 p-6" />
-        </div>
-      </section>
+
     </>
   );
 }
