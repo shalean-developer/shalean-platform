@@ -4,6 +4,7 @@ import { GrowthTracking } from "@/components/growth/GrowthTracking";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { SiteFooter } from "@/components/nav/SiteFooter";
 import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
+import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { getHomePageData } from "@/lib/home/data";
 import { buildHubCleaningServiceLinks } from "@/lib/marketing/hubCleaningServiceLinks";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -40,8 +41,22 @@ export const metadata: Metadata = {
 
 export default async function CleaningPricesCapeTownRoutePage() {
   const bookingHref = marketingHomeBookingHref();
-  const { locations } = await getHomePageData();
+  const [{ locations }, bookingCatalog] = await Promise.all([
+    getHomePageData(),
+    loadBookingV2Catalog(),
+  ]);
   const seoLocationLinks = buildHubCleaningServiceLinks(locations);
+  const pricingDisplay = {
+    serviceFeeZar: bookingCatalog.feesConfig.serviceFeeFlatCents / 100,
+    services: {
+      standard: bookingCatalog.catalog["regular-cleaning"].basePrice,
+      deep: bookingCatalog.catalog["deep-cleaning"].basePrice,
+      move: bookingCatalog.catalog["moving-cleaning"].basePrice,
+      airbnb: bookingCatalog.catalog["airbnb-cleaning"].basePrice,
+      office: null,
+      carpet: bookingCatalog.catalog["carpet-cleaning"].basePrice,
+    },
+  };
 
   return (
     <div className="bg-background text-foreground">
@@ -55,7 +70,7 @@ export default async function CleaningPricesCapeTownRoutePage() {
       />
       <MarketingHomeHeader bookingHref={bookingHref} />
       <main>
-        <CleaningPricesCapeTownPage seoLocationLinks={seoLocationLinks} />
+        <CleaningPricesCapeTownPage seoLocationLinks={seoLocationLinks} pricingDisplay={pricingDisplay} />
       </main>
       <SiteFooter />
     </div>
