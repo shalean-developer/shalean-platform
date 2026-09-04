@@ -7,8 +7,6 @@ type HowItWorksStep = {
   Icon: LucideIcon;
   title: string;
   description: string;
-  surface: string;
-  iconTone: string;
 };
 
 const STEPS: readonly HowItWorksStep[] = [
@@ -17,24 +15,18 @@ const STEPS: readonly HowItWorksStep[] = [
     Icon: CalendarCheck,
     title: "Book online",
     description: "Choose your service, share the details and pick a time that suits you.",
-    surface: "#C9D8FF",
-    iconTone: "var(--navy-from)",
   },
   {
     step: "02",
     Icon: Sparkles,
     title: "We clean",
     description: "A vetted Shalean cleaner or team arrives for the service you selected.",
-    surface: "#B8C5FF",
-    iconTone: "var(--navy-to)",
   },
   {
     step: "03",
     Icon: House,
     title: "You relax",
     description: "Enjoy a professionally cleaned space while we take care of the work.",
-    surface: "#EFF6FF",
-    iconTone: "var(--primary)",
   },
 ] as const;
 
@@ -43,7 +35,7 @@ export function MarketingHomeHowItWorksSection() {
     <HomeSection
       id="how-it-works"
       containerSize="marketing"
-      className="scroll-mt-24 bg-background md:py-[var(--ui-space-20)]"
+      className="scroll-mt-24 bg-primary/10 md:py-[var(--ui-space-20)]"
       aria-label="How Shalean cleaning works"
     >
       <MarketingSectionHeader
@@ -53,30 +45,27 @@ export function MarketingHomeHowItWorksSection() {
       />
 
       <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
-        {STEPS.map(({ step, Icon, title, description, surface, iconTone }) => (
+        {STEPS.map(({ step, Icon, title, description }) => (
           <article
             key={step}
-            className="relative flex min-h-[180px] flex-col rounded-[var(--ui-radius-marketing)] border border-black/5 p-[var(--ui-space-6)] text-foreground shadow-[var(--ui-shadow-sm)]"
-            style={{ backgroundColor: surface }}
+            className="relative flex min-h-[180px] flex-col items-center justify-center rounded-[var(--ui-radius-marketing)] border border-border/60 bg-card p-[var(--ui-space-5)] text-center text-card-foreground shadow-[var(--ui-shadow-lg)]"
           >
-            <div className="flex items-start justify-between gap-[var(--ui-space-4)]">
-              <span className="text-[length:var(--ui-text-small)] font-semibold tracking-[0.12em] text-foreground/60">
-                {step}
-              </span>
-              <div
-                className="flex h-14 w-14 items-center justify-center rounded-full bg-background/85 shadow-[var(--ui-shadow-sm)]"
-                style={{ color: iconTone }}
-                aria-hidden
-              >
-                <Icon className="h-7 w-7" strokeWidth={1.65} />
-              </div>
+            <span className="absolute right-[var(--ui-space-5)] top-[var(--ui-space-4)] text-[length:var(--ui-text-caption)] font-semibold tracking-[0.12em] text-muted-foreground">
+              {step}
+            </span>
+
+            <div
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-[var(--navy-from)]"
+              aria-hidden
+            >
+              <Icon className="h-6 w-6" strokeWidth={1.65} />
             </div>
 
-            <div className="mt-auto pt-[var(--ui-space-8)]">
-              <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight">
+            <div className="mt-[var(--ui-space-3)]">
+              <h3 className="text-[length:var(--ui-text-card-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight">
                 {title}
               </h3>
-              <p className="mt-[var(--ui-space-3)] max-w-sm text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-foreground/75">
+              <p className="mx-auto mt-[var(--ui-space-2)] max-w-xs text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
                 {description}
               </p>
             </div>
