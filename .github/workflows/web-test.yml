@@ -123,6 +123,7 @@ jobs:
           lib/services/__tests__/primaryServiceHeroContract.test.ts
           lib/services/__tests__/primaryServiceRouteContract.test.ts
           lib/seo/__tests__/capeTownServiceSchemaPricingAuthority.test.ts
+          lib/seo/__tests__/pricingRouteAuthorityProxy.test.ts
           lib/seo/__tests__/locationsShortSlugProxyRedirect.test.ts
           app/api/meta/data-deletion/__tests__/route.test.ts
           lib/oauth/__tests__/metaFacebookOAuth.test.ts
