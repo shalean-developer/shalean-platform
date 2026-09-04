@@ -56,7 +56,7 @@ export function MarketingHomeHowItWorksSection() {
         {STEPS.map(({ step, Icon, title, description, surface, iconTone }) => (
           <article
             key={step}
-            className="relative flex min-h-[320px] flex-col rounded-[var(--ui-radius-marketing)] border border-black/5 p-[var(--ui-space-8)] text-foreground shadow-[var(--ui-shadow-sm)]"
+            className="relative flex min-h-[260px] flex-col rounded-[var(--ui-radius-marketing)] border border-black/5 p-[var(--ui-space-6)] text-foreground shadow-[var(--ui-shadow-sm)]"
             style={{ backgroundColor: surface }}
           >
             <div className="flex items-start justify-between gap-[var(--ui-space-4)]">
@@ -72,7 +72,7 @@ export function MarketingHomeHowItWorksSection() {
               </div>
             </div>
 
-            <div className="mt-auto pt-[var(--ui-space-12)]">
+            <div className="mt-auto pt-[var(--ui-space-8)]">
               <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight">
                 {title}
               </h3>
