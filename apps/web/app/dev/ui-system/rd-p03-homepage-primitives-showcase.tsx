@@ -15,7 +15,7 @@ export function RDP03HomepagePrimitivesShowcase() {
           <span className="rounded-[var(--ui-radius-pill)] bg-secondary px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-secondary-foreground">HOMEPAGE SYSTEM</span>
           <span className="rounded-[var(--ui-radius-pill)] bg-warning px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-warning-foreground">CURRENT SPECIMEN</span>
         </div>
-        <h1 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] text-foreground">Reusable homepage section system</h1>
+        <h2 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] text-foreground">Reusable homepage section system</h2>
         <p className="mt-[var(--ui-space-2)] max-w-3xl text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">Development-only specimens for the current homepage hero, section framing, heading, feature-card, proof-card and final-conversion patterns.</p>
       </div>
 

@@ -54,7 +54,7 @@ export function ShaleanColorPaletteShowcase() {
             <span className="rounded-full border border-border px-3 py-1">Canonical palette</span>
             <span className="rounded-full border border-border px-3 py-1">Development reference</span>
           </div>
-          <h1 className="mt-4 text-[length:var(--ui-text-page-title)] font-bold leading-[var(--ui-leading-tight)] tracking-tight">Shalean color palette</h1>
+          <h2 className="mt-4 text-[length:var(--ui-text-page-title)] font-bold leading-[var(--ui-leading-tight)] tracking-tight">Shalean color palette</h2>
           <p className="mt-3 text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
             Shalean Primary (#6382F7) is the main brand/action colour. Navy and Royal provide depth; the official homepage marketing palette stays within the Shalean blue family through Soft Periwinkle, Powder Blue, Sky Mist, Blue Ice, Cool Cloud and White.
           </p>

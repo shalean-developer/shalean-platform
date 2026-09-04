@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { CheckCircle2 } from "lucide-react";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
-import { SeoInternalLinksBlock } from "@/components/seo/SeoInternalLinksBlock";
 import { marketingPrimaryCtaClassName } from "@/lib/marketing/marketingHomeCtaClasses";
 import { CAPE_TOWN_SERVICE_SEO } from "@/lib/seo/capeTownSeoPages";
 import { moneyPageExploreAreaHubs, moneyPageSuburbAuthorityKeywordLinks } from "@/lib/seo/moneyPageLocationClusters";
@@ -37,7 +36,7 @@ export const CLEANING_PRICES_CAPE_TOWN_FAQS = [
     idSlug: "from-vs-checkout",
     question: "Do the ‘from’ prices on this page match checkout?",
     answer:
-      "Tiers and home-size anchors here are entry bands for planning. Checkout reflects the exact rooms, baths, add-ons, and tier you select—the number you agree to before payment.",
+      "The starting prices come from Shalean’s active booking catalogue. Checkout reflects the exact rooms, bathrooms, add-ons, and service you select, plus the separately itemised service fee—the number you approve before payment.",
   },
   {
     idSlug: "pick-tier-checkout",
@@ -84,78 +83,45 @@ function buildPricingFaqJsonLdNode(pageUrl: string): Record<string, unknown> {
   };
 }
 
-/** Supplementary offers by home size — supports rich-result eligibility where Google accepts OfferCatalog. */
-function buildPricingOfferCatalogNode(pageUrl: string, catalogId: string): Record<string, unknown> {
+type PricingServiceKey = "standard" | "deep" | "move" | "airbnb" | "office" | "carpet";
+
+export type CleaningPricesDisplayConfig = {
+  serviceFeeZar: number;
+  services: Record<PricingServiceKey, number | null>;
+};
+
+function buildPricingOfferCatalogNode(
+  pageUrl: string,
+  catalogId: string,
+  tiers: readonly { name: string; price: number | null; href: string; description: string }[],
+): Record<string, unknown> {
   const eligibleRegion = { "@type": "Place", name: "Cape Town, South Africa" };
-  const describe =
-    "Indicative starting-from totals for typical standard-clean scopes in Cape Town; final price depends on service tier, bathrooms, and extras selected online.";
   return {
     "@type": "OfferCatalog",
     "@id": catalogId,
-    name: "Cleaning prices by home size in Cape Town",
+    name: "Cleaning services and starting prices in Cape Town",
     url: pageUrl,
-    description: describe,
-    itemListElement: [
-      {
-        "@type": "ListItem",
-        position: 1,
-        item: {
-          "@type": "Offer",
-          name: "Residential cleaning — studio / 1-bedroom apartment (from)",
-          description: describe,
-          price: "280",
-          priceCurrency: "ZAR",
-          url: pageUrl,
-          availability: "https://schema.org/InStock",
-          eligibleRegion,
-        },
+    itemListElement: tiers.map((tier, index) => ({
+      "@type": "ListItem",
+      position: index + 1,
+      item: {
+        "@type": "Offer",
+        name: tier.name,
+        description: tier.description,
+        url: absoluteCanonicalUrl(tier.href),
+        availability: "https://schema.org/InStock",
+        eligibleRegion,
+        ...(tier.price != null
+          ? { price: String(tier.price), priceCurrency: "ZAR" }
+          : {}),
       },
-      {
-        "@type": "ListItem",
-        position: 2,
-        item: {
-          "@type": "Offer",
-          name: "Residential cleaning — 2-bedroom home (from)",
-          description: describe,
-          price: "350",
-          priceCurrency: "ZAR",
-          url: pageUrl,
-          availability: "https://schema.org/InStock",
-          eligibleRegion,
-        },
-      },
-      {
-        "@type": "ListItem",
-        position: 3,
-        item: {
-          "@type": "Offer",
-          name: "Residential cleaning — 3-bedroom home (from)",
-          description: describe,
-          price: "450",
-          priceCurrency: "ZAR",
-          url: pageUrl,
-          availability: "https://schema.org/InStock",
-          eligibleRegion,
-        },
-      },
-      {
-        "@type": "ListItem",
-        position: 4,
-        item: {
-          "@type": "Offer",
-          name: "Residential cleaning — 4+ bedroom home",
-          description:
-            "Custom quote in Cape Town based on bedrooms, bathrooms, property condition, and cleaning level—totals confirmed online before payment.",
-          url: pageUrl,
-          availability: "https://schema.org/InStock",
-          eligibleRegion,
-        },
-      },
-    ],
+    })),
   };
 }
 
-function buildCleaningPricesHubJsonLd(): Record<string, unknown> {
+function buildCleaningPricesHubJsonLd(
+  tiers: readonly { name: string; price: number | null; href: string; description: string }[],
+): Record<string, unknown> {
   const pageUrl = absoluteCanonicalUrl(CANONICAL_PATH);
   const catalogId = `${pageUrl}#offer-catalog`;
   return jsonLdGraphDocument([
@@ -168,7 +134,7 @@ function buildCleaningPricesHubJsonLd(): Record<string, unknown> {
       speakableCssSelectors: ["main h1"],
     }),
     buildPrimaryLocalBusinessMoneyPageNode(),
-    buildPricingOfferCatalogNode(pageUrl, catalogId),
+    buildPricingOfferCatalogNode(pageUrl, catalogId, tiers),
     buildPricingFaqJsonLdNode(pageUrl),
     buildBreadcrumbJsonLdNode(pageUrl, [
       { name: "Home", url: SITE_ORIGIN },
@@ -177,74 +143,64 @@ function buildCleaningPricesHubJsonLd(): Record<string, unknown> {
   ]);
 }
 
-const pricingTiers = [
+const pricingTierDefinitions = [
   {
-    name: "Standard Cleaning (Cape Town)",
-    from: "R280",
-    description:
-      "Regular home upkeep—kitchens, bathrooms, floors, and surfaces kept guest-ready. Ideal for weekly, bi-weekly, or monthly rhythm.",
+    key: "standard",
+    name: "Standard Cleaning",
+    description: "Reliable maintenance cleaning for occupied homes.",
     href: svc["standard-cleaning-cape-town"].path,
-    cta: "Standard cleaning services in Cape Town",
-    fullBreakdownLabel: "standard cleaning services in Cape Town",
   },
   {
-    name: "Deep Cleaning (Cape Town)",
-    from: "R520",
-    description:
-      "Heavier reset for neglected areas, seasonal refreshes, or before you settle into a maintenance cadence. More time on detail zones.",
+    key: "deep",
+    name: "Deep Cleaning",
+    description: "A detailed reset for heavier dirt, neglected areas, and seasonal refreshes.",
     href: svc["deep-cleaning-cape-town"].path,
-    cta: "Deep cleaning services in Cape Town",
-    fullBreakdownLabel: "deep cleaning services in Cape Town",
   },
   {
-    name: "Move-Out Cleaning (Cape Town)",
-    from: "R720",
-    description:
-      "Handover-focused scope for inspections and deposit peace of mind. Structured for empty or nearly empty homes.",
+    key: "move",
+    name: "Move Out Cleaning",
+    description: "Handover-focused cleaning for empty or nearly empty homes.",
     href: svc["move-out-cleaning-cape-town"].path,
-    cta: "Move-out cleaning services in Cape Town",
-    fullBreakdownLabel: "move-out cleaning services in Cape Town",
   },
   {
-    name: "Airbnb Cleaning (Cape Town)",
-    from: "R320",
-    description:
-      "Fast turnovers between guests—reset living areas, sanitise bathrooms, kitchen polish, and presentation-ready finishing.",
+    key: "airbnb",
+    name: "Airbnb Cleaning",
+    description: "Guest-ready turnover cleaning between short-stay bookings.",
     href: svc["airbnb-cleaning-cape-town"].path,
-    cta: "Airbnb cleaning services in Cape Town",
-    fullBreakdownLabel: "Airbnb cleaning services in Cape Town",
   },
   {
-    name: "Office Cleaning (Cape Town)",
-    from: "Custom quote",
-    description:
-      "Desks, kitchens, bathrooms, bins, and communal floors on a schedule that fits your team—priced from footprint and frequency.",
+    key: "office",
+    name: "Office Cleaning",
+    description: "A scoped commercial clean based on footprint, facilities, and frequency.",
     href: svc["office-cleaning-cape-town"].path,
-    cta: "Office cleaning services in Cape Town",
-    fullBreakdownLabel: "office cleaning services in Cape Town",
   },
-] as const;
-
-const pricingComparisonRows = [
-  { service: "Standard Cleaning", price: "R280", bestFor: "Regular maintenance" },
-  { service: "Deep Cleaning", price: "R520", bestFor: "Full home reset" },
-  { service: "Move-Out Cleaning", price: "R720", bestFor: "End of tenancy" },
-  { service: "Airbnb Cleaning", price: "R320", bestFor: "Short-term rentals" },
-] as const;
-
-const homeSizePricingBands = [
-  { label: "Studio / 1-bedroom apartment", price: "R280" },
-  { label: "2-bedroom home", price: "R350" },
-  { label: "3-bedroom home", price: "R450" },
-  { label: "4+ bedroom home", price: "Custom quote" },
-] as const;
+  {
+    key: "carpet",
+    name: "Carpet Cleaning",
+    description: "Specialist carpet, rug, and upholstery cleaning priced from the selected scope.",
+    href: svc["carpet-cleaning-cape-town"].path,
+  },
+] as const satisfies readonly {
+  key: PricingServiceKey;
+  name: string;
+  description: string;
+  href: string;
+}[];
 
 type CleaningPricesCapeTownPageProps = {
   seoLocationLinks?: readonly { readonly href: string; readonly label: string }[];
+  pricingDisplay: CleaningPricesDisplayConfig;
 };
 
-export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPricesCapeTownPageProps) {
-  const hubJsonLd = buildCleaningPricesHubJsonLd();
+export function CleaningPricesCapeTownPage({
+  seoLocationLinks = [],
+  pricingDisplay,
+}: CleaningPricesCapeTownPageProps) {
+  const pricingTiers = pricingTierDefinitions.map((tier) => ({
+    ...tier,
+    price: pricingDisplay.services[tier.key],
+  }));
+  const hubJsonLd = buildCleaningPricesHubJsonLd(pricingTiers);
 
   const staticHubHrefs = new Set([
     ...popularCapeTownAreaHubs.map((h) => h.href),
@@ -269,9 +225,9 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
               Cleaning Prices in Cape Town
             </h1>
             <p className="mt-4 text-base leading-relaxed text-slate-600 sm:text-lg">
-              This page lists Shalean&apos;s <strong className="font-semibold text-slate-800">current from-prices</strong> by tier and
-              home-size anchors. Your checkout total is built from the same fields—bedrooms, bathrooms, service type, frequency, and
-              selected extras—so what you approve before payment is what crews brief against.
+              Compare Shalean&apos;s <strong className="font-semibold text-slate-800">current starting prices</strong> across all six
+              services. The figures come from the active booking catalogue; your exact checkout total reflects the scope, frequency,
+              selected extras, and separately itemised service fee.
             </p>
             <p className="mt-3 text-base leading-relaxed text-slate-700 sm:text-lg">
               Open <strong className="font-semibold text-slate-800">Get instant quote</strong>, walk the steps, then confirm only when
@@ -325,24 +281,9 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
                 Book a Cleaner
               </GrowthCtaLink>
             </div>
-            <div className="mx-auto mt-6 max-w-xl text-center text-sm font-medium text-slate-800 sm:text-base">
-              <p>Transparent pricing. No hidden fees.</p>
-              <p className="mt-1">Only pay for what you book.</p>
-              <ul className="mx-auto mt-4 flex max-w-md flex-col gap-1.5 text-left text-slate-700 sm:mx-auto sm:max-w-lg">
-                <li className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  <span>Instant online pricing</span>
-                </li>
-                <li className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  <span>No contracts</span>
-                </li>
-                <li className="flex gap-2">
-                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden />
-                  <span>Pay securely online</span>
-                </li>
-              </ul>
-            </div>
+            <p className="mx-auto mt-6 max-w-xl text-sm font-medium text-slate-800 sm:text-base">
+              A separately itemised R{pricingDisplay.serviceFeeZar} service fee is added before payment.
+            </p>
           </div>
         </div>
       </section>
@@ -355,9 +296,9 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
               Cleaning services prices Cape Town — at a glance
             </h2>
             <p className="mt-3 text-slate-600">
-              Shown amounts are <strong className="font-semibold text-slate-800">entry bands</strong> for planning. Checkout applies
-              your exact bedroom and bathroom counts, tier, and extras. Office work still routes through a short scoped quote from
-              footprint and frequency.
+              Starting amounts come from the same active service catalogue used by booking. Your exact total can also include room,
+              scope, frequency, and extras adjustments, plus a separately itemised R{pricingDisplay.serviceFeeZar} service fee. Office
+              work routes through a scoped quote based on footprint and frequency.
             </p>
             <p className="mx-auto mt-5 max-w-2xl text-center text-slate-600">
               In the booking flow, switch <strong className="font-semibold text-slate-800">once-off vs recurring</strong> before you
@@ -375,7 +316,7 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
                   <h3 className="text-lg font-semibold text-slate-900">{tier.name}</h3>
                   <p className="shrink-0 text-right">
                     <span className="block text-xs font-medium uppercase tracking-wide text-slate-500">From</span>
-                    <span className="text-xl font-bold text-blue-600">{tier.from}</span>
+                    <span className="text-xl font-bold text-blue-600">{tier.price == null ? "Custom quote" : `R${tier.price}`}</span>
                   </p>
                 </div>
                 <p className="mt-3 flex-1 text-sm leading-relaxed text-slate-600">{tier.description}</p>
@@ -383,51 +324,11 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
                   href={tier.href}
                   className="mt-5 inline-flex text-sm font-semibold text-blue-700 underline-offset-2 hover:underline"
                 >
-                  {tier.cta}
+                  View {tier.name.toLowerCase()} details
                 </Link>
-                <p className="mt-3 text-xs leading-relaxed text-slate-600">
-                  For a full breakdown, see our{" "}
-                  <Link href={tier.href} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                    {tier.fullBreakdownLabel}
-                  </Link>
-                  .
-                </p>
               </li>
             ))}
           </ul>
-
-          <div className="mx-auto mt-12 max-w-4xl">
-            <h3 className="text-center text-lg font-semibold text-slate-900">Compare starting prices</h3>
-            <div className="mt-4 overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-              <table className="w-full min-w-[520px] border-collapse text-left text-sm">
-                <caption className="sr-only">
-                  Comparison of Shalean cleaning services in Cape Town with starting prices and best use cases
-                </caption>
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50">
-                    <th scope="col" className="px-4 py-3 font-semibold text-slate-900">
-                      Service
-                    </th>
-                    <th scope="col" className="px-4 py-3 font-semibold text-slate-900">
-                      Starting Price
-                    </th>
-                    <th scope="col" className="px-4 py-3 font-semibold text-slate-900">
-                      Best For
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pricingComparisonRows.map((row) => (
-                    <tr key={row.service} className="border-b border-slate-100 last:border-b-0">
-                      <td className="px-4 py-3 font-medium text-slate-800">{row.service}</td>
-                      <td className="px-4 py-3 text-blue-700 font-semibold">{row.price}</td>
-                      <td className="px-4 py-3 text-slate-600">{row.bestFor}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
 
           <p className="mx-auto mt-8 max-w-2xl text-center text-sm text-slate-600">
             Need glass done to handover standard? Pair your booking with{" "}
@@ -493,40 +394,6 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
               </ul>
             </>
           ) : null}
-        </div>
-      </section>
-
-      {/* Home size — long-tail intent */}
-      <section className="border-b border-slate-100 bg-slate-50/80 py-14 md:py-16">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">
-            Cleaning prices by home size in Cape Town
-          </h2>
-          <p className="mt-4 leading-relaxed text-slate-600">
-            These rows mirror the <strong className="font-semibold text-slate-800">standard-tier anchors</strong> in checkout for
-            typical layouts—change tier or add-ons and the builder reprices before you pay.
-          </p>
-          <ul className="mt-8 space-y-4 rounded-2xl border border-slate-200 bg-slate-50/90 p-6 text-slate-800">
-            {homeSizePricingBands.map((row) => (
-              <li key={row.label} className="flex flex-wrap items-baseline justify-between gap-2 border-b border-slate-200/80 pb-4 last:border-b-0 last:pb-0">
-                <span className="font-medium">{row.label}</span>
-                <span className="text-lg font-semibold text-blue-700">
-                  {row.price === "Custom quote" ? row.price : `from ${row.price}`}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-6 text-sm leading-relaxed text-slate-600">
-            Lock the price for your exact bedroom and bathroom count in{" "}
-            <GrowthCtaLink
-              href="/book"
-              source="cleaning_prices_home_size_quote"
-              className="font-semibold text-blue-700 underline-offset-2 hover:underline"
-            >
-              instant quote
-            </GrowthCtaLink>
-            —that captures 1-bedroom cleaning cost, 2-bedroom cleaning cost, and larger homes in one flow.
-          </p>
         </div>
       </section>
 
@@ -601,55 +468,6 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
         </div>
       </section>
 
-      {/* Internal linking */}
-      <section className="border-b border-slate-100 bg-slate-50/80 py-14 md:py-16">
-        <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 md:text-3xl">Explore services &amp; scopes</h2>
-          <p className="mt-4 leading-relaxed text-slate-600">
-            Compare what&apos;s included before you choose a tier—these pages spell out checklists, typical durations, and booking
-            paths:
-          </p>
-          <ul className="mt-6 list-disc space-y-3 pl-5 text-slate-700 marker:text-blue-600">
-            <li>
-              <Link href={svc["standard-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                Standard cleaning services in Cape Town
-              </Link>{" "}
-              — recurring house cleaning prices and maintenance scope.
-            </li>
-            <li>
-              <Link href={svc["deep-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                Deep cleaning services in Cape Town
-              </Link>{" "}
-              — deeper reset when kitchens, bathrooms, or dust load need more time.
-            </li>
-            <li>
-              <Link href={svc["move-out-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                Move-out cleaning services in Cape Town
-              </Link>{" "}
-              — deposit-focused detailing and empty-home workflows.
-            </li>
-            <li>
-              <Link href={svc["airbnb-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                Airbnb cleaning services in Cape Town
-              </Link>{" "}
-              — guest-ready turnovers when calendars are tight.
-            </li>
-            <li>
-              <Link href={svc["office-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                Office cleaning services in Cape Town
-              </Link>{" "}
-              — workstations, kitchens, and washrooms on a commercial rhythm.
-            </li>
-            <li>
-              <Link href={svc["window-cleaning-cape-town"].path} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-                Window cleaning services in Cape Town
-              </Link>{" "}
-              — interior (and scope-dependent exterior) glass add-ons for sparkle and handovers.
-            </li>
-          </ul>
-        </div>
-      </section>
-
       {/* FAQ */}
       <section id="faq" className="scroll-mt-24 border-b border-slate-100 bg-slate-50/80 py-14 md:py-16">
         <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8">
@@ -711,23 +529,13 @@ export function CleaningPricesCapeTownPage({ seoLocationLinks = [] }: CleaningPr
               >
                 Get your exact cleaning price now
               </GrowthCtaLink>
-              <GrowthCtaLink
-                href="/book"
-                source="cleaning_prices_final_cta_book"
-                className="inline-flex items-center justify-center rounded-full border-2 border-white/80 bg-transparent px-6 py-3.5 text-base font-semibold text-white transition hover:bg-white/10"
-              >
-                Book a cleaner
-              </GrowthCtaLink>
+
             </div>
           </div>
         </div>
       </section>
 
-      <section className="border-b border-slate-100 bg-slate-50/80 py-14 md:py-16">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6 lg:px-8">
-          <SeoInternalLinksBlock title="Hub navigation" className="rounded-2xl border border-slate-200 bg-slate-50/90 p-6" />
-        </div>
-      </section>
+
     </>
   );
 }

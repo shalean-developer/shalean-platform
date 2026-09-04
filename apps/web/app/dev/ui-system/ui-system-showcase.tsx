@@ -105,19 +105,19 @@ export function UISystemShowcase() {
   const [selectValue, setSelectValue] = useState("standard");
 
   return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-10 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 lg:px-8">
+    <div className="min-h-screen bg-zinc-50 px-4 py-10 text-zinc-950 dark:bg-zinc-950 dark:text-zinc-50 sm:px-6 lg:px-8">
       <div className="mx-auto max-w-7xl space-y-12">
         <header className="space-y-4">
           <div className="flex flex-wrap items-center gap-2">
             <Badge>RD-P00V</Badge>
             <Badge variant="outline">Baseline audit</Badge>
-            <Badge variant="warning">RD-P00 not approved</Badge>
+            <Badge variant="outline">Historical snapshot</Badge>
             <Badge variant="outline">Development only</Badge>
           </div>
           <div className="max-w-4xl space-y-2">
-            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">Shalean reusable UI baseline</h1>
+            <h2 className="text-3xl font-bold tracking-tight sm:text-4xl">Shalean reusable UI baseline</h2>
             <p className="text-base leading-7 text-zinc-600 dark:text-zinc-400">
-              Read-only visual audit for the design/rd04-platform-redesign branch. Existing platform APIs, RBAC, booking, pricing, payment, ownership and persistence logic remain authoritative. RD-P01 does not start until RD-P00 is approved.
+              Archived read-only visual audit from the original design-system baseline. Its classifications are retained as historical evidence and do not represent the current programme status.
             </p>
           </div>
         </header>
@@ -241,10 +241,10 @@ export function UISystemShowcase() {
         </section>
 
         <section className="rounded-2xl border border-amber-200 bg-amber-50 p-6 dark:border-amber-900 dark:bg-amber-950/30">
-          <h2 className="text-lg font-semibold">RD-P00 approval gate</h2>
-          <p className="mt-2 max-w-4xl text-sm leading-6 text-zinc-700 dark:text-zinc-300">This catalogue is an audit artefact, not RD-P01 implementation. Hard-coded primitive colours, duplicate CTA/select systems and missing global patterns are recorded findings. Do not redesign or replace them until RD-P00 is approved. No backend, booking, payment, RBAC or persistence behaviour is changed by this page.</p>
+          <h3 className="text-lg font-semibold">Historical RD-P00 gate record</h3>
+          <p className="mt-2 max-w-4xl text-sm leading-6 text-zinc-700 dark:text-zinc-300">This archived catalogue preserves the original audit findings. Current implementation authority is documented in the active sections above. No backend, booking, payment, RBAC or persistence behaviour is changed by this page.</p>
         </section>
       </div>
-    </main>
+    </div>
   );
 }

@@ -117,13 +117,14 @@ const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
 
 export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   const admin = getSupabaseAdmin();
+  let extrasCatalogAuthoritative = false;
 
   const dbServices: Record<string, DbServiceRow> = {};
   const dbExtras: Record<string, DbExtraRow> = {};
   let configJson: unknown = null;
 
   if (admin) {
-    const [{ data: svcRows }, { data: extRows }, { data: configRow }] = await Promise.all([
+    const [servicesResult, extrasResult, configResult] = await Promise.all([
       admin
         .from("pricing_services")
         .select(
@@ -138,6 +139,10 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         .order("sort_order", { ascending: true }),
       admin.from("pricing_booking_config").select("config").eq("id", "default").maybeSingle(),
     ]);
+    const { data: svcRows } = servicesResult;
+    const { data: extRows } = extrasResult;
+    const { data: configRow } = configResult;
+    extrasCatalogAuthoritative = extrasResult.error == null;
 
     if (svcRows) {
       for (const raw of svcRows) {
@@ -294,5 +299,6 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
     feesConfig,
     scheduling,
     activeServiceSlugs,
+    extrasCatalogAuthoritative,
   };
 }
