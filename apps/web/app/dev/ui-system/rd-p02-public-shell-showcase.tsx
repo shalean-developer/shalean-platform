@@ -45,7 +45,7 @@ export function RDP02PublicShellShowcase() {
           <span className="rounded-[var(--ui-radius-pill)] bg-secondary px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-secondary-foreground">PUBLIC SHELL</span>
           <span className="rounded-[var(--ui-radius-pill)] bg-success px-[var(--ui-space-3)] py-[var(--ui-space-1)] text-[length:var(--ui-text-caption)] font-semibold text-success-foreground">CANONICAL</span>
         </div>
-        <h1 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] text-foreground">Canonical public shell</h1>
+        <h2 className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] text-foreground">Canonical public shell</h2>
         <p className="mt-[var(--ui-space-2)] max-w-3xl text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
           UI-system authority for the Shalean public header, 112rem marketing canvas, canonical page gutter, shared footer and public CTA direction.
         </p>

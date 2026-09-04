@@ -116,6 +116,7 @@ jobs:
           npm run test --
           lib/marketing/__tests__/marketingAreaLinks.test.ts
           lib/marketing/__tests__/globalTopNavVisibility.test.ts
+          lib/marketing/__tests__/uiSystemRouteContract.test.ts
           lib/meta/__tests__/dataDeletion.test.ts
           lib/meta/__tests__/complianceRoutes.contract.test.ts
           lib/services/__tests__/publicServiceExtras.test.ts

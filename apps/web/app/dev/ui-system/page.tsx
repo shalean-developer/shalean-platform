@@ -4,6 +4,7 @@ import { MarketingHomeSystemShowcase } from "./marketing-home-system-showcase";
 import { RDP01B5Showcase } from "./rd-p01b5-showcase";
 import { RDP02PublicShellShowcase } from "./rd-p02-public-shell-showcase";
 import { RDP03HomepagePrimitivesShowcase } from "./rd-p03-homepage-primitives-showcase";
+import { RDPublicPagesShowcase } from "./rd-public-pages-showcase";
 import { ShaleanColorPaletteShowcase } from "./shalean-color-palette-showcase";
 import { UISystemShowcase } from "./ui-system-showcase";
 
@@ -19,10 +20,23 @@ export const metadata: Metadata = {
 export default function UISystemPage() {
   return (
     <>
+      <header className="mx-auto w-full max-w-[var(--ui-container-marketing)] px-[var(--ui-page-gutter)] pb-[var(--ui-space-6)] pt-[var(--ui-space-10)]">
+        <p className="text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-[0.14em] text-primary">
+          Development catalogue
+        </p>
+        <h1 className="mt-[var(--ui-space-2)] text-[length:var(--ui-text-page-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+          Shalean UI system
+        </h1>
+        <p className="mt-[var(--ui-space-3)] max-w-3xl text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
+          Current visual authority for reusable Shalean foundations, public-page patterns and historical design evidence.
+        </p>
+      </header>
+
       <ShaleanColorPaletteShowcase />
       <MarketingHomeSystemShowcase />
       <RDP03HomepagePrimitivesShowcase />
       <RDP02PublicShellShowcase />
+      <RDPublicPagesShowcase />
       <FoundationScaleShowcase />
       <RDP01B5Showcase />
 
