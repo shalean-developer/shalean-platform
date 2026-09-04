@@ -77,7 +77,7 @@ describe("officePayoutPeriodReport", () => {
     );
     expect(allocs).toEqual([
       { cleaner_id: nyasha, cents: 30000 },
-      { cleaner_id: ethel, cents: 42700 },
+      { cleaner_id: ethel, cents: 30000 },
     ]);
   });
 

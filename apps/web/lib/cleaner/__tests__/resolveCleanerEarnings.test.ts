@@ -6,14 +6,14 @@ import {
 } from "@/lib/cleaner/resolveCleanerEarnings";
 
 describe("resolveCleanerEarningsCents", () => {
-  it("prefers positive cleaner_earnings_total_cents over frozen and display", () => {
+  it("prefers the frozen settlement amount over display and stale line totals", () => {
     expect(
       resolveCleanerEarningsCents({
         cleaner_earnings_total_cents: 42_000,
         payout_frozen_cents: 50_000,
         display_earnings_cents: 30_000,
       }),
-    ).toBe(42_000);
+    ).toBe(50_000);
   });
 
   it("ignores zero line total and uses frozen/display", () => {
@@ -87,7 +87,7 @@ describe("resolveCleanerDashboardEarningsCents", () => {
     ).toBe(25_000);
   });
 
-  it("uses per-cleaner earnings_summary total when present", () => {
+  it("uses the policy-locked display amount before a stale earnings summary", () => {
     expect(
       resolveCleanerDashboardEarningsCents(
         {
@@ -109,10 +109,10 @@ describe("resolveCleanerDashboardEarningsCents", () => {
         },
         "c1",
       ),
-    ).toBe(25_500);
+    ).toBe(50_000);
   });
 
-  it("falls back to booking columns when cleaner is missing from summary", () => {
+  it("uses the policy-locked display amount when the cleaner is missing from the summary", () => {
     expect(
       resolveCleanerDashboardEarningsCents(
         {
@@ -134,7 +134,7 @@ describe("resolveCleanerDashboardEarningsCents", () => {
         },
         "member",
       ),
-    ).toBe(42_700);
+    ).toBe(30_000);
   });
 });
 
