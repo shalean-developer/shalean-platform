@@ -56,7 +56,7 @@ export function MarketingHomeHowItWorksSection() {
         {STEPS.map(({ step, Icon, title, description, surface, iconTone }) => (
           <article
             key={step}
-            className="relative flex min-h-[260px] flex-col rounded-[var(--ui-radius-marketing)] border border-black/5 p-[var(--ui-space-6)] text-foreground shadow-[var(--ui-shadow-sm)]"
+            className="relative flex min-h-[180px] flex-col rounded-[var(--ui-radius-marketing)] border border-black/5 p-[var(--ui-space-6)] text-foreground shadow-[var(--ui-shadow-sm)]"
             style={{ backgroundColor: surface }}
           >
             <div className="flex items-start justify-between gap-[var(--ui-space-4)]">
