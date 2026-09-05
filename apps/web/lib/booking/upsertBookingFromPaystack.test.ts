@@ -150,6 +150,7 @@ describe("upsertBookingFromPaystack", () => {
       bookingSelectOnce({
         id: "00000000-0000-4000-8000-000000000001",
         status: "pending",
+        paystack_reference: "ref-already-paid", customer_email: null, customer_id: null,
         is_recurring_generated: false,
         price_snapshot: null,
       }) as unknown as ReturnType<typeof getSupabaseAdmin>,
@@ -408,4 +409,42 @@ describe("observed pending upsert conflict propagation", () => {
       },
     );
   }
+});
+
+describe("Slice 2B already-finalized upsert replay", () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  const stored = { id, status: "pending", paystack_reference: "pay_current", customer_email: "current@example.com", customer_id: "owner-a" };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(resolveBookingUserId).mockResolvedValue("owner-a");
+    getSupabaseAdminMock.mockReturnValue({
+      from: () => {
+        const filters: Array<[string, unknown]> = [];
+        const q = {
+          select: () => q, limit: async () => ({ data: [], error: null }),
+          eq: (key: string, value: unknown) => { filters.push([key, value]); return q; },
+          maybeSingle: async () => ({ data: filters.every(([key, value]) => stored[key as keyof typeof stored] === value) ? { ...stored } : null, error: null }),
+        };
+        return q;
+      },
+    } as unknown as ReturnType<typeof getSupabaseAdmin>);
+  });
+  const input = { paystackReference: "pay_current", amountCents: 12550, currency: "ZAR", customerEmail: " CURRENT@example.com ", snapshot: null, paystackMetadata: { booking_id: id } };
+  it.each([
+    { paystackReference: "pay_old" }, { customerEmail: "old@example.com" }, { customerEmail: "" },
+    { paystackMetadata: { booking_id: "00000000-0000-4000-8000-000000000009" } },
+  ])("rejects non-equivalent context %j without writes/effects", async (change) => {
+    expect(await upsertBookingFromPaystack({ ...input, ...change })).toMatchObject({ ok: false, code: "PAYMENT_FINALIZATION_REPLAY_MISMATCH", bookingId: id });
+    expect(successEffect).not.toHaveBeenCalled();
+    expect(enqueueFailedJob).not.toHaveBeenCalled();
+  });
+  it.each(["other-owner", null])("rejects conflicting/missing owner %s", async (owner) => {
+    vi.mocked(resolveBookingUserId).mockResolvedValue(owner);
+    expect(await upsertBookingFromPaystack(input)).toMatchObject({ ok: false, code: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" });
+    expect(successEffect).not.toHaveBeenCalled();
+  });
+  it("preserves equivalent replay", async () => {
+    expect(await upsertBookingFromPaystack(input)).toMatchObject({ ok: true, skipped: true, bookingId: id });
+    expect(successEffect).not.toHaveBeenCalled();
+  });
 });

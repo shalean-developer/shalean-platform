@@ -1,4 +1,4 @@
-import { preservePaymentCustomerIdentity } from "@/lib/booking/paymentCustomerIdentityGuard";
+import { preservePaymentCustomerIdentity, paymentFinalizationReplayEquivalent } from "@/lib/booking/paymentCustomerIdentityGuard";
 import { syncPreferredCleanerRosterFromBookingRow } from "@/lib/booking/persistPreferredCleaners";
 import { resolveCustomerPhoneFromAuthAdmin } from "@/lib/admin/adminBookingCustomerContact";
 import { bookingCustomerKey, bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
@@ -346,6 +346,28 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       };
     }
     if (st !== "pending_payment") {
+      const replayEmail = normalizeEmail(input.customerEmail);
+      // Reads verified snapshot/metadata, then auth ID by email; never claims ownership.
+      const replayOwner = await resolveBookingUserId(supabase, input.snapshot, input.paystackMetadata, replayEmail);
+      const metadata = input.paystackMetadata ?? {};
+      const resolvedId = resolveInternalBookingIdFromPaystackReference(input.paystackReference, metadata);
+      const bookingIds = [resolvedId, metadata.booking_id, metadata.shalean_booking_id, metadata.bookingId]
+        .filter((id): id is string => typeof id === "string" && id.trim().length > 0);
+      if (!paymentFinalizationReplayEquivalent({
+        id: bidEarly,
+        paystackReference: typeof existing.paystack_reference === "string" ? existing.paystack_reference : null,
+        customerEmail: typeof existing.customer_email === "string" ? existing.customer_email : null,
+        customerAuthId: typeof existing[ownershipColumn] === "string" ? existing[ownershipColumn] as string : null,
+      }, {
+        bookingIds, paystackReference: input.paystackReference,
+        customerEmail: replayEmail, customerAuthId: replayOwner,
+      })) {
+        return {
+          ok: false, skipped: true, bookingId: bidEarly, bookingInDatabase: true,
+          error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH", code: "PAYMENT_FINALIZATION_REPLAY_MISMATCH",
+        };
+      }
+
       logPaymentStructured("payment_finalize", {
         reference: input.paystackReference,
         status: "skipped_already_persisted",

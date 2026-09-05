@@ -30,3 +30,16 @@ export function preservePaymentCustomerIdentity(
     customerAuthId: owner(incoming.customerAuthId) ? incoming.customerAuthId : observed.customerAuthId,
   } };
 }
+
+/** Replay proves established identity; missing incoming proof is not a fill. */
+export function paymentFinalizationReplayEquivalent(
+  persisted: PaymentCustomerIdentity & { id: string; paystackReference: string | null },
+  incoming: PaymentCustomerIdentity & { bookingIds: readonly string[]; paystackReference: string | null },
+): boolean {
+  const reference = persisted.paystackReference?.trim();
+  if (!persisted.id || !reference || reference !== incoming.paystackReference?.trim()) return false;
+  if (incoming.bookingIds.some((id) => id.trim() !== persisted.id)) return false;
+  if (normalizeEmail(persisted.customerEmail ?? "") && !normalizeEmail(incoming.customerEmail ?? "")) return false;
+  if (persisted.customerAuthId?.trim() && !incoming.customerAuthId?.trim()) return false;
+  return preservePaymentCustomerIdentity(persisted, incoming).error === null;
+}
