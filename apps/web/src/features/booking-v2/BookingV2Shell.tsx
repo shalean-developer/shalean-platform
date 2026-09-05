@@ -18,8 +18,10 @@ import { useBookingV2FunnelTelemetry } from "@/src/features/booking-v2/hooks/use
 import { useBookingV2Pricing } from "@/src/features/booking-v2/hooks/useBookingV2Pricing";
 import { useClientMounted } from "@/src/features/booking-v2/hooks/useClientMounted";
 import {
+  BOOKING_PRICING_LOADING_MESSAGE,
   BOOKING_PRICING_UNAVAILABLE_MESSAGE,
   canEnterBookingPayment,
+  type BookingPricingAvailability,
 } from "@/lib/booking-v2/bookingPricingAvailability";
 
 function BookingV2LoadingShell() {
@@ -60,14 +62,20 @@ function BookingV2LoadingShell() {
   );
 }
 
-function PricingUnavailableNotice() {
+function PricingBlockedNotice({ availability }: { availability: BookingPricingAvailability }) {
+  const loading = availability === "loading";
   return (
     <div
-      role="alert"
+      role="status"
+      aria-live="polite"
       className="rounded-[var(--ui-radius-xl)] border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-[var(--ui-shadow-sm)] sm:p-6"
     >
-      <h2 className="text-lg font-bold">Live pricing is temporarily unavailable</h2>
-      <p className="mt-2 text-sm leading-6">{BOOKING_PRICING_UNAVAILABLE_MESSAGE}</p>
+      <h2 className="text-lg font-bold">
+        {loading ? "Loading live pricing" : "Live pricing is temporarily unavailable"}
+      </h2>
+      <p className="mt-2 text-sm leading-6">
+        {loading ? BOOKING_PRICING_LOADING_MESSAGE : BOOKING_PRICING_UNAVAILABLE_MESSAGE}
+      </p>
     </div>
   );
 }
@@ -84,6 +92,7 @@ function BookingV2Inner() {
   } = useBookingV2();
   const { watch } = useFormContext<BookingV2FormData>();
   const reviewTime = watch("time")?.trim() ?? "";
+  const pendingBookingId = watch("pendingBookingId")?.trim() ?? "";
   useBookingV2Pricing();
   useBookingV2FunnelTelemetry(currentStep, serviceSlug);
 
@@ -91,11 +100,11 @@ function BookingV2Inner() {
     return <BookingV2LoadingShell />;
   }
 
-  const pricingUnavailable = pricingAvailability === "unavailable";
-  const paymentEntryAllowed = canEnterBookingPayment(pricingAvailability);
+  const hasPendingBooking = Boolean(pendingBookingId);
+  const paymentEntryAllowed = canEnterBookingPayment(pricingAvailability, hasPendingBooking);
   const stepContent =
-    currentStep === 4 && pricingUnavailable
-      ? <PricingUnavailableNotice />
+    currentStep === 4 && !paymentEntryAllowed
+      ? <PricingBlockedNotice availability={pricingAvailability} />
       : ({
           1: <Step1Details />,
           2: <Step2Schedule />,
@@ -107,6 +116,10 @@ function BookingV2Inner() {
   /** Steps 3–4 already use section cards — avoid card-in-card chrome that squeezes mobile. */
   const useOuterStepCard = currentStep <= 2;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
+  const paymentBlockMessage =
+    pricingAvailability === "loading"
+      ? BOOKING_PRICING_LOADING_MESSAGE
+      : BOOKING_PRICING_UNAVAILABLE_MESSAGE;
 
   return (
     <div className="min-h-dvh bg-muted/35 text-foreground">
@@ -141,9 +154,9 @@ function BookingV2Inner() {
               {stepContent}
             </div>
 
-            {currentStep === 3 && pricingUnavailable ? (
-              <div role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
-                {BOOKING_PRICING_UNAVAILABLE_MESSAGE}
+            {currentStep === 3 && !paymentEntryAllowed ? (
+              <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                {paymentBlockMessage}
               </div>
             ) : null}
 
