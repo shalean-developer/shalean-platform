@@ -1,3 +1,4 @@
+import { provePersistedPaystackReplay } from "@/lib/booking/provePersistedPaystackReplay";
 /**
  * **Responsibility:** Browser / delayed-webhook **fallback finalizer** — calls Paystack verify API then {@link runPaystackVerifyFinalizePipeline} (idempotent vs webhook).
  * See `lib/booking/paystackRouteResponsibilityContract.ts`.
@@ -55,8 +56,28 @@ export type { PaystackVerifyPostResponse } from "@/lib/booking/paystackVerifyRes
 function paystackChargeUpsertState(r: UpsertBookingFromPaystackResult): string {
   if (r.reason === "amount_mismatch") return "payment_mismatch";
   if (r.reason === "finalization_failed") return "payment_reconciliation_required";
-  if (r.error && !r.bookingId) return "payment_reconciliation_required";
+  if (r.error || r.ok === false) return "payment_reconciliation_required";
   return "paid";
+}
+
+/** Gateway success does not imply that booking finalization was accepted. */
+function rejectedBookingFinalization(result: UpsertBookingFromPaystackResult, reference: string) {
+  const error = result.error || "PAYMENT_FINALIZATION_FAILED";
+  return NextResponse.json({
+    ok: false as const,
+    success: false as const,
+    paymentStatus: "success" as const,
+    reference,
+    error,
+    upsertError: error,
+    code: result.code,
+    reason: result.reason,
+    bookingId: result.bookingId,
+    bookingInDatabase: result.bookingInDatabase ?? Boolean(result.bookingId),
+    state: paystackChargeUpsertState(result),
+    alreadyExists: false,
+    skipped: Boolean(result.skipped),
+  }, { status: 409 });
 }
 
 /**
@@ -316,6 +337,14 @@ export async function GET(request: Request) {
       const amountCentsGet =
         typeof tx.amount === "number" && Number.isFinite(tx.amount) ? tx.amount : 0;
       const emailFromCustomer = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
+      if (!await provePersistedPaystackReplay({
+        supabase: adminGet, bookingId: existing.bookingId, reference: ref,
+        amountCents: amountCentsGet, customerEmail: typeof tx.customer?.email === "string" ? tx.customer.email : "",
+        metadata: tx.metadata,
+      })) {
+        return NextResponse.json({ ok: false, success: false, paymentStatus: "unknown",
+          reference: ref, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" }, { status: 409 });
+      }
       await replayPaymentConfirmedNotifyForPersistedBooking({
         supabase: adminGet,
         bookingId: existing.bookingId,
@@ -354,6 +383,7 @@ export async function GET(request: Request) {
   try {
     const pipeline = await runPaystackVerifyFinalizePipeline(tx, reference, "paystack/verify");
     const { result } = pipeline;
+    if (result.error || result.ok === false) return rejectedBookingFinalization(result, pipeline.ref);
     const bookingInDatabase = result.bookingInDatabase ?? Boolean(result.bookingId);
     const chargeState = paystackChargeUpsertState(result);
 
@@ -485,7 +515,9 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
       )
         .trim()
         .toLowerCase();
-      if (paymentStatus === "success" || paymentStatus === "paid") {
+      const rawAmountCents = (payRow as { amount_paid_cents?: unknown } | null)?.amount_paid_cents;
+      if ((paymentStatus === "success" || paymentStatus === "paid") &&
+        typeof rawAmountCents === "number" && Number.isInteger(rawAmountCents) && rawAmountCents === 0) {
         const amountCents = Number(
           (payRow as { amount_paid_cents?: number | null } | null)?.amount_paid_cents ?? 0,
         );
@@ -763,6 +795,14 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
       const emailNorm = emailRaw ? normalizeEmail(emailRaw) : "";
       const userIdShort = resolvePaystackUserId(snapShort, metadataShort);
       const emailFromCustomerPost = typeof tx.customer?.email === "string" ? tx.customer.email.trim() : "";
+      if (!await provePersistedPaystackReplay({
+        supabase: adminPost, bookingId: existingPost.bookingId, reference: ref,
+        amountCents: txAmount, customerEmail: typeof tx.customer?.email === "string" ? tx.customer.email : "",
+        metadata: tx.metadata,
+      })) {
+        return NextResponse.json({ ok: false, success: false, paymentStatus: "unknown",
+          reference: ref, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" }, { status: 409 });
+      }
       await replayPaymentConfirmedNotifyForPersistedBooking({
         supabase: adminPost,
         bookingId: existingPost.bookingId,
@@ -842,6 +882,8 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
     assignedCleanerId,
     selectedCleanerId,
   } = pipeline;
+
+  if (result.error || result.ok === false) return rejectedBookingFinalization(result, ref);
 
   const showCleanerSubstitutionNotice = assignmentType === "auto_fallback";
 
