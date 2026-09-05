@@ -104,6 +104,7 @@ jobs:
           lib/booking-v2/__tests__/servicePricingSourceOfTruth.test.ts
           lib/booking-v2/__tests__/authoritativePricingCatalogRead.test.ts
           lib/booking-v2/__tests__/pricingAvailabilityState.test.ts
+          lib/booking-v2/__tests__/authoritativePricingClientAvailability.test.ts
           lib/booking/__tests__/cleanerServicePreferenceEligibility.test.ts
           lib/dispatch/__tests__/h9DispatchEscalationStatusFilter.test.ts
           app/api/cleaner/__tests__/cleanerEarningsApi.test.ts
