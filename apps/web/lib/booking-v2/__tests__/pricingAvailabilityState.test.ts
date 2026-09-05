@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  BOOKING_PRICING_LOADING_MESSAGE,
   BOOKING_PRICING_UNAVAILABLE_MESSAGE,
   canEnterBookingPayment,
   type BookingPricingAvailability,
@@ -12,7 +13,7 @@ function read(relativePath: string): string {
 }
 
 describe("SPC-01-04 SR-04D1 pricing availability state", () => {
-  it("allows payment entry only when the booking catalog is available", () => {
+  it("blocks new payment until pricing is available but preserves pending-payment recovery", () => {
     const cases: Array<[BookingPricingAvailability, boolean]> = [
       ["loading", false],
       ["available", true],
@@ -21,28 +22,45 @@ describe("SPC-01-04 SR-04D1 pricing availability state", () => {
 
     for (const [availability, expected] of cases) {
       expect(canEnterBookingPayment(availability)).toBe(expected);
+      expect(canEnterBookingPayment(availability, true)).toBe(true);
     }
+    expect(BOOKING_PRICING_LOADING_MESSAGE).toMatch(/loading live pricing/i);
     expect(BOOKING_PRICING_UNAVAILABLE_MESSAGE).toMatch(/pricing is temporarily unavailable/i);
   });
 
-  it("propagates catalog fetch failure and blocks step 4 navigation", () => {
+  it("propagates catalog failure and uses pending-aware navigation gates", () => {
     const src = read("src/features/booking-v2/BookingV2Context.tsx");
 
     expect(src).toMatch(/useState<BookingPricingAvailability>\("loading"\)/);
     expect(src).toMatch(/if \(!json\.catalog\) throw new Error\("catalog_missing"\)/);
     expect(src).toMatch(/setPricingAvailability\("available"\)/);
     expect(src).toMatch(/\.catch\(\(\) => \{\s*setPricingAvailability\("unavailable"\)/);
-    expect(src).toMatch(/step === 3 && pricingAvailability !== "available"/);
-    expect(src).toMatch(/step === 4 && pricingAvailability !== "available"/);
+    expect(src).toContain('form.getValues("pendingBookingId")?.trim()');
+    expect(src).toContain("canEnterBookingPayment(pricingAvailability, hasPendingBooking)");
+    expect(src).toContain("if (step === 3)");
+    expect(src).toContain("if (step === 4)");
   });
 
-  it("replaces or disables payment UI when pricing is unavailable", () => {
+  it("blocks direct Step 4 while loading or unavailable unless a pending booking exists", () => {
     const src = read("src/features/booking-v2/BookingV2Shell.tsx");
 
-    expect(src).toMatch(/currentStep === 4 && pricingUnavailable/);
-    expect(src).toMatch(/<PricingUnavailableNotice \/>/);
-    expect(src).toMatch(/disabled=\{currentStep === 3 && !paymentEntryAllowed\}/);
+    expect(src).toContain('watch("pendingBookingId")');
+    expect(src).toContain("canEnterBookingPayment(pricingAvailability, hasPendingBooking)");
+    expect(src).toContain("currentStep === 4 && !paymentEntryAllowed");
+    expect(src).toContain("<PricingBlockedNotice availability={pricingAvailability} />");
+    expect(src).toContain("BOOKING_PRICING_LOADING_MESSAGE");
     expect(src).toContain("BOOKING_PRICING_UNAVAILABLE_MESSAGE");
+    expect(src).toMatch(/disabled=\{currentStep === 3 && !paymentEntryAllowed\}/);
+  });
+
+  it("preserves the server-owned pending payment-session recovery path", () => {
+    const src = read("src/features/booking-v2/steps/Step4Payment.tsx");
+
+    expect(src).toContain("const canStartPayment = Boolean(pendingBookingId) || quoteReadiness.ready");
+    expect(src).toContain("if (pendingBookingId)");
+    expect(src).toContain("/payment-session");
+    expect(src).toContain("only fall through when a new canonical quote is ready");
+    expect(src).toContain("if (!quoteReadiness.ready)");
   });
 
   it("preserves the no-admin static catalog path and does not add SR-04D2", () => {
