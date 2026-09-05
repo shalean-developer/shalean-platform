@@ -24,6 +24,8 @@ export const PRICING_SERVICE_SLUG_ALIASES: Readonly<Record<string, readonly stri
   office: ["office", "office-cleaning", "quick"],
 };
 
+const KNOWN_PRICING_FAMILIES = new Set(Object.keys(PRICING_SERVICE_SLUG_ALIASES));
+
 /** All candidate DB slugs for a canonical engine (or already-canonical) pricing slug. */
 export function pricingServiceSlugCandidates(pricingSlug: string): string[] {
   const key = pricingSlug.trim().toLowerCase();
@@ -91,6 +93,11 @@ function configuredPricingSlugBelongsToService(
 ): boolean {
   if (!configuredPricingSlug?.trim()) return false;
   const configuredCanonical = canonicalizePricingServiceSlug(configuredPricingSlug);
+
+  // Preserve custom configured pricing rows. Only known canonical families can
+  // be proven to belong to another service and must therefore be rejected.
+  if (!KNOWN_PRICING_FAMILIES.has(configuredCanonical)) return true;
+
   if (serviceSlug === "moving-cleaning") {
     return configuredCanonical === "move" || configuredCanonical === "move-in" || configuredCanonical === "move-out";
   }
@@ -100,9 +107,9 @@ function configuredPricingSlugBelongsToService(
 /**
  * Resolve a Booking V2 pricing row without cross-service fallback.
  *
- * A configured pricingSlug is honored only when it belongs to the requested
- * service's own pricing family. Invalid cross-service configuration falls back
- * to the requested service's canonical family, never another service's live row.
+ * A configured pricingSlug is honored when it is a same-service alias or custom
+ * pricing row. Known other-service families are rejected and resolution falls
+ * back to the requested service's canonical family, never another service's row.
  */
 export function resolveBookingV2PricingServiceRow<T>(
   dbServices: Record<string, T>,
