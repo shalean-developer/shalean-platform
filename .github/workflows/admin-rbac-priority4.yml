@@ -6,6 +6,7 @@ on:
       - "apps/web/lib/admin/**"
       - "apps/web/lib/security/**"
       - "apps/web/app/api/admin/**"
+      - "apps/web/app/(ui-redesign)/office/**"
       - "apps/web/src/features/office/**"
       - "supabase/migrations/**"
       - "docs/admin-rbac-priority4-uat.md"
