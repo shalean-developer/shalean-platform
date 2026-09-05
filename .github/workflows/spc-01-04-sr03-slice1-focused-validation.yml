@@ -1,0 +1,52 @@
+name: SPC-01-04 SR-03 Slice 1 focused validation
+
+on:
+  pull_request:
+    branches:
+      - integration/shalean-release
+    paths:
+      - .github/workflows/spc-01-04-sr03-slice1-focused-validation.yml
+
+permissions:
+  contents: read
+
+jobs:
+  focused-sr03-slice1:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    env:
+      EXPECTED_SHA: 37d1244253cb42a6ba648350a10d9bb9747fe344
+    steps:
+      - name: Check out exact audited Slice 1 commit
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: 37d1244253cb42a6ba648350a10d9bb9747fe344
+
+      - name: Verify exact audited commit
+        working-directory: .
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACTUAL_SHA="$(git rev-parse HEAD)"
+          echo "expected=$EXPECTED_SHA"
+          echo "actual=$ACTUAL_SHA"
+          test "$ACTUAL_SHA" = "$EXPECTED_SHA"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        run: npm ci
+
+      - name: Run only SR-03 Slice 1 focused suites
+        run: >-
+          npm run test --
+          lib/booking/__tests__/bookingPaidAmountColumns.test.ts
+          lib/booking/__tests__/paymentFinalizationCommandConvergence.test.ts
