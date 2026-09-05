@@ -23,6 +23,7 @@ import {
   resolveMovingPricingServiceRow,
   resolvePricingServiceRow,
 } from "@/lib/booking-v2/resolvePricingServiceSlug";
+import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
 export type {
@@ -266,14 +267,15 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       const dbSvc =
         resolvePricingServiceRow(dbServices, dbSlug) ??
         resolvePricingServiceRow(dbServices, "standard");
+      const showEquipmentQuestion = serviceRequiresCustomerEquipmentChoice(slug);
       catalog[slug] = {
         slug,
         label: staticFallback.label,
         shortLabel: staticFallback.shortLabel,
         description: staticFallback.description,
         cleanerMode: staticFallback.cleanerMode,
-        showEquipmentQuestion: slug === "regular-cleaning",
-        showCleaningProductsQuestion: slug === "regular-cleaning",
+        showEquipmentQuestion,
+        showCleaningProductsQuestion: showEquipmentQuestion,
         allowsExtraCleaner: slug === "regular-cleaning" || slug === "airbnb-cleaning" || slug === "office-cleaning" || slug === "carpet-cleaning",
         step1Questions: staticFallback.step1Questions,
         basePrice: dbSvc?.base_price && dbSvc.base_price > 0 ? dbSvc.base_price : staticFallback.basePrice,
