@@ -5,6 +5,8 @@ on:
     paths:
       - "apps/web/lib/admin/**"
       - "apps/web/lib/security/**"
+      - "apps/web/lib/customerCare/__tests__/p4CustomerCareCasesContract.test.ts"
+      - "apps/web/lib/workforce/__tests__/p6TrainingComplianceContract.test.ts"
       - "apps/web/app/api/admin/**"
       - "apps/web/app/(ui-redesign)/office/**"
       - "apps/web/src/features/office/**"
@@ -36,8 +38,11 @@ jobs:
           lib/admin/__tests__/priority4EightRoleDod.test.ts
           lib/admin/__tests__/officeExperience.test.ts
           lib/admin/__tests__/officeAccessPolicyCoverage.test.ts
+          lib/admin/__tests__/sr05b1CentralizedRouteRbac.test.ts
           lib/admin/__tests__/officeWorkItems.test.ts
           lib/admin/__tests__/routePermissions.test.ts
+          lib/customerCare/__tests__/p4CustomerCareCasesContract.test.ts
+          lib/workforce/__tests__/p6TrainingComplianceContract.test.ts
           lib/security/__tests__/p0CleanerColumnRbacContract.test.ts
           lib/security/__tests__/p0SupervisorCustomerScopeContract.test.ts
       - name: Typecheck
