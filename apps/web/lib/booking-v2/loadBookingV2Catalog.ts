@@ -20,7 +20,7 @@ import type {
 } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { DB_SLUG_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
 import {
-  resolveMovingPricingServiceRow,
+  resolveBookingV2PricingServiceRow,
   resolvePricingServiceRow,
 } from "@/lib/booking-v2/resolvePricingServiceSlug";
 import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
@@ -222,12 +222,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
     if (serviceDef.isActive === false) continue;
     const slug = serviceDef.slug;
     const staticFallback = SERVICE_CONFIG[slug];
-    const dbSlug = serviceDef.pricingSlug || DB_SLUG_MAP[slug];
-    const dbSvc =
-      (slug === "moving-cleaning"
-        ? resolveMovingPricingServiceRow(dbServices, null)
-        : resolvePricingServiceRow(dbServices, dbSlug)) ??
-      resolvePricingServiceRow(dbServices, "standard");
+    const dbSvc = resolveBookingV2PricingServiceRow(dbServices, slug, serviceDef.pricingSlug);
 
     const extras = buildExtrasForService(slug, dbExtras);
     const rates = ratesFromDbRow(dbSvc, staticFallback);
@@ -263,10 +258,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   for (const slug of SERVICE_SLUGS) {
     if (!catalog[slug]) {
       const staticFallback = SERVICE_CONFIG[slug];
-      const dbSlug = DB_SLUG_MAP[slug];
-      const dbSvc =
-        resolvePricingServiceRow(dbServices, dbSlug) ??
-        resolvePricingServiceRow(dbServices, "standard");
+      const dbSvc = resolveBookingV2PricingServiceRow(dbServices, slug);
       const showEquipmentQuestion = serviceRequiresCustomerEquipmentChoice(slug);
       catalog[slug] = {
         slug,
