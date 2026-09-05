@@ -929,6 +929,39 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     ...(tenureShareLine != null ? { cleaner_share_percentage: tenureShareLine } : {}),
   };
 
+  type PaymentFinalizationRecoveryRow = {
+    id?: string | null;
+    status?: string | null;
+    paystack_reference?: string | null;
+    customer_email?: string | null;
+  } & Record<string, unknown>;
+
+  const recoverySelect = `id, status, paystack_reference, customer_email, ${ownershipColumn}`;
+  const recoveryReplayEquivalent = (persisted: PaymentFinalizationRecoveryRow | null): boolean => {
+    if (!persisted || typeof persisted.id !== "string" ||
+      typeof persisted.status !== "string" || !persisted.status ||
+      ["pending_payment", "payment_mismatch", "payment_reconciliation_required"].includes(persisted.status)) return false;
+    const metadata = input.paystackMetadata ?? {};
+    const resolvedId = resolveInternalBookingIdFromPaystackReference(input.paystackReference, metadata);
+    return paymentFinalizationReplayEquivalent({
+      id: persisted.id,
+      paystackReference: typeof persisted.paystack_reference === "string" ? persisted.paystack_reference : null,
+      customerEmail: typeof persisted.customer_email === "string" ? persisted.customer_email : null,
+      customerAuthId: typeof persisted[ownershipColumn] === "string" ? persisted[ownershipColumn] as string : null,
+    }, {
+      bookingIds: [resolvedId, metadata.booking_id, metadata.shalean_booking_id, metadata.bookingId]
+        .filter((id): id is string => typeof id === "string" && id.trim().length > 0),
+      paystackReference: input.paystackReference,
+      customerEmail: emailStored, customerAuthId: userIdResolved,
+    });
+  };
+  const recoveryMismatch = (persisted: PaymentFinalizationRecoveryRow | null): UpsertBookingFromPaystackResult => ({
+    ok: false, skipped: true,
+    bookingId: typeof persisted?.id === "string" ? persisted.id : null,
+    bookingInDatabase: typeof persisted?.id === "string",
+    error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH", code: "PAYMENT_FINALIZATION_REPLAY_MISMATCH",
+  });
+
   let finalizeId: string | null = null;
   let id: string | null = null;
   let inserted: PaymentFinalizationPersistedBookingRow | null = null;
@@ -1008,11 +1041,13 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
 
     if (insertErr) {
       if (insertErr.code === "23505") {
-        const { data: again } = await supabase
+        const { data: recoveryData, error: recoveryError } = await supabase
           .from("bookings")
-          .select("id")
+          .select(recoverySelect)
           .eq("paystack_reference", input.paystackReference)
           .maybeSingle();
+        const again = recoveryData as unknown as PaymentFinalizationRecoveryRow | null;
+        if (recoveryError || !recoveryReplayEquivalent(again)) return recoveryMismatch(again);
         const dupId =
           again && typeof again === "object" && "id" in again ? String((again as { id: string }).id) : null;
         logPaymentStructured("payment_finalize", {
@@ -1036,11 +1071,13 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   id = inserted?.id ?? null;
 
   if (!id) {
-    const { data: ghost } = await supabase
+    const { data: recoveryData, error: recoveryError } = await supabase
       .from("bookings")
-      .select("id, status")
+      .select(recoverySelect)
       .eq("paystack_reference", input.paystackReference)
       .maybeSingle();
+    const ghost = recoveryData as unknown as PaymentFinalizationRecoveryRow | null;
+    if (recoveryError || !recoveryReplayEquivalent(ghost)) return recoveryMismatch(ghost);
     const ghostSt = String((ghost as { status?: string } | null)?.status ?? "");
     if (ghost?.id && ghostSt && ghostSt !== "pending_payment") {
       logPaymentStructured("payment_finalize", {
