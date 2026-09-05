@@ -1,3 +1,4 @@
+import { provePersistedPaystackReplay } from "@/lib/booking/provePersistedPaystackReplay";
 /**
  * **Responsibility:** Paystack **authoritative** server webhook for **charge** events.
  * `charge.success` → {@link finalizePaidBooking} (checkout persistence). Not used for cleaner **transfer** webhooks (those live under `/api/webhooks/paystack`).
@@ -412,6 +413,17 @@ export async function POST(request: Request) {
   if (supabase) {
     const persistedHead = await findBookingIdStatusForPaystackReference(supabase, reference);
     if (persistedHead && persistedHead.status !== "pending_payment") {
+      if (!await provePersistedPaystackReplay({
+        supabase, bookingId: persistedHead.bookingId, reference, amountCents: amount,
+        customerEmail: email, metadata,
+      })) {
+        logPaymentStructured("payment_webhook_outcome", {
+          outcome: "rejected", rejection_reason: "PAYMENT_FINALIZATION_REPLAY_MISMATCH",
+          event: "charge.success", reference_masked: maskPaystackReference(reference),
+          booking_id: persistedHead.bookingId, gateway_event_id: gatewayEventId,
+        });
+        return NextResponse.json({ received: true, ok: false, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" });
+      }
       await replayPaymentConfirmedNotifyForPersistedBooking({
         supabase,
         bookingId: persistedHead.bookingId,
