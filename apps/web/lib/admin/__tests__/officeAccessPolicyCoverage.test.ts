@@ -32,6 +32,17 @@ describe("SR-05A Office page RBAC policy coverage", () => {
     expect(policyForOfficePath("/office")).toBeNull();
   });
 
+  it("classifies every discovered Office page or explicitly exempts the root", () => {
+    const pages = officePagePaths();
+    expect(pages.length).toBeGreaterThan(80);
+
+    const unclassified = pages.filter(
+      (path) => !policyForOfficePath(path) && !isOfficePolicyExemptPath(path),
+    );
+
+    expect(unclassified).toEqual([]);
+  });
+
   it("covers the two approved SR-05A page-policy gaps", () => {
     expect(policyForOfficePath("/office/customer-care")).toMatchObject({
       anyOf: ["customer.view", "customer.contact", "incident.manage"],
@@ -43,15 +54,7 @@ describe("SR-05A Office page RBAC policy coverage", () => {
     });
   });
 
-  it("keeps real Office pages subject to policy or the sole root exception", () => {
-    const pages = officePagePaths();
-    expect(pages.length).toBeGreaterThan(80);
-    expect(pages).toContain("/office/customer-care");
-    expect(pages).toContain("/office/workforce/training");
-    expect(pages.filter(isOfficePolicyExemptPath)).toEqual(["/office"]);
-  });
-
-  it("fails closed when an Office page has neither a policy nor the root exception", () => {
+  it("fails closed without reusing an allowed result from a previous pathname", () => {
     expect(policyForOfficePath("/office/unclassified-example")).toBeNull();
     expect(isOfficePolicyExemptPath("/office/unclassified-example")).toBe(false);
 
@@ -60,7 +63,9 @@ describe("SR-05A Office page RBAC policy coverage", () => {
       "utf8",
     );
     expect(boundary).toContain("isOfficePolicyExemptPath(pathname)");
-    expect(boundary).toContain('{ status: "denied", permissions: [], unclassified: true }');
+    expect(boundary).toContain('{ status: "denied", pathname, permissions: [], unclassified: true }');
+    expect(boundary).toContain("state.pathname === pathname");
+    expect(boundary).toContain('{ status: "checking", pathname }');
     expect(boundary).toContain("This Office page has no approved access policy and is blocked by default.");
     expect(boundary).not.toContain('if (!policy) {\n      setState({ status: "allowed" });');
   });
