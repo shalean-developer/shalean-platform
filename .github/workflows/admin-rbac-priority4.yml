@@ -6,6 +6,7 @@ on:
       - "apps/web/lib/admin/**"
       - "apps/web/lib/security/**"
       - "apps/web/app/api/admin/**"
+      - "apps/web/app/(ui-redesign)/office/**"
       - "apps/web/src/features/office/**"
       - "supabase/migrations/**"
       - "docs/admin-rbac-priority4-uat.md"
@@ -34,6 +35,7 @@ jobs:
           npx vitest run
           lib/admin/__tests__/priority4EightRoleDod.test.ts
           lib/admin/__tests__/officeExperience.test.ts
+          lib/admin/__tests__/officeAccessPolicyCoverage.test.ts
           lib/admin/__tests__/officeWorkItems.test.ts
           lib/admin/__tests__/routePermissions.test.ts
           lib/security/__tests__/p0CleanerColumnRbacContract.test.ts

@@ -1,27 +1,45 @@
+import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
+
+function HeaderSkeleton() {
+  return (
+    <>
+      <div className="mx-auto h-5 w-28 animate-pulse rounded-[var(--ui-radius-pill)] bg-muted" />
+      <div className="mx-auto mt-[var(--ui-space-5)] h-10 w-full max-w-xl animate-pulse rounded-[var(--ui-radius-lg)] bg-muted" />
+      <div className="mx-auto mt-[var(--ui-space-4)] h-5 w-full max-w-2xl animate-pulse rounded-[var(--ui-radius-lg)] bg-muted" />
+    </>
+  );
+}
+
 /** Placeholder while CMS services, FAQ, areas, and JSON-LD stream in. */
 export function MarketingHomeDbSectionsFallback() {
   return (
     <>
-      <div className="border-y border-slate-100 bg-white py-5" aria-hidden>
-        <div className="mx-auto flex max-w-7xl gap-3 overflow-hidden px-4 sm:px-6 lg:px-8">
-          {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-16 w-40 shrink-0 animate-pulse rounded-xl bg-slate-100/90" />
+      <HomeSection containerSize="marketing" className="!bg-[#F4F6FA]" aria-hidden>
+        <HeaderSkeleton />
+        <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="min-h-[400px] animate-pulse rounded-[var(--ui-radius-marketing)] bg-card shadow-[var(--ui-shadow-sm)]" />
           ))}
         </div>
-      </div>
-      <div className="bg-white py-16 md:py-20" aria-hidden>
-        <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-          <div className="mx-auto h-8 w-56 animate-pulse rounded-lg bg-slate-100" />
-          <div className="mt-10 grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="aspect-[16/9] animate-pulse rounded-2xl bg-slate-100" />
-            ))}
-          </div>
+      </HomeSection>
+
+      <HomeSection containerSize="marketing" aria-hidden>
+        <HeaderSkeleton />
+        <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="min-h-[320px] animate-pulse rounded-[var(--ui-radius-marketing)] bg-[#DDEBFF]" />
+          ))}
         </div>
-      </div>
-      <div className="border-t border-slate-100 bg-slate-50 py-16 md:py-20" aria-hidden>
-        <div className="mx-auto h-48 max-w-7xl animate-pulse rounded-2xl bg-slate-100/80 px-4 sm:px-6 lg:px-8" />
-      </div>
+      </HomeSection>
+
+      <HomeSection containerSize="marketing" className="!bg-[#F4F6FA]" aria-hidden>
+        <HeaderSkeleton />
+        <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-5)] sm:grid-cols-2 xl:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="min-h-[300px] animate-pulse rounded-[var(--ui-radius-marketing)] bg-card shadow-[var(--ui-shadow-sm)]" />
+          ))}
+        </div>
+      </HomeSection>
     </>
   );
 }

@@ -2,11 +2,11 @@
 export const SERVICES_HUB_FAQS = [
   {
     q: "How much does a cleaner cost?",
-    a: "Cleaning services in Cape Town typically cost between R300 and R900 depending on home size, service type, bedrooms, bathrooms, and add-ons. You’ll see an exact total online before you confirm — adjust rooms and extras until it matches your budget.",
+    a: "Your cleaning price depends on the service and property details you choose. Use the booking flow to see the current calculated total before you confirm; any optional add-ons you select are included in that total.",
   },
   {
     q: "Do cleaners bring supplies?",
-    a: "Yes. Teams arrive with professional supplies suited to typical Cape Town finishes. If you prefer specific products (for example on wooden floors or stone), add that to your booking notes and we’ll align where possible.",
+    a: "Supplies depend on the service. Deep Cleaning and Move In / Out Cleaning include company-provided cleaning supplies. For Standard Cleaning and Airbnb Cleaning, customers provide the usual cleaning supplies unless a separate supplies arrangement or charge has been agreed. Check the booking scope for Office Cleaning and specialist services because requirements can differ.",
   },
   {
     q: "Can I book same-day?",

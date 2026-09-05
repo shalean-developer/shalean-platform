@@ -1,6 +1,7 @@
 import { cache } from "react";
 import type { HomeWidgetServiceKey } from "@/lib/pricing/calculatePrice";
-import { pricingSlugForMarketingKey } from "@/lib/marketing/marketingHomePricingSlugs";
+import { pricingSlugForMarketingKey, MARKETING_TO_PRICING_SLUG } from "@/lib/marketing/marketingHomePricingSlugs";
+import { HOME_STARTING_PRICE_ZAR } from "@/lib/seo/homePageMeta";
 import { getSupabaseServer } from "@/lib/supabase/server";
 
 type DbRow = Record<string, unknown>;
@@ -69,6 +70,30 @@ export type MarketingHomeService = {
   features: string[];
 };
 
+const MARKETING_SERVICE_KEY_BY_SLUG: Record<string, MarketingHomeServiceKey> = {
+  standard: "standard",
+  "standard-cleaning": "standard",
+  "regular-cleaning": "standard",
+  deep: "deep",
+  "deep-cleaning": "deep",
+  move: "move",
+  move_cleaning: "move",
+  "move-cleaning": "move",
+  "moving-cleaning": "move",
+  "move-in-out": "move",
+  airbnb: "airbnb",
+  "airbnb-cleaning": "airbnb",
+  office: "office",
+  "office-cleaning": "office",
+  carpet: "carpet",
+  "carpet-cleaning": "carpet",
+};
+
+function normalizeMarketingServiceKey(value: string | null): MarketingHomeServiceKey | null {
+  if (!value) return null;
+  return MARKETING_SERVICE_KEY_BY_SLUG[value] ?? null;
+}
+
 function text(row: DbRow, keys: string[]): string | null {
   for (const key of keys) {
     const value = row[key];
@@ -127,14 +152,13 @@ async function readRows(table: string): Promise<DbRow[]> {
 }
 
 function mapMarketingHomeService(row: DbRow, _index: number): MarketingHomeService | null {
-  const rawId = text(row, ["slug", "service_id", "id", "key"]);
-  const id = rawId === "move_cleaning" || rawId === "move-in-out" ? "move" : rawId;
+  const id = normalizeMarketingServiceKey(text(row, ["slug", "service_id", "id", "key"]));
   if (!id || !MARKETING_HOME_SERVICE_IDS.has(id)) return null;
   const title = text(row, ["title", "name", "label"]);
   const description = text(row, ["description", "summary", "short_description", "blurb"]);
   if (!title || !description) return null;
   return {
-    id: id as MarketingHomeServiceKey,
+    id,
     title,
     description,
     price: null,
@@ -155,6 +179,29 @@ function activePricingBaseBySlug(rows: DbRow[]): Map<string, number> {
   return map;
 }
 
+/**
+ * Prevent the homepage SEO "from" price from silently diverging from the active homepage catalog.
+ * CI/development fails when catalog data is available; production logs loudly instead of hiding drift.
+ */
+function guardHomepageStartingPriceContract(pricingRows: DbRow[]): void {
+  const catalog = activePricingBaseBySlug(pricingRows);
+  if (catalog.size === 0) return;
+
+  const homepageSlugs = new Set(Object.values(MARKETING_TO_PRICING_SLUG));
+  const activeHomepagePrices = [...catalog.entries()]
+    .filter(([slug]) => homepageSlugs.has(slug))
+    .map(([, price]) => price)
+    .filter((price) => Number.isFinite(price) && price > 0);
+  if (activeHomepagePrices.length === 0) return;
+
+  const catalogMinimum = Math.min(...activeHomepagePrices);
+  if (catalogMinimum === HOME_STARTING_PRICE_ZAR) return;
+
+  const message = `[seo] Homepage starting-price contract is R${HOME_STARTING_PRICE_ZAR}, but the active homepage pricing catalog minimum is R${catalogMinimum}. Update the pricing authority and homepage SEO contract together.`;
+  if (process.env.CI === "true" || process.env.NODE_ENV === "development") throw new Error(message);
+  console.error(message);
+}
+
 /** Overlay checkout catalog base prices onto marketing service rows. */
 function applyPricingCatalogToMarketingServices(
   services: MarketingHomeService[],
@@ -170,9 +217,8 @@ function applyPricingCatalogToMarketingServices(
 }
 
 function mapService(row: DbRow, _index: number): HomeService | null {
-  const rawId = text(row, ["slug", "service_id", "id", "key"]);
-  const id = rawId === "move_cleaning" || rawId === "move-in-out" ? "move" : rawId;
-  if (!id || !WIDGET_SERVICE_IDS.has(id)) return null;
+  const id = normalizeMarketingServiceKey(text(row, ["slug", "service_id", "id", "key"]));
+  if (!id || id === "office" || !WIDGET_SERVICE_IDS.has(id)) return null;
   const title = text(row, ["title", "name", "label"]);
   const description = text(row, ["description", "summary", "short_description", "blurb"]);
   if (!title || !description) return null;
@@ -249,6 +295,8 @@ export const getMarketingHomeSeoData = cache(
       readRows("locations"),
       readRows("faqs"),
     ]);
+
+    guardHomepageStartingPriceContract(pricingRows);
 
     const services = applyPricingCatalogToMarketingServices(
       servicesRows.map(mapMarketingHomeService).filter((row): row is MarketingHomeService => Boolean(row)),

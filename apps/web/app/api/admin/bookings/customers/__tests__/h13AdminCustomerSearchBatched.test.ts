@@ -24,15 +24,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const ADMIN_EMAIL = "ops@example.com";
 const ADMIN_USER_ID = "00000000-0000-4000-8000-000000000099";
 
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: vi.fn(() => ({
-    auth: {
-      getUser: vi.fn(async () => ({
-        data: { user: { id: ADMIN_USER_ID, email: ADMIN_EMAIL } },
-        error: null,
-      })),
-    },
-  })),
+vi.mock("@/lib/auth/requireAdminApi", () => ({
+  requireAdminApi: vi.fn(async (request: Request) => {
+    const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "").trim();
+    if (!token) return { ok: false, status: 401, error: "Missing authorization." };
+    return { ok: true, userId: ADMIN_USER_ID, email: ADMIN_EMAIL };
+  }),
 }));
 
 type ProfileRow = {

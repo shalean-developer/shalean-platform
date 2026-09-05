@@ -4,25 +4,30 @@ import { cn } from "@/lib/utils";
 
 export type SelectProps = SelectHTMLAttributes<HTMLSelectElement> & {
   label?: string;
-  /** Distinct styling for bedroom / bathroom / extra-room controls (booking flows). */
+  /** Distinct styling retained for existing booking room controls during migration. */
   variant?: "default" | "room";
 };
 
+/**
+ * Canonical native Select for ordinary form choices.
+ * FloatingSelect remains the specialised custom-listbox option where its current
+ * booking/room interaction is explicitly required; do not replace those flows wholesale.
+ */
 export const Select = forwardRef<HTMLSelectElement, SelectProps>(
   ({ className, id, label, variant = "default", children, ...props }, ref) => {
     const selectId = id ?? props.name;
     const isRoom = variant === "room";
 
     return (
-      <div className="w-full space-y-1.5">
+      <div className="w-full space-y-[var(--ui-space-2)]">
         {label ? (
           <label
             htmlFor={selectId}
             className={cn(
               "block",
               isRoom
-                ? "text-xs font-semibold uppercase tracking-wide text-blue-900/85 dark:text-blue-200/90"
-                : "text-sm font-medium text-zinc-800 dark:text-zinc-200",
+                ? "text-[length:var(--ui-text-caption)] font-semibold uppercase tracking-wide text-primary"
+                : "text-[length:var(--ui-text-small)] font-medium text-foreground",
             )}
           >
             {label}
@@ -33,12 +38,12 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
             ref={ref}
             id={selectId}
             className={cn(
-              "h-12 w-full appearance-none rounded-xl border px-3 pr-10 text-base shadow-sm transition-[border-color,box-shadow,background-color]",
-              "focus-visible:border-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-blue-500",
+              "h-12 w-full appearance-none rounded-[var(--ui-radius-xl)] border px-[var(--ui-space-3)] pr-10 text-base shadow-[var(--ui-shadow-sm)] transition-[border-color,box-shadow,background-color]",
+              "focus-visible:border-ring focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-0 focus-visible:outline-ring",
               "disabled:cursor-not-allowed disabled:opacity-50",
               isRoom
-                ? "cursor-pointer border-blue-200/80 bg-blue-50/40 text-zinc-900 hover:border-blue-400/70 hover:bg-blue-50/70 hover:shadow-md dark:border-blue-900/50 dark:bg-blue-950/25 dark:text-zinc-100 dark:hover:border-blue-600/55 dark:hover:bg-blue-950/40"
-                : "border-zinc-200 bg-white text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100",
+                ? "cursor-pointer border-primary/20 bg-primary/5 text-foreground hover:border-primary/40 hover:bg-primary/10 hover:shadow-[var(--ui-shadow-md)]"
+                : "border-input bg-background text-foreground",
               className,
             )}
             {...props}
@@ -48,7 +53,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
           <ChevronDown
             className={cn(
               "pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2",
-              isRoom ? "text-blue-700 dark:text-blue-400/90" : "text-zinc-500 dark:text-zinc-400",
+              isRoom ? "text-primary" : "text-muted-foreground",
             )}
             aria-hidden
           />

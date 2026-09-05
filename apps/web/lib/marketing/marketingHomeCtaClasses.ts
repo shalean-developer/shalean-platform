@@ -1,7 +1,15 @@
-/** Shared primary booking CTA — marketing homepage visual consistency. */
+/**
+ * Canonical primary public-marketing CTA.
+ * Mirrors the redesigned homepage: Shalean Primary, Ink text, pill radius,
+ * tokenized spacing/shadows and accessible focus treatment.
+ */
 export const marketingPrimaryCtaClassName =
-  "inline-flex min-h-11 items-center justify-center bg-blue-600 text-white px-6 py-3 rounded-full text-sm font-semibold hover:bg-blue-700 transition sm:text-base";
+  "inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-6)] py-[var(--ui-space-3)] text-[length:var(--ui-text-body)] font-medium text-primary-foreground shadow-[var(--ui-shadow-md)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
 
-/** Icon-only companion to primary booking CTA (same colors, compact tap target). */
+/** Canonical secondary public-marketing CTA. */
+export const marketingSecondaryCtaClassName =
+  "inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] border border-border bg-card px-[var(--ui-space-6)] py-[var(--ui-space-3)] text-[length:var(--ui-text-body)] font-medium text-foreground shadow-[var(--ui-shadow-sm)] transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+
+/** Icon-only companion to the primary CTA (same palette and focus behavior). */
 export const marketingPrimaryCtaIconClassName =
-  "inline-flex h-11 w-11 shrink-0 items-center justify-center bg-blue-600 text-white rounded-full font-semibold hover:bg-blue-700 transition sm:h-12 sm:w-12";
+  "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-primary font-medium text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";

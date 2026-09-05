@@ -10,7 +10,8 @@ import { SERVICE_PRICING_CONTRACTS } from "@/lib/booking-v2/servicePricingContra
  * quote appears "not calculating".
  *
  * Move-in / move-out prefer their own rows when present; otherwise fall back to
- * shared `move`, then standard.
+ * the shared `move` row. A service must never borrow another service's pricing
+ * row when its own row is missing.
  */
 export const PRICING_SERVICE_SLUG_ALIASES: Readonly<Record<string, readonly string[]>> = {
   standard: ["standard", "standard-cleaning", "regular", "regular-cleaning"],
@@ -22,6 +23,8 @@ export const PRICING_SERVICE_SLUG_ALIASES: Readonly<Record<string, readonly stri
   carpet: ["carpet", "carpet-cleaning"],
   office: ["office", "office-cleaning", "quick"],
 };
+
+const KNOWN_PRICING_FAMILIES = new Set(Object.keys(PRICING_SERVICE_SLUG_ALIASES));
 
 /** All candidate DB slugs for a canonical engine (or already-canonical) pricing slug. */
 export function pricingServiceSlugCandidates(pricingSlug: string): string[] {
@@ -49,10 +52,7 @@ export function resolvePricingServiceRow<T>(
   return null;
 }
 
-/**
- * Resolve move pricing row: prefer move-in / move-out when moveType is set and
- * that row exists; else shared `move`; else null (caller may fall back to standard).
- */
+/** Resolve move pricing row: preferred move variant, then shared `move`, then null. */
 export function resolveMovingPricingSlug(
   moveType: string | number | boolean | null | undefined,
 ): "move-in" | "move-out" | "move" {
@@ -76,11 +76,6 @@ export function resolveMovingPricingServiceRow<T>(
   );
 }
 
-/** Engine pricing slug for a booking-v2 service (before DB alias resolution). */
-export function enginePricingSlugForBookingV2(serviceSlug: ServiceSlug): string {
-  return DB_SLUG_MAP[serviceSlug] ?? SERVICE_PRICING_CONTRACTS[serviceSlug].canonicalPricingKey;
-}
-
 /** Normalize any known alias to its canonical pricing key. */
 export function canonicalizePricingServiceSlug(raw: string): string {
   const key = raw.trim().toLowerCase();
@@ -90,4 +85,54 @@ export function canonicalizePricingServiceSlug(raw: string): string {
     if (aliases.includes(key)) return canonical;
   }
   return key;
+}
+
+function configuredPricingSlugBelongsToService(
+  serviceSlug: ServiceSlug,
+  configuredPricingSlug: string | null | undefined,
+): boolean {
+  if (!configuredPricingSlug?.trim()) return false;
+  const configuredCanonical = canonicalizePricingServiceSlug(configuredPricingSlug);
+
+  // Preserve custom configured pricing rows. Only known canonical families can
+  // be proven to belong to another service and must therefore be rejected.
+  if (!KNOWN_PRICING_FAMILIES.has(configuredCanonical)) return true;
+
+  if (serviceSlug === "moving-cleaning") {
+    return configuredCanonical === "move" || configuredCanonical === "move-in" || configuredCanonical === "move-out";
+  }
+  return configuredCanonical === SERVICE_PRICING_CONTRACTS[serviceSlug].canonicalPricingKey;
+}
+
+/**
+ * Resolve a Booking V2 pricing row without cross-service fallback.
+ *
+ * A configured pricingSlug is honored when it is a same-service alias or custom
+ * pricing row. Known other-service families are rejected and resolution falls
+ * back to the requested service's canonical family, never another service's row.
+ */
+export function resolveBookingV2PricingServiceRow<T>(
+  dbServices: Record<string, T>,
+  serviceSlug: ServiceSlug,
+  configuredPricingSlug?: string | null,
+): T | null {
+  if (serviceSlug === "moving-cleaning") {
+    if (configuredPricingSlugBelongsToService(serviceSlug, configuredPricingSlug)) {
+      return (
+        resolvePricingServiceRow(dbServices, configuredPricingSlug!) ??
+        resolvePricingServiceRow(dbServices, "move")
+      );
+    }
+    return resolveMovingPricingServiceRow(dbServices, null);
+  }
+
+  const pricingSlug = configuredPricingSlugBelongsToService(serviceSlug, configuredPricingSlug)
+    ? configuredPricingSlug!
+    : DB_SLUG_MAP[serviceSlug];
+  return resolvePricingServiceRow(dbServices, pricingSlug);
+}
+
+/** Engine pricing slug for a booking-v2 service (before DB alias resolution). */
+export function enginePricingSlugForBookingV2(serviceSlug: ServiceSlug): string {
+  return DB_SLUG_MAP[serviceSlug] ?? SERVICE_PRICING_CONTRACTS[serviceSlug].canonicalPricingKey;
 }

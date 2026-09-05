@@ -1,146 +1,45 @@
 import Link from "next/link";
 import { GrowthCtaLink } from "@/components/growth/GrowthCtaLink";
-import { STANDARD_CLEANING_SNIPPET_FAQS } from "@/lib/seo/standardCleaningMoneyPageFaqs";
-import { CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF } from "@/lib/seo/internalLinks";
+import { CAPE_TOWN_PRICING_AUTHORITY_HREF } from "@/lib/seo/internalLinks";
 
 type Props = {
   bookingPath: string;
 };
 
 /**
- * Pricing, snippet FAQs, and mid-page CTAs for `/services/standard-cleaning-cape-town` only.
+ * Concise pricing-authority handoff for `/services/standard-cleaning-cape-town`.
+ *
+ * The shared service template owns FAQs and final conversion actions. This
+ * extension deliberately avoids duplicating price figures or CTA groups.
  */
 export function StandardCleaningCapeTownEnhancements({ bookingPath }: Props) {
   return (
-    <>
-      <section className="border-b border-blue-100 bg-white py-14" aria-labelledby="std-ct-cost-snippet-heading">
-        <div className="mx-auto max-w-4xl px-4">
-          <h2 id="std-ct-cost-snippet-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
-            How much do cleaning services cost in Cape Town?
-          </h2>
-          <blockquote className="mt-4 rounded-2xl border-l-4 border-blue-500 bg-blue-50/60 px-5 py-4 text-base leading-relaxed text-zinc-800 shadow-sm">
-            Cleaning services in Cape Town typically cost <strong className="font-semibold text-zinc-900">R250 to R600+</strong>,
-            depending on property size and service type.
-          </blockquote>
-
-          <h3 id="std-ct-prices-heading" className="mt-10 text-xl font-bold tracking-tight text-zinc-900">
-            Typical standard cleaning price bands
-          </h3>
-          <p className="mt-3 text-base leading-relaxed text-zinc-600">
-            Maintenance cleaning totals depend on bedrooms, bathrooms, and add-ons—ranges below are typical standard scopes
-            before extras. Lock your fixed total in the{" "}
-            <Link href={bookingPath} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              instant quote
-            </Link>
-            . For move-outs or inventory-grade ovens, scope usually steps up—compare{" "}
-            <Link href="/services/deep-cleaning-cape-town" className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              deep cleaning in Cape Town
-            </Link>{" "}
-            when you need a full reset.
-          </p>
-          <div className="mt-8 overflow-x-auto rounded-2xl border border-blue-100 bg-blue-50/40 shadow-sm">
-            <table className="min-w-full border-collapse text-left text-sm">
-              <caption className="sr-only">Typical standard cleaning price bands in Cape Town</caption>
-              <thead>
-                <tr className="border-b border-blue-200 bg-white">
-                  <th scope="col" className="px-4 py-3 font-semibold text-zinc-900">
-                    Home type
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-semibold text-zinc-900">
-                    Typical visit band
-                  </th>
-                  <th scope="col" className="px-4 py-3 font-semibold text-zinc-900">
-                    Notes
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-blue-100 bg-white">
-                <tr>
-                  <td className="px-4 py-3 font-medium text-zinc-800">Compact apartment (1 bed)</td>
-                  <td className="px-4 py-3 text-zinc-700">From ~R250–R380</td>
-                  <td className="px-4 py-3 text-zinc-600">Ideal for weekly or bi-weekly upkeep</td>
-                </tr>
-                <tr className="bg-blue-50/50">
-                  <td className="px-4 py-3 font-medium text-zinc-800">2–3 bed apartment / townhouse</td>
-                  <td className="px-4 py-3 text-zinc-700">~R350–R520</td>
-                  <td className="px-4 py-3 text-zinc-600">Extra bathrooms &amp; ovens shift time upward</td>
-                </tr>
-                <tr>
-                  <td className="px-4 py-3 font-medium text-zinc-800">Family house (larger footprint)</td>
-                  <td className="px-4 py-3 text-zinc-700">~R450–R600+</td>
-                  <td className="px-4 py-3 text-zinc-600">Scope scales with rooms &amp; furnished density</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-            <GrowthCtaLink
-              href={bookingPath}
-              source="seo_ct_standard-cleaning-cape-town_after_table_quote"
-              className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:flex-none"
-            >
-              Get instant quote
-            </GrowthCtaLink>
-            <GrowthCtaLink
-              href={bookingPath}
-              source="seo_ct_standard-cleaning-cape-town_after_table_book"
-              className="inline-flex min-h-12 flex-1 items-center justify-center rounded-xl border border-blue-200 bg-white px-6 text-base font-semibold text-blue-800 transition hover:bg-blue-50 sm:flex-none"
-            >
-              Book now
-            </GrowthCtaLink>
-          </div>
-
-          <section id="faqs" className="scroll-mt-24 mt-12 border-t border-blue-100 pt-12" aria-labelledby="std-ct-faq-heading">
-            <h2 id="std-ct-faq-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
-              Frequently asked questions
-            </h2>
-            <div className="mt-8 space-y-5">
-              {STANDARD_CLEANING_SNIPPET_FAQS.map((faq) => (
-                <div key={faq.q} className="rounded-2xl border border-blue-100 bg-blue-50/40 p-5 shadow-sm">
-                  <h3 className="font-semibold text-zinc-900">{faq.q}</h3>
-                  <p className="mt-2 text-sm leading-relaxed text-zinc-600">{faq.a}</p>
-                </div>
-              ))}
-            </div>
-          </section>
-
-          <p className="mt-10 text-sm leading-relaxed text-zinc-600">
-            Apartment vs house pricing nuances — plus deep-clean uplifts — are spelled out in our{" "}
-            <Link href={CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF} className="font-semibold text-blue-700 underline-offset-2 hover:underline">
-              cleaning prices guide
-            </Link>
-            , with itemised totals for your bedrooms, bathrooms, and add-ons before checkout.
-          </p>
+    <section className="border-b border-blue-100 bg-white py-12" aria-labelledby="std-ct-pricing-heading">
+      <div className="mx-auto max-w-4xl px-4">
+        <h2 id="std-ct-pricing-heading" className="text-2xl font-bold tracking-tight text-zinc-900">
+          Standard cleaning prices
+        </h2>
+        <p className="mt-4 max-w-3xl text-base leading-relaxed text-zinc-600">
+          Your total is calculated from the current governed pricing rules for bedrooms, bathrooms, selected extras, and
+          applicable service charges. Review the{" "}
+          <Link
+            href={CAPE_TOWN_PRICING_AUTHORITY_HREF}
+            className="font-semibold text-blue-700 underline-offset-2 hover:underline"
+          >
+            current pricing authority
+          </Link>{" "}
+          or use the quote builder to see the itemised total before checkout.
+        </p>
+        <div className="mt-6">
+          <GrowthCtaLink
+            href={bookingPath}
+            source="seo_ct_standard-cleaning-cape-town_pricing_quote"
+            className="inline-flex min-h-12 items-center rounded-xl bg-blue-600 px-6 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
+          >
+            Get instant quote
+          </GrowthCtaLink>
         </div>
-      </section>
-
-      <section className="border-b border-blue-100 bg-blue-50/30 py-14" aria-labelledby="std-ct-book-heading">
-        <div className="mx-auto max-w-4xl px-4 text-center">
-          <h2 id="std-ct-book-heading" className="text-2xl font-bold tracking-tight text-zinc-900 sm:text-3xl">
-            Book a cleaner in Cape Town today
-          </h2>
-          <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-zinc-600">
-            Choose a slot that works for your schedule — pick rooms, see your total, and confirm online.
-          </p>
-          <div className="mt-8 flex flex-wrap justify-center gap-3">
-            <GrowthCtaLink
-              href={bookingPath}
-              source="seo_ct_standard-cleaning-cape-town_mid_cta"
-              className="inline-flex min-h-12 items-center rounded-xl bg-blue-600 px-8 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700"
-            >
-              Get instant quote
-            </GrowthCtaLink>
-            <GrowthCtaLink
-              href={bookingPath}
-              source="seo_ct_standard-cleaning-cape-town_mid_book"
-              className="inline-flex min-h-12 items-center rounded-xl border border-blue-200 bg-white px-8 text-base font-semibold text-blue-800 transition hover:bg-blue-50"
-            >
-              Book a cleaner
-            </GrowthCtaLink>
-          </div>
-        </div>
-      </section>
-    </>
+      </div>
+    </section>
   );
 }

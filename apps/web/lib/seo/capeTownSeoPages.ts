@@ -444,8 +444,8 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
         a: "Pricing is based on home size, bedrooms, bathrooms, extras, and your selected time slot. Shalean shows a live total during booking so you can compare options before checkout—no surprise surcharges for items that are already in your selected scope.",
       },
       {
-        q: "Do cleaners bring supplies and equipment?",
-        a: "Yes. Teams arrive with professional supplies suited to typical Cape Town finishes. If you prefer specific products—for example on wooden floors or stone—add that to your booking notes and we will align where possible.",
+        q: "Who provides supplies and equipment for standard cleaning?",
+        a: "For standard cleaning, the customer provides suitable products and equipment by default. If you need Shalean to bring supplies, select the available paid option during booking; any applicable delivery or area charge must be shown before checkout. Add surface-specific instructions to your booking notes.",
       },
       {
         q: "What if my home needs more than standard cleaning this month?",
@@ -746,6 +746,13 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
       "Dust and surface lift on agreed carpeted areas",
       "Room-by-room planning aligned to your booking scope",
       "Optional add-on with standard or deep home cleaning where you select it",
+    ],
+    exclusions: [
+      "Guaranteed removal of permanent stains, dye transfer, bleach marks, or long-set odours",
+      "Specialist restoration for water damage, mould, biohazards, or damaged carpet backing",
+      "Moving heavy furniture, fitted units, or fragile items without safe access arranged in advance",
+      "Immediate drying guarantees—ventilation, fibre type, weather, and humidity affect drying time",
+      "Rugs or fibres requiring specialist treatments not confirmed in the booked scope",
     ],
     benefits: [
       {

@@ -110,7 +110,10 @@ function buildLockedTemplate(opts?: { lockedCleanerId?: string | null; topCleane
 type CapturedInsert = { table: string; row: Record<string, unknown> };
 
 function buildFakeBookingsAdmin(opts: { onInsertReturnsId?: string } = {}) {
-  const captured: { inserts: CapturedInsert[] } = { inserts: [] };
+  const captured: {
+    inserts: CapturedInsert[];
+    lineItemInserts: Array<Array<Record<string, unknown>>>;
+  } = { inserts: [], lineItemInserts: [] };
   const insertedId = opts.onInsertReturnsId ?? BOOKING_ID;
   const admin = {
     from(table: string) {
@@ -129,6 +132,14 @@ function buildFakeBookingsAdmin(opts: { onInsertReturnsId?: string } = {}) {
       if (table === "booking_payment_recovery_jobs") {
         return {
           insert: async () => ({ error: null }),
+        };
+      }
+      if (table === "booking_line_items") {
+        return {
+          insert: async (rows: Array<Record<string, unknown>>) => {
+            captured.lineItemInserts.push(rows);
+            return { error: null };
+          },
         };
       }
       throw new Error(`Unexpected table read: ${table}`);
@@ -295,6 +306,8 @@ describe("M-6: insertRecurringOccurrenceBooking propagates preferred cleaner", (
     expect(row.recurring_id).toBe(RECURRING_PLAN_ID);
     expect(row.is_recurring_generated).toBe(true);
     expect(row.status).toBe("pending_payment");
+    expect(captured.lineItemInserts).toHaveLength(1);
+    expect(captured.lineItemInserts[0]!.every((item) => item.booking_id === BOOKING_ID)).toBe(true);
   });
 
   it("falls back to snapshot.locked.cleaner_id when recurring column is null", async () => {
@@ -391,6 +404,8 @@ describe("M-6: insertMonthlyRecurringOccurrenceBooking propagates preferred clea
     expect(row.is_monthly_billing_booking).toBe(true);
     expect(row.billing_type).toBe("recurring_invoice");
     expect(row.payment_status).toBe("pending_monthly");
+    expect(captured.lineItemInserts).toHaveLength(1);
+    expect(captured.lineItemInserts[0]!.every((item) => item.booking_id === BOOKING_ID)).toBe(true);
   });
 });
 

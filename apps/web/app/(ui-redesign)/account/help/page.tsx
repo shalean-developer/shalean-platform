@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   AlertTriangle,
   BookOpen,
@@ -15,15 +15,17 @@ import {
   Search,
   Sparkles,
   Users,
+  type LucideIcon,
 } from "lucide-react";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type FaqCategory = {
   id: string;
-  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
-  iconBg: string;
-  iconColor: string;
+  icon: LucideIcon;
+  iconTone: string;
   title: string;
   items: { q: string; a: string }[];
 };
@@ -32,8 +34,7 @@ const FAQ_CATEGORIES: FaqCategory[] = [
   {
     id: "bookings",
     icon: BookOpen,
-    iconBg: "bg-blue-100",
-    iconColor: "text-blue-600",
+    iconTone: "bg-primary/10 text-primary",
     title: "Bookings & scheduling",
     items: [
       {
@@ -57,8 +58,7 @@ const FAQ_CATEGORIES: FaqCategory[] = [
   {
     id: "billing",
     icon: CreditCard,
-    iconBg: "bg-amber-100",
-    iconColor: "text-amber-600",
+    iconTone: "bg-warning/15 text-warning-foreground",
     title: "Billing & payments",
     items: [
       {
@@ -82,8 +82,7 @@ const FAQ_CATEGORIES: FaqCategory[] = [
   {
     id: "cleaners",
     icon: Users,
-    iconBg: "bg-green-100",
-    iconColor: "text-green-600",
+    iconTone: "bg-success/10 text-success",
     title: "Cleaners & quality",
     items: [
       {
@@ -107,8 +106,7 @@ const FAQ_CATEGORIES: FaqCategory[] = [
   {
     id: "general",
     icon: HelpCircle,
-    iconBg: "bg-violet-100",
-    iconColor: "text-violet-600",
+    iconTone: "bg-accent text-accent-foreground",
     title: "General questions",
     items: [
       {
@@ -133,22 +131,68 @@ const FAQ_CATEGORIES: FaqCategory[] = [
 
 function FaqItem({ q, a }: { q: string; a: string }) {
   const [open, setOpen] = useState(false);
+  const panelId = useId();
+
   return (
-    <div className="border-b border-gray-100 last:border-0">
+    <div className="border-b border-border last:border-0">
       <button
         type="button"
-        className="flex w-full items-center justify-between gap-3 py-4 text-left text-sm font-semibold text-gray-900"
-        onClick={() => setOpen((o) => !o)}
+        className="flex w-full items-center justify-between gap-3 py-4 text-left text-sm font-semibold text-foreground focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-controls={panelId}
       >
-        {q}
+        <span>{q}</span>
         {open ? (
-          <ChevronUp className="h-4 w-4 shrink-0 text-gray-400" />
+          <ChevronUp className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         ) : (
-          <ChevronDown className="h-4 w-4 shrink-0 text-gray-400" />
+          <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />
         )}
       </button>
-      {open ? <p className="pb-4 text-sm leading-relaxed text-gray-500">{a}</p> : null}
+      {open ? (
+        <p id={panelId} className="pb-4 text-sm leading-relaxed text-muted-foreground">
+          {a}
+        </p>
+      ) : null}
     </div>
+  );
+}
+
+function ContactOption({
+  href,
+  title,
+  value,
+  detail,
+  icon: Icon,
+  iconTone,
+  external = false,
+}: {
+  href: string;
+  title: string;
+  value: string;
+  detail: string;
+  icon: LucideIcon;
+  iconTone: string;
+  external?: boolean;
+}) {
+  return (
+    <Card className="min-w-0 overflow-hidden transition-shadow hover:shadow-[var(--ui-shadow-md)]">
+      <a
+        href={href}
+        target={external ? "_blank" : undefined}
+        rel={external ? "noopener noreferrer" : undefined}
+        className="flex h-full items-center gap-4 p-5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-ring"
+      >
+        <div className={cn("flex h-12 w-12 shrink-0 items-center justify-center rounded-xl", iconTone)}>
+          <Icon className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+        </div>
+        <div className="min-w-0">
+          <p className="font-semibold text-foreground">{title}</p>
+          <p className="break-all text-sm font-medium text-foreground">{value}</p>
+          <p className="text-xs text-muted-foreground">{detail}</p>
+        </div>
+      </a>
+    </Card>
   );
 }
 
@@ -167,181 +211,169 @@ export default function AccountHelpPage() {
       : cat.items,
   })).filter((cat) => cat.items.length > 0);
 
-  const displayed = activeCategory
-    ? filtered.filter((c) => c.id === activeCategory)
-    : filtered;
+  const displayed = activeCategory ? filtered.filter((category) => category.id === activeCategory) : filtered;
 
   return (
     <div className="space-y-8 pb-8">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight text-gray-900">Help &amp; Support</h1>
-        <p className="mt-1 text-sm text-gray-500">
+      <header>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Help &amp; Support</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
           Find answers, browse FAQs, or reach our team directly.
         </p>
-      </div>
+      </header>
 
-      {/* Search */}
       <div className="relative">
-        <Search className="absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400" />
+        <label htmlFor="account-help-search" className="sr-only">Search help</label>
+        <Search className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" aria-hidden />
         <Input
+          id="account-help-search"
           type="search"
           value={search}
-          onChange={(e) => { setSearch(e.target.value); setActiveCategory(null); }}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            setActiveCategory(null);
+          }}
           placeholder="Search for help…"
-          className="h-12 rounded-2xl border-gray-200 pl-12 text-sm shadow-sm focus-visible:ring-blue-500"
+          className="h-12 pl-12"
         />
       </div>
 
-      {/* Emergency CTA */}
-      <div className="rounded-2xl border border-red-100 bg-red-50 p-5">
-        <div className="flex items-start gap-4">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-red-600">
-            <AlertTriangle className="h-5 w-5 text-white" strokeWidth={1.75} />
+      <Card className="border-destructive/25 bg-destructive/5">
+        <CardContent className="p-5">
+          <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-4 min-[640px]:grid-cols-[auto_minmax(0,1fr)_auto] min-[640px]:items-start">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-destructive text-destructive-foreground">
+              <AlertTriangle className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+            </div>
+            <div className="min-w-0">
+              <p className="font-semibold text-foreground">Urgent booking issue?</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                If your cleaner hasn&apos;t arrived or there&apos;s an emergency, contact us immediately on WhatsApp.
+              </p>
+            </div>
+            <Button asChild variant="destructive" className="col-span-2 w-full min-[640px]:col-span-1 min-[640px]:w-auto">
+              <a
+                href="https://wa.me/27825915525?text=URGENT%3A%20I%20need%20help%20with%20my%20booking"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Get help now
+              </a>
+            </Button>
           </div>
-          <div className="flex-1">
-            <p className="font-semibold text-red-900">Urgent booking issue?</p>
-            <p className="mt-1 text-sm text-red-700">
-              If your cleaner hasn&apos;t arrived or there&apos;s an emergency, contact us immediately on WhatsApp.
-            </p>
-          </div>
-          <a
-            href="https://wa.me/27825915525?text=URGENT%3A%20I%20need%20help%20with%20my%20booking"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-700 transition"
-          >
-            Get help now
-          </a>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Contact options */}
-      <section>
-        <h2 className="mb-4 text-base font-semibold text-gray-900">Contact us</h2>
+      <section aria-labelledby="contact-us-heading">
+        <h2 id="contact-us-heading" className="mb-4 text-base font-semibold text-foreground">Contact us</h2>
         <div className="grid gap-4 sm:grid-cols-3">
-          <a
+          <ContactOption
             href="https://wa.me/27825915525"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="group flex items-center gap-4 rounded-2xl border border-green-100 bg-green-50 p-5 shadow-sm transition hover:border-green-200 hover:shadow-md"
-          >
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-green-600 shadow-sm">
-              <MessageCircle className="h-6 w-6 text-white" strokeWidth={1.75} />
-            </div>
-            <div>
-              <p className="font-semibold text-gray-900">WhatsApp</p>
-              <p className="text-sm text-green-700 font-medium">082 591 5525</p>
-              <p className="text-xs text-gray-500">Fastest response</p>
-            </div>
-          </a>
-          <a
+            title="WhatsApp"
+            value="082 591 5525"
+            detail="Fastest response"
+            icon={MessageCircle}
+            iconTone="bg-success/10 text-success"
+            external
+          />
+          <ContactOption
             href="mailto:hello@shalean.co.za"
-            className="group flex items-center gap-4 rounded-2xl border border-blue-100 bg-blue-50 p-5 shadow-sm transition hover:border-blue-200 hover:shadow-md"
-          >
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600 shadow-sm">
-              <Mail className="h-6 w-6 text-white" strokeWidth={1.75} />
-            </div>
-            <div>
-              <p className="font-semibold text-gray-900">Email</p>
-              <p className="text-sm text-blue-700 font-medium">hello@shalean.co.za</p>
-              <p className="text-xs text-gray-500">Reply within 24 hours</p>
-            </div>
-          </a>
-          <a
+            title="Email"
+            value="hello@shalean.co.za"
+            detail="Reply within 24 hours"
+            icon={Mail}
+            iconTone="bg-primary/10 text-primary"
+          />
+          <ContactOption
             href="tel:+27825915525"
-            className="group flex items-center gap-4 rounded-2xl border border-violet-100 bg-violet-50 p-5 shadow-sm transition hover:border-violet-200 hover:shadow-md"
-          >
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-violet-600 shadow-sm">
-              <Phone className="h-6 w-6 text-white" strokeWidth={1.75} />
-            </div>
-            <div>
-              <p className="font-semibold text-gray-900">Call us</p>
-              <p className="text-sm text-violet-700 font-medium">082 591 5525</p>
-              <p className="text-xs text-gray-500">Mon–Sat 8am–6pm</p>
-            </div>
-          </a>
+            title="Call us"
+            value="082 591 5525"
+            detail="Mon–Sat 8am–6pm"
+            icon={Phone}
+            iconTone="bg-accent text-accent-foreground"
+          />
         </div>
       </section>
 
-      {/* FAQ categories filter */}
       {!search.trim() ? (
-        <div className="flex flex-wrap gap-2">
-          <button
+        <div className="flex flex-wrap gap-2" aria-label="FAQ categories">
+          <Button
             type="button"
+            size="sm"
+            variant={activeCategory === null ? "default" : "outline"}
             onClick={() => setActiveCategory(null)}
-            className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
-              activeCategory === null
-                ? "border-blue-200 bg-blue-50 text-blue-700"
-                : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-            }`}
+            aria-pressed={activeCategory === null}
           >
             All
-          </button>
-          {FAQ_CATEGORIES.map((cat) => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => setActiveCategory(activeCategory === cat.id ? null : cat.id)}
-              className={`rounded-xl border px-3 py-1.5 text-sm font-medium transition ${
-                activeCategory === cat.id
-                  ? "border-blue-200 bg-blue-50 text-blue-700"
-                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-              }`}
-            >
-              {cat.title}
-            </button>
-          ))}
+          </Button>
+          {FAQ_CATEGORIES.map((cat) => {
+            const active = activeCategory === cat.id;
+            return (
+              <Button
+                key={cat.id}
+                type="button"
+                size="sm"
+                variant={active ? "default" : "outline"}
+                onClick={() => setActiveCategory(active ? null : cat.id)}
+                aria-pressed={active}
+              >
+                {cat.title}
+              </Button>
+            );
+          })}
         </div>
       ) : null}
 
-      {/* FAQ accordion */}
-      <section>
-        <h2 className="mb-4 text-base font-semibold text-gray-900">
+      <section aria-labelledby="faq-heading">
+        <h2 id="faq-heading" className="mb-4 text-base font-semibold text-foreground">
           {search.trim() ? `Results for "${search}"` : "Frequently asked questions"}
         </h2>
         {displayed.length === 0 ? (
-          <div className="rounded-2xl border border-gray-100 bg-white p-8 text-center shadow-sm">
-            <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100 mx-auto">
-              <Search className="h-6 w-6 text-gray-400" strokeWidth={1.5} />
-            </div>
-            <p className="mt-4 font-semibold text-gray-900">No results found</p>
-            <p className="mt-1 text-sm text-gray-500">
-              Try different keywords or contact us directly on WhatsApp.
-            </p>
-          </div>
+          <Card>
+            <CardContent className="p-8 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-muted text-muted-foreground">
+                <Search className="h-6 w-6" strokeWidth={1.5} aria-hidden />
+              </div>
+              <p className="mt-4 font-semibold text-foreground">No results found</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Try different keywords or contact us directly on WhatsApp.
+              </p>
+            </CardContent>
+          </Card>
         ) : (
           <div className="space-y-4">
             {displayed.map((cat) => (
-              <div key={cat.id} className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-                <div className="flex items-center gap-3 border-b border-gray-100 px-5 py-4">
-                  <div className={`flex h-9 w-9 items-center justify-center rounded-xl ${cat.iconBg}`}>
-                    <cat.icon className={`h-4 w-4 ${cat.iconColor}`} strokeWidth={1.75} />
+              <Card key={cat.id} className="overflow-hidden">
+                <CardHeader className="border-b border-border pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className={cn("flex h-9 w-9 items-center justify-center rounded-xl", cat.iconTone)}>
+                      <cat.icon className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                    </div>
+                    <CardTitle className="text-base">{cat.title}</CardTitle>
                   </div>
-                  <h3 className="text-sm font-semibold text-gray-900">{cat.title}</h3>
-                </div>
-                <div className="px-5">
+                </CardHeader>
+                <CardContent className="px-5 py-0">
                   {cat.items.map((item) => (
                     <FaqItem key={item.q} q={item.q} a={item.a} />
                   ))}
-                </div>
-              </div>
+                </CardContent>
+              </Card>
             ))}
           </div>
         )}
       </section>
 
-      {/* Book a clean CTA */}
-      <div className="rounded-2xl border border-blue-100 bg-blue-50 p-6 text-center">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-600 mx-auto shadow-sm">
-          <Sparkles className="h-7 w-7 text-white" strokeWidth={1.75} />
-        </div>
-        <h2 className="mt-4 text-lg font-semibold text-gray-900">Ready to book a clean?</h2>
-        <p className="mt-1 text-sm text-gray-500">Schedule your next visit in just a few taps.</p>
-        <Button asChild size="lg" className="mt-4 rounded-xl bg-blue-600 text-white hover:bg-blue-700">
-          <Link href="/account/book">Book a clean</Link>
-        </Button>
-      </div>
+      <Card className="border-primary/20 bg-primary/5">
+        <CardContent className="p-6 text-center">
+          <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-primary-foreground">
+            <Sparkles className="h-7 w-7" strokeWidth={1.75} aria-hidden />
+          </div>
+          <h2 className="mt-4 text-lg font-semibold text-foreground">Ready to book a clean?</h2>
+          <p className="mt-1 text-sm text-muted-foreground">Schedule your next visit in just a few taps.</p>
+          <Button asChild size="lg" className="mt-4">
+            <Link href="/account/book">Book a clean</Link>
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   );
 }

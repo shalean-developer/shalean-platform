@@ -100,6 +100,11 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: >-
           npm run test --
+          lib/booking-v2/__tests__/serviceSuppliesPolicy.test.ts
+          lib/booking-v2/__tests__/servicePricingSourceOfTruth.test.ts
+          lib/booking-v2/__tests__/authoritativePricingCatalogRead.test.ts
+          lib/booking-v2/__tests__/pricingAvailabilityState.test.ts
+          lib/booking-v2/__tests__/authoritativePricingClientAvailability.test.ts
           lib/booking/__tests__/cleanerServicePreferenceEligibility.test.ts
           lib/dispatch/__tests__/h9DispatchEscalationStatusFilter.test.ts
           app/api/cleaner/__tests__/cleanerEarningsApi.test.ts
@@ -115,8 +120,15 @@ jobs:
         run: >-
           npm run test --
           lib/marketing/__tests__/marketingAreaLinks.test.ts
+          lib/marketing/__tests__/globalTopNavVisibility.test.ts
+          lib/marketing/__tests__/uiSystemRouteContract.test.ts
           lib/meta/__tests__/dataDeletion.test.ts
           lib/meta/__tests__/complianceRoutes.contract.test.ts
+          lib/services/__tests__/publicServiceExtras.test.ts
+          lib/services/__tests__/primaryServiceHeroContract.test.ts
+          lib/services/__tests__/primaryServiceRouteContract.test.ts
+          lib/seo/__tests__/capeTownServiceSchemaPricingAuthority.test.ts
+          lib/seo/__tests__/pricingRouteAuthorityProxy.test.ts
           lib/seo/__tests__/locationsShortSlugProxyRedirect.test.ts
           app/api/meta/data-deletion/__tests__/route.test.ts
           lib/oauth/__tests__/metaFacebookOAuth.test.ts

@@ -1,64 +1,69 @@
-import { Fragment } from "react";
-import { MousePointerClick, Sparkles, Home, ArrowRight } from "lucide-react";
+import { CalendarCheck, House, Sparkles, type LucideIcon } from "lucide-react";
+import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
+import { MarketingSectionHeader } from "@/components/marketing-home/primitives/MarketingSectionHeader";
 
-const STEPS = [
+type HowItWorksStep = {
+  Icon: LucideIcon;
+  title: string;
+  description: string;
+};
+
+const STEPS: readonly HowItWorksStep[] = [
   {
-    step: "1",
-    Icon: MousePointerClick,
+    Icon: CalendarCheck,
     title: "Book online",
-    desc: "Choose your service, tell us about your space, and pick a time that suits you.",
+    description: "Choose your service, share the details and pick a time that suits you.",
   },
   {
-    step: "2",
     Icon: Sparkles,
     title: "We clean",
-    desc: "Our professional team arrives on time and gets to work.",
+    description: "A vetted Shalean cleaner or team arrives for the service you selected.",
   },
   {
-    step: "3",
-    Icon: Home,
+    Icon: House,
     title: "You relax",
-    desc: "Come home to a spotless space. Clean and hassle-free, every time.",
+    description: "Enjoy a professionally cleaned space while we take care of the work.",
   },
 ] as const;
 
 export function MarketingHomeHowItWorksSection() {
   return (
-    <section id="how-it-works" className="scroll-mt-24 border-t border-slate-100 bg-white py-16 md:py-20">
-      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
-            From booking to a fresh home
-          </h2>
-          <p className="mt-2 text-sm text-slate-500">Simple, fast and hassle-free.</p>
-        </div>
+    <HomeSection
+      id="how-it-works"
+      containerSize="marketing"
+      className="scroll-mt-24 bg-primary/10 md:py-[var(--ui-space-20)]"
+      aria-label="How Shalean cleaning works"
+    >
+      <MarketingSectionHeader
+        eyebrow="How it works"
+        title="Simple from booking to clean"
+        description="Three clear steps from choosing a service to enjoying a cleaner space."
+      />
 
-        <div className="mt-12 flex flex-col items-stretch gap-4 sm:flex-row sm:items-start">
-          {STEPS.map(({ step, Icon, title, desc }, index) => (
-            <Fragment key={step}>
-              <div className="flex flex-1 flex-col items-start gap-4 rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-                <div className="flex items-center gap-3">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-extrabold text-white">
-                    {step}
-                  </span>
-                  <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-100 bg-slate-50">
-                    <Icon className="h-5 w-5 text-slate-700" strokeWidth={1.75} aria-hidden />
-                  </div>
-                </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">{title}</h3>
-                  <p className="mt-1.5 text-sm leading-relaxed text-slate-500">{desc}</p>
-                </div>
-              </div>
-              {index < STEPS.length - 1 && (
-                <div className="hidden items-center justify-center self-center sm:flex" aria-hidden>
-                  <ArrowRight className="h-6 w-6 text-slate-300" />
-                </div>
-              )}
-            </Fragment>
-          ))}
-        </div>
+      <div className="mx-auto mt-[var(--ui-space-16)] grid w-full max-w-6xl gap-[var(--ui-space-6)] md:grid-cols-3">
+        {STEPS.map(({ Icon, title, description }) => (
+          <article
+            key={title}
+            className="relative flex min-h-[180px] flex-col items-center justify-center rounded-[var(--ui-radius-marketing)] border border-border/60 bg-card p-[var(--ui-space-5)] text-center text-card-foreground shadow-[var(--ui-shadow-lg)]"
+          >
+            <div
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-[var(--navy-from)]"
+              aria-hidden
+            >
+              <Icon className="h-6 w-6" strokeWidth={1.65} />
+            </div>
+
+            <div className="mt-[var(--ui-space-3)]">
+              <h3 className="text-[length:var(--ui-text-card-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight">
+                {title}
+              </h3>
+              <p className="mx-auto mt-[var(--ui-space-2)] max-w-xs text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                {description}
+              </p>
+            </div>
+          </article>
+        ))}
       </div>
-    </section>
+    </HomeSection>
   );
 }
