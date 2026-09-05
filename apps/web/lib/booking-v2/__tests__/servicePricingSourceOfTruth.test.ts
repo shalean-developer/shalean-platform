@@ -38,6 +38,12 @@ describe("SR-04B service pricing source of truth", () => {
     expect(resolveBookingV2PricingServiceRow(moveDb, "moving-cleaning", "move-out")).toEqual({ base: 1250 });
   });
 
+  it("preserves custom configured pricing slugs that do not alias another service family", () => {
+    const db = { "office-contract": { base: 720 } };
+
+    expect(resolveBookingV2PricingServiceRow(db, "office-cleaning", "office-contract")).toEqual({ base: 720 });
+  });
+
   it("ignores cross-service configured pricing and stays in the requested service family", () => {
     const db = {
       standard: { base: 350 },
