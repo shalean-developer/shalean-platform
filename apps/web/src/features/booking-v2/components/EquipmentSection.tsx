@@ -5,7 +5,7 @@ import { useFormContext } from "react-hook-form";
 import { Loader2 } from "lucide-react";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
-import { serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
+import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 import { coerceYesNoValue } from "@/src/features/booking-v2/components/serviceQuestionYesNo";
 import { YesNoToggleRow } from "@/src/features/booking-v2/components/YesNoToggleRow";
@@ -21,7 +21,7 @@ export function EquipmentSection() {
   const showEquipmentQuestion =
     liveConfig?.showEquipmentQuestion ??
     liveConfig?.showCleaningProductsQuestion ??
-    serviceShowsEquipmentQuestion(serviceSlug);
+    serviceRequiresCustomerEquipmentChoice(serviceSlug);
 
   const equipmentRequired = coerceYesNoValue(watch("equipmentRequired"));
   const address = watch("address") ?? "";

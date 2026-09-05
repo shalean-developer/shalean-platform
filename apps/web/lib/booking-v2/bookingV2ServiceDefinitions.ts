@@ -1,9 +1,9 @@
 import {
   SERVICE_CONFIG,
   SERVICE_SLUGS,
-  serviceShowsEquipmentQuestion,
   type ServiceSlug,
 } from "@/src/features/booking-v2/config/serviceConfig";
+import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
 import { EXTRA_CLEANER_SERVICE_SLUGS } from "@/lib/booking-v2/propertyFactorPricing";
 import type { BookingV2CatalogConfig, BookingV2ServiceDefinition } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { DB_SLUG_MAP, EXTRA_TYPE_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
@@ -24,8 +24,8 @@ export function buildDefaultBookingV2CatalogConfig(): BookingV2CatalogConfig {
       cleanerMode: config.cleanerMode,
       extraTypes: [...EXTRA_TYPE_MAP[slug]],
       extraSlugs: [...extraSlugsForService(slug)],
-      showEquipmentQuestion: serviceShowsEquipmentQuestion(slug),
-      showCleaningProductsQuestion: serviceShowsEquipmentQuestion(slug),
+      showEquipmentQuestion: serviceRequiresCustomerEquipmentChoice(slug),
+      showCleaningProductsQuestion: serviceRequiresCustomerEquipmentChoice(slug),
       allowsExtraCleaner: EXTRA_CLEANER_SERVICE_SLUGS.has(slug),
       step1Questions: config.step1Questions.map((q) => ({ ...q, options: q.options?.map((o) => ({ ...o })) })),
       isActive: true,
@@ -73,6 +73,11 @@ export function parseBookingV2CatalogConfig(raw: unknown): BookingV2CatalogConfi
         })
       : SERVICE_CONFIG[slug as ServiceSlug].step1Questions;
 
+    const policyShowsEquipment = serviceRequiresCustomerEquipmentChoice(slug as ServiceSlug);
+    const configuredShowEquipment =
+      row.showEquipmentQuestion === true ||
+      (row.showEquipmentQuestion !== false && row.showCleaningProductsQuestion !== false && policyShowsEquipment);
+
     services.push({
       slug: slug as ServiceSlug,
       pricingSlug,
@@ -86,16 +91,8 @@ export function parseBookingV2CatalogConfig(raw: unknown): BookingV2CatalogConfi
       extraSlugs: Array.isArray(row.extraSlugs)
         ? row.extraSlugs.filter((s): s is string => typeof s === "string" && s.trim().length > 0)
         : [...extraSlugsForService(slug as ServiceSlug)],
-      showEquipmentQuestion:
-        row.showEquipmentQuestion === true ||
-        (row.showEquipmentQuestion !== false &&
-          row.showCleaningProductsQuestion !== false &&
-          serviceShowsEquipmentQuestion(slug as ServiceSlug)),
-      showCleaningProductsQuestion:
-        row.showEquipmentQuestion === true ||
-        (row.showEquipmentQuestion !== false &&
-          row.showCleaningProductsQuestion !== false &&
-          serviceShowsEquipmentQuestion(slug as ServiceSlug)),
+      showEquipmentQuestion: configuredShowEquipment,
+      showCleaningProductsQuestion: configuredShowEquipment,
       allowsExtraCleaner:
         row.allowsExtraCleaner === true || EXTRA_CLEANER_SERVICE_SLUGS.has(slug as ServiceSlug),
       step1Questions,
