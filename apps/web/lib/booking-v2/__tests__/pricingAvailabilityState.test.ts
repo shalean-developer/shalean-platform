@@ -31,7 +31,7 @@ describe("SPC-01-04 SR-04D1 pricing availability state", () => {
     expect(src).toMatch(/useState<BookingPricingAvailability>\("loading"\)/);
     expect(src).toMatch(/if \(!json\.catalog\) throw new Error\("catalog_missing"\)/);
     expect(src).toMatch(/setPricingAvailability\("available"\)/);
-    expect(src).toMatch(/\.catch\(\(\) => \{\s*setPricingAvailability\("unavailable"\)/s);
+    expect(src).toMatch(/\.catch\(\(\) => \{\s*setPricingAvailability\("unavailable"\)/);
     expect(src).toMatch(/step === 3 && pricingAvailability !== "available"/);
     expect(src).toMatch(/step === 4 && pricingAvailability !== "available"/);
   });
