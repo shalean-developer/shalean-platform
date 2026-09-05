@@ -63,12 +63,14 @@ describe("SPC-01-04 SR-04D1 pricing availability state", () => {
     expect(src).toContain("if (!quoteReadiness.ready)");
   });
 
-  it("preserves the no-admin static catalog path and does not add SR-04D2", () => {
+  it("preserves the no-admin fallback path outside customer production while D2 owns the production guard", () => {
     const loader = read("lib/booking-v2/loadBookingV2Catalog.ts");
+    const guard = read("lib/booking-v2/authoritativePricingClientAvailability.ts");
 
     expect(loader).toMatch(/const admin = getSupabaseAdmin\(\);/);
+    expect(loader).toContain("assertAuthoritativePricingClientAvailable({ adminAvailable: Boolean(admin) })");
     expect(loader).toMatch(/if \(admin\) \{/);
-    expect(loader).not.toMatch(/isCustomerFacingProduction/);
-    expect(loader).not.toMatch(/assertAuthoritativePricingClientAvailable/);
+    expect(guard).toContain("isCustomerFacingProduction");
+    expect(guard).not.toContain('nodeEnv !== "production"');
   });
 });
