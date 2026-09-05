@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { finalizePendingPaymentBookingFromPaystack, insertFinalizedBookingFromPaystack } from "@/lib/booking/paymentFinalizationBookingCommands";
+import { finalizePendingPaymentBookingFromPaystack, insertFinalizedBookingFromPaystack, updateObservedPendingPaymentBooking, type PaymentFinalizationObservedPendingBooking } from "@/lib/booking/paymentFinalizationBookingCommands";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
@@ -26,8 +26,10 @@ describe("payment finalization booking command convergence (Phase 1F)", () => {
     expect(src).toContain("finalizePendingPaymentBookingFromPaystack");
     expect(src).toContain("ownershipColumn");
     expect(src).toContain("paymentFinalizationSelect");
-    expect(src).toMatch(/\.from\("bookings"\)[\s\S]*?\.update\(normalizedRow\)[\s\S]*?\.eq\("id",\s*existingPendingPaymentId\)[\s\S]*?\.eq\("status",\s*"pending_payment"\)[\s\S]*?\.select\(select\)[\s\S]*?\.maybeSingle\(\)/);
-    expect(src).toMatch(/\.from\("bookings"\)[\s\S]*?\.update\(normalizedRow\)[\s\S]*?\.eq\("paystack_reference",\s*paystackReference\)[\s\S]*?\.eq\("status",\s*"pending_payment"\)[\s\S]*?\.select\(select\)[\s\S]*?\.maybeSingle\(\)/);
+    expect(src).toContain('row: normalizePaystackFinalizationPaidAmountRow(params.row)');
+    expect(src).toContain('.eq("id", observed.id)');
+    expect(src).toContain('.eq("status", observed.status)');
+
   });
 
   it("owns the Paystack finalized booking insert shape", () => {
@@ -91,12 +93,14 @@ describe("Paystack finalization paid-amount normalization", () => {
       update: vi.fn(),
       insert: vi.fn(),
       eq: vi.fn(),
+      is: vi.fn(),
       select: vi.fn(),
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: "booking-test" }, error: null }),
     };
     query.update.mockReturnValue(query);
     query.insert.mockReturnValue(query);
     query.eq.mockReturnValue(query);
+    query.is.mockReturnValue(query);
     query.select.mockReturnValue(query);
     const from = vi.fn().mockReturnValue(query);
     return { from, query, client: { from } as unknown as SupabaseClient };
@@ -111,9 +115,11 @@ describe("Paystack finalization paid-amount normalization", () => {
         supabase: db.client,
         row,
         ownershipColumn: "customer_id",
-        pendingFinalizeMatch: mode,
-        existingPendingPaymentId: "booking-test",
-        paystackReference: "test-reference",
+        observed: {
+          id: "booking-test", status: "pending_payment",
+          customerEmail: "customer@example.com", customerAuthId: "owner-test",
+          paystackReference: "test-reference",
+        },
       });
     }
 
@@ -137,8 +143,11 @@ describe("Paystack finalization paid-amount normalization", () => {
         expect(row.total_paid_zar).toBe(999.99);
         if (mode !== "insert") {
           expect(db.query.eq.mock.calls).toEqual([
-            [mode, mode === "id" ? "booking-test" : "test-reference"],
+            ["id", "booking-test"],
             ["status", "pending_payment"],
+            ["customer_email", "customer@example.com"],
+            ["customer_id", "owner-test"],
+            ["paystack_reference", "test-reference"],
           ]);
         }
       },
@@ -157,4 +166,112 @@ describe("Paystack finalization paid-amount normalization", () => {
       },
     );
   }
+});
+
+describe("observed-state payment writes", () => {
+  const anchor: PaymentFinalizationObservedPendingBooking = {
+    id: "booking-test", status: "pending_payment", customerEmail: " Customer@Example.com ",
+    customerAuthId: "owner-a", paystackReference: "old-reference",
+  };
+  // Simulates a database evaluating the complete WHERE clause after a competing write.
+  function database(observed: typeof anchor, competing: Record<string, unknown> = {}, owner = "customer_id") {
+    const current: Record<string, unknown> = {
+      id: observed.id, status: observed.status, customer_email: observed.customerEmail,
+      [owner]: observed.customerAuthId, paystack_reference: observed.paystackReference, ...competing,
+    };
+    const predicates: Array<[string, string, unknown]> = [];
+    let payload: Record<string, unknown> = {};
+    const query = {
+      update: vi.fn((patch: Record<string, unknown>) => { payload = patch; return query; }),
+      eq: vi.fn((key: string, value: unknown) => { predicates.push(["eq", key, value]); return query; }),
+      is: vi.fn((key: string, value: unknown) => { predicates.push(["is", key, value]); return query; }),
+      select: vi.fn(() => query),
+      maybeSingle: vi.fn(async () => {
+        if (!predicates.every(([, key, value]) => current[key] === value)) return { data: null, error: null };
+        Object.assign(current, payload);
+        return { data: { id: current.id }, error: null };
+      }),
+    };
+    const from = vi.fn(() => query);
+    return { current, predicates, query, from, client: { from } as unknown as SupabaseClient };
+  }
+  for (const ownershipColumn of ["customer_id", "user_id"] as const) {
+    for (const mode of ["paystack_reference", "id"] as const) {
+      const observed = { ...anchor, paystackReference: mode === "id" ? anchor.id : "test-reference" };
+      const row = {
+        customer_email: "customer@example.com", [ownershipColumn]: "owner-a",
+        paystack_reference: "pay_verified", amount_paid_cents: 12550,
+        total_paid_cents: 1, total_paid_zar: 1.5,
+      };
+      it(mode + "/" + ownershipColumn + " pins raw fields and permits reference replacement", async () => {
+        const db = database(observed, {}, ownershipColumn);
+        const result = await finalizePendingPaymentBookingFromPaystack({
+          supabase: db.client, observed, row, ownershipColumn,
+        });
+        expect(result.error).toBeNull();
+        expect(db.predicates).toEqual([
+          ["eq", "id", observed.id], ["eq", "status", "pending_payment"],
+          ["eq", "customer_email", observed.customerEmail],
+          ["eq", ownershipColumn, observed.customerAuthId],
+          ["eq", "paystack_reference", observed.paystackReference],
+        ]);
+        expect(db.current).toMatchObject({
+          paystack_reference: "pay_verified", amount_paid_cents: 12550,
+          total_paid_cents: 12550, total_paid_zar: 126,
+        });
+      });
+      it.each([
+        { customer_email: "other@example.com" },
+        { [ownershipColumn]: "owner-b" },
+        { paystack_reference: "another-reference" },
+        { status: "cancelled" },
+        { id: "another-booking" },
+      ])(mode + "/" + ownershipColumn + " rejects a competing mutation %j", async (competing) => {
+        const db = database(observed, competing, ownershipColumn);
+        const before = { ...db.current };
+        const result = await finalizePendingPaymentBookingFromPaystack({
+          supabase: db.client, observed, row, ownershipColumn,
+        });
+        expect(result.data).toBeNull();
+        expect(result.error?.code).toBe("PAYMENT_FINALIZATION_CONFLICT");
+        expect(db.current).toEqual(before);
+      });
+      it(mode + "/" + ownershipColumn + " uses explicit NULL predicates and permits legacy fill", async () => {
+        const missing = { ...observed, customerEmail: null, customerAuthId: null, paystackReference: null };
+        const db = database(missing, {}, ownershipColumn);
+        expect((await finalizePendingPaymentBookingFromPaystack({
+          supabase: db.client, observed: missing, row, ownershipColumn,
+        })).error).toBeNull();
+        expect(db.query.is.mock.calls).toEqual([
+          ["customer_email", null], [ownershipColumn, null], ["paystack_reference", null],
+        ]);
+      });
+      it(mode + "/" + ownershipColumn + " preserves missing incoming identity", async () => {
+        const db = database(observed, {}, ownershipColumn);
+        await finalizePendingPaymentBookingFromPaystack({
+          supabase: db.client, observed, row: { ...row, customer_email: "", [ownershipColumn]: null }, ownershipColumn,
+        });
+        expect(db.current.customer_email).toBe(observed.customerEmail);
+        expect(db.current[ownershipColumn]).toBe(observed.customerAuthId);
+      });
+      it.each([{ customer_email: "wrong@example.com" }, { [ownershipColumn]: "wrong-owner" }])(
+        mode + "/" + ownershipColumn + " rejects identity mismatch without UPDATE %j", async (badIdentity) => {
+          const db = database(observed, {}, ownershipColumn);
+          const result = await finalizePendingPaymentBookingFromPaystack({
+            supabase: db.client, observed, row: { ...row, ...badIdentity }, ownershipColumn,
+          });
+          expect(result.error?.code).toBe("PAYMENT_CUSTOMER_IDENTITY_MISMATCH");
+          expect(db.from).not.toHaveBeenCalled();
+        },
+      );
+    }
+  }
+  it("mismatch/reconciliation writes share the same zero-row conflict contract", async () => {
+    const db = database(anchor, { customer_id: "claimed-owner" });
+    const result = await updateObservedPendingPaymentBooking({
+      supabase: db.client, observed: anchor, row: { status: "payment_mismatch" }, ownershipColumn: "customer_id",
+    });
+    expect(result.error?.code).toBe("PAYMENT_FINALIZATION_CONFLICT");
+    expect(db.current.status).toBe("pending_payment");
+  });
 });

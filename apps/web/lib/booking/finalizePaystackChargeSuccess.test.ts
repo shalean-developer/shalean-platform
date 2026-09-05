@@ -1,3 +1,5 @@
+import { recordReferralCheckoutRedemption } from "@/lib/referrals/validateReferral";
+import { enqueueFailedJob } from "@/lib/booking/failedJobs";
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const upsertMock = vi.fn();
@@ -87,4 +89,25 @@ describe("finalizePaystackChargeSuccess", () => {
     expect(out.reason).toBe("amount_mismatch");
     expect(vi.mocked(notifyBookingEvent)).not.toHaveBeenCalled();
   });
+});
+
+describe("Slice 2 conflict boundary before external success effects", () => {
+  it.each(["PAYMENT_CUSTOMER_IDENTITY_MISMATCH", "PAYMENT_FINALIZATION_CONFLICT"])(
+    "preserves %s without referral redemption, notification or recovery enqueue", async (code) => {
+      vi.clearAllMocks();
+      upsertMock.mockResolvedValue({
+        ok: false, skipped: true, bookingId: "00000000-0000-4000-8000-000000000088",
+        bookingInDatabase: true, code, error: "Pending booking finalization rejected.",
+      });
+      const out = await finalizePaystackChargeSuccess({
+        source: "webhook", paystackReference: "pay_conflict", amountCents: 12550,
+        currency: "ZAR", customerEmail: "payer@example.com", snapshot: null,
+        paystackMetadata: {}, paystackAuthorizationCode: null, paystackCustomerCode: null, paidAtIso: null,
+      });
+      expect(out).toMatchObject({ ok: false, code });
+      expect(notifyBookingEvent).not.toHaveBeenCalled();
+      expect(recordReferralCheckoutRedemption).not.toHaveBeenCalled();
+      expect(enqueueFailedJob).not.toHaveBeenCalled();
+    },
+  );
 });

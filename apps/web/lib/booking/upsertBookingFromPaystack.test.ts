@@ -1,5 +1,41 @@
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
+const successEffect = vi.hoisted(() => vi.fn());
+vi.mock("@/lib/recurring/refreshRecurringPaymentStateForBooking", () => ({ refreshRecurringPaymentStateForBooking: successEffect }));
+vi.mock("@/lib/booking/promoteV2TeamBookingAfterPayment", () => ({ promoteV2TeamBookingAfterPayment: successEffect }));
+vi.mock("@/lib/booking/persistPreferredCleaners", () => ({ syncPreferredCleanerRosterFromBookingRow: successEffect }));
+vi.mock("@/lib/referrals/server", () => ({ createPendingCustomerReferral: successEffect, processCustomerReferralAfterFirstPaidBooking: successEffect }));
+vi.mock("@/lib/dispatch/preferredCleanerDispatch", () => ({ startPreferredCleanerDispatchAfterPayment: successEffect }));
+vi.mock("@/lib/admin/runAdminAssignSmart", () => ({ runAdminAssignSmart: successEffect }));
+vi.mock("@/lib/marketplace-intelligence/assignBestCleaner", () => ({ assignBestCleaner: successEffect }));
+vi.mock("@/lib/dispatch/notifyCleanerAssigned", () => ({ notifyCleanerAssignedBooking: successEffect }));
+vi.mock("@/lib/booking/recordBookingSideEffects", () => ({ recordBookingSideEffects: successEffect }));
+vi.mock("@/lib/booking/cancelUnsentBookingPaymentRecoveryJobs", () => ({ cancelUnsentBookingPaymentRecoveryJobs: successEffect }));
+vi.mock("@/lib/growth/syncPrimaryCity", () => ({ syncUserPrimaryCityFromBooking: successEffect }));
+vi.mock("@/lib/growth/growthActionOutcomes", () => ({ attributePaidBookingToGrowthOutcomes: successEffect }));
+vi.mock("@/lib/conversion/conversionExperimentOutcomes", () => ({ recordConversionExperimentResultsOnPayment: successEffect }));
+vi.mock("@/lib/ai-autonomy/learningLoop", () => ({ learnFromPaymentSuccess: successEffect }));
+vi.mock("@/lib/payout/persistCleanerPayout", () => ({ persistCleanerPayoutIfUnset: successEffect }));
+vi.mock("@/lib/booking/resolveBookingUserId", () => ({ resolveBookingUserId: vi.fn().mockResolvedValue(null) }));
+vi.mock("@/lib/booking/checkoutCleanerEligibility", () => ({
+  resolveCheckoutCleanerSelection: vi.fn().mockResolvedValue({ kind: "no_pick" }),
+  checkoutPaidDispatchOfferCleanerId: vi.fn().mockReturnValue(null),
+}));
+vi.mock("@/lib/booking/resolveLocationId", () => ({
+  resolveBookingLocationContext: vi.fn().mockResolvedValue({ locationId: null, cityId: null }),
+}));
+vi.mock("@/lib/pricing/demandSupplySurge", () => ({
+  getDemandSupplySnapshotByCity: vi.fn().mockResolvedValue({ multiplier: 1 }), getSurgeLabel: vi.fn(),
+}));
+vi.mock("@/lib/payout/tenureBasedCleanerLineShare", () => ({
+  resolveTenureBasedCleanerShareForBookingRow: vi.fn().mockResolvedValue(null),
+}));
+vi.mock("@/lib/pay/paymentLinkDeliveryEvents", () => ({
+  resolvePaymentAttributionTouches: vi.fn().mockResolvedValue({ firstTouch: null, lastTouch: null, assistChannels: [] }),
+}));
+import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
+import { enqueueFailedJob } from "@/lib/booking/failedJobs";
+
 vi.mock("@/lib/supabase/admin", () => ({
   getSupabaseAdmin: vi.fn(),
 }));
@@ -267,4 +303,109 @@ describe("detectMonthlyManagedRowForPaystackFinalize (Paystack finalize payment_
     );
     expect(result).toBe(false);
   });
+});
+
+describe("observed pending upsert conflict propagation", () => {
+  const bookingId = "00000000-0000-4000-8000-000000000001";
+  const snapshot = {
+    version: 1, currency: "ZAR", total_zar: 125.5, subtotal_zar: 125.5,
+    extras_total_zar: 0, discount_zar: 0, tip_zar: 0, visit_total_zar: 125.5,
+    duration_hours: 3, cleaners_count: 1,
+    line_items: [{ id: "visit", name: "Visit", amount_zar: 125.5 }], pricing_version_id: null,
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(resolveBookingUserId).mockResolvedValue(null);
+  });
+
+  function pendingDb(mode: "id" | "paystack_reference", competing: Record<string, unknown> = {}) {
+    const initial: Record<string, unknown> = {
+      id: bookingId, status: "pending_payment", customer_email: " Payer@Example.com ",
+      customer_id: "owner-a", paystack_reference: mode === "id" ? bookingId : "pay_verified",
+      is_recurring_generated: false, price_snapshot: null,
+    };
+    const current = { ...initial };
+    const writes = vi.fn();
+    const reads: string[] = [];
+    const predicates: Array<[string, unknown]> = [];
+    const from = vi.fn((table: string) => {
+      if (table !== "bookings") throw new Error("Unexpected side-effect table " + table);
+      let columns = "";
+      let patch: Record<string, unknown> | null = null;
+      const filters: Array<[string, unknown]> = [];
+      const query = {
+        select: vi.fn((value: string) => { columns = value; return query; }),
+        limit: vi.fn(async () => ({ data: [], error: null })),
+        eq: vi.fn((key: string, value: unknown) => { filters.push([key, value]); return query; }),
+        is: vi.fn((key: string, value: unknown) => { filters.push([key, value]); return query; }),
+        update: vi.fn((value: Record<string, unknown>) => {
+          Object.assign(current, competing); // competing commit after initial read, before UPDATE
+          patch = value; writes(value); return query;
+        }),
+        maybeSingle: vi.fn(async () => {
+          if (patch) {
+            predicates.push(...filters);
+            if (!filters.every(([key, value]) => current[key] === value)) return { data: null, error: null };
+            Object.assign(current, patch);
+            return { data: { id: bookingId }, error: null };
+          }
+          reads.push(columns);
+          if (columns === "payment_link_first_sent_at") return { data: null, error: null };
+          if (mode === "id" && filters.some(([key]) => key === "paystack_reference")) return { data: null, error: null };
+          return { data: { ...initial }, error: null };
+        }),
+      };
+      return query;
+    });
+    getSupabaseAdminMock.mockReturnValue({ from } as unknown as ReturnType<typeof getSupabaseAdmin>);
+    return { initial, current, writes, predicates, reads };
+  }
+
+  function input(overrides = {}) {
+    return {
+      paystackReference: "pay_verified", amountCents: 12550, currency: "ZAR",
+      customerEmail: "payer@example.com", snapshot: null,
+      paystackMetadata: { booking_id: bookingId, price_snapshot: JSON.stringify(snapshot) }, ...overrides,
+    };
+  }
+
+  for (const mode of ["id", "paystack_reference"] as const) {
+    it.each([
+      { customer_email: "other@example.com" }, { customer_id: "owner-b" },
+      { paystack_reference: "pay_competing" }, { status: "pending" },
+    ])(mode + " surfaces competing mutation %j without success or replay", async (competing) => {
+      const db = pendingDb(mode, competing);
+      const result = await upsertBookingFromPaystack(input());
+      expect(result).toMatchObject({ ok: false, code: "PAYMENT_FINALIZATION_CONFLICT", bookingId });
+      expect(successEffect).not.toHaveBeenCalled();
+      expect(enqueueFailedJob).not.toHaveBeenCalled();
+      expect(db.writes).toHaveBeenCalledTimes(1);
+      expect(db.predicates).toEqual([
+        ["id", bookingId], ["status", "pending_payment"],
+        ["customer_email", db.initial.customer_email], ["customer_id", "owner-a"],
+        ["paystack_reference", db.initial.paystack_reference],
+      ]);
+      expect(db.reads).not.toContain("id, status");
+    });
+    it.each(["email", "owner"])(mode + " rejects established %s mismatch before any write", async (field) => {
+      const db = pendingDb(mode);
+      if (field === "owner") vi.mocked(resolveBookingUserId).mockResolvedValue("other-owner");
+      const result = await upsertBookingFromPaystack(input(field === "email" ? { customerEmail: "other@example.com" } : {}));
+      expect(result).toMatchObject({ ok: false, code: "PAYMENT_CUSTOMER_IDENTITY_MISMATCH", bookingId });
+      expect(db.writes).not.toHaveBeenCalled();
+      expect(successEffect).not.toHaveBeenCalled();
+      expect(enqueueFailedJob).not.toHaveBeenCalled();
+    });
+    it.each([{ currency: "USD" }, { amountCents: 9940 }])(
+      mode + " guards mismatch write %j and blocks stale recovery", async (override) => {
+        const db = pendingDb(mode, { customer_id: "competing-owner" });
+        const result = await upsertBookingFromPaystack(input(override));
+        expect(result).toMatchObject({ ok: false, code: "PAYMENT_FINALIZATION_CONFLICT", bookingId });
+        expect(db.writes).toHaveBeenCalledTimes(1);
+        expect(enqueueFailedJob).not.toHaveBeenCalled();
+        expect(successEffect).not.toHaveBeenCalled();
+        expect(db.current.status).toBe("pending_payment");
+      },
+    );
+  }
 });
