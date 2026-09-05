@@ -100,6 +100,7 @@ jobs:
         if: steps.filter.outputs.run_suite == 'true'
         run: >-
           npm run test --
+          lib/booking-v2/__tests__/serviceSuppliesPolicy.test.ts
           lib/booking/__tests__/cleanerServicePreferenceEligibility.test.ts
           lib/dispatch/__tests__/h9DispatchEscalationStatusFilter.test.ts
           app/api/cleaner/__tests__/cleanerEarningsApi.test.ts
