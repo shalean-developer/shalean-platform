@@ -17,6 +17,10 @@ import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { useBookingV2FunnelTelemetry } from "@/src/features/booking-v2/hooks/useBookingV2FunnelTelemetry";
 import { useBookingV2Pricing } from "@/src/features/booking-v2/hooks/useBookingV2Pricing";
 import { useClientMounted } from "@/src/features/booking-v2/hooks/useClientMounted";
+import {
+  BOOKING_PRICING_UNAVAILABLE_MESSAGE,
+  canEnterBookingPayment,
+} from "@/lib/booking-v2/bookingPricingAvailability";
 
 function BookingV2LoadingShell() {
   return (
@@ -56,9 +60,28 @@ function BookingV2LoadingShell() {
   );
 }
 
+function PricingUnavailableNotice() {
+  return (
+    <div
+      role="alert"
+      className="rounded-[var(--ui-radius-xl)] border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-[var(--ui-shadow-sm)] sm:p-6"
+    >
+      <h2 className="text-lg font-bold">Live pricing is temporarily unavailable</h2>
+      <p className="mt-2 text-sm leading-6">{BOOKING_PRICING_UNAVAILABLE_MESSAGE}</p>
+    </div>
+  );
+}
+
 function BookingV2Inner() {
   const mounted = useClientMounted();
-  const { currentStep, goToStep, goNext, goBack, serviceSlug } = useBookingV2();
+  const {
+    currentStep,
+    goToStep,
+    goNext,
+    goBack,
+    serviceSlug,
+    pricingAvailability,
+  } = useBookingV2();
   const { watch } = useFormContext<BookingV2FormData>();
   const reviewTime = watch("time")?.trim() ?? "";
   useBookingV2Pricing();
@@ -68,12 +91,17 @@ function BookingV2Inner() {
     return <BookingV2LoadingShell />;
   }
 
-  const stepContent = {
-    1: <Step1Details />,
-    2: <Step2Schedule />,
-    3: <Step3Review />,
-    4: <Step4Payment />,
-  }[currentStep];
+  const pricingUnavailable = pricingAvailability === "unavailable";
+  const paymentEntryAllowed = canEnterBookingPayment(pricingAvailability);
+  const stepContent =
+    currentStep === 4 && pricingUnavailable
+      ? <PricingUnavailableNotice />
+      : ({
+          1: <Step1Details />,
+          2: <Step2Schedule />,
+          3: <Step3Review />,
+          4: <Step4Payment />,
+        }[currentStep]);
 
   const showSidebarSummary = currentStep <= 2;
   /** Steps 3–4 already use section cards — avoid card-in-card chrome that squeezes mobile. */
@@ -113,6 +141,12 @@ function BookingV2Inner() {
               {stepContent}
             </div>
 
+            {currentStep === 3 && pricingUnavailable ? (
+              <div role="alert" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                {BOOKING_PRICING_UNAVAILABLE_MESSAGE}
+              </div>
+            ) : null}
+
             {/* Inline nav — natural flow (no nested scroll / fixed bar) */}
             <div className="mt-4 flex flex-col-reverse gap-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
               <Button
@@ -129,6 +163,7 @@ function BookingV2Inner() {
                 <Button
                   size="lg"
                   onClick={goNext}
+                  disabled={currentStep === 3 && !paymentEntryAllowed}
                   suppressHydrationWarning
                   className="w-full rounded-xl sm:w-auto"
                 >
