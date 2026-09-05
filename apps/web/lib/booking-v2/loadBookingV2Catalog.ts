@@ -45,6 +45,33 @@ type DbServiceRow = {
   max_hours: number;
 };
 
+type PricingCatalogReadError = { message: string; code?: string | null } | null;
+
+/**
+ * SR-04C: once the authoritative pricing client is configured, read errors from
+ * pricing_services, pricing_extras, or pricing_booking_config must fail closed.
+ * Returning a static/default catalog after a failed authoritative read would let
+ * downstream booking flows treat fallback pricing as if the live catalog loaded.
+ */
+export function assertAuthoritativePricingCatalogReads(params: {
+  servicesError: PricingCatalogReadError;
+  extrasError: PricingCatalogReadError;
+  configError: PricingCatalogReadError;
+}): void {
+  const failures = [
+    ["pricing_services", params.servicesError],
+    ["pricing_extras", params.extrasError],
+    ["pricing_booking_config", params.configError],
+  ] as const;
+  const failed = failures.filter(([, error]) => Boolean(error));
+  if (!failed.length) return;
+
+  const detail = failed
+    .map(([table, error]) => `${table}: ${error?.message ?? "unknown read error"}`)
+    .join("; ");
+  throw new Error(`Authoritative booking pricing could not be read (${detail})`);
+}
+
 function ratesFromDbRow(dbSvc: DbServiceRow | null | undefined, staticFallback: { basePrice: number }) {
   return {
     basePrice: dbSvc?.base_price && dbSvc.base_price > 0 ? dbSvc.base_price : staticFallback.basePrice,
@@ -140,6 +167,13 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         .order("sort_order", { ascending: true }),
       admin.from("pricing_booking_config").select("config").eq("id", "default").maybeSingle(),
     ]);
+
+    assertAuthoritativePricingCatalogReads({
+      servicesError: servicesResult.error,
+      extrasError: extrasResult.error,
+      configError: configResult.error,
+    });
+
     const { data: svcRows } = servicesResult;
     const { data: extRows } = extrasResult;
     const { data: configRow } = configResult;
