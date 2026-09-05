@@ -1,5 +1,6 @@
 import "server-only";
 
+import { bookingPaidAmountColumnsFromCents } from "@/lib/booking/bookingPaidAmountColumns";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { BookingCustomerOwnershipColumn } from "@/lib/booking/bookingCustomerIdentity";
 
@@ -11,6 +12,10 @@ export type PaymentFinalizationPersistedBookingRow = {
 };
 
 type DbError = { message: string; code?: string };
+
+function normalizePaystackFinalizationPaidAmountRow(row: Record<string, unknown>): Record<string, unknown> {
+  return { ...row, ...bookingPaidAmountColumnsFromCents(row.amount_paid_cents) };
+}
 
 function paymentFinalizationSelect(ownershipColumn: BookingCustomerOwnershipColumn): string {
   return `id, created_at, ${ownershipColumn}`;
@@ -32,19 +37,20 @@ export async function finalizePendingPaymentBookingFromPaystack(params: {
     paystackReference,
     ownershipColumn,
   } = params;
+  const normalizedRow = normalizePaystackFinalizationPaidAmountRow(row);
   const select = paymentFinalizationSelect(ownershipColumn);
   const result =
     pendingFinalizeMatch === "id"
       ? await supabase
           .from("bookings")
-          .update(row)
+          .update(normalizedRow)
           .eq("id", existingPendingPaymentId)
           .eq("status", "pending_payment")
           .select(select)
           .maybeSingle()
       : await supabase
           .from("bookings")
-          .update(row)
+          .update(normalizedRow)
           .eq("paystack_reference", paystackReference)
           .eq("status", "pending_payment")
           .select(select)
@@ -64,9 +70,10 @@ export async function insertFinalizedBookingFromPaystack(params: {
   row: Record<string, unknown>;
   ownershipColumn: BookingCustomerOwnershipColumn;
 }): Promise<{ data: PaymentFinalizationPersistedBookingRow | null; error: DbError | null }> {
+  const normalizedRow = normalizePaystackFinalizationPaidAmountRow(params.row);
   const { data, error } = await params.supabase
     .from("bookings")
-    .insert(params.row)
+    .insert(normalizedRow)
     .select(paymentFinalizationSelect(params.ownershipColumn))
     .maybeSingle();
 
