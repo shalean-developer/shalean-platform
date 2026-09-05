@@ -25,7 +25,10 @@ import { coerceYesNoValue } from "@/src/features/booking-v2/components/serviceQu
 import type { LiveServiceConfig, ServicesCatalog } from "@/app/api/booking-v2/services/route";
 import type { BookingV2FeesConfig } from "@/lib/booking-v2/types";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
-import type { BookingPricingAvailability } from "@/lib/booking-v2/bookingPricingAvailability";
+import {
+  canEnterBookingPayment,
+  type BookingPricingAvailability,
+} from "@/lib/booking-v2/bookingPricingAvailability";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import { bookingV2PrefillPatchFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
 import { buildStep2Schema, step1Schema } from "@/src/features/booking-v2/schemas";
@@ -308,13 +311,16 @@ export function BookingV2Provider({
 
   const canGoNext = useCallback(
     async (step: BookingStep): Promise<boolean> => {
-      if (step === 3 && pricingAvailability !== "available") {
-        trackBookingFunnelEvent(bookingV2StepToFunnelStep(step), BOOKING_FUNNEL_ROW.ERROR, {
-          flow: "booking_v2",
-          step,
-          reason: "pricing_unavailable",
-        });
-        return false;
+      if (step === 3) {
+        const hasPendingBooking = Boolean(form.getValues("pendingBookingId")?.trim());
+        if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) {
+          trackBookingFunnelEvent(bookingV2StepToFunnelStep(step), BOOKING_FUNNEL_ROW.ERROR, {
+            flow: "booking_v2",
+            step,
+            reason: "pricing_unavailable",
+          });
+          return false;
+        }
       }
       if (step === 1) {
         const values = form.getValues();
@@ -360,12 +366,15 @@ export function BookingV2Provider({
 
   const goToStep = useCallback(
     (step: BookingStep) => {
-      if (step === 4 && pricingAvailability !== "available") return;
+      if (step === 4) {
+        const hasPendingBooking = Boolean(form.getValues("pendingBookingId")?.trim());
+        if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) return;
+      }
       const params = new URLSearchParams(searchParams.toString());
       params.set("step", String(step));
       router.push(`/book/${serviceSlug}?${params.toString()}`);
     },
-    [router, searchParams, serviceSlug, pricingAvailability],
+    [router, searchParams, serviceSlug, pricingAvailability, form],
   );
 
   const goNext = useCallback(async () => {
