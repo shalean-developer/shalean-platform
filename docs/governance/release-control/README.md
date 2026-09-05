@@ -2,6 +2,8 @@
 
 This directory defines the current release-control standard for `shalean-platform`.
 
+Material SPC decisions are indexed in [the SPC release decision log](./decision-log.md); the programme tracker and attributable GitHub evidence remain the underlying sources of truth.
+
 ## Principles
 
 1. `main` is the production source branch, but a merge is not proof that customer traffic is healthy.
