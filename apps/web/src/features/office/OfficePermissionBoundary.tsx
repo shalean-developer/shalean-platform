@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { getSupabaseSession } from "@/lib/supabase/browser";
 import {
   hasAnyOfficePermission,
+  isOfficePolicyExemptPath,
   policyForOfficePath,
 } from "@/lib/admin/officeExperience";
 import {
@@ -21,7 +22,7 @@ type PermissionPayload = { permissions?: string[]; roles?: OfficeRoleAssignment[
 type State =
   | { status: "checking" }
   | { status: "allowed" }
-  | { status: "denied"; permissions: string[] }
+  | { status: "denied"; permissions: string[]; unclassified?: boolean }
   | { status: "error"; message: string };
 
 const SUPERVISOR_TEAM_SCOPE_PENDING = [
@@ -48,7 +49,11 @@ export function OfficePermissionBoundary({ children }: { children: ReactNode }) 
   useEffect(() => {
     let active = true;
     if (!policy) {
-      setState({ status: "allowed" });
+      setState(
+        isOfficePolicyExemptPath(pathname)
+          ? { status: "allowed" }
+          : { status: "denied", permissions: [], unclassified: true },
+      );
       return () => { active = false; };
     }
 
@@ -102,10 +107,12 @@ export function OfficePermissionBoundary({ children }: { children: ReactNode }) 
       <h1 className="text-xl font-semibold text-slate-900">Access Restricted</h1>
       <p className="mt-3 text-sm text-slate-600">
         {state.status === "denied"
-          ? "This page is not included in your assigned Office role. Contact the Owner if your responsibilities have changed."
+          ? state.unclassified
+            ? "This Office page has no approved access policy and is blocked by default."
+            : "This page is not included in your assigned Office role. Contact the Owner if your responsibilities have changed."
           : state.message}
       </p>
-      {state.status === "denied" ? (
+      {state.status === "denied" && state.permissions.length > 0 ? (
         <p className="mt-2 font-mono text-xs text-slate-400">Requires any of: {state.permissions.join(", ")}</p>
       ) : null}
       <Link href="/office" className="mt-6 inline-flex rounded-xl bg-emerald-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-700">
