@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertAuthoritativePricingClientAvailable } from "@/lib/booking-v2/authoritativePricingClientAvailability";
 import { SERVICE_CONFIG, SERVICE_SLUGS, type ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import {
   defaultBookingV2FeesConfig,
@@ -145,6 +146,7 @@ const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
 
 export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   const admin = getSupabaseAdmin();
+  assertAuthoritativePricingClientAvailable({ adminAvailable: Boolean(admin) });
   let extrasCatalogAuthoritative = false;
 
   const dbServices: Record<string, DbServiceRow> = {};
