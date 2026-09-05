@@ -510,11 +510,7 @@ export async function POST(request: Request): Promise<NextResponse<PaystackVerif
         .select("payment_status, amount_paid_cents")
         .eq("id", settled.bookingId)
         .maybeSingle();
-      const paymentStatus = String(
-        (payRow as { payment_status?: string | null } | null)?.payment_status ?? "",
-      )
-        .trim()
-        .toLowerCase();
+      const paymentStatus = (payRow as { payment_status?: unknown } | null)?.payment_status;
       const rawAmountCents = (payRow as { amount_paid_cents?: unknown } | null)?.amount_paid_cents;
       if ((paymentStatus === "success" || paymentStatus === "paid") &&
         typeof rawAmountCents === "number" && Number.isInteger(rawAmountCents) && rawAmountCents === 0) {

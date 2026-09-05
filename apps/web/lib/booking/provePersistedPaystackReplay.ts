@@ -27,7 +27,8 @@ export async function provePersistedPaystackReplay(params: {
     ["pending_payment", "payment_mismatch", "payment_reconciliation_required"].includes(row.status)) return false;
   const metadata = normalizePaystackMetadata(params.metadata);
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: params.amountCents });
-  const email = normalizeEmail(params.customerEmail || metadata.customer_email || "");
+  const gatewayEmail = normalizeEmail(params.customerEmail);
+  const email = gatewayEmail || normalizeEmail(metadata.customer_email || "");
   const owner = await resolveBookingUserId(supabase, snapshot, metadata, email);
   const resolvedId = resolveInternalBookingIdFromPaystackReference(reference, metadata);
   return paymentFinalizationReplayEquivalent({

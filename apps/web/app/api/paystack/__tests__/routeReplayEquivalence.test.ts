@@ -177,3 +177,44 @@ for (const mode of ["GET", "POST"] as const) {
     });
   });
 }
+
+
+describe("POST raw R0 status authority", () => {
+  it.each(["SUCCESS", "Paid", " PAID ", " success ", null, undefined, 123, true, "pending"])(
+    "continues to gateway verification for non-exact status %s", async (status) => {
+      row.payment_status = status; row.amount_paid_cents = 0;
+      if (status === undefined) delete row.payment_status;
+      await call("POST");
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+    },
+  );
+});
+
+for (const mode of ["GET", "POST", "webhook"] as const) {
+  describe(mode + " canonical replay email fallback", () => {
+    it.each(["   ", ""])("uses matching metadata when gateway email is blank: %j", async (email) => {
+      tx.customer.email = email; tx.metadata.customer_email = " Payer@Example.com ";
+      const response = await call(mode);
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      if (mode !== "webhook") expect(body).toMatchObject({ ok: true, state: "already_processed" });
+      expect(m.replay).toHaveBeenCalledTimes(1); expect(m.record).toHaveBeenCalledTimes(1);
+      expect(m.sync).toHaveBeenCalledTimes(mode === "webhook" ? 1 : 0);
+    });
+    it("prefers a usable gateway email over conflicting metadata", async () => {
+      tx.customer.email = " Payer@Example.com "; tx.metadata.customer_email = "other@example.com";
+      const response = await call(mode);
+      expect(response.status).toBe(200);
+      expect(m.replay).toHaveBeenCalledTimes(1); expect(m.record).toHaveBeenCalledTimes(1);
+    });
+    it.each([undefined, "   ", "other@example.com"])("rejects absent or conflicting metadata proof: %s", async (email) => {
+      tx.customer.email = "   ";
+      if (email === undefined) delete tx.metadata.customer_email;
+      else tx.metadata.customer_email = email;
+      const response = await call(mode);
+      expect(response.status).toBe(mode === "webhook" ? 200 : 409);
+      expect(await response.json()).toMatchObject({ ok: false, error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" });
+      noSuccess();
+    });
+  });
+}
