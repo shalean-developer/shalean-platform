@@ -448,3 +448,65 @@ describe("Slice 2B already-finalized upsert replay", () => {
     expect(successEffect).not.toHaveBeenCalled();
   });
 });
+
+
+describe("Slice 2C alternate insert recovery", () => {
+  const id = "00000000-0000-4000-8000-000000000001";
+  const snapshot = {
+    version: 1, currency: "ZAR", total_zar: 125.5, subtotal_zar: 125.5,
+    extras_total_zar: 0, discount_zar: 0, tip_zar: 0, visit_total_zar: 125.5,
+    duration_hours: 3, cleaners_count: 1,
+    line_items: [{ id: "visit", name: "Visit", amount_zar: 125.5 }], pricing_version_id: null,
+  };
+  for (const mode of ["23505", "skipped_peer"] as const) {
+    it.each([
+      ["equivalent", {}, "payer@example.com", "owner-a", true],
+      ["email conflict", { customer_email: "other@example.com" }, "payer@example.com", "owner-a", false],
+      ["owner conflict", { customer_id: "owner-b" }, "payer@example.com", "owner-a", false],
+      ["reference conflict", { paystack_reference: "other-ref" }, "payer@example.com", "owner-a", false],
+      ["booking conflict", { id: "00000000-0000-4000-8000-000000000009" }, "payer@example.com", "owner-a", false],
+      ["missing email proof", {}, "", "owner-a", false],
+      ["missing owner proof", {}, "payer@example.com", null, false],
+      ["pending peer", { status: "pending_payment" }, "payer@example.com", "owner-a", false],
+      ["mismatch peer", { status: "payment_mismatch" }, "payer@example.com", "owner-a", false],
+      ["reconciliation peer", { status: "payment_reconciliation_required" }, "payer@example.com", "owner-a", false],
+    ] as const)(mode + " %s", async (_name, change, email, owner, allowed) => {
+      vi.clearAllMocks();
+      vi.mocked(resolveBookingUserId).mockResolvedValue(owner);
+      const winner = { id, status: "pending", paystack_reference: "legacy-ref", customer_email: "payer@example.com", customer_id: "owner-a", ...change };
+      let insertAttempted = false;
+      const sequence: string[] = [];
+      const recoveryColumns: string[] = [];
+      const from = vi.fn((table: string) => {
+        let columns = "";
+        let inserting = false;
+        const q = {
+          select: (value: string) => { columns = value; return q; },
+          eq: () => q,
+          limit: async () => ({ data: [], error: null }),
+          insert: () => { inserting = true; insertAttempted = true; sequence.push("insert"); return q; },
+          maybeSingle: async () => {
+            if (inserting) return { data: null, error: mode === "23505" ? { code: "23505", message: "duplicate" } : null };
+            if (table !== "bookings" || columns === "payment_link_first_sent_at") return { data: null, error: null };
+            if (!insertAttempted) { sequence.push("initial-empty"); return { data: null, error: null }; }
+            sequence.push("winner"); recoveryColumns.push(columns);
+            return { data: winner, error: null };
+          },
+        };
+        return q;
+      });
+      getSupabaseAdminMock.mockReturnValue({ from } as unknown as ReturnType<typeof getSupabaseAdmin>);
+      const result = await upsertBookingFromPaystack({
+        paystackReference: "legacy-ref", amountCents: 12550, currency: "ZAR", customerEmail: email,
+        snapshot: null, paystackMetadata: { booking_id: id, price_snapshot: JSON.stringify(snapshot) },
+      });
+      expect(sequence).toContain("initial-empty");
+      expect(sequence.slice(-2)).toEqual(["insert", "winner"]);
+      expect(recoveryColumns).toEqual(["id, status, paystack_reference, customer_email, customer_id"]);
+      expect(result).toMatchObject({ ok: allowed, skipped: true, bookingId: winner.id });
+      if (!allowed) expect(result).toMatchObject({ code: "PAYMENT_FINALIZATION_REPLAY_MISMATCH", error: "PAYMENT_FINALIZATION_REPLAY_MISMATCH" });
+      expect(successEffect).not.toHaveBeenCalled();
+      expect(enqueueFailedJob).not.toHaveBeenCalled();
+    });
+  }
+});
