@@ -39,6 +39,7 @@ jobs:
           lib/admin/__tests__/officeExperience.test.ts
           lib/admin/__tests__/officeAccessPolicyCoverage.test.ts
           lib/admin/__tests__/sr05b1CentralizedRouteRbac.test.ts
+          app/api/admin/__tests__/sr05b2cFinanceRbac.test.ts
           lib/admin/__tests__/officeWorkItems.test.ts
           lib/admin/__tests__/routePermissions.test.ts
           lib/customerCare/__tests__/p4CustomerCareCasesContract.test.ts
