@@ -36,6 +36,8 @@ type DisputesPayload = {
   meta?: { limit: number; returned: number };
 };
 
+type PermissionsPayload = { permissions?: string[] };
+
 const STATUS_UI: Record<string, { label: string; cls: string }> = {
   open: { label: "Open", cls: "bg-red-100 text-red-700" },
   reviewing: { label: "Under Review", cls: "bg-orange-100 text-orange-700" },
@@ -62,8 +64,10 @@ export default function DisputesPage() {
   const { data, loading, error, refetch } = useAdminData<DisputesPayload>("/api/admin/cleaner-earnings-disputes", {
     params: { limit: "200" },
   });
+  const { data: permissionsData } = useAdminData<PermissionsPayload>("/api/admin/security/my-permissions");
 
   const disputes = data?.disputes ?? [];
+  const canPreparePayout = permissionsData?.permissions?.includes("payout.prepare") === true;
 
   const getToken = useCallback(async () => {
     const sb = getSupabaseBrowser();
@@ -121,7 +125,7 @@ export default function DisputesPage() {
     try {
       const token = await getToken();
       const body: Record<string, unknown> = { status, admin_response: note };
-      if (status === "resolved" && adjCents.trim()) {
+      if (canPreparePayout && status === "resolved" && adjCents.trim()) {
         const n = Number(adjCents.trim());
         if (Number.isFinite(n) && Math.round(n) !== 0) {
           body.adjustment_amount_cents = Math.round(n);
@@ -371,7 +375,7 @@ export default function DisputesPage() {
               />
             </label>
 
-            {selected.status !== "resolved" && selected.status !== "rejected" ? (
+            {canPreparePayout && selected.status !== "resolved" && selected.status !== "rejected" ? (
               <div className="mt-4 space-y-2 border-t border-slate-200 pt-4">
                 <p className="text-xs font-semibold text-slate-600">Optional when resolving</p>
                 <label className="block text-xs text-slate-600">
