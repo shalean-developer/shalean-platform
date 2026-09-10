@@ -25,7 +25,7 @@ type BookingFetchResult =
 
 async function fetchBookingPages(options: {
   pageCount?: number;
-  view?: "all" | "upcoming";
+  view?: "all" | "upcoming" | "review_eligibility";
 }): Promise<BookingFetchResult> {
   const rows: BookingRow[] = [];
   const seenCursors = new Set<string>();
@@ -35,7 +35,7 @@ async function fetchBookingPages(options: {
 
   do {
     const query = new URLSearchParams({ limit: String(CUSTOMER_BOOKINGS_PAGE_LIMIT) });
-    if (options.view === "upcoming") query.set("view", "upcoming");
+    if (options.view && options.view !== "all") query.set("view", options.view);
     if (cursor) query.set("cursor", cursor);
     const out = await dashboardFetchJson<CustomerBookingsPageResponse>(`/api/customer/bookings?${query}`);
     if (!out.ok) return { ok: false, error: out.error };
@@ -68,6 +68,7 @@ export function useBookings(options?: {
 }): {
   bookings: DashboardBooking[];
   reviewBookings: DashboardBooking[];
+  reviewHistoryComplete: boolean;
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
@@ -81,6 +82,7 @@ export function useBookings(options?: {
   const userId = user?.id;
   const [rows, setRows] = useState<BookingRow[]>([]);
   const [reviewRows, setReviewRows] = useState<BookingRow[]>([]);
+  const [reviewHistoryComplete, setReviewHistoryComplete] = useState(false);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -109,6 +111,7 @@ export function useBookings(options?: {
       loadedPageCountRef.current = 1;
       setRows([]);
       setReviewRows([]);
+      setReviewHistoryComplete(false);
       setNextCursor(null);
       setHasMore(false);
       setLoading(false);
@@ -118,6 +121,7 @@ export function useBookings(options?: {
       setLoading(true);
       setError(null);
     }
+    if (includeCompleteReviewHistory) setReviewHistoryComplete(false);
 
     try {
       const pendingLoadMore = loadMoreInFlightRef.current;
@@ -148,13 +152,14 @@ export function useBookings(options?: {
         setRows(nextRows);
         applyPageInfo(mode === "paged" ? out.pageInfo : undefined);
         if (includeCompleteReviewHistory) {
-          const reviewHistory = await fetchBookingPages({});
+          const reviewHistory = await fetchBookingPages({ view: "review_eligibility" });
           if (fetchEpoch !== fetchEpochRef.current) return;
           if (!reviewHistory.ok) {
             setError(reviewHistory.error);
             return;
           }
           setReviewRows(reviewHistory.rows);
+          setReviewHistoryComplete(true);
         }
         setError(null);
       }
@@ -292,6 +297,7 @@ export function useBookings(options?: {
   return {
     bookings,
     reviewBookings,
+    reviewHistoryComplete,
     loading: userLoading || loading,
     loadingMore,
     hasMore,

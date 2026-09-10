@@ -28,7 +28,7 @@ export type LoadCustomerBookingPageOptions = {
   viewerEmail?: string | null;
   cursor?: string | null;
   limit?: number;
-  view?: "all" | "upcoming";
+  view?: "all" | "upcoming" | "review_eligibility";
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -126,7 +126,7 @@ async function loadSourceRows(
     viewerNorm?: string;
     cursor: BookingCursor | null;
     fetchLimit: number;
-    view: "all" | "upcoming";
+    view: "all" | "upcoming" | "review_eligibility";
   },
 ): Promise<{ data: unknown[] | null; error: { message: string } | null }> {
   const select = buildCustomerBookingSelect(args.ownershipColumn);
@@ -168,7 +168,9 @@ export async function loadCustomerBookingPageForUser(
   const viewerNorm = normalizeEmail(String(options?.viewerEmail ?? ""));
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const fetchLimit = limit + 1;
-  const view = options?.view === "upcoming" ? "upcoming" : "all";
+  const view = options?.view === "upcoming"
+    ? "upcoming"
+    : options?.view === "review_eligibility" ? "review_eligibility" : "all";
 
   const owned = await loadSourceRows(admin, {
     ownershipColumn,
@@ -192,6 +194,9 @@ export async function loadCustomerBookingPageForUser(
       view,
     });
     if (orphan.error) {
+      if (view === "review_eligibility") {
+        return { ok: false, error: "Could not load complete review eligibility.", status: 500 };
+      }
       void reportOperationalIssue("warn", "customer/bookings/page_email_orphan", orphan.error.message, { userId });
     } else if (orphan.data?.length) {
       metrics.increment("customer.bookings.email_orphan_merge_rows", { count: orphan.data.length });

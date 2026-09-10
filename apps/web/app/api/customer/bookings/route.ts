@@ -89,7 +89,9 @@ export async function GET(request: Request) {
         viewerEmail,
         cursor: url.searchParams.get("cursor"),
         limit: parsePageLimit(url),
-        view: url.searchParams.get("view") === "upcoming" ? "upcoming" : "all",
+        view: url.searchParams.get("view") === "upcoming"
+          ? "upcoming"
+          : url.searchParams.get("view") === "review_eligibility" ? "review_eligibility" : "all",
       });
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: out.status });

@@ -155,7 +155,7 @@ describe("SR-10B customer booking pagination", () => {
     expect(page).toContain("includeCompleteReviewHistory: true");
     expect(page).toContain("reviewBookings.find");
     expect(page).toContain("reviewBookings.filter");
-    expect(hook).toContain("const reviewHistory = await fetchBookingPages({})");
+    expect(hook).toContain('const reviewHistory = await fetchBookingPages({ view: "review_eligibility" })');
     expect(hook).toContain("setReviewRows(reviewHistory.rows)");
     expect(hook).toContain("limit: String(CUSTOMER_BOOKINGS_PAGE_LIMIT)");
     expect(hook).toContain("seenCursors.has(nextCursor)");
@@ -178,7 +178,7 @@ describe("SR-10B customer booking pagination", () => {
     expect(reviewsRoute).toContain("bookingIds.length > REVIEW_ID_LOOKUP_MAX");
 
     const visibleCommit = hook.indexOf("setRows(nextRows)");
-    const reviewTraversal = hook.indexOf("const reviewHistory = await fetchBookingPages({})");
+    const reviewTraversal = hook.indexOf('const reviewHistory = await fetchBookingPages({ view: "review_eligibility" })');
     expect(visibleCommit).toBeGreaterThan(-1);
     expect(reviewTraversal).toBeGreaterThan(visibleCommit);
   });
@@ -188,9 +188,11 @@ describe("SR-10B customer booking pagination", () => {
     const reviewsPage = read("apps/web/app/(ui-redesign)/account/reviews/page.tsx");
     const detailPage = read("apps/web/app/(ui-redesign)/account/bookings/[id]/page.tsx");
     expect(page).toContain("const reviewEligibilityUnavailable =");
+    expect(page).toContain("!reviewHistoryComplete");
     expect(page).toContain("reviewedIdsLoading || Boolean(reviewedIdsError)");
     expect(page).toContain("if (reviewEligibilityUnavailable) return null");
     expect(page).toContain("if (reviewEligibilityUnavailable) return 0");
+    expect(reviewsPage).toContain("!reviewHistoryComplete");
     expect(reviewsPage).toContain("reviewedIdsLoading || reviewedIdsError");
     expect(detailPage).toContain("reviewedIdsLoading || Boolean(reviewedIdsError)");
   });
@@ -229,9 +231,11 @@ describe("SR-10B customer booking pagination", () => {
     expect(hook).toContain("} finally {");
     expect(hook).toContain("setLoadingMore(false)");
     expect(hook).toContain("fetchBookings({ silent: true })");
-    expect(route).toContain('view: url.searchParams.get("view") === "upcoming" ? "upcoming" : "all"');
+    expect(route).toContain('url.searchParams.get("view") === "review_eligibility"');
     expect(loader).toContain('.gte("date", cutoff)');
     expect(loader).toContain('.is("completed_at", null)');
+    expect(loader).toContain('if (view === "review_eligibility")');
+    expect(loader).toContain('error: "Could not load complete review eligibility."');
   });
 
   it("rejects non-UUID cursor IDs before building a PostgREST filter", () => {

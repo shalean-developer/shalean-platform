@@ -101,6 +101,7 @@ export default function AccountBookingsPage() {
   const {
     bookings,
     reviewBookings,
+    reviewHistoryComplete,
     loading,
     loadingMore,
     hasMore,
@@ -123,7 +124,8 @@ export default function AccountBookingsPage() {
     loading: reviewedIdsLoading,
     error: reviewedIdsError,
   } = useReviewedBookingIds(loading ? null : eligibleReviewBookingIds);
-  const reviewEligibilityUnavailable = revLoading || Boolean(revError) || reviewedIdsLoading || Boolean(reviewedIdsError);
+  const reviewEligibilityUnavailable =
+    !reviewHistoryComplete || revLoading || Boolean(revError) || reviewedIdsLoading || Boolean(reviewedIdsError);
 
   const firstPendingReviewBookingId = useMemo(() => {
     if (reviewEligibilityUnavailable) return null;

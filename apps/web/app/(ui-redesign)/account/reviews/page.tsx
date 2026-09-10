@@ -51,7 +51,9 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
 
 function ReviewsContent() {
   const { reviews, loading: revLoading, error: revError } = useReviews();
-  const { bookings, loading: bookLoading } = useBookings();
+  const { reviewBookings: bookings, reviewHistoryComplete, loading: bookLoading } = useBookings({
+    includeCompleteReviewHistory: true,
+  });
 
   const eligibleReviewBookingIds = useMemo(
     () => bookings.filter(isBookingCustomerReviewEligible).map((booking) => booking.id),
@@ -64,9 +66,9 @@ function ReviewsContent() {
   } = useReviewedBookingIds(bookLoading ? null : eligibleReviewBookingIds);
 
   const pendingReviews = useMemo(() => {
-    if (bookLoading || revLoading || revError || reviewedIdsLoading || reviewedIdsError) return [];
+    if (!reviewHistoryComplete || bookLoading || revLoading || revError || reviewedIdsLoading || reviewedIdsError) return [];
     return bookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds));
-  }, [bookings, reviewedIds, bookLoading, revError, revLoading, reviewedIdsError, reviewedIdsLoading]);
+  }, [bookings, reviewedIds, bookLoading, reviewHistoryComplete, revError, revLoading, reviewedIdsError, reviewedIdsLoading]);
 
   const avgRating = useMemo(() => {
     if (reviews.length === 0) return 0;
