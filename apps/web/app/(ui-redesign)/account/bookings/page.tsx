@@ -97,7 +97,17 @@ function BookingsEmptyState({ kind }: { kind: "upcoming" | "past" }) {
 }
 
 export default function AccountBookingsPage() {
-  const { bookings, loading, error, refetch, cancelBooking, rescheduleBooking } = useBookings();
+  const {
+    bookings,
+    loading,
+    loadingMore,
+    hasMore,
+    error,
+    refetch,
+    loadMore,
+    cancelBooking,
+    rescheduleBooking,
+  } = useBookings();
   const { reviews, loading: revLoading, error: revError } = useReviews();
   const { summary, loading: summaryLoading } = useDashboardSummary();
   const [view, setView] = useState<"cards" | "table">("cards");
@@ -385,6 +395,22 @@ export default function AccountBookingsPage() {
               )}
             </TabsContent>
           </Tabs>
+
+          {hasMore ? (
+            <div className="flex justify-center pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+              >
+                {loadingMore ? "Loading older bookings…" : "Load older bookings"}
+              </Button>
+            </div>
+          ) : bookings.length > 0 ? (
+            <p className="text-center text-xs text-muted-foreground">All available bookings are loaded.</p>
+          ) : null}
         </section>
 
         <TrustBar />
