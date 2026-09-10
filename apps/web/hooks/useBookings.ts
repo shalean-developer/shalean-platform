@@ -17,6 +17,33 @@ type CustomerBookingsPageResponse = {
   pageInfo?: CustomerBookingsPageInfo;
 };
 
+const CUSTOMER_BOOKINGS_PAGE_LIMIT = 25;
+
+async function fetchAllBookingRows(): Promise<
+  | { ok: true; rows: BookingRow[] }
+  | { ok: false; error: string }
+> {
+  const rows: BookingRow[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+
+  do {
+    const query = new URLSearchParams({ limit: String(CUSTOMER_BOOKINGS_PAGE_LIMIT) });
+    if (cursor) query.set("cursor", cursor);
+    const out = await dashboardFetchJson<CustomerBookingsPageResponse>(`/api/customer/bookings?${query}`);
+    if (!out.ok) return { ok: false, error: out.error };
+
+    rows.push(...(Array.isArray(out.data.bookings) ? out.data.bookings : []));
+    const nextCursor = out.data.pageInfo?.hasMore === true ? out.data.pageInfo.nextCursor : null;
+    if (!nextCursor) break;
+    if (seenCursors.has(nextCursor)) return { ok: false, error: "Bookings pagination did not converge." };
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  } while (cursor);
+
+  return { ok: true, rows: mergeBookingRows([], rows) };
+}
+
 function mergeBookingRows(existing: BookingRow[], incoming: BookingRow[]): BookingRow[] {
   const byId = new Map<string, BookingRow>();
   for (const row of existing) byId.set(row.id, row);
@@ -64,7 +91,7 @@ export function useBookings(): {
       setError(null);
     }
 
-    const out = await dashboardFetchJson<CustomerBookingsPageResponse>("/api/customer/bookings?limit=25");
+    const out = await fetchAllBookingRows();
     if (!out.ok) {
       setError(out.error);
       if (!silent) {
@@ -73,8 +100,8 @@ export function useBookings(): {
         setHasMore(false);
       }
     } else {
-      setRows(Array.isArray(out.data.bookings) ? out.data.bookings : []);
-      applyPageInfo(out.data.pageInfo);
+      setRows(out.rows);
+      applyPageInfo(undefined);
       setError(null);
     }
     if (!silent) setLoading(false);

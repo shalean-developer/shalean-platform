@@ -56,6 +56,33 @@ describe("SR-10B customer booking pagination", () => {
     expect(page).toContain("void loadMore()");
   });
 
+  it("keeps every existing web consumer complete through bounded cursor pages", () => {
+    const hook = read("apps/web/hooks/useBookings.ts");
+    expect(hook).toContain("async function fetchAllBookingRows()");
+    expect(hook).toContain("limit: String(CUSTOMER_BOOKINGS_PAGE_LIMIT)");
+    expect(hook).toContain('query.set("cursor", cursor)');
+    expect(hook).toContain("seenCursors.has(nextCursor)");
+    expect(hook).toContain("setRows(out.rows)");
+  });
+
+  it("keeps customer-mobile history complete through the same bounded cursor contract", () => {
+    const hook = read("apps/customer-mobile/hooks/useCustomerBookings.ts");
+    const types = read("apps/customer-mobile/services/types/customerBookings.ts");
+    const api = read("packages/api-client/src/domains/customerBookings.ts");
+    expect(hook).toContain("{ cursor, limit: 25 }");
+    expect(hook).toContain("seenCursors.has(nextCursor)");
+    expect(types).toContain("pageInfo?:");
+    expect(api).toContain('query.set("cursor", params.cursor)');
+  });
+
+  it("loads all pages before replacement so upcoming and realtime history cannot truncate", () => {
+    const hook = read("apps/web/hooks/useBookings.ts");
+    expect(hook).toContain("const out = await fetchAllBookingRows()");
+    expect(hook).toContain("setRows(out.rows)");
+    expect(hook.indexOf("setRows(out.rows)")).toBeGreaterThan(hook.indexOf("const out = await fetchAllBookingRows()"));
+    expect(hook).toContain("fetchBookings({ silent: true })");
+  });
+
   it("preserves read-only ownership enforcement without ownership writes", () => {
     const route = read("apps/web/app/api/customer/bookings/route.ts");
     const hook = read("apps/web/hooks/useBookings.ts");
