@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import {
   CUSTOMER_BOOKINGS_PAGE_DEFAULT_LIMIT,
   CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT,
+  compareCustomerBookingRowsDesc,
   decodeCustomerBookingsCursor,
   encodeCustomerBookingsCursor,
   normalizeCustomerBookingsPageLimit,
@@ -38,6 +39,22 @@ describe("SR-10B customer booking pagination", () => {
       createdAt: "2026-08-29T08:00:00.000Z",
     })).toString("base64url");
     expect(decodeCustomerBookingsCursor(invalidIdCursor)).toBeNull();
+  });
+
+  it("preserves and orders PostgreSQL microsecond cursor boundaries", () => {
+    const createdAt = "2026-08-29T08:00:00.123456+00:00";
+    const cursor = encodeCustomerBookingsCursor({
+      id: "00000000-0000-4000-8000-000000000123",
+      created_at: createdAt,
+    });
+    expect(decodeCustomerBookingsCursor(cursor)?.createdAt).toBe(createdAt);
+
+    const newer = { id: "00000000-0000-4000-8000-000000000124", created_at: createdAt };
+    const older = {
+      id: "00000000-0000-4000-8000-000000000125",
+      created_at: "2026-08-29T08:00:00.123455+00:00",
+    };
+    expect([older, newer].sort(compareCustomerBookingRowsDesc)).toEqual([newer, older]);
   });
 
   it("uses a bounded cursor query and keeps pending-payment rows visible", () => {

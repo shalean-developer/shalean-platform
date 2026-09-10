@@ -32,13 +32,31 @@ export type LoadCustomerBookingPageOptions = {
 };
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const POSTGRES_TIMESTAMP_PATTERN =
+  /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/;
 
-function compareBookingRowsDesc(a: BookingRow, b: BookingRow): number {
-  const at = Date.parse(String(a.created_at ?? ""));
-  const bt = Date.parse(String(b.created_at ?? ""));
-  const safeA = Number.isFinite(at) ? at : 0;
-  const safeB = Number.isFinite(bt) ? bt : 0;
-  if (safeA !== safeB) return safeB - safeA;
+function parsePostgresTimestampSortKey(value: string): { epochSecond: number; fraction: string } | null {
+  const match = POSTGRES_TIMESTAMP_PATTERN.exec(value.trim());
+  if (!match) return null;
+  const parsedMs = Date.parse(value);
+  if (!Number.isFinite(parsedMs)) return null;
+  return {
+    epochSecond: Math.floor(parsedMs / 1000),
+    fraction: (match[7] ?? "").padEnd(6, "0"),
+  };
+}
+
+export function compareCustomerBookingRowsDesc(
+  a: Pick<BookingRow, "id" | "created_at">,
+  b: Pick<BookingRow, "id" | "created_at">,
+): number {
+  const aKey = parsePostgresTimestampSortKey(String(a.created_at ?? ""));
+  const bKey = parsePostgresTimestampSortKey(String(b.created_at ?? ""));
+  const aSecond = aKey?.epochSecond ?? 0;
+  const bSecond = bKey?.epochSecond ?? 0;
+  if (aSecond !== bSecond) return bSecond - aSecond;
+  const fractionOrder = (bKey?.fraction ?? "").localeCompare(aKey?.fraction ?? "");
+  if (fractionOrder !== 0) return fractionOrder;
   return String(b.id ?? "").localeCompare(String(a.id ?? ""));
 }
 
@@ -48,8 +66,12 @@ export function normalizeCustomerBookingsPageLimit(input: number | undefined): n
 }
 
 export function encodeCustomerBookingsCursor(row: Pick<BookingRow, "id" | "created_at">): string {
+  const createdAt = String(row.created_at ?? "").trim();
+  if (!parsePostgresTimestampSortKey(createdAt) || !UUID_PATTERN.test(String(row.id))) {
+    throw new Error("Cannot encode an invalid customer bookings cursor.");
+  }
   return Buffer.from(
-    JSON.stringify({ createdAt: new Date(row.created_at).toISOString(), id: String(row.id) } satisfies BookingCursor),
+    JSON.stringify({ createdAt, id: String(row.id) } satisfies BookingCursor),
     "utf8",
   ).toString("base64url");
 }
@@ -60,9 +82,9 @@ export function decodeCustomerBookingsCursor(raw: string | null | undefined): Bo
   try {
     const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<BookingCursor>;
     const id = typeof parsed.id === "string" ? parsed.id.trim() : "";
-    const createdMs = Date.parse(typeof parsed.createdAt === "string" ? parsed.createdAt : "");
-    if (!UUID_PATTERN.test(id) || !Number.isFinite(createdMs)) return null;
-    return { createdAt: new Date(createdMs).toISOString(), id };
+    const createdAt = typeof parsed.createdAt === "string" ? parsed.createdAt.trim() : "";
+    if (!UUID_PATTERN.test(id) || !parsePostgresTimestampSortKey(createdAt)) return null;
+    return { createdAt, id };
   } catch {
     return null;
   }
@@ -164,7 +186,7 @@ export async function loadCustomerBookingPageForUser(
     if (!deduped.has(row.id)) deduped.set(row.id, row);
   }
 
-  const ordered = Array.from(deduped.values()).sort(compareBookingRowsDesc);
+  const ordered = Array.from(deduped.values()).sort(compareCustomerBookingRowsDesc);
   const hasMore = ordered.length > limit;
   const rows = ordered.slice(0, limit).map((row) => attachCanonicalCustomerBookingLifecycle(row));
 
