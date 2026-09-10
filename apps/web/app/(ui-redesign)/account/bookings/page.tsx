@@ -107,7 +107,7 @@ export default function AccountBookingsPage() {
     loadMore,
     cancelBooking,
     rescheduleBooking,
-  } = useBookings();
+  } = useBookings({ mode: "paged", includeUpcoming: true });
   const { reviews, loading: revLoading, error: revError } = useReviews();
   const { summary, loading: summaryLoading } = useDashboardSummary();
   const [view, setView] = useState<"cards" | "table">("cards");

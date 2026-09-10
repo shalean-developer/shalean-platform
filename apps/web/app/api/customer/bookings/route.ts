@@ -51,6 +51,7 @@ export async function GET(request: Request) {
     viewerEmail: typeof userData.user.email === "string" ? userData.user.email : null,
     cursor: url.searchParams.get("cursor"),
     limit: parsePageLimit(url),
+    view: url.searchParams.get("view") === "upcoming" ? "upcoming" : "all",
   });
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: out.status });

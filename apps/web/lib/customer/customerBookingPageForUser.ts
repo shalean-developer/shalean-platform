@@ -28,7 +28,10 @@ export type LoadCustomerBookingPageOptions = {
   viewerEmail?: string | null;
   cursor?: string | null;
   limit?: number;
+  view?: "all" | "upcoming";
 };
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function compareBookingRowsDesc(a: BookingRow, b: BookingRow): number {
   const at = Date.parse(String(a.created_at ?? ""));
@@ -58,7 +61,7 @@ export function decodeCustomerBookingsCursor(raw: string | null | undefined): Bo
     const parsed = JSON.parse(Buffer.from(value, "base64url").toString("utf8")) as Partial<BookingCursor>;
     const id = typeof parsed.id === "string" ? parsed.id.trim() : "";
     const createdMs = Date.parse(typeof parsed.createdAt === "string" ? parsed.createdAt : "");
-    if (!id || !Number.isFinite(createdMs)) return null;
+    if (!UUID_PATTERN.test(id) || !Number.isFinite(createdMs)) return null;
     return { createdAt: new Date(createdMs).toISOString(), id };
   } catch {
     return null;
@@ -81,6 +84,7 @@ async function loadSourceRows(
     viewerNorm?: string;
     cursor: BookingCursor | null;
     fetchLimit: number;
+    view: "all" | "upcoming";
   },
 ): Promise<{ data: unknown[] | null; error: { message: string } | null }> {
   const select = buildCustomerBookingSelect(args.ownershipColumn);
@@ -88,6 +92,13 @@ async function loadSourceRows(
     .from("bookings")
     .select(select)
     .neq("status", "payment_expired");
+
+  if (args.view === "upcoming") {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    query = query
+      .gte("date", cutoff)
+      .is("completed_at", null);
+  }
 
   if (args.userId) query = query.eq(args.ownershipColumn, args.userId);
   else query = query.eq("customer_email", args.viewerNorm!).is(args.ownershipColumn, null);
@@ -115,12 +126,14 @@ export async function loadCustomerBookingPageForUser(
   const viewerNorm = normalizeEmail(String(options?.viewerEmail ?? ""));
   const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const fetchLimit = limit + 1;
+  const view = options?.view === "upcoming" ? "upcoming" : "all";
 
   const owned = await loadSourceRows(admin, {
     ownershipColumn,
     userId,
     cursor,
     fetchLimit,
+    view,
   });
   if (owned.error) {
     void reportOperationalIssue("error", "customer/bookings/page", owned.error.message, { userId, ownershipColumn });
@@ -134,6 +147,7 @@ export async function loadCustomerBookingPageForUser(
       viewerNorm,
       cursor,
       fetchLimit,
+      view,
     });
     if (orphan.error) {
       void reportOperationalIssue("warn", "customer/bookings/page_email_orphan", orphan.error.message, { userId });

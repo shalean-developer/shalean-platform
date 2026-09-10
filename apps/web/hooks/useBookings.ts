@@ -19,29 +19,39 @@ type CustomerBookingsPageResponse = {
 
 const CUSTOMER_BOOKINGS_PAGE_LIMIT = 25;
 
-async function fetchAllBookingRows(): Promise<
-  | { ok: true; rows: BookingRow[] }
-  | { ok: false; error: string }
-> {
+type BookingFetchResult =
+  | { ok: true; rows: BookingRow[]; pageInfo: CustomerBookingsPageInfo | undefined }
+  | { ok: false; error: string };
+
+async function fetchBookingPages(options: {
+  pageCount?: number;
+  view?: "all" | "upcoming";
+}): Promise<BookingFetchResult> {
   const rows: BookingRow[] = [];
   const seenCursors = new Set<string>();
   let cursor: string | null = null;
+  let pageInfo: CustomerBookingsPageInfo | undefined;
+  let pagesLoaded = 0;
 
   do {
     const query = new URLSearchParams({ limit: String(CUSTOMER_BOOKINGS_PAGE_LIMIT) });
+    if (options.view === "upcoming") query.set("view", "upcoming");
     if (cursor) query.set("cursor", cursor);
     const out = await dashboardFetchJson<CustomerBookingsPageResponse>(`/api/customer/bookings?${query}`);
     if (!out.ok) return { ok: false, error: out.error };
 
     rows.push(...(Array.isArray(out.data.bookings) ? out.data.bookings : []));
-    const nextCursor = out.data.pageInfo?.hasMore === true ? out.data.pageInfo.nextCursor : null;
+    pageInfo = out.data.pageInfo;
+    pagesLoaded += 1;
+    if (options.pageCount && pagesLoaded >= options.pageCount) break;
+    const nextCursor = pageInfo?.hasMore === true ? pageInfo.nextCursor : null;
     if (!nextCursor) break;
     if (seenCursors.has(nextCursor)) return { ok: false, error: "Bookings pagination did not converge." };
     seenCursors.add(nextCursor);
     cursor = nextCursor;
   } while (cursor);
 
-  return { ok: true, rows: mergeBookingRows([], rows) };
+  return { ok: true, rows: mergeBookingRows([], rows), pageInfo };
 }
 
 function mergeBookingRows(existing: BookingRow[], incoming: BookingRow[]): BookingRow[] {
@@ -51,7 +61,7 @@ function mergeBookingRows(existing: BookingRow[], incoming: BookingRow[]): Booki
   return Array.from(byId.values());
 }
 
-export function useBookings(): {
+export function useBookings(options?: { mode?: "complete" | "paged"; includeUpcoming?: boolean }): {
   bookings: DashboardBooking[];
   loading: boolean;
   loadingMore: boolean;
@@ -71,6 +81,9 @@ export function useBookings(): {
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const realtimeDebounceRef = useRef<number | null>(null);
+  const loadedPageCountRef = useRef(1);
+  const mode = options?.mode === "paged" ? "paged" : "complete";
+  const includeUpcoming = options?.includeUpcoming === true;
 
   const applyPageInfo = useCallback((pageInfo: CustomerBookingsPageInfo | undefined) => {
     setNextCursor(typeof pageInfo?.nextCursor === "string" ? pageInfo.nextCursor : null);
@@ -80,6 +93,7 @@ export function useBookings(): {
   const fetchBookings = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
     if (!userId) {
+      loadedPageCountRef.current = 1;
       setRows([]);
       setNextCursor(null);
       setHasMore(false);
@@ -91,7 +105,8 @@ export function useBookings(): {
       setError(null);
     }
 
-    const out = await fetchAllBookingRows();
+    const pageCount = mode === "paged" ? loadedPageCountRef.current : undefined;
+    const out = await fetchBookingPages({ pageCount });
     if (!out.ok) {
       setError(out.error);
       if (!silent) {
@@ -100,12 +115,22 @@ export function useBookings(): {
         setHasMore(false);
       }
     } else {
-      setRows(out.rows);
-      applyPageInfo(undefined);
+      let nextRows = out.rows;
+      if (includeUpcoming) {
+        const upcoming = await fetchBookingPages({ view: "upcoming" });
+        if (!upcoming.ok) {
+          setError(upcoming.error);
+          if (!silent) setLoading(false);
+          return;
+        }
+        nextRows = mergeBookingRows(nextRows, upcoming.rows);
+      }
+      setRows(nextRows);
+      applyPageInfo(mode === "paged" ? out.pageInfo : undefined);
       setError(null);
     }
     if (!silent) setLoading(false);
-  }, [applyPageInfo, userId]);
+  }, [applyPageInfo, includeUpcoming, mode, userId]);
 
   const loadMore = useCallback(async () => {
     if (!userId || !hasMore || !nextCursor || loadingMore) return;
@@ -119,6 +144,7 @@ export function useBookings(): {
       const incoming = Array.isArray(out.data.bookings) ? out.data.bookings : [];
       setRows((current) => mergeBookingRows(current, incoming));
       applyPageInfo(out.data.pageInfo);
+      loadedPageCountRef.current += 1;
     }
     setLoadingMore(false);
   }, [applyPageInfo, hasMore, loadingMore, nextCursor, userId]);

@@ -33,6 +33,11 @@ describe("SR-10B customer booking pagination", () => {
       createdAt: "2026-08-29T08:00:00.000Z",
     });
     expect(decodeCustomerBookingsCursor("not-a-valid-cursor")).toBeNull();
+    const invalidIdCursor = Buffer.from(JSON.stringify({
+      id: "not-a-uuid),status.eq.completed",
+      createdAt: "2026-08-29T08:00:00.000Z",
+    })).toString("base64url");
+    expect(decodeCustomerBookingsCursor(invalidIdCursor)).toBeNull();
   });
 
   it("uses a bounded cursor query and keeps pending-payment rows visible", () => {
@@ -56,13 +61,15 @@ describe("SR-10B customer booking pagination", () => {
     expect(page).toContain("void loadMore()");
   });
 
-  it("keeps every existing web consumer complete through bounded cursor pages", () => {
+  it("keeps complete-history consumers explicit while account bookings stays paged", () => {
     const hook = read("apps/web/hooks/useBookings.ts");
-    expect(hook).toContain("async function fetchAllBookingRows()");
+    const page = read("apps/web/app/(ui-redesign)/account/bookings/page.tsx");
+    expect(hook).toContain('mode = options?.mode === "paged" ? "paged" : "complete"');
+    expect(hook).toContain("async function fetchBookingPages(options:");
     expect(hook).toContain("limit: String(CUSTOMER_BOOKINGS_PAGE_LIMIT)");
     expect(hook).toContain('query.set("cursor", cursor)');
     expect(hook).toContain("seenCursors.has(nextCursor)");
-    expect(hook).toContain("setRows(out.rows)");
+    expect(page).toContain('useBookings({ mode: "paged", includeUpcoming: true })');
   });
 
   it("keeps customer-mobile history complete through the same bounded cursor contract", () => {
@@ -76,12 +83,23 @@ describe("SR-10B customer booking pagination", () => {
     expect(api).toContain('query.set("cursor", params.cursor)');
   });
 
-  it("loads all pages before replacement so upcoming and realtime history cannot truncate", () => {
+  it("loads upcoming independently and preserves paged depth during realtime refresh", () => {
     const hook = read("apps/web/hooks/useBookings.ts");
-    expect(hook).toContain("const out = await fetchAllBookingRows()");
-    expect(hook).toContain("setRows(out.rows)");
-    expect(hook.indexOf("setRows(out.rows)")).toBeGreaterThan(hook.indexOf("const out = await fetchAllBookingRows()"));
+    const route = read("apps/web/app/api/customer/bookings/route.ts");
+    const loader = read("apps/web/lib/customer/customerBookingPageForUser.ts");
+    expect(hook).toContain('fetchBookingPages({ view: "upcoming" })');
+    expect(hook).toContain("loadedPageCountRef.current");
+    expect(hook).toContain("loadedPageCountRef.current += 1");
     expect(hook).toContain("fetchBookings({ silent: true })");
+    expect(route).toContain('view: url.searchParams.get("view") === "upcoming" ? "upcoming" : "all"');
+    expect(loader).toContain('.gte("date", cutoff)');
+    expect(loader).toContain('.is("completed_at", null)');
+  });
+
+  it("rejects non-UUID cursor IDs before building a PostgREST filter", () => {
+    const loader = read("apps/web/lib/customer/customerBookingPageForUser.ts");
+    expect(loader).toContain("UUID_PATTERN.test(id)");
+    expect(loader).toContain('return { ok: false, error: "Invalid bookings cursor.", status: 400 }');
   });
 
   it("preserves read-only ownership enforcement without ownership writes", () => {
