@@ -82,6 +82,8 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
   const [error, setError] = useState<string | null>(null);
   const realtimeDebounceRef = useRef<number | null>(null);
   const loadedPageCountRef = useRef(1);
+  const fetchEpochRef = useRef(0);
+  const loadMoreInFlightRef = useRef<Promise<void> | null>(null);
   const mode = options?.mode === "paged" ? "paged" : "complete";
   const includeUpcoming = options?.includeUpcoming === true;
 
@@ -92,6 +94,7 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
 
   const fetchBookings = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
+    const fetchEpoch = ++fetchEpochRef.current;
     if (!userId) {
       loadedPageCountRef.current = 1;
       setRows([]);
@@ -105,8 +108,19 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
       setError(null);
     }
 
+    const pendingLoadMore = loadMoreInFlightRef.current;
+    if (pendingLoadMore) await pendingLoadMore;
+    if (fetchEpoch !== fetchEpochRef.current) {
+      if (!silent) setLoading(false);
+      return;
+    }
+
     const pageCount = mode === "paged" ? loadedPageCountRef.current : undefined;
     const out = await fetchBookingPages({ pageCount });
+    if (fetchEpoch !== fetchEpochRef.current) {
+      if (!silent) setLoading(false);
+      return;
+    }
     if (!out.ok) {
       setError(out.error);
       if (!silent) {
@@ -118,6 +132,10 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
       let nextRows = out.rows;
       if (includeUpcoming) {
         const upcoming = await fetchBookingPages({ view: "upcoming" });
+        if (fetchEpoch !== fetchEpochRef.current) {
+          if (!silent) setLoading(false);
+          return;
+        }
         if (!upcoming.ok) {
           setError(upcoming.error);
           if (!silent) setLoading(false);
@@ -133,20 +151,31 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
   }, [applyPageInfo, includeUpcoming, mode, userId]);
 
   const loadMore = useCallback(async () => {
-    if (!userId || !hasMore || !nextCursor || loadingMore) return;
-    setLoadingMore(true);
-    setError(null);
-    const query = `/api/customer/bookings?limit=25&cursor=${encodeURIComponent(nextCursor)}`;
-    const out = await dashboardFetchJson<CustomerBookingsPageResponse>(query);
-    if (!out.ok) {
-      setError(out.error);
-    } else {
-      const incoming = Array.isArray(out.data.bookings) ? out.data.bookings : [];
-      setRows((current) => mergeBookingRows(current, incoming));
-      applyPageInfo(out.data.pageInfo);
-      loadedPageCountRef.current += 1;
+    if (!userId || !hasMore || !nextCursor || loadingMore || loadMoreInFlightRef.current) return;
+
+    const task = (async () => {
+      fetchEpochRef.current += 1;
+      setLoadingMore(true);
+      setError(null);
+      const query = `/api/customer/bookings?limit=25&cursor=${encodeURIComponent(nextCursor)}`;
+      const out = await dashboardFetchJson<CustomerBookingsPageResponse>(query);
+      if (!out.ok) {
+        setError(out.error);
+      } else {
+        const incoming = Array.isArray(out.data.bookings) ? out.data.bookings : [];
+        setRows((current) => mergeBookingRows(current, incoming));
+        applyPageInfo(out.data.pageInfo);
+        loadedPageCountRef.current += 1;
+      }
+      setLoadingMore(false);
+    })();
+
+    loadMoreInFlightRef.current = task;
+    try {
+      await task;
+    } finally {
+      if (loadMoreInFlightRef.current === task) loadMoreInFlightRef.current = null;
     }
-    setLoadingMore(false);
   }, [applyPageInfo, hasMore, loadingMore, nextCursor, userId]);
 
   useEffect(() => {

@@ -72,6 +72,20 @@ describe("SR-10B customer booking pagination", () => {
     });
   });
 
+  it("rejects PostgreSQL-invalid year-zero cursors with HTTP 400 before querying", async () => {
+    const cursor = Buffer.from(JSON.stringify({
+      id: "00000000-0000-4000-8000-000000000123",
+      createdAt: "0000-01-01T00:00:00.123456+00:00",
+    })).toString("base64url");
+
+    expect(decodeCustomerBookingsCursor(cursor)).toBeNull();
+    await expect(loadCustomerBookingPageForUser({} as never, "customer-id", { cursor })).resolves.toEqual({
+      ok: false,
+      error: "Invalid bookings cursor.",
+      status: 400,
+    });
+  });
+
   it("uses a bounded cursor query and keeps pending-payment rows visible", () => {
     const loader = read("apps/web/lib/customer/customerBookingPageForUser.ts");
     expect(loader).toContain("const fetchLimit = limit + 1");
@@ -122,6 +136,11 @@ describe("SR-10B customer booking pagination", () => {
     expect(hook).toContain('fetchBookingPages({ view: "upcoming" })');
     expect(hook).toContain("loadedPageCountRef.current");
     expect(hook).toContain("loadedPageCountRef.current += 1");
+    expect(hook).toContain("const fetchEpochRef = useRef(0)");
+    expect(hook).toContain("const loadMoreInFlightRef = useRef<Promise<void> | null>(null)");
+    expect(hook).toContain("if (pendingLoadMore) await pendingLoadMore");
+    expect(hook).toContain("if (fetchEpoch !== fetchEpochRef.current)");
+    expect(hook).toContain("fetchEpochRef.current += 1");
     expect(hook).toContain("fetchBookings({ silent: true })");
     expect(route).toContain('view: url.searchParams.get("view") === "upcoming" ? "upcoming" : "all"');
     expect(loader).toContain('.gte("date", cutoff)');

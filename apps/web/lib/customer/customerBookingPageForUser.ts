@@ -43,7 +43,7 @@ function isValidGregorianTimestampMatch(match: RegExpExecArray): boolean {
   const minute = Number(match[5]);
   const second = Number(match[6]);
 
-  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return false;
+  if (year < 1 || month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return false;
   const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
   const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
   return day >= 1 && day <= daysInMonth[month - 1];
