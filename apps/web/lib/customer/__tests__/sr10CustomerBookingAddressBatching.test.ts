@@ -11,13 +11,21 @@ describe("SR-10 customer booking address batching contract", () => {
     expect(source).toContain('.in("user_id", ownerIds)');
     expect(source).toContain('.in("suburb", suburbs)');
     expect(source).toContain("savedAddressLookupKey(ownerId, target.suburb)");
+    expect(source).toContain("return `${ownerId}\\u0000${suburb.trim()}`;");
+    expect(source).not.toContain("suburb.trim().toLowerCase()");
     expect(source).not.toContain("rows[i] = await enrichCustomerBookingRowFromSavedAddress");
   });
 
   it("paginates through every matching saved-address page", () => {
     expect(source).toContain("const SAVED_ADDRESS_BATCH_PAGE_SIZE = 500");
     expect(source).toContain("for (let from = 0; ; from += SAVED_ADDRESS_BATCH_PAGE_SIZE)");
+    expect(source).toContain('.select("id, user_id, line1, suburb, created_at")');
+    expect(source).toContain('.order("created_at", { ascending: false })');
+    expect(source).toContain('.order("id", { ascending: true })');
     expect(source).toContain(".range(from, from + SAVED_ADDRESS_BATCH_PAGE_SIZE - 1)");
+    expect(source.indexOf('.order("id", { ascending: true })')).toBeLessThan(
+      source.indexOf(".range(from, from + SAVED_ADDRESS_BATCH_PAGE_SIZE - 1)"),
+    );
     expect(source).toContain("if (page.length < SAVED_ADDRESS_BATCH_PAGE_SIZE) break");
   });
 
