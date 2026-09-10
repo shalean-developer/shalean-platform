@@ -49,6 +49,10 @@ export type CustomerBookingRow = {
 
 export type CustomerBookingsListResponse = {
   bookings: CustomerBookingRow[];
+  pageInfo?: {
+    nextCursor: string | null;
+    hasMore: boolean;
+  };
 };
 
 export type CustomerBookingDetailResponse = {

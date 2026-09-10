@@ -21,12 +21,13 @@ import { StatCard } from "@/components/account/StatCard";
 import { HelpCard } from "@/components/account/HelpCard";
 import { TrustBar } from "@/components/account/TrustBar";
 import { useBookings } from "@/hooks/useBookings";
-import { useReviews } from "@/hooks/useReviews";
+import { useReviewedBookingIds, useReviews } from "@/hooks/useReviews";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { isUpcomingBookingRow } from "@/lib/dashboard/bookingUtils";
 import { canCustomerModifyDashboardBooking } from "@/lib/dashboard/dashboardBookingOperational";
 import {
   isBookingPendingCustomerReview,
+  isBookingCustomerReviewEligible,
   leaveReviewHrefForBooking,
 } from "@/lib/dashboard/customerBookingReviewUi";
 import { formatZarFromCents } from "@/lib/dashboard/formatZar";
@@ -97,23 +98,45 @@ function BookingsEmptyState({ kind }: { kind: "upcoming" | "past" }) {
 }
 
 export default function AccountBookingsPage() {
-  const { bookings, loading, error, refetch, cancelBooking, rescheduleBooking } = useBookings();
-  const { reviews, loading: revLoading, error: revError } = useReviews();
+  const {
+    bookings,
+    reviewBookings,
+    reviewHistoryComplete,
+    loading,
+    loadingMore,
+    hasMore,
+    error,
+    refetch,
+    loadMore,
+    cancelBooking,
+    rescheduleBooking,
+  } = useBookings({ mode: "paged", includeUpcoming: true, includeCompleteReviewHistory: true });
+  const { loading: revLoading, error: revError } = useReviews();
   const { summary, loading: summaryLoading } = useDashboardSummary();
   const [view, setView] = useState<"cards" | "table">("cards");
 
-  const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
+  const eligibleReviewBookingIds = useMemo(
+    () => reviewBookings.filter(isBookingCustomerReviewEligible).map((booking) => booking.id),
+    [reviewBookings],
+  );
+  const {
+    reviewedIds,
+    loading: reviewedIdsLoading,
+    error: reviewedIdsError,
+  } = useReviewedBookingIds(loading ? null : eligibleReviewBookingIds);
+  const reviewEligibilityUnavailable =
+    !reviewHistoryComplete || revLoading || Boolean(revError) || reviewedIdsLoading || Boolean(reviewedIdsError);
 
   const firstPendingReviewBookingId = useMemo(() => {
-    if (revLoading) return null;
-    const row = bookings.find((b) => isBookingPendingCustomerReview(b, reviewedIds));
+    if (reviewEligibilityUnavailable) return null;
+    const row = reviewBookings.find((b) => isBookingPendingCustomerReview(b, reviewedIds));
     return row?.id ?? null;
-  }, [bookings, reviewedIds, revLoading]);
+  }, [reviewBookings, reviewEligibilityUnavailable, reviewedIds]);
 
   const pendingReviewCount = useMemo(() => {
-    if (revLoading) return 0;
-    return bookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds)).length;
-  }, [bookings, reviewedIds, revLoading]);
+    if (reviewEligibilityUnavailable) return 0;
+    return reviewBookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds)).length;
+  }, [reviewBookings, reviewEligibilityUnavailable, reviewedIds]);
 
   const upcoming = useMemo(
     () =>
@@ -162,7 +185,7 @@ export default function AccountBookingsPage() {
 
   const tableProps = {
     reviewedIds,
-    revLoading,
+    revLoading: reviewEligibilityUnavailable,
     detailHref: (id: string) => `/account/bookings/${id}`,
   };
 
@@ -358,7 +381,7 @@ export default function AccountBookingsPage() {
                         <BookingCard
                           booking={b}
                           detailHref={`/account/bookings/${b.id}`}
-                          leaveReviewHref={leaveReviewHrefForBooking(b, reviewedIds, revLoading)}
+                          leaveReviewHref={leaveReviewHrefForBooking(b, reviewedIds, reviewEligibilityUnavailable)}
                           onCancel={cancelBooking}
                           onReschedule={rescheduleBooking}
                         />
@@ -385,6 +408,22 @@ export default function AccountBookingsPage() {
               )}
             </TabsContent>
           </Tabs>
+
+          {hasMore ? (
+            <div className="flex justify-center pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-xl"
+                disabled={loadingMore}
+                onClick={() => void loadMore()}
+              >
+                {loadingMore ? "Loading older bookings…" : "Load older bookings"}
+              </Button>
+            </div>
+          ) : bookings.length > 0 ? (
+            <p className="text-center text-xs text-muted-foreground">All available bookings are loaded.</p>
+          ) : null}
         </section>
 
         <TrustBar />

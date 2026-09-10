@@ -44,7 +44,7 @@ function savedAddressLookupKey(ownerId: string, suburb: string): string {
   return `${ownerId}\u0000${suburb.trim()}`;
 }
 
-async function enrichCustomerBookingRowsFromSavedAddresses(
+export async function enrichCustomerBookingRowsFromSavedAddresses(
   admin: SupabaseClient,
   rows: BookingRow[],
 ): Promise<void> {
@@ -244,7 +244,7 @@ export async function loadCustomerBookingRowsForUser(
   return { ok: true, bookings: rows };
 }
 
-async function enrichRowsWithCleanerDisplayNames(
+export async function enrichRowsWithCleanerDisplayNames(
   admin: SupabaseClient,
   rows: BookingRow[],
   userId: string,
