@@ -9,7 +9,11 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: false,
-    include: ["lib/**/*.test.ts", "app/api/**/__tests__/*.test.ts"],
+    include: [
+      "lib/**/*.test.ts",
+      "app/api/**/__tests__/*.test.ts",
+      "components/admin/office/__tests__/*.test.ts",
+    ],
     pool: "threads",
     poolOptions: {
       threads: {
