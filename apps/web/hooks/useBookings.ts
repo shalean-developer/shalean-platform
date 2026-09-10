@@ -108,46 +108,43 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
       setError(null);
     }
 
-    const pendingLoadMore = loadMoreInFlightRef.current;
-    if (pendingLoadMore) await pendingLoadMore;
-    if (fetchEpoch !== fetchEpochRef.current) {
-      if (!silent) setLoading(false);
-      return;
-    }
+    try {
+      const pendingLoadMore = loadMoreInFlightRef.current;
+      if (pendingLoadMore) await pendingLoadMore;
+      if (fetchEpoch !== fetchEpochRef.current) return;
 
-    const pageCount = mode === "paged" ? loadedPageCountRef.current : undefined;
-    const out = await fetchBookingPages({ pageCount });
-    if (fetchEpoch !== fetchEpochRef.current) {
+      const pageCount = mode === "paged" ? loadedPageCountRef.current : undefined;
+      const out = await fetchBookingPages({ pageCount });
+      if (fetchEpoch !== fetchEpochRef.current) return;
+      if (!out.ok) {
+        setError(out.error);
+        if (!silent) {
+          setRows([]);
+          setNextCursor(null);
+          setHasMore(false);
+        }
+      } else {
+        let nextRows = out.rows;
+        if (includeUpcoming) {
+          const upcoming = await fetchBookingPages({ view: "upcoming" });
+          if (fetchEpoch !== fetchEpochRef.current) return;
+          if (!upcoming.ok) {
+            setError(upcoming.error);
+            return;
+          }
+          nextRows = mergeBookingRows(nextRows, upcoming.rows);
+        }
+        setRows(nextRows);
+        applyPageInfo(mode === "paged" ? out.pageInfo : undefined);
+        setError(null);
+      }
+    } catch (fetchError) {
+      if (fetchEpoch === fetchEpochRef.current) {
+        setError(fetchError instanceof Error ? fetchError.message : "Could not load bookings.");
+      }
+    } finally {
       if (!silent) setLoading(false);
-      return;
     }
-    if (!out.ok) {
-      setError(out.error);
-      if (!silent) {
-        setRows([]);
-        setNextCursor(null);
-        setHasMore(false);
-      }
-    } else {
-      let nextRows = out.rows;
-      if (includeUpcoming) {
-        const upcoming = await fetchBookingPages({ view: "upcoming" });
-        if (fetchEpoch !== fetchEpochRef.current) {
-          if (!silent) setLoading(false);
-          return;
-        }
-        if (!upcoming.ok) {
-          setError(upcoming.error);
-          if (!silent) setLoading(false);
-          return;
-        }
-        nextRows = mergeBookingRows(nextRows, upcoming.rows);
-      }
-      setRows(nextRows);
-      applyPageInfo(mode === "paged" ? out.pageInfo : undefined);
-      setError(null);
-    }
-    if (!silent) setLoading(false);
   }, [applyPageInfo, includeUpcoming, mode, userId]);
 
   const loadMore = useCallback(async () => {
