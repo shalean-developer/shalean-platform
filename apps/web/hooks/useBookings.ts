@@ -157,17 +157,22 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
       fetchEpochRef.current += 1;
       setLoadingMore(true);
       setError(null);
-      const query = `/api/customer/bookings?limit=25&cursor=${encodeURIComponent(nextCursor)}`;
-      const out = await dashboardFetchJson<CustomerBookingsPageResponse>(query);
-      if (!out.ok) {
-        setError(out.error);
-      } else {
-        const incoming = Array.isArray(out.data.bookings) ? out.data.bookings : [];
-        setRows((current) => mergeBookingRows(current, incoming));
-        applyPageInfo(out.data.pageInfo);
-        loadedPageCountRef.current += 1;
+      try {
+        const query = `/api/customer/bookings?limit=25&cursor=${encodeURIComponent(nextCursor)}`;
+        const out = await dashboardFetchJson<CustomerBookingsPageResponse>(query);
+        if (!out.ok) {
+          setError(out.error);
+        } else {
+          const incoming = Array.isArray(out.data.bookings) ? out.data.bookings : [];
+          setRows((current) => mergeBookingRows(current, incoming));
+          applyPageInfo(out.data.pageInfo);
+          loadedPageCountRef.current += 1;
+        }
+      } catch (loadMoreError) {
+        setError(loadMoreError instanceof Error ? loadMoreError.message : "Could not load older bookings.");
+      } finally {
+        setLoadingMore(false);
       }
-      setLoadingMore(false);
     })();
 
     loadMoreInFlightRef.current = task;

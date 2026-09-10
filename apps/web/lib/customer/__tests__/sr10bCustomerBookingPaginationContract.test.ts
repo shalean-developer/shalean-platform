@@ -141,6 +141,9 @@ describe("SR-10B customer booking pagination", () => {
     expect(hook).toContain("if (pendingLoadMore) await pendingLoadMore");
     expect(hook).toContain("if (fetchEpoch !== fetchEpochRef.current)");
     expect(hook).toContain("fetchEpochRef.current += 1");
+    expect(hook).toContain("} catch (loadMoreError) {");
+    expect(hook).toContain("} finally {");
+    expect(hook).toContain("setLoadingMore(false)");
     expect(hook).toContain("fetchBookings({ silent: true })");
     expect(route).toContain('view: url.searchParams.get("view") === "upcoming" ? "upcoming" : "all"');
     expect(loader).toContain('.gte("date", cutoff)');
