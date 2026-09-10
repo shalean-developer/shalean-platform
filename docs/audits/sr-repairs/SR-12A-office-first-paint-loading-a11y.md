@@ -10,10 +10,12 @@ This isolated convergence slice targets `apps/web/src/features/office/OfficeShel
 
 ## Repair
 
-- Expose the loading container as a polite, busy status region.
+- Expose the loading container as a polite status region.
 - Provide the screen-reader message `Loading Office workspace…`.
 - Hide the decorative top-bar and body skeleton groups from assistive technology.
 - Add the Office feature-test directory to the normal Vitest discovery set.
+
+`aria-busy` is intentionally omitted: the transient skeleton unmounts when loading completes, so it has no persistent region on which to clear a busy state. This allows the status announcement to be delivered immediately instead of being deferred indefinitely.
 
 ## Preserved behaviour
 

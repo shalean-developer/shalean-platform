@@ -11,7 +11,7 @@ describe("SR-12A Office first-paint loading accessibility contract", () => {
   it("announces loading without exposing decorative skeleton blocks", () => {
     expect(source).toContain('role="status"');
     expect(source).toContain('aria-live="polite"');
-    expect(source).toContain('aria-busy="true"');
+    expect(source).not.toContain('aria-busy="true"');
     expect(source).toContain("Loading Office workspace…");
     expect(source).toContain('aria-hidden="true" className="h-16 animate-pulse');
     expect(source).toContain('aria-hidden="true" className="flex flex-1"');

@@ -25,7 +25,6 @@ function OfficeSkeleton() {
       className="flex min-h-screen flex-col bg-background"
       role="status"
       aria-live="polite"
-      aria-busy="true"
     >
       <span className="sr-only">Loading Office workspace…</span>
       <div aria-hidden="true" className="h-16 animate-pulse border-b border-border bg-card" />
