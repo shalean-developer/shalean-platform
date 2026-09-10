@@ -54,7 +54,7 @@ export default function AccountBookingDetailPage() {
   const searchParams = useSearchParams();
   const id = typeof params.id === "string" ? params.id : undefined;
   const { booking, loading, error, refetch, cancelBooking, rescheduleBooking } = useBookingDetail(id);
-  const { reviews, loading: revLoading } = useReviews();
+  const { reviews, loading: revLoading, error: revError } = useReviews();
   const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
   const toast = useDashboardToast();
   const [cancelOpen, setCancelOpen] = useState(false);
@@ -201,7 +201,7 @@ export default function AccountBookingDetailPage() {
     : "Date & time to be confirmed";
   const modifiable = canCustomerModifyDashboardBooking(current);
   const { showRebook } = dashboardBookingCustomerSurface(current);
-  const reviewHref = leaveReviewHrefForBooking(current, reviewedIds, revLoading);
+  const reviewHref = leaveReviewHrefForBooking(current, reviewedIds, revLoading || Boolean(revError));
 
   async function confirmCancel() {
     setBusy(true);

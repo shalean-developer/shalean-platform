@@ -183,11 +183,14 @@ describe("SR-10B customer booking pagination", () => {
   it("suppresses pending-review prompts and actions when reviewed-ID loading fails", () => {
     const page = read("apps/web/app/(ui-redesign)/account/bookings/page.tsx");
     const reviewsPage = read("apps/web/app/(ui-redesign)/account/reviews/page.tsx");
+    const detailPage = read("apps/web/app/(ui-redesign)/account/bookings/[id]/page.tsx");
     expect(page).toContain("if (revLoading || revError) return null");
     expect(page).toContain("if (revLoading || revError) return 0");
     expect(page).toContain("revLoading: revLoading || Boolean(revError)");
     expect(page).toContain("revLoading || Boolean(revError)");
     expect(reviewsPage).toContain("if (bookLoading || revLoading || revError) return []");
+    expect(detailPage).toContain("reviews, loading: revLoading, error: revError");
+    expect(detailPage).toContain("revLoading || Boolean(revError)");
   });
 
   it("keeps customer-mobile history complete through the same bounded cursor contract", () => {
