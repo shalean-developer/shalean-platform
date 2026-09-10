@@ -11,7 +11,8 @@ describe("SR-11H shared Office pagination contract", () => {
     const source = fs.readFileSync(chromePath, "utf8");
 
     expect(source).toContain("export function OfficeZohoPagination");
-    expect(source).toContain('aria-label="Pagination controls"');
+    expect(source).toContain('<nav className="flex flex-wrap items-center gap-2" aria-label="Pagination controls">');
+    expect(source).toContain("</nav>");
     expect(source).toContain('aria-live="polite"');
     expect(source).toContain("disabled={safePage <= 1}");
     expect(source).toContain("disabled={safePage >= safeTotalPages}");

@@ -282,7 +282,7 @@ export function OfficeZohoPagination({
   const safePage = Math.min(Math.max(1, page), safeTotalPages);
 
   return (
-    <div className="flex flex-wrap items-center gap-2" aria-label="Pagination controls">
+    <nav className="flex flex-wrap items-center gap-2" aria-label="Pagination controls">
       <label className="flex items-center gap-2 text-xs text-slate-500">
         {label}
         <select
@@ -318,7 +318,7 @@ export function OfficeZohoPagination({
         Next
         <ChevronRight className="h-3.5 w-3.5" aria-hidden />
       </button>
-    </div>
+    </nav>
   );
 }
 
