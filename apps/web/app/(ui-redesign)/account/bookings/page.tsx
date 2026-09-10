@@ -21,12 +21,13 @@ import { StatCard } from "@/components/account/StatCard";
 import { HelpCard } from "@/components/account/HelpCard";
 import { TrustBar } from "@/components/account/TrustBar";
 import { useBookings } from "@/hooks/useBookings";
-import { useReviews } from "@/hooks/useReviews";
+import { useReviewedBookingIds, useReviews } from "@/hooks/useReviews";
 import { useDashboardSummary } from "@/hooks/useDashboardSummary";
 import { isUpcomingBookingRow } from "@/lib/dashboard/bookingUtils";
 import { canCustomerModifyDashboardBooking } from "@/lib/dashboard/dashboardBookingOperational";
 import {
   isBookingPendingCustomerReview,
+  isBookingCustomerReviewEligible,
   leaveReviewHrefForBooking,
 } from "@/lib/dashboard/customerBookingReviewUi";
 import { formatZarFromCents } from "@/lib/dashboard/formatZar";
@@ -109,22 +110,31 @@ export default function AccountBookingsPage() {
     cancelBooking,
     rescheduleBooking,
   } = useBookings({ mode: "paged", includeUpcoming: true, includeCompleteReviewHistory: true });
-  const { reviews, loading: revLoading, error: revError } = useReviews();
+  const { loading: revLoading, error: revError } = useReviews();
   const { summary, loading: summaryLoading } = useDashboardSummary();
   const [view, setView] = useState<"cards" | "table">("cards");
 
-  const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
+  const eligibleReviewBookingIds = useMemo(
+    () => reviewBookings.filter(isBookingCustomerReviewEligible).map((booking) => booking.id),
+    [reviewBookings],
+  );
+  const {
+    reviewedIds,
+    loading: reviewedIdsLoading,
+    error: reviewedIdsError,
+  } = useReviewedBookingIds(loading ? null : eligibleReviewBookingIds);
+  const reviewEligibilityUnavailable = revLoading || Boolean(revError) || reviewedIdsLoading || Boolean(reviewedIdsError);
 
   const firstPendingReviewBookingId = useMemo(() => {
-    if (revLoading || revError) return null;
+    if (reviewEligibilityUnavailable) return null;
     const row = reviewBookings.find((b) => isBookingPendingCustomerReview(b, reviewedIds));
     return row?.id ?? null;
-  }, [reviewBookings, reviewedIds, revError, revLoading]);
+  }, [reviewBookings, reviewEligibilityUnavailable, reviewedIds]);
 
   const pendingReviewCount = useMemo(() => {
-    if (revLoading || revError) return 0;
+    if (reviewEligibilityUnavailable) return 0;
     return reviewBookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds)).length;
-  }, [reviewBookings, reviewedIds, revError, revLoading]);
+  }, [reviewBookings, reviewEligibilityUnavailable, reviewedIds]);
 
   const upcoming = useMemo(
     () =>
@@ -173,7 +183,7 @@ export default function AccountBookingsPage() {
 
   const tableProps = {
     reviewedIds,
-    revLoading: revLoading || Boolean(revError),
+    revLoading: reviewEligibilityUnavailable,
     detailHref: (id: string) => `/account/bookings/${id}`,
   };
 
@@ -369,7 +379,7 @@ export default function AccountBookingsPage() {
                         <BookingCard
                           booking={b}
                           detailHref={`/account/bookings/${b.id}`}
-                          leaveReviewHref={leaveReviewHrefForBooking(b, reviewedIds, revLoading || Boolean(revError))}
+                          leaveReviewHref={leaveReviewHrefForBooking(b, reviewedIds, reviewEligibilityUnavailable)}
                           onCancel={cancelBooking}
                           onReschedule={rescheduleBooking}
                         />

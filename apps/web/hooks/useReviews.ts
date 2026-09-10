@@ -1,15 +1,71 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ReviewRow } from "@/lib/dashboard/types";
 import { dashboardFetchJson, getDashboardAccessToken } from "@/lib/dashboard/dashboardFetch";
 import { useUser } from "@/hooks/useUser";
 
-export type ReviewListItem = ReviewRow & {
+export type ReviewListItem = ReviewRow & {
   serviceName: string;
   bookingDate: string | null;
   cleanerName: string | null;
-};
+};
+
+const REVIEW_ELIGIBILITY_BATCH_SIZE = 100;
+
+export function useReviewedBookingIds(eligibleBookingIds: string[] | null): {
+  reviewedIds: ReadonlySet<string>;
+  loading: boolean;
+  error: string | null;
+} {
+  const normalizedIds = useMemo(
+    () => eligibleBookingIds == null ? null : Array.from(new Set(eligibleBookingIds)).sort(),
+    [eligibleBookingIds],
+  );
+  const requestKey = normalizedIds?.join(",") ?? null;
+  const [reviewedIds, setReviewedIds] = useState<string[]>([]);
+  const [completedKey, setCompletedKey] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (normalizedIds == null || requestKey == null) return;
+    let cancelled = false;
+    setError(null);
+
+    void (async () => {
+      try {
+        const found = new Set<string>();
+        for (let offset = 0; offset < normalizedIds.length; offset += REVIEW_ELIGIBILITY_BATCH_SIZE) {
+          const bookingIds = normalizedIds.slice(offset, offset + REVIEW_ELIGIBILITY_BATCH_SIZE);
+          const out = await dashboardFetchJson<{ reviewedBookingIds?: string[] }>("/api/me/reviews", {
+            method: "POST",
+            json: { bookingIds },
+          });
+          if (!out.ok) throw new Error(out.error);
+          for (const id of out.data.reviewedBookingIds ?? []) found.add(id);
+        }
+        if (!cancelled) {
+          setReviewedIds(Array.from(found));
+          setCompletedKey(requestKey);
+        }
+      } catch (lookupError) {
+        if (!cancelled) {
+          setReviewedIds([]);
+          setCompletedKey(null);
+          setError(lookupError instanceof Error ? lookupError.message : "Could not verify reviewed bookings.");
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [normalizedIds, requestKey]);
+
+  return {
+    reviewedIds: useMemo(() => new Set(reviewedIds), [reviewedIds]),
+    loading: requestKey == null || completedKey !== requestKey,
+    error,
+  };
+}
 
 export function useReviews(): {
   reviews: ReviewListItem[];

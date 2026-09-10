@@ -163,16 +163,19 @@ describe("SR-10B customer booking pagination", () => {
 
   it("keeps reviewed booking IDs complete and visible pages independent of review-history failures", () => {
     const hook = read("apps/web/hooks/useBookings.ts");
+    const reviewsHook = read("apps/web/hooks/useReviews.ts");
+    const reviewsRoute = read("apps/web/app/api/me/reviews/route.ts");
     const reviewLoader = read("apps/web/lib/customer/loadCustomerReviewsForUser.ts");
-    expect(reviewLoader).toContain("CUSTOMER_REVIEWS_PAGE_SIZE = 100");
-    expect(reviewLoader).toContain("const seenCursors = new Set<string>()");
-    expect(reviewLoader).toContain("created_at.lt.${cursor.createdAt}");
-    expect(reviewLoader).toContain("created_at.eq.${cursor.createdAt}");
-    expect(reviewLoader).toContain("id.lt.${cursor.id}");
-    expect(reviewLoader).toContain('.order("id", { ascending: false })');
-    expect(reviewLoader).toContain(".limit(CUSTOMER_REVIEWS_PAGE_SIZE)");
-    expect(reviewLoader).toContain("seenCursors.has(nextCursor)");
-    expect(reviewLoader).not.toContain(".range(");
+    expect(reviewLoader).toContain(".limit(100)");
+    expect(reviewsHook).toContain("REVIEW_ELIGIBILITY_BATCH_SIZE = 100");
+    expect(reviewsHook).toContain("normalizedIds.slice(offset, offset + REVIEW_ELIGIBILITY_BATCH_SIZE)");
+    expect(reviewsHook).toContain('method: "POST"');
+    expect(reviewsHook).toContain("setCompletedKey(requestKey)");
+    expect(reviewsRoute).toContain("REVIEW_ID_LOOKUP_MAX = 100");
+    expect(reviewsRoute).toContain('.in("booking_id", bookingIds)');
+    expect(reviewsRoute).toContain('.eq("user_id", auth.session.userId)');
+    expect(reviewsRoute).toContain(".limit(REVIEW_ID_LOOKUP_MAX)");
+    expect(reviewsRoute).toContain("bookingIds.length > REVIEW_ID_LOOKUP_MAX");
 
     const visibleCommit = hook.indexOf("setRows(nextRows)");
     const reviewTraversal = hook.indexOf("const reviewHistory = await fetchBookingPages({})");
@@ -184,13 +187,12 @@ describe("SR-10B customer booking pagination", () => {
     const page = read("apps/web/app/(ui-redesign)/account/bookings/page.tsx");
     const reviewsPage = read("apps/web/app/(ui-redesign)/account/reviews/page.tsx");
     const detailPage = read("apps/web/app/(ui-redesign)/account/bookings/[id]/page.tsx");
-    expect(page).toContain("if (revLoading || revError) return null");
-    expect(page).toContain("if (revLoading || revError) return 0");
-    expect(page).toContain("revLoading: revLoading || Boolean(revError)");
-    expect(page).toContain("revLoading || Boolean(revError)");
-    expect(reviewsPage).toContain("if (bookLoading || revLoading || revError) return []");
-    expect(detailPage).toContain("reviews, loading: revLoading, error: revError");
-    expect(detailPage).toContain("revLoading || Boolean(revError)");
+    expect(page).toContain("const reviewEligibilityUnavailable =");
+    expect(page).toContain("reviewedIdsLoading || Boolean(reviewedIdsError)");
+    expect(page).toContain("if (reviewEligibilityUnavailable) return null");
+    expect(page).toContain("if (reviewEligibilityUnavailable) return 0");
+    expect(reviewsPage).toContain("reviewedIdsLoading || reviewedIdsError");
+    expect(detailPage).toContain("reviewedIdsLoading || Boolean(reviewedIdsError)");
   });
 
   it("keeps customer-mobile history complete through the same bounded cursor contract", () => {

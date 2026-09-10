@@ -3,11 +3,14 @@
 import Link from "next/link";
 import { Suspense, useMemo } from "react";
 import { MessageSquare, Star, ThumbsUp } from "lucide-react";
-import { useReviews } from "@/hooks/useReviews";
+import { useReviewedBookingIds, useReviews } from "@/hooks/useReviews";
 import { useBookings } from "@/hooks/useBookings";
 import { HelpCard } from "@/components/account/HelpCard";
 import { Button } from "@/components/ui/button";
-import { isBookingPendingCustomerReview } from "@/lib/dashboard/customerBookingReviewUi";
+import {
+  isBookingCustomerReviewEligible,
+  isBookingPendingCustomerReview,
+} from "@/lib/dashboard/customerBookingReviewUi";
 import { cn } from "@/lib/utils";
 
 function StarDisplay({ rating }: { rating: number }) {
@@ -50,12 +53,20 @@ function ReviewsContent() {
   const { reviews, loading: revLoading, error: revError } = useReviews();
   const { bookings, loading: bookLoading } = useBookings();
 
-  const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
+  const eligibleReviewBookingIds = useMemo(
+    () => bookings.filter(isBookingCustomerReviewEligible).map((booking) => booking.id),
+    [bookings],
+  );
+  const {
+    reviewedIds,
+    loading: reviewedIdsLoading,
+    error: reviewedIdsError,
+  } = useReviewedBookingIds(bookLoading ? null : eligibleReviewBookingIds);
 
   const pendingReviews = useMemo(() => {
-    if (bookLoading || revLoading || revError) return [];
+    if (bookLoading || revLoading || revError || reviewedIdsLoading || reviewedIdsError) return [];
     return bookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds));
-  }, [bookings, reviewedIds, bookLoading, revError, revLoading]);
+  }, [bookings, reviewedIds, bookLoading, revError, revLoading, reviewedIdsError, reviewedIdsLoading]);
 
   const avgRating = useMemo(() => {
     if (reviews.length === 0) return 0;

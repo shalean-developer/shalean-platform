@@ -7,50 +7,22 @@ export type CustomerReviewListItem = ReviewRow & {
   cleanerName: string | null;
 };
 
-const CUSTOMER_REVIEWS_PAGE_SIZE = 100;
-
-async function loadAllCustomerReviewRows(admin: SupabaseClient, userId: string) {
-  const reviews: ReviewRow[] = [];
-  const seenCursors = new Set<string>();
-  let cursor: { createdAt: string; id: string } | null = null;
-
-  while (true) {
-    let query = admin
-      .from("reviews")
-      .select("id, booking_id, user_id, cleaner_id, rating, comment, created_at")
-      .eq("user_id", userId);
-    if (cursor) {
-      query = query.or(
-        `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
-      );
-    }
-    const { data, error } = await query
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: false })
-      .limit(CUSTOMER_REVIEWS_PAGE_SIZE);
-
-    if (error) return { ok: false as const };
-    const page = (data ?? []) as ReviewRow[];
-    reviews.push(...page);
-    if (page.length < CUSTOMER_REVIEWS_PAGE_SIZE) return { ok: true as const, reviews };
-    const last = page.at(-1);
-    const nextCursor = `${String(last?.created_at ?? "")}\u0000${String(last?.id ?? "")}`;
-    if (!last?.created_at || !last.id || seenCursors.has(nextCursor)) return { ok: false as const };
-    seenCursors.add(nextCursor);
-    cursor = { createdAt: String(last.created_at), id: String(last.id) };
-  }
-}
-
 export async function loadCustomerReviewsForUser(
   admin: SupabaseClient,
   userId: string,
 ): Promise<{ ok: true; reviews: CustomerReviewListItem[] } | { ok: false; error: string; status: number }> {
-  const loaded = await loadAllCustomerReviewRows(admin, userId);
-  if (!loaded.ok) {
+  const { data: rows, error } = await admin
+    .from("reviews")
+    .select("id, booking_id, user_id, cleaner_id, rating, comment, created_at")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(100);
+
+  if (error) {
     return { ok: false, error: "Could not load reviews.", status: 500 };
   }
 
-  const reviews = loaded.reviews;
+  const reviews = (rows ?? []) as ReviewRow[];
   if (reviews.length === 0) {
     return { ok: true, reviews: [] };
   }
