@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type ReactNode } from "react";
-import { ChevronDown, type LucideIcon } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, type LucideIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAdminData } from "@/hooks/useAdminData";
 
@@ -258,6 +258,67 @@ export function OfficeZohoToggle({
         />
       </button>
     </label>
+  );
+}
+
+export function OfficeZohoPagination({
+  page,
+  totalPages,
+  pageSize,
+  pageSizeOptions,
+  onPageChange,
+  onPageSizeChange,
+  label = "Rows",
+}: {
+  page: number;
+  totalPages: number;
+  pageSize: number;
+  pageSizeOptions: readonly number[];
+  onPageChange: (page: number) => void;
+  onPageSizeChange: (pageSize: number) => void;
+  label?: string;
+}) {
+  const safeTotalPages = Math.max(1, totalPages);
+  const safePage = Math.min(Math.max(1, page), safeTotalPages);
+
+  return (
+    <div className="flex flex-wrap items-center gap-2" aria-label="Pagination controls">
+      <label className="flex items-center gap-2 text-xs text-slate-500">
+        {label}
+        <select
+          value={pageSize}
+          onChange={(event) => onPageSizeChange(Number(event.target.value))}
+          className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-active)]/30"
+        >
+          {pageSizeOptions.map((size) => (
+            <option key={size} value={size}>
+              {size}
+            </option>
+          ))}
+        </select>
+      </label>
+      <span className="text-xs font-medium text-slate-500" aria-live="polite">
+        Page {safePage} of {safeTotalPages}
+      </span>
+      <button
+        type="button"
+        disabled={safePage <= 1}
+        onClick={() => onPageChange(Math.max(1, safePage - 1))}
+        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-active)]/30 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+        Prev
+      </button>
+      <button
+        type="button"
+        disabled={safePage >= safeTotalPages}
+        onClick={() => onPageChange(Math.min(safeTotalPages, safePage + 1))}
+        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[var(--sidebar-active)]/30 disabled:cursor-not-allowed disabled:opacity-40"
+      >
+        Next
+        <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+      </button>
+    </div>
   );
 }
 

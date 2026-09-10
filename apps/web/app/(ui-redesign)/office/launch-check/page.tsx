@@ -9,11 +9,14 @@ import {
   XCircle,
   AlertCircle,
   Info,
-  Rocket,
 } from "lucide-react";
 import { adminFetch, useAdminData } from "@/hooks/useAdminData";
 import type { LaunchCheckResult, LaunchCheckRunResponse, OfficeLaunchCheckStatus } from "@/lib/launch/types";
 import { cn } from "@/lib/utils";
+import {
+  OfficeZohoPageHeader,
+  OfficeZohoSecondaryButton,
+} from "@/components/admin/office/OfficeZohoChrome";
 
 const SOURCE_LABELS: Record<OfficeLaunchCheckStatus["config"]["sources"]["customerUserId"], string> = {
   env: "Env",
@@ -152,27 +155,19 @@ export default function OfficeLaunchCheckPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <Rocket className="h-6 w-6 text-slate-700" />
-            <h1 className="text-2xl font-bold text-slate-900">Launch readiness</h1>
-          </div>
-          <p className="mt-0.5 max-w-2xl text-sm text-slate-500">
-            End-to-end checks for booking persistence, dashboards, payment status, references, and role routing.
-            Creates a tagged test booking, verifies all surfaces, then cleans up.
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled={loading || runState === "loading" || status?.configReady === false}
-          onClick={() => void runChecks()}
-          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-600 shadow-sm hover:bg-slate-50 disabled:opacity-50"
-        >
-          <RefreshCw className={cn("h-4 w-4", runState === "loading" && "animate-spin")} />
-          Run checklist
-        </button>
-      </div>
+      <OfficeZohoPageHeader
+        title="Launch readiness"
+        subtitle="End-to-end checks for booking persistence, dashboards, payment status, references, and role routing. Creates a tagged test booking, verifies all surfaces, then cleans up."
+        actions={
+          <OfficeZohoSecondaryButton
+            disabled={loading || runState === "loading" || status?.configReady === false}
+            onClick={() => void runChecks()}
+          >
+            <RefreshCw className={cn("h-4 w-4", runState === "loading" && "animate-spin")} />
+            Run checklist
+          </OfficeZohoSecondaryButton>
+        }
+      />
 
       {error ? (
         <div className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">

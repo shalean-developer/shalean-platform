@@ -9,11 +9,14 @@ import {
   RefreshCw,
   AlertCircle,
   Loader2,
-  ChevronLeft,
-  ChevronRight,
   Search,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  OfficeZohoPageHeader,
+  OfficeZohoPagination,
+  OfficeZohoSecondaryButton,
+} from "@/components/admin/office/OfficeZohoChrome";
 import { useAdminData } from "@/hooks/useAdminData";
 import { DIRECT_BOOKING_FLOW_LANDING, landingDisplayName } from "@/lib/admin/landingPageAttribution";
 
@@ -94,23 +97,19 @@ export default function ConversionPage() {
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">Conversion</h1>
-          <p className="mt-0.5 text-sm text-slate-500">
-            Session-based conversion from analytics events{sinceLabel ? ` · since ${sinceLabel}` : ""}.
-          </p>
-        </div>
-        <button
-          type="button"
-          onClick={() => {
-            void seo.refetch();
-          }}
-          className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-600 shadow-sm hover:bg-slate-50"
-        >
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Refresh
-        </button>
-      </div>
+      <OfficeZohoPageHeader
+        title="Conversion"
+        subtitle={`Session-based conversion from analytics events${sinceLabel ? ` · since ${sinceLabel}` : ""}.`}
+        actions={
+          <OfficeZohoSecondaryButton
+            onClick={() => {
+              void seo.refetch();
+            }}
+          >
+            <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} /> Refresh
+          </OfficeZohoSecondaryButton>
+        }
+      />
 
       {error ? (
         <div className="flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
@@ -236,46 +235,17 @@ export default function ConversionPage() {
               {search.trim() ? ` matching “${search.trim()}”` : ""}
               {seo.data?.rowsLoaded != null ? ` · ${seo.data.rowsLoaded.toLocaleString()} events` : ""}
             </p>
-            <div className="flex items-center gap-2">
-              <label className="flex items-center gap-2 text-xs text-slate-500">
-                Rows
-                <select
-                  value={pageSize}
-                  onChange={(e) => {
-                    setPageSize(Number(e.target.value));
-                    setPage(1);
-                  }}
-                  className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs font-semibold text-slate-700"
-                >
-                  {PAGE_SIZE_OPTIONS.map((size) => (
-                    <option key={size} value={size}>
-                      {size}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <span className="text-xs font-medium text-slate-500">
-                Page {safePage} of {totalPages}
-              </span>
-              <button
-                type="button"
-                disabled={safePage <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-                Prev
-              </button>
-              <button
-                type="button"
-                disabled={safePage >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-40"
-              >
-                Next
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </div>
+            <OfficeZohoPagination
+              page={safePage}
+              totalPages={totalPages}
+              pageSize={pageSize}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              onPageChange={setPage}
+              onPageSizeChange={(size) => {
+                setPageSize(size);
+                setPage(1);
+              }}
+            />
           </div>
         ) : null}
       </div>
