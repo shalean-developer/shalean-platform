@@ -31,6 +31,7 @@ import {
 import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 
 type SavedAddressCandidate = {
+  id: string;
   user_id: string;
   line1: string | null;
   suburb: string | null;
@@ -40,7 +41,7 @@ type SavedAddressCandidate = {
 const SAVED_ADDRESS_BATCH_PAGE_SIZE = 500;
 
 function savedAddressLookupKey(ownerId: string, suburb: string): string {
-  return `${ownerId}\u0000${suburb.trim().toLowerCase()}`;
+  return `${ownerId}\u0000${suburb.trim()}`;
 }
 
 async function enrichCustomerBookingRowsFromSavedAddresses(
@@ -65,10 +66,11 @@ async function enrichCustomerBookingRowsFromSavedAddresses(
   for (let from = 0; ; from += SAVED_ADDRESS_BATCH_PAGE_SIZE) {
     const { data, error } = await admin
       .from("customer_saved_addresses")
-      .select("user_id, line1, suburb, created_at")
+      .select("id, user_id, line1, suburb, created_at")
       .in("user_id", ownerIds)
       .in("suburb", suburbs)
       .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
       .range(from, from + SAVED_ADDRESS_BATCH_PAGE_SIZE - 1);
 
     if (error) return;
