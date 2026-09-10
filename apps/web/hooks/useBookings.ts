@@ -83,6 +83,7 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
   const realtimeDebounceRef = useRef<number | null>(null);
   const loadedPageCountRef = useRef(1);
   const fetchEpochRef = useRef(0);
+  const loadingEpochRef = useRef<number | null>(null);
   const loadMoreInFlightRef = useRef<Promise<void> | null>(null);
   const mode = options?.mode === "paged" ? "paged" : "complete";
   const includeUpcoming = options?.includeUpcoming === true;
@@ -95,6 +96,8 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
   const fetchBookings = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
     const fetchEpoch = ++fetchEpochRef.current;
+    const managesLoading = !silent || loadingEpochRef.current !== null;
+    if (managesLoading) loadingEpochRef.current = fetchEpoch;
     if (!userId) {
       loadedPageCountRef.current = 1;
       setRows([]);
@@ -143,7 +146,14 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
         setError(fetchError instanceof Error ? fetchError.message : "Could not load bookings.");
       }
     } finally {
-      if (!silent) setLoading(false);
+      if (
+        managesLoading &&
+        fetchEpoch === fetchEpochRef.current &&
+        loadingEpochRef.current === fetchEpoch
+      ) {
+        loadingEpochRef.current = null;
+        setLoading(false);
+      }
     }
   }, [applyPageInfo, includeUpcoming, mode, userId]);
 

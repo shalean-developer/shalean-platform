@@ -5,6 +5,7 @@ import {
   CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT,
   loadCustomerBookingPageForUser,
 } from "@/lib/customer/customerBookingPageForUser";
+import type { BookingRow } from "@/lib/dashboard/types";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -16,6 +17,39 @@ function parsePageLimit(url: URL): number {
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed < 1) return CUSTOMER_BOOKINGS_PAGE_DEFAULT_LIMIT;
   return Math.min(parsed, CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT);
+}
+
+async function loadLegacyCompleteBookingHistory(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  userId: string,
+  viewerEmail: string | null,
+) {
+  const bookings: BookingRow[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+
+  do {
+    const out = await loadCustomerBookingPageForUser(admin, userId, {
+      viewerEmail,
+      cursor,
+      limit: CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT,
+      view: "all",
+    });
+    if (!out.ok) return out;
+    bookings.push(...out.bookings);
+
+    const nextCursor = out.pageInfo.hasMore ? out.pageInfo.nextCursor : null;
+    if (!nextCursor) {
+      return { ok: true as const, bookings, pageInfo: { hasMore: false, nextCursor: null } };
+    }
+    if (seenCursors.has(nextCursor)) {
+      return { ok: false as const, error: "Bookings pagination did not converge.", status: 500 };
+    }
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  } while (cursor);
+
+  return { ok: true as const, bookings, pageInfo: { hasMore: false, nextCursor: null } };
 }
 
 /**
@@ -47,12 +81,16 @@ export async function GET(request: Request) {
   }
 
   const url = new URL(request.url);
-  const out = await loadCustomerBookingPageForUser(admin, userData.user.id, {
-    viewerEmail: typeof userData.user.email === "string" ? userData.user.email : null,
-    cursor: url.searchParams.get("cursor"),
-    limit: parsePageLimit(url),
-    view: url.searchParams.get("view") === "upcoming" ? "upcoming" : "all",
-  });
+  const viewerEmail = typeof userData.user.email === "string" ? userData.user.email : null;
+  const legacyNoParameterRequest = url.searchParams.size === 0;
+  const out = legacyNoParameterRequest
+    ? await loadLegacyCompleteBookingHistory(admin, userData.user.id, viewerEmail)
+    : await loadCustomerBookingPageForUser(admin, userData.user.id, {
+        viewerEmail,
+        cursor: url.searchParams.get("cursor"),
+        limit: parsePageLimit(url),
+        view: url.searchParams.get("view") === "upcoming" ? "upcoming" : "all",
+      });
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: out.status });
   }

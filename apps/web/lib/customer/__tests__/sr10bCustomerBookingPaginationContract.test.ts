@@ -107,6 +107,16 @@ describe("SR-10B customer booking pagination", () => {
     expect(page).toContain("void loadMore()");
   });
 
+  it("preserves complete history for deployed no-parameter clients with bounded internal pages", () => {
+    const route = read("apps/web/app/api/customer/bookings/route.ts");
+    expect(route).toContain("const legacyNoParameterRequest =");
+    expect(route).toContain("url.searchParams.size === 0");
+    expect(route).toContain("loadLegacyCompleteBookingHistory");
+    expect(route).toContain("limit: CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT");
+    expect(route).toContain("seenCursors.has(nextCursor)");
+    expect(route).toContain("cursor = nextCursor");
+  });
+
   it("keeps complete-history consumers explicit while account bookings stays paged", () => {
     const hook = read("apps/web/hooks/useBookings.ts");
     const page = read("apps/web/app/(ui-redesign)/account/bookings/page.tsx");
@@ -137,12 +147,14 @@ describe("SR-10B customer booking pagination", () => {
     expect(hook).toContain("loadedPageCountRef.current");
     expect(hook).toContain("loadedPageCountRef.current += 1");
     expect(hook).toContain("const fetchEpochRef = useRef(0)");
+    expect(hook).toContain("const loadingEpochRef = useRef<number | null>(null)");
     expect(hook).toContain("const loadMoreInFlightRef = useRef<Promise<void> | null>(null)");
     expect(hook).toContain("if (pendingLoadMore) await pendingLoadMore");
     expect(hook).toContain("if (fetchEpoch !== fetchEpochRef.current)");
     expect(hook).toContain("fetchEpochRef.current += 1");
     expect(hook).toContain("} catch (fetchError) {");
-    expect(hook).toContain("if (!silent) setLoading(false)");
+    expect(hook).toContain("fetchEpoch === fetchEpochRef.current");
+    expect(hook).toContain("loadingEpochRef.current === fetchEpoch");
     expect(hook).toContain("} catch (loadMoreError) {");
     expect(hook).toContain("} finally {");
     expect(hook).toContain("setLoadingMore(false)");
