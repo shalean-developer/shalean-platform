@@ -21,7 +21,7 @@ No changes are made to authentication, authorization, retry handling, redirects,
 
 ## Regression evidence
 
-`apps/web/src/features/office/__tests__/sr12bOfficeDeniedGateFocusContract.test.ts` is discovered by the normal Vitest configuration introduced with SR-12A.
+`apps/web/src/features/office/__tests__/sr12bOfficeDeniedGateFocusContract.test.ts` is invoked explicitly by the required Admin RBAC Priority 2 workflow as well as being discovered by the normal Vitest configuration introduced with SR-12A.
 
 ## Decision
 
