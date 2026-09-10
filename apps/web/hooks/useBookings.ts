@@ -145,6 +145,8 @@ export function useBookings(options?: {
           }
           nextRows = mergeBookingRows(nextRows, upcoming.rows);
         }
+        setRows(nextRows);
+        applyPageInfo(mode === "paged" ? out.pageInfo : undefined);
         if (includeCompleteReviewHistory) {
           const reviewHistory = await fetchBookingPages({});
           if (fetchEpoch !== fetchEpochRef.current) return;
@@ -154,8 +156,6 @@ export function useBookings(options?: {
           }
           setReviewRows(reviewHistory.rows);
         }
-        setRows(nextRows);
-        applyPageInfo(mode === "paged" ? out.pageInfo : undefined);
         setError(null);
       }
     } catch (fetchError) {

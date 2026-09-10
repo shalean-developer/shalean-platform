@@ -161,6 +161,21 @@ describe("SR-10B customer booking pagination", () => {
     expect(hook).toContain("seenCursors.has(nextCursor)");
   });
 
+  it("keeps reviewed booking IDs complete and visible pages independent of review-history failures", () => {
+    const hook = read("apps/web/hooks/useBookings.ts");
+    const reviewLoader = read("apps/web/lib/customer/loadCustomerReviewsForUser.ts");
+    expect(reviewLoader).toContain("CUSTOMER_REVIEWS_PAGE_SIZE = 100");
+    expect(reviewLoader).toContain(".range(offset, offset + CUSTOMER_REVIEWS_PAGE_SIZE - 1)");
+    expect(reviewLoader).toContain('.order("id", { ascending: false })');
+    expect(reviewLoader).toContain("offset += CUSTOMER_REVIEWS_PAGE_SIZE");
+    expect(reviewLoader).not.toContain(".limit(100)");
+
+    const visibleCommit = hook.indexOf("setRows(nextRows)");
+    const reviewTraversal = hook.indexOf("const reviewHistory = await fetchBookingPages({})");
+    expect(visibleCommit).toBeGreaterThan(-1);
+    expect(reviewTraversal).toBeGreaterThan(visibleCommit);
+  });
+
   it("keeps customer-mobile history complete through the same bounded cursor contract", () => {
     const hook = read("apps/customer-mobile/hooks/useCustomerBookings.ts");
     const types = read("apps/customer-mobile/services/types/customerBookings.ts");
