@@ -69,7 +69,8 @@ describe("SR-10B customer booking pagination", () => {
     const hook = read("apps/customer-mobile/hooks/useCustomerBookings.ts");
     const types = read("apps/customer-mobile/services/types/customerBookings.ts");
     const api = read("packages/api-client/src/domains/customerBookings.ts");
-    expect(hook).toContain("{ cursor, limit: 25 }");
+    expect(hook).toContain("cursor,");
+    expect(hook).toContain("limit: 25,");
     expect(hook).toContain("seenCursors.has(nextCursor)");
     expect(types).toContain("pageInfo?:");
     expect(api).toContain('query.set("cursor", params.cursor)');
