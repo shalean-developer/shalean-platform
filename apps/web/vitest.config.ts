@@ -13,6 +13,7 @@ export default defineConfig({
       "lib/**/*.test.ts",
       "app/api/**/__tests__/*.test.ts",
       "components/admin/office/__tests__/*.test.ts",
+      "src/features/office/__tests__/*.test.ts",
     ],
     pool: "threads",
     poolOptions: {
