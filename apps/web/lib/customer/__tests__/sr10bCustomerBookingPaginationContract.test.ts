@@ -8,6 +8,7 @@ import {
   compareCustomerBookingRowsDesc,
   decodeCustomerBookingsCursor,
   encodeCustomerBookingsCursor,
+  loadCustomerBookingPageForUser,
   normalizeCustomerBookingsPageLimit,
 } from "@/lib/customer/customerBookingPageForUser";
 
@@ -55,6 +56,20 @@ describe("SR-10B customer booking pagination", () => {
       created_at: "2026-08-29T08:00:00.123455+00:00",
     };
     expect([older, newer].sort(compareCustomerBookingRowsDesc)).toEqual([newer, older]);
+  });
+
+  it("rejects calendar-invalid microsecond cursors with HTTP 400 before querying", async () => {
+    const cursor = Buffer.from(JSON.stringify({
+      id: "00000000-0000-4000-8000-000000000123",
+      createdAt: "2026-02-31T08:00:00.123456+00:00",
+    })).toString("base64url");
+
+    expect(decodeCustomerBookingsCursor(cursor)).toBeNull();
+    await expect(loadCustomerBookingPageForUser({} as never, "customer-id", { cursor })).resolves.toEqual({
+      ok: false,
+      error: "Invalid bookings cursor.",
+      status: 400,
+    });
   });
 
   it("uses a bounded cursor query and keeps pending-payment rows visible", () => {

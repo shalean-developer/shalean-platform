@@ -35,9 +35,23 @@ const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3
 const POSTGRES_TIMESTAMP_PATTERN =
   /^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,6}))?(Z|[+-]\d{2}:\d{2})$/;
 
+function isValidGregorianTimestampMatch(match: RegExpExecArray): boolean {
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4]);
+  const minute = Number(match[5]);
+  const second = Number(match[6]);
+
+  if (month < 1 || month > 12 || hour > 23 || minute > 59 || second > 59) return false;
+  const leapYear = year % 4 === 0 && (year % 100 !== 0 || year % 400 === 0);
+  const daysInMonth = [31, leapYear ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+  return day >= 1 && day <= daysInMonth[month - 1];
+}
+
 function parsePostgresTimestampSortKey(value: string): { epochSecond: number; fraction: string } | null {
   const match = POSTGRES_TIMESTAMP_PATTERN.exec(value.trim());
-  if (!match) return null;
+  if (!match || !isValidGregorianTimestampMatch(match)) return null;
   const parsedMs = Date.parse(value);
   if (!Number.isFinite(parsedMs)) return null;
   return {
