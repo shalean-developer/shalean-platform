@@ -30,35 +30,88 @@ import {
 } from "@/lib/customer/customerCleanerNameEnrichment";
 import { fetchTeamRosterByBookingIds } from "@/lib/cleaner/fetchTeamRosterByBookingIds";
 
-async function enrichCustomerBookingRowFromSavedAddress(
+type SavedAddressCandidate = {
+  id: string;
+  user_id: string;
+  line1: string | null;
+  suburb: string | null;
+  created_at: string | null;
+};
+
+const SAVED_ADDRESS_BATCH_PAGE_SIZE = 500;
+
+function savedAddressLookupKey(ownerId: string, suburb: string): string {
+  return `${ownerId}\u0000${suburb.trim()}`;
+}
+
+async function enrichCustomerBookingRowsFromSavedAddresses(
   admin: SupabaseClient,
-  row: BookingRow,
-): Promise<BookingRow> {
-  const ownerId = bookingCustomerKey(row);
-  if (row.location?.trim() || !ownerId) return row;
-  const suburb = row.suburb?.trim();
-  if (!suburb) return row;
+  rows: BookingRow[],
+): Promise<void> {
+  const targets = rows
+    .map((row, index) => ({
+      row,
+      index,
+      ownerId: bookingCustomerKey(row),
+      suburb: row.suburb?.trim() ?? "",
+    }))
+    .filter((item) => !item.row.location?.trim() && Boolean(item.ownerId) && Boolean(item.suburb));
 
-  const { data, error } = await admin
-    .from("customer_saved_addresses")
-    .select("line1, suburb, city, created_at")
-    .eq("user_id", ownerId)
-    .eq("suburb", suburb)
-    .order("created_at", { ascending: false })
-    .limit(3);
+  if (targets.length === 0) return;
 
-  if (error || !data?.length) return row;
+  const ownerIds = Array.from(new Set(targets.map((item) => item.ownerId!).filter(Boolean)));
+  const suburbs = Array.from(new Set(targets.map((item) => item.suburb).filter(Boolean)));
+  const candidates: SavedAddressCandidate[] = [];
 
-  const bookingCreatedMs = Date.parse(row.created_at);
-  const picked =
-    data.find((addr) => {
-      const createdMs = Date.parse(String((addr as { created_at?: string }).created_at ?? ""));
-      return Number.isFinite(bookingCreatedMs) && Number.isFinite(createdMs) && Math.abs(createdMs - bookingCreatedMs) < 5 * 60 * 1000;
-    }) ?? data[0];
+  for (let from = 0; ; from += SAVED_ADDRESS_BATCH_PAGE_SIZE) {
+    const { data, error } = await admin
+      .from("customer_saved_addresses")
+      .select("id, user_id, line1, suburb, created_at")
+      .in("user_id", ownerIds)
+      .in("suburb", suburbs)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, from + SAVED_ADDRESS_BATCH_PAGE_SIZE - 1);
 
-  const line1 = typeof (picked as { line1?: unknown }).line1 === "string" ? (picked as { line1: string }).line1.trim() : "";
-  if (!line1) return row;
-  return { ...row, location: line1 };
+    if (error) return;
+
+    const page = (data ?? []) as SavedAddressCandidate[];
+    candidates.push(...page);
+    if (page.length < SAVED_ADDRESS_BATCH_PAGE_SIZE) break;
+  }
+
+  if (candidates.length === 0) return;
+
+  const candidatesByKey = new Map<string, SavedAddressCandidate[]>();
+  for (const candidate of candidates) {
+    const ownerId = String(candidate.user_id ?? "").trim();
+    const suburb = String(candidate.suburb ?? "").trim();
+    if (!ownerId || !suburb) continue;
+    const key = savedAddressLookupKey(ownerId, suburb);
+    const existing = candidatesByKey.get(key);
+    if (existing) existing.push(candidate);
+    else candidatesByKey.set(key, [candidate]);
+  }
+
+  for (const target of targets) {
+    const ownerId = target.ownerId!;
+    const matching = candidatesByKey.get(savedAddressLookupKey(ownerId, target.suburb)) ?? [];
+    if (matching.length === 0) continue;
+
+    const bookingCreatedMs = Date.parse(target.row.created_at);
+    const picked =
+      matching.find((address) => {
+        const createdMs = Date.parse(String(address.created_at ?? ""));
+        return (
+          Number.isFinite(bookingCreatedMs) &&
+          Number.isFinite(createdMs) &&
+          Math.abs(createdMs - bookingCreatedMs) < 5 * 60 * 1000
+        );
+      }) ?? matching[0];
+
+    const line1 = String(picked?.line1 ?? "").trim();
+    if (line1) rows[target.index] = { ...target.row, location: line1 };
+  }
 }
 
 export type LoadCustomerBookingsOptions = {
@@ -186,9 +239,7 @@ export async function loadCustomerBookingRowsForUser(
   // Skipped entirely for solo-cleaner pages (no extra round-trip).
   await enrichRowsWithCleanerDisplayNames(admin, rows, userId);
 
-  for (let i = 0; i < rows.length; i += 1) {
-    rows[i] = await enrichCustomerBookingRowFromSavedAddress(admin, rows[i]!);
-  }
+  await enrichCustomerBookingRowsFromSavedAddresses(admin, rows);
 
   return { ok: true, bookings: rows };
 }
@@ -270,6 +321,7 @@ export async function loadCustomerBookingRowForUser(
   }
   const enriched = attachCanonicalCustomerBookingLifecycle(row);
   await enrichRowsWithCleanerDisplayNames(admin, [enriched], userId);
-  const withAddress = await enrichCustomerBookingRowFromSavedAddress(admin, enriched);
-  return { ok: true, booking: withAddress };
+  const detailRows = [enriched];
+  await enrichCustomerBookingRowsFromSavedAddresses(admin, detailRows);
+  return { ok: true, booking: detailRows[0]! };
 }
