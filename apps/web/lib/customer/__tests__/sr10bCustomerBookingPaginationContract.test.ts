@@ -176,7 +176,9 @@ describe("SR-10B customer booking pagination", () => {
     expect(reviewsHook).toContain("REVIEW_ELIGIBILITY_BATCH_SIZE = 100");
     expect(reviewsHook).toContain("normalizedIds.slice(offset, offset + REVIEW_ELIGIBILITY_BATCH_SIZE)");
     expect(reviewsHook).toContain('method: "POST"');
-    expect(reviewsHook).toContain("setCompletedKey(requestKey)");
+    expect(reviewsHook).toContain("setCompletedRequest(normalizedIds)");
+    expect(reviewsHook).toContain("completedRequest !== normalizedIds");
+    expect(reviewsHook).not.toContain("completedKey !== requestKey");
     expect(reviewsRoute).toContain("REVIEW_ID_LOOKUP_MAX = 100");
     expect(reviewsRoute).toContain('.in("booking_id", bookingIds)');
     expect(reviewsRoute).toContain('.eq("user_id", auth.session.userId)');

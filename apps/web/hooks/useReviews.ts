@@ -24,7 +24,7 @@ export function useReviewedBookingIds(eligibleBookingIds: string[] | null): {
   );
   const requestKey = normalizedIds?.join(",") ?? null;
   const [reviewedIds, setReviewedIds] = useState<string[]>([]);
-  const [completedKey, setCompletedKey] = useState<string | null>(null);
+  const [completedRequest, setCompletedRequest] = useState<ReadonlyArray<string> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -46,12 +46,12 @@ export function useReviewedBookingIds(eligibleBookingIds: string[] | null): {
         }
         if (!cancelled) {
           setReviewedIds(Array.from(found));
-          setCompletedKey(requestKey);
+          setCompletedRequest(normalizedIds);
         }
       } catch (lookupError) {
         if (!cancelled) {
           setReviewedIds([]);
-          setCompletedKey(null);
+          setCompletedRequest(null);
           setError(lookupError instanceof Error ? lookupError.message : "Could not verify reviewed bookings.");
         }
       }
@@ -62,7 +62,7 @@ export function useReviewedBookingIds(eligibleBookingIds: string[] | null): {
 
   return {
     reviewedIds: useMemo(() => new Set(reviewedIds), [reviewedIds]),
-    loading: requestKey == null || completedKey !== requestKey,
+    loading: normalizedIds == null || completedRequest !== normalizedIds,
     error,
   };
 }
