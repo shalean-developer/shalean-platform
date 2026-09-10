@@ -21,9 +21,14 @@ type Gate = "denied" | "ready";
 
 function OfficeSkeleton() {
   return (
-    <div className="flex min-h-screen flex-col bg-background">
-      <div className="h-16 animate-pulse border-b border-border bg-card" />
-      <div className="flex flex-1">
+    <div
+      className="flex min-h-screen flex-col bg-background"
+      role="status"
+      aria-live="polite"
+    >
+      <span className="sr-only">Loading Office workspace…</span>
+      <div aria-hidden="true" className="h-16 animate-pulse border-b border-border bg-card" />
+      <div aria-hidden="true" className="flex flex-1">
         <div className="hidden w-[220px] animate-pulse border-r border-border bg-[--sidebar-bg] md:block" />
         <div className="flex-1 space-y-[var(--ui-space-4)] bg-muted/20 p-[var(--ui-space-6)]">
           <div className="h-8 w-64 animate-pulse rounded-[var(--ui-radius-lg)] bg-muted" />
