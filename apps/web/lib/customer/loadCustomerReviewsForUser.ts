@@ -11,22 +11,33 @@ const CUSTOMER_REVIEWS_PAGE_SIZE = 100;
 
 async function loadAllCustomerReviewRows(admin: SupabaseClient, userId: string) {
   const reviews: ReviewRow[] = [];
-  let offset = 0;
+  const seenCursors = new Set<string>();
+  let cursor: { createdAt: string; id: string } | null = null;
 
   while (true) {
-    const { data, error } = await admin
+    let query = admin
       .from("reviews")
       .select("id, booking_id, user_id, cleaner_id, rating, comment, created_at")
-      .eq("user_id", userId)
+      .eq("user_id", userId);
+    if (cursor) {
+      query = query.or(
+        `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`,
+      );
+    }
+    const { data, error } = await query
       .order("created_at", { ascending: false })
       .order("id", { ascending: false })
-      .range(offset, offset + CUSTOMER_REVIEWS_PAGE_SIZE - 1);
+      .limit(CUSTOMER_REVIEWS_PAGE_SIZE);
 
     if (error) return { ok: false as const };
     const page = (data ?? []) as ReviewRow[];
     reviews.push(...page);
     if (page.length < CUSTOMER_REVIEWS_PAGE_SIZE) return { ok: true as const, reviews };
-    offset += CUSTOMER_REVIEWS_PAGE_SIZE;
+    const last = page.at(-1);
+    const nextCursor = `${String(last?.created_at ?? "")}\u0000${String(last?.id ?? "")}`;
+    if (!last?.created_at || !last.id || seenCursors.has(nextCursor)) return { ok: false as const };
+    seenCursors.add(nextCursor);
+    cursor = { createdAt: String(last.created_at), id: String(last.id) };
   }
 }
 

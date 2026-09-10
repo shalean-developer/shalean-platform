@@ -116,15 +116,15 @@ export default function AccountBookingsPage() {
   const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
 
   const firstPendingReviewBookingId = useMemo(() => {
-    if (revLoading) return null;
+    if (revLoading || revError) return null;
     const row = reviewBookings.find((b) => isBookingPendingCustomerReview(b, reviewedIds));
     return row?.id ?? null;
-  }, [reviewBookings, reviewedIds, revLoading]);
+  }, [reviewBookings, reviewedIds, revError, revLoading]);
 
   const pendingReviewCount = useMemo(() => {
-    if (revLoading) return 0;
+    if (revLoading || revError) return 0;
     return reviewBookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds)).length;
-  }, [reviewBookings, reviewedIds, revLoading]);
+  }, [reviewBookings, reviewedIds, revError, revLoading]);
 
   const upcoming = useMemo(
     () =>
@@ -173,7 +173,7 @@ export default function AccountBookingsPage() {
 
   const tableProps = {
     reviewedIds,
-    revLoading,
+    revLoading: revLoading || Boolean(revError),
     detailHref: (id: string) => `/account/bookings/${id}`,
   };
 
@@ -369,7 +369,7 @@ export default function AccountBookingsPage() {
                         <BookingCard
                           booking={b}
                           detailHref={`/account/bookings/${b.id}`}
-                          leaveReviewHref={leaveReviewHrefForBooking(b, reviewedIds, revLoading)}
+                          leaveReviewHref={leaveReviewHrefForBooking(b, reviewedIds, revLoading || Boolean(revError))}
                           onCancel={cancelBooking}
                           onReschedule={rescheduleBooking}
                         />

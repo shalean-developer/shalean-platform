@@ -53,9 +53,9 @@ function ReviewsContent() {
   const reviewedIds = useMemo(() => new Set(reviews.map((r) => r.booking_id)), [reviews]);
 
   const pendingReviews = useMemo(() => {
-    if (bookLoading || revLoading) return [];
+    if (bookLoading || revLoading || revError) return [];
     return bookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds));
-  }, [bookings, reviewedIds, bookLoading, revLoading]);
+  }, [bookings, reviewedIds, bookLoading, revError, revLoading]);
 
   const avgRating = useMemo(() => {
     if (reviews.length === 0) return 0;

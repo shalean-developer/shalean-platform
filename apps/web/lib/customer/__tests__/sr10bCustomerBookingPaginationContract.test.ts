@@ -165,15 +165,29 @@ describe("SR-10B customer booking pagination", () => {
     const hook = read("apps/web/hooks/useBookings.ts");
     const reviewLoader = read("apps/web/lib/customer/loadCustomerReviewsForUser.ts");
     expect(reviewLoader).toContain("CUSTOMER_REVIEWS_PAGE_SIZE = 100");
-    expect(reviewLoader).toContain(".range(offset, offset + CUSTOMER_REVIEWS_PAGE_SIZE - 1)");
+    expect(reviewLoader).toContain("const seenCursors = new Set<string>()");
+    expect(reviewLoader).toContain("created_at.lt.${cursor.createdAt}");
+    expect(reviewLoader).toContain("created_at.eq.${cursor.createdAt}");
+    expect(reviewLoader).toContain("id.lt.${cursor.id}");
     expect(reviewLoader).toContain('.order("id", { ascending: false })');
-    expect(reviewLoader).toContain("offset += CUSTOMER_REVIEWS_PAGE_SIZE");
-    expect(reviewLoader).not.toContain(".limit(100)");
+    expect(reviewLoader).toContain(".limit(CUSTOMER_REVIEWS_PAGE_SIZE)");
+    expect(reviewLoader).toContain("seenCursors.has(nextCursor)");
+    expect(reviewLoader).not.toContain(".range(");
 
     const visibleCommit = hook.indexOf("setRows(nextRows)");
     const reviewTraversal = hook.indexOf("const reviewHistory = await fetchBookingPages({})");
     expect(visibleCommit).toBeGreaterThan(-1);
     expect(reviewTraversal).toBeGreaterThan(visibleCommit);
+  });
+
+  it("suppresses pending-review prompts and actions when reviewed-ID loading fails", () => {
+    const page = read("apps/web/app/(ui-redesign)/account/bookings/page.tsx");
+    const reviewsPage = read("apps/web/app/(ui-redesign)/account/reviews/page.tsx");
+    expect(page).toContain("if (revLoading || revError) return null");
+    expect(page).toContain("if (revLoading || revError) return 0");
+    expect(page).toContain("revLoading: revLoading || Boolean(revError)");
+    expect(page).toContain("revLoading || Boolean(revError)");
+    expect(reviewsPage).toContain("if (bookLoading || revLoading || revError) return []");
   });
 
   it("keeps customer-mobile history complete through the same bounded cursor contract", () => {
