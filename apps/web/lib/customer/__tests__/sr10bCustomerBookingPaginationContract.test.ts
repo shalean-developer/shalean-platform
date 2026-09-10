@@ -40,6 +40,12 @@ describe("SR-10B customer booking pagination", () => {
       createdAt: "2026-08-29T08:00:00.000Z",
     })).toString("base64url");
     expect(decodeCustomerBookingsCursor(invalidIdCursor)).toBeNull();
+
+    const exhaustedCursor = encodeCustomerBookingsCursor({
+      id: "00000000-0000-4000-8000-000000000123",
+      created_at: "2026-08-29T08:00:00.000Z",
+    }, { orphanExhausted: true });
+    expect(decodeCustomerBookingsCursor(exhaustedCursor)?.orphanExhausted).toBe(true);
   });
 
   it("preserves and orders PostgreSQL microsecond cursor boundaries", () => {
@@ -230,12 +236,17 @@ describe("SR-10B customer booking pagination", () => {
     expect(hook).toContain("} catch (loadMoreError) {");
     expect(hook).toContain("} finally {");
     expect(hook).toContain("setLoadingMore(false)");
+    expect(hook).toContain("if (includeCompleteReviewHistory) await fetchBookings({ silent: true })");
     expect(hook).toContain("fetchBookings({ silent: true })");
     expect(route).toContain('url.searchParams.get("view") === "review_eligibility"');
     expect(loader).toContain('.gte("date", cutoff)');
     expect(loader).toContain('.is("completed_at", null)');
     expect(loader).toContain('if (view === "review_eligibility")');
     expect(loader).toContain('error: "Could not load complete review eligibility."');
+    expect(loader).toContain("cursor?.orphanExhausted");
+    expect(loader).toContain("cursor?.ownedExhausted");
+    expect(loader).toContain("!orphanQueryFailed && orphanRowCount === 0");
+    expect(loader).toContain("encodeCustomerBookingsCursor(last, sourceState)");
   });
 
   it("rejects non-UUID cursor IDs before building a PostgREST filter", () => {

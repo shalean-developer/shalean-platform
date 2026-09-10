@@ -220,7 +220,8 @@ export function useBookings(options?: {
     } finally {
       if (loadMoreInFlightRef.current === task) loadMoreInFlightRef.current = null;
     }
-  }, [applyPageInfo, hasMore, loadingMore, nextCursor, userId]);
+    if (includeCompleteReviewHistory) await fetchBookings({ silent: true });
+  }, [applyPageInfo, fetchBookings, hasMore, includeCompleteReviewHistory, loadingMore, nextCursor, userId]);
 
   useEffect(() => {
     if (userLoading) return;

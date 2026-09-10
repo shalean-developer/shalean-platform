@@ -17,7 +17,12 @@ import { metrics } from "@/lib/metrics/counters";
 export const CUSTOMER_BOOKINGS_PAGE_DEFAULT_LIMIT = 25;
 export const CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT = 50;
 
-type BookingCursor = { createdAt: string; id: string };
+type BookingCursor = {
+  createdAt: string;
+  id: string;
+  ownedExhausted?: true;
+  orphanExhausted?: true;
+};
 
 export type CustomerBookingPageInfo = {
   nextCursor: string | null;
@@ -85,13 +90,16 @@ export function normalizeCustomerBookingsPageLimit(input: number | undefined): n
   return Math.min(CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT, Math.max(1, Math.trunc(input!)));
 }
 
-export function encodeCustomerBookingsCursor(row: Pick<BookingRow, "id" | "created_at">): string {
+export function encodeCustomerBookingsCursor(
+  row: Pick<BookingRow, "id" | "created_at">,
+  sourceState?: Pick<BookingCursor, "ownedExhausted" | "orphanExhausted">,
+): string {
   const createdAt = String(row.created_at ?? "").trim();
   if (!parsePostgresTimestampSortKey(createdAt) || !UUID_PATTERN.test(String(row.id))) {
     throw new Error("Cannot encode an invalid customer bookings cursor.");
   }
   return Buffer.from(
-    JSON.stringify({ createdAt, id: String(row.id) } satisfies BookingCursor),
+    JSON.stringify({ createdAt, id: String(row.id), ...sourceState } satisfies BookingCursor),
     "utf8",
   ).toString("base64url");
 }
@@ -104,7 +112,12 @@ export function decodeCustomerBookingsCursor(raw: string | null | undefined): Bo
     const id = typeof parsed.id === "string" ? parsed.id.trim() : "";
     const createdAt = typeof parsed.createdAt === "string" ? parsed.createdAt.trim() : "";
     if (!UUID_PATTERN.test(id) || !parsePostgresTimestampSortKey(createdAt)) return null;
-    return { createdAt, id };
+    return {
+      createdAt,
+      id,
+      ...(parsed.ownedExhausted === true ? { ownedExhausted: true as const } : {}),
+      ...(parsed.orphanExhausted === true ? { orphanExhausted: true as const } : {}),
+    };
   } catch {
     return null;
   }
@@ -172,20 +185,24 @@ export async function loadCustomerBookingPageForUser(
     ? "upcoming"
     : options?.view === "review_eligibility" ? "review_eligibility" : "all";
 
-  const owned = await loadSourceRows(admin, {
-    ownershipColumn,
-    userId,
-    cursor,
-    fetchLimit,
-    view,
-  });
+  const owned = cursor?.ownedExhausted
+    ? { data: [] as unknown[], error: null }
+    : await loadSourceRows(admin, {
+        ownershipColumn,
+        userId,
+        cursor,
+        fetchLimit,
+        view,
+      });
   if (owned.error) {
     void reportOperationalIssue("error", "customer/bookings/page", owned.error.message, { userId, ownershipColumn });
     return { ok: false, error: "Could not load bookings.", status: 500 };
   }
 
   const rawRows = ((owned.data ?? []) as BookingRow[]).map((row) => normalizeBookingCustomerIdentity(row));
-  if (viewerNorm.length >= 3) {
+  let orphanRowCount = 0;
+  let orphanQueryFailed = false;
+  if (viewerNorm.length >= 3 && !cursor?.orphanExhausted) {
     const orphan = await loadSourceRows(admin, {
       ownershipColumn,
       viewerNorm,
@@ -194,11 +211,13 @@ export async function loadCustomerBookingPageForUser(
       view,
     });
     if (orphan.error) {
+      orphanQueryFailed = true;
       if (view === "review_eligibility") {
         return { ok: false, error: "Could not load complete review eligibility.", status: 500 };
       }
       void reportOperationalIssue("warn", "customer/bookings/page_email_orphan", orphan.error.message, { userId });
     } else if (orphan.data?.length) {
+      orphanRowCount = orphan.data.length;
       metrics.increment("customer.bookings.email_orphan_merge_rows", { count: orphan.data.length });
       rawRows.push(...(orphan.data as BookingRow[]).map((row) => normalizeBookingCustomerIdentity(row)));
     }
@@ -219,12 +238,18 @@ export async function loadCustomerBookingPageForUser(
   await enrichCustomerBookingRowsFromSavedAddresses(admin, rows);
 
   const last = rows.at(-1);
+  const sourceState = {
+    ...(cursor?.ownedExhausted || (owned.data?.length ?? 0) === 0 ? { ownedExhausted: true as const } : {}),
+    ...(cursor?.orphanExhausted || viewerNorm.length < 3 || (!orphanQueryFailed && orphanRowCount === 0)
+      ? { orphanExhausted: true as const }
+      : {}),
+  };
   return {
     ok: true,
     bookings: rows,
     pageInfo: {
       hasMore,
-      nextCursor: hasMore && last ? encodeCustomerBookingsCursor(last) : null,
+      nextCursor: hasMore && last ? encodeCustomerBookingsCursor(last, sourceState) : null,
     },
   };
 }
