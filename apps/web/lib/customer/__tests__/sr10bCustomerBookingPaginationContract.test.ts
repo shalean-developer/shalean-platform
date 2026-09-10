@@ -137,6 +137,7 @@ describe("SR-10B customer booking pagination", () => {
     expect(hook).toContain("seenCursors.has(nextCursor)");
     expect(types).toContain("pageInfo?:");
     expect(api).toContain('query.set("cursor", params.cursor)');
+    expect(api).toContain('if (params) query.set("limit", String(params.limit ?? 25))');
   });
 
   it("loads upcoming independently and preserves paged depth during realtime refresh", () => {
@@ -151,7 +152,9 @@ describe("SR-10B customer booking pagination", () => {
     expect(hook).toContain("const loadMoreInFlightRef = useRef<Promise<void> | null>(null)");
     expect(hook).toContain("if (pendingLoadMore) await pendingLoadMore");
     expect(hook).toContain("if (fetchEpoch !== fetchEpochRef.current)");
-    expect(hook).toContain("fetchEpochRef.current += 1");
+    expect(hook).toContain("const loadMoreEpoch = ++fetchEpochRef.current");
+    expect(hook).toContain("if (inheritsLoading) loadingEpochRef.current = loadMoreEpoch");
+    expect(hook).toContain("loadingEpochRef.current === loadMoreEpoch");
     expect(hook).toContain("} catch (fetchError) {");
     expect(hook).toContain("fetchEpoch === fetchEpochRef.current");
     expect(hook).toContain("loadingEpochRef.current === fetchEpoch");

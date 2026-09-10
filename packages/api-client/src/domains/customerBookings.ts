@@ -9,7 +9,7 @@ export function createCustomerBookingsApi(client: ApiClient) {
     list<T = unknown>(params?: { cursor?: string | null; limit?: number }): Promise<ApiResult<T>> {
       const query = new URLSearchParams();
       if (params?.cursor) query.set("cursor", params.cursor);
-      if (params?.limit) query.set("limit", String(params.limit));
+      if (params) query.set("limit", String(params.limit ?? 25));
       const suffix = query.size > 0 ? `?${query}` : "";
       return client.requestJson<T>(`/api/customer/bookings${suffix}`, { method: "GET" });
     },

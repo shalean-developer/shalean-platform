@@ -161,7 +161,9 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
     if (!userId || !hasMore || !nextCursor || loadingMore || loadMoreInFlightRef.current) return;
 
     const task = (async () => {
-      fetchEpochRef.current += 1;
+      const loadMoreEpoch = ++fetchEpochRef.current;
+      const inheritsLoading = loadingEpochRef.current !== null;
+      if (inheritsLoading) loadingEpochRef.current = loadMoreEpoch;
       setLoadingMore(true);
       setError(null);
       try {
@@ -178,6 +180,14 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
       } catch (loadMoreError) {
         setError(loadMoreError instanceof Error ? loadMoreError.message : "Could not load older bookings.");
       } finally {
+        if (
+          inheritsLoading &&
+          loadMoreEpoch === fetchEpochRef.current &&
+          loadingEpochRef.current === loadMoreEpoch
+        ) {
+          loadingEpochRef.current = null;
+          setLoading(false);
+        }
         setLoadingMore(false);
       }
     })();
