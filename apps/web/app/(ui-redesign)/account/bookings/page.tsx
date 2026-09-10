@@ -99,6 +99,7 @@ function BookingsEmptyState({ kind }: { kind: "upcoming" | "past" }) {
 export default function AccountBookingsPage() {
   const {
     bookings,
+    reviewBookings,
     loading,
     loadingMore,
     hasMore,
@@ -107,7 +108,7 @@ export default function AccountBookingsPage() {
     loadMore,
     cancelBooking,
     rescheduleBooking,
-  } = useBookings({ mode: "paged", includeUpcoming: true });
+  } = useBookings({ mode: "paged", includeUpcoming: true, includeCompleteReviewHistory: true });
   const { reviews, loading: revLoading, error: revError } = useReviews();
   const { summary, loading: summaryLoading } = useDashboardSummary();
   const [view, setView] = useState<"cards" | "table">("cards");
@@ -116,14 +117,14 @@ export default function AccountBookingsPage() {
 
   const firstPendingReviewBookingId = useMemo(() => {
     if (revLoading) return null;
-    const row = bookings.find((b) => isBookingPendingCustomerReview(b, reviewedIds));
+    const row = reviewBookings.find((b) => isBookingPendingCustomerReview(b, reviewedIds));
     return row?.id ?? null;
-  }, [bookings, reviewedIds, revLoading]);
+  }, [reviewBookings, reviewedIds, revLoading]);
 
   const pendingReviewCount = useMemo(() => {
     if (revLoading) return 0;
-    return bookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds)).length;
-  }, [bookings, reviewedIds, revLoading]);
+    return reviewBookings.filter((b) => isBookingPendingCustomerReview(b, reviewedIds)).length;
+  }, [reviewBookings, reviewedIds, revLoading]);
 
   const upcoming = useMemo(
     () =>

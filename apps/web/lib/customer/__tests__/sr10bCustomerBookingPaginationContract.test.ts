@@ -86,6 +86,27 @@ describe("SR-10B customer booking pagination", () => {
     });
   });
 
+  it("rejects timezone offsets outside PostgreSQL's supported range with HTTP 400", async () => {
+    const invalidCursor = Buffer.from(JSON.stringify({
+      id: "00000000-0000-4000-8000-000000000123",
+      createdAt: "2026-08-29T08:00:00.123456+16:00",
+    })).toString("base64url");
+
+    expect(decodeCustomerBookingsCursor(invalidCursor)).toBeNull();
+    await expect(loadCustomerBookingPageForUser({} as never, "customer-id", { cursor: invalidCursor })).resolves.toEqual({
+      ok: false,
+      error: "Invalid bookings cursor.",
+      status: 400,
+    });
+
+    const boundary = "2026-08-29T08:00:00.123456+15:59";
+    const validCursor = encodeCustomerBookingsCursor({
+      id: "00000000-0000-4000-8000-000000000123",
+      created_at: boundary,
+    });
+    expect(decodeCustomerBookingsCursor(validCursor)?.createdAt).toBe(boundary);
+  });
+
   it("uses a bounded cursor query and keeps pending-payment rows visible", () => {
     const loader = read("apps/web/lib/customer/customerBookingPageForUser.ts");
     expect(loader).toContain("const fetchLimit = limit + 1");
@@ -125,7 +146,19 @@ describe("SR-10B customer booking pagination", () => {
     expect(hook).toContain("limit: String(CUSTOMER_BOOKINGS_PAGE_LIMIT)");
     expect(hook).toContain('query.set("cursor", cursor)');
     expect(hook).toContain("seenCursors.has(nextCursor)");
-    expect(page).toContain('useBookings({ mode: "paged", includeUpcoming: true })');
+    expect(page).toContain('useBookings({ mode: "paged", includeUpcoming: true, includeCompleteReviewHistory: true })');
+  });
+
+  it("computes pending-review prompts from independently complete bounded pages", () => {
+    const hook = read("apps/web/hooks/useBookings.ts");
+    const page = read("apps/web/app/(ui-redesign)/account/bookings/page.tsx");
+    expect(page).toContain("includeCompleteReviewHistory: true");
+    expect(page).toContain("reviewBookings.find");
+    expect(page).toContain("reviewBookings.filter");
+    expect(hook).toContain("const reviewHistory = await fetchBookingPages({})");
+    expect(hook).toContain("setReviewRows(reviewHistory.rows)");
+    expect(hook).toContain("limit: String(CUSTOMER_BOOKINGS_PAGE_LIMIT)");
+    expect(hook).toContain("seenCursors.has(nextCursor)");
   });
 
   it("keeps customer-mobile history complete through the same bounded cursor contract", () => {

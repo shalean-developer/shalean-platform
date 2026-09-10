@@ -61,8 +61,13 @@ function mergeBookingRows(existing: BookingRow[], incoming: BookingRow[]): Booki
   return Array.from(byId.values());
 }
 
-export function useBookings(options?: { mode?: "complete" | "paged"; includeUpcoming?: boolean }): {
+export function useBookings(options?: {
+  mode?: "complete" | "paged";
+  includeUpcoming?: boolean;
+  includeCompleteReviewHistory?: boolean;
+}): {
   bookings: DashboardBooking[];
+  reviewBookings: DashboardBooking[];
   loading: boolean;
   loadingMore: boolean;
   hasMore: boolean;
@@ -75,6 +80,7 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
   const { user, loading: userLoading } = useUser();
   const userId = user?.id;
   const [rows, setRows] = useState<BookingRow[]>([]);
+  const [reviewRows, setReviewRows] = useState<BookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
@@ -87,6 +93,7 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
   const loadMoreInFlightRef = useRef<Promise<void> | null>(null);
   const mode = options?.mode === "paged" ? "paged" : "complete";
   const includeUpcoming = options?.includeUpcoming === true;
+  const includeCompleteReviewHistory = options?.includeCompleteReviewHistory === true;
 
   const applyPageInfo = useCallback((pageInfo: CustomerBookingsPageInfo | undefined) => {
     setNextCursor(typeof pageInfo?.nextCursor === "string" ? pageInfo.nextCursor : null);
@@ -101,6 +108,7 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
     if (!userId) {
       loadedPageCountRef.current = 1;
       setRows([]);
+      setReviewRows([]);
       setNextCursor(null);
       setHasMore(false);
       setLoading(false);
@@ -137,6 +145,15 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
           }
           nextRows = mergeBookingRows(nextRows, upcoming.rows);
         }
+        if (includeCompleteReviewHistory) {
+          const reviewHistory = await fetchBookingPages({});
+          if (fetchEpoch !== fetchEpochRef.current) return;
+          if (!reviewHistory.ok) {
+            setError(reviewHistory.error);
+            return;
+          }
+          setReviewRows(reviewHistory.rows);
+        }
         setRows(nextRows);
         applyPageInfo(mode === "paged" ? out.pageInfo : undefined);
         setError(null);
@@ -155,7 +172,7 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
         setLoading(false);
       }
     }
-  }, [applyPageInfo, includeUpcoming, mode, userId]);
+  }, [applyPageInfo, includeCompleteReviewHistory, includeUpcoming, mode, userId]);
 
   const loadMore = useCallback(async () => {
     if (!userId || !hasMore || !nextCursor || loadingMore || loadMoreInFlightRef.current) return;
@@ -241,6 +258,7 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
   }, [userLoading, userId, fetchBookings]);
 
   const bookings = useMemo(() => rows.map((r) => mapBookingRow(r)), [rows]);
+  const reviewBookings = useMemo(() => reviewRows.map((r) => mapBookingRow(r)), [reviewRows]);
 
   const cancelBooking = useCallback(async (id: string) => {
     const out = await dashboardFetchJson<{ ok?: boolean; error?: string }>(`/api/customer/bookings/${id}/cancel`, {
@@ -273,6 +291,7 @@ export function useBookings(options?: { mode?: "complete" | "paged"; includeUpco
 
   return {
     bookings,
+    reviewBookings,
     loading: userLoading || loading,
     loadingMore,
     hasMore,
