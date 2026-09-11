@@ -6,7 +6,8 @@
  *   node scripts/env/seed-nonprod.mjs --env staging
  *   node scripts/env/seed-nonprod.mjs --env staging --reset
  *
- * Development is local-only and uses the governed `db:seed:dev` workflow.
+ * Development is local-only and uses the governed
+ * `npm run dev:local:seed:catalog` workflow.
  * Requires docs/audits/environments/evidence/.secrets-local/staging.keys.env
  * (gitignored). Never prints secret values.
  */

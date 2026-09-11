@@ -29,6 +29,8 @@ describe("retired development Supabase tooling", () => {
     const source = readRepositoryFile(relativePath);
     expect(source).toContain('env !== "staging"');
     expect(source).not.toMatch(/--env development|staging\|development/);
+    expect(source).toContain("npm run dev:local:seed:catalog");
+    expect(source).not.toContain("`db:seed:dev`");
   });
 
   it.each([
@@ -38,5 +40,15 @@ describe("retired development Supabase tooling", () => {
     const source = readRepositoryFile(relativePath);
     expect(source).not.toContain("gitBranch: 'development'");
     expect(source).not.toContain('load("development")');
+  });
+
+  it("runs this retirement contract in the enforced critical test command", () => {
+    const packageJson = JSON.parse(readRepositoryFile("apps/web/package.json")) as {
+      scripts?: Record<string, string>;
+    };
+
+    expect(packageJson.scripts?.["test:critical"]).toContain(
+      "lib/env/__tests__/retiredDevelopmentSupabaseTooling.test.ts",
+    );
   });
 });
