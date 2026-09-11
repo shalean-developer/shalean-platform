@@ -51,6 +51,7 @@ jobs:
           lib/admin/__tests__/operationsRoutePermissions.test.ts
           lib/auth/__tests__/linkedCleanerPortalSwitch.test.ts
           src/features/office/__tests__/OfficePermissionNavigationGate.operations.test.ts
+          src/features/office/__tests__/sr12bOfficeDeniedGateFocusContract.test.ts
       - name: Typecheck
         working-directory: apps/web
         run: npm run typecheck
