@@ -52,6 +52,7 @@ jobs:
           lib/auth/__tests__/linkedCleanerPortalSwitch.test.ts
           src/features/office/__tests__/OfficePermissionNavigationGate.operations.test.ts
           src/features/office/__tests__/sr12bOfficeDeniedGateFocusContract.test.ts
+          src/features/office/__tests__/sr12cOfficeMobileDialogNameContract.test.ts
       - name: Typecheck
         working-directory: apps/web
         run: npm run typecheck
