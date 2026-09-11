@@ -142,7 +142,7 @@ export function OfficeShell({ children }: { children: ReactNode }) {
   }, [pathname]);
 
   useEffect(() => {
-    if (!mobileOpen) return;
+    if (!mobileOpen || commandOpen) return;
     const down = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -151,7 +151,7 @@ export function OfficeShell({ children }: { children: ReactNode }) {
     };
     document.addEventListener("keydown", down);
     return () => document.removeEventListener("keydown", down);
-  }, [mobileOpen]);
+  }, [mobileOpen, commandOpen]);
 
   useEffect(() => {
     if (roleState.status === "unauthenticated" || roleState.status === "missing_profile") {

@@ -7,8 +7,9 @@ const source = readFileSync(
   "utf8",
 );
 const escapeEffect = source.slice(
-  source.indexOf("if (!mobileOpen) return;"),
-  source.indexOf("}, [mobileOpen]);") + "}, [mobileOpen]);".length,
+  source.indexOf("if (!mobileOpen || commandOpen) return;"),
+  source.indexOf("}, [mobileOpen, commandOpen]);") +
+    "}, [mobileOpen, commandOpen]);".length,
 );
 const mobileDrawer = source.slice(
   source.indexOf("{/* Mobile drawer */}"),
@@ -16,8 +17,8 @@ const mobileDrawer = source.slice(
 );
 
 describe("SR-12D Office mobile dialog Escape convergence", () => {
-  it("listens for Escape only while the mobile drawer is open", () => {
-    expect(escapeEffect).toContain("if (!mobileOpen) return;");
+  it("listens for Escape only while the drawer is the topmost open dialog", () => {
+    expect(escapeEffect).toContain("if (!mobileOpen || commandOpen) return;");
     expect(escapeEffect).toContain('if (event.key === "Escape")');
     expect(escapeEffect).toContain("event.preventDefault();");
     expect(escapeEffect).toContain("setMobileOpen(false);");
@@ -25,7 +26,13 @@ describe("SR-12D Office mobile dialog Escape convergence", () => {
     expect(escapeEffect).toContain(
       'return () => document.removeEventListener("keydown", down);',
     );
-    expect(escapeEffect).toContain("}, [mobileOpen]);");
+    expect(escapeEffect).toContain("}, [mobileOpen, commandOpen]);");
+  });
+
+  it("leaves the drawer open when Escape dismisses the command palette", () => {
+    expect(source).toContain("const [commandOpen, setCommandOpen] = useState(false)");
+    expect(source).toContain("<OfficeCommandPalette open={commandOpen}");
+    expect(escapeEffect).toContain("|| commandOpen");
   });
 
   it("preserves the named modal and existing open and close paths", () => {

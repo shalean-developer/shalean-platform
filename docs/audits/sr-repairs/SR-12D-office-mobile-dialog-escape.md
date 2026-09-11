@@ -13,6 +13,7 @@ The release shell already provided modal semantics, an accessible name, backdrop
 - Listen for `keydown` only while the mobile drawer is open.
 - Prevent the default Escape action and close the drawer when `Escape` is pressed.
 - Remove the listener when the drawer closes or the effect is cleaned up.
+- Suspend drawer Escape handling while the command palette is the topmost dialog, so one keypress dismisses only that palette.
 - Add executable regression coverage in the current Office test location.
 - Invoke the SR-12D contract explicitly in the required Admin RBAC Priority 2 workflow.
 
@@ -33,14 +34,16 @@ The existing named modal, close-menu button, sidebar close path, pathname-change
 
 Local validation from the isolated convergence worktree passed:
 
-- SR-12A through SR-12D targeted contracts: 4 files, 9 tests.
-- Enforced Admin RBAC Priority 2 matrix: 9 files, 44 tests.
+- SR-12A through SR-12D targeted contracts: 4 files, 10 tests.
+- Enforced Admin RBAC Priority 2 matrix: 9 files, 45 tests.
 - Production dependency audit, critical suite, privileged Office security contracts, revenue-path suite, marketing/Meta suite and booking-core lint.
 - TypeScript typecheck and the CI-equivalent Next.js Webpack production build.
 - Static blog-route, internal-link, SEO-governance and canonical-purity checks; live SEO and Search Console readiness checks.
 
-The complete GitHub exact-head workflow remains a pull-request gate and must run after separate approval to open the convergence pull request.
+The complete GitHub exact-head workflow must rerun against every repaired pull-request head.
+
+Final review found that the first convergence head could close the command palette and its underlying mobile drawer with the same Escape event. The repaired handler now remains inactive while `commandOpen` is true, preserving topmost-dialog dismissal. The strengthened contract explicitly locks this coordination.
 
 ## Decision
 
-**SR-12D — Implemented and locally validated / exact-head pull-request workflow pending.**
+**SR-12D — Review finding repaired and locally validated / repaired-head workflow pending.**
