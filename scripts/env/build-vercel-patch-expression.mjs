@@ -27,7 +27,6 @@ function load(env) {
 }
 
 const stg = load("staging");
-const dev = load("development");
 
 const expression = `((async () => {
   const projectId = 'prj_eA7rHVSDiDXslAmrGwkdS4BtlVAc';
@@ -37,10 +36,6 @@ const expression = `((async () => {
     { id: 'cpBa94mmofJoZ4J8', key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', gitBranch: 'staging', value: ${JSON.stringify(stg.SUPABASE_ANON_KEY)}, type: 'sensitive' },
     { id: 'jQqq2HofjPU2V4YO', key: 'SUPABASE_SERVICE_ROLE_KEY', gitBranch: 'staging', value: ${JSON.stringify(stg.SUPABASE_SERVICE_ROLE_KEY)}, type: 'sensitive' },
     { id: 'Ggujm1NqcRcIfoCS', key: 'SUPABASE_PROJECT_REF', gitBranch: 'staging', value: 'gbgnemlpyykyhpqqbgru', type: 'sensitive' },
-    { id: 'FhYRRUUabuV9bCaf', key: 'NEXT_PUBLIC_SUPABASE_URL', gitBranch: 'development', value: ${JSON.stringify(`https://mbvixuzfvzbooiurvxwz.supabase.co`)}, type: 'sensitive' },
-    { id: '08WNwBjUWJJaBiUW', key: 'NEXT_PUBLIC_SUPABASE_ANON_KEY', gitBranch: 'development', value: ${JSON.stringify(dev.SUPABASE_ANON_KEY)}, type: 'plain' },
-    { id: 'JSup8Pcw6HEQZV8s', key: 'SUPABASE_SERVICE_ROLE_KEY', gitBranch: 'development', value: ${JSON.stringify(dev.SUPABASE_SERVICE_ROLE_KEY)}, type: 'sensitive' },
-    { id: 'V3QHC1VXxf2HqAlz', key: 'SUPABASE_PROJECT_REF', gitBranch: 'development', value: 'mbvixuzfvzbooiurvxwz', type: 'plain' },
   ];
   const out = [];
   for (const p of patches) {
@@ -67,10 +62,6 @@ const outPath = resolve(
 if (!stg.SUPABASE_ANON_KEY || !stg.SUPABASE_SERVICE_ROLE_KEY) {
   throw new Error("staging keys incomplete after parse");
 }
-if (!dev.SUPABASE_ANON_KEY || !dev.SUPABASE_SERVICE_ROLE_KEY) {
-  throw new Error("development keys incomplete after parse");
-}
 writeFileSync(outPath, expression);
 console.log("expression_path=" + outPath);
 console.log("stg_anon_len=" + stg.SUPABASE_ANON_KEY.length);
-console.log("dev_anon_len=" + dev.SUPABASE_ANON_KEY.length);

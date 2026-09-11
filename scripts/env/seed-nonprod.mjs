@@ -4,10 +4,10 @@
  *
  * Usage:
  *   node scripts/env/seed-nonprod.mjs --env staging
- *   node scripts/env/seed-nonprod.mjs --env development
  *   node scripts/env/seed-nonprod.mjs --env staging --reset
  *
- * Requires docs/audits/environments/evidence/.secrets-local/{staging,development}.keys.env
+ * Development is local-only and uses the governed `db:seed:dev` workflow.
+ * Requires docs/audits/environments/evidence/.secrets-local/staging.keys.env
  * (gitignored). Never prints secret values.
  */
 import { createRequire } from "node:module";
@@ -24,7 +24,6 @@ const { createClient } = require("@supabase/supabase-js");
 
 const REFS = {
   staging: "gbgnemlpyykyhpqqbgru",
-  development: "mbvixuzfvzbooiurvxwz",
 };
 
 const USERS = {
@@ -33,18 +32,13 @@ const USERS = {
     { email: "staging-customer@shalean.test", role: "customer", name: "TEST Staging Customer" },
     { email: "staging-cleaner@shalean.test", role: "cleaner", name: "TEST Staging Cleaner" },
   ],
-  development: [
-    { email: "development-admin@shalean.test", role: "admin", name: "TEST Development Admin" },
-    { email: "development-customer@shalean.test", role: "customer", name: "TEST Development Customer" },
-    { email: "development-cleaner@shalean.test", role: "cleaner", name: "TEST Development Cleaner" },
-  ],
 };
 
 function parseArgs(argv) {
   const env = argv.includes("--env") ? argv[argv.indexOf("--env") + 1] : null;
   const reset = argv.includes("--reset");
-  if (!env || !REFS[env]) {
-    console.error("Usage: node scripts/env/seed-nonprod.mjs --env staging|development [--reset]");
+  if (env !== "staging") {
+    console.error("Usage: node scripts/env/seed-nonprod.mjs --env staging [--reset]");
     process.exit(1);
   }
   return { env, reset };
@@ -80,8 +74,7 @@ function loadKeys(env) {
 
 function marker(env) {
   const ts = new Date().toISOString().replace(/[-:]/g, "").replace(/\.\d+Z$/, "Z");
-  const prefix = env === "staging" ? "ENV-03-STG" : "ENV-03-DEV";
-  return `${prefix}-${ts}`;
+  return `ENV-03-STG-${ts}`;
 }
 
 async function ensureUsers(admin, env) {
@@ -161,8 +154,7 @@ async function ensureUsers(admin, env) {
 }
 
 async function seedBookings(admin, env, isolationMarker) {
-  const customerEmail =
-    env === "staging" ? "staging-customer@shalean.test" : "development-customer@shalean.test";
+  const customerEmail = "staging-customer@shalean.test";
   const { data: listed } = await admin.auth.admin.listUsers({ page: 1, perPage: 200 });
   const customer = listed?.users?.find((x) => x.email === customerEmail);
   if (!customer) throw new Error("customer auth user missing");
@@ -267,8 +259,7 @@ function applyCatalogSql(env) {
 }
 
 async function resetFixtures(admin, env) {
-  const prefix = env === "staging" ? "ENV-03-STG-%" : "ENV-03-DEV-%";
-  const { error } = await admin.from("bookings").delete().like("paystack_reference", prefix);
+  const { error } = await admin.from("bookings").delete().like("paystack_reference", "ENV-03-STG-%");
   if (error) throw new Error(`reset bookings: ${error.message}`);
 }
 
