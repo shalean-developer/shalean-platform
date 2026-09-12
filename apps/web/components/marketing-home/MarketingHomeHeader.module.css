@@ -1,7 +1,8 @@
 .root {
   --campaign-navy: #07194a;
   --campaign-blue: #2365df;
-  filter: drop-shadow(0 10px 24px rgb(7 25 74 / 0.12));
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgb(7 25 74 / 0.1);
 }
 
 .utilityBar {
@@ -33,33 +34,34 @@
 }
 
 .root > div:not(.utilityBar) {
-  background: var(--campaign-navy) !important;
+  background: #ffffff !important;
+  border-top: 1px solid #eef2f8;
   padding-bottom: 0.8rem !important;
   padding-top: 0.8rem !important;
 }
 
 .root nav[aria-label="Primary"] > a,
 .root nav[aria-label="Primary"] > div > button {
-  color: #ffffff !important;
+  color: var(--campaign-navy) !important;
 }
 
 .root nav[aria-label="Primary"] > a:hover,
 .root nav[aria-label="Primary"] > div > button:hover,
 .root nav[aria-label="Primary"] > div > button[aria-expanded="true"] {
-  background: rgb(255 255 255 / 0.12) !important;
+  background: #edf4ff !important;
 }
 
 .root a[aria-label="Shalean home"] {
-  background: #ffffff;
-  border-radius: 0.75rem;
-  padding: 0.35rem 0.7rem;
+  background: transparent;
+  border-radius: 0;
+  padding: 0;
 }
 
 .root button[aria-label="Open menu"],
 .root button[aria-label="Close menu"] {
-  background: rgb(255 255 255 / 0.1) !important;
-  border-color: rgb(255 255 255 / 0.2) !important;
-  color: #ffffff !important;
+  background: #edf4ff !important;
+  border-color: #d8e5fb !important;
+  color: var(--campaign-navy) !important;
 }
 
 .root a[href^="/auth/login"] {
