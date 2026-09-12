@@ -31,7 +31,7 @@ export function MarketingHomeFinalCta({
           <p className="text-[length:var(--ui-text-small)] font-semibold uppercase tracking-[0.14em] text-white/60">
             {eyebrow}
           </p>
-          <h2 className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-page-title)] font-semibold leading-[1.08] tracking-[-0.03em] text-white md:text-[length:var(--ui-text-hero-title)]">
+          <h2 className="mt-4 text-[clamp(2rem,3.6vw,3.5rem)] font-medium leading-[1.06] tracking-[-0.035em] text-white">
             {title}
           </h2>
           <p className="mt-[var(--ui-space-5)] max-w-2xl text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-white/75">

@@ -6,14 +6,14 @@ export function MarketingHomeFaqAccordion({ faqs }: { faqs: HomeFaq[] }) {
   return (
     <div className="overflow-hidden rounded-lg border border-[#DCE7FF] bg-card shadow-[var(--ui-shadow-sm)]">
       {faqs.map((faq) => (
-        <details key={faq.id} className="group border-b border-border last:border-b-0">
-          <summary className="flex w-full cursor-pointer list-none items-center justify-between gap-[var(--ui-space-4)] px-[var(--ui-space-5)] py-[var(--ui-space-5)] text-left text-[length:var(--ui-text-body)] font-medium text-foreground transition hover:bg-muted/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring sm:px-[var(--ui-space-6)] sm:py-[var(--ui-space-6)] [&::-webkit-details-marker]:hidden">
+        <details key={faq.id} className="group border-b border-[#DCE7FF] last:border-b-0">
+          <summary className="flex min-h-16 w-full cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 text-left text-base font-medium text-[#00164E] transition hover:bg-[#F5F7FB] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#0051FF] sm:px-6 [&::-webkit-details-marker]:hidden">
             <span>{faq.question}</span>
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-muted-foreground" aria-hidden>
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-[#EEF3FF] text-[#0033A1]" aria-hidden>
               <ChevronDown className="h-4 w-4 transition-transform group-open:rotate-180" />
             </span>
           </summary>
-          <div className="border-t border-border bg-muted/30 px-[var(--ui-space-5)] py-[var(--ui-space-5)] text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground sm:px-[var(--ui-space-6)]">
+          <div className="border-t border-[#DCE7FF] bg-[#F5F7FB] px-5 py-5 text-base leading-7 text-slate-600 sm:px-6">
             {faq.answer}
           </div>
         </details>

@@ -102,7 +102,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
                   </Link>
 
                   <div className="flex flex-1 flex-col px-6 pb-7 pt-5 md:px-7 md:pb-8 md:pt-6">
-                    <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+                    <h3 className="text-[length:var(--ui-text-section-title)] font-medium leading-[var(--ui-leading-tight)] tracking-tight text-[#00164E]">
                       {title}
                     </h3>
                     <p className="mt-[var(--ui-space-3)] text-[length:var(--ui-text-small)] leading-[var(--ui-leading-body)] text-muted-foreground">
@@ -112,7 +112,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
                     <div className="mt-auto pt-6">
                       <Link
                         href={href}
-                        className="inline-flex min-h-11 items-center gap-[var(--ui-space-2)] font-medium text-primary hover:underline hover:underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        className="inline-flex min-h-11 items-center gap-2 rounded-md bg-[#0051FF] px-4 text-xs font-semibold uppercase tracking-wide text-white shadow-[var(--ui-shadow-sm)] transition hover:bg-[#0033A1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051FF] focus-visible:ring-offset-2"
                       >
                         View service
                         <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden />
@@ -136,7 +136,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
             return (
               <article
                 key={group.id}
-                className="flex min-h-[400px] flex-col rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card p-[var(--ui-space-8)] text-card-foreground shadow-[var(--ui-shadow-md)] transition-transform duration-200 hover:-translate-y-1"
+                className="flex min-h-[400px] flex-col rounded-lg border border-[#DCE7FF] bg-card p-[var(--ui-space-8)] text-card-foreground shadow-[var(--ui-shadow-md)] transition-transform duration-200 hover:-translate-y-1"
               >
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#EFF6FF] text-primary" aria-hidden>
                   <GroupIcon className="h-8 w-8" strokeWidth={1.7} />
