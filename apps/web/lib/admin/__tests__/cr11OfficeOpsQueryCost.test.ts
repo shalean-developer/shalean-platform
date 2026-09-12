@@ -100,6 +100,9 @@ describe("CR-11 Office Ops query cost contract", () => {
     expect(migration).toContain("set search_path = ''");
     expect(migration).not.toContain("security definer");
     expect(migration).toContain(
+      "lower(btrim(coalesce(b.status, \'\'))) not in (\'cancelled\', \'failed\', \'payment_expired\')",
+    );
+    expect(migration).toContain(
       "grant execute on function public.owner_command_centre_analytics_rollup(timestamptz, timestamptz) to service_role",
     );
   });
