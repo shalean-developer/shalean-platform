@@ -60,13 +60,13 @@ export function MarketingHomeTrustSection() {
                 Customer feedback is available on Shalean&apos;s review page.
               </p>
             </div>
-            <div className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/90 text-primary sm:flex" aria-hidden>
+            <div className="hidden h-16 w-16 shrink-0 items-center justify-center rounded-full bg-white/90 text-[#0051FF] sm:flex" aria-hidden>
               <MessageSquareText className="h-8 w-8" strokeWidth={1.6} />
             </div>
           </article>
 
           <article className="flex min-h-[245px] flex-col rounded-lg border border-[#AAC4FF] bg-[#C7D8FF] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-[var(--navy-to)]" aria-hidden>
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white/90 text-[#0051FF]" aria-hidden>
               <ShieldCheck className="h-7 w-7" strokeWidth={1.65} />
             </div>
             <div className="mt-auto pt-[var(--ui-space-8)]">
@@ -78,7 +78,7 @@ export function MarketingHomeTrustSection() {
           </article>
 
           <article className="flex min-h-[245px] flex-col rounded-lg border border-[#DCE7FF] bg-[#EEF3FF] p-[var(--ui-space-6)] shadow-[var(--ui-shadow-sm)] md:p-[var(--ui-space-8)]">
-            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-[var(--navy-from)]" aria-hidden>
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-[#0051FF]" aria-hidden>
               <ReceiptText className="h-7 w-7" strokeWidth={1.65} />
             </div>
             <div className="mt-auto pt-[var(--ui-space-8)]">

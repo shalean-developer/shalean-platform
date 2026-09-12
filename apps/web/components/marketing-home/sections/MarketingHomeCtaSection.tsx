@@ -23,7 +23,7 @@ export function MarketingHomeCtaSection() {
               Your Home Deserves A Sparkle
             </h2>
             <div className="mt-9 rounded-xl border border-slate-100 bg-white p-7 shadow-sm sm:mt-10 sm:p-9">
-              <Sparkles className="h-6 w-6 text-neutral-900" strokeWidth={1.25} aria-hidden />
+              <Sparkles className="h-6 w-6 text-[#0051FF]" strokeWidth={1.25} aria-hidden />
               <p className="mt-5 max-w-md text-base leading-relaxed text-slate-600">
                 Schedule a cleaning today with our trusted professionals and enjoy a spotless, fresh home without any
                 hassle.

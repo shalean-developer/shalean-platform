@@ -35,7 +35,7 @@ export function MarketingHomeAboutSection() {
 
           <div className="rounded-2xl border border-slate-100 bg-slate-50 p-6 shadow-sm sm:p-8">
             <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-100">
-              <MessageSquareText className="h-5 w-5 text-blue-600" strokeWidth={1.75} aria-hidden />
+              <MessageSquareText className="h-5 w-5 text-[#0051FF]" strokeWidth={1.75} aria-hidden />
             </div>
             <p className="mt-5 text-4xl font-extrabold tracking-tight text-slate-900">
               {GOOGLE_BUSINESS_REVIEWS.count}+

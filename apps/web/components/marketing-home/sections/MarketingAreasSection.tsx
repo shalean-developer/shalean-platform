@@ -67,7 +67,7 @@ export function MarketingAreasSection() {
                 key={region}
                 className="group grid min-h-[132px] gap-[var(--ui-space-4)] border-b border-[#DBEAFE] p-[var(--ui-space-6)] transition last:border-b-0 hover:bg-[#DDEBFF] sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center md:p-[var(--ui-space-8)]"
               >
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EFF6FF] text-primary" aria-hidden>
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-[#EEF3FF] text-[#0051FF]" aria-hidden>
                   <MapPin className="h-6 w-6" strokeWidth={1.7} />
                 </div>
                 <div>

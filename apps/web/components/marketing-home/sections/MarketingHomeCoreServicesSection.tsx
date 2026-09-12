@@ -91,7 +91,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
                       sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
                       className="object-cover transition duration-300 group-hover:scale-[1.02]"
                     />
-                    <span className="absolute left-[var(--ui-space-4)] top-[var(--ui-space-4)] flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-primary shadow-[var(--ui-shadow-sm)]" aria-hidden>
+                    <span className="absolute left-[var(--ui-space-4)] top-[var(--ui-space-4)] flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-[#0051FF] shadow-[var(--ui-shadow-sm)]" aria-hidden>
                       <ServiceIcon className="h-5 w-5" strokeWidth={1.8} />
                     </span>
                     {priceLabel ? (
@@ -138,7 +138,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
                 key={group.id}
                 className="flex min-h-[400px] flex-col rounded-lg border border-[#DCE7FF] bg-card p-[var(--ui-space-8)] text-card-foreground shadow-[var(--ui-shadow-md)] transition-transform duration-200 hover:-translate-y-1"
               >
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#EFF6FF] text-primary" aria-hidden>
+                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#EEF3FF] text-[#0051FF]" aria-hidden>
                   <GroupIcon className="h-8 w-8" strokeWidth={1.7} />
                 </div>
 
