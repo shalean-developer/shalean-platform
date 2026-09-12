@@ -2,6 +2,7 @@ import StructuredData from "@/components/home/StructuredData";
 import { MarketingHomeCoreServicesSection } from "@/components/marketing-home/sections/MarketingHomeCoreServicesSection";
 import { MarketingAreasSection } from "@/components/marketing-home/sections/MarketingAreasSection";
 import { MarketingHomeFaqSection } from "@/components/marketing-home/sections/MarketingHomeFaqSection";
+import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
 import { MarketingHomeHowItWorksSection } from "@/components/marketing-home/sections/MarketingHomeHowItWorksSection";
 import { MarketingHomeServicesSection } from "@/components/marketing-home/sections/MarketingHomeServicesSection";
 import { MarketingHomeTrustSection } from "@/components/marketing-home/sections/MarketingHomeTrustSection";
@@ -26,6 +27,7 @@ export async function MarketingHomeDbSections() {
       <MarketingHomeServicesSection />
       <PromotionFeaturedCard />
       <MarketingAreasSection />
+      <MarketingHomeFinalCta />
       <MarketingHomeFaqSection faqs={resolvedFaqs} />
     </>
   );

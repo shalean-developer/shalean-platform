@@ -86,6 +86,24 @@ export function MarketingHomeFooter({
 }) {
   return (
     <>
+      <section className="border-t border-[#DCE7FF] bg-white text-[#00164E]" aria-label="Contact Shalean">
+        <div className="mx-auto grid w-full max-w-[var(--ui-container-marketing)] gap-8 px-[var(--ui-page-gutter)] py-12 md:grid-cols-3 md:py-16">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#0051FF]">Need help?</p>
+            <h2 className="mt-3 text-2xl font-medium tracking-tight">Talk to the Shalean team</h2>
+          </div>
+          <a href={CUSTOMER_SUPPORT_TELEPHONE_TEL} onClick={() => trackGa4PhoneClick()} className="group rounded-lg border border-[#DCE7FF] p-5 transition hover:border-[#0051FF] hover:bg-[#F5F7FB]">
+            <Phone className="h-5 w-5 text-[#0051FF]" aria-hidden />
+            <span className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">Call us</span>
+            <span className="mt-1 block font-medium group-hover:text-[#0033A1]">{CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}</span>
+          </a>
+          <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="group rounded-lg border border-[#DCE7FF] p-5 transition hover:border-[#0051FF] hover:bg-[#F5F7FB]">
+            <Mail className="h-5 w-5 text-[#0051FF]" aria-hidden />
+            <span className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email support</span>
+            <span className="mt-1 block font-medium group-hover:text-[#0033A1]">{CUSTOMER_SUPPORT_EMAIL}</span>
+          </a>
+        </div>
+      </section>
       <footer
         id="contact"
         className="relative scroll-mt-28 overflow-hidden bg-[#00164e] text-white"
