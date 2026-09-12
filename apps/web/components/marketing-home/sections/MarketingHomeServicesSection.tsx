@@ -27,7 +27,7 @@ export function MarketingHomeServicesSection() {
               src={PEOPLE_IMG_MAIN}
               alt="Professional cleaner vacuuming a bedroom in Cape Town"
               fill
-              className="object-cover object-center"
+              className="object-cover object-[center_38%]"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 60vw, 36vw"
             />
           </div>

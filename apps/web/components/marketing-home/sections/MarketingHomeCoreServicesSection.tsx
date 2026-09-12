@@ -89,7 +89,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
                       alt={imageAlt}
                       fill
                       sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
-                      className="object-cover transition duration-300 group-hover:scale-[1.02]"
+                      className="object-cover object-center transition duration-300 group-hover:scale-[1.02]"
                     />
                     <span className="absolute left-[var(--ui-space-4)] top-[var(--ui-space-4)] flex h-11 w-11 items-center justify-center rounded-full bg-white/95 text-[#0051FF] shadow-[var(--ui-shadow-sm)]" aria-hidden>
                       <ServiceIcon className="h-5 w-5" strokeWidth={1.8} />

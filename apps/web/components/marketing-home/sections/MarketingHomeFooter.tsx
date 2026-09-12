@@ -114,7 +114,7 @@ export function MarketingHomeFooter({
           <div className="grid gap-[var(--ui-space-12)] sm:grid-cols-2 lg:grid-cols-12 lg:gap-[var(--ui-space-8)]">
             <div className="sm:col-span-2 lg:col-span-4 lg:pr-[var(--ui-space-12)]">
               <div className="inline-flex rounded-[var(--ui-radius-xl)] bg-white px-[var(--ui-space-3)] py-[var(--ui-space-2)] shadow-[var(--ui-shadow-sm)]">
-                <ShaleanNavLogo className="h-9 w-auto" intrinsicHeight={80} />
+                <ShaleanNavLogo className="h-10 w-auto md:h-11" intrinsicHeight={96} />
               </div>
               <p className="mt-[var(--ui-space-6)] text-xs font-semibold uppercase tracking-[0.16em] text-[#0051ff]">
                 A cleaner space. A brighter day.

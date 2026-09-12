@@ -13,18 +13,21 @@ const HERO_STORIES = [
     detail: "Reliable cleaning for everyday living.",
     href: "/services/standard-cleaning-cape-town",
     image: marketingHeroImage("professional-cleaner-cape-town.webp"),
+    position: "object-[center_42%]",
   },
   {
     title: "Moving made easier",
     detail: "Detailed care before or after a move.",
     href: "/services/move-out-cleaning-cape-town",
     image: marketingHeroImage("cleaning-team-bright-space-cape-town.webp"),
+    position: "object-center",
   },
   {
     title: "Workplaces cared for",
     detail: "Professional cleaning for productive spaces.",
     href: "/services/office-cleaning-cape-town",
     image: marketingHeroImage("office-cleaning-workspace-cape-town.webp"),
+    position: "object-center",
   },
 ] as const;
 
@@ -86,7 +89,7 @@ export function MarketingHomeHeroSection() {
         <div className="mx-auto max-w-[var(--ui-container-marketing)]">
           <p className="mb-3 text-sm font-medium text-white">Cleaning stories</p>
           <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
-            {HERO_STORIES.map(({ title, detail, href, image }) => (
+            {HERO_STORIES.map(({ title, detail, href, image, position }) => (
               <Link
                 key={title}
                 href={href}
@@ -97,7 +100,7 @@ export function MarketingHomeHeroSection() {
                   alt=""
                   fill
                   sizes="(max-width: 640px) 100vw, 33vw"
-                  className="object-cover transition duration-300 group-hover:scale-[1.03]"
+                  className={`object-cover ${position} transition duration-300 group-hover:scale-[1.03]`}
                 />
                 <span className="absolute inset-0 bg-gradient-to-t from-[#00164e]/95 via-[#00164e]/15 to-transparent" />
                 <span className="absolute inset-x-0 bottom-0 p-5 text-white">
