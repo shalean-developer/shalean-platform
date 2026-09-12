@@ -52,14 +52,14 @@ export function MarketingAreasSection() {
           />
           <SafeInternalLink
             href="/locations"
-            className="mt-[var(--ui-space-8)] inline-flex min-h-12 items-center justify-center gap-[var(--ui-space-2)] rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-semibold text-primary-foreground shadow-[var(--ui-shadow-sm)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            className="mt-[var(--ui-space-8)] inline-flex min-h-12 items-center justify-center gap-[var(--ui-space-2)] rounded-md bg-primary px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-semibold uppercase tracking-wide text-white shadow-[var(--ui-shadow-sm)] transition hover:bg-[#0033A1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
           >
             View all suburbs
             <ArrowRight className="h-4 w-4" aria-hidden />
           </SafeInternalLink>
         </div>
 
-        <div className="overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card shadow-[var(--ui-shadow-md)]">
+        <div className="overflow-hidden rounded-lg border border-[#DCE7FF] bg-card shadow-[var(--ui-shadow-md)]">
           {regionGroups.map(({ region, previewLocations }, index) => {
             const regionHref = `/locations#region-${regionAnchor(region)}`;
             return (

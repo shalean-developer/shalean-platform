@@ -21,10 +21,10 @@ export async function MarketingHomeDbSections() {
     <>
       <StructuredData services={services} locations={locations} faqs={resolvedFaqs} />
       <MarketingHomeCoreServicesSection cards={serviceCards} layout="individual" />
-      <PromotionFeaturedCard />
       <MarketingHomeHowItWorksSection />
       <MarketingHomeTrustSection />
       <MarketingHomeServicesSection />
+      <PromotionFeaturedCard />
       <MarketingAreasSection />
       <MarketingHomeFaqSection faqs={resolvedFaqs} />
     </>
