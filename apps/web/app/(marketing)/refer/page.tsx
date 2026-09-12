@@ -56,7 +56,7 @@ export default function ReferPage() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
-      <Suspense fallback={<div className="min-h-screen animate-pulse bg-white" />}>
+      <Suspense fallback={<div className="min-h-screen animate-pulse bg-background text-foreground" />}>
         <ReferralLandingRouter />
       </Suspense>
     </>

@@ -2,6 +2,8 @@
 
 This directory defines the current release-control standard for `shalean-platform`.
 
+Material SPC decisions are indexed in [the SPC release decision log](./decision-log.md); the programme tracker and attributable GitHub evidence remain the underlying sources of truth.
+
 ## Principles
 
 1. `main` is the production source branch, but a merge is not proof that customer traffic is healthy.
@@ -10,6 +12,28 @@ This directory defines the current release-control standard for `shalean-platfor
 4. Payment, booking, authentication, RBAC, messaging, and other high-impact changes require focused regression checks in addition to general CI.
 5. Production changes must have a rollback action identified before release.
 6. Release evidence should describe the exact current Git SHA, deployment, migration versions, validation, and rollback target. Do not reuse stale deployment IDs from previous releases.
+
+## SPC programme freeze
+
+Approved by Farai under SPC-00-04, effective **2026-09-05**, this freeze remains in force until explicitly lifted by Farai under governed SPC authority. It limits work admission before the standard release sequence below; all existing release safeguards still apply.
+
+Only these work classes may proceed during the freeze:
+
+- explicitly approved SPC convergence work;
+- approved release-blocking fixes;
+- approved critical production, security or data-integrity fixes;
+- explicitly approved bounded operational fixes that do not expand into a new broad programme.
+
+Classification alone is not approval. Until the freeze is explicitly lifted, no new large feature or redesign programme may begin, no existing programme may materially expand its scope outside an explicitly approved SPC work unit, and no branch or PR may become an alternative release authority. Any proposed new broad feature, redesign or programme-level work must remain paused unless Farai first explicitly lifts or amends this freeze. While the freeze remains in force, permitted work must be admitted under an exact governed SPC work unit or one of the allowed fix categories above; an existing branch, PR or programme does not grant admission.
+
+Existing programme disposition:
+
+- `main` remains production code authority; `integration/shalean-release` remains the sole release candidate.
+- RD / Shalean Redesign expansion is frozen. [PR #481](https://github.com/shalean-developer/shalean-platform/pull/481) is specifically frozen as an RD expansion proposal; its work may proceed only when admitted as one or more separately approved exact SPC work units.
+- Existing RD branches (including `design/rd04-platform-redesign`), SR branches/work and `integration/shalean-repairs` are feeders only into governed SPC/release work. They have no independent programme or release authority; each admitted slice must meet the permitted-work and approval rules above.
+- Older direct-to-main PRs must be reviewed and dispositioned under SPC-01. This freeze approval does not authorize them to merge, and their prior existence does not grant admission.
+
+This rule does not itself close, retarget, merge or otherwise modify any PR. It does not authorize merge to `main`, production deployment, production database changes, production-data mutation, payments, refunds, payouts or outbound customer/cleaner messaging. Those actions continue to require their normal separate approvals.
 
 ## Standard release sequence
 

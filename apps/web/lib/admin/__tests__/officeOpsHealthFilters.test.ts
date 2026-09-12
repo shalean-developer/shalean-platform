@@ -15,6 +15,30 @@ describe("isWebsiteCustomerFacingSystemLog", () => {
     expect(isWebsiteCustomerFacingSystemLog({ created_at: "2026-07-05T10:00:00Z", source: "production_health", message: "scan" })).toBe(false);
     expect(isWebsiteCustomerFacingSystemLog({ created_at: "2026-07-05T10:00:00Z", source: "booking_finalize", message: "payment mismatch" })).toBe(true);
   });
+
+  it("separates deferred-payment worker failures from customer-request enqueue failures", () => {
+    expect(
+      isWebsiteCustomerFacingSystemLog({
+        created_at: "2026-08-12T04:00:00Z",
+        source: "deferred_payment_link_email/process",
+        message: "worker claim failed",
+      }),
+    ).toBe(false);
+    expect(
+      isWebsiteCustomerFacingSystemLog({
+        created_at: "2026-08-12T04:00:00Z",
+        source: "deferred_payment_link_email/delivery_failed",
+        message: "email provider rejected delivery",
+      }),
+    ).toBe(false);
+    expect(
+      isWebsiteCustomerFacingSystemLog({
+        created_at: "2026-08-12T04:00:00Z",
+        source: "deferred_payment_link_email",
+        message: "failed to enqueue customer payment link",
+      }),
+    ).toBe(true);
+  });
 });
 
 describe("filterBookingEngineCronErrors", () => {

@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { FAQGroup } from "@/components/faq/FAQGroup";
 import { FAQSearch } from "@/components/faq/FAQSearch";
 import { FaqFeaturedPanel } from "@/components/faq/FaqFeaturedPanel";
+import { PublicPageContainer } from "@/components/nav/PublicPageContainer";
 import { FAQ_CATEGORY_GROUPS, FAQ_FEATURED } from "@/lib/faq/faq-page-data";
 import type { FaqCategoryGroup, FaqStructuredItem } from "@/lib/faq/faq-page-types";
 
@@ -43,14 +44,14 @@ export function FaqPageExperience() {
 
   return (
     <div className="pb-24 md:pb-0">
-      <section className="mx-auto max-w-6xl px-4 py-10 sm:px-6 lg:px-8" aria-label="Search FAQs">
+      <PublicPageContainer className="py-10" aria-label="Search FAQs">
         <FAQSearch value={query} onChange={setQuery} />
-      </section>
+      </PublicPageContainer>
 
       {!hasAny ? (
-        <section className="mx-auto max-w-6xl px-4 pb-16 sm:px-6 lg:px-8">
-          <div className="rounded-2xl border border-zinc-200 bg-zinc-50 px-5 py-6 text-center">
-            <p className="text-sm text-zinc-700 sm:text-base">
+        <PublicPageContainer className="pb-16">
+          <div className="rounded-[var(--ui-radius-2xl)] border border-border bg-muted px-5 py-6 text-center">
+            <p className="text-sm text-muted-foreground sm:text-base">
               No matching questions—try &ldquo;price&rdquo;, &ldquo;supplies&rdquo;, or &ldquo;same-day&rdquo;.
             </p>
             <button
@@ -61,15 +62,15 @@ export function FaqPageExperience() {
               Clear search
             </button>
           </div>
-        </section>
+        </PublicPageContainer>
       ) : null}
 
       {featuredFiltered.length > 0 ? (
-        <section className="mx-auto max-w-6xl px-4 pb-14 sm:px-6 lg:px-8" aria-labelledby="faq-featured-heading">
-          <h2 id="faq-featured-heading" className="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">
+        <PublicPageContainer className="pb-14" aria-labelledby="faq-featured-heading">
+          <h2 id="faq-featured-heading" className="text-xl font-bold tracking-tight text-foreground sm:text-2xl">
             Popular answers
           </h2>
-          <p className="mt-2 max-w-2xl text-sm text-zinc-600 sm:text-base">
+          <p className="mt-2 max-w-2xl text-sm text-muted-foreground sm:text-base">
             Straight responses first—then detail—so you can decide fast.
           </p>
           <ul className="mt-8 grid gap-5 lg:grid-cols-2">
@@ -79,11 +80,11 @@ export function FaqPageExperience() {
               </li>
             ))}
           </ul>
-        </section>
+        </PublicPageContainer>
       ) : null}
 
       {groupsFiltered.length > 0 ? (
-        <section className="mx-auto max-w-6xl space-y-14 px-4 pb-16 sm:px-6 lg:px-8" aria-label="FAQ categories">
+        <PublicPageContainer className="space-y-14 pb-16" aria-label="FAQ categories">
           {needle ? (
             <p className="text-sm font-medium text-blue-800">
               Showing {groupsFiltered.reduce((n, g) => n + g.items.length, 0)} matching questions in categories below.
@@ -92,7 +93,7 @@ export function FaqPageExperience() {
           {groupsFiltered.map((group) => (
             <FAQGroup key={group.id} group={group} />
           ))}
-        </section>
+        </PublicPageContainer>
       ) : null}
     </div>
   );

@@ -1,6 +1,9 @@
 #!/usr/bin/env node
 /**
- * Patch Vercel Preview branch-scoped Supabase vars for staging/development.
+ * Patch Vercel Preview branch-scoped Supabase vars for staging only.
+ *
+ * Development is local-only. This script must never attach a development or
+ * feature branch to a remote Supabase project.
  * Reads keys from gitignored .secrets-local; uses Vercel dashboard cookie auth via
  * VERCEL_COOKIE env (name=value pairs) OR bearer VERCEL_TOKEN.
  * Never prints secret values.
@@ -16,7 +19,6 @@ const TEAM = "team_gSaraaY4wPNKtO0Pfx5MY42D";
 
 const REFS = {
   staging: "gbgnemlpyykyhpqqbgru",
-  development: "mbvixuzfvzbooiurvxwz",
 };
 
 const ENV_IDS = {
@@ -25,12 +27,6 @@ const ENV_IDS = {
     NEXT_PUBLIC_SUPABASE_ANON_KEY: "cpBa94mmofJoZ4J8",
     SUPABASE_SERVICE_ROLE_KEY: "jQqq2HofjPU2V4YO",
     SUPABASE_PROJECT_REF: "Ggujm1NqcRcIfoCS",
-  },
-  development: {
-    NEXT_PUBLIC_SUPABASE_URL: "FhYRRUUabuV9bCaf",
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: "08WNwBjUWJJaBiUW",
-    SUPABASE_SERVICE_ROLE_KEY: "JSup8Pcw6HEQZV8s",
-    SUPABASE_PROJECT_REF: "V3QHC1VXxf2HqAlz",
   },
 };
 
@@ -90,26 +86,25 @@ async function patchEnv(id, key, value, gitBranch) {
 }
 
 async function main() {
+  const env = "staging";
   const results = [];
-  for (const env of ["staging", "development"]) {
-    const keys = loadKeys(env);
-    const ref = REFS[env];
-    const url = `https://${ref}.supabase.co`;
-    const anon = keys.SUPABASE_ANON_KEY;
-    const service = keys.SUPABASE_SERVICE_ROLE_KEY;
-    if (!anon || !service) throw new Error(`${env}: missing anon/service keys`);
+  const keys = loadKeys(env);
+  const ref = REFS[env];
+  const url = `https://${ref}.supabase.co`;
+  const anon = keys.SUPABASE_ANON_KEY;
+  const service = keys.SUPABASE_SERVICE_ROLE_KEY;
+  if (!anon || !service) throw new Error(`${env}: missing anon/service keys`);
 
-    const values = {
-      NEXT_PUBLIC_SUPABASE_URL: url,
-      NEXT_PUBLIC_SUPABASE_ANON_KEY: anon,
-      SUPABASE_SERVICE_ROLE_KEY: service,
-      SUPABASE_PROJECT_REF: ref,
-    };
+  const values = {
+    NEXT_PUBLIC_SUPABASE_URL: url,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: anon,
+    SUPABASE_SERVICE_ROLE_KEY: service,
+    SUPABASE_PROJECT_REF: ref,
+  };
 
-    for (const [key, id] of Object.entries(ENV_IDS[env])) {
-      results.push(await patchEnv(id, key, values[key], env));
-      console.log(`patched ${env} ${key} -> ref=${ref} status=ok`);
-    }
+  for (const [key, id] of Object.entries(ENV_IDS[env])) {
+    results.push(await patchEnv(id, key, values[key], env));
+    console.log(`patched ${env} ${key} -> ref=${ref} status=ok`);
   }
 
   const evidence = resolve(
@@ -128,6 +123,7 @@ async function main() {
           status: r.status,
         })),
         refs: REFS,
+        developmentLocalOnly: true,
         productionUntouched: true,
       },
       null,

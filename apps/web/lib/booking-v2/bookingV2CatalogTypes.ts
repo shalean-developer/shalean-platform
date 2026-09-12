@@ -98,4 +98,6 @@ export type BookingV2CatalogPayload = {
   feesConfig: import("@/lib/booking-v2/types").BookingV2FeesConfig;
   scheduling: BookingV2SchedulingConfig;
   activeServiceSlugs: ServiceSlug[];
+  /** Server-only signal: active pricing/extras rows were read successfully. */
+  extrasCatalogAuthoritative: boolean;
 };

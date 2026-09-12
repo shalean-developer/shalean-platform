@@ -12,6 +12,7 @@ export const SEO_REBUILD_PHASE = 2 as const;
 export const SEO_REBUILD_SITEMAP_CORE_PATHS = [
   "/",
   "/services",
+  "/cleaning-prices-cape-town",
   "/services/standard-cleaning-cape-town",
   "/services/deep-cleaning-cape-town",
   "/services/airbnb-cleaning-cape-town",

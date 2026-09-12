@@ -10,9 +10,9 @@ import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarning
  * is visible in observability — we never silently substitute R0.
  *
  * Source of truth precedence (`resolveCleanerEarningsCents`):
- *   1. `cleaner_earnings_total_cents` (line-item finalized, set at completion)
- *   2. `payout_frozen_cents`          (settlement-frozen, set at invoice eligibility)
- *   3. `display_earnings_cents`       (first persist via persistCleanerPayoutIfUnset)
+ *   1. `payout_frozen_cents`          (settlement-frozen, set at invoice eligibility)
+ *   2. `display_earnings_cents`       (policy lock written by the earnings trigger)
+ *   3. `cleaner_earnings_total_cents` (line-ledger fallback only)
  * Fallback (server only): `previewDisplayEarningsCentsForCleanerJob` runs
  * the same `computeBookingEarnings` engine in-memory without persisting.
  */

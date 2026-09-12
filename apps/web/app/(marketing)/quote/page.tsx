@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
+import { PublicPageContainer } from "@/components/nav/PublicPageContainer";
 import { QuotePageFooter } from "@/components/quote/QuotePageFooter";
 import { QuotePageHeader } from "@/components/quote/QuotePageHeader";
 import { QuoteRequestForm } from "@/components/quote/QuoteRequestForm";
@@ -45,31 +46,33 @@ const JSON_LD = buildMarketingWebPageJsonLd({
 
 export default function QuoteRequestPage() {
   return (
-    <div className="flex min-h-dvh flex-col bg-slate-50 text-slate-900">
+    <div className="flex min-h-dvh flex-col bg-muted/30 text-foreground">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(JSON_LD) }} />
       <GrowthTracking
         event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{ page_type: "quote_request", content_group: "marketing_quote" }}
       />
       <QuotePageHeader />
-      <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-10 sm:px-6 sm:py-16">
-        <div className="mb-8 text-center">
-          <p className="text-sm font-semibold uppercase tracking-wide text-blue-600">Personalised quote</p>
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-slate-900 sm:text-4xl">
-            Request a cleaning quote
-          </h1>
-          <p className="mx-auto mt-3 max-w-xl text-base leading-relaxed text-slate-600">
-            Use this form for unusual properties, offices, recurring schedules or jobs that need a custom scope. We&apos;ll review your requirements and email a personalised quote.
-          </p>
-          <div className="mx-auto mt-5 max-w-xl rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-            Need a standard price immediately?{" "}
-            <Link href="/book" className="font-bold text-blue-700 hover:underline">
-              See your instant online price instead
-            </Link>
-            .
+      <main className="flex-1 py-[var(--ui-space-10)] sm:py-[var(--ui-space-16)]">
+        <PublicPageContainer size="content" className="max-w-4xl">
+          <div className="mb-[var(--ui-space-8)] text-center">
+            <p className="text-sm font-semibold uppercase tracking-wide text-primary">Personalised quote</p>
+            <h1 className="mt-[var(--ui-space-2)] text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+              Request a cleaning quote
+            </h1>
+            <p className="mx-auto mt-[var(--ui-space-3)] max-w-xl text-base leading-relaxed text-muted-foreground">
+              Use this form for unusual properties, offices, recurring schedules or jobs that need a custom scope. We&apos;ll review your requirements and email a personalised quote.
+            </p>
+            <div className="mx-auto mt-[var(--ui-space-5)] max-w-xl rounded-[var(--ui-radius-xl)] border border-primary/20 bg-primary/5 px-[var(--ui-space-4)] py-[var(--ui-space-3)] text-sm text-foreground">
+              Need a standard price immediately?{" "}
+              <Link href="/book" className="font-bold text-primary hover:underline">
+                See your instant online price instead
+              </Link>
+              .
+            </div>
           </div>
-        </div>
-        <QuoteRequestForm />
+          <QuoteRequestForm />
+        </PublicPageContainer>
       </main>
       <QuotePageFooter />
     </div>

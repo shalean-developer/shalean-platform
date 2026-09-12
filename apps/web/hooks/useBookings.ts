@@ -7,25 +7,113 @@ import type { BookingRow, DashboardBooking } from "@/lib/dashboard/types";
 import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import { useUser } from "@/hooks/useUser";
 
-export function useBookings(): {
+type CustomerBookingsPageInfo = {
+  nextCursor: string | null;
+  hasMore: boolean;
+};
+
+type CustomerBookingsPageResponse = {
+  bookings?: BookingRow[];
+  pageInfo?: CustomerBookingsPageInfo;
+};
+
+const CUSTOMER_BOOKINGS_PAGE_LIMIT = 25;
+
+type BookingFetchResult =
+  | { ok: true; rows: BookingRow[]; pageInfo: CustomerBookingsPageInfo | undefined }
+  | { ok: false; error: string };
+
+async function fetchBookingPages(options: {
+  pageCount?: number;
+  view?: "all" | "upcoming" | "review_eligibility";
+}): Promise<BookingFetchResult> {
+  const rows: BookingRow[] = [];
+  const seenCursors = new Set<string>();
+  let cursor: string | null = null;
+  let pageInfo: CustomerBookingsPageInfo | undefined;
+  let pagesLoaded = 0;
+
+  do {
+    const query = new URLSearchParams({ limit: String(CUSTOMER_BOOKINGS_PAGE_LIMIT) });
+    if (options.view && options.view !== "all") query.set("view", options.view);
+    if (cursor) query.set("cursor", cursor);
+    const out = await dashboardFetchJson<CustomerBookingsPageResponse>(`/api/customer/bookings?${query}`);
+    if (!out.ok) return { ok: false, error: out.error };
+
+    rows.push(...(Array.isArray(out.data.bookings) ? out.data.bookings : []));
+    pageInfo = out.data.pageInfo;
+    pagesLoaded += 1;
+    if (options.pageCount && pagesLoaded >= options.pageCount) break;
+    const nextCursor = pageInfo?.hasMore === true ? pageInfo.nextCursor : null;
+    if (!nextCursor) break;
+    if (seenCursors.has(nextCursor)) return { ok: false, error: "Bookings pagination did not converge." };
+    seenCursors.add(nextCursor);
+    cursor = nextCursor;
+  } while (cursor);
+
+  return { ok: true, rows: mergeBookingRows([], rows), pageInfo };
+}
+
+function mergeBookingRows(existing: BookingRow[], incoming: BookingRow[]): BookingRow[] {
+  const byId = new Map<string, BookingRow>();
+  for (const row of existing) byId.set(row.id, row);
+  for (const row of incoming) byId.set(row.id, row);
+  return Array.from(byId.values());
+}
+
+export function useBookings(options?: {
+  mode?: "complete" | "paged";
+  includeUpcoming?: boolean;
+  includeCompleteReviewHistory?: boolean;
+}): {
   bookings: DashboardBooking[];
+  reviewBookings: DashboardBooking[];
+  reviewHistoryComplete: boolean;
   loading: boolean;
+  loadingMore: boolean;
+  hasMore: boolean;
   error: string | null;
   refetch: () => Promise<void>;
+  loadMore: () => Promise<void>;
   cancelBooking: (id: string) => Promise<{ ok: true } | { ok: false; message: string }>;
   rescheduleBooking: (id: string, date: string, time: string) => Promise<{ ok: true } | { ok: false; message: string }>;
 } {
   const { user, loading: userLoading } = useUser();
   const userId = user?.id;
   const [rows, setRows] = useState<BookingRow[]>([]);
+  const [reviewRows, setReviewRows] = useState<BookingRow[]>([]);
+  const [reviewHistoryComplete, setReviewHistoryComplete] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const realtimeDebounceRef = useRef<number | null>(null);
+  const loadedPageCountRef = useRef(1);
+  const fetchEpochRef = useRef(0);
+  const loadingEpochRef = useRef<number | null>(null);
+  const loadMoreInFlightRef = useRef<Promise<void> | null>(null);
+  const mode = options?.mode === "paged" ? "paged" : "complete";
+  const includeUpcoming = options?.includeUpcoming === true;
+  const includeCompleteReviewHistory = options?.includeCompleteReviewHistory === true;
+
+  const applyPageInfo = useCallback((pageInfo: CustomerBookingsPageInfo | undefined) => {
+    setNextCursor(typeof pageInfo?.nextCursor === "string" ? pageInfo.nextCursor : null);
+    setHasMore(pageInfo?.hasMore === true && Boolean(pageInfo.nextCursor));
+  }, []);
 
   const fetchBookings = useCallback(async (opts?: { silent?: boolean }) => {
     const silent = opts?.silent === true;
+    const fetchEpoch = ++fetchEpochRef.current;
+    const managesLoading = !silent || loadingEpochRef.current !== null;
+    if (managesLoading) loadingEpochRef.current = fetchEpoch;
     if (!userId) {
+      loadedPageCountRef.current = 1;
       setRows([]);
+      setReviewRows([]);
+      setReviewHistoryComplete(false);
+      setNextCursor(null);
+      setHasMore(false);
       setLoading(false);
       return;
     }
@@ -33,16 +121,107 @@ export function useBookings(): {
       setLoading(true);
       setError(null);
     }
+    if (includeCompleteReviewHistory) setReviewHistoryComplete(false);
 
-    const out = await dashboardFetchJson<{ bookings?: BookingRow[] }>("/api/customer/bookings");
-    if (!out.ok) {
-      setError(out.error);
-      setRows([]);
-    } else {
-      setRows(Array.isArray(out.data.bookings) ? out.data.bookings : []);
+    try {
+      const pendingLoadMore = loadMoreInFlightRef.current;
+      if (pendingLoadMore) await pendingLoadMore;
+      if (fetchEpoch !== fetchEpochRef.current) return;
+
+      const pageCount = mode === "paged" ? loadedPageCountRef.current : undefined;
+      const out = await fetchBookingPages({ pageCount });
+      if (fetchEpoch !== fetchEpochRef.current) return;
+      if (!out.ok) {
+        setError(out.error);
+        if (!silent) {
+          setRows([]);
+          setNextCursor(null);
+          setHasMore(false);
+        }
+      } else {
+        let nextRows = out.rows;
+        if (includeUpcoming) {
+          const upcoming = await fetchBookingPages({ view: "upcoming" });
+          if (fetchEpoch !== fetchEpochRef.current) return;
+          if (!upcoming.ok) {
+            setError(upcoming.error);
+            return;
+          }
+          nextRows = mergeBookingRows(nextRows, upcoming.rows);
+        }
+        setRows(nextRows);
+        applyPageInfo(mode === "paged" ? out.pageInfo : undefined);
+        if (includeCompleteReviewHistory) {
+          const reviewHistory = await fetchBookingPages({ view: "review_eligibility" });
+          if (fetchEpoch !== fetchEpochRef.current) return;
+          if (!reviewHistory.ok) {
+            setError(reviewHistory.error);
+            return;
+          }
+          setReviewRows(reviewHistory.rows);
+          setReviewHistoryComplete(true);
+        }
+        setError(null);
+      }
+    } catch (fetchError) {
+      if (fetchEpoch === fetchEpochRef.current) {
+        setError(fetchError instanceof Error ? fetchError.message : "Could not load bookings.");
+      }
+    } finally {
+      if (
+        managesLoading &&
+        fetchEpoch === fetchEpochRef.current &&
+        loadingEpochRef.current === fetchEpoch
+      ) {
+        loadingEpochRef.current = null;
+        setLoading(false);
+      }
     }
-    if (!silent) setLoading(false);
-  }, [userId]);
+  }, [applyPageInfo, includeCompleteReviewHistory, includeUpcoming, mode, userId]);
+
+  const loadMore = useCallback(async () => {
+    if (!userId || !hasMore || !nextCursor || loadingMore || loadMoreInFlightRef.current) return;
+
+    const task = (async () => {
+      const loadMoreEpoch = ++fetchEpochRef.current;
+      const inheritsLoading = loadingEpochRef.current !== null;
+      if (inheritsLoading) loadingEpochRef.current = loadMoreEpoch;
+      setLoadingMore(true);
+      setError(null);
+      try {
+        const query = `/api/customer/bookings?limit=25&cursor=${encodeURIComponent(nextCursor)}`;
+        const out = await dashboardFetchJson<CustomerBookingsPageResponse>(query);
+        if (!out.ok) {
+          setError(out.error);
+        } else {
+          const incoming = Array.isArray(out.data.bookings) ? out.data.bookings : [];
+          setRows((current) => mergeBookingRows(current, incoming));
+          applyPageInfo(out.data.pageInfo);
+          loadedPageCountRef.current += 1;
+        }
+      } catch (loadMoreError) {
+        setError(loadMoreError instanceof Error ? loadMoreError.message : "Could not load older bookings.");
+      } finally {
+        if (
+          inheritsLoading &&
+          loadMoreEpoch === fetchEpochRef.current &&
+          loadingEpochRef.current === loadMoreEpoch
+        ) {
+          loadingEpochRef.current = null;
+          setLoading(false);
+        }
+        setLoadingMore(false);
+      }
+    })();
+
+    loadMoreInFlightRef.current = task;
+    try {
+      await task;
+    } finally {
+      if (loadMoreInFlightRef.current === task) loadMoreInFlightRef.current = null;
+    }
+    if (includeCompleteReviewHistory) await fetchBookings({ silent: true });
+  }, [applyPageInfo, fetchBookings, hasMore, includeCompleteReviewHistory, loadingMore, nextCursor, userId]);
 
   useEffect(() => {
     if (userLoading) return;
@@ -85,6 +264,7 @@ export function useBookings(): {
   }, [userLoading, userId, fetchBookings]);
 
   const bookings = useMemo(() => rows.map((r) => mapBookingRow(r)), [rows]);
+  const reviewBookings = useMemo(() => reviewRows.map((r) => mapBookingRow(r)), [reviewRows]);
 
   const cancelBooking = useCallback(async (id: string) => {
     const out = await dashboardFetchJson<{ ok?: boolean; error?: string }>(`/api/customer/bookings/${id}/cancel`, {
@@ -117,9 +297,14 @@ export function useBookings(): {
 
   return {
     bookings,
+    reviewBookings,
+    reviewHistoryComplete,
     loading: userLoading || loading,
+    loadingMore,
+    hasMore,
     error,
     refetch: refetchBookings,
+    loadMore,
     cancelBooking,
     rescheduleBooking,
   };

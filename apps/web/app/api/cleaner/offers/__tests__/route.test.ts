@@ -224,7 +224,7 @@ describe("GET /api/cleaner/offers", () => {
       expect(previewBookingFetch).not.toHaveBeenCalled();
     });
 
-    it("prefers cleaner_earnings_total_cents over display_earnings_cents (line-ledger truth wins)", async () => {
+    it("prefers the policy-locked display earning over a stale line-ledger total", async () => {
       nextOffersData = [pendingOfferRow()];
       nextBookingsData = [
         {
@@ -240,7 +240,7 @@ describe("GET /api/cleaner/offers", () => {
       const body = (await res.json()) as {
         offers: Array<{ jobEarning: { amount_cents: number } }>;
       };
-      expect(body.offers[0]!.jobEarning.amount_cents).toBe(50000);
+      expect(body.offers[0]!.jobEarning.amount_cents).toBe(30000);
     });
 
     it("prefers the dispatch_offers snapshot before calling the runtime preview helper", async () => {

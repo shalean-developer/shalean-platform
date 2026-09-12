@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
+import { priorityPermissionsForRequest } from "@/lib/admin/requireAdmin";
 
 const repoRoot = path.resolve(process.cwd(), "../..");
 const read = (p: string) => fs.readFileSync(path.join(repoRoot, p), "utf8");
@@ -37,8 +38,18 @@ describe("P6 workforce training/compliance", () => {
     expect(service).toContain("validityDays * 86_400_000");
   });
 
-  it("keeps writes behind workforce permissions", () => {
-    expect(route).toContain('"cleaner.edit", "incident.manage"');
-    expect(route).toContain('requireAdminApi(request)');
+  it("keeps reads and writes behind centralized Workforce permissions", () => {
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://shalean.test/api/admin/workforce/training-compliance"),
+      ),
+    ).toEqual(["cleaner.view", "cleaner.documents.view", "incident.manage"]);
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://shalean.test/api/admin/workforce/training-compliance", { method: "POST" }),
+      ),
+    ).toEqual(["cleaner.edit", "incident.manage"]);
+    expect(route).toContain("requireAdminApi(request)");
+    expect(route).not.toContain("admin_has_permission");
   });
 });

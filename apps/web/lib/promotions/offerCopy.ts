@@ -11,9 +11,20 @@ export function formatOfferLabel(args: {
   return `R${Math.round(args.discountValue).toLocaleString("en-ZA")} OFF`;
 }
 
+function normalizeLegacyCampaignPath(value: string): string {
+  return value
+    .replace(/^\/campaigns\//i, "/offers/")
+    .replace(
+      /^(https?:\/\/(?:www\.)?shalean\.(?:co\.za|com))\/campaigns\//i,
+      "$1/offers/",
+    );
+}
+
 export function campaignLandingPath(promo: Pick<PromotionRow, "slug" | "landing_page_path">): string {
-  if (promo.landing_page_path?.trim()) return promo.landing_page_path.trim();
-  return `/campaigns/${promo.slug}`;
+  if (promo.landing_page_path?.trim()) {
+    return normalizeLegacyCampaignPath(promo.landing_page_path.trim());
+  }
+  return `/offers/${promo.slug}`;
 }
 
 export function siteOrigin(): string {
@@ -47,9 +58,14 @@ export function canonicalizePublicSiteUrl(url: string): string {
       u.protocol = "https:";
       u.hostname = "shalean.co.za";
     }
+    if (/^(www\.)?shalean\.co\.za$/i.test(u.hostname) && u.pathname.startsWith("/campaigns/")) {
+      u.pathname = u.pathname.replace(/^\/campaigns\//, "/offers/");
+    }
     return u.toString().replace(/\/$/, "") || siteOrigin();
   } catch {
-    if (trimmed.startsWith("/")) return `${siteOrigin()}${trimmed}`;
+    if (trimmed.startsWith("/")) {
+      return `${siteOrigin()}${normalizeLegacyCampaignPath(trimmed)}`;
+    }
     return `${siteOrigin()}/book`;
   }
 }

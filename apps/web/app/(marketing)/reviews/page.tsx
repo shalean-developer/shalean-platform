@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
-import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
+import { SiteFooter } from "@/components/nav/SiteFooter";
 import { ReviewsPageContent } from "@/components/reviews/ReviewsPageContent";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
@@ -57,12 +57,12 @@ export default function ReviewsPage() {
   const bookingHref = marketingHomeBookingHref();
 
   return (
-    <div className="bg-white text-slate-900">
+    <div className="bg-background text-foreground">
       <MarketingHomeHeader bookingHref={bookingHref} />
       <main className={marketingWhatsAppFloatMainPadding}>
         <ReviewsPageContent />
       </main>
-      <FooterSection />
+      <SiteFooter />
     </div>
   );
 }

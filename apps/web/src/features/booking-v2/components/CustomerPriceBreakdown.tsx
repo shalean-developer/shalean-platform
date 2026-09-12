@@ -17,6 +17,19 @@ type CustomerPriceBreakdownProps = {
   compact?: boolean;
 };
 
+type EquipmentLineRole = "detail" | "subtotal" | "standard";
+
+function getEquipmentLineRole(item: PricingLineItem): EquipmentLineRole {
+  const label = item.label.toLowerCase();
+  if (label.includes("equipment base") || label.includes("distance charge")) {
+    return "detail";
+  }
+  if (label.includes("equipment logistics")) {
+    return "subtotal";
+  }
+  return "standard";
+}
+
 export function CustomerPriceBreakdown({
   pricing,
   className,
@@ -41,21 +54,25 @@ export function CustomerPriceBreakdown({
   return (
     <div className={cn("space-y-1.5", className)}>
       <ul className={cn("space-y-1.5", compact && "space-y-1")}>
-        {visibleLines.map((item, i) => (
-          <li
-            key={`${item.label}-${i}`}
-            className={cn(
-              "flex items-center justify-between gap-2 text-slate-600",
-              compact ? "text-xs" : "text-sm",
-              item.amountZar < 0 && "text-emerald-700",
-            )}
-          >
-            <span className="min-w-0 truncate">{item.label}</span>
-            <span className={cn("shrink-0 tabular-nums font-medium", item.amountZar < 0 && "text-emerald-700")}>
-              {formatZar(item.amountZar)}
-            </span>
-          </li>
-        ))}
+        {visibleLines.map((item, i) => {
+          const equipmentRole = getEquipmentLineRole(item);
+          return (
+            <li
+              key={`${item.label}-${i}`}
+              data-equipment-role={equipmentRole === "standard" ? undefined : equipmentRole}
+              className={cn(
+                "flex items-center justify-between gap-2 text-slate-600",
+                compact ? "text-xs" : "text-sm",
+                item.amountZar < 0 && "text-emerald-700",
+              )}
+            >
+              <span className="min-w-0 truncate">{item.label}</span>
+              <span className={cn("shrink-0 tabular-nums font-medium", item.amountZar < 0 && "text-emerald-700")}>
+                {formatZar(item.amountZar)}
+              </span>
+            </li>
+          );
+        })}
       </ul>
       {showTotal ? (
         <div

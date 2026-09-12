@@ -1,150 +1,87 @@
 import Image from "next/image";
 import Link from "next/link";
 import { preload } from "react-dom";
-import { ShieldCheck, ThumbsUp, MousePointerClick, Star, BadgeCheck } from "lucide-react";
-import { publicTrustAverageDisplay } from "@/lib/home/publicTrustRating";
-import { GET_FREE_QUOTE_HREF, getFreeQuoteButtonClass } from "@/lib/marketing/getFreeQuote";
+import { Check } from "lucide-react";
+import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
+import { GET_FREE_QUOTE_HREF } from "@/lib/marketing/getFreeQuote";
 import { marketingHeroImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
-import { googleReviewsBasedOnCountLine } from "@/lib/seo/googleReviews";
 import { HOME_PAGE_HEADLINE } from "@/lib/seo/homePageMeta";
 
 const HERO_MAIN = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
+const HERO_HEADLINE_ACCENT = "Cleaning Services";
+const HERO_HEADLINE_REST = HOME_PAGE_HEADLINE.startsWith(`${HERO_HEADLINE_ACCENT} `)
+  ? HOME_PAGE_HEADLINE.slice(HERO_HEADLINE_ACCENT.length + 1)
+  : HOME_PAGE_HEADLINE;
+
+const HERO_BENEFITS = [
+  "Vetted and trained cleaners",
+  "See your price before you pay",
+  "Book online in minutes",
+] as const;
 
 export function MarketingHomeHeroSection() {
   const bookHref = marketingHomeBookingHref();
-  const avg = publicTrustAverageDisplay(null);
+
   preload(HERO_MAIN, { as: "image", fetchPriority: "high" });
 
   return (
-    <section className="relative w-full bg-white py-8 md:py-8 lg:py-10">
-      <div className="mx-auto grid max-w-7xl grid-cols-1 items-center gap-8 px-4 sm:gap-10 sm:px-6 lg:grid-cols-2 lg:gap-16 lg:px-8">
-
-        {/* Left column — below hero image on mobile for faster LCP */}
-        <div className="order-2 flex flex-col items-center gap-5 text-center sm:items-start sm:gap-6 sm:text-left lg:order-1">
-
-          {/* Badge */}
-          <div className="inline-flex w-fit items-center gap-2 rounded-full border border-blue-200 bg-blue-50 px-4 py-1.5 text-xs font-semibold uppercase tracking-widest text-blue-700">
-            Cape Town&apos;s trusted cleaning service
-          </div>
-
-          {/* Headline */}
-          <h1 className="text-4xl font-extrabold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl lg:text-[2.85rem] xl:text-5xl">
-            {HOME_PAGE_HEADLINE}
+    <HomeSection
+      containerSize="marketing"
+      className="overflow-hidden bg-background pt-[var(--ui-space-10)] pb-[var(--ui-space-16)] md:pt-[var(--ui-space-16)] md:pb-[var(--ui-space-20)] lg:py-[var(--ui-space-24)]"
+    >
+      <div className="grid items-center gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-[var(--ui-space-16)] xl:gap-[var(--ui-space-20)]">
+        <div className="max-w-2xl">
+          <h1 className="text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
+            <span className="block text-primary">{HERO_HEADLINE_ACCENT}</span>
+            <span className="mt-[var(--ui-space-2)] block lg:whitespace-nowrap">{HERO_HEADLINE_REST}</span>
           </h1>
 
-          {/* Supporting paragraph */}
-          <p className="marketing-hero-lead max-w-lg text-base leading-relaxed text-slate-600">
-            Professional, reliable and affordable cleaning services for homes, apartments and offices. See your price and book online in minutes.
-          </p>
-
-          {/* Benefit icons */}
-          <div className="flex flex-wrap justify-center gap-3 sm:justify-start sm:gap-5">
-            {[
-              { Icon: ShieldCheck, label: "Vetted & trained cleaners" },
-              { Icon: ThumbsUp, label: "Satisfaction guaranteed" },
-              { Icon: MousePointerClick, label: "Easy online booking" },
-            ].map(({ Icon, label }) => (
-              <div key={label} className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100">
-                  <Icon className="h-4 w-4 text-blue-600" strokeWidth={2} aria-hidden />
-                </div>
-                {label}
+          <div className="mt-[var(--ui-space-10)] space-y-[var(--ui-space-4)]">
+            {HERO_BENEFITS.map((label) => (
+              <div
+                key={label}
+                className="flex items-center gap-[var(--ui-space-3)] text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-foreground"
+              >
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                  <Check className="h-4 w-4" strokeWidth={2.6} aria-hidden />
+                </span>
+                <span>{label}</span>
               </div>
             ))}
           </div>
 
-          <p className="text-sm text-slate-600">
-            Are you a worker?{" "}
-            <Link href="/cleaner/apply" className="font-semibold text-blue-600 hover:underline">
-              Apply Now
-            </Link>
-          </p>
-
-          {/* CTAs — distinguish instant self-service pricing from assisted quoting. */}
-          <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
+          <div className="mt-[var(--ui-space-10)] flex w-full flex-col gap-[var(--ui-space-3)] sm:w-auto sm:flex-row">
             <Link
               href={bookHref}
               data-growth-cta-source="marketing_hero_see_price"
-              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white shadow-sm transition hover:bg-blue-700 sm:w-auto sm:text-sm"
+              className="inline-flex min-h-14 items-center justify-center rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-8)] text-[length:var(--ui-text-body)] font-medium text-primary-foreground shadow-[var(--ui-shadow-md)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               See instant price
-              <span aria-hidden className="ml-0.5">→</span>
             </Link>
             <Link
               href={GET_FREE_QUOTE_HREF}
               data-quote-cta-source="marketing_hero"
-              className={`${getFreeQuoteButtonClass.outline} w-full sm:w-auto`}
+              className="inline-flex min-h-14 items-center justify-center rounded-[var(--ui-radius-pill)] border border-border bg-card px-[var(--ui-space-8)] text-[length:var(--ui-text-body)] font-medium text-foreground shadow-[var(--ui-shadow-sm)] transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             >
               Request a quote
             </Link>
           </div>
-          <p className="-mt-2 text-xs text-slate-500">
-            Instant price is self-service. Request a quote for custom or unusual jobs.
-          </p>
-
-          {/* Google rating row */}
-          <div className="flex flex-wrap items-center justify-center gap-2.5 sm:justify-start">
-            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm ring-1 ring-slate-200">
-              {/* Google G */}
-              <svg viewBox="0 0 24 24" className="h-4 w-4" aria-hidden>
-                <path
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                  fill="#4285F4"
-                />
-                <path
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                  fill="#34A853"
-                />
-                <path
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l3.66-2.84z"
-                  fill="#FBBC05"
-                />
-                <path
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-                  fill="#EA4335"
-                />
-              </svg>
-            </div>
-            <div className="flex items-center gap-0.5">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <Star
-                  key={i}
-                  className={i <= 4 ? "h-4 w-4 fill-amber-400 text-amber-400" : "h-4 w-4 fill-amber-400 text-amber-400"}
-                  aria-hidden
-                />
-              ))}
-            </div>
-            <span className="text-sm font-semibold text-slate-800">{avg}</span>
-            <span className="text-sm text-slate-500">{googleReviewsBasedOnCountLine()}</span>
-          </div>
         </div>
 
-        {/* Right column — image first on mobile (LCP) */}
-        <div className="relative order-1 mx-auto w-full max-w-lg lg:order-2 lg:mx-0 lg:max-w-none">
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-2xl shadow-xl">
+        <div className="relative mx-auto w-full max-w-[520px] lg:mx-0 lg:justify-self-end">
+          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-xl)] ring-1 ring-border/70">
             <Image
               src={HERO_MAIN}
               alt="Professional house cleaning service in a bright modern kitchen in Cape Town"
               fill
               className="object-cover object-center"
-              sizes="(max-width: 1024px) 100vw, 50vw"
+              sizes="(max-width: 1024px) 100vw, 520px"
               priority
               fetchPriority="high"
             />
           </div>
-
-          {/* Floating conversion-truth card — no unsupported volume claims. */}
-          <div className="absolute left-2 bottom-4 z-10 flex items-center gap-3 rounded-2xl bg-blue-600 px-4 py-3 shadow-lg sm:-left-6 sm:bottom-6 sm:px-5 sm:py-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/20">
-              <BadgeCheck className="h-5 w-5 text-white" aria-hidden />
-            </div>
-            <div>
-              <p className="text-sm font-extrabold leading-none tracking-tight text-white">Instant pricing</p>
-              <p className="mt-1 text-xs font-medium leading-tight text-blue-100">See your total<br />before you pay</p>
-            </div>
-          </div>
         </div>
       </div>
-    </section>
+    </HomeSection>
   );
 }

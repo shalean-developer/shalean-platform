@@ -12,6 +12,7 @@
     "dev:local:web": "node scripts/check-local-dev-env.mjs && npm --prefix apps/web run dev",
     "dev:local:reset": "npx supabase db reset --local",
     "dev:local:seed:catalog": "npx supabase db query --local -f supabase/seeds/nonprod/env03_catalog_and_fixtures.sql",
+    "dev:local:seed:booking": "node scripts/seed-local-booking.mjs",
     "dev:local:stop": "npx supabase stop",
     "dev:local:clean": "npx supabase stop --no-backup",
     "db:migrations:validate": "node scripts/validate-supabase-migrations.mjs",

@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, CheckCircle2, Star } from "lucide-react";
+import { ArrowRight, CheckCircle2, ShieldCheck, Star } from "lucide-react";
 import { BookIndexHeader } from "@/components/booking/BookIndexHeader";
+import { Button } from "@/components/ui/button";
 import { buildBookHubHrefFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
 import { collectLegacyBookingSearchParams } from "@/lib/booking/legacyBookingSearchParams";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
@@ -45,90 +46,96 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
   const { catalog } = await loadBookingV2Catalog();
 
   return (
-    <div className="min-h-dvh bg-slate-50">
+    <div className="min-h-dvh bg-muted/35 text-foreground">
       <BookIndexHeader />
 
-      <main className="mx-auto max-w-5xl px-4 py-10 sm:px-6 sm:py-12">
-        <div className="text-center">
-          <p className="mx-auto inline-flex items-center gap-2 rounded-full border border-blue-100 bg-blue-50 px-3 py-1 text-xs font-semibold text-blue-700">
+      <main className="mx-auto max-w-[var(--ui-container-lg)] px-[var(--ui-page-gutter)] py-10 sm:py-14">
+        <section className="text-center" aria-labelledby="booking-service-heading">
+          <p className="mx-auto inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
             Instant online price · No obligation
           </p>
-          <h1 className="mt-4 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
+          <h1
+            id="booking-service-heading"
+            className="mx-auto mt-5 max-w-3xl text-[length:var(--ui-text-page-title)] font-extrabold leading-[var(--ui-leading-tight)] tracking-tight text-foreground"
+          >
             Choose your cleaning service
           </h1>
-          <p className="mx-auto mt-3 max-w-2xl text-base leading-relaxed text-slate-600">
+          <p className="mx-auto mt-3 max-w-2xl text-base leading-[var(--ui-leading-body)] text-muted-foreground">
             Select a service to see your price, choose a date and continue to secure checkout. Most bookings take less than 3 minutes.
           </p>
-        </div>
+        </section>
 
-        <div className="mt-7 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 text-sm text-slate-600">
-          <span className="inline-flex items-center gap-1.5 font-semibold text-slate-800">
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-[var(--ui-radius-xl)] border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-[var(--ui-shadow-sm)] sm:px-6">
+          <span className="inline-flex items-center gap-1.5 font-semibold text-card-foreground">
             <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden />
             Trusted local cleaning team
           </span>
           <span>Vetted cleaners</span>
-          <span>Secure Paystack payment</span>
+          <span className="inline-flex items-center gap-1.5">
+            <ShieldCheck className="h-4 w-4 text-primary" aria-hidden />
+            Secure Paystack payment
+          </span>
           <span>Satisfaction guarantee</span>
         </div>
 
-        <div className="mt-9 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {SERVICE_SLUGS.map((slug) => {
-            const config = SERVICE_CONFIG[slug];
-            const basePrice = catalog[slug].basePrice;
-            const hasRoomPricing = catalog[slug].pricePerBedroom > 0;
+        <section className="mt-8" aria-label="Cleaning services">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {SERVICE_SLUGS.map((slug) => {
+              const config = SERVICE_CONFIG[slug];
+              const basePrice = catalog[slug].basePrice;
+              const hasRoomPricing = catalog[slug].pricePerBedroom > 0;
 
-            return (
-              <Link
-                key={slug}
-                href={`/book/${slug}`}
-                data-growth-cta-source={`book_hub_${slug}`}
-                className="group flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-              >
-                <div>
-                  <div className="flex items-center gap-3">
-                    <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-50 transition group-hover:bg-blue-100">
-                      <config.icon className="h-5 w-5 text-blue-600" aria-hidden />
-                    </div>
-                    <h2 className="text-base font-bold text-slate-900">{config.label}</h2>
-                  </div>
-                  <p className="mt-3 text-sm leading-relaxed text-slate-500">{config.description}</p>
-                </div>
-
-                <div className="mt-5 flex items-end justify-between gap-4 border-t border-slate-100 pt-4">
+              return (
+                <Link
+                  key={slug}
+                  href={`/book/${slug}`}
+                  data-growth-cta-source={`book_hub_${slug}`}
+                  className="group flex min-h-[15rem] flex-col justify-between rounded-[var(--ui-radius-xl)] border border-border bg-card p-5 text-card-foreground shadow-[var(--ui-shadow-sm)] transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[var(--ui-shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:p-6"
+                >
                   <div>
-                    <span className="block text-xs font-medium uppercase tracking-wide text-slate-400">Price from</span>
-                    <span className="mt-0.5 block text-base font-bold text-blue-700">
-                      R{basePrice.toLocaleString("en-ZA")}
-                      {hasRoomPricing && <span className="ml-1 text-xs font-medium text-slate-400">+ room pricing</span>}
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary transition group-hover:bg-primary/15">
+                        <config.icon className="h-5 w-5" aria-hidden />
+                      </div>
+                      <h2 className="text-base font-bold text-card-foreground">{config.label}</h2>
+                    </div>
+                    <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{config.description}</p>
+                  </div>
+
+                  <div className="mt-5 flex items-end justify-between gap-4 border-t border-border pt-4">
+                    <div>
+                      <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">Price from</span>
+                      <span className="mt-0.5 block text-lg font-bold text-primary">
+                        R{basePrice.toLocaleString("en-ZA")}
+                        {hasRoomPricing && <span className="ml-1 text-xs font-medium text-muted-foreground">+ room pricing</span>}
+                      </span>
+                    </div>
+                    <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
+                      See price
+                      <ArrowRight
+                        className="h-4 w-4 transition group-hover:translate-x-1"
+                        aria-hidden
+                      />
                     </span>
                   </div>
-                  <span className="inline-flex items-center gap-1 text-sm font-semibold text-blue-700">
-                    See price
-                    <ArrowRight
-                      className="h-4 w-4 transition group-hover:translate-x-1"
-                      aria-hidden
-                    />
-                  </span>
-                </div>
-              </Link>
-            );
-          })}
-        </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
 
-        <div className="mt-10 rounded-2xl border border-slate-200 bg-white p-5 text-center shadow-sm sm:p-6">
-          <h2 className="text-base font-bold text-slate-900">Not ready to book online?</h2>
-          <p className="mx-auto mt-1.5 max-w-xl text-sm leading-relaxed text-slate-600">
+        <aside className="mt-10 rounded-[var(--ui-radius-xl)] border border-primary/15 bg-primary/5 p-5 text-center sm:p-7">
+          <h2 className="text-base font-bold text-foreground">Not ready to book online?</h2>
+          <p className="mx-auto mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
             Request a personalised quote for an unusual property, office, recurring schedule or job that needs a custom scope.
           </p>
-          <Link
-            href={GET_FREE_QUOTE_HREF}
-            data-quote-cta-source="book_hub"
-            className="mt-4 inline-flex min-h-11 items-center justify-center rounded-xl border border-blue-600 px-5 py-2.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
-          >
-            Request a personalised quote
-          </Link>
-        </div>
+          <Button asChild variant="outline" size="lg" className="mt-5 rounded-xl border-primary/30 bg-background text-primary hover:bg-primary/5">
+            <Link href={GET_FREE_QUOTE_HREF} data-quote-cta-source="book_hub">
+              Request a personalised quote
+            </Link>
+          </Button>
+        </aside>
       </main>
     </div>
   );

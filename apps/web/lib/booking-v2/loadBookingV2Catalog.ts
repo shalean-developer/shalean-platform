@@ -1,6 +1,7 @@
 import "server-only";
 
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertAuthoritativePricingClientAvailable } from "@/lib/booking-v2/authoritativePricingClientAvailability";
 import { SERVICE_CONFIG, SERVICE_SLUGS, type ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import {
   defaultBookingV2FeesConfig,
@@ -20,9 +21,10 @@ import type {
 } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { DB_SLUG_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
 import {
-  resolveMovingPricingServiceRow,
+  resolveBookingV2PricingServiceRow,
   resolvePricingServiceRow,
 } from "@/lib/booking-v2/resolvePricingServiceSlug";
+import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
 export type {
@@ -43,6 +45,33 @@ type DbServiceRow = {
   min_hours: number;
   max_hours: number;
 };
+
+type PricingCatalogReadError = { message: string; code?: string | null } | null;
+
+/**
+ * SR-04C: once the authoritative pricing client is configured, read errors from
+ * pricing_services, pricing_extras, or pricing_booking_config must fail closed.
+ * Returning a static/default catalog after a failed authoritative read would let
+ * downstream booking flows treat fallback pricing as if the live catalog loaded.
+ */
+export function assertAuthoritativePricingCatalogReads(params: {
+  servicesError: PricingCatalogReadError;
+  extrasError: PricingCatalogReadError;
+  configError: PricingCatalogReadError;
+}): void {
+  const failures = [
+    ["pricing_services", params.servicesError],
+    ["pricing_extras", params.extrasError],
+    ["pricing_booking_config", params.configError],
+  ] as const;
+  const failed = failures.filter(([, error]) => Boolean(error));
+  if (!failed.length) return;
+
+  const detail = failed
+    .map(([table, error]) => `${table}: ${error?.message ?? "unknown read error"}`)
+    .join("; ");
+  throw new Error(`Authoritative booking pricing could not be read (${detail})`);
+}
 
 function ratesFromDbRow(dbSvc: DbServiceRow | null | undefined, staticFallback: { basePrice: number }) {
   return {
@@ -117,13 +146,15 @@ const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
 
 export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   const admin = getSupabaseAdmin();
+  assertAuthoritativePricingClientAvailable({ adminAvailable: Boolean(admin) });
+  let extrasCatalogAuthoritative = false;
 
   const dbServices: Record<string, DbServiceRow> = {};
   const dbExtras: Record<string, DbExtraRow> = {};
   let configJson: unknown = null;
 
   if (admin) {
-    const [{ data: svcRows }, { data: extRows }, { data: configRow }] = await Promise.all([
+    const [servicesResult, extrasResult, configResult] = await Promise.all([
       admin
         .from("pricing_services")
         .select(
@@ -138,6 +169,17 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         .order("sort_order", { ascending: true }),
       admin.from("pricing_booking_config").select("config").eq("id", "default").maybeSingle(),
     ]);
+
+    assertAuthoritativePricingCatalogReads({
+      servicesError: servicesResult.error,
+      extrasError: extrasResult.error,
+      configError: configResult.error,
+    });
+
+    const { data: svcRows } = servicesResult;
+    const { data: extRows } = extrasResult;
+    const { data: configRow } = configResult;
+    extrasCatalogAuthoritative = extrasResult.error == null;
 
     if (svcRows) {
       for (const raw of svcRows) {
@@ -216,12 +258,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
     if (serviceDef.isActive === false) continue;
     const slug = serviceDef.slug;
     const staticFallback = SERVICE_CONFIG[slug];
-    const dbSlug = serviceDef.pricingSlug || DB_SLUG_MAP[slug];
-    const dbSvc =
-      (slug === "moving-cleaning"
-        ? resolveMovingPricingServiceRow(dbServices, null)
-        : resolvePricingServiceRow(dbServices, dbSlug)) ??
-      resolvePricingServiceRow(dbServices, "standard");
+    const dbSvc = resolveBookingV2PricingServiceRow(dbServices, slug, serviceDef.pricingSlug);
 
     const extras = buildExtrasForService(slug, dbExtras);
     const rates = ratesFromDbRow(dbSvc, staticFallback);
@@ -257,18 +294,16 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   for (const slug of SERVICE_SLUGS) {
     if (!catalog[slug]) {
       const staticFallback = SERVICE_CONFIG[slug];
-      const dbSlug = DB_SLUG_MAP[slug];
-      const dbSvc =
-        resolvePricingServiceRow(dbServices, dbSlug) ??
-        resolvePricingServiceRow(dbServices, "standard");
+      const dbSvc = resolveBookingV2PricingServiceRow(dbServices, slug);
+      const showEquipmentQuestion = serviceRequiresCustomerEquipmentChoice(slug);
       catalog[slug] = {
         slug,
         label: staticFallback.label,
         shortLabel: staticFallback.shortLabel,
         description: staticFallback.description,
         cleanerMode: staticFallback.cleanerMode,
-        showEquipmentQuestion: slug === "regular-cleaning",
-        showCleaningProductsQuestion: slug === "regular-cleaning",
+        showEquipmentQuestion,
+        showCleaningProductsQuestion: showEquipmentQuestion,
         allowsExtraCleaner: slug === "regular-cleaning" || slug === "airbnb-cleaning" || slug === "office-cleaning" || slug === "carpet-cleaning",
         step1Questions: staticFallback.step1Questions,
         basePrice: dbSvc?.base_price && dbSvc.base_price > 0 ? dbSvc.base_price : staticFallback.basePrice,
@@ -294,5 +329,6 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
     feesConfig,
     scheduling,
     activeServiceSlugs,
+    extrasCatalogAuthoritative,
   };
 }

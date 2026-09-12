@@ -1,67 +1,55 @@
-import { Star, Quote } from "lucide-react";
-import { googleReviewsCountPlusDisplay } from "@/lib/seo/googleReviews";
+import Link from "next/link";
+import { Star, MessageSquareText } from "lucide-react";
+import {
+  GOOGLE_BUSINESS_REVIEWS,
+  googleReviewsBasedOnCountLine,
+} from "@/lib/seo/googleReviews";
 
 export function MarketingHomeAboutSection() {
   return (
-    <section id="about" className="scroll-mt-24 bg-white py-14 md:py-16">
+    <section id="customer-proof" className="scroll-mt-24 bg-white py-14 md:py-16" aria-labelledby="customer-proof-heading">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 sm:gap-5 lg:grid-cols-4">
+        <div className="mx-auto max-w-2xl text-center">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-blue-600">Customer proof</p>
+          <h2 id="customer-proof-heading" className="mt-2 text-2xl font-bold tracking-tight text-slate-900 sm:text-3xl">
+            Rated by customers on Google
+          </h2>
+          <p className="mt-3 text-sm leading-relaxed text-slate-600 sm:text-base">
+            The homepage review figures use the same verified Google Business Profile aggregate as Shalean&apos;s structured data.
+          </p>
+        </div>
 
-          {/* Card 1: Since 2022 */}
-          <div className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-slate-400">Established</p>
-            <div className="mt-4">
-              <p className="text-3xl font-extrabold tracking-tight text-slate-900">Since</p>
-              <p className="text-3xl font-extrabold tracking-tight text-slate-900">2022</p>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-slate-500">
-              Proudly cleaning homes across Cape Town.
-            </p>
-          </div>
-
-          {/* Card 2: evidence-backed service coverage (no unsupported volume claim). */}
-          <div className="flex flex-col justify-between rounded-2xl bg-[#1e4fd4] p-6 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-widest text-blue-200">Service coverage</p>
-            <div className="mt-4">
-              <p className="text-2xl font-extrabold tracking-tight text-white">Homes, apartments & offices</p>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-blue-200">
-              Professional cleaning across Cape Town.
-            </p>
-          </div>
-
-          {/* Card 3: Testimonial */}
-          <div className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm sm:col-span-2 lg:col-span-1">
-            <Quote className="h-8 w-8 text-slate-200" strokeWidth={1} aria-hidden />
-            <blockquote className="mt-3 text-sm leading-relaxed text-slate-700">
-              Shalean Cleaning transformed my home! The team was so friendly and left every corner spotless. Highly recommended.
-            </blockquote>
-            <footer className="mt-4 flex items-center gap-3 border-t border-slate-100 pt-4">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
-                NP
-              </div>
-              <div>
-                <cite className="not-italic">
-                  <span className="block text-sm font-bold text-slate-900">Nomsa P.</span>
-                  <span className="text-xs text-slate-400">Claremont</span>
-                </cite>
-              </div>
-            </footer>
-          </div>
-
-          {/* Card 4: 5-star reviews */}
-          <div className="flex flex-col justify-between rounded-2xl border border-slate-100 bg-white p-6 shadow-sm">
-            <div className="flex items-center gap-1">
+        <div className="mx-auto mt-8 grid max-w-4xl gap-4 sm:grid-cols-2 sm:gap-5">
+          <div className="rounded-2xl border border-slate-100 bg-white p-6 shadow-sm sm:p-8">
+            <div className="flex items-center gap-1" aria-label={`${GOOGLE_BUSINESS_REVIEWS.rating} out of 5 stars`}>
               {[1, 2, 3, 4, 5].map((i) => (
-                <Star key={i} className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden />
+                <Star key={i} className="h-5 w-5 fill-amber-400 text-amber-400" aria-hidden />
               ))}
             </div>
-            <div className="mt-4">
-              <p className="text-3xl font-extrabold tracking-tight text-slate-900">{googleReviewsCountPlusDisplay()}</p>
-            </div>
-            <p className="mt-3 text-xs leading-relaxed text-slate-500">
-              Google reviews from happy customers.
+            <p className="mt-5 text-4xl font-extrabold tracking-tight text-slate-900">
+              {GOOGLE_BUSINESS_REVIEWS.rating}
             </p>
+            <p className="mt-2 text-sm font-semibold text-slate-900">Google rating</p>
+            <p className="mt-1 text-sm leading-relaxed text-slate-500">{googleReviewsBasedOnCountLine()}</p>
+          </div>
+
+          <div className="rounded-2xl border border-slate-100 bg-slate-50 p-6 shadow-sm sm:p-8">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-white shadow-sm ring-1 ring-slate-100">
+              <MessageSquareText className="h-5 w-5 text-blue-600" strokeWidth={1.75} aria-hidden />
+            </div>
+            <p className="mt-5 text-4xl font-extrabold tracking-tight text-slate-900">
+              {GOOGLE_BUSINESS_REVIEWS.count}+
+            </p>
+            <p className="mt-2 text-sm font-semibold text-slate-900">Google reviews</p>
+            <p className="mt-1 text-sm leading-relaxed text-slate-500">
+              Browse Shalean&apos;s review page for customer feedback and review information.
+            </p>
+            <Link
+              href="/reviews"
+              className="mt-5 inline-flex text-sm font-semibold text-blue-600 transition hover:text-blue-700"
+            >
+              View reviews →
+            </Link>
           </div>
         </div>
       </div>

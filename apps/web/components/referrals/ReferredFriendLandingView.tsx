@@ -12,8 +12,8 @@ import {
   Sparkles,
   Star,
 } from "lucide-react";
-import { FooterSection } from "@/components/home/sections/FooterSection";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
+import { SiteFooter } from "@/components/nav/SiteFooter";
 import { Button } from "@/components/ui/button";
 import { marketingHeroImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { appendStoredReferralToHref } from "@/lib/referrals/client";
@@ -82,11 +82,11 @@ export function ReferredFriendLandingView() {
 
   if (loading) {
     return (
-      <div className="min-h-screen animate-pulse bg-white">
-        <div className="h-16 bg-gray-100" />
+      <div className="min-h-screen animate-pulse bg-background text-foreground">
+        <div className="h-16 bg-muted" />
         <div className="mx-auto max-w-4xl px-4 py-24">
-          <div className="h-12 w-2/3 rounded-xl bg-gray-100" />
-          <div className="mt-4 h-6 w-full rounded-lg bg-gray-50" />
+          <div className="h-12 w-2/3 rounded-xl bg-muted" />
+          <div className="mt-4 h-6 w-full rounded-lg bg-muted/60" />
         </div>
       </div>
     );
@@ -94,20 +94,20 @@ export function ReferredFriendLandingView() {
 
   if (settings && !settings.enabled) {
     return (
-      <div className={cn("min-h-screen bg-white", marketingWhatsAppFloatMainPadding)}>
+      <div className={cn("min-h-screen bg-background text-foreground", marketingWhatsAppFloatMainPadding)}>
         <MarketingHomeHeader bookingHref={bookingHref} />
         <main className="mx-auto max-w-lg px-4 py-24 text-center">
-          <h1 className="text-2xl font-bold text-gray-900">Referral offer unavailable</h1>
-          <p className="mt-2 text-gray-600">Our referral program is temporarily paused. You can still book a cleaning with us.</p>
+          <h1 className="text-2xl font-bold text-foreground">Referral offer unavailable</h1>
+          <p className="mt-2 text-muted-foreground">Our referral program is temporarily paused. You can still book a cleaning with us.</p>
           <Button asChild className="mt-6 rounded-xl"><Link href={bookingHref}>Book a Cleaning</Link></Button>
         </main>
-        <FooterSection />
+        <SiteFooter />
       </div>
     );
   }
 
   return (
-    <div className={cn("min-h-screen bg-white", marketingWhatsAppFloatMainPadding)}>
+    <div className={cn("min-h-screen bg-background text-foreground", marketingWhatsAppFloatMainPadding)}>
       <MarketingHomeHeader bookingHref={bookingHref} />
 
       {/* Hero */}
@@ -266,7 +266,7 @@ export function ReferredFriendLandingView() {
         </section>
       ) : null}
 
-      <FooterSection />
+      <SiteFooter />
     </div>
   );
 }

@@ -1,0 +1,43 @@
+.root nav[aria-label="Primary"] > div:hover > div {
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: translateY(0) !important;
+  pointer-events: auto !important;
+}
+
+/*
+ * Homepage horizontal alignment authority.
+ * Match the hero and every marketing HomeSection exactly: the shared 112rem
+ * marketing canvas plus the responsive canonical page gutter.
+ */
+.root > div {
+  padding-left: var(--ui-page-gutter) !important;
+  padding-right: var(--ui-page-gutter) !important;
+}
+
+.root > div > div:first-child {
+  max-width: var(--ui-container-marketing) !important;
+}
+
+/* The desktop reference keeps the header visually quiet; service search remains in mobile/menu flows. */
+@media (min-width: 80rem) {
+  .root div:has(> div > input[aria-label="Search Shalean cleaning services"]) {
+    display: none !important;
+  }
+}
+
+/* Homepage header top-level navigation and text actions use canonical Body text at normal weight. */
+.root nav[aria-label="Primary"] > a,
+.root nav[aria-label="Primary"] > div > button,
+.root a[href^="/auth/login"] {
+  font-size: var(--ui-text-body) !important;
+  line-height: var(--ui-leading-body) !important;
+  font-weight: 400 !important;
+}
+
+/* Keep dropdown/service descriptions compact; primary menu actions also use normal-weight Body text. */
+.root nav[aria-label="Primary"] > div > div a[class*="rounded-full"] {
+  font-size: var(--ui-text-body) !important;
+  line-height: var(--ui-leading-body) !important;
+  font-weight: 400 !important;
+}

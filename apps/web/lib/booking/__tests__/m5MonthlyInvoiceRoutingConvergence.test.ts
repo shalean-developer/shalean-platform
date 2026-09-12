@@ -3,11 +3,11 @@ import { join, resolve } from "node:path";
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-vi.mock("@/lib/monthlyInvoice/applyMonthlyInvoicePayment", () => ({
-  applyMonthlyInvoicePayment: vi.fn(),
+vi.mock("@/lib/monthlyInvoice/applyMonthlyInvoiceAccountPayment", () => ({
+  applyMonthlyInvoiceAccountPayment: vi.fn(),
 }));
 
-import { applyMonthlyInvoicePayment } from "@/lib/monthlyInvoice/applyMonthlyInvoicePayment";
+import { applyMonthlyInvoiceAccountPayment } from "@/lib/monthlyInvoice/applyMonthlyInvoiceAccountPayment";
 import {
   interpretMonthlyInvoiceOutcome,
   routePaystackChargeForMonthlyInvoice,
@@ -15,7 +15,7 @@ import {
   type PaystackChargeMonthlyRouting,
 } from "@/lib/booking/routePaystackChargeForMonthlyInvoice";
 
-const applyMock = applyMonthlyInvoicePayment as unknown as ReturnType<typeof vi.fn>;
+const applyAccountMock = applyMonthlyInvoiceAccountPayment as unknown as ReturnType<typeof vi.fn>;
 
 /**
  * Helper to walk up parents and find the first directory that contains a child path on disk.
@@ -42,7 +42,7 @@ function readSrc(...segments: string[]): string {
 
 describe("M-5: monthly-invoice routing helper", () => {
   beforeEach(() => {
-    applyMock.mockReset();
+    applyAccountMock.mockReset();
   });
 
   describe("interpretMonthlyInvoiceOutcome (pure mapper)", () => {
@@ -95,16 +95,16 @@ describe("M-5: monthly-invoice routing helper", () => {
     });
   });
 
-  describe("routePaystackChargeForMonthlyInvoice (delegates to applyMonthlyInvoicePayment)", () => {
-    it("calls applyMonthlyInvoicePayment exactly once and returns its mapped routing", async () => {
-      applyMock.mockResolvedValueOnce({ ok: true, settled: "full", invoiceId: "inv-x" });
+  describe("routePaystackChargeForMonthlyInvoice (delegates to account-aware settlement)", () => {
+    it("calls applyMonthlyInvoiceAccountPayment exactly once and returns its mapped routing", async () => {
+      applyAccountMock.mockResolvedValueOnce({ ok: true, settled: "full", invoiceId: "inv-x" });
       const fakeAdmin = { __id: "admin" } as unknown as Parameters<typeof routePaystackChargeForMonthlyInvoice>[0];
       const r = await routePaystackChargeForMonthlyInvoice(fakeAdmin, {
         reference: "psk_ref_abc",
         amountCents: 12345,
       });
-      expect(applyMock).toHaveBeenCalledTimes(1);
-      expect(applyMock).toHaveBeenCalledWith(fakeAdmin, {
+      expect(applyAccountMock).toHaveBeenCalledTimes(1);
+      expect(applyAccountMock).toHaveBeenCalledWith(fakeAdmin, {
         reference: "psk_ref_abc",
         amountCents: 12345,
       });
@@ -112,7 +112,7 @@ describe("M-5: monthly-invoice routing helper", () => {
     });
 
     it("propagates not_found unchanged so booking pipeline runs", async () => {
-      applyMock.mockResolvedValueOnce({ ok: true, skipped: true, reason: "not_found" });
+      applyAccountMock.mockResolvedValueOnce({ ok: true, skipped: true, reason: "not_found" });
       const fakeAdmin = {} as unknown as Parameters<typeof routePaystackChargeForMonthlyInvoice>[0];
       const r = await routePaystackChargeForMonthlyInvoice(fakeAdmin, {
         reference: "ref-no-match",
@@ -166,15 +166,15 @@ describe("M-5: webhook + verify routes use the same routing helper (convergence)
     expect(src).not.toMatch(/\bapplyMonthlyInvoicePayment\s*\(/);
   });
 
-  it("payments verify route imports + calls the routing helper for non-UUID references", () => {
+  it("keeps the retired payments verify route as an explicit 410 tombstone", () => {
     const src = readSrc("apps", "web", "app", "api", "payments", "verify", "route.ts");
-    expect(src).toContain('from "@/lib/booking/routePaystackChargeForMonthlyInvoice"');
-    expect(src).toMatch(/routePaystackChargeForMonthlyInvoice\s*\(/);
-    expect(src).toMatch(/shouldShortCircuitForMonthlyInvoice\s*\(/);
-    expect(src).not.toMatch(/\bapplyMonthlyInvoicePayment\s*\(/);
+    expect(src).toContain("Legacy payment verification is retired");
+    expect(src).toContain('canonicalVerifyPath: "/api/paystack/verify"');
+    expect(src).toContain("{ status: 410 }");
+    expect(src).not.toMatch(/runPaystackVerifyFinalizePipeline\s*\(/);
   });
 
-  it("monthly-invoice routing runs BEFORE booking-finalize pipeline in every verify route", () => {
+  it("monthly-invoice routing runs before the booking-finalize pipeline in the canonical verify route", () => {
     // Static guard: the substring `routePaystackChargeForMonthlyInvoice(` MUST appear before the
     // first `runPaystackVerifyFinalizePipeline(` call inside each verify route, so a monthly
     // reference cannot accidentally enter the booking-settlement pipeline first.
@@ -184,13 +184,6 @@ describe("M-5: webhook + verify routes use the same routing helper (convergence)
     expect(verifyHelperIdx).toBeGreaterThan(0);
     expect(verifyPipelineIdx).toBeGreaterThan(0);
     expect(verifyHelperIdx).toBeLessThan(verifyPipelineIdx);
-
-    const paymentsSrc = readSrc("apps", "web", "app", "api", "payments", "verify", "route.ts");
-    const paymentsHelperIdx = paymentsSrc.indexOf("routePaystackChargeForMonthlyInvoice(");
-    const paymentsPipelineIdx = paymentsSrc.indexOf("runPaystackVerifyFinalizePipeline(");
-    expect(paymentsHelperIdx).toBeGreaterThan(0);
-    expect(paymentsPipelineIdx).toBeGreaterThan(0);
-    expect(paymentsHelperIdx).toBeLessThan(paymentsPipelineIdx);
   });
 
   it("webhook continues to use finalizePaidBooking for booking references (regression: not_monthly falls through)", () => {

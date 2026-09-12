@@ -6,21 +6,11 @@ import { assignTrainingModule, loadTrainingComplianceSummary, updateTrainingAssi
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function hasPermission(admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>, userId: string, write: boolean) {
-  const permissions = write ? ["cleaner.edit", "incident.manage"] : ["cleaner.view", "cleaner.documents.view", "incident.manage"];
-  for (const permission of permissions) {
-    const { data } = await admin.rpc("admin_has_permission", { p_user_id: userId, p_permission: permission, p_branch_id: null, p_team_id: null });
-    if (data === true) return true;
-  }
-  return false;
-}
-
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await hasPermission(admin, auth.userId, false))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   try {
     const cleanerId = new URL(request.url).searchParams.get("cleaner_id")?.trim() || null;
     return NextResponse.json(await loadTrainingComplianceSummary(admin, cleanerId));
@@ -34,7 +24,6 @@ export async function POST(request: Request) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await hasPermission(admin, auth.userId, true))) return NextResponse.json({ error: "Forbidden." }, { status: 403 });
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });
   const action = String(body.action ?? "assign").trim();

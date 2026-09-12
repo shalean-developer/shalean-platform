@@ -53,13 +53,13 @@ describe("cleanerJobEarning", () => {
   });
 
   describe("resolveCleanerJobEarning", () => {
-    it("prefers cleaner_earnings_total_cents (line-item finalized, set at completion)", () => {
+    it("prefers the frozen settlement amount over display and stale line totals", () => {
       const e = resolveCleanerJobEarning({
         cleaner_earnings_total_cents: 50000,
         payout_frozen_cents: 30000,
         display_earnings_cents: 10000,
       });
-      expect(e.amount_cents).toBe(50000);
+      expect(e.amount_cents).toBe(30000);
     });
 
     it("falls back to payout_frozen_cents when line-item total is null", () => {
