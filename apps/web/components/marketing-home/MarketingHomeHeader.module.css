@@ -1,3 +1,72 @@
+.root {
+  --campaign-navy: #07194a;
+  --campaign-blue: #2365df;
+  filter: drop-shadow(0 10px 24px rgb(7 25 74 / 0.12));
+}
+
+.utilityBar {
+  background: #ffffff;
+  color: #34446f;
+}
+
+.utilityInner {
+  align-items: center;
+  display: flex;
+  font-size: 0.75rem;
+  justify-content: space-between;
+  margin: 0 auto;
+  max-width: var(--ui-container-marketing);
+  min-height: 2rem;
+  padding: 0 var(--ui-page-gutter);
+}
+
+.utilityInner span {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.4rem;
+}
+
+.utilityInner svg {
+  color: var(--campaign-blue);
+  height: 0.85rem;
+  width: 0.85rem;
+}
+
+.root > div:not(.utilityBar) {
+  background: var(--campaign-navy) !important;
+  padding-bottom: 0.8rem !important;
+  padding-top: 0.8rem !important;
+}
+
+.root nav[aria-label="Primary"] > a,
+.root nav[aria-label="Primary"] > div > button {
+  color: #ffffff !important;
+}
+
+.root nav[aria-label="Primary"] > a:hover,
+.root nav[aria-label="Primary"] > div > button:hover,
+.root nav[aria-label="Primary"] > div > button[aria-expanded="true"] {
+  background: rgb(255 255 255 / 0.12) !important;
+}
+
+.root a[aria-label="Shalean home"] {
+  background: #ffffff;
+  border-radius: 0.75rem;
+  padding: 0.35rem 0.7rem;
+}
+
+.root button[aria-label="Open menu"],
+.root button[aria-label="Close menu"] {
+  background: rgb(255 255 255 / 0.1) !important;
+  border-color: rgb(255 255 255 / 0.2) !important;
+  color: #ffffff !important;
+}
+
+.root a[href^="/auth/login"] {
+  background: var(--campaign-blue) !important;
+  color: #ffffff !important;
+}
+
 .root nav[aria-label="Primary"] > div:hover > div {
   visibility: visible !important;
   opacity: 1 !important;
@@ -10,13 +79,23 @@
  * Match the hero and every marketing HomeSection exactly: the shared 112rem
  * marketing canvas plus the responsive canonical page gutter.
  */
-.root > div {
+.root > div:not(.utilityBar) {
   padding-left: var(--ui-page-gutter) !important;
   padding-right: var(--ui-page-gutter) !important;
 }
 
-.root > div > div:first-child {
+.root > div:not(.utilityBar) > div:first-child {
   max-width: var(--ui-container-marketing) !important;
+}
+
+@media (max-width: 47.99rem) {
+  .utilityInner {
+    justify-content: center;
+  }
+
+  .utilityInner span:last-child {
+    display: none;
+  }
 }
 
 /* The desktop reference keeps the header visually quiet; service search remains in mobile/menu flows. */
