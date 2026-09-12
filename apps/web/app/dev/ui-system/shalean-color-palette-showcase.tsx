@@ -1,17 +1,17 @@
 const coreColors = [
-  { name: "Shalean Primary", hex: "#6382F7", css: "var(--primary)", use: "Primary brand and action colour" },
-  { name: "Shalean Navy", hex: "#0D1B69", css: "var(--navy-from)", use: "Supporting brand depth and dark accents" },
-  { name: "Shalean Royal", hex: "#1A3DBD", css: "var(--navy-to)", use: "Supporting emphasis and deeper blue states" },
-  { name: "Blue Mist", hex: "#DBEAFE", css: "#DBEAFE", use: "Soft selected states and brand-tinted cards" },
-  { name: "Blue Ice", hex: "#EFF6FF", css: "#EFF6FF", use: "Very light brand-tinted surfaces" },
+  { name: "Electric Blue", hex: "#0051FF", css: "var(--primary)", use: "Primary actions, links and campaign emphasis" },
+  { name: "Action Blue", hex: "#0033A1", css: "var(--navy-to)", use: "Hover states and supporting brand depth" },
+  { name: "Royal Blue", hex: "#00008C", css: "#00008C", use: "High-emphasis brand accents" },
+  { name: "Shalean Navy", hex: "#00164E", css: "var(--navy-from)", use: "Hero overlays, footer and dark campaign surfaces" },
+  { name: "White", hex: "#FFFFFF", css: "var(--background)", use: "Header, cards and clean page surfaces" },
 ] as const;
 
 const marketingCompanionColors = [
-  { name: "Soft Periwinkle", hex: "#B8C5FF", css: "#B8C5FF", use: "Balanced secondary marketing card surface" },
-  { name: "Powder Blue", hex: "#C9D8FF", css: "#C9D8FF", use: "Mid-strength blue surface for process and trust cards" },
-  { name: "Sky Mist", hex: "#DDEBFF", css: "#DDEBFF", use: "Soft blue surface for supporting proof and content blocks" },
-  { name: "Blue Ice", hex: "#EFF6FF", css: "#EFF6FF", use: "Low-emphasis brand-tinted section and card surface" },
-  { name: "Cool Cloud", hex: "#F4F6FA", css: "#F4F6FA", use: "Neutral cool marketing section surface" },
+  { name: "Blue Tint", hex: "#AAC4FF", css: "#AAC4FF", use: "Strong supporting highlight surface" },
+  { name: "Powder Blue", hex: "#C7D8FF", css: "#C7D8FF", use: "Process and trust-card surface" },
+  { name: "Blue Mist", hex: "#DCE7FF", css: "#DCE7FF", use: "Borders and selected supporting blocks" },
+  { name: "Blue Ice", hex: "#EEF3FF", css: "#EEF3FF", use: "Low-emphasis brand-tinted surface" },
+  { name: "Cool Cloud", hex: "#F5F7FB", css: "#F5F7FB", use: "Primary editorial section background" },
   { name: "White", hex: "#FFFFFF", css: "#FFFFFF", use: "Primary page and clean card surface" },
 ] as const;
 
@@ -56,7 +56,7 @@ export function ShaleanColorPaletteShowcase() {
           </div>
           <h2 className="mt-4 text-[length:var(--ui-text-page-title)] font-bold leading-[var(--ui-leading-tight)] tracking-tight">Shalean color palette</h2>
           <p className="mt-3 text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
-            Shalean Primary (#6382F7) is the main brand/action colour. Navy and Royal provide depth; the official homepage marketing palette stays within the Shalean blue family through Soft Periwinkle, Powder Blue, Sky Mist, Blue Ice, Cool Cloud and White.
+            Electric Blue (#0051FF) is the main action colour. Action Blue, Royal Blue and Shalean Navy provide the campaign depth used by the current homepage, supported by cool blue tints, Cool Cloud and White.
           </p>
         </div>
 
@@ -74,7 +74,7 @@ export function ShaleanColorPaletteShowcase() {
           <div className="mb-3">
             <h2 className="text-[length:var(--ui-text-section-title)] font-semibold">Official homepage marketing palette</h2>
             <p className="mt-1 text-sm text-muted-foreground">
-              Use these cool blue and neutral surfaces for homepage storytelling. Warm Sand, pink, lavender and teal are not part of the default Shalean homepage palette.
+              Use these cool blue and neutral surfaces for editorial homepage storytelling. Warm, pink, lavender and teal surfaces are excluded from the current public-brand direction.
             </p>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -102,13 +102,13 @@ export function ShaleanColorPaletteShowcase() {
         <div className="mt-8 rounded-[var(--ui-radius-xl)] border border-border bg-card p-5 shadow-[var(--ui-shadow-sm)]">
           <h2 className="text-sm font-semibold">Recommended header combination</h2>
           <div className="mt-4 flex flex-wrap items-center gap-3">
-            <span className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground">Primary / Log in</span>
-            <span className="rounded-full bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground brightness-95">Primary hover</span>
+            <span className="rounded-md bg-primary px-5 py-2.5 text-sm font-semibold uppercase tracking-wide text-white">Primary / Log in</span>
+            <span className="rounded-md bg-[#0033A1] px-5 py-2.5 text-sm font-semibold uppercase tracking-wide text-white">Primary hover</span>
             <span className="rounded-full bg-muted px-5 py-2.5 text-sm font-semibold text-foreground">Nav hover</span>
             <span className="rounded-full border-2 border-primary px-5 py-2.5 text-sm font-semibold text-foreground">Focus ring</span>
           </div>
           <p className="mt-3 text-xs leading-5 text-muted-foreground">
-            Use dark Ink text on Shalean Primary for small controls; white text does not provide enough contrast at normal button-text sizes on #6382F7.
+            Use white text on Electric Blue and Action Blue. Keep the public header white with dark-navy navigation, and reserve Shalean Navy for hero overlays and the footer.
           </p>
         </div>
       </div>
