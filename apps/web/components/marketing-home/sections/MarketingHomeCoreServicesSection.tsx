@@ -60,14 +60,14 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
     <HomeSection
       id="our-services"
       containerSize="marketing"
-      className="scroll-mt-24 !bg-[#F4F6FA] md:py-[var(--ui-space-20)]"
+      className="scroll-mt-24 !bg-[#F5F7FB] md:py-[var(--ui-space-20)]"
       aria-label="Cleaning services"
     >
       <span id="service-options" className="sr-only" aria-hidden />
       <MarketingSectionHeader
         eyebrow="Services"
-        title="What do you need cleaned?"
-        description="Choose the type of cleaning that best matches your space."
+        title="Cleaning solutions shaped around your space"
+        description="Explore our home, moving, workplace and specialist cleaning services."
       />
 
       {layout === "individual" ? (
@@ -76,7 +76,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
             {cards.map(({ id, title, description, priceLabel, href, image, imageAlt, icon: ServiceIcon }) => (
               <article
                 key={id}
-                className="group flex overflow-hidden rounded-[var(--ui-radius-marketing)] border border-[#DBEAFE] bg-card text-card-foreground shadow-[var(--ui-shadow-sm)] transition duration-200 hover:-translate-y-1 hover:border-primary/30 hover:shadow-[var(--ui-shadow-md)]"
+                className="group flex overflow-hidden rounded-lg border border-[#DCE7FF] bg-card text-card-foreground shadow-[var(--ui-shadow-sm)] transition duration-200 hover:-translate-y-1 hover:border-primary/40 hover:shadow-[var(--ui-shadow-md)]"
               >
                 <div className="flex w-full flex-col">
                   <Link
