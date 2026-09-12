@@ -19,7 +19,7 @@ export function MarketingHomeHeroSection() {
   preload(HERO_MAIN, { as: "image", fetchPriority: "high" });
 
   return (
-    <section className="relative isolate mb-20 bg-[#07194a] text-white md:mb-24">
+    <section className="relative isolate mb-20 bg-[#00164e] text-white md:mb-24">
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <Image
           src={HERO_MAIN}
@@ -30,8 +30,8 @@ export function MarketingHomeHeroSection() {
           priority
           fetchPriority="high"
         />
-        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(4,19,60,0.97)_0%,rgba(7,36,99,0.9)_43%,rgba(15,69,158,0.48)_72%,rgba(7,25,74,0.18)_100%)]" />
-        <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(7,25,74,0.58),transparent_48%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,22,78,0.98)_0%,rgba(0,51,161,0.9)_43%,rgba(0,0,140,0.48)_72%,rgba(0,22,78,0.18)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(0,22,78,0.58),transparent_48%)]" />
       </div>
 
       <div className="mx-auto w-full max-w-[var(--ui-container-marketing)] px-[var(--ui-page-gutter)] pb-28 pt-16 md:pb-36 md:pt-24 lg:min-h-[650px] lg:pt-28">
@@ -41,7 +41,7 @@ export function MarketingHomeHeroSection() {
           </p>
           <h1 className="mt-7 text-[clamp(3rem,7vw,6.75rem)] font-semibold leading-[0.92] tracking-[-0.055em] text-white">
             A cleaner space.
-            <span className="mt-2 block text-[#75b8ff]">A brighter day.</span>
+            <span className="mt-2 block text-[#0051ff]">A brighter day.</span>
           </h1>
           <p className="mt-7 max-w-xl text-lg leading-8 text-blue-50/90 md:text-xl">
             Professional home and business cleaning, shaped around your schedule and backed by a local team you can reach.
@@ -51,7 +51,7 @@ export function MarketingHomeHeroSection() {
             <Link
               href={bookHref}
               data-growth-cta-source="marketing_hero_see_price"
-              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-[#2874ee] px-8 text-base font-semibold text-white shadow-xl transition hover:bg-[#3f87f4] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#07194a]"
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full bg-[#0051ff] px-8 text-base font-semibold text-white shadow-xl transition hover:bg-[#0033a1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#00164e]"
             >
               See instant price
               <ArrowRight className="h-4 w-4" aria-hidden />
@@ -68,13 +68,13 @@ export function MarketingHomeHeroSection() {
       </div>
 
       <div className="absolute inset-x-0 bottom-0 translate-y-1/2 px-[var(--ui-page-gutter)]">
-        <div className="mx-auto grid max-w-[var(--ui-container-marketing)] overflow-hidden rounded-2xl bg-white text-[#07194a] shadow-[0_24px_70px_rgba(5,24,72,0.22)] sm:grid-cols-3">
+        <div className="mx-auto grid max-w-[var(--ui-container-marketing)] overflow-hidden rounded-2xl bg-white text-[#00164e] shadow-[0_24px_70px_rgba(0,22,78,0.22)] sm:grid-cols-3">
           {HERO_SIGNALS.map(({ icon: Icon, label, detail }, index) => (
             <div
               key={label}
               className={`flex items-center gap-4 px-5 py-5 md:px-7 ${index ? "border-t border-slate-200 sm:border-l sm:border-t-0" : ""}`}
             >
-              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[#2365df]">
+              <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50 text-[#0033a1]">
                 <Icon className="h-5 w-5" aria-hidden />
               </span>
               <span>

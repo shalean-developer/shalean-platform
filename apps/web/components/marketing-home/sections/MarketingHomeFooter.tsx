@@ -88,17 +88,17 @@ export function MarketingHomeFooter({
     <>
       <footer
         id="contact"
-        className="relative scroll-mt-28 overflow-hidden bg-[#07194a] text-white"
+        className="relative scroll-mt-28 overflow-hidden bg-[#00164e] text-white"
       >
-        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#2874ee] via-[#75b8ff] to-[#2874ee]" />
-        <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-[#2874ee]/10 blur-3xl" />
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0051ff] via-[#0033a1] to-[#00008c]" />
+        <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-[#0051ff]/10 blur-3xl" />
         <div className="mx-auto w-full max-w-[var(--ui-container-marketing)] px-[var(--ui-page-gutter)] py-[var(--ui-space-16)] md:py-[var(--ui-space-20)]">
           <div className="grid gap-[var(--ui-space-12)] sm:grid-cols-2 lg:grid-cols-12 lg:gap-[var(--ui-space-8)]">
             <div className="sm:col-span-2 lg:col-span-4 lg:pr-[var(--ui-space-12)]">
               <div className="inline-flex rounded-[var(--ui-radius-xl)] bg-white px-[var(--ui-space-3)] py-[var(--ui-space-2)] shadow-[var(--ui-shadow-sm)]">
                 <ShaleanNavLogo className="h-9 w-auto" intrinsicHeight={80} />
               </div>
-              <p className="mt-[var(--ui-space-6)] text-xs font-semibold uppercase tracking-[0.16em] text-[#75b8ff]">
+              <p className="mt-[var(--ui-space-6)] text-xs font-semibold uppercase tracking-[0.16em] text-[#0051ff]">
                 A cleaner space. A brighter day.
               </p>
               <p className="mt-[var(--ui-space-3)] max-w-sm text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-white/70">

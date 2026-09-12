@@ -1,8 +1,8 @@
 .root {
-  --campaign-navy: #07194a;
-  --campaign-blue: #2365df;
+  --campaign-navy: #00164e;
+  --campaign-blue: #0051ff;
   background: #ffffff;
-  box-shadow: 0 10px 28px rgb(7 25 74 / 0.1);
+  box-shadow: 0 10px 28px rgb(0 22 78 / 0.1);
 }
 
 .utilityBar {
