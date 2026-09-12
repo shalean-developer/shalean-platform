@@ -31,7 +31,7 @@ as $$
       and b.payment_completed_at is not null
       and b.payment_completed_at >= p_start
       and b.payment_completed_at < p_end
-      and lower(coalesce(b.status, '')) not in ('cancelled', 'failed', 'payment_expired')
+      and lower(btrim(coalesce(b.status, ''))) not in ('cancelled', 'failed', 'payment_expired')
       and b.refunded_at is null
       and lower(coalesce(b.refund_status, '')) not in (
         'refunded',
