@@ -1,14 +1,14 @@
 /**
  * Canonical primary public-marketing CTA.
- * Mirrors the redesigned homepage: Shalean Primary, Ink text, pill radius,
- * tokenized spacing/shadows and accessible focus treatment.
+ * Canonical campaign action: compact rectangular silhouette, Electric Blue,
+ * uppercase label and accessible focus treatment.
  */
 export const marketingPrimaryCtaClassName =
-  "inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-6)] py-[var(--ui-space-3)] text-[length:var(--ui-text-body)] font-medium text-primary-foreground shadow-[var(--ui-shadow-md)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  "inline-flex min-h-12 items-center justify-center rounded-md bg-[#0051FF] px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-[var(--ui-shadow-sm)] transition hover:bg-[#0033A1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051FF] focus-visible:ring-offset-2";
 
 /** Canonical secondary public-marketing CTA. */
 export const marketingSecondaryCtaClassName =
-  "inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-pill)] border border-border bg-card px-[var(--ui-space-6)] py-[var(--ui-space-3)] text-[length:var(--ui-text-body)] font-medium text-foreground shadow-[var(--ui-shadow-sm)] transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2";
+  "inline-flex min-h-12 items-center justify-center rounded-md border border-[#0051FF] bg-white px-6 py-3 text-sm font-semibold uppercase tracking-wide text-[#0033A1] shadow-[var(--ui-shadow-sm)] transition hover:bg-[#EEF3FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051FF] focus-visible:ring-offset-2";
 
 /** Icon-only companion to the primary CTA (same palette and focus behavior). */
 export const marketingPrimaryCtaIconClassName =

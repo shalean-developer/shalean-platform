@@ -174,7 +174,7 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
           <div className="mt-[var(--ui-space-8)] flex justify-center">
             <Link
               href="/services"
-              className="inline-flex min-h-12 items-center gap-[var(--ui-space-2)] rounded-[var(--ui-radius-pill)] border border-border bg-card px-[var(--ui-space-6)] text-[length:var(--ui-text-small)] font-medium text-foreground shadow-[var(--ui-shadow-sm)] transition hover:border-primary/30 hover:bg-background hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex min-h-12 items-center gap-[var(--ui-space-2)] rounded-md border border-[#0051FF] bg-white px-6 text-sm font-semibold uppercase tracking-wide text-[#0033A1] shadow-[var(--ui-shadow-sm)] transition hover:bg-[#EEF3FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051FF] focus-visible:ring-offset-2"
             >
               Compare all cleaning services
               <ArrowRight className="h-4 w-4" aria-hidden />
