@@ -1,6 +1,6 @@
 "use client";
 
-import { Building2, Check, Home, PanelsTopLeft, type LucideIcon } from "lucide-react";
+import { Building2, Home, PanelsTopLeft, type LucideIcon } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 import { cn } from "@/lib/utils";
 import type { FormQuestion } from "@/src/features/booking-v2/config/serviceConfig";
@@ -38,15 +38,15 @@ const PROPERTY_TYPE_PRESENTATION: Record<
 > = {
   house: {
     icon: Home,
-    description: "A freestanding home with private rooms and living areas.",
+    description: "A freestanding home.",
   },
   apartment: {
     icon: Building2,
-    description: "A flat or apartment within a shared residential building.",
+    description: "A home in a shared building.",
   },
   townhouse: {
     icon: PanelsTopLeft,
-    description: "An attached or multi-level home in a residential complex.",
+    description: "An attached home in a complex.",
   },
 };
 
@@ -142,12 +142,7 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
                         : "border-slate-200 text-slate-800",
                     )}
                   >
-                    {selected ? (
-                      <span className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white">
-                        <Check className="h-4 w-4" aria-hidden />
-                      </span>
-                    ) : null}
-                    <span className="flex items-center gap-3 pr-8">
+                    <span className="flex items-center gap-3">
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
                         <Icon className="h-5 w-5" aria-hidden />
                       </span>
