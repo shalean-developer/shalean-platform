@@ -58,7 +58,7 @@ select
   p.created_at as occurred_at,
   jsonb_build_object('body', p.body, 'read_at', p.read_at) as metadata
 from public.user_notifications p
-left join public.users u on u.id = p.user_id;
+left join public.user_profiles u on u.id = p.user_id;
 
 grant select on public.communication_timeline to service_role;
 revoke all on public.communication_timeline from anon, authenticated;

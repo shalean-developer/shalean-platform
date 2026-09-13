@@ -31,14 +31,14 @@ const SERVICE_GROUPS: readonly ServiceGroup[] = [
   },
   {
     id: "moving-stays",
-    title: "Moving & Stays",
+    title: "Moving Cleaning",
     description: "Move cleans and guest-ready Airbnb turnovers.",
     icon: Luggage,
     serviceIds: ["move", "airbnb"],
   },
   {
     id: "workplace-specialist",
-    title: "Workplace & Specialist",
+    title: "Specialist Cleaning",
     description: "Office cleaning and specialist carpet care.",
     icon: Building2,
     serviceIds: ["office", "carpet"],

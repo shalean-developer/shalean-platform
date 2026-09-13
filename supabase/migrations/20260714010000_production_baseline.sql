@@ -1,16 +1,19 @@
 -- =============================================================================
--- PROCESSED PRODUCTION SCHEMA BASELINE DRAFT (REVIEW ONLY)
+-- SANITIZED NON-PRODUCTION SCHEMA BASELINE
 -- =============================================================================
 -- Source: docs/database-baseline/production-schema-source.sql
 -- Branch: chore/database-schema-baseline
 -- Generated: 2026-07-13T22:41:22.373Z
--- Status: DRAFT — do not apply to production; do not add to supabase/migrations yet
+-- Status: APPROVED FOR ISOLATED NON-PRODUCTION BOOTSTRAP ONLY
+-- Production use is prohibited. This migration contains schema only and no
+-- production row data, environment URLs, credentials, or active cron schedule.
 --
 -- Preprocessing applied:
 --   1. Removed all object-ownership reassignment statements
 --   2. Excluded ephemeral blog draft backup tables and related DDL/ACL/RLS
 --   3. Preserved public schema objects, auth.users FKs, grants, realtime pub membership
---   4. Did NOT replace YOUR_DOMAIN / YOUR_CRON_SECRET placeholders
+--   4. Removed environment URL/secret defaults; cron dispatch fails closed until
+--      an authorized environment-specific configuration row is supplied.
 --   5. Did NOT invent storage buckets, cron schedules, auth users, or secrets
 --   6. SECURITY DEFINER functions left unchanged (see processed-baseline-review.md)
 --
@@ -3916,8 +3919,10 @@ begin
     raise exception 'cron_http_targets row missing';
   end if;
 
-  if v_cfg.app_base_url like '%YOUR_DOMAIN%' or v_cfg.cron_secret = 'YOUR_CRON_SECRET' then
-    raise exception 'cron_http_targets still has placeholder values — update app_base_url and cron_secret';
+  if nullif(btrim(v_cfg.app_base_url), '') is null
+     or v_cfg.app_base_url !~ '^https://'
+     or nullif(btrim(v_cfg.cron_secret), '') is null then
+    raise exception 'cron_http_targets is not configured with a secure non-empty HTTPS target and secret';
   end if;
 
   v_url := rtrim(v_cfg.app_base_url, '/') || v_path;
@@ -5724,16 +5729,9 @@ CREATE OR REPLACE FUNCTION "public"."retry_unassigned_jobs"() RETURNS "jsonb"
 declare
   v_req_id bigint;
 begin
-  select
-    net.http_post(
-      url := 'https://YOUR_DOMAIN/api/cron/retry-failed-jobs',
-      headers := jsonb_build_object(
-        'Content-Type', 'application/json',
-        'Authorization', 'Bearer YOUR_CRON_SECRET'
-      ),
-      body := '{}'::jsonb
-    )
-  into v_req_id;
+  -- Fail closed through the governed singleton configuration. The baseline must
+  -- never embed an environment URL or cron credential.
+  v_req_id := public.invoke_nextjs_cron('/api/cron/retry-failed-jobs');
 
   insert into public.dispatch_logs (source, level, message, context)
   values (
@@ -7928,14 +7926,14 @@ COMMENT ON TABLE "public"."conversion_experiments" IS 'Conversion optimization e
 
 CREATE TABLE IF NOT EXISTS "public"."cron_http_targets" (
     "singleton" boolean DEFAULT true NOT NULL,
-    "app_base_url" "text" DEFAULT 'https://YOUR_DOMAIN'::"text" NOT NULL,
-    "cron_secret" "text" DEFAULT 'YOUR_CRON_SECRET'::"text" NOT NULL,
+    "app_base_url" "text" NOT NULL,
+    "cron_secret" "text" NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "cron_http_targets_singleton_check" CHECK ("singleton")
 );
 
 
-COMMENT ON TABLE "public"."cron_http_targets" IS 'Production origin + CRON_SECRET for pg_net → Next.js /api/cron/* (service_role only).';
+COMMENT ON TABLE "public"."cron_http_targets" IS 'Environment-specific HTTPS origin + CRON_SECRET for pg_net → Next.js /api/cron/* (service_role only; no baseline defaults).';
 
 
 

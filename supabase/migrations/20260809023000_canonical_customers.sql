@@ -40,12 +40,10 @@ create index if not exists customer_identity_alias_lookup_idx
 alter table public.bookings add column if not exists crm_customer_id uuid references public.customers(id) on delete set null;
 alter table public.monthly_invoices add column if not exists crm_customer_id uuid references public.customers(id) on delete set null;
 alter table public.sales_documents add column if not exists crm_customer_id uuid references public.customers(id) on delete set null;
-alter table public.customer_care_cases add column if not exists crm_customer_id uuid references public.customers(id) on delete set null;
 
 create index if not exists bookings_crm_customer_idx on public.bookings(crm_customer_id, created_at desc);
 create index if not exists monthly_invoices_crm_customer_idx on public.monthly_invoices(crm_customer_id);
 create index if not exists sales_documents_crm_customer_idx on public.sales_documents(crm_customer_id);
-create index if not exists customer_care_cases_crm_customer_idx on public.customer_care_cases(crm_customer_id, created_at desc);
 
 alter table public.customers enable row level security;
 alter table public.customer_identity_aliases enable row level security;
