@@ -125,12 +125,6 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
       { value: "no", label: "No" },
     ],
   },
-  {
-    key: "specialInstructions",
-    label: "Special instructions (optional)",
-    type: "textarea",
-    placeholder: "e.g. focus on kitchen, avoid the study...",
-  },
 ];
 
 const REGULAR_EXTRAS: ServiceExtra[] = [
@@ -209,12 +203,6 @@ const DEEP_QUESTIONS: FormQuestion[] = [
       { value: "yes", label: "Yes" },
       { value: "no", label: "No" },
     ],
-  },
-  {
-    key: "specialInstructions",
-    label: "Special instructions (optional)",
-    type: "textarea",
-    placeholder: "Any areas to focus on or avoid...",
   },
 ];
 
@@ -309,12 +297,6 @@ const MOVING_QUESTIONS: FormQuestion[] = [
     ],
     hint: "We’ll prioritise skirting, cupboards, and other inspection hotspots when yes.",
   },
-  {
-    key: "specialInstructions",
-    label: "Special instructions (optional)",
-    type: "textarea",
-    placeholder: "Landlord requirements, key handover details...",
-  },
 ];
 
 const MOVING_EXTRAS: ServiceExtra[] = [
@@ -385,12 +367,6 @@ const OFFICE_QUESTIONS: FormQuestion[] = [
       { value: "after_hours", label: "After hours / evenings" },
       { value: "weekends", label: "Weekends only" },
     ],
-  },
-  {
-    key: "specialInstructions",
-    label: "Special instructions (optional)",
-    type: "textarea",
-    placeholder: "Access code, areas to avoid, IT equipment notes...",
   },
 ];
 
@@ -482,12 +458,6 @@ const CARPET_QUESTIONS: FormQuestion[] = [
       { value: "yes", label: "Yes" },
       { value: "no", label: "No" },
     ],
-  },
-  {
-    key: "specialInstructions",
-    label: "Special instructions (optional)",
-    type: "textarea",
-    placeholder: "Problem areas, delicate rugs, stain details...",
   },
 ];
 
@@ -595,12 +565,6 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
       { value: "yes", label: "Yes — I'll leave supplies" },
       { value: "no", label: "No" },
     ],
-  },
-  {
-    key: "specialInstructions",
-    label: "Special host instructions (optional)",
-    type: "textarea",
-    placeholder: "Staging preferences, check-in checklist, fragile items...",
   },
 ];
 
