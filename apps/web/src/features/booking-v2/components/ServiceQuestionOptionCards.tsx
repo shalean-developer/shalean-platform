@@ -38,15 +38,15 @@ const PROPERTY_TYPE_PRESENTATION: Record<
 > = {
   house: {
     icon: Home,
-    description: "A freestanding home with its own rooms and living areas.",
+    description: "A freestanding home with private rooms and living areas.",
   },
   apartment: {
     icon: Building2,
-    description: "A flat or apartment inside a shared residential building.",
+    description: "A flat or apartment within a shared residential building.",
   },
   townhouse: {
     icon: PanelsTopLeft,
-    description: "A multi-level or attached home in a residential complex.",
+    description: "An attached or multi-level home in a residential complex.",
   },
 };
 
@@ -136,7 +136,7 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
                     onClick={() => field.onChange(opt.value)}
                     suppressHydrationWarning
                     className={cn(
-                      "relative min-h-40 rounded-xl border bg-white p-5 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
+                      "relative min-h-32 rounded-xl border bg-white p-5 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
                       selected
                         ? "border-blue-600 bg-blue-50/60 ring-2 ring-blue-600/15"
                         : "border-slate-200 text-slate-800",
@@ -147,11 +147,13 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
                         <Check className="h-4 w-4" aria-hidden />
                       </span>
                     ) : null}
-                    <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
-                      <Icon className="h-6 w-6" aria-hidden />
+                    <span className="flex items-center gap-3 pr-8">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                        <Icon className="h-5 w-5" aria-hidden />
+                      </span>
+                      <span className="text-lg font-bold text-slate-900">{opt.label}</span>
                     </span>
-                    <span className="mt-4 block text-lg font-bold text-slate-900">{opt.label}</span>
-                    <span className="mt-1.5 block text-sm leading-relaxed text-slate-600">
+                    <span className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-slate-600">
                       {presentation?.description ?? "Select this property type."}
                     </span>
                   </button>
