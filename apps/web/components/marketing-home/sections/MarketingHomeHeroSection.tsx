@@ -5,7 +5,7 @@ import { ArrowRight, Check } from "lucide-react";
 import { GET_FREE_QUOTE_HREF } from "@/lib/marketing/getFreeQuote";
 import { marketingHeroImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 
-const HERO_MAIN = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
+const HERO_MAIN = marketingHeroImage("homepage-hero-cleaning-team-cape-town.webp");
 
 const HERO_STORIES = [
   {
@@ -41,7 +41,7 @@ export function MarketingHomeHeroSection() {
       <div className="absolute inset-0 -z-10 overflow-hidden">
         <Image
           src={HERO_MAIN}
-          alt="Professional house cleaning service in a bright modern kitchen in Cape Town"
+          alt="Two professional Shalean cleaners caring for a Cape Town home"
           fill
           className="object-cover object-center lg:object-[center_42%]"
           sizes="100vw"
