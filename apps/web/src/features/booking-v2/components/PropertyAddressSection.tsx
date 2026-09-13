@@ -205,12 +205,9 @@ export function PropertyAddressSection() {
       setValue("suburb", addr.suburb.trim(), { shouldDirty: false, shouldValidate: true });
       setValue("city", addr.city?.trim() || "Cape Town", { shouldDirty: false });
       setValue("postalCode", addr.postal_code?.trim() || "", { shouldDirty: false });
-      if (addr.notes?.trim() && !getValues("accessInstructions")?.trim()) {
-        setValue("accessInstructions", addr.notes.trim(), { shouldDirty: false });
-      }
       setSelectedAddressId(addr.id);
     },
-    [getValues, setValue],
+    [setValue],
   );
 
   const switchToCustom = useCallback(() => {
