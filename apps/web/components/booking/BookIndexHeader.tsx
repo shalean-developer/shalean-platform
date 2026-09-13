@@ -14,7 +14,7 @@ export function BookIndexHeader() {
         </Link>
 
         <div className="flex shrink-0 items-center gap-2">
-          <HeaderLoginButton />
+          <HeaderLoginButton avatarOnly />
           <a
             href="tel:0871535250"
             className="hidden items-center gap-1.5 text-sm font-medium text-muted-foreground transition hover:text-primary sm:flex"
