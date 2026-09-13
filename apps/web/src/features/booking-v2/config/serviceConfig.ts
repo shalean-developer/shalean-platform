@@ -80,7 +80,7 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
     centered: true,
     options: [
       { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment / flat" },
+      { value: "apartment", label: "Apartment" },
       { value: "townhouse", label: "Townhouse" },
     ],
   },
@@ -152,7 +152,7 @@ const DEEP_QUESTIONS: FormQuestion[] = [
     centered: true,
     options: [
       { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment / flat" },
+      { value: "apartment", label: "Apartment" },
       { value: "townhouse", label: "Townhouse" },
     ],
   },
@@ -236,7 +236,7 @@ const MOVING_QUESTIONS: FormQuestion[] = [
     centered: true,
     options: [
       { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment / flat" },
+      { value: "apartment", label: "Apartment" },
       { value: "townhouse", label: "Townhouse" },
     ],
   },
@@ -411,7 +411,7 @@ const CARPET_QUESTIONS: FormQuestion[] = [
     centered: true,
     options: [
       { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment / flat" },
+      { value: "apartment", label: "Apartment" },
       { value: "townhouse", label: "Townhouse" },
     ],
   },
@@ -515,7 +515,7 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
     centered: true,
     options: [
       { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment / flat" },
+      { value: "apartment", label: "Apartment" },
       { value: "townhouse", label: "Townhouse" },
     ],
   },
