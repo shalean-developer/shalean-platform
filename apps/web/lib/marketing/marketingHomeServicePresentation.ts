@@ -28,7 +28,7 @@ type ServicePresentation = {
  */
 const PRESENTATION: Record<MarketingHomeServiceKey, ServicePresentation> = {
   standard: {
-    title: "Standard Cleaning",
+    title: "Regular Cleaning",
     defaultDescription: "Routine home cleaning for kitchens, bathrooms, living areas and floors across Cape Town.",
     icon: Home,
     href: "/services/standard-cleaning-cape-town",

@@ -86,14 +86,40 @@ export function MarketingHomeFooter({
 }) {
   return (
     <>
-      <footer id="contact" className="scroll-mt-28 bg-[var(--navy-from)] text-white">
+      <section className="border-t border-[#DCE7FF] bg-white text-[#00164E]" aria-label="Contact Shalean">
+        <div className="mx-auto grid w-full max-w-[var(--ui-container-marketing)] gap-8 px-[var(--ui-page-gutter)] py-12 md:grid-cols-3 md:py-16">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#0051FF]">Need help?</p>
+            <h2 className="mt-3 text-2xl font-medium tracking-tight">Talk to the Shalean team</h2>
+          </div>
+          <a href={CUSTOMER_SUPPORT_TELEPHONE_TEL} onClick={() => trackGa4PhoneClick()} className="group rounded-lg border border-[#DCE7FF] p-5 transition hover:border-[#0051FF] hover:bg-[#F5F7FB]">
+            <Phone className="h-5 w-5 text-[#0051FF]" aria-hidden />
+            <span className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">Call us</span>
+            <span className="mt-1 block font-medium group-hover:text-[#0033A1]">{CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}</span>
+          </a>
+          <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="group rounded-lg border border-[#DCE7FF] p-5 transition hover:border-[#0051FF] hover:bg-[#F5F7FB]">
+            <Mail className="h-5 w-5 text-[#0051FF]" aria-hidden />
+            <span className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email support</span>
+            <span className="mt-1 block font-medium group-hover:text-[#0033A1]">{CUSTOMER_SUPPORT_EMAIL}</span>
+          </a>
+        </div>
+      </section>
+      <footer
+        id="contact"
+        className="relative scroll-mt-28 overflow-hidden bg-[#00164e] text-white"
+      >
+        <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#0051ff] via-[#0033a1] to-[#00008c]" />
+        <div className="pointer-events-none absolute -right-32 -top-32 h-96 w-96 rounded-full bg-[#0051ff]/10 blur-3xl" />
         <div className="mx-auto w-full max-w-[var(--ui-container-marketing)] px-[var(--ui-page-gutter)] py-[var(--ui-space-16)] md:py-[var(--ui-space-20)]">
           <div className="grid gap-[var(--ui-space-12)] sm:grid-cols-2 lg:grid-cols-12 lg:gap-[var(--ui-space-8)]">
             <div className="sm:col-span-2 lg:col-span-4 lg:pr-[var(--ui-space-12)]">
               <div className="inline-flex rounded-[var(--ui-radius-xl)] bg-white px-[var(--ui-space-3)] py-[var(--ui-space-2)] shadow-[var(--ui-shadow-sm)]">
-                <ShaleanNavLogo className="h-9 w-auto" intrinsicHeight={80} />
+                <ShaleanNavLogo className="h-10 w-auto md:h-11" intrinsicHeight={96} />
               </div>
-              <p className="mt-[var(--ui-space-6)] max-w-sm text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-white/70">
+              <p className="mt-[var(--ui-space-6)] text-xs font-semibold uppercase tracking-[0.16em] text-[#0051ff]">
+                A cleaner space. A brighter day.
+              </p>
+              <p className="mt-[var(--ui-space-3)] max-w-sm text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-white/70">
                 Reliable, professional cleaning across Cape Town with easy online booking, clear pricing and real support.
               </p>
               <div className="mt-[var(--ui-space-6)] flex items-center gap-[var(--ui-space-3)]">

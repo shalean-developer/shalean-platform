@@ -4,8 +4,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
-  --primary: #6382f7;
-  --primary-foreground: #171717;
+  --primary: #0051ff;
+  --primary-foreground: #ffffff;
 
   /* Canonical semantic UI tokens */
   --secondary: #18181b;
@@ -18,7 +18,7 @@
   --popover-foreground: #09090b;
   --border: #e4e4e7;
   --input: #e4e4e7;
-  --ring: #6382f7;
+  --ring: #0051ff;
   --accent: #f4f4f5;
   --accent-foreground: #18181b;
   --destructive: #dc2626;
@@ -83,17 +83,17 @@
   --ui-page-gutter: clamp(1rem, 3vw, 2rem);
 
   /* Homepage marketing presentation surfaces. These are decorative, not status colours. */
-  --marketing-surface-warm: #f7f0e4;
-  --marketing-surface-soft-yellow: #fffaf0;
-  --marketing-surface-soft-blush: #fff4f6;
-  --marketing-surface-soft-aqua: #eefaf8;
-  --marketing-surface-soft-lavender: #f7f3ff;
-  --marketing-surface-step-yellow: #f8dfa0;
-  --marketing-surface-step-pink: #f3addf;
-  --marketing-surface-step-aqua: #afe0df;
-  --marketing-accent-rose: #ec6f86;
-  --marketing-accent-teal: #38a991;
-  --marketing-accent-violet: #8060e8;
+  --marketing-surface-warm: #f5f7fb;
+  --marketing-surface-soft-yellow: #f7f9ff;
+  --marketing-surface-soft-blush: #f2f5ff;
+  --marketing-surface-soft-aqua: #eef3ff;
+  --marketing-surface-soft-lavender: #e8efff;
+  --marketing-surface-step-yellow: #dce7ff;
+  --marketing-surface-step-pink: #c7d8ff;
+  --marketing-surface-step-aqua: #aac4ff;
+  --marketing-accent-rose: #0051ff;
+  --marketing-accent-teal: #0033a1;
+  --marketing-accent-violet: #00008c;
 
   /* RD-P01B canonical layer scale */
   --ui-z-base: 0;
@@ -107,15 +107,15 @@
   --sidebar-bg: #f8f9fb;
   --sidebar-fg: #313949;
   --sidebar-muted: #5c6578;
-  --sidebar-active: #408df7;
+  --sidebar-active: #0051ff;
   --sidebar-active-fg: #ffffff;
   --sidebar-border: #e8ecf1;
   --sidebar-hover: #eef1f6;
   --sidebar-flyout-bg: #ffffff;
 
   /* Supporting brand blues */
-  --navy-from: #0d1b69;
-  --navy-to: #1a3dbd;
+  --navy-from: #00164e;
+  --navy-to: #0033a1;
 }
 
 @theme inline {
@@ -151,8 +151,8 @@
   :root {
     --background: #0a0a0a;
     --foreground: #ededed;
-    --primary: #6382f7;
-    --primary-foreground: #171717;
+    --primary: #0051ff;
+    --primary-foreground: #ffffff;
     --secondary: #f4f4f5;
     --secondary-foreground: #18181b;
     --muted: #27272a;
@@ -163,7 +163,7 @@
     --popover-foreground: #fafafa;
     --border: #27272a;
     --input: #3f3f46;
-    --ring: #6382f7;
+    --ring: #0051ff;
     --accent: #27272a;
     --accent-foreground: #fafafa;
     --destructive: #ef4444;

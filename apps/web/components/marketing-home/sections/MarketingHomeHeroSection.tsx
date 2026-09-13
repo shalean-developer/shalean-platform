@@ -1,22 +1,35 @@
 import Image from "next/image";
 import Link from "next/link";
 import { preload } from "react-dom";
-import { Check } from "lucide-react";
-import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
+import { ArrowRight, Check } from "lucide-react";
 import { GET_FREE_QUOTE_HREF } from "@/lib/marketing/getFreeQuote";
 import { marketingHeroImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
-import { HOME_PAGE_HEADLINE } from "@/lib/seo/homePageMeta";
+import { HOME_PAGE_H1, HOME_PAGE_H1_BRAND_LINE } from "@/lib/seo/homePageMeta";
 
-const HERO_MAIN = marketingHeroImage("cape-town-house-cleaning-kitchen.webp");
-const HERO_HEADLINE_ACCENT = "Cleaning Services";
-const HERO_HEADLINE_REST = HOME_PAGE_HEADLINE.startsWith(`${HERO_HEADLINE_ACCENT} `)
-  ? HOME_PAGE_HEADLINE.slice(HERO_HEADLINE_ACCENT.length + 1)
-  : HOME_PAGE_HEADLINE;
+const HERO_MAIN = marketingHeroImage("homepage-hero-cleaning-team-cape-town.webp");
 
-const HERO_BENEFITS = [
-  "Vetted and trained cleaners",
-  "See your price before you pay",
-  "Book online in minutes",
+const HERO_STORIES = [
+  {
+    title: "Homes refreshed",
+    detail: "Reliable cleaning for everyday living.",
+    href: "/services/standard-cleaning-cape-town",
+    image: marketingHeroImage("home-stories/homes-refreshed-cape-town.webp"),
+    position: "object-center",
+  },
+  {
+    title: "Moving made easier",
+    detail: "Detailed care before or after a move.",
+    href: "/services/move-out-cleaning-cape-town",
+    image: marketingHeroImage("home-stories/moving-made-easier-cape-town.webp"),
+    position: "object-center",
+  },
+  {
+    title: "Workplaces cared for",
+    detail: "Professional cleaning for productive spaces.",
+    href: "/services/office-cleaning-cape-town",
+    image: marketingHeroImage("home-stories/workplaces-cared-for-cape-town.webp"),
+    position: "object-center",
+  },
 ] as const;
 
 export function MarketingHomeHeroSection() {
@@ -25,63 +38,83 @@ export function MarketingHomeHeroSection() {
   preload(HERO_MAIN, { as: "image", fetchPriority: "high" });
 
   return (
-    <HomeSection
-      containerSize="marketing"
-      className="overflow-hidden bg-background pt-[var(--ui-space-10)] pb-[var(--ui-space-16)] md:pt-[var(--ui-space-16)] md:pb-[var(--ui-space-20)] lg:py-[var(--ui-space-24)]"
-    >
-      <div className="grid items-center gap-[var(--ui-space-12)] lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)] lg:gap-[var(--ui-space-16)] xl:gap-[var(--ui-space-20)]">
-        <div className="max-w-2xl">
-          <h1 className="text-[length:var(--ui-text-hero-title)] font-semibold leading-[var(--ui-leading-hero)] tracking-[var(--ui-tracking-hero-title)] text-foreground">
-            <span className="block text-primary">{HERO_HEADLINE_ACCENT}</span>
-            <span className="mt-[var(--ui-space-2)] block lg:whitespace-nowrap">{HERO_HEADLINE_REST}</span>
+    <section className="relative isolate mb-40 bg-[#00164e] text-white md:mb-44">
+      <div className="absolute inset-0 -z-10 overflow-hidden">
+        <Image
+          src={HERO_MAIN}
+          alt="Two professional Shalean cleaners caring for a Cape Town home"
+          fill
+          className="object-cover object-center lg:object-[center_42%]"
+          sizes="100vw"
+          priority
+          fetchPriority="high"
+        />
+        <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(0,22,78,0.98)_0%,rgba(0,51,161,0.9)_43%,rgba(0,0,140,0.48)_72%,rgba(0,22,78,0.18)_100%)]" />
+        <div className="absolute inset-0 bg-[linear-gradient(0deg,rgba(0,22,78,0.58),transparent_48%)]" />
+      </div>
+
+      <div className="mx-auto w-full max-w-[var(--ui-container-marketing)] px-[var(--ui-page-gutter)] pb-32 pt-14 md:pb-40 md:pt-20 lg:min-h-[560px] lg:pt-24">
+        <div className="max-w-[660px]">
+          <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white">
+            <Check className="h-4 w-4" aria-hidden /> Cape Town&apos;s cleaning partner
+          </p>
+          <h1 className="mt-5 font-semibold leading-[0.98] tracking-[-0.045em] text-white">
+            <span className="block whitespace-nowrap text-[clamp(1.5rem,4vw,3rem)]">{HOME_PAGE_H1}</span>
+            <span className="mt-2 block whitespace-nowrap text-[clamp(1.25rem,3.3vw,2.5rem)] text-[#0051ff]">
+              {HOME_PAGE_H1_BRAND_LINE}
+            </span>
           </h1>
+          <p className="mt-5 max-w-xl text-base leading-7 text-white/90 md:text-lg">
+            Professional home and business cleaning, shaped around your schedule and backed by a local team you can reach.
+          </p>
 
-          <div className="mt-[var(--ui-space-10)] space-y-[var(--ui-space-4)]">
-            {HERO_BENEFITS.map((label) => (
-              <div
-                key={label}
-                className="flex items-center gap-[var(--ui-space-3)] text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-foreground"
-              >
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
-                  <Check className="h-4 w-4" strokeWidth={2.6} aria-hidden />
-                </span>
-                <span>{label}</span>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-[var(--ui-space-10)] flex w-full flex-col gap-[var(--ui-space-3)] sm:w-auto sm:flex-row">
+          <div className="mt-7 flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
             <Link
               href={bookHref}
               data-growth-cta-source="marketing_hero_see_price"
-              className="inline-flex min-h-14 items-center justify-center rounded-[var(--ui-radius-pill)] bg-primary px-[var(--ui-space-8)] text-[length:var(--ui-text-body)] font-medium text-primary-foreground shadow-[var(--ui-shadow-md)] transition hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex min-h-12 items-center justify-center gap-2 rounded-md bg-[#0051ff] px-6 text-sm font-semibold uppercase tracking-wide text-white shadow-lg transition hover:bg-[#0033a1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#00164e]"
             >
               See instant price
+              <ArrowRight className="h-4 w-4" aria-hidden />
             </Link>
             <Link
               href={GET_FREE_QUOTE_HREF}
               data-quote-cta-source="marketing_hero"
-              className="inline-flex min-h-14 items-center justify-center rounded-[var(--ui-radius-pill)] border border-border bg-card px-[var(--ui-space-8)] text-[length:var(--ui-text-body)] font-medium text-foreground shadow-[var(--ui-shadow-sm)] transition hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="inline-flex min-h-12 items-center justify-center rounded-md border border-white/50 bg-white/10 px-6 text-sm font-semibold uppercase tracking-wide text-white backdrop-blur transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
             >
               Request a quote
             </Link>
           </div>
         </div>
+      </div>
 
-        <div className="relative mx-auto w-full max-w-[520px] lg:mx-0 lg:justify-self-end">
-          <div className="relative aspect-[4/3] w-full overflow-hidden rounded-[var(--ui-radius-marketing)] bg-muted shadow-[var(--ui-shadow-xl)] ring-1 ring-border/70">
-            <Image
-              src={HERO_MAIN}
-              alt="Professional house cleaning service in a bright modern kitchen in Cape Town"
-              fill
-              className="object-cover object-center"
-              sizes="(max-width: 1024px) 100vw, 520px"
-              priority
-              fetchPriority="high"
-            />
+      <div className="absolute inset-x-0 bottom-0 translate-y-[58%] px-[var(--ui-page-gutter)]">
+        <div className="mx-auto max-w-[var(--ui-container-marketing)]">
+          <p className="mb-3 text-sm font-medium text-white">Cleaning stories</p>
+          <div className="flex snap-x snap-mandatory gap-4 overflow-x-auto pb-3 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0">
+            {HERO_STORIES.map(({ title, detail, href, image, position }) => (
+              <Link
+                key={title}
+                href={href}
+                className="group relative aspect-[1.7/1] min-w-[82vw] snap-start overflow-hidden rounded-lg bg-[#00164e] shadow-[0_18px_44px_rgba(0,22,78,0.25)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051ff] focus-visible:ring-offset-2 sm:min-w-0"
+              >
+                <Image
+                  src={image}
+                  alt=""
+                  fill
+                  sizes="(max-width: 640px) 100vw, 33vw"
+                  className={`object-cover ${position} transition duration-300 group-hover:scale-[1.03]`}
+                />
+                <span className="absolute inset-0 bg-gradient-to-t from-[#00164e]/95 via-[#00164e]/15 to-transparent" />
+                <span className="absolute inset-x-0 bottom-0 p-5 text-white">
+                  <strong className="block text-lg font-semibold">{title}</strong>
+                  <span className="mt-1 block text-sm text-white/80">{detail}</span>
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
       </div>
-    </HomeSection>
+    </section>
   );
 }

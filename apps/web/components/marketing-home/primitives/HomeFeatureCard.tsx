@@ -18,7 +18,7 @@ export function HomeFeatureCard({ icon: Icon, title, children, className }: Home
       )}
     >
       {Icon ? (
-        <div className="mb-[var(--ui-space-4)] flex h-10 w-10 items-center justify-center rounded-[var(--ui-radius-lg)] bg-primary/10 text-primary">
+        <div className="mb-[var(--ui-space-4)] flex h-10 w-10 items-center justify-center rounded-[var(--ui-radius-lg)] bg-[#EEF3FF] text-[#0051FF]">
           <Icon className="h-5 w-5" strokeWidth={1.75} aria-hidden />
         </div>
       ) : null}

@@ -4,7 +4,7 @@ import { MarketingHomeDbSections } from "@/components/marketing-home/MarketingHo
 import { MarketingHomeDbSectionsFallback } from "@/components/marketing-home/MarketingHomeDbSectionsFallback";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
 import { MarketingHomeStickyCtaClient } from "@/components/marketing-home/MarketingHomeStickyCtaClient";
-import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
+import { MarketingHomeEditorialSection } from "@/components/marketing-home/sections/MarketingHomeEditorialSection";
 import { MarketingHomeFooter } from "@/components/marketing-home/sections/MarketingHomeFooter";
 import { MarketingHomeHeroSection } from "@/components/marketing-home/sections/MarketingHomeHeroSection";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
@@ -38,10 +38,10 @@ export default function MarketingHomePage() {
       <MarketingHomeHeader bookingHref={bookingHref} />
       <main className={marketingHomeMainPadding}>
         <MarketingHomeHeroSection />
+        <MarketingHomeEditorialSection />
         <Suspense fallback={<MarketingHomeDbSectionsFallback />}>
           <MarketingHomeDbSections />
         </Suspense>
-        <MarketingHomeFinalCta />
       </main>
       <MarketingHomeFooter stackFloats />
       <MarketingHomeStickyCtaClient />

@@ -19,11 +19,6 @@ GRANT SELECT ON public.services TO anon, authenticated;
 
 ALTER TABLE public.pricing_services ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS pricing_services_select_public_nonprod ON public.pricing_services;
-CREATE POLICY pricing_services_select_public_nonprod
-  ON public.pricing_services
-  FOR SELECT
-  TO anon, authenticated
-  USING (is_active = true);
 GRANT SELECT ON public.pricing_services TO anon, authenticated;
 
 -- Normalize the two legacy ENV-03 catalogue rows when this seed is reapplied to an

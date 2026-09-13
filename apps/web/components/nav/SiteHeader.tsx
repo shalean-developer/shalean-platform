@@ -170,7 +170,7 @@ export function SiteHeader({
                       type="button"
                       className={cn(
                         navLinkClass,
-                        servicesOpen && (dribbbleMode ? "bg-muted" : "bg-accent text-accent-foreground"),
+                        servicesOpen && (dribbbleMode ? "bg-[#EEF3FF] text-[#00164E]" : "bg-accent text-accent-foreground"),
                       )}
                       onClick={() => setServicesOpen((value) => !value)}
                       aria-expanded={servicesOpen}
@@ -188,7 +188,7 @@ export function SiteHeader({
                     {dribbbleMode ? (
                       <div
                         className={cn(
-                          "absolute left-0 top-full z-50 mt-3 w-[640px] overflow-hidden rounded-[28px] bg-popover text-popover-foreground shadow-[0_24px_70px_rgba(0,0,0,0.16)] ring-1 ring-black/5 transition-[opacity,visibility,transform] duration-150",
+                          "absolute left-0 top-full z-50 mt-3 w-[640px] overflow-hidden rounded-[28px] bg-white text-[#00164E] shadow-[0_24px_70px_rgba(0,22,78,0.18)] ring-1 ring-[#DCE7FF] transition-[opacity,visibility,transform] duration-150",
                           servicesOpen
                             ? "visible translate-y-0 opacity-100"
                             : "invisible pointer-events-none -translate-y-1 opacity-0",
@@ -196,17 +196,17 @@ export function SiteHeader({
                         aria-hidden={!servicesOpen}
                       >
                         <div className="grid grid-cols-[220px_minmax(0,1fr)] gap-2 p-2">
-                          <div className="flex flex-col rounded-[22px] bg-muted p-5">
-                            <p className="text-xs font-bold uppercase tracking-[0.14em] text-muted-foreground">
+                          <div className="flex flex-col rounded-[22px] bg-[#EEF3FF] p-5">
+                            <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#0051FF]">
                               Cleaning services
                             </p>
-                            <h3 className="mt-3 text-xl font-bold leading-tight text-foreground">
+                            <h3 className="mt-3 text-xl font-bold leading-tight text-[#00164E]">
                               Find the right clean for your space.
                             </h3>
-                            <p className="mt-3 text-sm leading-6 text-muted-foreground">
+                            <p className="mt-3 text-sm leading-6 text-[#4B5876]">
                               Compare the main Shalean cleaning options and choose the service that fits your home, move, stay or workplace.
                             </p>
-                            <div className="mt-4 space-y-2 text-sm text-foreground">
+                            <div className="mt-4 space-y-2 text-sm text-[#00164E]">
                               <p>See the right service faster</p>
                               <p>Understand each cleaning type</p>
                               <p>Continue to canonical service pages</p>
@@ -215,7 +215,7 @@ export function SiteHeader({
                             {allServicesLink ? (
                               <Link
                                 href={allServicesLink[1]}
-                                className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-full bg-foreground px-4 py-2.5 text-sm font-semibold text-background transition hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                className="mt-5 inline-flex min-h-11 items-center justify-center gap-2 rounded-md bg-[#0051FF] px-4 py-2.5 text-sm font-semibold uppercase tracking-wide text-white shadow-[var(--ui-shadow-sm)] transition hover:bg-[#0033A1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051FF] focus-visible:ring-offset-2"
                                 onClick={() => setServicesOpen(false)}
                                 tabIndex={servicesOpen ? 0 : -1}
                               >
@@ -228,10 +228,10 @@ export function SiteHeader({
                           <div className="p-3">
                             <div className="flex items-center justify-between gap-4 px-2 pb-2">
                               <div>
-                                <p className="text-sm font-bold text-foreground">Popular services</p>
-                                <p className="mt-0.5 text-xs text-muted-foreground">Choose one to see service details.</p>
+                                <p className="text-sm font-bold text-[#00164E]">Popular services</p>
+                                <p className="mt-0.5 text-xs text-[#4B5876]">Choose one to see service details.</p>
                               </div>
-                              <span className="rounded-full bg-muted px-3 py-1 text-xs font-semibold text-muted-foreground">
+                              <span className="rounded-full bg-[#EEF3FF] px-3 py-1 text-xs font-semibold text-[#0033A1]">
                                 6 primary
                               </span>
                             </div>
@@ -241,15 +241,15 @@ export function SiteHeader({
                                 <Link
                                   key={item}
                                   href={itemHref}
-                                  className="group rounded-2xl px-3 py-3 transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                  className="group rounded-2xl px-3 py-3 transition-colors hover:bg-[#EEF3FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0051FF]"
                                   onClick={() => setServicesOpen(false)}
                                   tabIndex={servicesOpen ? 0 : -1}
                                 >
-                                  <span className="flex items-center justify-between gap-2 text-sm font-semibold text-foreground">
+                                  <span className="flex items-center justify-between gap-2 text-sm font-semibold text-[#00164E]">
                                     {item}
-                                    <ArrowRight className="h-3.5 w-3.5 -translate-x-1 opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" aria-hidden />
+                                    <ArrowRight className="h-3.5 w-3.5 -translate-x-1 text-[#0051FF] opacity-0 transition group-hover:translate-x-0 group-hover:opacity-100" aria-hidden />
                                   </span>
-                                  <span className="mt-1 block text-xs leading-5 text-muted-foreground">
+                                  <span className="mt-1 block text-xs leading-5 text-[#4B5876]">
                                     {SERVICE_MENU_DETAILS[item] ?? "Explore this cleaning service."}
                                   </span>
                                 </Link>

@@ -25,14 +25,13 @@ export function MarketingHomeFinalCta({
   return (
     <HomeSection containerSize="marketing" className="bg-background md:py-[var(--ui-space-20)]">
       <div
-        className="overflow-hidden rounded-[var(--ui-radius-marketing)] px-[var(--ui-space-6)] py-[var(--ui-space-12)] text-white shadow-[var(--ui-shadow-xl)] sm:px-[var(--ui-space-10)] md:py-[var(--ui-space-16)] lg:px-[var(--ui-space-16)]"
-        style={{ background: "linear-gradient(135deg, var(--navy-from), var(--navy-to))" }}
+        className="overflow-hidden rounded-lg bg-[#0051ff] px-[var(--ui-space-6)] py-[var(--ui-space-12)] text-white shadow-[var(--ui-shadow-xl)] sm:px-[var(--ui-space-10)] md:py-[var(--ui-space-16)] lg:px-[var(--ui-space-16)]"
       >
         <div className="mx-auto flex max-w-4xl flex-col items-center text-center">
           <p className="text-[length:var(--ui-text-small)] font-semibold uppercase tracking-[0.14em] text-white/60">
             {eyebrow}
           </p>
-          <h2 className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-page-title)] font-semibold leading-[1.08] tracking-[-0.03em] text-white md:text-[length:var(--ui-text-hero-title)]">
+          <h2 className="mt-4 text-[clamp(2rem,3.6vw,3.5rem)] font-medium leading-[1.06] tracking-[-0.035em] text-white">
             {title}
           </h2>
           <p className="mt-[var(--ui-space-5)] max-w-2xl text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-white/75">
@@ -42,7 +41,7 @@ export function MarketingHomeFinalCta({
             <GrowthCtaLink
               href={bookHref}
               source={ctaSource}
-              className="inline-flex min-h-14 items-center justify-center gap-[var(--ui-space-2)] rounded-[var(--ui-radius-pill)] bg-white px-[var(--ui-space-8)] text-[length:var(--ui-text-body)] font-medium text-foreground shadow-[var(--ui-shadow-md)] transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--navy-to)]"
+              className="inline-flex min-h-12 items-center justify-center gap-[var(--ui-space-2)] rounded-md bg-white px-[var(--ui-space-8)] text-[length:var(--ui-text-small)] font-semibold uppercase tracking-wide text-[#0033a1] shadow-[var(--ui-shadow-md)] transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-[#0033a1]"
             >
               {ctaLabel}
               <ArrowRight className="h-4 w-4" aria-hidden />

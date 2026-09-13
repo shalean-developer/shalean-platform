@@ -14,11 +14,11 @@ function HeaderSkeleton() {
 export function MarketingHomeDbSectionsFallback() {
   return (
     <>
-      <HomeSection containerSize="marketing" className="!bg-[#F4F6FA]" aria-hidden>
+      <HomeSection containerSize="marketing" className="!bg-[#F5F7FB]" aria-hidden>
         <HeaderSkeleton />
         <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="min-h-[400px] animate-pulse rounded-[var(--ui-radius-marketing)] bg-card shadow-[var(--ui-shadow-sm)]" />
+            <div key={i} className="min-h-[400px] animate-pulse rounded-lg bg-card shadow-[var(--ui-shadow-sm)]" />
           ))}
         </div>
       </HomeSection>
@@ -27,16 +27,16 @@ export function MarketingHomeDbSectionsFallback() {
         <HeaderSkeleton />
         <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-6)] md:grid-cols-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="min-h-[320px] animate-pulse rounded-[var(--ui-radius-marketing)] bg-[#DDEBFF]" />
+            <div key={i} className="min-h-[320px] animate-pulse rounded-lg bg-[#DCE7FF]" />
           ))}
         </div>
       </HomeSection>
 
-      <HomeSection containerSize="marketing" className="!bg-[#F4F6FA]" aria-hidden>
+      <HomeSection containerSize="marketing" className="!bg-[#F5F7FB]" aria-hidden>
         <HeaderSkeleton />
         <div className="mt-[var(--ui-space-16)] grid gap-[var(--ui-space-5)] sm:grid-cols-2 xl:grid-cols-4">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="min-h-[300px] animate-pulse rounded-[var(--ui-radius-marketing)] bg-card shadow-[var(--ui-shadow-sm)]" />
+            <div key={i} className="min-h-[300px] animate-pulse rounded-lg bg-card shadow-[var(--ui-shadow-sm)]" />
           ))}
         </div>
       </HomeSection>

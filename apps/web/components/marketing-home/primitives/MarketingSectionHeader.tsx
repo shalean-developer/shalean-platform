@@ -16,7 +16,6 @@ export function MarketingSectionHeader({
   title,
   description,
   align = "center",
-  eyebrowTone = "default",
   headingId,
   className,
 }: MarketingSectionHeaderProps) {
@@ -32,22 +31,21 @@ export function MarketingSectionHeader({
     >
       <p
         className={cn(
-          "text-[length:var(--ui-text-small)] font-semibold uppercase tracking-[0.14em]",
-          eyebrowTone === "brand" ? "text-primary" : "text-foreground/60",
+          "text-xs font-semibold uppercase tracking-[0.16em] text-[#0051FF]",
         )}
       >
         {eyebrow}
       </p>
       <h2
         id={headingId}
-        className="mt-[var(--ui-space-4)] text-[length:var(--ui-text-page-title)] font-semibold leading-[1.08] tracking-[-0.03em] text-foreground md:text-[length:var(--ui-text-hero-title)]"
+        className="mt-4 text-[clamp(2rem,3.6vw,3.5rem)] font-medium leading-[1.06] tracking-[-0.035em] text-[#00164E]"
       >
         {title}
       </h2>
       {description ? (
         <div
           className={cn(
-            "mt-[var(--ui-space-5)] max-w-3xl text-[length:var(--ui-text-lead)] leading-[var(--ui-leading-body)] text-muted-foreground",
+            "mt-5 max-w-3xl text-base leading-7 text-slate-600 md:text-lg",
             centered && "mx-auto",
           )}
         >

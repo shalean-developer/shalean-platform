@@ -31,7 +31,7 @@ export function MarketingHomeHowItWorksSection() {
     <HomeSection
       id="how-it-works"
       containerSize="marketing"
-      className="scroll-mt-24 bg-primary/10 md:py-[var(--ui-space-20)]"
+      className="scroll-mt-24 !bg-[#EEF3FF] md:py-[var(--ui-space-20)]"
       aria-label="How Shalean cleaning works"
     >
       <MarketingSectionHeader
@@ -44,10 +44,10 @@ export function MarketingHomeHowItWorksSection() {
         {STEPS.map(({ Icon, title, description }) => (
           <article
             key={title}
-            className="relative flex min-h-[180px] flex-col items-center justify-center rounded-[var(--ui-radius-marketing)] border border-border/60 bg-card p-[var(--ui-space-5)] text-center text-card-foreground shadow-[var(--ui-shadow-lg)]"
+            className="relative flex min-h-[180px] flex-col items-center justify-center rounded-lg border border-[#DCE7FF] bg-card p-[var(--ui-space-5)] text-center text-card-foreground shadow-[var(--ui-shadow-sm)]"
           >
             <div
-              className="flex h-11 w-11 items-center justify-center rounded-full bg-primary/15 text-[var(--navy-from)]"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-[#EEF3FF] text-[#0051FF]"
               aria-hidden
             >
               <Icon className="h-6 w-6" strokeWidth={1.65} />

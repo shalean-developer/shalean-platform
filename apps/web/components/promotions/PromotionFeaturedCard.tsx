@@ -46,16 +46,10 @@ export function PromotionFeaturedCard() {
 
   if (!promo) return null;
 
-  const primary = promo.colours?.primary ?? "#0f172a";
-  const accent = promo.colours?.accent ?? "#059669";
-
   return (
     <HomeSection containerSize="marketing" className="py-[var(--ui-space-8)] md:py-[var(--ui-space-10)]">
       <div
-        className="overflow-hidden rounded-[var(--ui-radius-marketing)] text-white shadow-[var(--ui-shadow-md)]"
-        style={{
-          background: `linear-gradient(135deg, ${primary}, ${accent})`,
-        }}
+        className="overflow-hidden rounded-lg bg-[linear-gradient(135deg,#00164E,#0033A1)] text-white shadow-[var(--ui-shadow-md)]"
       >
         <div className="grid gap-[var(--ui-space-6)] p-[var(--ui-space-6)] md:grid-cols-[1.2fr_0.8fr] md:p-[var(--ui-space-10)]">
           <div>
@@ -86,14 +80,14 @@ export function PromotionFeaturedCard() {
             <div className="mt-[var(--ui-space-5)] flex flex-wrap gap-[var(--ui-space-3)]">
               <Link
                 href={promoBookingHref(promo.promoCode)}
-                className="inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-lg)] bg-white px-[var(--ui-space-5)] text-[length:var(--ui-text-small)] font-semibold text-foreground shadow-[var(--ui-shadow-sm)] transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                className="inline-flex min-h-12 items-center justify-center rounded-md bg-white px-[var(--ui-space-5)] text-[length:var(--ui-text-small)] font-semibold uppercase tracking-wide text-[#0033A1] shadow-[var(--ui-shadow-sm)] transition hover:bg-white/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 onClick={() => trackPromoEvent(promo.id, "click")}
               >
                 {promo.cta || "Book now"}
               </Link>
               <Link
                 href={promo.landingPagePath}
-                className="inline-flex min-h-12 items-center justify-center rounded-[var(--ui-radius-lg)] border border-white/40 bg-white/10 px-[var(--ui-space-5)] text-[length:var(--ui-text-small)] font-semibold text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                className="inline-flex min-h-12 items-center justify-center rounded-md border border-white/40 bg-white/10 px-[var(--ui-space-5)] text-[length:var(--ui-text-small)] font-semibold uppercase tracking-wide text-white transition hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
                 onClick={() => trackPromoEvent(promo.id, "landing_visit")}
               >
                 Learn more

@@ -67,6 +67,9 @@ function portalCutoverRedirects() {
 }
 
 const nextConfig: NextConfig = {
+  // The development tools launcher overlaps the mobile sticky CTA. Browser and
+  // terminal diagnostics remain available without rendering the floating badge.
+  devIndicators: false,
   // Keep Next's file tracing and bundler rooted at the same monorepo directory. Vercel
   // traces from the repository root, and warns when Turbopack uses apps/web instead.
   outputFileTracingRoot: workspaceRoot,
