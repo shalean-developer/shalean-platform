@@ -554,7 +554,7 @@ export function PropertyAddressSection() {
                     }}
                     placeholder={locationsLoading ? "Loading suburbs…" : "Select suburb…"}
                     error={errors.suburb?.message}
-                    disabled={locationsLoading || Boolean(locationsError) || locationOptions.length === 0}
+                    disabled={locationsLoading}
                   />
                 )}
               />
