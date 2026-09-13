@@ -328,13 +328,24 @@ export function Step1Details() {
   const { watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
   const serviceDetails = watch("serviceDetails") ?? {};
+  const address = watch("address") ?? "";
+  const suburb = watch("suburb") ?? "";
+  const contactPhone = watch("contactPhone") ?? "";
+  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
   const isRegularCleaning = serviceSlug === "regular-cleaning";
-  const regularDetailsStage = regularCleaningDetailsStage(serviceDetails);
+  const regularDetailsStage = regularCleaningDetailsStage(serviceDetails, {
+    address,
+    suburb,
+    contactPhone,
+    serviceAreaLocationId,
+  });
   const hasSelectedPropertyType = regularDetailsStage !== "property";
-  const hasCompletedRequiredRooms = regularDetailsStage === "remaining";
+  const hasCompletedRequiredRooms = !["property", "rooms"].includes(regularDetailsStage);
+  const showAddress = !isRegularCleaning || ["address", "equipment"].includes(regularDetailsStage);
+  const showEquipment = !isRegularCleaning || regularDetailsStage === "equipment";
 
   function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
     if (!question.showWhen) return true;
@@ -373,10 +384,10 @@ export function Step1Details() {
     if (!isRegularCleaning) return true;
     if (question.key === "propertyType") return true;
     if (question.group === "rooms") return hasSelectedPropertyType;
-    return hasCompletedRequiredRooms;
+    if (question.key === "hasPets") return hasCompletedRequiredRooms;
+    return regularDetailsStage === "equipment";
   });
   const questionGroups = groupQuestions(visibleQuestions);
-  const showRemainingDetails = !isRegularCleaning || hasCompletedRequiredRooms;
 
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
@@ -428,18 +439,18 @@ export function Step1Details() {
         })}
       </section>
 
-      <hr className={cn("border-slate-200", !showRemainingDetails && "hidden")} />
+      <hr className={cn("border-slate-200", !showAddress && "hidden")} />
 
-      <div className={cn(!showRemainingDetails && "hidden")}>
+      <div className={cn(!showAddress && "hidden")}>
         <PropertyAddressSection />
       </div>
 
-      <div className={cn(!showRemainingDetails && "hidden")}>
+      <div className={cn(!showEquipment && "hidden")}>
         <EquipmentSection />
       </div>
 
       {/* Extras */}
-      {showRemainingDetails && extras.length > 0 && (
+      {showEquipment && extras.length > 0 && (
         <>
           <hr className="border-slate-200" />
           <section className="space-y-4">
