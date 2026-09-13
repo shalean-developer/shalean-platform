@@ -42,7 +42,7 @@ const PROPERTY_TYPE_PRESENTATION: Record<
   },
   apartment: {
     icon: Building2,
-    description: "A shared-building home.",
+    description: "A home in a building.",
   },
   townhouse: {
     icon: PanelsTopLeft,
