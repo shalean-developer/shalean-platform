@@ -121,7 +121,7 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
           control={control}
           rules={{ required: question.required ? `${question.label} is required` : false }}
           render={({ field }) => (
-            <div className="mx-auto mt-6 grid w-full max-w-4xl gap-4 sm:grid-cols-3">
+            <div className="mx-auto mt-6 grid w-full max-w-5xl gap-5 sm:grid-cols-3 sm:gap-6">
               {options.map((opt) => {
                 const selected = String(field.value ?? "") === opt.value;
                 const presentation = PROPERTY_TYPE_PRESENTATION[opt.value];
@@ -136,7 +136,7 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
                     onClick={() => field.onChange(opt.value)}
                     suppressHydrationWarning
                     className={cn(
-                      "relative min-h-32 rounded-xl border bg-white p-5 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
+                      "relative min-h-36 rounded-xl border bg-white p-5 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:aspect-[2/1] sm:min-h-0",
                       selected
                         ? "border-blue-600 bg-blue-50/60 ring-2 ring-blue-600/15"
                         : "border-slate-200 text-slate-800",
@@ -151,7 +151,7 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
                       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
                         <Icon className="h-5 w-5" aria-hidden />
                       </span>
-                      <span className="text-lg font-bold text-slate-900">{opt.label}</span>
+                      <span className="whitespace-nowrap text-base font-bold text-slate-900 lg:text-lg">{opt.label}</span>
                     </span>
                     <span className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-slate-600">
                       {presentation?.description ?? "Select this property type."}
