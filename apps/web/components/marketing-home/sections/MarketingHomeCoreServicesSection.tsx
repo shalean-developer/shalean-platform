@@ -17,6 +17,8 @@ type ServiceGroup = {
   id: string;
   title: string;
   description: string;
+  image: string;
+  imageAlt: string;
   icon: LucideIcon;
   serviceIds: readonly MarketingHomeServiceCard["id"][];
 };
@@ -26,6 +28,8 @@ const SERVICE_GROUPS: readonly ServiceGroup[] = [
     id: "home-cleaning",
     title: "Home Cleaning",
     description: "Everyday cleaning and deeper whole-home care.",
+    image: "/images/marketing/service-groups/home-cleaning-cape-town.webp",
+    imageAlt: "Professional Shalean cleaner caring for a Cape Town home",
     icon: House,
     serviceIds: ["standard", "deep"],
   },
@@ -33,6 +37,8 @@ const SERVICE_GROUPS: readonly ServiceGroup[] = [
     id: "moving-stays",
     title: "Moving Cleaning",
     description: "Move cleans and guest-ready Airbnb turnovers.",
+    image: "/images/marketing/service-groups/moving-cleaning-cape-town.webp",
+    imageAlt: "Shalean cleaning team preparing a Cape Town apartment for a move",
     icon: Luggage,
     serviceIds: ["move", "airbnb"],
   },
@@ -40,6 +46,8 @@ const SERVICE_GROUPS: readonly ServiceGroup[] = [
     id: "workplace-specialist",
     title: "Specialist Cleaning",
     description: "Office cleaning and specialist carpet care.",
+    image: "/images/marketing/service-groups/specialist-cleaning-cape-town.webp",
+    imageAlt: "Professional carpet cleaning in a Cape Town office",
     icon: Building2,
     serviceIds: ["office", "carpet"],
   },
@@ -136,34 +144,45 @@ export function MarketingHomeCoreServicesSection({ cards, afterCards, layout = "
             return (
               <article
                 key={group.id}
-                className="flex min-h-[400px] flex-col rounded-lg border border-[#DCE7FF] bg-card p-[var(--ui-space-8)] text-card-foreground shadow-[var(--ui-shadow-md)] transition-transform duration-200 hover:-translate-y-1"
+                className="group flex min-h-[500px] flex-col overflow-hidden rounded-lg border border-[#DCE7FF] bg-card text-card-foreground shadow-[var(--ui-shadow-md)] transition-transform duration-200 hover:-translate-y-1"
               >
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#EEF3FF] text-[#0051FF]" aria-hidden>
-                  <GroupIcon className="h-8 w-8" strokeWidth={1.7} />
+                <div className="relative aspect-[3/2] overflow-hidden bg-[#EEF3FF]">
+                  <Image
+                    src={group.image}
+                    alt={group.imageAlt}
+                    fill
+                    sizes="(max-width: 767px) 100vw, 33vw"
+                    className="object-cover object-center transition duration-300 group-hover:scale-[1.02]"
+                  />
+                  <div className="absolute bottom-[var(--ui-space-4)] left-[var(--ui-space-4)] flex h-12 w-12 items-center justify-center rounded-full bg-white/95 text-[#0051FF] shadow-[var(--ui-shadow-sm)]" aria-hidden>
+                    <GroupIcon className="h-6 w-6" strokeWidth={1.7} />
+                  </div>
                 </div>
 
-                <h3 className="mt-[var(--ui-space-6)] text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
-                  {group.title}
-                </h3>
-                <p className="mt-[var(--ui-space-3)] max-w-sm text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
-                  {group.description}
-                </p>
+                <div className="flex flex-1 flex-col p-[var(--ui-space-8)]">
+                  <h3 className="text-[length:var(--ui-text-section-title)] font-semibold leading-[var(--ui-leading-tight)] tracking-tight text-foreground">
+                    {group.title}
+                  </h3>
+                  <p className="mt-[var(--ui-space-3)] max-w-sm text-[length:var(--ui-text-body)] leading-[var(--ui-leading-body)] text-muted-foreground">
+                    {group.description}
+                  </p>
 
-                <div className="mt-auto pt-[var(--ui-space-8)]">
-                  <div className="space-y-[var(--ui-space-3)]">
-                    {group.services.map(({ id, title, priceLabel, href }) => (
-                      <Link
-                        key={id}
-                        href={href}
-                        className="group/service flex min-h-14 items-center justify-between gap-[var(--ui-space-3)] rounded-[var(--ui-radius-xl)] border border-[#DBEAFE] bg-background px-[var(--ui-space-4)] text-[length:var(--ui-text-small)] transition hover:border-primary/40 hover:bg-[#EFF6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-                      >
-                        <span className="font-medium text-foreground">{title}</span>
-                        <span className="flex shrink-0 items-center gap-[var(--ui-space-2)] text-[length:var(--ui-text-caption)] text-muted-foreground transition-colors group-hover/service:text-primary">
-                          {priceLabel ? `From ${priceLabel}` : "View"}
-                          <ArrowRight className="h-4 w-4 transition-transform group-hover/service:translate-x-0.5" aria-hidden />
-                        </span>
-                      </Link>
-                    ))}
+                  <div className="mt-auto pt-[var(--ui-space-8)]">
+                    <div className="space-y-[var(--ui-space-3)]">
+                      {group.services.map(({ id, title, priceLabel, href }) => (
+                        <Link
+                          key={id}
+                          href={href}
+                          className="group/service flex min-h-14 items-center justify-between gap-[var(--ui-space-3)] rounded-[var(--ui-radius-xl)] border border-[#DBEAFE] bg-background px-[var(--ui-space-4)] text-[length:var(--ui-text-small)] transition hover:border-primary/40 hover:bg-[#EFF6FF] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                        >
+                          <span className="font-medium text-foreground">{title}</span>
+                          <span className="flex shrink-0 items-center gap-[var(--ui-space-2)] text-[length:var(--ui-text-caption)] text-muted-foreground transition-colors group-hover/service:text-primary">
+                            {priceLabel ? `From ${priceLabel}` : "View"}
+                            <ArrowRight className="h-4 w-4 transition-transform group-hover/service:translate-x-0.5" aria-hidden />
+                          </span>
+                        </Link>
+                      ))}
+                    </div>
                   </div>
                 </div>
               </article>
