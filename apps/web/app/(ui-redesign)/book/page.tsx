@@ -1,12 +1,10 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { ArrowRight, CheckCircle2, ShieldCheck, Star } from "lucide-react";
+import { ArrowRight } from "lucide-react";
 import { BookIndexHeader } from "@/components/booking/BookIndexHeader";
-import { Button } from "@/components/ui/button";
 import { buildBookHubHrefFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
 import { collectLegacyBookingSearchParams } from "@/lib/booking/legacyBookingSearchParams";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
-import { GET_FREE_QUOTE_HREF } from "@/lib/marketing/getFreeQuote";
 import { SERVICE_CONFIG, SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 
 export const dynamic = "force-dynamic";
@@ -51,13 +49,9 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
 
       <main className="mx-auto max-w-[var(--ui-container-lg)] px-[var(--ui-page-gutter)] py-10 sm:py-14">
         <section className="text-center" aria-labelledby="booking-service-heading">
-          <p className="mx-auto inline-flex items-center gap-2 rounded-full border border-primary/15 bg-primary/5 px-3 py-1.5 text-xs font-semibold text-primary">
-            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-            Instant online price · No obligation
-          </p>
           <h1
             id="booking-service-heading"
-            className="mx-auto mt-5 max-w-3xl text-[length:var(--ui-text-page-title)] font-extrabold leading-[var(--ui-leading-tight)] tracking-tight text-foreground"
+            className="mx-auto max-w-3xl text-[length:var(--ui-text-page-title)] font-extrabold leading-[var(--ui-leading-tight)] tracking-tight text-foreground"
           >
             Choose your cleaning service
           </h1>
@@ -65,19 +59,6 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
             Select a service to see your price, choose a date and continue to secure checkout. Most bookings take less than 3 minutes.
           </p>
         </section>
-
-        <div className="mt-8 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 rounded-[var(--ui-radius-xl)] border border-border bg-card px-4 py-3 text-sm text-muted-foreground shadow-[var(--ui-shadow-sm)] sm:px-6">
-          <span className="inline-flex items-center gap-1.5 font-semibold text-card-foreground">
-            <Star className="h-4 w-4 fill-amber-400 text-amber-400" aria-hidden />
-            Trusted local cleaning team
-          </span>
-          <span>Vetted cleaners</span>
-          <span className="inline-flex items-center gap-1.5">
-            <ShieldCheck className="h-4 w-4 text-primary" aria-hidden />
-            Secure Paystack payment
-          </span>
-          <span>Satisfaction guarantee</span>
-        </div>
 
         <section className="mt-8" aria-label="Cleaning services">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -125,17 +106,6 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
           </div>
         </section>
 
-        <aside className="mt-10 rounded-[var(--ui-radius-xl)] border border-primary/15 bg-primary/5 p-5 text-center sm:p-7">
-          <h2 className="text-base font-bold text-foreground">Not ready to book online?</h2>
-          <p className="mx-auto mt-1.5 max-w-xl text-sm leading-relaxed text-muted-foreground">
-            Request a personalised quote for an unusual property, office, recurring schedule or job that needs a custom scope.
-          </p>
-          <Button asChild variant="outline" size="lg" className="mt-5 rounded-xl border-primary/30 bg-background text-primary hover:bg-primary/5">
-            <Link href={GET_FREE_QUOTE_HREF} data-quote-cta-source="book_hub">
-              Request a personalised quote
-            </Link>
-          </Button>
-        </aside>
       </main>
     </div>
   );
