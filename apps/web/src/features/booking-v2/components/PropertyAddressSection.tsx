@@ -8,12 +8,12 @@ import { getSession, getUser } from "@/lib/auth/authClient";
 import { useUser } from "@/hooks/useUser";
 import { useAddresses } from "@/hooks/useAddresses";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
+import type { ServiceLocationRow } from "@/app/api/booking/service-locations/route";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import {
   CONTACT_PHONE_VALIDATION_MESSAGE,
   isValidContactPhone,
 } from "@/lib/booking/contactPhoneValidation";
-import { getBookingLocationOptions } from "@/lib/locations/bookingLocations";
 import { useBookingV2LocationResolve } from "@/lib/booking-v2/useBookingV2LocationResolve";
 import { UnsupportedSuburbModal } from "@/src/features/booking-v2/components/UnsupportedSuburbModal";
 
@@ -49,17 +49,21 @@ function FieldLabel({
 function SearchableSelect({
   id,
   options,
+  selectedId,
   value,
   onChange,
   placeholder = "Select…",
   error,
+  disabled,
 }: {
   id: string;
-  options: string[];
+  options: ServiceLocationRow[];
+  selectedId: string;
   value: string;
-  onChange: (v: string) => void;
+  onChange: (location: ServiceLocationRow) => void;
   placeholder?: string;
   error?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -85,7 +89,7 @@ function SearchableSelect({
     () =>
       query.trim() === ""
         ? options
-        : options.filter((o) => o.toLowerCase().includes(query.toLowerCase())),
+        : options.filter((option) => option.name.toLowerCase().includes(query.toLowerCase())),
     [options, query],
   );
 
@@ -94,11 +98,13 @@ function SearchableSelect({
       <button
         id={id}
         type="button"
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm transition sm:px-4",
           open ? "border-blue-500 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300",
           error && "border-red-400",
+          disabled && "cursor-not-allowed bg-slate-50 text-slate-400",
         )}
       >
         <span
@@ -139,14 +145,14 @@ function SearchableSelect({
             {filtered.length === 0 ? (
               <p className="px-4 py-3 text-sm text-slate-400">No suburbs found</p>
             ) : (
-              filtered.map((opt) => {
-                const isSelected = opt === value;
+              filtered.map((option) => {
+                const isSelected = option.id === selectedId;
                 return (
                   <button
-                    key={opt}
+                    key={option.id}
                     type="button"
                     onClick={() => {
-                      onChange(opt);
+                      onChange(option);
                       setOpen(false);
                       setQuery("");
                     }}
@@ -157,7 +163,10 @@ function SearchableSelect({
                         : "text-slate-700 hover:bg-slate-50",
                     )}
                   >
-                    <span className="min-w-0 break-words">{opt}</span>
+                    <span className="min-w-0 break-words">
+                      {option.name}
+                      {option.city && option.city !== "Cape Town" ? ` (${option.city})` : ""}
+                    </span>
                     {isSelected ? <Check className="h-4 w-4 shrink-0 text-blue-600" /> : null}
                   </button>
                 );
@@ -191,6 +200,10 @@ export function PropertyAddressSection() {
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [prefilled, setPrefilled] = useState(false);
   const [unsupportedOpen, setUnsupportedOpen] = useState(false);
+  const [locationOptions, setLocationOptions] = useState<ServiceLocationRow[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
+  const [locationLoadAttempt, setLocationLoadAttempt] = useState(0);
 
   const savedAddresses = addresses;
   const hasSavedAddresses = savedAddresses.length > 0;
@@ -319,6 +332,47 @@ export function PropertyAddressSection() {
   const addressValue = watch("address");
   const suburbValue = watch("suburb");
   const showBookForSomeoneHint = addressMode === "custom" && !addressValue?.trim();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const response = await fetch("/api/booking/service-locations?withActiveCleanersOnly=false");
+        const json = (await response.json()) as {
+          ok?: boolean;
+          locations?: ServiceLocationRow[];
+          error?: string;
+        };
+        if (cancelled) return;
+        if (!response.ok || json.ok !== true || !Array.isArray(json.locations)) {
+          setLocationOptions([]);
+          setLocationsError(json.error || "Could not load suburbs.");
+          return;
+        }
+
+        const uniqueLocations = Array.from(
+          new Map(
+            json.locations
+              .filter((location) => location.id && location.name?.trim())
+              .map((location) => [location.id, { ...location, name: location.name.trim() }]),
+          ).values(),
+        ).sort((a, b) => a.name.localeCompare(b.name, "en-ZA"));
+        setLocationOptions(uniqueLocations);
+      } catch {
+        if (!cancelled) {
+          setLocationOptions([]);
+          setLocationsError("Could not load suburbs.");
+        }
+      } finally {
+        if (!cancelled) setLocationsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [locationLoadAttempt]);
 
   const { location: resolvedLocation, loading: locationLoading, error: locationError } =
     useBookingV2LocationResolve(suburbValue ?? "");
@@ -487,14 +541,44 @@ export function PropertyAddressSection() {
                 render={({ field }) => (
                   <SearchableSelect
                     id="suburb"
-                    options={getBookingLocationOptions()}
+                    options={locationOptions}
+                    selectedId={getValues("serviceAreaLocationId") ?? ""}
                     value={field.value ?? ""}
-                    onChange={field.onChange}
-                    placeholder="Select suburb…"
+                    onChange={(location) => {
+                      field.onChange(location.name);
+                      setValue("serviceAreaLocationId", location.id, { shouldDirty: true });
+                      setValue("serviceAreaCityId", location.city_id ?? "", { shouldDirty: true });
+                      if (location.city) {
+                        setValue("city", location.city, { shouldDirty: true });
+                      }
+                    }}
+                    placeholder={locationsLoading ? "Loading suburbs…" : "Select suburb…"}
                     error={errors.suburb?.message}
+                    disabled={locationsLoading || Boolean(locationsError) || locationOptions.length === 0}
                   />
                 )}
               />
+              {locationsError ? (
+                <div className="mt-1 flex items-center gap-2 text-xs text-amber-700" role="status">
+                  <span>{locationsError}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocationsLoading(true);
+                      setLocationsError(null);
+                      setLocationLoadAttempt((attempt) => attempt + 1);
+                    }}
+                    className="font-semibold text-blue-600 hover:underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : null}
+              {!locationsLoading && !locationsError && locationOptions.length === 0 ? (
+                <p className="mt-1 text-xs font-medium text-amber-700" role="status">
+                  No booking suburbs are configured yet. Please contact us for assistance.
+                </p>
+              ) : null}
               <FieldError message={errors.suburb?.message} />
               <FieldError message={errors.serviceAreaLocationId?.message} />
               {locationLoading && suburbValue?.trim() ? (
