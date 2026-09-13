@@ -58,9 +58,11 @@ export function MarketingHomeHeroSection() {
           <p className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-white">
             <Check className="h-4 w-4" aria-hidden /> Cape Town&apos;s cleaning partner
           </p>
-          <h1 className="mt-5 text-[clamp(2.75rem,5vw,4.75rem)] font-semibold leading-[0.98] tracking-[-0.045em] text-white">
-            {HOME_PAGE_H1}
-            <span className="mt-2 block text-[#0051ff]">{HOME_PAGE_H1_BRAND_LINE}</span>
+          <h1 className="mt-5 font-semibold leading-[0.98] tracking-[-0.045em] text-white">
+            <span className="block whitespace-nowrap text-[clamp(1.5rem,4vw,3rem)]">{HOME_PAGE_H1}</span>
+            <span className="mt-2 block whitespace-nowrap text-[clamp(1.25rem,3.3vw,2.5rem)] text-[#0051ff]">
+              {HOME_PAGE_H1_BRAND_LINE}
+            </span>
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-white/90 md:text-lg">
             Professional home and business cleaning, shaped around your schedule and backed by a local team you can reach.

@@ -17,7 +17,7 @@ export const HOME_STARTING_PRICE_ZAR = 350;
 export const HOME_PAGE_H1 = "Cleaning Services Cape Town";
 
 /** Brand promise displayed as the second line of the homepage H1. */
-export const HOME_PAGE_H1_BRAND_LINE = "A cleaner space. A brighter day.";
+export const HOME_PAGE_H1_BRAND_LINE = "A cleaner space, a brighter day.";
 
 /** Primary keyword phrase — shared by `<title>`, `<h1>`, and JSON-LD WebPage name. */
 export const HOME_PAGE_HEADLINE = `${HOME_PAGE_H1} from R${HOME_STARTING_PRICE_ZAR}`;
