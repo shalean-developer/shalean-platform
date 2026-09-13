@@ -19,21 +19,21 @@ export function MarketingHomeEditorialSection() {
         </p>
       </div>
 
-      <div className="relative mt-14 aspect-[16/8] min-h-[360px] max-h-[720px] overflow-hidden rounded-lg bg-[#00164E] shadow-[var(--ui-shadow-lg)] md:mt-20">
+      <div className="relative mt-10 aspect-[4/5] min-h-[440px] overflow-hidden rounded-lg bg-[#00164E] shadow-[var(--ui-shadow-lg)] sm:aspect-[4/3] md:mt-20 md:aspect-[16/8] md:min-h-[360px] md:max-h-[720px]">
         <Image
           src={EDITORIAL_IMAGE}
           alt="Shalean cleaning team arriving together at a Cape Town home"
           fill
-          sizes="100vw"
-          className="object-cover object-center"
+          sizes="(max-width: 640px) 100vw, (max-width: 1024px) 90vw, 1200px"
+          className="object-cover object-[38%_center] sm:object-center"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#00164E]/85 via-transparent to-transparent" />
-        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-5 p-6 text-white sm:flex-row sm:items-end sm:justify-between md:p-10">
+        <div className="absolute inset-0 bg-gradient-to-t from-[#00164E]/95 via-[#00164E]/15 to-transparent sm:from-[#00164E]/85 sm:via-transparent" />
+        <div className="absolute inset-x-0 bottom-0 flex flex-col gap-5 p-5 text-white sm:flex-row sm:items-end sm:justify-between sm:p-6 md:p-10">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-white/70">Professional care, delivered locally</p>
             <p className="mt-2 max-w-xl text-xl font-medium leading-tight md:text-3xl">A dependable cleaning team for the moments that matter.</p>
           </div>
-          <Link href="/about" className="inline-flex min-h-12 shrink-0 items-center justify-center gap-2 rounded-md bg-[#0051FF] px-5 text-sm font-semibold uppercase tracking-wide text-white hover:bg-[#0033A1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+          <Link href="/about" className="inline-flex min-h-12 w-full shrink-0 items-center justify-center gap-2 rounded-md bg-[#0051FF] px-5 text-sm font-semibold uppercase tracking-wide text-white hover:bg-[#0033A1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white sm:w-auto">
             <Play className="h-4 w-4" aria-hidden /> Our story <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
         </div>
