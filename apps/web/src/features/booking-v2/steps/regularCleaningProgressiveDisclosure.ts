@@ -9,7 +9,6 @@ type RegularCleaningBookingDetails = {
   address?: string;
   suburb?: string;
   contactPhone?: string;
-  serviceAreaLocationId?: string;
 };
 
 export function regularCleaningDetailsStage(
@@ -27,8 +26,7 @@ export function regularCleaningDetailsStage(
   const addressReady =
     String(bookingDetails.address ?? "").trim().length >= 5 &&
     String(bookingDetails.suburb ?? "").trim().length >= 2 &&
-    Boolean(String(bookingDetails.contactPhone ?? "").trim()) &&
-    Boolean(String(bookingDetails.serviceAreaLocationId ?? "").trim());
+    Boolean(String(bookingDetails.contactPhone ?? "").trim());
 
   return addressReady ? "equipment" : "address";
 }
