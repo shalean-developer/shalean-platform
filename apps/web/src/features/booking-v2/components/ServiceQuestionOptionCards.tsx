@@ -1,5 +1,6 @@
 "use client";
 
+import { Building2, Check, Home, PanelsTopLeft, type LucideIcon } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 import { cn } from "@/lib/utils";
 import type { FormQuestion } from "@/src/features/booking-v2/config/serviceConfig";
@@ -29,6 +30,24 @@ export function shouldUseHorizontalOptionCards(question: FormQuestion): boolean 
 type ServiceQuestionOptionCardsProps = {
   question: FormQuestion;
   compact?: boolean;
+};
+
+const PROPERTY_TYPE_PRESENTATION: Record<
+  string,
+  { icon: LucideIcon; description: string }
+> = {
+  house: {
+    icon: Home,
+    description: "A freestanding home with its own rooms and living areas.",
+  },
+  apartment: {
+    icon: Building2,
+    description: "A flat or apartment inside a shared residential building.",
+  },
+  townhouse: {
+    icon: PanelsTopLeft,
+    description: "A multi-level or attached home in a residential complex.",
+  },
 };
 
 function YesNoServiceQuestionField({
@@ -85,6 +104,65 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
 
   if (isYesNoQuestion(question)) {
     return <YesNoServiceQuestionField question={question} compact={compact} />;
+  }
+
+  if (question.key === "propertyType") {
+    return (
+      <fieldset className="w-full">
+        <legend className="w-full text-center text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
+          What type of property needs cleaning?
+          {question.required ? <span className="ml-1 text-red-500">*</span> : null}
+        </legend>
+        <p className="mt-2 text-center text-sm text-slate-500">
+          Select the property type for this booking.
+        </p>
+        <Controller
+          name={fieldKey}
+          control={control}
+          rules={{ required: question.required ? `${question.label} is required` : false }}
+          render={({ field }) => (
+            <div className="mx-auto mt-6 grid w-full max-w-4xl gap-4 sm:grid-cols-3">
+              {options.map((opt) => {
+                const selected = String(field.value ?? "") === opt.value;
+                const presentation = PROPERTY_TYPE_PRESENTATION[opt.value];
+                const Icon = presentation?.icon ?? Home;
+
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => field.onChange(opt.value)}
+                    suppressHydrationWarning
+                    className={cn(
+                      "relative min-h-40 rounded-xl border bg-white p-5 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
+                      selected
+                        ? "border-blue-600 bg-blue-50/60 ring-2 ring-blue-600/15"
+                        : "border-slate-200 text-slate-800",
+                    )}
+                  >
+                    {selected ? (
+                      <span className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-white">
+                        <Check className="h-4 w-4" aria-hidden />
+                      </span>
+                    ) : null}
+                    <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                      <Icon className="h-6 w-6" aria-hidden />
+                    </span>
+                    <span className="mt-4 block text-lg font-bold text-slate-900">{opt.label}</span>
+                    <span className="mt-1.5 block text-sm leading-relaxed text-slate-600">
+                      {presentation?.description ?? "Select this property type."}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        />
+        {fieldError ? <p className="mt-2 text-center text-xs text-red-500">{fieldError}</p> : null}
+      </fieldset>
+    );
   }
 
   return (
