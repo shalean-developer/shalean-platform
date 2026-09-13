@@ -4,7 +4,7 @@ import { ArrowRight, Play } from "lucide-react";
 import { HomeSection } from "@/components/marketing-home/primitives/HomeSection";
 import { marketingHeroImage } from "@/lib/marketing/marketingHomeAssets";
 
-const EDITORIAL_IMAGE = marketingHeroImage("professional-cleaner-cape-town.webp");
+const EDITORIAL_IMAGE = marketingHeroImage("home-stories/where-cleaner-living-begins-cape-town.webp");
 
 export function MarketingHomeEditorialSection() {
   return (
@@ -22,10 +22,10 @@ export function MarketingHomeEditorialSection() {
       <div className="relative mt-14 aspect-[16/8] min-h-[360px] max-h-[720px] overflow-hidden rounded-lg bg-[#00164E] shadow-[var(--ui-shadow-lg)] md:mt-20">
         <Image
           src={EDITORIAL_IMAGE}
-          alt="Shalean cleaning team arriving at a Cape Town property"
+          alt="Shalean cleaning team arriving together at a Cape Town home"
           fill
           sizes="100vw"
-          className="object-cover object-[center_42%]"
+          className="object-cover object-center"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-[#00164E]/85 via-transparent to-transparent" />
         <div className="absolute inset-x-0 bottom-0 flex flex-col gap-5 p-6 text-white sm:flex-row sm:items-end sm:justify-between md:p-10">
