@@ -34,11 +34,20 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, ...errorBody }, { status: 503 });
   }
 
-  const { data, error } = await client
+  let { data, error } = await client
     .from("locations")
     .select("id, name, slug, city, city_id")
     .order("city", { ascending: true })
     .order("name", { ascending: true });
+  if (error && /city_id/i.test(error.message)) {
+    const fallback = await client
+      .from("locations")
+      .select("id, name, slug, city")
+      .order("city", { ascending: true })
+      .order("name", { ascending: true });
+    data = fallback.data?.map((row) => ({ ...row, city_id: null })) ?? null;
+    error = fallback.error;
+  }
   if (error) {
     console.error("[api/booking/service-locations]", error.message);
     return NextResponse.json({ ok: false, error: "Could not load areas." }, { status: 500 });
