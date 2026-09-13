@@ -579,14 +579,20 @@ export function PropertyAddressSection() {
                   No booking suburbs are configured yet. Please contact us for assistance.
                 </p>
               ) : null}
-              <FieldError message={errors.suburb?.message} />
-              <FieldError message={errors.serviceAreaLocationId?.message} />
-              {locationLoading && suburbValue?.trim() ? (
+              {!locationsLoading && !locationsError && locationOptions.length > 0 ? (
+                <>
+                  <FieldError message={errors.suburb?.message} />
+                  {!locationLoading ? (
+                    <FieldError message={errors.serviceAreaLocationId?.message} />
+                  ) : null}
+                </>
+              ) : null}
+              {!locationsLoading && !locationsError && locationLoading && suburbValue?.trim() ? (
                 <p className="mt-1 text-xs text-slate-500" role="status">
                   Checking service area…
                 </p>
               ) : null}
-              {!locationLoading && locationError && suburbValue?.trim() ? (
+              {!locationsLoading && !locationsError && !locationLoading && locationError && suburbValue?.trim() ? (
                 <button
                   type="button"
                   onClick={() => setUnsupportedOpen(true)}
@@ -595,7 +601,9 @@ export function PropertyAddressSection() {
                   This suburb isn&apos;t covered yet — view options
                 </button>
               ) : null}
-              {!locationLoading &&
+              {!locationsLoading &&
+              !locationsError &&
+              !locationLoading &&
               !locationError &&
               suburbValue?.trim() &&
               !resolvedLocation?.locationId ? (
