@@ -331,7 +331,6 @@ export function Step1Details() {
   const address = watch("address") ?? "";
   const suburb = watch("suburb") ?? "";
   const contactPhone = watch("contactPhone") ?? "";
-  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
@@ -340,7 +339,6 @@ export function Step1Details() {
     address,
     suburb,
     contactPhone,
-    serviceAreaLocationId,
   });
   const hasSelectedPropertyType = regularDetailsStage !== "property";
   const hasCompletedRequiredRooms = !["property", "rooms"].includes(regularDetailsStage);
