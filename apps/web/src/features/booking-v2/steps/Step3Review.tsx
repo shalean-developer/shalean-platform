@@ -395,45 +395,6 @@ function LocationEditPanel() {
         />
       </div>
 
-      <div>
-        <label htmlFor="edit-access" className="mb-1.5 block text-sm font-medium text-slate-700">
-          Access instructions (optional)
-        </label>
-        <input
-          id="edit-access"
-          type="text"
-          placeholder="e.g. Ring bell, use side gate…"
-          {...register("accessInstructions")}
-          className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor="edit-parking" className="mb-1.5 block text-sm font-medium text-slate-700">
-            Parking (optional)
-          </label>
-          <input
-            id="edit-parking"
-            type="text"
-            placeholder="Street parking…"
-            {...register("parkingInstructions")}
-            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-        <div>
-          <label htmlFor="edit-gate" className="mb-1.5 block text-sm font-medium text-slate-700">
-            Gate code (optional)
-          </label>
-          <input
-            id="edit-gate"
-            type="text"
-            placeholder="e.g. #1234"
-            {...register("gateCode")}
-            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -1022,25 +983,6 @@ export function Step3Review() {
             </div>
           </div>
 
-          {(values.accessInstructions || values.gateCode || values.parkingInstructions) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {values.accessInstructions && (
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  Access: {values.accessInstructions}
-                </span>
-              )}
-              {values.gateCode && (
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  Gate: {values.gateCode}
-                </span>
-              )}
-              {values.parkingInstructions && (
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  Parking: {values.parkingInstructions}
-                </span>
-              )}
-            </div>
-          )}
         </ReviewSection>
 
         {(values.equipmentRequired === "yes" || values.equipmentRequired === "no") && (
