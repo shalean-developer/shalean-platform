@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { collectLocationIdsWithActiveCleaners } from "@/lib/booking/activeCleanerLocationIds";
 import { getSupabaseAdmin, supabaseAdminNotConfiguredBody } from "@/lib/supabase/admin";
+import { getSupabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,17 +17,24 @@ export type ServiceLocationRow = {
 /**
  * Public list of bookable service areas for suburb pickers.
  * Default: only locations with at least one active (non-offline) cleaner.
- * `?withActiveCleanersOnly=false` returns all `locations` rows (e.g. admin tools).
+ * `?withActiveCleanersOnly=false` returns the public location catalogue using
+ * the RLS-scoped server client, so the booking picker does not require admin credentials.
  */
 export async function GET(request: Request) {
-  const admin = getSupabaseAdmin();
-  if (!admin) {
-    return NextResponse.json({ ok: false, ...supabaseAdminNotConfiguredBody() }, { status: 503 });
-  }
   const url = new URL(request.url);
   const withActiveCleanersOnly = url.searchParams.get("withActiveCleanersOnly") !== "false";
+  const client = withActiveCleanersOnly ? getSupabaseAdmin() : getSupabaseServer();
+  if (!client) {
+    const errorBody = withActiveCleanersOnly
+      ? supabaseAdminNotConfiguredBody()
+      : {
+          error: "Scheduling is temporarily unavailable. Please try again shortly.",
+          errorCode: "SUPABASE_PUBLIC_CLIENT_NOT_CONFIGURED" as const,
+        };
+    return NextResponse.json({ ok: false, ...errorBody }, { status: 503 });
+  }
 
-  const { data, error } = await admin
+  const { data, error } = await client
     .from("locations")
     .select("id, name, slug, city, city_id")
     .order("city", { ascending: true })
@@ -37,7 +45,7 @@ export async function GET(request: Request) {
   }
   let rows = (data ?? []) as ServiceLocationRow[];
   if (withActiveCleanersOnly && rows.length > 0) {
-    const cover = await collectLocationIdsWithActiveCleaners(admin);
+    const cover = await collectLocationIdsWithActiveCleaners(client);
     if (cover.size > 0) {
       rows = rows.filter((r) => cover.has(String(r.id).trim().toLowerCase()));
     }
