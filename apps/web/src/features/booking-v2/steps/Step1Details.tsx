@@ -380,15 +380,6 @@ export function Step1Details() {
 
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
-      <div className="text-center">
-        <h2 className="text-xl font-bold text-slate-900">Your details</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Tell us about the property and what you need cleaned.
-        </p>
-      </div>
-
-      <hr className="border-slate-200" />
-
       {/* Service-specific questions */}
       <section className="space-y-5">
         <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
