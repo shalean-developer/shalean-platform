@@ -28,9 +28,9 @@ import { BookingCard } from "@/components/dashboard/booking-card";
 import { CustomerBookingStatusBadge } from "@/components/dashboard/customer-booking-status-badge";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 
-/* ─── Quick action cards ─── */
 const QUICK_ACTIONS = [
   {
     href: "/account/book",
@@ -66,7 +66,6 @@ const QUICK_ACTIONS = [
   },
 ];
 
-/* ─── Booking time formatter ─── */
 function formatTimeRange(time: string, durationHours: number | null, scheduleConfirmed = true): string {
   if (!scheduleConfirmed || !time?.trim() || !/^\d{1,2}:\d{2}$/.test(time.trim())) {
     return "Time to be confirmed";
@@ -89,7 +88,6 @@ function formatTimeRange(time: string, durationHours: number | null, scheduleCon
   }
 }
 
-/* ─── Date formatter ─── */
 function formatBookingDate(date: string): string {
   try {
     const d = new Date(date + "T00:00:00");
@@ -115,6 +113,37 @@ function formatAddress(addressLine: string | null | undefined, suburb: string | 
     .map((p) => (p ?? "").trim())
     .filter((p) => p.length > 0 && p !== "—");
   return parts.filter((p, i) => parts.indexOf(p) === i).join(", ");
+}
+
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return <h2 className="mb-3 text-base font-semibold text-foreground">{children}</h2>;
+}
+
+function StatCard({
+  icon: Icon,
+  iconClassName,
+  iconSurfaceClassName,
+  value,
+  label,
+  detail,
+}: {
+  icon: typeof CalendarDays;
+  iconClassName: string;
+  iconSurfaceClassName: string;
+  value: React.ReactNode;
+  label: string;
+  detail: React.ReactNode;
+}) {
+  return (
+    <Card className="min-w-0 p-4">
+      <div className={cn("flex h-10 w-10 items-center justify-center rounded-xl", iconSurfaceClassName)}>
+        <Icon className={cn("h-5 w-5", iconClassName)} strokeWidth={1.75} />
+      </div>
+      <p className="mt-3 text-2xl font-bold tabular-nums text-foreground">{value}</p>
+      <p className="mt-0.5 text-xs font-medium text-foreground">{label}</p>
+      <p className="text-xs leading-snug text-muted-foreground">{detail}</p>
+    </Card>
+  );
 }
 
 export default function AccountHomePage() {
@@ -146,29 +175,28 @@ export default function AccountHomePage() {
 
   const defaultAddr = useMemo(() => addresses.find((a) => a.is_default) ?? addresses[0], [addresses]);
 
-  /* ── Skeleton ── */
   if (loading) {
     return (
-      <div className="space-y-6 animate-pulse">
-        {/* Quick actions skeleton */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      <div className="animate-pulse space-y-6" aria-label="Loading account overview">
+        <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-20 rounded-2xl bg-gray-100" />
+            <div key={i} className="h-24 rounded-[var(--ui-radius-lg)] border border-border bg-card" />
           ))}
         </div>
-        {/* Main grid skeleton */}
-        <div className="grid gap-6 lg:grid-cols-3">
-          <div className="space-y-4 lg:col-span-2">
-            <div className="h-48 rounded-2xl bg-gray-100" />
-            <div className="grid grid-cols-4 gap-3">
-              {[...Array(4)].map((_, i) => <div key={i} className="h-24 rounded-2xl bg-gray-100" />)}
+        <div className="grid gap-6 xl:grid-cols-3">
+          <div className="space-y-5 xl:col-span-2">
+            <div className="h-48 rounded-[var(--ui-radius-lg)] border border-border bg-card" />
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              {[...Array(4)].map((_, i) => (
+                <div key={i} className="h-32 rounded-[var(--ui-radius-lg)] border border-border bg-card" />
+              ))}
             </div>
-            <div className="h-32 rounded-2xl bg-gray-100" />
+            <div className="h-40 rounded-[var(--ui-radius-lg)] border border-border bg-card" />
           </div>
           <div className="space-y-4">
-            <div className="h-40 rounded-2xl bg-gray-100" />
-            <div className="h-40 rounded-2xl bg-gray-100" />
-            <div className="h-24 rounded-2xl bg-gray-100" />
+            <div className="h-44 rounded-[var(--ui-radius-lg)] border border-border bg-card" />
+            <div className="h-44 rounded-[var(--ui-radius-lg)] border border-border bg-card" />
+            <div className="h-28 rounded-[var(--ui-radius-lg)] border border-border bg-card" />
           </div>
         </div>
       </div>
@@ -177,52 +205,50 @@ export default function AccountHomePage() {
 
   return (
     <div className="space-y-6 pb-8">
-      {/* Error banner */}
       {error ? (
-        <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+        <div className="rounded-[var(--ui-radius-lg)] border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive" role="alert">
           {error}{" "}
-          <button type="button" className="font-semibold underline" onClick={() => void refetch()}>
+          <button
+            type="button"
+            className="font-semibold underline underline-offset-2 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            onClick={() => void refetch()}
+          >
             Retry
           </button>
         </div>
       ) : null}
 
-      {/* ── Quick action cards ── */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {QUICK_ACTIONS.map(({ href, icon: Icon, iconBg, iconColor, title, description }) => (
-          <Link
-            key={href}
-            href={href}
-            className="group flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm transition hover:border-blue-200 hover:shadow-md"
-          >
-            <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", iconBg)}>
-              <Icon className={cn("h-5 w-5", iconColor)} strokeWidth={1.75} />
-            </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-gray-900">{title}</p>
-              <p className="truncate text-xs text-gray-500">{description}</p>
-            </div>
-            <ChevronRight className="h-4 w-4 shrink-0 text-gray-300 transition group-hover:text-gray-400" />
-          </Link>
-        ))}
-      </div>
+      <section aria-label="Account quick actions">
+        <div className="grid grid-cols-1 gap-3 min-[360px]:grid-cols-2 lg:grid-cols-4">
+          {QUICK_ACTIONS.map(({ href, icon: Icon, iconBg, iconColor, title, description }) => (
+            <Link
+              key={href}
+              href={href}
+              className="group flex min-h-20 items-start gap-3 rounded-[var(--ui-radius-lg)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] transition hover:border-primary/30 hover:shadow-[var(--ui-shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+            >
+              <div className={cn("flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", iconBg)}>
+                <Icon className={cn("h-5 w-5", iconColor)} strokeWidth={1.75} />
+              </div>
+              <div className="min-w-0 flex-1 pt-0.5">
+                <p className="text-sm font-semibold leading-tight text-foreground">{title}</p>
+                <p className="mt-1 text-xs leading-snug text-muted-foreground">{description}</p>
+              </div>
+              <ChevronRight className="mt-1 h-4 w-4 shrink-0 text-muted-foreground/60 transition group-hover:text-foreground" aria-hidden />
+            </Link>
+          ))}
+        </div>
+      </section>
 
-      {/* ── Main 2-col grid ── */}
-      <div className="grid gap-6 lg:grid-cols-3">
-
-        {/* ── LEFT COLUMN ── */}
-        <div className="space-y-6 lg:col-span-2">
-
-          {/* Upcoming booking */}
+      <div className="grid gap-6 xl:grid-cols-3">
+        <div className="min-w-0 space-y-6 xl:col-span-2">
           <section>
-            <h2 className="mb-3 text-base font-semibold text-gray-900">Upcoming booking</h2>
+            <SectionHeading>Upcoming booking</SectionHeading>
             {nextBooking ? (
-              <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+              <Card className="overflow-hidden">
                 <div className="flex flex-col sm:flex-row">
-                  {/* Service gradient — same style as BookingCard */}
                   <div
                     className={cn(
-                      "relative h-40 w-full shrink-0 overflow-hidden sm:h-auto sm:w-40 md:w-48",
+                      "relative h-36 w-full shrink-0 overflow-hidden sm:h-auto sm:w-40 md:w-48",
                       `bg-gradient-to-br ${getServiceGradient(nextBooking.serviceName)}`,
                     )}
                   >
@@ -236,122 +262,111 @@ export default function AccountHomePage() {
                     </div>
                   </div>
 
-                  {/* Details */}
-                  <div className="flex flex-1 flex-col justify-between p-5">
+                  <div className="flex min-w-0 flex-1 flex-col justify-between p-5">
                     <div className="space-y-3">
                       <CustomerBookingStatusBadge booking={nextBooking} />
-                      <p className="text-lg font-bold text-gray-900">{nextBooking.serviceName}</p>
-                      <div className="space-y-1.5 text-sm text-gray-600">
+                      <p className="text-lg font-bold text-foreground">{nextBooking.serviceName}</p>
+                      <div className="space-y-1.5 text-sm text-muted-foreground">
                         <div className="flex items-center gap-2">
-                          <CalendarDays className="h-4 w-4 shrink-0 text-blue-500" />
-                          {formatBookingDate(nextBooking.date)}
+                          <CalendarDays className="h-4 w-4 shrink-0 text-primary" aria-hidden />
+                          <span>{formatBookingDate(nextBooking.date)}</span>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-4 w-4 shrink-0 text-blue-500" />
-                          {formatTimeRange(nextBooking.time, nextBooking.durationHours, nextBooking.scheduleConfirmed)}
+                        <div className="flex items-start gap-2">
+                          <Clock className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+                          <span>{formatTimeRange(nextBooking.time, nextBooking.durationHours, nextBooking.scheduleConfirmed)}</span>
                         </div>
                         {formatAddress(nextBooking.addressLine, nextBooking.suburb) ? (
                           <div className="flex items-start gap-2">
-                            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" />
-                            <span className="line-clamp-1">
-                              {formatAddress(nextBooking.addressLine, nextBooking.suburb)}
-                            </span>
+                            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden />
+                            <span>{formatAddress(nextBooking.addressLine, nextBooking.suburb)}</span>
                           </div>
                         ) : null}
                       </div>
                     </div>
                     <div className="mt-4">
-                      <Button asChild size="sm" className="rounded-xl bg-blue-600 hover:bg-blue-700">
+                      <Button asChild size="sm">
                         <Link href={`/account/bookings/${nextBooking.id}`}>View details</Link>
                       </Button>
                     </div>
                   </div>
                 </div>
-              </div>
+              </Card>
             ) : (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-200 bg-white p-10 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-blue-50">
-                  <CalendarDays className="h-7 w-7 text-blue-400" strokeWidth={1.5} />
+              <Card className="flex flex-col items-center justify-center border-dashed p-8 text-center sm:p-10">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
+                  <CalendarDays className="h-7 w-7 text-primary" strokeWidth={1.5} aria-hidden />
                 </div>
-                <p className="mt-4 font-semibold text-gray-900">No upcoming cleans</p>
-                <p className="mt-1 text-sm text-gray-500">Book your next visit in a few taps.</p>
-                <Button asChild size="sm" className="mt-4 rounded-xl bg-blue-600 hover:bg-blue-700">
+                <p className="mt-4 font-semibold text-foreground">No upcoming cleans</p>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">Book your next visit in a few taps.</p>
+                <Button asChild size="sm" className="mt-4">
                   <Link href="/account/book">Book a clean</Link>
                 </Button>
-              </div>
+              </Card>
             )}
           </section>
 
-          {/* This month overview */}
           <section>
-            <h2 className="mb-3 text-base font-semibold text-gray-900">This month overview</h2>
+            <SectionHeading>This month overview</SectionHeading>
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-              {/* Bookings */}
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100">
-                  <CalendarDays className="h-5 w-5 text-blue-600" strokeWidth={1.75} />
-                </div>
-                <p className="mt-3 text-2xl font-bold tabular-nums text-gray-900">{bookingsThisMonthCount}</p>
-                <p className="mt-0.5 text-xs font-medium text-gray-700">Bookings</p>
-                <p className="text-xs text-gray-400">in {ym || "this month"}</p>
-              </div>
-              {/* Completed */}
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-100">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" strokeWidth={1.75} />
-                </div>
-                <p className="mt-3 text-2xl font-bold tabular-nums text-gray-900">{completedCount}</p>
-                <p className="mt-0.5 text-xs font-medium text-gray-700">Completed</p>
-                <p className="text-xs text-gray-400">bookings</p>
-              </div>
-              {/* Hours booked */}
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-100">
-                  <Clock className="h-5 w-5 text-orange-500" strokeWidth={1.75} />
-                </div>
-                <p className="mt-3 text-2xl font-bold tabular-nums text-gray-900">{hoursBookedThisMonth}</p>
-                <p className="mt-0.5 text-xs font-medium text-gray-700">Hours booked</p>
-                <p className="text-xs text-gray-400">this month</p>
-              </div>
-              {/* Total spent */}
-              <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-100">
-                  <Wallet className="h-5 w-5 text-purple-600" strokeWidth={1.75} />
-                </div>
-                <p className="mt-3 text-2xl font-bold tabular-nums text-gray-900">
-                  {formatZarFromCents(totalSpentCents)}
-                </p>
-                <p className="mt-0.5 text-xs font-medium text-gray-700">Total spent</p>
-                <p className="text-xs text-gray-400">this month</p>
-              </div>
+              <StatCard
+                icon={CalendarDays}
+                iconSurfaceClassName="bg-blue-100"
+                iconClassName="text-blue-600"
+                value={bookingsThisMonthCount}
+                label="Bookings"
+                detail={<>in {ym || "this month"}</>}
+              />
+              <StatCard
+                icon={CheckCircle2}
+                iconSurfaceClassName="bg-green-100"
+                iconClassName="text-green-600"
+                value={completedCount}
+                label="Completed"
+                detail="bookings"
+              />
+              <StatCard
+                icon={Clock}
+                iconSurfaceClassName="bg-orange-100"
+                iconClassName="text-orange-500"
+                value={hoursBookedThisMonth}
+                label="Hours booked"
+                detail="this month"
+              />
+              <StatCard
+                icon={Wallet}
+                iconSurfaceClassName="bg-violet-100"
+                iconClassName="text-violet-600"
+                value={formatZarFromCents(totalSpentCents)}
+                label="Total spent"
+                detail="this month"
+              />
             </div>
           </section>
 
-          {/* Recent bookings */}
           <section>
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <h2 className="text-base font-semibold text-gray-900">Recent bookings</h2>
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-semibold text-foreground">Recent bookings</h2>
               <Link
                 href="/account/bookings"
-                className="flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline"
+                className="inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
               >
                 View all bookings
-                <ChevronRight className="h-4 w-4" />
+                <ChevronRight className="h-4 w-4" aria-hidden />
               </Link>
             </div>
             {recent.length === 0 ? (
-              <div className="flex flex-col items-center justify-center rounded-2xl border border-gray-100 bg-white p-10 text-center shadow-sm">
-                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gray-100">
-                  <CalendarX2 className="h-7 w-7 text-gray-400" strokeWidth={1.5} />
+              <Card className="flex flex-col items-center justify-center p-8 text-center sm:p-10">
+                <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-muted">
+                  <CalendarX2 className="h-7 w-7 text-muted-foreground" strokeWidth={1.5} aria-hidden />
                 </div>
-                <p className="mt-4 font-semibold text-gray-900">No bookings yet</p>
-                <p className="mt-1 text-sm text-gray-500">
+                <p className="mt-4 font-semibold text-foreground">No bookings yet</p>
+                <p className="mt-1 max-w-sm text-sm text-muted-foreground">
                   Once you book a clean, your bookings will appear here.
                 </p>
-                <Button asChild size="sm" className="mt-4 rounded-xl bg-blue-600 hover:bg-blue-700">
+                <Button asChild size="sm" className="mt-4">
                   <Link href="/account/book">Book your first clean</Link>
                 </Button>
-              </div>
+              </Card>
             ) : (
               <ul className="space-y-3">
                 {recent.map((b) => (
@@ -364,22 +379,22 @@ export default function AccountHomePage() {
           </section>
         </div>
 
-        {/* ── RIGHT COLUMN ── */}
-        <div className="space-y-4">
-
-          {/* Invoice summary */}
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">Invoice summary</h2>
-              <Link href="/account/invoices" className="flex items-center gap-0.5 text-xs font-medium text-blue-600 hover:underline">
-                View all invoices <ChevronRight className="h-3.5 w-3.5" />
+        <aside className="min-w-0 space-y-4" aria-label="Account summaries and support">
+          <Card className="overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
+              <h2 className="text-sm font-semibold text-foreground">Invoice summary</h2>
+              <Link
+                href="/account/invoices"
+                className="inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                View all invoices <ChevronRight className="h-3.5 w-3.5" aria-hidden />
               </Link>
             </div>
             <div className="p-5">
               {invoiceThisMonth ? (
                 <>
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-primary">
                       {invoiceThisMonth.month} · {customerMonthlyInvoiceStatusLabel(invoiceThisMonth.status)}
                     </p>
                     {isOverdue ? (
@@ -390,28 +405,28 @@ export default function AccountHomePage() {
                     <p className="mt-2 text-xs text-amber-700">{invoiceOverdueEscalationText(daysOverdue)}</p>
                   ) : null}
                   {hasOverdueInvoice && !isOverdue ? (
-                    <p className="mt-2 text-xs text-gray-500">
+                    <p className="mt-2 text-xs text-muted-foreground">
                       You have an overdue invoice —{" "}
-                      <Link href="/account/invoices" className="font-medium text-blue-600 underline">view invoices</Link>.
+                      <Link href="/account/invoices" className="font-medium text-primary underline">view invoices</Link>.
                     </p>
                   ) : null}
                   <dl className="mt-4 space-y-3 text-sm">
                     <div className="flex justify-between gap-2">
-                      <dt className="text-gray-500">Total</dt>
-                      <dd className="font-semibold tabular-nums text-gray-900">{formatZarFromCents(invoiceThisMonth.total_amount_cents)}</dd>
+                      <dt className="text-muted-foreground">Total</dt>
+                      <dd className="font-semibold tabular-nums text-foreground">{formatZarFromCents(invoiceThisMonth.total_amount_cents)}</dd>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <dt className="text-gray-500">Paid</dt>
-                      <dd className="font-semibold tabular-nums text-gray-900">{formatZarFromCents(invoiceThisMonth.amount_paid_cents)}</dd>
+                      <dt className="text-muted-foreground">Paid</dt>
+                      <dd className="font-semibold tabular-nums text-foreground">{formatZarFromCents(invoiceThisMonth.amount_paid_cents)}</dd>
                     </div>
                     <div className="flex justify-between gap-2">
-                      <dt className="text-gray-500">Balance</dt>
-                      <dd className={cn("font-semibold tabular-nums", balanceCents > 0 ? "text-red-600" : "text-gray-900")}>
+                      <dt className="text-muted-foreground">Balance</dt>
+                      <dd className={cn("font-semibold tabular-nums", balanceCents > 0 ? "text-destructive" : "text-foreground")}>
                         {formatZarFromCents(balanceCents)}
                       </dd>
                     </div>
                   </dl>
-                  <Button asChild variant="outline" size="sm" className="mt-4 w-full rounded-xl">
+                  <Button asChild variant="outline" size="sm" className="mt-4 w-full">
                     <Link href={`/account/invoices/${invoiceThisMonth.id}`}>View invoice</Link>
                   </Button>
                 </>
@@ -422,33 +437,33 @@ export default function AccountHomePage() {
                       <li key={inv.bookingId}>
                         <Link
                           href={`/account/bookings/${inv.bookingId}`}
-                          className="flex items-center justify-between gap-2 rounded-xl border border-gray-100 px-3 py-2.5 transition hover:border-blue-200 hover:bg-blue-50/40"
+                          className="flex items-center justify-between gap-2 rounded-[var(--ui-radius-md)] border border-border px-3 py-2.5 transition hover:border-primary/30 hover:bg-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
                         >
                           <div className="min-w-0">
-                            <p className="truncate text-sm font-medium text-gray-900">{inv.serviceName}</p>
-                            <p className="text-xs text-gray-400">Per-visit · Paid</p>
+                            <p className="text-sm font-medium text-foreground">{inv.serviceName}</p>
+                            <p className="text-xs text-muted-foreground">Per-visit · Paid</p>
                           </div>
-                          <span className="shrink-0 text-sm font-semibold tabular-nums text-gray-900">
+                          <span className="shrink-0 text-sm font-semibold tabular-nums text-foreground">
                             R {inv.amountZar.toLocaleString("en-ZA")}
                           </span>
                         </Link>
                       </li>
                     ))}
                   </ul>
-                  <Button asChild variant="outline" size="sm" className="mt-4 w-full rounded-xl">
+                  <Button asChild variant="outline" size="sm" className="mt-4 w-full">
                     <Link href="/account/invoices">View all invoices</Link>
                   </Button>
                 </>
               ) : (
                 <div className="flex flex-col items-center py-2 text-center">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gray-100">
-                    <Receipt className="h-6 w-6 text-gray-400" strokeWidth={1.5} />
+                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-muted">
+                    <Receipt className="h-6 w-6 text-muted-foreground" strokeWidth={1.5} aria-hidden />
                   </div>
-                  <p className="mt-3 text-sm font-semibold text-gray-900">No invoice yet</p>
-                  <p className="mt-1 text-xs leading-relaxed text-gray-500">
+                  <p className="mt-3 text-sm font-semibold text-foreground">No invoice yet</p>
+                  <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
                     Your invoices will appear here once you complete a paid clean.
                   </p>
-                  <Button asChild variant="outline" size="sm" className="mt-4 w-full rounded-xl">
+                  <Button asChild variant="outline" size="sm" className="mt-4 w-full">
                     <Link href="/account/invoices">
                       {hasAnyInvoices ? "View past invoices" : "View invoices"}
                     </Link>
@@ -456,66 +471,66 @@ export default function AccountHomePage() {
                 </div>
               )}
             </div>
-          </div>
+          </Card>
 
-          {/* My properties */}
-          <div className="rounded-2xl border border-gray-100 bg-white shadow-sm">
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3">
-              <h2 className="text-sm font-semibold text-gray-900">My properties</h2>
-              <Link href="/account/addresses" className="flex items-center gap-0.5 text-xs font-medium text-blue-600 hover:underline">
-                View all <ChevronRight className="h-3.5 w-3.5" />
+          <Card className="overflow-hidden">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border px-5 py-3">
+              <h2 className="text-sm font-semibold text-foreground">My properties</h2>
+              <Link
+                href="/account/addresses"
+                className="inline-flex items-center gap-0.5 text-xs font-medium text-primary hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+              >
+                View all <ChevronRight className="h-3.5 w-3.5" aria-hidden />
               </Link>
             </div>
             <div className="p-5">
               {addrError ? (
-                <p className="text-sm text-red-700">{addrError}</p>
+                <p className="text-sm text-destructive" role="alert">{addrError}</p>
               ) : addrLoading ? (
-                <div className="h-20 animate-pulse rounded-xl bg-gray-100" />
+                <div className="h-20 animate-pulse rounded-xl bg-muted" aria-hidden />
               ) : defaultAddr ? (
                 <>
                   <div className="flex items-start gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-100">
-                      <Home className="h-5 w-5 text-blue-600" strokeWidth={1.75} />
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10">
+                      <Home className="h-5 w-5 text-primary" strokeWidth={1.75} aria-hidden />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap gap-1.5">
-                        <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                        <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary">
                           {defaultAddr.label || "Home"}
                         </span>
-                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600">
+                        <span className="inline-flex items-center rounded-full bg-muted px-2 py-0.5 text-xs font-semibold text-muted-foreground">
                           Primary
                         </span>
                       </div>
-                      <p className="mt-2 text-sm font-medium text-gray-900">{defaultAddr.line1}</p>
-                      <p className="text-sm text-gray-500">
+                      <p className="mt-2 break-words text-sm font-medium text-foreground">{defaultAddr.line1}</p>
+                      <p className="break-words text-sm text-muted-foreground">
                         {defaultAddr.suburb}, {defaultAddr.city} {defaultAddr.postal_code}
                       </p>
                     </div>
                   </div>
-                  <Button asChild variant="outline" size="sm" className="mt-4 w-full rounded-xl">
+                  <Button asChild variant="outline" size="sm" className="mt-4 w-full">
                     <Link href="/account/addresses">Manage properties</Link>
                   </Button>
                 </>
               ) : (
                 <>
-                  <p className="text-sm text-gray-500">Save properties to book faster.</p>
-                  <Button asChild variant="outline" size="sm" className="mt-4 w-full rounded-xl">
+                  <p className="text-sm text-muted-foreground">Save properties to book faster.</p>
+                  <Button asChild variant="outline" size="sm" className="mt-4 w-full">
                     <Link href="/account/addresses">Add a property</Link>
                   </Button>
                 </>
               )}
             </div>
-          </div>
+          </Card>
 
-          {/* We're here to help */}
           <HelpCard />
-        </div>
+        </aside>
       </div>
 
-      {/* ── Trust bar ── */}
-      <div className="pt-2">
+      <section className="pt-2" aria-label="Shalean service assurances">
         <TrustBar />
-      </div>
+      </section>
     </div>
   );
 }

@@ -25,6 +25,10 @@ import { coerceYesNoValue } from "@/src/features/booking-v2/components/serviceQu
 import type { LiveServiceConfig, ServicesCatalog } from "@/app/api/booking-v2/services/route";
 import type { BookingV2FeesConfig } from "@/lib/booking-v2/types";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
+import {
+  canEnterBookingPayment,
+  type BookingPricingAvailability,
+} from "@/lib/booking-v2/bookingPricingAvailability";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import { bookingV2PrefillPatchFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
 import { buildStep2Schema, step1Schema } from "@/src/features/booking-v2/schemas";
@@ -53,6 +57,7 @@ type BookingV2ContextValue = {
   scheduling: BookingV2SchedulingConfig;
   feesConfig: BookingV2FeesConfig;
   catalogLoading: boolean;
+  pricingAvailability: BookingPricingAvailability;
   goToStep: (step: BookingStep) => void;
   goNext: () => void;
   goBack: () => void;
@@ -145,6 +150,8 @@ export function BookingV2Provider({
   const [scheduling, setScheduling] = useState<BookingV2SchedulingConfig>(DEFAULT_SCHEDULING);
   const [feesConfig, setFeesConfig] = useState<BookingV2FeesConfig>(defaultBookingV2FeesConfig());
   const [catalogLoading, setCatalogLoading] = useState(true);
+  const [pricingAvailability, setPricingAvailability] =
+    useState<BookingPricingAvailability>("loading");
 
   useEffect(() => {
     fetch("/api/booking-v2/services")
@@ -157,12 +164,14 @@ export function BookingV2Provider({
         }>;
       })
       .then((json) => {
-        if (json.catalog) setCatalog(json.catalog);
+        if (!json.catalog) throw new Error("catalog_missing");
+        setCatalog(json.catalog);
+        setPricingAvailability("available");
         if (json.feesConfig) setFeesConfig(json.feesConfig);
         if (json.scheduling) setScheduling({ ...DEFAULT_SCHEDULING, ...json.scheduling });
       })
       .catch(() => {
-        /* fall back to static config — pricing still recomputes from SERVICE_CONFIG */
+        setPricingAvailability("unavailable");
       })
       .finally(() => setCatalogLoading(false));
   }, []);
@@ -302,6 +311,17 @@ export function BookingV2Provider({
 
   const canGoNext = useCallback(
     async (step: BookingStep): Promise<boolean> => {
+      if (step === 3) {
+        const hasPendingBooking = Boolean(form.getValues("pendingBookingId")?.trim());
+        if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) {
+          trackBookingFunnelEvent(bookingV2StepToFunnelStep(step), BOOKING_FUNNEL_ROW.ERROR, {
+            flow: "booking_v2",
+            step,
+            reason: "pricing_unavailable",
+          });
+          return false;
+        }
+      }
       if (step === 1) {
         const values = form.getValues();
         const result = step1Schema.safeParse(values);
@@ -341,16 +361,20 @@ export function BookingV2Provider({
       }
       return true;
     },
-    [form, scheduling],
+    [form, scheduling, pricingAvailability],
   );
 
   const goToStep = useCallback(
     (step: BookingStep) => {
+      if (step === 4) {
+        const hasPendingBooking = Boolean(form.getValues("pendingBookingId")?.trim());
+        if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) return;
+      }
       const params = new URLSearchParams(searchParams.toString());
       params.set("step", String(step));
       router.push(`/book/${serviceSlug}?${params.toString()}`);
     },
-    [router, searchParams, serviceSlug],
+    [router, searchParams, serviceSlug, pricingAvailability, form],
   );
 
   const goNext = useCallback(async () => {
@@ -391,13 +415,28 @@ export function BookingV2Provider({
       scheduling,
       feesConfig,
       catalogLoading,
+      pricingAvailability,
       goToStep,
       goNext,
       goBack,
       canGoNext,
       clearBooking,
     }),
-    [form, currentStep, serviceSlug, liveConfig, scheduling, feesConfig, catalogLoading, goToStep, goNext, goBack, canGoNext, clearBooking],
+    [
+      form,
+      currentStep,
+      serviceSlug,
+      liveConfig,
+      scheduling,
+      feesConfig,
+      catalogLoading,
+      pricingAvailability,
+      goToStep,
+      goNext,
+      goBack,
+      canGoNext,
+      clearBooking,
+    ],
   );
 
   return (

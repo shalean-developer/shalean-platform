@@ -28,7 +28,6 @@ import {
   bookingV2SuccessHref,
   clearBookingV2DraftStorage,
   consumeBookingV2SuccessRedirect,
-  redirectToBookingV2Success,
 } from "@/lib/booking-v2/bookingV2PaymentRedirect";
 import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
 import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
@@ -485,6 +484,18 @@ function PaymentSection({
         }
         if (sessJson.status === "ready" && sessJson.authorizationUrl?.trim()) {
           if (sessJson.message) setError(sessJson.message);
+          trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
+            service: serviceSlug,
+            service_type: serviceSlug,
+            serviceAreaName: values.suburb ?? null,
+            finalPrice: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+            extras: values.selectedExtras ?? null,
+          }, {
+            service_type: serviceSlug,
+            suburb: values.suburb ?? null,
+            estimated_price: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+            booking_id: pendingBookingId,
+          });
           window.location.assign(sessJson.authorizationUrl.trim());
           return;
         }
@@ -640,19 +651,6 @@ function PaymentSection({
         return;
       }
 
-      trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
-        service: serviceSlug,
-        service_type: serviceSlug,
-        serviceAreaName: values.suburb ?? null,
-        finalPrice: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
-        extras: values.selectedExtras ?? null,
-      }, {
-        service_type: serviceSlug,
-        suburb: values.suburb ?? null,
-        estimated_price: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
-        booking_id: bookingId,
-      });
-
       // Server-side Paystack session (persists authorization_url). Redirect is more reliable than
       // Inline popups on mobile / in-app browsers, and enables `/pay` recovery after refresh.
       const sessRes = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/payment-session`, {
@@ -685,77 +683,29 @@ function PaymentSection({
 
       if (sessJson.status === "ready" && sessJson.authorizationUrl?.trim()) {
         if (sessJson.message) setError(sessJson.message);
+        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
+          service: serviceSlug,
+          service_type: serviceSlug,
+          serviceAreaName: values.suburb ?? null,
+          finalPrice: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+          extras: values.selectedExtras ?? null,
+        }, {
+          service_type: serviceSlug,
+          suburb: values.suburb ?? null,
+          estimated_price: values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? null,
+          booking_id: bookingId,
+        });
         window.location.assign(sessJson.authorizationUrl.trim());
         return;
       }
 
-      // Fallback: Inline popup only when we still have a Paystack-valid email.
-      // Never open Paystack with "" — that surfaces Paystack's opaque
-      // `"email" must be a valid email` modal instead of a recoverable UI error.
-      const emailLooksValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail);
-      const publicKey = process.env.NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY?.trim() ?? "";
-      if (!emailLooksValid || !publicKey || !paystackReference) {
-        setError(
-          sessJson.error?.trim() ||
-            (!emailLooksValid
-              ? "Your account has no valid email for payment. Update your email, then try again."
-              : "We could not start the secure payment checkout. Your booking is saved — try again or use the pay link from your confirmation email."),
-        );
-        setConfirming(false);
-        return;
-      }
-
-      const { getAcquisitionPayloadFields } = await import("@/lib/analytics/acquisitionContext");
-      const acq = getAcquisitionPayloadFields();
-      const gclid = typeof acq.gclid === "string" ? acq.gclid.trim() : "";
-      const fbclid = typeof acq.fbclid === "string" ? acq.fbclid.trim() : "";
-
-      const PaystackPop = (await import("@paystack/inline-js")).default;
-      const popup = new PaystackPop();
-
-      const paystackOpts = {
-        key: publicKey,
-        email: checkoutEmail,
-        amount: Math.round(chargeAmount * 100),
-        currency: "ZAR" as const,
-        reference: paystackReference,
-        metadata: {
-          booking_id: bookingId,
-          pay_total_zar: String(chargeAmount),
-          expected_total_zar: String(chargeAmount),
-          ...(gclid ? { gclid } : {}),
-          ...(fbclid ? { fbclid } : {}),
-        },
-        onSuccess: (transaction?: { reference?: string }) => {
-          const ref =
-            (typeof transaction?.reference === "string" && transaction.reference.trim()) ||
-            paystackReference ||
-            bookingId ||
-            "";
-          redirectToBookingV2Success(ref);
-        },
-        onCancel: () => {
-          setError("Payment cancelled. Your booking is saved — you can retry payment.");
-          trackBookingFunnelEvent("payment", BOOKING_FUNNEL_ROW.EXIT, {
-            flow: "booking_v2",
-            reason: "paystack_cancelled",
-            booking_id: bookingId,
-          });
-          setConfirming(false);
-        },
-      };
-      popup.newTransaction(paystackOpts as Parameters<typeof popup.newTransaction>[0]);
-
-      window.setTimeout(() => {
-        setConfirming((still) => {
-          if (still) {
-            setError(
-              "If you completed payment, check My Bookings or your email. Otherwise tap Pay again.",
-            );
-          }
-          return false;
-        });
-      }, 5 * 60 * 1000);
+      setError(
+        sessJson.error?.trim() ||
+          sessJson.message?.trim() ||
+          "We could not start the secure payment checkout. Your booking is saved — please try again.",
+      );
+      setConfirming(false);
+      return;
     } catch (err) {
       const message = "An unexpected error occurred. Please try again.";
       setError(message);

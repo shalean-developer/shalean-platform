@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { priorityPermissionsForRequest } from "@/lib/admin/requireAdmin";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, "..", "..", "..", "..", "..");
@@ -27,14 +28,26 @@ describe("P4 Customer Care Case Management", () => {
     expect(sql).toContain("grant all on public.customer_care_cases to service_role");
   });
 
-  it("requires an explicit customer-care permission after generic admin auth", () => {
+  it("keeps explicit customer-care permissions in the shared Office API gate", () => {
+    expect(
+      priorityPermissionsForRequest(new Request("https://shalean.test/api/admin/customer-care-cases")),
+    ).toEqual(["customer.view", "customer.contact", "incident.manage"]);
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://shalean.test/api/admin/customer-care-cases", { method: "POST" }),
+      ),
+    ).toEqual(["customer.contact", "incident.manage"]);
+    expect(
+      priorityPermissionsForRequest(
+        new Request("https://shalean.test/api/admin/customer-care-cases/case-1", { method: "PATCH" }),
+      ),
+    ).toEqual(["customer.contact", "incident.manage"]);
+
     const listRoute = read("apps/web/app/api/admin/customer-care-cases/route.ts");
     const itemRoute = read("apps/web/app/api/admin/customer-care-cases/[id]/route.ts");
     for (const src of [listRoute, itemRoute]) {
-      expect(src).toContain("requireAdminApi");
-      expect(src).toContain("admin_has_permission");
-      expect(src).toContain('"customer.contact"');
-      expect(src).toContain('"incident.manage"');
+      expect(src).toContain("requireAdminApi(request)");
+      expect(src).not.toContain("admin_has_permission");
     }
   });
 

@@ -142,7 +142,7 @@ export async function finalizePaystackChargeSuccess(
     resolvedCustomerEmail = normalizeEmail(params.snapshot?.customer?.email ?? "");
   }
 
-  if (result.bookingId && !result.error && admin) {
+  if (result.ok === true && result.bookingId && !result.error && admin) {
     try {
       await recordReferralCheckoutRedemption({
         admin,
@@ -163,7 +163,7 @@ export async function finalizePaystackChargeSuccess(
   // Payment notifications must run on every verify/webhook success for this reference, including
   // idempotent upsert replays (`result.skipped === true`). Upsert stays skipped; duplicate sends are
   // prevented inside `notifyBookingEvent` via `tryClaimNotificationIdempotency` (Paystack reference key).
-  if (result.bookingId && !result.error && admin) {
+  if (result.ok === true && result.bookingId && !result.error && admin) {
     notifyBookingDebug("finalize_paystack_calling_notify", {
       bookingId: result.bookingId,
       skipped: result.skipped,

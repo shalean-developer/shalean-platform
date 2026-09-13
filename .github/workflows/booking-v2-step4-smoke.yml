@@ -1,0 +1,59 @@
+name: booking-v2-step4-smoke
+
+on:
+  pull_request:
+    paths:
+      - "apps/web/src/features/booking-v2/**"
+      - "apps/web/lib/booking-v2/**"
+      - "apps/web/e2e/smoke/booking-v2-step4.spec.ts"
+      - ".github/workflows/booking-v2-step4-smoke.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  step4-smoke:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Confirm checkout SHA equals PR head
+        working-directory: .
+        run: |
+          set -euo pipefail
+          GOT="$(git rev-parse HEAD)"
+          WANT="${{ github.event.pull_request.head.sha }}"
+          echo "checkout=$GOT"
+          echo "pr_head=$WANT"
+          test "$GOT" = "$WANT"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @tailwindcss/postcss@^4
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: RD-P05F Step 4 non-mutating browser smoke
+        env:
+          NEXT_PUBLIC_SITE_URL: http://127.0.0.1:3000
+          NEXT_PUBLIC_SUPABASE_URL: ""
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+        run: npx playwright test e2e/smoke/booking-v2-step4.spec.ts --project=chromium

@@ -1,11 +1,12 @@
 import { Lock, ShieldCheck, Star } from "lucide-react";
+import { PublicPageContainer } from "@/components/nav/PublicPageContainer";
 import { GOOGLE_BUSINESS_REVIEWS } from "@/lib/seo/googleReviews";
 
 export function FaqTrustStrip() {
   return (
-    <section className="border-y border-zinc-200 bg-zinc-50/90" aria-label="Trust signals">
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        <ul className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-sm font-medium text-zinc-800 sm:justify-between sm:text-[15px]">
+    <section className="border-y border-border bg-muted/70" aria-label="Trust signals">
+      <PublicPageContainer className="py-8">
+        <ul className="flex flex-wrap items-center justify-center gap-x-10 gap-y-4 text-sm font-medium text-foreground sm:justify-between sm:text-[15px]">
           <li className="flex items-center gap-2">
             <Star className="size-5 fill-amber-400 text-amber-400" aria-hidden />
             <span>{GOOGLE_BUSINESS_REVIEWS.rating} rating</span>
@@ -25,7 +26,7 @@ export function FaqTrustStrip() {
             <span>Thousands of homes served</span>
           </li>
         </ul>
-      </div>
+      </PublicPageContainer>
     </section>
   );
 }

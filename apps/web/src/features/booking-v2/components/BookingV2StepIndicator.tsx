@@ -27,8 +27,8 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                 onClick={() => isClickable && onStepClick(step)}
                 disabled={!isClickable}
                 className={cn(
-                  "flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 px-1.5 sm:gap-1 sm:px-3 md:px-4",
-                  isClickable && "cursor-pointer",
+                  "flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 transition sm:gap-1 sm:px-3 md:px-4",
+                  isClickable && "cursor-pointer hover:bg-accent",
                   !isClickable && "cursor-default",
                 )}
                 aria-current={isActive ? "step" : undefined}
@@ -37,9 +37,9 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                 <div
                   className={cn(
                     "flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors sm:h-8 sm:w-8 sm:text-sm",
-                    isCompleted && "border-blue-600 bg-blue-600 text-white",
-                    isActive && "border-blue-600 bg-white text-blue-600",
-                    !isCompleted && !isActive && "border-slate-200 bg-white text-slate-400",
+                    isCompleted && "border-primary bg-primary text-primary-foreground",
+                    isActive && "border-primary bg-background text-primary shadow-[var(--ui-shadow-sm)]",
+                    !isCompleted && !isActive && "border-border bg-card text-muted-foreground",
                   )}
                 >
                   {isCompleted ? <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={3} /> : step}
@@ -47,9 +47,9 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                 <span
                   className={cn(
                     "hidden text-xs font-medium sm:block",
-                    isActive && "text-blue-600",
-                    isCompleted && "text-slate-600",
-                    !isCompleted && !isActive && "text-slate-400",
+                    isActive && "text-primary",
+                    isCompleted && "text-foreground",
+                    !isCompleted && !isActive && "text-muted-foreground",
                   )}
                 >
                   {BOOKING_STEP_LABELS[step]}
@@ -59,8 +59,8 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
               {index < STEPS.length - 1 && (
                 <div
                   className={cn(
-                    "h-px w-3 shrink-0 sm:w-8 md:w-12",
-                    step < currentStep ? "bg-blue-600" : "bg-slate-200",
+                    "h-0.5 w-3 shrink-0 rounded-full sm:w-8 md:w-12",
+                    step < currentStep ? "bg-primary" : "bg-border",
                   )}
                   aria-hidden
                 />

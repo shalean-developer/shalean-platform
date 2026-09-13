@@ -4,6 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { ensureBookingPaymentSession } from "@/lib/booking/ensureBookingPaymentSession";
+import { paymentSessionFailureHttpStatus } from "@/lib/booking/paymentSessionFailureHttpStatus";
 import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearerAuth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
@@ -132,21 +133,15 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   if (session.status === "failed") {
-    const http =
-      session.errorCode === "PAYMENT_ACCESS_DENIED"
-        ? 403
-        : session.errorCode === "PAYMENT_BOOKING_NOT_FOUND"
-          ? 404
-          : session.errorCode === "PAYMENT_ALREADY_COMPLETED"
-            ? 409
-            : session.retryable
-              ? 503
-              : 409;
+    const http = paymentSessionFailureHttpStatus(session);
     return NextResponse.json(
       {
         status: "failed",
         bookingId: session.bookingId,
-        error: session.error,
+        error:
+          session.errorCode === "PAYMENT_BOOKING_NOT_FOUND"
+            ? "We could not verify your booking for payment. No payment was started. Please sign in again and retry your booking."
+            : session.error,
         errorCode: session.errorCode,
         retryable: session.retryable,
       },

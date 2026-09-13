@@ -41,11 +41,11 @@ export function MarketingHomeServicesGrid({ cards }: Props) {
                     <span className="text-xs text-slate-400">
                       From <span className="font-bold text-blue-600">{priceLabel}</span>
                     </span>
-                    <ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:text-blue-600" aria-hidden />
+                    <ArrowRight className="h-4 w-4 text-[#AAC4FF] transition group-hover:text-[#0051FF]" aria-hidden />
                   </div>
                 ) : (
                   <div className="mt-3 flex justify-end">
-                    <ArrowRight className="h-4 w-4 text-slate-300 transition group-hover:text-blue-600" aria-hidden />
+                    <ArrowRight className="h-4 w-4 text-[#AAC4FF] transition group-hover:text-[#0051FF]" aria-hidden />
                   </div>
                 )}
               </div>

@@ -20,7 +20,7 @@ export const marketingHeaderLogoLinkClass =
 
 /** Logo image sizing inside the mobile header bar. */
 export const marketingHeaderLogoImageClass =
-  "h-7 max-h-7 w-full max-w-[128px] object-contain object-left sm:h-8 sm:max-h-8 sm:max-w-[148px] md:h-10 md:max-h-10 md:max-w-[168px]";
+  "h-8 max-h-8 w-auto max-w-[140px] object-contain object-left sm:h-9 sm:max-h-9 sm:max-w-[160px] md:h-11 md:max-h-11 md:max-w-[192px]";
 
 /** Mobile header action cluster — calendar + menu, pinned to the trailing edge. */
 export const marketingMobileHeaderActionsClass =

@@ -6,30 +6,11 @@ import { createCustomerCareCase } from "@/lib/customerCare/customerCareCases";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-async function hasCasePermission(admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>, userId: string, write: boolean) {
-  const permissions = write
-    ? ["customer.contact", "incident.manage"]
-    : ["customer.view", "customer.contact", "incident.manage"];
-  for (const permission of permissions) {
-    const { data } = await admin.rpc("admin_has_permission", {
-      p_user_id: userId,
-      p_permission: permission,
-      p_branch_id: null,
-      p_team_id: null,
-    });
-    if (data === true) return true;
-  }
-  return false;
-}
-
 export async function GET(request: Request) {
   const auth = await requireAdminApi(request);
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await hasCasePermission(admin, auth.userId, false))) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-  }
 
   const url = new URL(request.url);
   const status = url.searchParams.get("status")?.trim();
@@ -51,9 +32,6 @@ export async function POST(request: Request) {
   if (!auth.ok) return NextResponse.json({ error: auth.error }, { status: auth.status });
   const admin = getSupabaseAdmin();
   if (!admin) return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
-  if (!(await hasCasePermission(admin, auth.userId, true))) {
-    return NextResponse.json({ error: "Forbidden." }, { status: 403 });
-  }
 
   const body = (await request.json().catch(() => null)) as Record<string, unknown> | null;
   if (!body) return NextResponse.json({ error: "Invalid JSON." }, { status: 400 });

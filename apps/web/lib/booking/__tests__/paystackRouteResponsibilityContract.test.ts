@@ -27,21 +27,38 @@ describe("paystackRouteResponsibilityContract guardrails", () => {
     expect(readApiRoute("paystack", "verify", "route.ts")).toContain("runPaystackVerifyFinalizePipeline");
   });
 
-  it("GET /api/booking/status does not run checkout finalize or mutate bookings", () => {
+  it("GET /api/booking/status is a 410 tombstone and cannot call Paystack or Supabase", () => {
     const src = readApiRoute("booking", "status", "route.ts");
-    expect(src).not.toContain("finalizePaidBooking");
+    expect(src).toContain("LEGACY_BOOKING_STATUS_RETIRED");
+    expect(src).toContain("status: 410");
+    expect(src).not.toContain("api.paystack.co");
+    expect(src).not.toContain("getSupabaseAdmin");
     expect(src).not.toContain("runPaystackVerifyFinalizePipeline");
-    expect(src).not.toContain("finalizePaystackChargeSuccess");
-    expect(src).not.toContain(".insert(");
-    expect(src).not.toContain(".update(");
   });
 
-  it("POST /api/booking/complete does not touch Supabase or finalize bookings", () => {
+  it("POST /api/booking/complete is a 410 tombstone and cannot call Paystack or finalize bookings", () => {
     const src = readApiRoute("booking", "complete", "route.ts");
+    expect(src).toContain("LEGACY_BOOKING_COMPLETE_RETIRED");
+    expect(src).toContain("status: 410");
+    expect(src).not.toContain("api.paystack.co");
     expect(src).not.toContain("getSupabaseAdmin");
-    expect(src).not.toContain("finalizePaidBooking");
     expect(src).not.toContain("runPaystackVerifyFinalizePipeline");
-    expect(src).not.toContain("finalizePaystackChargeSuccess");
+  });
+
+  it("AI booking agent keeps quote mode but cannot initialize customer payment", () => {
+    const src = readApiRoute("ai", "booking-agent", "route.ts");
+    expect(src).toContain("AI_BOOKING_AGENT_PAY_RETIRED");
+    expect(src).toContain('bookingPath: "/book"');
+    expect(src).toContain("buildBookingAgentQuote");
+    expect(src).not.toContain("processPaystackInitializeBody");
+    expect(src).not.toContain("api.paystack.co");
+  });
+
+  it("GET /api/paystack/status remains the active read-only status route", () => {
+    const src = readApiRoute("paystack", "status", "route.ts");
+    expect(src).toContain("findBookingIdStatusForPaystackReference");
+    expect(src).not.toContain("runPaystackVerifyFinalizePipeline");
+    expect(src).not.toContain("finalizePaidBooking");
   });
 
   it("POST /api/webhooks/paystack handles transfers only — not charge checkout finalization", () => {

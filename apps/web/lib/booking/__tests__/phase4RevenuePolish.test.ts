@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { resolveTotalPaidCents } from "@/lib/payout/calculateCleanerPayout";
-import { isLegacyBookingLockEnabled, CUSTOMER_PRICING_SOT } from "@/lib/booking/customerPricingSot";
+import { CUSTOMER_PRICING_SOT } from "@/lib/booking/customerPricingSot";
 import {
   computeServiceFeeCentsFromBaseZar,
   DEFAULT_BOOKING_SERVICE_FEE_CENTS,
@@ -11,14 +11,9 @@ describe("Phase 4 revenue polish", () => {
     expect(CUSTOMER_PRICING_SOT).toBe("booking_v2");
   });
 
-  it("disables new legacy locks by default", () => {
-    const prev = process.env.LEGACY_BOOKING_LOCK_ENABLED;
-    delete process.env.LEGACY_BOOKING_LOCK_ENABLED;
-    expect(isLegacyBookingLockEnabled()).toBe(false);
-    process.env.LEGACY_BOOKING_LOCK_ENABLED = "true";
-    expect(isLegacyBookingLockEnabled()).toBe(true);
-    if (prev == null) delete process.env.LEGACY_BOOKING_LOCK_ENABLED;
-    else process.env.LEGACY_BOOKING_LOCK_ENABLED = prev;
+  it("does not expose an env switch for the retired legacy booking lock", async () => {
+    const sot = await import("@/lib/booking/customerPricingSot");
+    expect("isLegacyBookingLockEnabled" in sot).toBe(false);
   });
 
   it("prefers amount_paid_cents over disagreeing total_paid_zar", () => {
