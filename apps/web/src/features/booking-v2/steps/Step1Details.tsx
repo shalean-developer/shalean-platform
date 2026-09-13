@@ -17,7 +17,7 @@ import {
   shouldUseHorizontalOptionCards,
 } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
 import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
-import { WhatsIncludedModal } from "@/src/features/booking-v2/components/WhatsIncludedModal";
+import { regularCleaningDetailsStage } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 
 // ─── Shared field components ───────────────────────────────────────────────────
 
@@ -331,6 +331,10 @@ export function Step1Details() {
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+  const isRegularCleaning = serviceSlug === "regular-cleaning";
+  const regularDetailsStage = regularCleaningDetailsStage(serviceDetails);
+  const hasSelectedPropertyType = regularDetailsStage !== "property";
+  const hasCompletedRequiredRooms = regularDetailsStage === "remaining";
 
   function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
     if (!question.showWhen) return true;
@@ -364,9 +368,15 @@ export function Step1Details() {
     setValue("selectedExtras", updated, { shouldDirty: true });
   }
 
-  const questionGroups = groupQuestions(
-    step1Questions.filter((q) => q.key !== "cleaningProducts" && isQuestionVisible(q)),
-  );
+  const visibleQuestions = step1Questions.filter((question) => {
+    if (question.key === "cleaningProducts" || !isQuestionVisible(question)) return false;
+    if (!isRegularCleaning) return true;
+    if (question.key === "propertyType") return true;
+    if (question.group === "rooms") return hasSelectedPropertyType;
+    return hasCompletedRequiredRooms;
+  });
+  const questionGroups = groupQuestions(visibleQuestions);
+  const showRemainingDetails = !isRegularCleaning || hasCompletedRequiredRooms;
 
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
@@ -384,11 +394,6 @@ export function Step1Details() {
         <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
           About the clean
         </h3>
-        {serviceSlug === "regular-cleaning" ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <WhatsIncludedModal />
-          </div>
-        ) : null}
         {questionGroups.map((group) => {
           if (group.type === "inline") {
             const isRooms = group.groupName === "rooms";
@@ -432,13 +437,17 @@ export function Step1Details() {
         })}
       </section>
 
-      <hr className="border-slate-200" />
+      <hr className={cn("border-slate-200", !showRemainingDetails && "hidden")} />
 
-      <PropertyAddressSection />
+      <div className={cn(!showRemainingDetails && "hidden")}>
+        <PropertyAddressSection />
+      </div>
 
-      <EquipmentSection />
+      <div className={cn(!showRemainingDetails && "hidden")}>
+        <EquipmentSection />
+      </div>
 
-      <div className="space-y-4">
+      <div className={cn("space-y-4", !showRemainingDetails && "hidden")}>
         <div>
           <FieldLabel htmlFor="accessInstructions">Access instructions (optional)</FieldLabel>
           <input
@@ -481,7 +490,7 @@ export function Step1Details() {
       </div>
 
       {/* Extras */}
-      {extras.length > 0 && (
+      {showRemainingDetails && extras.length > 0 && (
         <>
           <hr className="border-slate-200" />
           <section className="space-y-4">
