@@ -7,7 +7,7 @@ import { getBrandSameAsForJsonLd } from "@/lib/site/brandSameAs";
 export const PRIMARY_LOCAL_BUSINESS_ID = `${SITE_ORIGIN}/#localbusiness`;
 
 /** Representative image for LocalBusiness (logo asset not in public/ — uses verified marketing hero). */
-export const PRIMARY_LOCAL_BUSINESS_IMAGE = `${SITE_ORIGIN}/images/marketing/cape-town-house-cleaning-kitchen.webp`;
+export const PRIMARY_LOCAL_BUSINESS_IMAGE = `${SITE_ORIGIN}/images/marketing/homepage-hero-cleaning-team-cape-town.webp`;
 
 const CAPE_TOWN_CITY = {
   "@type": "City",

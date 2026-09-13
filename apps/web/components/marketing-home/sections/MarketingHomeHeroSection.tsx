@@ -4,6 +4,7 @@ import { preload } from "react-dom";
 import { ArrowRight, Check } from "lucide-react";
 import { GET_FREE_QUOTE_HREF } from "@/lib/marketing/getFreeQuote";
 import { marketingHeroImage, marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
+import { HOME_PAGE_H1, HOME_PAGE_H1_BRAND_LINE } from "@/lib/seo/homePageMeta";
 
 const HERO_MAIN = marketingHeroImage("homepage-hero-cleaning-team-cape-town.webp");
 
@@ -58,8 +59,8 @@ export function MarketingHomeHeroSection() {
             <Check className="h-4 w-4" aria-hidden /> Cape Town&apos;s cleaning partner
           </p>
           <h1 className="mt-5 text-[clamp(2.75rem,5vw,4.75rem)] font-semibold leading-[0.98] tracking-[-0.045em] text-white">
-            A cleaner space.
-            <span className="mt-2 block text-[#0051ff]">A brighter day.</span>
+            {HOME_PAGE_H1}
+            <span className="mt-2 block text-[#0051ff]">{HOME_PAGE_H1_BRAND_LINE}</span>
           </h1>
           <p className="mt-5 max-w-xl text-base leading-7 text-white/90 md:text-lg">
             Professional home and business cleaning, shaped around your schedule and backed by a local team you can reach.
