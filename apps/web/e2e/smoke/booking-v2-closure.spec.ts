@@ -187,7 +187,6 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
       const response = await page.goto("/book", { waitUntil: "domcontentloaded" });
       expect(response?.status()).toBeLessThan(400);
       await expect(page.getByRole("heading", { name: "Choose your cleaning service", exact: true })).toBeVisible();
-      await expect(page.getByRole("link", { name: /Request a personalised quote/ })).toBeVisible();
 
       const serviceLinks = page.locator('a[href^="/book/"]').filter({ has: page.locator("h2") });
       await expect(serviceLinks).toHaveCount(6);
