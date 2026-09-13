@@ -50,7 +50,6 @@ describe("regular cleaning progressive disclosure", () => {
           address: "45 Galway Road",
           suburb: "Athlone",
           contactPhone: "+27825915525",
-          serviceAreaLocationId: "8cd1b7b8-7f3f-4d5d-8fe8-c90855cad5c7",
         },
       ),
     ).toBe("equipment");
