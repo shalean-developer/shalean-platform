@@ -22,6 +22,14 @@
   box-shadow: var(--ui-shadow-sm);
 }
 
+.step1 > :global(.space-y-8) > section:first-child {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
 .step1 > :global(.space-y-8) > section h3 {
   color: var(--muted-foreground);
 }
