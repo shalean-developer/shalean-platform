@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import { resolveBookingV2LocationContext } from "@/lib/booking-v2/bookingV2LocationContext";
-import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getSupabaseServer } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
-  const admin = getSupabaseAdmin();
-  if (!admin) {
+  const supabase = getSupabaseServer();
+  if (!supabase) {
     return NextResponse.json({ error: "Server configuration error." }, { status: 503 });
   }
 
@@ -29,7 +29,7 @@ export async function GET(request: Request) {
     );
   }
 
-  const ctx = await resolveBookingV2LocationContext(admin, suburb);
+  const ctx = await resolveBookingV2LocationContext(supabase, suburb);
   if (!ctx) {
     return NextResponse.json(
       {
