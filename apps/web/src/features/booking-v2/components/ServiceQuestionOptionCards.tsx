@@ -42,11 +42,11 @@ const PROPERTY_TYPE_PRESENTATION: Record<
   },
   apartment: {
     icon: Building2,
-    description: "A home in a shared building.",
+    description: "A shared-building home.",
   },
   townhouse: {
     icon: PanelsTopLeft,
-    description: "An attached home in a complex.",
+    description: "A home in a complex.",
   },
 };
 
