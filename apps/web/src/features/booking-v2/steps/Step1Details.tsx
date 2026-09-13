@@ -325,7 +325,7 @@ function groupQuestions(questions: FormQuestion[]): QuestionGroup[] {
 export function Step1Details() {
   const { serviceSlug, liveConfig } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
-  const { register, watch, setValue } = useFormContext<BookingV2FormData>();
+  const { watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
   const serviceDetails = watch("serviceDetails") ?? {};
 
@@ -445,48 +445,6 @@ export function Step1Details() {
 
       <div className={cn(!showRemainingDetails && "hidden")}>
         <EquipmentSection />
-      </div>
-
-      <div className={cn("space-y-4", !showRemainingDetails && "hidden")}>
-        <div>
-          <FieldLabel htmlFor="accessInstructions">Access instructions (optional)</FieldLabel>
-          <input
-            id="accessInstructions"
-            type="text"
-            placeholder="e.g. Ring bell, use side gate…"
-            {...register("accessInstructions")}
-            autoComplete="off"
-            suppressHydrationWarning
-            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <FieldLabel htmlFor="parkingInstructions">Parking (optional)</FieldLabel>
-            <input
-              id="parkingInstructions"
-              type="text"
-              placeholder="Street parking, driveway…"
-              {...register("parkingInstructions")}
-              autoComplete="off"
-              suppressHydrationWarning
-              className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-          <div>
-            <FieldLabel htmlFor="gateCode">Gate / security code (optional)</FieldLabel>
-            <input
-              id="gateCode"
-              type="text"
-              placeholder="e.g. #1234"
-              {...register("gateCode")}
-              autoComplete="off"
-              suppressHydrationWarning
-              className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-        </div>
       </div>
 
       {/* Extras */}
