@@ -15,7 +15,7 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
     <nav aria-label="Booking progress" className="w-full min-w-0">
       <ol className="relative mx-auto grid w-full max-w-2xl grid-cols-4">
         <li
-          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-4 h-px bg-border sm:top-5"
+          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-4 h-px bg-border"
           aria-hidden
         />
         {STEPS.map((step) => {
@@ -30,7 +30,7 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                 onClick={() => isClickable && onStepClick(step)}
                 disabled={!isClickable}
                 className={cn(
-                  "flex min-w-0 flex-col items-center gap-1 bg-transparent px-1 transition sm:gap-1.5 sm:px-3",
+                  "flex min-w-0 flex-col items-center gap-0.5 bg-transparent px-1 transition sm:px-3",
                   isClickable && "cursor-pointer hover:bg-accent",
                   !isClickable && "cursor-default",
                 )}
@@ -39,7 +39,7 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
               >
                 <div
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors sm:h-10 sm:w-10 sm:text-base",
+                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
                     isCompleted && "bg-slate-200 text-slate-900",
                     isActive && "bg-primary text-primary-foreground",
                     !isCompleted && !isActive && "bg-slate-200 text-slate-700",
@@ -49,7 +49,7 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                 </div>
                 <span
                   className={cn(
-                    "truncate text-[10px] font-medium leading-tight sm:text-sm",
+                    "truncate text-[10px] font-medium leading-tight sm:text-xs",
                     isActive && "text-foreground",
                     isCompleted && "text-foreground",
                     !isCompleted && !isActive && "text-muted-foreground",
