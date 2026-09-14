@@ -10,6 +10,11 @@ import type { BookingV2FormData, BookingStep } from "@/src/features/booking-v2/t
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { estimatedCleaningHoursFromMinutes } from "@/lib/booking-v2/formatEstimatedCleaningTime";
 import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
+import {
+  isRegularCleaningStageComplete,
+  regularCleaningDetailsStage,
+  type RegularCleaningDetailsStage,
+} from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
@@ -49,7 +54,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const [open, setOpen] = useState(!defaultCollapsed);
   const [priceBreakdownOpen, setPriceBreakdownOpen] = useState(false);
   const { watch } = useFormContext<BookingV2FormData>();
-  const { liveConfig, goToStep } = useBookingV2();
+  const { currentStep, liveConfig, goToStep, editDetailsSection } = useBookingV2();
   const values = watch();
 
   const config = SERVICE_CONFIG[values.serviceSlug];
@@ -64,6 +69,10 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const hasCleaner = values.cleanerMode === "team" || values.cleanerCount > 0;
   const hasPriceBreakdown = pricing.lineItems.length > 0;
   const edit = (step: BookingStep) => () => goToStep(step);
+  const editDetail = (section: RegularCleaningDetailsStage) => () => {
+    goToStep(1);
+    editDetailsSection(section);
+  };
 
   const addressLabel = [values.address, values.suburb, values.city].filter(Boolean).join(", ");
   const cleanerLabel = values.cleanerMode === "team"
@@ -74,6 +83,23 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const priceLabel = hasPriceBreakdown
     ? `R${displayTotal.toLocaleString("en-ZA")}`
     : `From R${(liveConfig?.basePrice ?? config.basePrice).toLocaleString("en-ZA")}`;
+  const isRegularCleaning = values.serviceSlug === "regular-cleaning";
+  const detailsStage = regularCleaningDetailsStage(values.serviceDetails, {
+    address: values.address,
+    suburb: values.suburb,
+    contactPhone: values.contactPhone,
+    serviceAreaLocationId: values.serviceAreaLocationId,
+  });
+  const propertyType = String(values.serviceDetails.propertyType ?? "");
+  const propertyLabel = config.step1Questions
+    .find((question) => question.key === "propertyType")
+    ?.options?.find((option) => option.value === propertyType)?.label ?? propertyType;
+  const bedrooms = String(values.serviceDetails.bedrooms ?? "");
+  const bathrooms = String(values.serviceDetails.bathrooms ?? "");
+  const extraRooms = String(values.serviceDetails.extraRooms ?? "0");
+  const roomsLabel = `${bedrooms} bed · ${bathrooms} bath${extraRooms !== "0" ? ` · ${extraRooms} extra` : ""}`;
+  const petsLabel = String(values.serviceDetails.hasPets ?? "") === "yes" ? "Yes" : "No";
+  const equipmentLabel = values.equipmentRequired === "yes" ? "Shalean supplies" : "Customer supplies";
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -96,7 +122,9 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         <div className="space-y-2 p-3 sm:p-4">
           <h2 className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">Booking Details</h2>
 
-          {hasAddress && <SummaryRow label="Where" value={addressLabel} onEdit={edit(1)} />}
+          {hasAddress && (!isRegularCleaning || detailsStage === "equipment") ? (
+            <SummaryRow label="Where" value={addressLabel} onEdit={isRegularCleaning ? editDetail("address") : edit(1)} />
+          ) : null}
           <SummaryRow label="What" value={config.label} onEdit={edit(1)} />
           {hasDate && (
             <SummaryRow
@@ -106,6 +134,18 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             />
           )}
           {hasCleaner && <SummaryRow label="Who" value={cleanerLabel} onEdit={edit(2)} />}
+          {isRegularCleaning && isRegularCleaningStageComplete("property", detailsStage) ? (
+            <SummaryRow label="Property" value={propertyLabel} onEdit={editDetail("property")} />
+          ) : null}
+          {isRegularCleaning && isRegularCleaningStageComplete("rooms", detailsStage) ? (
+            <SummaryRow label="Rooms" value={roomsLabel} onEdit={editDetail("rooms")} />
+          ) : null}
+          {isRegularCleaning && isRegularCleaningStageComplete("pets", detailsStage) ? (
+            <SummaryRow label="Pets" value={petsLabel} onEdit={editDetail("pets")} />
+          ) : null}
+          {isRegularCleaning && currentStep > 1 ? (
+            <SummaryRow label="Equipment" value={equipmentLabel} onEdit={editDetail("equipment")} />
+          ) : null}
 
           {values.equipmentRequired === "yes" && values.equipmentQuote?.manual_quote_required && (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">

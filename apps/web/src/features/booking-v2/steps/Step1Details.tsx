@@ -323,7 +323,12 @@ function groupQuestions(questions: FormQuestion[]): QuestionGroup[] {
 // ─── Step 1 ─────────────────────────────────────────────────────────────────────
 
 export function Step1Details() {
-  const { serviceSlug, liveConfig } = useBookingV2();
+  const {
+    serviceSlug,
+    liveConfig,
+    detailsSectionOverride,
+    finishEditingDetailsSection,
+  } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
   const { watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
@@ -331,6 +336,7 @@ export function Step1Details() {
   const address = watch("address") ?? "";
   const suburb = watch("suburb") ?? "";
   const contactPhone = watch("contactPhone") ?? "";
+  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
@@ -339,11 +345,13 @@ export function Step1Details() {
     address,
     suburb,
     contactPhone,
+    serviceAreaLocationId,
   });
-  const hasSelectedPropertyType = regularDetailsStage !== "property";
-  const hasCompletedRequiredRooms = !["property", "rooms"].includes(regularDetailsStage);
-  const showAddress = !isRegularCleaning || ["address", "equipment"].includes(regularDetailsStage);
-  const showEquipment = !isRegularCleaning || regularDetailsStage === "equipment";
+  const activeDetailsStage = isRegularCleaning
+    ? detailsSectionOverride ?? regularDetailsStage
+    : null;
+  const showAddress = !isRegularCleaning || activeDetailsStage === "address";
+  const showEquipment = !isRegularCleaning || activeDetailsStage === "equipment";
 
   function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
     if (!question.showWhen) return true;
@@ -380,17 +388,17 @@ export function Step1Details() {
   const visibleQuestions = step1Questions.filter((question) => {
     if (question.key === "cleaningProducts" || !isQuestionVisible(question)) return false;
     if (!isRegularCleaning) return true;
-    if (question.key === "propertyType") return true;
-    if (question.group === "rooms") return hasSelectedPropertyType;
-    if (question.key === "hasPets") return hasCompletedRequiredRooms;
-    return regularDetailsStage === "equipment";
+    if (question.key === "propertyType") return activeDetailsStage === "property";
+    if (question.group === "rooms") return activeDetailsStage === "rooms";
+    if (question.key === "hasPets") return activeDetailsStage === "pets";
+    return activeDetailsStage === "equipment";
   });
   const questionGroups = groupQuestions(visibleQuestions);
 
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
       {/* Service-specific questions */}
-      <section className="space-y-5">
+      <section className={cn("space-y-5", isRegularCleaning && questionGroups.length === 0 && "hidden")}>
         <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
           About the clean
         </h3>
@@ -503,6 +511,16 @@ export function Step1Details() {
           </section>
         </>
       )}
+
+      {isRegularCleaning && detailsSectionOverride ? (
+        <button
+          type="button"
+          onClick={finishEditingDetailsSection}
+          className="mx-auto block rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+        >
+          Return to current question
+        </button>
+      ) : null}
     </div>
   );
 }

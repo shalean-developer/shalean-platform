@@ -36,6 +36,7 @@ import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import type { BookingRow } from "@/lib/dashboard/types";
 import { bookingServiceSlugFromBookingRow } from "@/lib/booking-v2/bookingV2ServiceSlug";
 import { bookingV2FormPatchFromBookingRow } from "@/lib/booking-v2/rebookFromBookingRow";
+import type { RegularCleaningDetailsStage } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 import {
   BOOKING_FUNNEL_ROW,
   bookingV2StepToFunnelStep,
@@ -58,6 +59,9 @@ type BookingV2ContextValue = {
   feesConfig: BookingV2FeesConfig;
   catalogLoading: boolean;
   pricingAvailability: BookingPricingAvailability;
+  detailsSectionOverride: RegularCleaningDetailsStage | null;
+  editDetailsSection: (section: RegularCleaningDetailsStage) => void;
+  finishEditingDetailsSection: () => void;
   goToStep: (step: BookingStep) => void;
   goNext: () => void;
   goBack: () => void;
@@ -152,6 +156,8 @@ export function BookingV2Provider({
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [pricingAvailability, setPricingAvailability] =
     useState<BookingPricingAvailability>("loading");
+  const [detailsSectionOverride, setDetailsSectionOverride] =
+    useState<RegularCleaningDetailsStage | null>(null);
 
   useEffect(() => {
     fetch("/api/booking-v2/services")
@@ -406,6 +412,18 @@ export function BookingV2Provider({
     form.reset(defaultBookingFormData(serviceSlug, cleanerMode));
   }, [form, serviceSlug, cleanerMode]);
 
+  const editDetailsSection = useCallback((section: RegularCleaningDetailsStage) => {
+    setDetailsSectionOverride(section);
+  }, []);
+
+  const finishEditingDetailsSection = useCallback(() => {
+    setDetailsSectionOverride(null);
+  }, []);
+
+  useEffect(() => {
+    if (currentStep !== 1) setDetailsSectionOverride(null);
+  }, [currentStep]);
+
   const value = useMemo<BookingV2ContextValue>(
     () => ({
       form,
@@ -416,6 +434,9 @@ export function BookingV2Provider({
       feesConfig,
       catalogLoading,
       pricingAvailability,
+      detailsSectionOverride,
+      editDetailsSection,
+      finishEditingDetailsSection,
       goToStep,
       goNext,
       goBack,
@@ -431,6 +452,9 @@ export function BookingV2Provider({
       feesConfig,
       catalogLoading,
       pricingAvailability,
+      detailsSectionOverride,
+      editDetailsSection,
+      finishEditingDetailsSection,
       goToStep,
       goNext,
       goBack,

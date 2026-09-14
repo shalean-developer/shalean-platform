@@ -23,6 +23,7 @@ import {
   canEnterBookingPayment,
   type BookingPricingAvailability,
 } from "@/lib/booking-v2/bookingPricingAvailability";
+import { regularCleaningDetailsStage } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 
 function BookingV2LoadingShell() {
   return (
@@ -89,10 +90,16 @@ function BookingV2Inner() {
     goBack,
     serviceSlug,
     pricingAvailability,
+    detailsSectionOverride,
   } = useBookingV2();
   const { watch } = useFormContext<BookingV2FormData>();
   const reviewTime = watch("time")?.trim() ?? "";
   const pendingBookingId = watch("pendingBookingId")?.trim() ?? "";
+  const serviceDetails = watch("serviceDetails") ?? {};
+  const address = watch("address") ?? "";
+  const suburb = watch("suburb") ?? "";
+  const contactPhone = watch("contactPhone") ?? "";
+  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
   useBookingV2Pricing();
   useBookingV2FunnelTelemetry(currentStep, serviceSlug);
 
@@ -116,6 +123,16 @@ function BookingV2Inner() {
   /** Steps 3–4 already use section cards — avoid card-in-card chrome that squeezes mobile. */
   const useOuterStepCard = currentStep <= 2;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
+  const regularDetailsStage = regularCleaningDetailsStage(serviceDetails, {
+    address,
+    suburb,
+    contactPhone,
+    serviceAreaLocationId,
+  });
+  const showNextButton =
+    currentStep !== 1 ||
+    serviceSlug !== "regular-cleaning" ||
+    (regularDetailsStage === "equipment" && detailsSectionOverride === null);
   const paymentBlockMessage =
     pricingAvailability === "loading"
       ? BOOKING_PRICING_LOADING_MESSAGE
@@ -172,7 +189,7 @@ function BookingV2Inner() {
                 {currentStep === 1 ? "← Back to services" : "← Back"}
               </Button>
 
-              {currentStep < 4 && (
+              {currentStep < 4 && showNextButton && (
                 <Button
                   size="lg"
                   onClick={goNext}
