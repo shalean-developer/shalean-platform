@@ -35,8 +35,8 @@ function BookingV2LoadingShell() {
           <div className="h-8 w-16 animate-pulse rounded-lg bg-muted" />
         </div>
       </div>
-      <div className="mx-auto max-w-[var(--ui-container-content)] px-[var(--ui-page-gutter)] py-4 sm:py-8">
-        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,560px)_minmax(280px,340px)] lg:justify-center">
+      <div className="mx-auto w-full max-w-[1280px] px-[var(--ui-page-gutter)] py-4 sm:py-8 lg:py-12">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,560px)_minmax(300px,360px)] lg:items-start lg:justify-center lg:gap-12 xl:justify-between xl:gap-48">
           <div className="rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8">
             <div className="animate-pulse space-y-6">
               <div className="mx-auto h-7 w-40 rounded bg-muted" />
@@ -128,15 +128,15 @@ function BookingV2Inner() {
       <BookingV2Header serviceSlug={serviceSlug} currentStep={currentStep} onStepClick={goToStep} />
 
       {/* Main content — single document scroll; fluid padding for ≤390px */}
-      <div className="mx-auto max-w-[var(--ui-container-content)] px-[var(--ui-page-gutter)] py-4 sm:py-8">
+      <div className="mx-auto w-full max-w-[1280px] px-[var(--ui-page-gutter)] py-4 sm:py-8 lg:py-12">
         <div
           className={
             showSidebarSummary
-              ? "grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,560px)_minmax(280px,340px)] lg:justify-center"
+              ? "grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,560px)_minmax(300px,360px)] lg:items-start lg:justify-center lg:gap-12 xl:justify-between xl:gap-48"
               : "mx-auto max-w-[var(--ui-container-sm)]"
           }
         >
-          <div className="min-w-0">
+          <div className="min-w-0 w-full max-w-[560px] justify-self-center">
             {showSidebarSummary && (
               <div className="mb-4 sm:mb-6 lg:hidden">
                 <BookingV2SummaryPanel collapsed />
@@ -194,7 +194,7 @@ function BookingV2Inner() {
           </div>
 
           {showSidebarSummary && (
-            <div className="hidden lg:block">
+            <div className="hidden w-full max-w-[360px] justify-self-start lg:block">
               <div className="sticky top-24">
                 <BookingV2SummaryPanel />
               </div>
