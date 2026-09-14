@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adjacentRegularCleaningStage,
   isRegularCleaningStageComplete,
   regularCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
@@ -87,5 +88,12 @@ describe("regular cleaning progressive disclosure", () => {
     expect(isRegularCleaningStageComplete("pets", "address")).toBe(true);
     expect(isRegularCleaningStageComplete("address", "address")).toBe(false);
     expect(isRegularCleaningStageComplete("equipment", "address")).toBe(false);
+  });
+
+  it("moves backward and forward through the controlled Step 1 sequence", () => {
+    expect(adjacentRegularCleaningStage("property", "back")).toBeNull();
+    expect(adjacentRegularCleaningStage("property", "next")).toBe("rooms");
+    expect(adjacentRegularCleaningStage("address", "back")).toBe("pets");
+    expect(adjacentRegularCleaningStage("equipment", "next")).toBeNull();
   });
 });

@@ -17,7 +17,10 @@ import {
   shouldUseHorizontalOptionCards,
 } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
 import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
-import { regularCleaningDetailsStage } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
+import {
+  adjacentRegularCleaningStage,
+  regularCleaningDetailsStage,
+} from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 
 // ─── Shared field components ───────────────────────────────────────────────────
 
@@ -327,7 +330,9 @@ export function Step1Details() {
     serviceSlug,
     liveConfig,
     detailsSectionOverride,
-    finishEditingDetailsSection,
+    editDetailsSection,
+    goBack,
+    goNext,
   } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
   const { watch, setValue } = useFormContext<BookingV2FormData>();
@@ -394,6 +399,31 @@ export function Step1Details() {
     return activeDetailsStage === "equipment";
   });
   const questionGroups = groupQuestions(visibleQuestions);
+  const regularStageReady =
+    activeDetailsStage === "property"
+      ? Boolean(String(serviceDetails.propertyType ?? "").trim())
+      : activeDetailsStage === "rooms"
+        ? ["bedrooms", "bathrooms", "extraRooms"].every((key) =>
+            Boolean(String(serviceDetails[key] ?? "").trim()),
+          )
+        : activeDetailsStage === "pets"
+          ? Boolean(String(serviceDetails.hasPets ?? "").trim())
+          : activeDetailsStage === "address"
+            ? regularDetailsStage === "equipment"
+            : true;
+
+  function moveRegularStage(direction: "back" | "next") {
+    if (!activeDetailsStage) return;
+    const adjacentStage = adjacentRegularCleaningStage(activeDetailsStage, direction);
+    if (direction === "back") {
+      if (adjacentStage) editDetailsSection(adjacentStage);
+      else goBack();
+      return;
+    }
+    if (!regularStageReady) return;
+    if (adjacentStage) editDetailsSection(adjacentStage);
+    else void goNext();
+  }
 
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
@@ -512,14 +542,24 @@ export function Step1Details() {
         </>
       )}
 
-      {isRegularCleaning && detailsSectionOverride ? (
-        <button
-          type="button"
-          onClick={finishEditingDetailsSection}
-          className="mx-auto block rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
-        >
-          Return to current question
-        </button>
+      {isRegularCleaning ? (
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={() => moveRegularStage("back")}
+            className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+          >
+            ← Back
+          </button>
+          <button
+            type="button"
+            disabled={!regularStageReady}
+            onClick={() => moveRegularStage("next")}
+            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
+          >
+            {activeDetailsStage === "equipment" ? "Continue to Schedule →" : "Continue →"}
+          </button>
+        </div>
       ) : null}
     </div>
   );

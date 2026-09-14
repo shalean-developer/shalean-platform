@@ -21,6 +21,15 @@ export function isRegularCleaningStageComplete(
     REGULAR_CLEANING_DETAILS_STAGES.indexOf(currentStage);
 }
 
+export function adjacentRegularCleaningStage(
+  stage: RegularCleaningDetailsStage,
+  direction: "back" | "next",
+): RegularCleaningDetailsStage | null {
+  const currentIndex = REGULAR_CLEANING_DETAILS_STAGES.indexOf(stage);
+  const adjacentIndex = direction === "back" ? currentIndex - 1 : currentIndex + 1;
+  return REGULAR_CLEANING_DETAILS_STAGES[adjacentIndex] ?? null;
+}
+
 type RegularCleaningBookingDetails = {
   address?: string;
   suburb?: string;

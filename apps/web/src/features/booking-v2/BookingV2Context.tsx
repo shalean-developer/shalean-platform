@@ -36,7 +36,10 @@ import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import type { BookingRow } from "@/lib/dashboard/types";
 import { bookingServiceSlugFromBookingRow } from "@/lib/booking-v2/bookingV2ServiceSlug";
 import { bookingV2FormPatchFromBookingRow } from "@/lib/booking-v2/rebookFromBookingRow";
-import type { RegularCleaningDetailsStage } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
+import {
+  regularCleaningDetailsStage,
+  type RegularCleaningDetailsStage,
+} from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 import {
   BOOKING_FUNNEL_ROW,
   bookingV2StepToFunnelStep,
@@ -61,7 +64,6 @@ type BookingV2ContextValue = {
   pricingAvailability: BookingPricingAvailability;
   detailsSectionOverride: RegularCleaningDetailsStage | null;
   editDetailsSection: (section: RegularCleaningDetailsStage) => void;
-  finishEditingDetailsSection: () => void;
   goToStep: (step: BookingStep) => void;
   goNext: () => void;
   goBack: () => void;
@@ -157,7 +159,9 @@ export function BookingV2Provider({
   const [pricingAvailability, setPricingAvailability] =
     useState<BookingPricingAvailability>("loading");
   const [detailsSectionOverride, setDetailsSectionOverride] =
-    useState<RegularCleaningDetailsStage | null>(null);
+    useState<RegularCleaningDetailsStage | null>(
+      serviceSlug === "regular-cleaning" ? "property" : null,
+    );
 
   useEffect(() => {
     fetch("/api/booking-v2/services")
@@ -228,6 +232,16 @@ export function BookingV2Provider({
       urlPatch.replaceSelectedExtras
     ) {
       form.reset(merged, { keepDefaultValues: false });
+      if (serviceSlug === "regular-cleaning") {
+        setDetailsSectionOverride(
+          regularCleaningDetailsStage(merged.serviceDetails ?? {}, {
+            address: merged.address,
+            suburb: merged.suburb,
+            contactPhone: merged.contactPhone,
+            serviceAreaLocationId: merged.serviceAreaLocationId,
+          }),
+        );
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -268,6 +282,16 @@ export function BookingV2Provider({
 
       const patch = bookingV2FormPatchFromBookingRow(row, serviceSlug, cleanerMode);
       form.reset(patch, { keepDefaultValues: false });
+      if (serviceSlug === "regular-cleaning") {
+        setDetailsSectionOverride(
+          regularCleaningDetailsStage(patch.serviceDetails, {
+            address: patch.address,
+            suburb: patch.suburb,
+            contactPhone: patch.contactPhone,
+            serviceAreaLocationId: patch.serviceAreaLocationId,
+          }),
+        );
+      }
       writeToStorage(patch);
     })();
     return () => {
@@ -410,19 +434,29 @@ export function BookingV2Provider({
   const clearBooking = useCallback(() => {
     clearStorage();
     form.reset(defaultBookingFormData(serviceSlug, cleanerMode));
+    setDetailsSectionOverride(serviceSlug === "regular-cleaning" ? "property" : null);
   }, [form, serviceSlug, cleanerMode]);
 
   const editDetailsSection = useCallback((section: RegularCleaningDetailsStage) => {
     setDetailsSectionOverride(section);
   }, []);
 
-  const finishEditingDetailsSection = useCallback(() => {
-    setDetailsSectionOverride(null);
-  }, []);
-
   useEffect(() => {
-    if (currentStep !== 1) setDetailsSectionOverride(null);
-  }, [currentStep]);
+    if (
+      currentStep !== 1 ||
+      serviceSlug !== "regular-cleaning" ||
+      detailsSectionOverride !== null
+    ) return;
+    const values = form.getValues();
+    setDetailsSectionOverride(
+      regularCleaningDetailsStage(values.serviceDetails, {
+        address: values.address,
+        suburb: values.suburb,
+        contactPhone: values.contactPhone,
+        serviceAreaLocationId: values.serviceAreaLocationId,
+      }),
+    );
+  }, [currentStep, detailsSectionOverride, form, serviceSlug]);
 
   const value = useMemo<BookingV2ContextValue>(
     () => ({
@@ -436,7 +470,6 @@ export function BookingV2Provider({
       pricingAvailability,
       detailsSectionOverride,
       editDetailsSection,
-      finishEditingDetailsSection,
       goToStep,
       goNext,
       goBack,
@@ -454,7 +487,6 @@ export function BookingV2Provider({
       pricingAvailability,
       detailsSectionOverride,
       editDetailsSection,
-      finishEditingDetailsSection,
       goToStep,
       goNext,
       goBack,

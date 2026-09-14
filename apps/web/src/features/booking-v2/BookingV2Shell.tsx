@@ -17,13 +17,13 @@ import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { useBookingV2FunnelTelemetry } from "@/src/features/booking-v2/hooks/useBookingV2FunnelTelemetry";
 import { useBookingV2Pricing } from "@/src/features/booking-v2/hooks/useBookingV2Pricing";
 import { useClientMounted } from "@/src/features/booking-v2/hooks/useClientMounted";
+import { cn } from "@/lib/utils";
 import {
   BOOKING_PRICING_LOADING_MESSAGE,
   BOOKING_PRICING_UNAVAILABLE_MESSAGE,
   canEnterBookingPayment,
   type BookingPricingAvailability,
 } from "@/lib/booking-v2/bookingPricingAvailability";
-import { regularCleaningDetailsStage } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 
 function BookingV2LoadingShell() {
   return (
@@ -90,16 +90,10 @@ function BookingV2Inner() {
     goBack,
     serviceSlug,
     pricingAvailability,
-    detailsSectionOverride,
   } = useBookingV2();
   const { watch } = useFormContext<BookingV2FormData>();
   const reviewTime = watch("time")?.trim() ?? "";
   const pendingBookingId = watch("pendingBookingId")?.trim() ?? "";
-  const serviceDetails = watch("serviceDetails") ?? {};
-  const address = watch("address") ?? "";
-  const suburb = watch("suburb") ?? "";
-  const contactPhone = watch("contactPhone") ?? "";
-  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
   useBookingV2Pricing();
   useBookingV2FunnelTelemetry(currentStep, serviceSlug);
 
@@ -123,16 +117,7 @@ function BookingV2Inner() {
   /** Steps 3–4 already use section cards — avoid card-in-card chrome that squeezes mobile. */
   const useOuterStepCard = currentStep <= 2;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
-  const regularDetailsStage = regularCleaningDetailsStage(serviceDetails, {
-    address,
-    suburb,
-    contactPhone,
-    serviceAreaLocationId,
-  });
-  const showNextButton =
-    currentStep !== 1 ||
-    serviceSlug !== "regular-cleaning" ||
-    (regularDetailsStage === "equipment" && detailsSectionOverride === null);
+  const showShellNavigation = currentStep !== 1 || serviceSlug !== "regular-cleaning";
   const paymentBlockMessage =
     pricingAvailability === "loading"
       ? BOOKING_PRICING_LOADING_MESSAGE
@@ -178,7 +163,12 @@ function BookingV2Inner() {
             ) : null}
 
             {/* Inline nav — natural flow (no nested scroll / fixed bar) */}
-            <div className="mt-4 flex flex-col-reverse gap-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:mt-6 sm:flex-row sm:items-center sm:justify-between">
+            <div
+              className={cn(
+                "mt-4 flex flex-col-reverse gap-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:mt-6 sm:flex-row sm:items-center sm:justify-between",
+                !showShellNavigation && "hidden",
+              )}
+            >
               <Button
                 variant="outline"
                 size="lg"
@@ -189,7 +179,7 @@ function BookingV2Inner() {
                 {currentStep === 1 ? "← Back to services" : "← Back"}
               </Button>
 
-              {currentStep < 4 && showNextButton && (
+              {currentStep < 4 && (
                 <Button
                   size="lg"
                   onClick={goNext}

@@ -54,7 +54,13 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const [open, setOpen] = useState(!defaultCollapsed);
   const [priceBreakdownOpen, setPriceBreakdownOpen] = useState(false);
   const { watch } = useFormContext<BookingV2FormData>();
-  const { currentStep, liveConfig, goToStep, editDetailsSection } = useBookingV2();
+  const {
+    currentStep,
+    liveConfig,
+    goToStep,
+    detailsSectionOverride,
+    editDetailsSection,
+  } = useBookingV2();
   const values = watch();
 
   const config = SERVICE_CONFIG[values.serviceSlug];
@@ -90,6 +96,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     contactPhone: values.contactPhone,
     serviceAreaLocationId: values.serviceAreaLocationId,
   });
+  const displayedDetailsStage = detailsSectionOverride ?? detailsStage;
   const propertyType = String(values.serviceDetails.propertyType ?? "");
   const propertyLabel = config.step1Questions
     .find((question) => question.key === "propertyType")
@@ -122,7 +129,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         <div className="space-y-2 p-3 sm:p-4">
           <h2 className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">Booking Details</h2>
 
-          {hasAddress && (!isRegularCleaning || detailsStage === "equipment") ? (
+          {hasAddress && (!isRegularCleaning || displayedDetailsStage === "equipment") ? (
             <SummaryRow label="Where" value={addressLabel} onEdit={isRegularCleaning ? editDetail("address") : edit(1)} />
           ) : null}
           <SummaryRow label="What" value={config.label} onEdit={edit(1)} />
@@ -134,13 +141,13 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             />
           )}
           {hasCleaner && <SummaryRow label="Who" value={cleanerLabel} onEdit={edit(2)} />}
-          {isRegularCleaning && isRegularCleaningStageComplete("property", detailsStage) ? (
+          {isRegularCleaning && isRegularCleaningStageComplete("property", displayedDetailsStage) ? (
             <SummaryRow label="Property" value={propertyLabel} onEdit={editDetail("property")} />
           ) : null}
-          {isRegularCleaning && isRegularCleaningStageComplete("rooms", detailsStage) ? (
+          {isRegularCleaning && isRegularCleaningStageComplete("rooms", displayedDetailsStage) ? (
             <SummaryRow label="Rooms" value={roomsLabel} onEdit={editDetail("rooms")} />
           ) : null}
-          {isRegularCleaning && isRegularCleaningStageComplete("pets", detailsStage) ? (
+          {isRegularCleaning && isRegularCleaningStageComplete("pets", displayedDetailsStage) ? (
             <SummaryRow label="Pets" value={petsLabel} onEdit={editDetail("pets")} />
           ) : null}
           {isRegularCleaning && currentStep > 1 ? (
