@@ -33,7 +33,7 @@ function formatDate(dateStr: string): string {
 
 function SummaryRow({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
   return (
-    <div className="flex min-h-12 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5">
+    <div className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
       <p className="min-w-0 flex-1 truncate text-sm text-slate-700">
         <span className="font-medium text-slate-500">{label}:</span>{" "}
         <span className="font-semibold text-slate-900">{value}</span>
@@ -41,7 +41,7 @@ function SummaryRow({ label, value, onEdit }: { label: string; value: string; on
       <button
         type="button"
         onClick={onEdit}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
         aria-label={`Edit ${label.toLowerCase()}`}
       >
         <Pencil className="h-4 w-4" aria-hidden />
@@ -113,7 +113,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
-        className="flex min-h-12 w-full items-center justify-between gap-2 px-4 py-3 lg:hidden"
+        className="flex min-h-10 w-full items-center justify-between gap-2 px-3 py-2.5 lg:hidden"
         aria-expanded={open}
       >
         <span className="truncate text-sm font-semibold text-slate-900">Booking details</span>
@@ -126,7 +126,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
       </button>
 
       <div className={cn("lg:block", !open && "hidden")}>
-        <div className="space-y-2 p-3 sm:p-4">
+        <div className="space-y-2 p-3">
           <h2 className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">Booking Details</h2>
 
           {hasAddress && (!isRegularCleaning || displayedDetailsStage === "equipment") ? (
@@ -155,7 +155,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
           ) : null}
 
           {values.equipmentRequired === "yes" && values.equipmentQuote?.manual_quote_required && (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
               {values.equipmentQuote.manual_quote_message}
             </p>
           )}
