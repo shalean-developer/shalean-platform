@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react";
 import { useFormContext, Controller } from "react-hook-form";
 import {
+  CalendarPlus,
   ChevronLeft,
   ChevronRight,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
@@ -294,6 +296,7 @@ export function Step2Schedule() {
   const activeScheduleStage = isRegularCleaning
     ? scheduleSectionOverride ?? "booking_type"
     : null;
+  const isBookingTypeStage = isRegularCleaning && activeScheduleStage === "booking_type";
 
   const durationMinutes = Math.round(
     (watch("pricingSummary")?.estimated_duration_minutes ??
@@ -384,8 +387,12 @@ export function Step2Schedule() {
     <div className="space-y-8">
       {/* ── Header ── */}
       <div className="text-center">
-        <h2 className="text-xl font-bold text-slate-900">{copy.title}</h2>
-        <p className="mt-1 text-sm text-slate-500">{copy.subtitle}</p>
+        <h2 className="text-xl font-bold text-slate-900 sm:text-2xl">
+          {isBookingTypeStage ? "How often do you need help?" : copy.title}
+        </h2>
+        <p className="mt-2 text-sm text-slate-500">
+          {isBookingTypeStage ? "How often do you need the service?" : copy.subtitle}
+        </p>
       </div>
 
       {!areaResolved ? (
@@ -413,34 +420,71 @@ export function Step2Schedule() {
 
       {/* ── Booking type ── */}
       {(!isRegularCleaning || activeScheduleStage === "booking_type") && <section className="space-y-4">
-        <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
-          Booking type
-        </h3>
+        {!isRegularCleaning ? (
+          <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
+            Booking type
+          </h3>
+        ) : null}
         <Controller
           name="bookingType"
           control={control}
           render={({ field }) => (
-            <div className="flex w-full flex-col gap-3 sm:flex-row sm:justify-center">
+            <div className={cn(
+              "w-full",
+              isRegularCleaning
+                ? "mx-auto grid max-w-2xl grid-cols-1 gap-4 pt-2 sm:grid-cols-2 sm:gap-5"
+                : "flex flex-col gap-3 sm:flex-row sm:justify-center",
+            )}>
               {[
-                { value: "once_off", label: "Once-off" },
-                { value: "recurring", label: "Recurring" },
-              ].map((opt) => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => field.onChange(opt.value)}
-                  disabled={!areaResolved}
-                  className={cn(
-                    "min-h-11 w-full rounded-xl border px-6 py-3 text-sm font-semibold transition sm:w-auto sm:min-w-[120px]",
-                    field.value === opt.value
-                      ? "border-blue-600 bg-blue-50 text-blue-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
-                    !areaResolved && "cursor-not-allowed opacity-50",
-                  )}
-                >
-                  {opt.label}
-                </button>
-              ))}
+                {
+                  value: "once_off",
+                  label: isRegularCleaning ? "One Time" : "Once-off",
+                  description: "For a once-off service that will not repeat.",
+                  icon: CalendarPlus,
+                },
+                {
+                  value: "recurring",
+                  label: isRegularCleaning ? "Repeat" : "Recurring",
+                  description: "For repeat services every few days or weeks.",
+                  icon: RefreshCw,
+                },
+              ].map((opt) => {
+                const selected = field.value === opt.value;
+                const Icon = opt.icon;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    onClick={() => field.onChange(opt.value)}
+                    disabled={!areaResolved}
+                    className={cn(
+                      isRegularCleaning
+                        ? "relative min-h-36 overflow-hidden rounded-xl border bg-white p-4 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                        : "min-h-11 w-full rounded-xl border px-6 py-3 text-sm font-semibold transition sm:w-auto sm:min-w-[120px]",
+                      selected
+                        ? "border-blue-600 bg-blue-50/60 text-blue-700 ring-2 ring-blue-600/15"
+                        : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
+                      !areaResolved && "cursor-not-allowed opacity-50",
+                    )}
+                  >
+                    {isRegularCleaning ? (
+                      <>
+                        <span className="flex items-center gap-3">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                            <Icon className="h-5 w-5" aria-hidden />
+                          </span>
+                          <span className="text-base font-bold leading-6 text-slate-900">{opt.label}</span>
+                        </span>
+                        <span className="mt-3 block text-sm leading-5 text-slate-600">
+                          {opt.description}
+                        </span>
+                      </>
+                    ) : opt.label}
+                  </button>
+                );
+              })}
             </div>
           )}
         />
