@@ -114,8 +114,8 @@ function BookingV2Inner() {
         }[currentStep]);
 
   const showSidebarSummary = currentStep <= 2;
-  /** Steps 3–4 already use section cards — avoid card-in-card chrome that squeezes mobile. */
-  const useOuterStepCard = currentStep <= 2;
+  /** Steps 2–4 already use their own section cards — avoid duplicate outer card chrome. */
+  const useOuterStepCard = currentStep === 1;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
   const showShellNavigation = currentStep > 2 || serviceSlug !== "regular-cleaning";
   const paymentBlockMessage =
@@ -152,8 +152,8 @@ function BookingV2Inner() {
               data-review-time-missing={reviewTimeMissing ? "true" : undefined}
               className={
                 useOuterStepCard
-                  ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${currentStep === 1 ? styles.step1 : currentStep === 2 ? styles.step2 : ""}`
-                  : `min-w-0 ${currentStep === 3 ? styles.step3 : currentStep === 4 ? styles.step4 : ""}`
+                  ? `rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 text-card-foreground shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 ${styles.step1}`
+                  : `min-w-0 ${currentStep === 2 ? styles.step2 : currentStep === 3 ? styles.step3 : currentStep === 4 ? styles.step4 : ""}`
               }
             >
               <PromotionBookingBanner />
