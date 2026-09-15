@@ -3,6 +3,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { loadPayBookingLanding } from "@/lib/pay/payBookingLanding";
 import { PayBookingCheckoutClient } from "@/components/pay/PayBookingCheckoutClient";
+import { classifyPaystackReturn } from "@/lib/pay/classifyPaystackReturn";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -20,8 +21,15 @@ export default async function PayBookingPage({
 }) {
   const { bookingId } = await params;
   const sp = await searchParams;
-  const reference =
-    sp.ref?.trim() || sp.reference?.trim() || sp.trxref?.trim() || "";
+  const paymentReturn = classifyPaystackReturn(sp);
+
+  if (paymentReturn.kind === "callback") {
+    // Paystack has returned from checkout. Verification/finalization is idempotent
+    // and belongs on the success route; never render another payment button here.
+    redirect(`/account/success?reference=${encodeURIComponent(paymentReturn.reference)}`);
+  }
+
+  const reference = paymentReturn.kind === "payment_link" ? paymentReturn.reference : "";
 
   if (!reference) {
     // Cancelled Paystack return without ref — still allow owner retry via payment-session.
