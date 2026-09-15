@@ -347,16 +347,6 @@
   color: var(--foreground);
 }
 
-.step4 > :global(.space-y-6) > div:first-child {
-  text-align: center;
-}
-
-.step4 > :global(.space-y-6) > div:first-child h2 {
-  color: var(--foreground);
-  font-size: var(--ui-text-section-title);
-  line-height: var(--ui-leading-tight);
-}
-
 .step4 > :global(.space-y-6) > :global(.space-y-6) {
   margin-inline: auto;
   max-width: 37.5rem;
