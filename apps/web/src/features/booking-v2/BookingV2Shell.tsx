@@ -139,7 +139,11 @@ function BookingV2Inner() {
           <div
             className={cn(
               "min-w-0 w-full justify-self-center lg:translate-x-6 xl:translate-x-20",
-              currentStep === 2 ? "max-w-[720px]" : "max-w-[560px]",
+              currentStep === 2
+                ? "max-w-[720px]"
+                : currentStep === 3
+                  ? "max-w-[760px]"
+                  : "max-w-[560px]",
             )}
           >
             {showSidebarSummary && (
