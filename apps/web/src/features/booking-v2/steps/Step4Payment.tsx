@@ -36,10 +36,25 @@ import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurr
 // ??? Auth Form ?????????????????????????????????????????????????????????????????
 
 type AuthMode = "sign_in" | "sign_up";
+type AuthMessage = { tone: "error" | "success"; text: string };
+
+function friendlySignInError(message?: string): string {
+  if (message?.toLowerCase().includes("invalid login credentials")) {
+    return "The email or password is incorrect. Try again or reset your password.";
+  }
+  return message ?? "Sign in failed. Check your details and try again.";
+}
+
+function friendlySignUpError(message?: string): string {
+  if (message?.toLowerCase().includes("already registered")) {
+    return "An account already exists for this email. Sign in or reset your password.";
+  }
+  return message ?? "Account creation failed. Please try again.";
+}
 
 function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
   const [mode, setMode] = useState<AuthMode>("sign_in");
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [authMessage, setAuthMessage] = useState<AuthMessage | null>(null);
   const [loading, setLoading] = useState(false);
 
   const signInForm = useForm<SignInData>({ resolver: zodResolver(signInSchema) });
@@ -47,14 +62,11 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
 
   async function handleSignIn(data: SignInData) {
     setLoading(true);
-    setServerError(null);
+    setAuthMessage(null);
     const { user, session, error } = await signIn(data.email, data.password);
     setLoading(false);
     if (error || !user || !session?.access_token) {
-      setServerError(
-        error?.message ??
-          "Sign in failed. Check your email and password, or confirm your account from the email we sent.",
-      );
+      setAuthMessage({ tone: "error", text: friendlySignInError(error?.message) });
       return;
     }
     onAuthenticated(user);
@@ -62,23 +74,36 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
 
   async function handleSignUp(data: SignUpData) {
     setLoading(true);
-    setServerError(null);
+    setAuthMessage(null);
     const { user, session, error } = await signUp(data.email, data.password, data.fullName, data.phone ?? "");
     setLoading(false);
     if (error) {
-      setServerError(error.message ?? "Sign up failed. Please try again.");
+      setAuthMessage({ tone: "error", text: friendlySignUpError(error.message) });
       return;
     }
     // Supabase returns a user without a session when email confirmation is required.
     // Do not advance to payment — Paystack confirm needs a live access token.
     if (!session?.access_token || !user) {
+      signInForm.setValue("email", data.email);
       setMode("sign_in");
-      setServerError(
-        "Account created. Confirm your email from the link we sent, then sign in to complete payment.",
-      );
+      setAuthMessage({
+        tone: "success",
+        text: "Account created. Check your email to confirm it, then sign in to continue.",
+      });
       return;
     }
     onAuthenticated(user);
+  }
+
+  function switchMode(nextMode: AuthMode) {
+    if (nextMode === mode) return;
+    const email = mode === "sign_in" ? signInForm.getValues("email") : signUpForm.getValues("email");
+    if (email) {
+      if (nextMode === "sign_in") signInForm.setValue("email", email);
+      else signUpForm.setValue("email", email);
+    }
+    setMode(nextMode);
+    setAuthMessage(null);
   }
 
   return (
@@ -88,17 +113,20 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
           {mode === "sign_in" ? "Sign in to confirm your booking" : "Create an account"}
         </h3>
         <p className="mt-1 text-sm text-slate-500">
-          Your booking details are saved ? signing in will not clear them.
+          Your booking details are saved and will remain here while you sign in or create an account.
         </p>
       </div>
 
       {/* Mode toggle */}
-      <div className="flex rounded-xl border border-slate-200 p-1">
+      <div className="flex rounded-xl border border-slate-200 p-1" role="tablist" aria-label="Account access">
         {(["sign_in", "sign_up"] as AuthMode[]).map((m) => (
           <button
             key={m}
             type="button"
-            onClick={() => { setMode(m); setServerError(null); }}
+            role="tab"
+            aria-selected={mode === m}
+            onClick={() => switchMode(m)}
+            disabled={loading}
             className={cn(
               "flex-1 rounded-lg py-2 text-sm font-semibold transition",
               mode === m ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-800",
@@ -109,11 +137,24 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
         ))}
       </div>
 
-      {/* Server error */}
-      {serverError && (
-        <div className="flex items-center gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
-          <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
-          {serverError}
+      {/* Authentication status */}
+      {authMessage && (
+        <div
+          role={authMessage.tone === "error" ? "alert" : "status"}
+          aria-live="polite"
+          className={cn(
+            "flex items-center gap-2 rounded-xl border px-4 py-3 text-sm",
+            authMessage.tone === "error"
+              ? "border-red-100 bg-red-50 text-red-700"
+              : "border-emerald-200 bg-emerald-50 text-emerald-800",
+          )}
+        >
+          {authMessage.tone === "error" ? (
+            <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
+          ) : (
+            <CheckCircle2 className="h-4 w-4 shrink-0" aria-hidden />
+          )}
+          {authMessage.text}
         </div>
       )}
 
@@ -146,7 +187,6 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
               <Link
                 href="/auth/forgot-password"
                 className="text-xs font-medium text-blue-600 hover:underline"
-                tabIndex={-1}
               >
                 Forgot password?
               </Link>
@@ -154,7 +194,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             <PasswordInput
               id="si-password"
               autoComplete="current-password"
-              placeholder="????????"
+              placeholder="Enter your password"
               {...signInForm.register("password")}
               className="rounded-xl border-slate-200 py-2.5 text-sm shadow-sm focus-visible:outline-blue-500"
             />
@@ -168,11 +208,11 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            Sign in
+            {loading ? "Signing in…" : "Sign in"}
           </button>
         </form>
       ) : (
-        <form onSubmit={signUpForm.handleSubmit(handleSignUp)} className="space-y-4">
+        <form onSubmit={signUpForm.handleSubmit(handleSignUp)} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <label htmlFor="su-name" className="mb-1.5 block text-sm font-medium text-slate-700">
               Full name <span className="text-red-500">*</span>
@@ -193,6 +233,25 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             )}
           </div>
           <div>
+            <label htmlFor="su-phone" className="mb-1.5 block text-sm font-medium text-slate-700">
+              Phone number <span className="text-red-500">*</span>
+            </label>
+            <div className="relative">
+              <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+              <input
+                id="su-phone"
+                type="tel"
+                autoComplete="tel"
+                placeholder="082 123 4567"
+                {...signUpForm.register("phone")}
+                className="block w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+            </div>
+            {signUpForm.formState.errors.phone && (
+              <p className="mt-1 text-xs text-red-500">{signUpForm.formState.errors.phone.message}</p>
+            )}
+          </div>
+          <div className="sm:col-span-2">
             <label htmlFor="su-email" className="mb-1.5 block text-sm font-medium text-slate-700">
               Email address <span className="text-red-500">*</span>
             </label>
@@ -211,26 +270,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
               <p className="mt-1 text-xs text-red-500">{signUpForm.formState.errors.email.message}</p>
             )}
           </div>
-          <div>
-            <label htmlFor="su-phone" className="mb-1.5 block text-sm font-medium text-slate-700">
-              Phone number <span className="text-red-500">*</span>
-            </label>
-            <div className="relative">
-              <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-              <input
-                id="su-phone"
-                type="tel"
-                autoComplete="tel"
-                placeholder="0821234567"
-                {...signUpForm.register("phone")}
-                className="block w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
-            {signUpForm.formState.errors.phone && (
-              <p className="mt-1 text-xs text-red-500">{signUpForm.formState.errors.phone.message}</p>
-            )}
-          </div>
-          <div>
+          <div className="sm:col-span-2">
             <label htmlFor="su-password" className="mb-1.5 block text-sm font-medium text-slate-700">
               Password <span className="text-red-500">*</span>
             </label>
@@ -248,10 +288,10 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60 sm:col-span-2"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
-            Create account & continue
+            {loading ? "Creating account…" : "Create account & continue"}
           </button>
         </form>
       )}
