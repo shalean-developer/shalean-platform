@@ -289,6 +289,8 @@ export function Step2Schedule() {
   const selectedExtras = watch("selectedExtras") ?? [];
   const cleanerCount = watch("cleanerCount") ?? 1;
   const recurringFrequency = watch("recurringFrequency");
+  const recurringStartDate = watch("recurringStartDate");
+  const recurringEndDate = watch("recurringEndDate");
   const selectedCleanerIds = watch("selectedCleanerIds") ?? [];
   const selectedCleanerDetails = watch("selectedCleanerDetails") ?? [];
   const assignedTeamId = watch("assignedTeamId") ?? "";
@@ -323,6 +325,17 @@ export function Step2Schedule() {
       setValue("recurringFrequency", "weekly", { shouldDirty: true });
     }
   }, [bookingType, recurringFrequency, setValue]);
+
+  // The calendar date starts the recurring series; recurring bookings are open-ended.
+  useEffect(() => {
+    if (bookingType !== "recurring") return;
+    if (date && recurringStartDate !== date) {
+      setValue("recurringStartDate", date, { shouldDirty: true });
+    }
+    if (recurringEndDate) {
+      setValue("recurringEndDate", "", { shouldDirty: true });
+    }
+  }, [bookingType, date, recurringEndDate, recurringStartDate, setValue]);
 
   useEffect(() => {
     if (!date || slotsLoading) return;
@@ -659,53 +672,6 @@ export function Step2Schedule() {
               </div>
             )}
 
-            {/* Start / end date */}
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div>
-                <label
-                  htmlFor="recurringStartDate"
-                  className="mb-1.5 block text-center text-sm font-medium text-slate-700"
-                >
-                  Start date
-                </label>
-                <Controller
-                  name="recurringStartDate"
-                  control={control}
-                  render={({ field }) => (
-                    <input
-                      id="recurringStartDate"
-                      type="date"
-                      min={today}
-                      value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  )}
-                />
-              </div>
-              <div>
-                <label
-                  htmlFor="recurringEndDate"
-                  className="mb-1.5 block text-center text-sm font-medium text-slate-700"
-                >
-                  End date (optional)
-                </label>
-                <Controller
-                  name="recurringEndDate"
-                  control={control}
-                  render={({ field }) => (
-                    <input
-                      id="recurringEndDate"
-                      type="date"
-                      min={today}
-                      value={field.value ?? ""}
-                      onChange={(e) => field.onChange(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                    />
-                  )}
-                />
-              </div>
-            </div>
           </section>
         </>
       )}
