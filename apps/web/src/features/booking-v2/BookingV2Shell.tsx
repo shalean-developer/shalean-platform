@@ -136,7 +136,12 @@ function BookingV2Inner() {
               : "mx-auto max-w-[var(--ui-container-sm)]"
           }
         >
-          <div className="min-w-0 w-full max-w-[560px] justify-self-center lg:translate-x-6 xl:translate-x-20">
+          <div
+            className={cn(
+              "min-w-0 w-full justify-self-center lg:translate-x-6 xl:translate-x-20",
+              currentStep === 2 ? "max-w-[720px]" : "max-w-[560px]",
+            )}
+          >
             {showSidebarSummary && (
               <div className="mb-4 sm:mb-6 lg:hidden">
                 <BookingV2SummaryPanel collapsed />
