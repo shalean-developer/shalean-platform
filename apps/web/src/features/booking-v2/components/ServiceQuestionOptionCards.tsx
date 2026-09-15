@@ -136,19 +136,19 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
                     onClick={() => field.onChange(opt.value)}
                     suppressHydrationWarning
                     className={cn(
-                      "relative min-h-36 rounded-xl border bg-white p-5 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:aspect-[2/1] sm:min-h-0",
+                      "relative min-h-36 overflow-hidden rounded-xl border bg-white p-4 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:aspect-[2/1] sm:min-h-0 sm:p-2",
                       selected
                         ? "border-blue-600 bg-blue-50/60 ring-2 ring-blue-600/15"
                         : "border-slate-200 text-slate-800",
                     )}
                   >
-                    <span className="flex items-center gap-3">
-                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+                    <span className="flex items-center gap-3 sm:gap-2">
+                      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 sm:h-8 sm:w-8">
                         <Icon className="h-5 w-5" aria-hidden />
                       </span>
-                      <span className="whitespace-nowrap text-base font-bold text-slate-900 lg:text-lg">{opt.label}</span>
+                      <span className="whitespace-nowrap text-base font-bold leading-6 text-slate-900">{opt.label}</span>
                     </span>
-                    <span className="mt-3 line-clamp-2 min-h-10 text-sm leading-5 text-slate-600">
+                    <span className="mt-2 line-clamp-2 text-sm leading-5 text-slate-600 sm:mt-1 sm:text-[13px] sm:leading-4">
                       {presentation?.description ?? "Select this property type."}
                     </span>
                   </button>
