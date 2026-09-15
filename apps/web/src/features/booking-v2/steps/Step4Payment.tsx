@@ -739,19 +739,17 @@ function PaymentSection({
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-bold text-slate-900">Confirm & pay</h3>
+    <div className="space-y-4">
+      <div className="text-center">
+        <h2 className="text-2xl font-bold text-slate-900">Confirm &amp; pay</h2>
         <p className="mt-1 text-sm text-slate-500">
-          You&apos;re logged in as <span className="font-medium text-slate-700">{user.email}</span>.
-          You&apos;ll pay securely with Paystack, then return here for your Shalean confirmation and booking
-          reference.
+          Signed in as <span className="font-medium text-slate-700">{user.email}</span>
         </p>
       </div>
 
       {/* Order summary */}
-      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-5">
-        <div className="flex items-center gap-3 pb-3">
+      <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4">
+        <div className="flex items-center gap-3 pb-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100">
             <config.icon className="h-4.5 w-4.5 text-blue-600" aria-hidden />
           </div>
@@ -760,7 +758,7 @@ function PaymentSection({
             <p className="text-xs text-slate-500">{values.address}, {values.suburb}</p>
           </div>
         </div>
-        <div className="border-t border-slate-200 pt-3 space-y-3">
+        <div className="space-y-2 border-t border-slate-200 pt-3">
           <CustomerPriceBreakdown pricing={values.pricingSummary} compact />
           <div className="flex gap-2">
             <input
@@ -853,9 +851,8 @@ function PaymentSection({
                 return (
                   <>
                     {recurringFrequencyLabel(values.recurringFrequency)} · about {visitsPerMonth}{" "}
-                    visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated monthly total R
-                    {estimatedMonthlyZar.toLocaleString("en-ZA")}. Future visits bill at the same
-                    per-visit price (or on your monthly invoice if enabled).
+                    visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated R
+                    {estimatedMonthlyZar.toLocaleString("en-ZA")}/month. Future visits billed per visit.
                   </>
                 );
               })()}
@@ -901,15 +898,15 @@ function PaymentSection({
       </button>
 
       {/* Trust badges */}
-      <div className="flex flex-col gap-2">
+      <div className="grid grid-cols-3 gap-2 border-t border-slate-200 pt-4">
         {[
-          { Icon: ShieldCheck, label: "Vetted and background-checked cleaners" },
-          { Icon: CreditCard, label: "Secure card payment — you’ll get a Shalean confirmation after" },
-          { Icon: CheckCircle2, label: "100% satisfaction guarantee — we'll make it right" },
+          { Icon: ShieldCheck, label: "Vetted cleaners" },
+          { Icon: CreditCard, label: "Secure payment" },
+          { Icon: CheckCircle2, label: "Satisfaction guaranteed" },
         ].map(({ Icon, label }) => (
-          <div key={label} className="flex items-center gap-2 text-xs text-slate-500">
-            <Icon className="h-3.5 w-3.5 shrink-0 text-green-500" aria-hidden />
-            {label}
+          <div key={label} className="flex flex-col items-center gap-1 text-center text-xs text-slate-500 sm:flex-row sm:justify-center sm:text-left">
+            <Icon className="h-4 w-4 shrink-0 text-green-500" aria-hidden />
+            <span>{label}</span>
           </div>
         ))}
       </div>
@@ -948,13 +945,6 @@ export function Step4Payment() {
 
   return (
     <div className="space-y-6">
-      {user ? <div>
-        <h2 className="text-xl font-bold text-slate-900">Payment</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {user ? "Ready to confirm your booking." : "Sign in or create an account to complete your booking."}
-        </p>
-      </div> : null}
-
       {authNotice && !user ? (
         <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertCircle className="h-4 w-4 shrink-0" aria-hidden />
