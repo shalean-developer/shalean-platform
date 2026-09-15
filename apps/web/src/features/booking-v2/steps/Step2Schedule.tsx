@@ -436,7 +436,7 @@ export function Step2Schedule() {
             <div className={cn(
               "w-full",
               isRegularCleaning
-                ? "mx-auto grid max-w-2xl grid-cols-1 gap-4 pt-2 sm:grid-cols-2 sm:gap-5"
+                ? "mx-auto grid max-w-[500px] grid-cols-1 gap-4 pt-2 sm:grid-cols-2 sm:gap-5"
                 : "flex flex-col gap-3 sm:flex-row sm:justify-center",
             )}>
               {[
@@ -481,7 +481,7 @@ export function Step2Schedule() {
                           </span>
                           <span className="text-base font-bold leading-6 text-slate-900">{opt.label}</span>
                         </span>
-                        <span className="mt-2 block text-sm leading-5 text-slate-600">
+                        <span className="mt-2 line-clamp-2 block text-sm leading-5 text-slate-600">
                           {opt.description}
                         </span>
                       </>
