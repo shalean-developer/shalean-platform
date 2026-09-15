@@ -111,7 +111,7 @@ export function TimeSlotPicker({
                   provisional && !selected ? "opacity-90" : null,
                 )}
               >
-                <span className="block">{formatCustomerBookingSlotLabel(slot)}</span>
+                <span className="block whitespace-nowrap">{formatCustomerBookingSlotLabel(slot)}</span>
                 {mode === "ops_assignment" || mode === "area_review" ? (
                   <span
                     className={cn(
