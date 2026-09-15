@@ -465,7 +465,7 @@ export function Step2Schedule() {
                     disabled={!areaResolved}
                     className={cn(
                       isRegularCleaning
-                        ? "relative min-h-[120px] overflow-hidden rounded-xl border bg-white p-3 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                        ? "relative min-h-[120px] overflow-hidden rounded-xl border bg-white p-3 pl-2 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         : "min-h-11 w-full rounded-xl border px-6 py-3 text-sm font-semibold transition sm:w-auto sm:min-w-[120px]",
                       selected
                         ? "border-blue-600 bg-blue-50/60 text-blue-700 ring-2 ring-blue-600/15"
