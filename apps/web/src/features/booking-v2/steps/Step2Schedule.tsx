@@ -672,7 +672,7 @@ export function Step2Schedule() {
                   Preferred days
                 </p>
                 <p className="text-xs text-slate-500">
-                  Select which days you&apos;d like us to visit on this schedule.
+                  Select every visit day. Choosing multiple days means multiple visits in each schedule cycle.
                 </p>
                 <Controller
                   name="recurringDays"

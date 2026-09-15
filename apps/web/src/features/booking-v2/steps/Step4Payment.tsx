@@ -850,8 +850,11 @@ function PaymentSection({
                 });
                 return (
                   <>
-                    {recurringFrequencyLabel(values.recurringFrequency)} · about {visitsPerMonth}{" "}
-                    visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated R
+                    {recurringFrequencyLabel(values.recurringFrequency)}
+                    {(values.recurringDays?.length ?? 0) > 1
+                      ? ` · ${values.recurringDays.length} visit days per cycle`
+                      : ""}{" "}
+                    · about {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated R
                     {estimatedMonthlyZar.toLocaleString("en-ZA")}/month. Future visits billed per visit.
                   </>
                 );
