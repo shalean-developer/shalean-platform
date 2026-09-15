@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Loader2, AlertCircle, ShieldCheck, CreditCard, Lock, Mail, Phone, User as UserIcon, CheckCircle2 } from "lucide-react";
+import { Loader2, AlertCircle, ShieldCheck, CreditCard, Lock, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { PasswordInput } from "@/components/ui/password-input";
 import { signIn, signUp, getUser, getSession } from "@/lib/auth/authClient";
@@ -110,31 +110,11 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
     <div className="space-y-6">
       <div className="text-center">
         <h3 className="text-2xl font-bold tracking-tight text-slate-900">
-          {mode === "sign_in" ? "Sign in to confirm your booking" : "Create an account"}
+          {mode === "sign_in" ? "Welcome back!" : "Create your account"}
         </h3>
         <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
           Your booking is saved. {mode === "sign_in" ? "Sign in to continue to payment." : "Create your account to continue to payment."}
         </p>
-      </div>
-
-      {/* Mode toggle */}
-      <div className="flex rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="Account access">
-        {(["sign_in", "sign_up"] as AuthMode[]).map((m) => (
-          <button
-            key={m}
-            type="button"
-            role="tab"
-            aria-selected={mode === m}
-            onClick={() => switchMode(m)}
-            disabled={loading}
-            className={cn(
-              "flex-1 rounded-lg py-2 text-sm font-semibold transition",
-              mode === m ? "bg-blue-600 text-white shadow-sm" : "text-slate-600 hover:text-slate-800",
-            )}
-          >
-            {m === "sign_in" ? "Sign in" : "Create account"}
-          </button>
-        ))}
       </div>
 
       {/* Authentication status */}
@@ -164,17 +144,14 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             <label htmlFor="si-email" className="mb-1.5 block text-sm font-medium text-slate-700">
               Email address
             </label>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-              <input
-                id="si-email"
-                type="email"
-                autoComplete="section-booking-signin email"
-                placeholder="you@example.com"
-                {...signInForm.register("email")}
-                className="block w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
+            <input
+              id="si-email"
+              type="email"
+              autoComplete="section-booking-signin email"
+              placeholder="you@example.com"
+              {...signInForm.register("email")}
+              className="block w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
             {signInForm.formState.errors.email && (
               <p className="mt-1 text-xs text-red-500">{signInForm.formState.errors.email.message}</p>
             )}
@@ -212,22 +189,19 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
           </button>
         </form>
       ) : (
-        <form onSubmit={signUpForm.handleSubmit(handleSignUp)} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+        <form onSubmit={signUpForm.handleSubmit(handleSignUp)} className="space-y-5">
           <div>
             <label htmlFor="su-name" className="mb-1.5 block text-sm font-medium text-slate-700">
               Full name <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <UserIcon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-              <input
-                id="su-name"
-                type="text"
-                autoComplete="section-booking-signup name"
-                placeholder="Jane Doe"
-                {...signUpForm.register("fullName")}
-                className="block w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
+            <input
+              id="su-name"
+              type="text"
+              autoComplete="section-booking-signup name"
+              placeholder="Jane Doe"
+              {...signUpForm.register("fullName")}
+              className="block w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
             {signUpForm.formState.errors.fullName && (
               <p className="mt-1 text-xs text-red-500">{signUpForm.formState.errors.fullName.message}</p>
             )}
@@ -236,41 +210,35 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             <label htmlFor="su-phone" className="mb-1.5 block text-sm font-medium text-slate-700">
               Phone number <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <Phone className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-              <input
-                id="su-phone"
-                type="tel"
-                autoComplete="section-booking-signup tel"
-                placeholder="082 123 4567"
-                {...signUpForm.register("phone")}
-                className="block w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
+            <input
+              id="su-phone"
+              type="tel"
+              autoComplete="section-booking-signup tel"
+              placeholder="082 123 4567"
+              {...signUpForm.register("phone")}
+              className="block w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
             {signUpForm.formState.errors.phone && (
               <p className="mt-1 text-xs text-red-500">{signUpForm.formState.errors.phone.message}</p>
             )}
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <label htmlFor="su-email" className="mb-1.5 block text-sm font-medium text-slate-700">
               Email address <span className="text-red-500">*</span>
             </label>
-            <div className="relative">
-              <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-              <input
-                id="su-email"
-                type="email"
-                autoComplete="section-booking-signup email"
-                placeholder="you@example.com"
-                {...signUpForm.register("email")}
-                className="block w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-            </div>
+            <input
+              id="su-email"
+              type="email"
+              autoComplete="section-booking-signup email"
+              placeholder="you@example.com"
+              {...signUpForm.register("email")}
+              className="block w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
             {signUpForm.formState.errors.email && (
               <p className="mt-1 text-xs text-red-500">{signUpForm.formState.errors.email.message}</p>
             )}
           </div>
-          <div className="sm:col-span-2">
+          <div>
             <label htmlFor="su-password" className="mb-1.5 block text-sm font-medium text-slate-700">
               Password <span className="text-red-500">*</span>
             </label>
@@ -288,13 +256,25 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
           <button
             type="submit"
             disabled={loading}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60 sm:col-span-2"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
           >
             {loading && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
             {loading ? "Creating account…" : "Create account & continue"}
           </button>
         </form>
       )}
+
+      <p className="text-center text-sm text-slate-500">
+        {mode === "sign_in" ? "New to Shalean?" : "Already have an account?"}{" "}
+        <button
+          type="button"
+          onClick={() => switchMode(mode === "sign_in" ? "sign_up" : "sign_in")}
+          disabled={loading}
+          className="font-semibold text-blue-600 hover:underline disabled:opacity-60"
+        >
+          {mode === "sign_in" ? "Create account" : "Sign in"}
+        </button>
+      </p>
     </div>
   );
 }
@@ -968,12 +948,12 @@ export function Step4Payment() {
 
   return (
     <div className="space-y-6">
-      <div>
+      {user ? <div>
         <h2 className="text-xl font-bold text-slate-900">Payment</h2>
         <p className="mt-1 text-sm text-slate-500">
           {user ? "Ready to confirm your booking." : "Sign in or create an account to complete your booking."}
         </p>
-      </div>
+      </div> : null}
 
       {authNotice && !user ? (
         <div className="flex items-center gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
