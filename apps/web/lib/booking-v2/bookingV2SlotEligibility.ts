@@ -10,6 +10,7 @@ import {
   parseServiceDetailInt,
 } from "@/lib/booking-v2/bookingV2ServiceSlug";
 import type { BookingV2LocationContext } from "@/lib/booking-v2/bookingV2LocationContext";
+import { SOFT_FULFILLMENT_CUSTOMER_COPY } from "@/lib/booking/bookingFulfillmentMode";
 
 export type BookingV2SlotEligibilityParams = {
   serviceSlug: string;
@@ -61,7 +62,7 @@ export async function assessBookingV2SlotFulfillment(
   );
   const canonicalService = canonicalServiceSlugFromBookingV2(params.serviceSlug);
 
-  return assessBookingFulfillment(admin, {
+  const assessment = await assessBookingFulfillment(admin, {
     date: params.date,
     startTime: timeHm,
     durationMinutes,
@@ -69,6 +70,22 @@ export async function assessBookingV2SlotFulfillment(
     locationExpandedIds: [params.location.locationId],
     serviceType: canonicalService,
   });
+
+  // A resolved Booking V2 service area is bookable even when no cleaner is
+  // immediately discoverable. Take payment and place the booking in the
+  // existing operations-assignment queue; area review remains for unresolved
+  // locations before this function is called.
+  if (assessment.mode === "area_review" && assessment.reason === "no_active_cleaner_coverage") {
+    return {
+      ...assessment,
+      mode: "ops_assignment",
+      reason: "known_area_pending_ops_assignment",
+      requiresPayment: true,
+      customerMessage: SOFT_FULFILLMENT_CUSTOMER_COPY.opsAssignment,
+    };
+  }
+
+  return assessment;
 }
 
 export function bedroomsBathroomsFromV2ServiceDetails(
