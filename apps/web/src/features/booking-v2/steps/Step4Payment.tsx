@@ -108,17 +108,17 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h3 className="text-lg font-bold text-slate-900">
+      <div className="text-center">
+        <h3 className="text-2xl font-bold tracking-tight text-slate-900">
           {mode === "sign_in" ? "Sign in to confirm your booking" : "Create an account"}
         </h3>
-        <p className="mt-1 text-sm text-slate-500">
-          Your booking details are saved and will remain here while you sign in or create an account.
+        <p className="mx-auto mt-2 max-w-lg text-sm leading-6 text-slate-500">
+          Your booking is saved. {mode === "sign_in" ? "Sign in to continue to payment." : "Create your account to continue to payment."}
         </p>
       </div>
 
       {/* Mode toggle */}
-      <div className="flex rounded-xl border border-slate-200 p-1" role="tablist" aria-label="Account access">
+      <div className="flex rounded-xl border border-slate-200 bg-white p-1" role="tablist" aria-label="Account access">
         {(["sign_in", "sign_up"] as AuthMode[]).map((m) => (
           <button
             key={m}
@@ -159,7 +159,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
       )}
 
       {mode === "sign_in" ? (
-        <form onSubmit={signInForm.handleSubmit(handleSignIn)} className="space-y-4">
+        <form onSubmit={signInForm.handleSubmit(handleSignIn)} className="space-y-5">
           <div>
             <label htmlFor="si-email" className="mb-1.5 block text-sm font-medium text-slate-700">
               Email address
@@ -169,7 +169,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
               <input
                 id="si-email"
                 type="email"
-                autoComplete="email"
+                autoComplete="section-booking-signin email"
                 placeholder="you@example.com"
                 {...signInForm.register("email")}
                 className="block w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -193,7 +193,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             </div>
             <PasswordInput
               id="si-password"
-              autoComplete="current-password"
+              autoComplete="section-booking-signin current-password"
               placeholder="Enter your password"
               {...signInForm.register("password")}
               className="rounded-xl border-slate-200 py-2.5 text-sm shadow-sm focus-visible:outline-blue-500"
@@ -212,7 +212,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
           </button>
         </form>
       ) : (
-        <form onSubmit={signUpForm.handleSubmit(handleSignUp)} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <form onSubmit={signUpForm.handleSubmit(handleSignUp)} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
           <div>
             <label htmlFor="su-name" className="mb-1.5 block text-sm font-medium text-slate-700">
               Full name <span className="text-red-500">*</span>
@@ -222,7 +222,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
               <input
                 id="su-name"
                 type="text"
-                autoComplete="name"
+                autoComplete="section-booking-signup name"
                 placeholder="Jane Doe"
                 {...signUpForm.register("fullName")}
                 className="block w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -241,7 +241,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
               <input
                 id="su-phone"
                 type="tel"
-                autoComplete="tel"
+                autoComplete="section-booking-signup tel"
                 placeholder="082 123 4567"
                 {...signUpForm.register("phone")}
                 className="block w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -260,7 +260,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
               <input
                 id="su-email"
                 type="email"
-                autoComplete="email"
+                autoComplete="section-booking-signup email"
                 placeholder="you@example.com"
                 {...signUpForm.register("email")}
                 className="block w-full rounded-xl border border-slate-200 py-2.5 pl-10 pr-4 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
@@ -276,7 +276,7 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             </label>
             <PasswordInput
               id="su-password"
-              autoComplete="new-password"
+              autoComplete="section-booking-signup new-password"
               placeholder="At least 8 characters"
               {...signUpForm.register("password")}
               className="rounded-xl border-slate-200 py-2.5 text-sm shadow-sm focus-visible:outline-blue-500"
