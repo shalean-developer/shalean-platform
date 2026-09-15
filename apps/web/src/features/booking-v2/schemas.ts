@@ -160,7 +160,11 @@ export const signInSchema = z.object({
 });
 
 export const signUpSchema = z.object({
-  fullName: z.string().min(2, "Enter your full name"),
+  fullName: z
+    .string()
+    .trim()
+    .min(2, "Enter your full name")
+    .refine((value) => !value.includes("@"), "Enter your full name, not your email address"),
   email: z.string().email("Enter a valid email address"),
   phone: contactPhoneField,
   password: z.string().min(8, "Password must be at least 8 characters"),
