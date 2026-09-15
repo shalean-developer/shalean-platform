@@ -804,15 +804,17 @@ function ReviewSection({
   number,
   title,
   onEdit,
+  className,
   children,
 }: {
   number: number;
   title: string;
   onEdit: () => void;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white">
+    <div className={cn("rounded-2xl border border-slate-100 bg-white", className)}>
       {/* Header */}
       <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5">
         <div className="flex min-w-0 items-center gap-2.5">
@@ -947,10 +949,10 @@ export function Step3Review() {
       )}
 
       {/* ── Page ── */}
-      <div className="space-y-5 [&>*+*]:!mt-3">
+      <div className="grid grid-cols-1 gap-3 space-y-5 sm:grid-cols-2 [&>*+*]:!mt-0">
 
         {/* Header */}
-        <div className="text-center">
+        <div className="text-center sm:col-span-2">
           <h2 className="text-xl font-bold text-slate-900">Review your booking</h2>
           <p className="mt-1 text-sm text-slate-500">
             Everything look right? Make any changes before you pay.
@@ -958,7 +960,7 @@ export function Step3Review() {
         </div>
 
         {/* Service badge */}
-        <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 sm:px-5">
+        <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 sm:col-span-2 sm:px-5">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600">
             <config.icon className="h-5 w-5 text-white" aria-hidden />
           </div>
@@ -969,7 +971,16 @@ export function Step3Review() {
         </div>
 
         {/* ① Location */}
-        <ReviewSection number={1} title="Location" onEdit={() => openEdit("location")}>
+        <ReviewSection
+          number={1}
+          title="Location"
+          onEdit={() => openEdit("location")}
+          className={
+            values.equipmentRequired === "yes" || values.equipmentRequired === "no"
+              ? undefined
+              : "sm:col-span-2"
+          }
+        >
           <div className="flex items-start gap-2.5">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" aria-hidden />
             <div>
@@ -1016,7 +1027,12 @@ export function Step3Review() {
 
         {/* ② Clean details */}
         {serviceDetails.length > 0 && (
-          <ReviewSection number={2} title="Clean details" onEdit={() => openEdit("property")}>
+          <ReviewSection
+            number={3}
+            title="Clean details"
+            onEdit={() => openEdit("property")}
+            className="sm:col-span-2"
+          >
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               {serviceDetails.map(([key, val]) => {
                 const question = step1Questions.find((q) => q.key === key);
@@ -1049,6 +1065,7 @@ export function Step3Review() {
           number={serviceDetails.length > 0 ? 3 : 2}
           title="Schedule"
           onEdit={() => openEdit("schedule")}
+          className="sm:col-span-2"
         >
           {/* Date + time cards */}
           <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
@@ -1187,6 +1204,7 @@ export function Step3Review() {
           }
           title="Add-ons"
           onEdit={() => openEdit("extras")}
+          className={values.cleanerMode === "individual_cleaners" ? undefined : "sm:col-span-2"}
         >
           {selectedExtras.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-slate-400">
@@ -1214,7 +1232,7 @@ export function Step3Review() {
         </ReviewSection>
 
         {/* Price breakdown */}
-        <div className="rounded-2xl border border-slate-200 bg-white">
+        <div className="rounded-2xl border border-slate-200 bg-white sm:col-span-2">
           <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5">
             <h3 className="text-sm font-bold text-slate-800">Price breakdown</h3>
           </div>
@@ -1266,7 +1284,7 @@ export function Step3Review() {
         </div>
 
         {/* Trust strip */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+        <div className="grid grid-cols-1 gap-2 sm:col-span-2 sm:grid-cols-3 sm:gap-3">
           {[
             { Icon: ShieldCheck, label: "Vetted cleaners" },
             { Icon: CreditCard, label: "Secure payment" },
