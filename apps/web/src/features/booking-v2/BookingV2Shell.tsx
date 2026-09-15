@@ -37,7 +37,7 @@ function BookingV2LoadingShell() {
       </div>
       <div className="mx-auto w-full max-w-[1280px] px-[var(--ui-page-gutter)] py-4 sm:py-8 lg:py-12">
         <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:items-start lg:gap-12 xl:gap-48">
-          <div className="rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8">
+          <div className="rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8 lg:translate-x-6 xl:translate-x-20">
             <div className="animate-pulse space-y-6">
               <div className="mx-auto h-7 w-40 rounded bg-muted" />
               <div className="mx-auto h-4 w-72 max-w-full rounded bg-muted" />
@@ -136,7 +136,7 @@ function BookingV2Inner() {
               : "mx-auto max-w-[var(--ui-container-sm)]"
           }
         >
-          <div className="min-w-0 w-full max-w-[560px] justify-self-center">
+          <div className="min-w-0 w-full max-w-[560px] justify-self-center lg:translate-x-6 xl:translate-x-20">
             {showSidebarSummary && (
               <div className="mb-4 sm:mb-6 lg:hidden">
                 <BookingV2SummaryPanel collapsed />
