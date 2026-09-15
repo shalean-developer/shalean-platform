@@ -36,7 +36,7 @@ function BookingV2LoadingShell() {
         </div>
       </div>
       <div className="mx-auto w-full max-w-[1280px] px-[var(--ui-page-gutter)] py-4 sm:py-8 lg:py-12">
-        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,560px)_minmax(300px,360px)] lg:items-start lg:justify-center lg:gap-12 xl:justify-between xl:gap-48">
+        <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:items-start lg:gap-12 xl:gap-48">
           <div className="rounded-[var(--ui-radius-xl)] border border-border bg-card p-4 shadow-[var(--ui-shadow-sm)] sm:p-6 md:p-8">
             <div className="animate-pulse space-y-6">
               <div className="mx-auto h-7 w-40 rounded bg-muted" />
@@ -132,7 +132,7 @@ function BookingV2Inner() {
         <div
           className={
             showSidebarSummary
-              ? "grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,560px)_minmax(300px,360px)] lg:items-start lg:justify-center lg:gap-12 xl:justify-between xl:gap-48"
+              ? "grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)] lg:items-start lg:gap-12 xl:gap-48"
               : "mx-auto max-w-[var(--ui-container-sm)]"
           }
         >
