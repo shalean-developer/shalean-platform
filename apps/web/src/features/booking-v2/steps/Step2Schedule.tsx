@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { useFormContext, Controller } from "react-hook-form";
 import {
+  CalendarDays,
+  CalendarRange,
   CalendarPlus,
   ChevronLeft,
   ChevronRight,
@@ -37,6 +39,21 @@ import {
 const RECURRING_FREQUENCIES = RECURRING_FREQUENCY_OPTIONS;
 
 const WEEKDAYS = [...RECURRING_WEEKDAYS];
+
+const FREQUENCY_PRESENTATION = {
+  weekly: {
+    description: "Cleaning every week.",
+    icon: CalendarDays,
+  },
+  fortnightly: {
+    description: "Cleaning every second week.",
+    icon: CalendarRange,
+  },
+  monthly: {
+    description: "Cleaning once a month.",
+    icon: CalendarPlus,
+  },
+} as const;
 
 const MONTH_NAMES = [
   "January",
@@ -597,30 +614,51 @@ export function Step2Schedule() {
             </h3>
 
             {/* Frequency */}
-            <div className="flex flex-col items-center gap-3">
-              <p className="text-sm font-medium text-slate-700">
+            <div>
+              <p className="text-center text-xl font-bold tracking-tight text-slate-900 sm:text-2xl">
                 Frequency <span className="text-red-500">*</span>
+              </p>
+              <p className="mt-2 text-center text-sm text-slate-500">
+                Select how often you need cleaning.
               </p>
               <Controller
                 name="recurringFrequency"
                 control={control}
                 render={({ field }) => (
-                  <div className="flex flex-wrap justify-center gap-2">
-                    {RECURRING_FREQUENCIES.map((opt) => (
-                      <button
-                        key={opt.value}
-                        type="button"
-                        onClick={() => field.onChange(opt.value)}
-                        className={cn(
-                          "rounded-xl border px-4 py-2 text-sm font-medium transition",
-                          field.value === opt.value
-                            ? "border-blue-600 bg-blue-600 text-white"
-                            : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
-                        )}
-                      >
-                        {opt.label}
-                      </button>
-                    ))}
+                  <div className="mx-auto mt-6 grid w-full max-w-5xl gap-5 sm:grid-cols-3 sm:gap-6">
+                    {RECURRING_FREQUENCIES.map((opt) => {
+                      const selected = field.value === opt.value;
+                      const presentation = FREQUENCY_PRESENTATION[opt.value];
+                      const Icon = presentation.icon;
+
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          role="radio"
+                          aria-checked={selected}
+                          onClick={() => field.onChange(opt.value)}
+                          className={cn(
+                            "relative min-h-36 overflow-hidden rounded-xl border bg-white p-4 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:aspect-[2/1] sm:min-h-0 sm:p-2",
+                            selected
+                              ? "border-blue-600 bg-blue-50/60 ring-2 ring-blue-600/15"
+                              : "border-slate-200 text-slate-800",
+                          )}
+                        >
+                          <span className="flex items-center gap-3 sm:gap-2">
+                            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700 sm:h-8 sm:w-8">
+                              <Icon className="h-5 w-5" aria-hidden />
+                            </span>
+                            <span className="whitespace-nowrap text-base font-bold leading-6 text-slate-900">
+                              {opt.label}
+                            </span>
+                          </span>
+                          <span className="mt-2 block text-sm leading-5 text-slate-600 sm:mt-1 sm:text-[13px] sm:leading-4">
+                            {presentation.description}
+                          </span>
+                        </button>
+                      );
+                    })}
                   </div>
                 )}
               />
