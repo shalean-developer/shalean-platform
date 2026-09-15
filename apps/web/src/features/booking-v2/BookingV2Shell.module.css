@@ -92,11 +92,11 @@
 }
 
 .step2 > :global(.space-y-8) > section {
-  border: 1px solid var(--border);
-  border-radius: var(--ui-radius-xl);
-  background: var(--card);
-  padding: var(--ui-space-4);
-  box-shadow: var(--ui-shadow-sm);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
 }
 
 .step2 > :global(.space-y-8) > section[data-booking-type-options="true"] {
@@ -476,7 +476,6 @@
 @media (min-width: 640px) {
   .step1 > :global(.space-y-8) > section,
   .step1 > :global(.space-y-8) > :global(.space-y-4),
-  .step2 > :global(.space-y-8) > section,
   .step4 > :global(.space-y-6) > :global(.space-y-6) {
     padding: var(--ui-space-5);
   }
