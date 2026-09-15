@@ -201,7 +201,7 @@ export const bookingV2ConfirmSchema = z.object({
   equipmentQuote: equipmentQuoteSchema.nullable().optional().default(null),
   bookingType: z.enum(["once_off", "recurring"]),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().min(1),
+  time: z.string().min(1, "Return to Schedule and select a time before paying."),
   alternativeDate: z.string().optional().default(""),
   alternativeTime: z.string().optional().default(""),
   recurringFrequency: z.enum(["weekly", "fortnightly", "monthly", "custom", ""]).optional(),
