@@ -10,7 +10,6 @@ import {
 } from "@/lib/booking-v2/customerBookingTimeSlots";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { CUSTOMER_SUPPORT_TELEPHONE_E164 } from "@/lib/site/customerSupport";
-import { SOFT_FULFILLMENT_CUSTOMER_COPY } from "@/lib/booking/bookingFulfillmentMode";
 
 export type SlotFulfillmentMode = "instant" | "ops_assignment" | "area_review";
 
@@ -82,29 +81,28 @@ export function TimeSlotPicker({
         </p>
       ) : null}
       {softBannerMode === "ops_assignment" ? (
-        <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-950">
-          {SOFT_FULFILLMENT_CUSTOMER_COPY.opsAssignment}
+        <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-950">
+          Cleaner confirmation needed. Choose a time and we’ll confirm it.
         </p>
       ) : null}
       {softBannerMode === "area_review" ? (
-        <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-950">
-          {SOFT_FULFILLMENT_CUSTOMER_COPY.areaReview}
+        <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-950">
+          Cleaner confirmation needed. Choose a time and we’ll confirm it.
         </p>
       ) : null}
 
       {slots.length > 0 ? (
-        <div className={cn("grid gap-2", compact ? "grid-cols-3 xl:grid-cols-4" : "grid-cols-2 sm:grid-cols-3")}>
+        <div className={cn("grid gap-1.5", compact ? "grid-cols-3 xl:grid-cols-4" : "grid-cols-2 sm:grid-cols-3")}>
           {slots.map((slot) => {
             const selected = value === slot;
-            const mode = provisional ? "instant" : (fulfillmentBySlot?.[slot] ?? "instant");
             return (
               <button
                 key={slot}
                 type="button"
                 onClick={() => onChange(slot)}
                 className={cn(
-                  "min-h-11 rounded-xl border text-center font-semibold transition",
-                  compact ? "px-2 py-2.5 text-sm" : "px-3 py-3 text-sm",
+                  "min-h-10 rounded-lg border text-center font-semibold transition",
+                  compact ? "px-1.5 py-2 text-sm" : "px-2 py-2.5 text-sm",
                   selected
                     ? "border-blue-600 bg-blue-600 text-white shadow-sm"
                     : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50/60",
@@ -112,36 +110,21 @@ export function TimeSlotPicker({
                 )}
               >
                 <span className="block whitespace-nowrap">{formatCustomerBookingSlotLabel(slot)}</span>
-                {mode === "ops_assignment" || mode === "area_review" ? (
-                  <span
-                    className={cn(
-                      "mt-0.5 block text-[10px] font-medium uppercase tracking-wide",
-                      selected ? "text-blue-100" : "text-slate-500",
-                    )}
-                  >
-                    Reserve
-                  </span>
-                ) : null}
               </button>
             );
           })}
         </div>
       ) : (
-        <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-950">
-          No cleaner is assigned yet. Reserve now and our team will confirm availability.
+        <p className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-950">
+          No online times available. Call us to book.
         </p>
       )}
 
-      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-        Book online until
-        <span className="font-semibold text-slate-800">
-          {formatCustomerBookingSlotLabel(lastSlot)}
-        </span>{" "}
-        <span aria-hidden>·</span>
-        <span>Later?</span>
+      <p className="flex flex-wrap items-center gap-x-1 gap-y-1 px-1 text-xs text-slate-600">
+        Later than <span className="font-semibold text-slate-800">{formatCustomerBookingSlotLabel(lastSlot)}?</span>
         <a href={callHref} className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline">
           <Phone className="h-3.5 w-3.5" aria-hidden />
-          Call us
+          Call to book
         </a>
       </p>
     </div>

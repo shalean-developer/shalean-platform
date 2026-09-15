@@ -536,7 +536,7 @@ export function Step2Schedule() {
                 ? areaResolved
                   ? slotsFetchError
                     ? "Could not load live availability — try again or call us."
-                    : "Times shown have at least one available cleaner in your area."
+                    : "Choose your preferred time."
                   : suburb?.trim()
                     ? "Confirm your suburb in Step 1 to see available times."
                     : "Select a suburb in Step 1 first."
