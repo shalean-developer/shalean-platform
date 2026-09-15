@@ -503,7 +503,7 @@ export function Step2Schedule() {
           Date &amp; time
         </h3>
 
-        <div className="grid items-start gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-[minmax(260px,0.85fr)_minmax(340px,1.15fr)]">
           {/* Date card */}
           <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <p className="mb-3 text-sm font-semibold text-slate-800">Pick a date</p>
