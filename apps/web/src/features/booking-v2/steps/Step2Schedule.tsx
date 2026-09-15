@@ -503,7 +503,7 @@ export function Step2Schedule() {
           Date &amp; time
         </h3>
 
-        <div className="grid gap-4 lg:grid-cols-2">
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           {/* Date card */}
           <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
             <p className="mb-3 text-sm font-semibold text-slate-800">Pick a date</p>
@@ -554,6 +554,7 @@ export function Step2Schedule() {
                     dateYmd={date}
                     value={field.value ?? ""}
                     onChange={field.onChange}
+                    compact
                     scheduling={scheduling}
                     availability={availability}
                     fulfillmentBySlot={fulfillmentBySlot}
@@ -562,7 +563,7 @@ export function Step2Schedule() {
                     areaResolved={areaResolved}
                   />
                 ) : (
-                  <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center text-sm text-slate-400">
+                  <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
                     {areaResolved ? "Choose a date to see available times" : "Confirm suburb in Step 1 first"}
                   </p>
                 )
