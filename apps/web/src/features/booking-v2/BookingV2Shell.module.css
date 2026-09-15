@@ -99,6 +99,14 @@
   box-shadow: var(--ui-shadow-sm);
 }
 
+.step2 > :global(.space-y-8) > section[data-booking-type-options="true"] {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
 .step2 > :global(.space-y-8) > section h3 {
   color: var(--muted-foreground);
 }

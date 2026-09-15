@@ -419,7 +419,11 @@ export function Step2Schedule() {
       {!isRegularCleaning || activeScheduleStage === "booking_type" ? <hr className="border-slate-200" /> : null}
 
       {/* ── Booking type ── */}
-      {(!isRegularCleaning || activeScheduleStage === "booking_type") && <section className="space-y-4">
+      {(!isRegularCleaning || activeScheduleStage === "booking_type") && (
+        <section
+          className="space-y-4"
+          data-booking-type-options={isRegularCleaning ? "true" : undefined}
+        >
         {!isRegularCleaning ? (
           <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
             Booking type
@@ -461,7 +465,7 @@ export function Step2Schedule() {
                     disabled={!areaResolved}
                     className={cn(
                       isRegularCleaning
-                        ? "relative min-h-36 overflow-hidden rounded-xl border bg-white p-4 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                        ? "relative min-h-[120px] overflow-hidden rounded-xl border bg-white p-3 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         : "min-h-11 w-full rounded-xl border px-6 py-3 text-sm font-semibold transition sm:w-auto sm:min-w-[120px]",
                       selected
                         ? "border-blue-600 bg-blue-50/60 text-blue-700 ring-2 ring-blue-600/15"
@@ -477,7 +481,7 @@ export function Step2Schedule() {
                           </span>
                           <span className="text-base font-bold leading-6 text-slate-900">{opt.label}</span>
                         </span>
-                        <span className="mt-3 block text-sm leading-5 text-slate-600">
+                        <span className="mt-2 block text-sm leading-5 text-slate-600">
                           {opt.description}
                         </span>
                       </>
@@ -488,7 +492,8 @@ export function Step2Schedule() {
             </div>
           )}
         />
-      </section>}
+        </section>
+      )}
 
       {!isRegularCleaning || activeScheduleStage === "date_time" ? <hr className="border-slate-200" /> : null}
 
