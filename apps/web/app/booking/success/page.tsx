@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CheckCircle2, Clock3, CreditCard, MessageCircle } from "lucide-react";
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -439,19 +440,71 @@ function SuccessContent() {
   }, [successPath, finalizeBooking, finalizeCoveredBooking]);
 
   if (phase === "area_review") {
+    const requestReference = bookingIdParam?.trim()
+      ? bookingIdParam.trim().split("-")[0].toUpperCase()
+      : null;
+
     return (
-      <PageShell>
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Request received</h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            We&apos;re reviewing coverage for your area. This is not a confirmed booking yet — we&apos;ll be in touch.
-          </p>
-          <Link
-            href={bookingFlowHref("entry")}
-            className="mt-6 inline-flex rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
-          >
-            Back to booking
-          </Link>
+      <PageShell className="max-w-xl">
+        <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="px-6 pb-5 pt-7 text-center sm:px-8">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
+              <CheckCircle2 className="h-7 w-7" aria-hidden />
+            </div>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+              Area review
+            </p>
+            <h1 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+              Request received
+            </h1>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+              We&apos;ll check coverage and cleaner availability, then contact you to confirm your booking.
+            </p>
+            {requestReference ? (
+              <p className="mt-3 text-xs text-zinc-500">
+                Request reference <span className="font-semibold text-zinc-700 dark:text-zinc-300">{requestReference}</span>
+              </p>
+            ) : null}
+          </div>
+
+          <div className="border-y border-zinc-200 bg-zinc-50 px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900/60 sm:px-8">
+            <div className="grid grid-cols-3 gap-3 text-center text-xs text-zinc-600 dark:text-zinc-400">
+              {[
+                { Icon: Clock3, label: "Review area" },
+                { Icon: CheckCircle2, label: "Check availability" },
+                { Icon: MessageCircle, label: "Contact you" },
+              ].map(({ Icon, label }) => (
+                <div key={label} className="flex flex-col items-center gap-1.5">
+                  <Icon className="h-4 w-4 text-primary" aria-hidden />
+                  <span>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-6 py-5 sm:px-8">
+            <div className="flex items-center justify-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <CreditCard className="h-4 w-4 text-emerald-600" aria-hidden />
+              <span>No payment has been taken.</span>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <Link
+                href={bookingFlowHref("entry")}
+                className="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+              >
+                Back to booking
+              </Link>
+              <a
+                href={`https://wa.me/${CUSTOMER_SUPPORT_WHATSAPP_E164.replace(/\D/g, "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden />
+                WhatsApp us
+              </a>
+            </div>
+          </div>
         </div>
       </PageShell>
     );
