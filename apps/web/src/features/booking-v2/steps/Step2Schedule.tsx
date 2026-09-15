@@ -25,6 +25,10 @@ import {
 import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
 import { filterCustomerOnlineBookingTimeSlots } from "@/lib/booking-v2/customerBookingTimeSlots";
 import { useBookingV2ScheduleAvailability } from "@/lib/booking-v2/useBookingV2ScheduleAvailability";
+import {
+  adjacentRegularCleaningScheduleStage,
+  type RegularCleaningScheduleStage,
+} from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -253,7 +257,16 @@ function CustomCalendar({
 // ─── Step 2 ─────────────────────────────────────────────────────────────────────
 
 export function Step2Schedule() {
-  const { serviceSlug, liveConfig, scheduling, goToStep } = useBookingV2();
+  const {
+    serviceSlug,
+    liveConfig,
+    scheduling,
+    goToStep,
+    goBack,
+    goNext,
+    scheduleSectionOverride,
+    editScheduleSection,
+  } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
   const copy = STEP2_COPY[serviceSlug];
   const isTeamMode = (liveConfig?.cleanerMode ?? config.cleanerMode) === "team";
@@ -277,6 +290,10 @@ export function Step2Schedule() {
   const selectedCleanerIds = watch("selectedCleanerIds") ?? [];
   const selectedCleanerDetails = watch("selectedCleanerDetails") ?? [];
   const assignedTeamId = watch("assignedTeamId") ?? "";
+  const isRegularCleaning = serviceSlug === "regular-cleaning";
+  const activeScheduleStage = isRegularCleaning
+    ? scheduleSectionOverride ?? "booking_type"
+    : null;
 
   const durationMinutes = Math.round(
     (watch("pricingSummary")?.estimated_duration_minutes ??
@@ -340,6 +357,29 @@ export function Step2Schedule() {
     setValue("selectedCleanerDetails", []);
   }
 
+  function stageIsReady(stage: RegularCleaningScheduleStage): boolean {
+    if (stage === "booking_type") return Boolean(bookingType);
+    if (stage === "date_time") return Boolean(date && time && areaResolved && !slotsLoading);
+    if (stage === "recurring_schedule") return Boolean(recurringFrequency);
+    return cleanerCount > 0;
+  }
+
+  function moveScheduleStage(direction: "back" | "next") {
+    if (!activeScheduleStage) return;
+    const adjacent = adjacentRegularCleaningScheduleStage(
+      activeScheduleStage,
+      direction,
+      bookingType,
+    );
+    if (adjacent) {
+      editScheduleSection(adjacent);
+    } else if (direction === "back") {
+      goBack();
+    } else {
+      void goNext();
+    }
+  }
+
   return (
     <div className="space-y-8">
       {/* ── Header ── */}
@@ -369,10 +409,10 @@ export function Step2Schedule() {
         </div>
       ) : null}
 
-      <hr className="border-slate-200" />
+      {!isRegularCleaning || activeScheduleStage === "booking_type" ? <hr className="border-slate-200" /> : null}
 
       {/* ── Booking type ── */}
-      <section className="space-y-4">
+      {(!isRegularCleaning || activeScheduleStage === "booking_type") && <section className="space-y-4">
         <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
           Booking type
         </h3>
@@ -404,12 +444,12 @@ export function Step2Schedule() {
             </div>
           )}
         />
-      </section>
+      </section>}
 
-      <hr className="border-slate-200" />
+      {!isRegularCleaning || activeScheduleStage === "date_time" ? <hr className="border-slate-200" /> : null}
 
       {/* ── Date & time ── */}
-      <section className="space-y-4">
+      {(!isRegularCleaning || activeScheduleStage === "date_time") && <section className="space-y-4">
         <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
           Date &amp; time
         </h3>
@@ -482,10 +522,10 @@ export function Step2Schedule() {
             <FieldError message={errors.time?.message} />
           </div>
         </div>
-      </section>
+      </section>}
 
       {/* ── Recurring schedule ── */}
-      {bookingType === "recurring" && (
+      {bookingType === "recurring" && (!isRegularCleaning || activeScheduleStage === "recurring_schedule") && (
         <>
           <hr className="border-slate-200" />
           <section className="space-y-5">
@@ -620,10 +660,10 @@ export function Step2Schedule() {
         </>
       )}
 
-      <hr className="border-slate-200" />
+      {!isRegularCleaning || activeScheduleStage === "cleaner" ? <hr className="border-slate-200" /> : null}
 
       {/* ── Team availability (deep / moving cleaning) ── */}
-      {isTeamMode && (
+      {isTeamMode && (!isRegularCleaning || activeScheduleStage === "cleaner") && (
         <section>
           <TeamAvailabilitySection
             date={date}
@@ -639,7 +679,7 @@ export function Step2Schedule() {
       )}
 
       {/* ── Cleaner count + preference (individual mode) ── */}
-      {!isTeamMode && (
+      {!isTeamMode && (!isRegularCleaning || activeScheduleStage === "cleaner") && (
         <section className="space-y-6">
           <CleanerCountSelector
             value={cleanerCount}
@@ -673,6 +713,26 @@ export function Step2Schedule() {
           />
         </section>
       )}
+
+      {isRegularCleaning && activeScheduleStage ? (
+        <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={() => moveScheduleStage("back")}
+            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto"
+          >
+            ← Back
+          </button>
+          <button
+            type="button"
+            onClick={() => moveScheduleStage("next")}
+            disabled={!stageIsReady(activeScheduleStage)}
+            className="min-h-11 w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            {activeScheduleStage === "cleaner" ? "Continue to Review →" : "Continue →"}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

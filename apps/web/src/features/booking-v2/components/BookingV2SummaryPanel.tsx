@@ -16,6 +16,10 @@ import {
   regularCleaningDetailsStage,
   type RegularCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
+import {
+  isRegularCleaningScheduleStageComplete,
+  type RegularCleaningScheduleStage,
+} from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
@@ -61,6 +65,8 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     goToStep,
     detailsSectionOverride,
     editDetailsSection,
+    scheduleSectionOverride,
+    editScheduleSection,
   } = useBookingV2();
   const values = watch();
 
@@ -79,6 +85,10 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const editDetail = (section: RegularCleaningDetailsStage) => () => {
     goToStep(1);
     editDetailsSection(section);
+  };
+  const editSchedule = (section: RegularCleaningScheduleStage) => () => {
+    goToStep(2);
+    editScheduleSection(section);
   };
 
   const addressLabel = [values.address, values.suburb, values.city].filter(Boolean).join(", ");
@@ -108,6 +118,8 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const roomsLabel = `${bedrooms} bed · ${bathrooms} bath${extraRooms !== "0" ? ` · ${extraRooms} extra` : ""}`;
   const petsLabel = petAnswerLabel(values.serviceDetails.hasPets);
   const equipmentLabel = values.equipmentRequired === "yes" ? "Shalean supplies" : "Customer supplies";
+  const displayedScheduleStage = scheduleSectionOverride ?? "booking_type";
+  const bookingTypeLabel = values.bookingType === "recurring" ? "Recurring" : "Once-off";
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -134,14 +146,17 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             <SummaryRow label="Where" value={addressLabel} onEdit={isRegularCleaning ? editDetail("address") : edit(1)} />
           ) : null}
           <SummaryRow label="What" value={config.label} onEdit={edit(1)} />
-          {hasDate && (
+          {isRegularCleaning && currentStep === 2 && isRegularCleaningScheduleStageComplete("booking_type", displayedScheduleStage, values.bookingType) ? (
+            <SummaryRow label="Booking" value={bookingTypeLabel} onEdit={editSchedule("booking_type")} />
+          ) : null}
+          {hasDate && (!isRegularCleaning || currentStep > 2 || isRegularCleaningScheduleStageComplete("date_time", displayedScheduleStage, values.bookingType)) && (
             <SummaryRow
               label="When"
               value={`${formatDate(values.date)}${values.time ? ` · ${values.time}` : ""}`}
-              onEdit={edit(2)}
+              onEdit={isRegularCleaning ? editSchedule("date_time") : edit(2)}
             />
           )}
-          {hasCleaner && <SummaryRow label="Who" value={cleanerLabel} onEdit={edit(2)} />}
+          {hasCleaner && <SummaryRow label="Who" value={cleanerLabel} onEdit={isRegularCleaning ? editSchedule("cleaner") : edit(2)} />}
           {isRegularCleaning && isRegularCleaningStageComplete("property", displayedDetailsStage) ? (
             <SummaryRow label="Property" value={propertyLabel} onEdit={editDetail("property")} />
           ) : null}

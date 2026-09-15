@@ -40,6 +40,7 @@ import {
   regularCleaningDetailsStage,
   type RegularCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
+import type { RegularCleaningScheduleStage } from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
 import {
   BOOKING_FUNNEL_ROW,
   bookingV2StepToFunnelStep,
@@ -64,6 +65,8 @@ type BookingV2ContextValue = {
   pricingAvailability: BookingPricingAvailability;
   detailsSectionOverride: RegularCleaningDetailsStage | null;
   editDetailsSection: (section: RegularCleaningDetailsStage) => void;
+  scheduleSectionOverride: RegularCleaningScheduleStage | null;
+  editScheduleSection: (section: RegularCleaningScheduleStage) => void;
   goToStep: (step: BookingStep) => void;
   goNext: () => void;
   goBack: () => void;
@@ -161,6 +164,10 @@ export function BookingV2Provider({
   const [detailsSectionOverride, setDetailsSectionOverride] =
     useState<RegularCleaningDetailsStage | null>(
       serviceSlug === "regular-cleaning" ? "property" : null,
+    );
+  const [scheduleSectionOverride, setScheduleSectionOverride] =
+    useState<RegularCleaningScheduleStage | null>(
+      serviceSlug === "regular-cleaning" ? "booking_type" : null,
     );
 
   useEffect(() => {
@@ -435,10 +442,15 @@ export function BookingV2Provider({
     clearStorage();
     form.reset(defaultBookingFormData(serviceSlug, cleanerMode));
     setDetailsSectionOverride(serviceSlug === "regular-cleaning" ? "property" : null);
+    setScheduleSectionOverride(serviceSlug === "regular-cleaning" ? "booking_type" : null);
   }, [form, serviceSlug, cleanerMode]);
 
   const editDetailsSection = useCallback((section: RegularCleaningDetailsStage) => {
     setDetailsSectionOverride(section);
+  }, []);
+
+  const editScheduleSection = useCallback((section: RegularCleaningScheduleStage) => {
+    setScheduleSectionOverride(section);
   }, []);
 
   useEffect(() => {
@@ -470,6 +482,8 @@ export function BookingV2Provider({
       pricingAvailability,
       detailsSectionOverride,
       editDetailsSection,
+      scheduleSectionOverride,
+      editScheduleSection,
       goToStep,
       goNext,
       goBack,
@@ -487,6 +501,8 @@ export function BookingV2Provider({
       pricingAvailability,
       detailsSectionOverride,
       editDetailsSection,
+      scheduleSectionOverride,
+      editScheduleSection,
       goToStep,
       goNext,
       goBack,

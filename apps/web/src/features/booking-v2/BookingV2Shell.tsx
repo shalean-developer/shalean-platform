@@ -117,7 +117,7 @@ function BookingV2Inner() {
   /** Steps 3–4 already use section cards — avoid card-in-card chrome that squeezes mobile. */
   const useOuterStepCard = currentStep <= 2;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
-  const showShellNavigation = currentStep !== 1 || serviceSlug !== "regular-cleaning";
+  const showShellNavigation = currentStep > 2 || serviceSlug !== "regular-cleaning";
   const paymentBlockMessage =
     pricingAvailability === "loading"
       ? BOOKING_PRICING_LOADING_MESSAGE
