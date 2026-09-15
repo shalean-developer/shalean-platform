@@ -139,6 +139,7 @@ function BookingV2Inner() {
           <div
             className={cn(
               "min-w-0 w-full justify-self-center lg:translate-x-6 xl:translate-x-20",
+              currentStep === 4 && "lg:translate-x-0 xl:translate-x-0",
               currentStep === 2
                 ? "max-w-[720px]"
                 : currentStep === 3
@@ -175,6 +176,7 @@ function BookingV2Inner() {
             <div
               className={cn(
                 "mt-4 flex flex-col-reverse gap-3 pb-[max(1rem,env(safe-area-inset-bottom))] sm:mt-6 sm:flex-row sm:items-center sm:justify-between",
+                currentStep === 4 && "items-center sm:justify-center",
                 !showShellNavigation && "hidden",
               )}
             >
@@ -183,7 +185,10 @@ function BookingV2Inner() {
                 size="lg"
                 onClick={goBack}
                 suppressHydrationWarning
-                className="w-full rounded-xl bg-card shadow-[var(--ui-shadow-sm)] sm:w-auto"
+                className={cn(
+                  "w-full rounded-xl bg-card shadow-[var(--ui-shadow-sm)] sm:w-auto",
+                  currentStep === 4 && "w-auto",
+                )}
               >
                 {currentStep === 1 ? "← Back to services" : "← Back"}
               </Button>
