@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useFormContext } from "react-hook-form";
 import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { petAnswerLabel } from "@/lib/booking-v2/petOptions";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurringScheduleOptions";
 import type { BookingV2FormData, BookingStep } from "@/src/features/booking-v2/types";
@@ -105,7 +106,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const bathrooms = String(values.serviceDetails.bathrooms ?? "");
   const extraRooms = String(values.serviceDetails.extraRooms ?? "0");
   const roomsLabel = `${bedrooms} bed · ${bathrooms} bath${extraRooms !== "0" ? ` · ${extraRooms} extra` : ""}`;
-  const petsLabel = String(values.serviceDetails.hasPets ?? "") === "yes" ? "Yes" : "No";
+  const petsLabel = petAnswerLabel(values.serviceDetails.hasPets);
   const equipmentLabel = values.equipmentRequired === "yes" ? "Shalean supplies" : "Customer supplies";
 
   return (

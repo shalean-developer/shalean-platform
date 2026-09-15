@@ -64,6 +64,12 @@ describe("bookingV2CustomerDisplay", () => {
     ]);
   });
 
+  it("formats the selected pet category", () => {
+    expect(cleanDetailLinesFromServiceDetails({ hasPets: "dogs_and_cats" })).toEqual([
+      { label: "Pets on site", value: "Dogs & Cats" },
+    ]);
+  });
+
   it("builds price lines from pricing_summary", () => {
     expect(
       priceLinesFromPricingSummary({

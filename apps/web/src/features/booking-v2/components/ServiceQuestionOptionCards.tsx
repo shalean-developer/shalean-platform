@@ -1,8 +1,9 @@
 "use client";
 
-import { Building2, Home, PanelsTopLeft, type LucideIcon } from "lucide-react";
+import { Building2, ChevronDown, Home, PanelsTopLeft, type LucideIcon } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 import { cn } from "@/lib/utils";
+import { PET_OPTIONS } from "@/lib/booking-v2/petOptions";
 import type { FormQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import {
@@ -90,6 +91,63 @@ function YesNoServiceQuestionField({
   );
 }
 
+function PetsDropdownField({ question }: { question: FormQuestion }) {
+  const {
+    control,
+    formState: { errors },
+  } = useFormContext<BookingV2FormData>();
+  const fieldKey = `serviceDetails.${question.key}` as const;
+  const fieldError = (errors.serviceDetails as Record<string, { message?: string }> | undefined)?.[
+    question.key
+  ]?.message;
+
+  return (
+    <div className="w-full">
+      <label htmlFor={`service-question-${question.key}`} className="block text-sm font-medium text-slate-800">
+        {question.label}
+        {question.required ? <span className="ml-1 text-red-500">*</span> : null}
+      </label>
+      {question.hint ? <p className="mt-1 text-sm text-slate-500">{question.hint}</p> : null}
+      <Controller
+        name={fieldKey}
+        control={control}
+        defaultValue="no"
+        rules={{ required: question.required ? `${question.label} is required` : false }}
+        render={({ field }) => (
+          <div className="relative mt-2">
+            <select
+              id={`service-question-${question.key}`}
+              ref={field.ref}
+              name={field.name}
+              value={String(field.value ?? "no")}
+              onBlur={field.onBlur}
+              onChange={field.onChange}
+              className="h-14 w-full appearance-none rounded-xl border border-slate-200 bg-white px-4 pr-11 text-base text-slate-900 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
+              aria-invalid={Boolean(fieldError)}
+              aria-describedby={fieldError ? `service-question-${question.key}-error` : undefined}
+            >
+              {PET_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <ChevronDown
+              className="pointer-events-none absolute right-4 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400"
+              aria-hidden
+            />
+          </div>
+        )}
+      />
+      {fieldError ? (
+        <p id={`service-question-${question.key}-error`} className="mt-2 text-xs text-red-500">
+          {fieldError}
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestionOptionCardsProps) {
   const {
     control,
@@ -101,6 +159,10 @@ export function ServiceQuestionOptionCards({ question, compact }: ServiceQuestio
   ]?.message;
   const options = question.options ?? [];
   const gridClass = optionGridClass(options.length);
+
+  if (question.key === "hasPets") {
+    return <PetsDropdownField question={question} />;
+  }
 
   if (isYesNoQuestion(question)) {
     return <YesNoServiceQuestionField question={question} compact={compact} />;
