@@ -93,7 +93,7 @@ export function TimeSlotPicker({
       ) : null}
 
       {slots.length > 0 ? (
-        <div className={cn("grid gap-2", compact ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-3")}>
+        <div className={cn("grid gap-2", compact ? "grid-cols-3 xl:grid-cols-4" : "grid-cols-2 sm:grid-cols-3")}>
           {slots.map((slot) => {
             const selected = value === slot;
             const mode = provisional ? "instant" : (fulfillmentBySlot?.[slot] ?? "instant");
