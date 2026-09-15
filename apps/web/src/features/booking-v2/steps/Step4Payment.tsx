@@ -563,6 +563,7 @@ function PaymentSection({
         bookingId?: string;
         paystackReference?: string;
         payAmountZar?: number;
+        pricingSummary?: BookingV2FormData["pricingSummary"];
         creditAppliedZar?: number;
         requiresPayment?: boolean;
         error?: string;
@@ -631,8 +632,14 @@ function PaymentSection({
       const chargeAmount = confirmJson.payAmountZar ?? payTotal;
       const requiresPayment = confirmJson.requiresPayment !== false && chargeAmount > 0;
 
-      // Keep UI total aligned with the amount Paystack will charge (VIP / promo / credit).
-      if (
+      // Replace the complete client quote with the server-authoritative breakdown,
+      // including room factors and any checkout discounts—not only its final total.
+      if (confirmJson.pricingSummary) {
+        setValue("pricingSummary", confirmJson.pricingSummary, {
+          shouldDirty: false,
+          shouldValidate: false,
+        });
+      } else if (
         Number.isFinite(chargeAmount) &&
         Math.abs(chargeAmount - payTotal) >= 1 &&
         values.pricingSummary

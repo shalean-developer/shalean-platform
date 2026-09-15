@@ -45,6 +45,53 @@ export function useBookingV2Pricing(): void {
       vipTier,
     });
     setValue("pricingSummary", breakdown, { shouldDirty: false, shouldValidate: false });
+
+    // Reconcile the optimistic browser quote with a fresh server quote. The server
+    // reloads pricing_services, so room rates, extras, fees, and discounts cannot
+    // remain stuck on a persisted/static base price when the database changes.
+    if (!liveConfig) return;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      void fetch("/api/booking-v2/quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        signal: controller.signal,
+        body: JSON.stringify({
+          serviceSlug,
+          serviceDetails: serviceDetails ?? {},
+          selectedExtras: selectedExtras ?? [],
+          cleanerMode,
+          cleanerCount: cleanerCount ?? 1,
+          bookingType,
+          recurringFrequency: recurringFrequency ?? "",
+          equipmentRequired: equipmentRequired ?? "",
+          equipmentQuote: equipmentQuote ?? null,
+          vipTier,
+        }),
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`quote_http_${response.status}`);
+          return response.json() as Promise<{ pricingSummary?: BookingV2FormData["pricingSummary"] }>;
+        })
+        .then(({ pricingSummary }) => {
+          if (pricingSummary) {
+            setValue("pricingSummary", pricingSummary, {
+              shouldDirty: false,
+              shouldValidate: false,
+            });
+          }
+        })
+        .catch((error: unknown) => {
+          if (error instanceof DOMException && error.name === "AbortError") return;
+          // The immediate quote above remains usable; confirm still recalculates
+          // and signs the authoritative amount before a booking is created.
+        });
+    }, 120);
+
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
   }, [
     serviceSlug,
     liveConfig,
@@ -56,8 +103,8 @@ export function useBookingV2Pricing(): void {
     recurringFrequency,
     equipmentRequired,
     setValue,
-    JSON.stringify(serviceDetails),
-    JSON.stringify(selectedExtras),
-    JSON.stringify(equipmentQuote),
+    serviceDetails,
+    selectedExtras,
+    equipmentQuote,
   ]);
 }

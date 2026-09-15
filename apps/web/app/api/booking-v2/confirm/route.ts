@@ -1063,6 +1063,23 @@ export async function POST(request: Request) {
     bookingId: inserted.id,
     paystackReference,
     payAmountZar,
+    pricingSummary: {
+      ...serverBreakdown,
+      estimated_total: payAmountZar,
+      total: payAmountZar,
+      lineItems: [
+        ...serverBreakdown.lineItems,
+        ...(referralAppliedZar > 0
+          ? [{ label: "Referral discount", amountZar: -referralAppliedZar }]
+          : []),
+        ...(promotionAppliedZar > 0
+          ? [{ label: "Promotion discount", amountZar: -promotionAppliedZar }]
+          : []),
+        ...(creditAppliedZar > 0
+          ? [{ label: "Cleaning credit", amountZar: -creditAppliedZar }]
+          : []),
+      ],
+    },
     creditAppliedZar,
     referralAppliedZar,
     promotionAppliedZar,

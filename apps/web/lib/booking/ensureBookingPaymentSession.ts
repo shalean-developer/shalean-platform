@@ -414,7 +414,7 @@ async function initializeFreshPaystackSession(
 
   if (persistErr || !persisted) {
     // Lost the race after Paystack init — prefer the winning row's usable link.
-    const latest = await loadBooking(admin, row.id);
+    const { row: latest } = await loadBooking(admin, row.id);
     if (
       latest &&
       isStoredPaymentLinkUsable({
