@@ -358,11 +358,10 @@
 }
 
 .step4 > :global(.space-y-6) > :global(.space-y-6) {
-  border: 1px solid var(--border);
-  border-radius: var(--ui-radius-xl);
-  background: var(--card);
-  padding: var(--ui-space-4);
-  box-shadow: var(--ui-shadow-sm);
+  margin-inline: auto;
+  max-width: 37.5rem;
+  background: transparent;
+  padding: 0;
 }
 
 .step4 h3,
@@ -475,8 +474,7 @@
 
 @media (min-width: 640px) {
   .step1 > :global(.space-y-8) > section,
-  .step1 > :global(.space-y-8) > :global(.space-y-4),
-  .step4 > :global(.space-y-6) > :global(.space-y-6) {
+  .step1 > :global(.space-y-8) > :global(.space-y-4) {
     padding: var(--ui-space-5);
   }
 }
