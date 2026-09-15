@@ -7,7 +7,7 @@ import { PREFERRED_CLEANER_CUSTOMER_DISCLAIMER } from "@/lib/dispatch/preferredC
 import { CleanerCard } from "@/src/features/booking-v2/components/CleanerCard";
 import type { AvailableCleanerV2 } from "@/src/features/booking-v2/types";
 
-const INITIAL_VISIBLE = 6;
+const INITIAL_VISIBLE = 4;
 
 type CleanerFetchParams = {
   serviceSlug: string;
@@ -21,16 +21,13 @@ function useAvailableCleaners({ serviceSlug, date, time, durationMinutes, locati
   const [cleaners, setCleaners] = useState<AvailableCleanerV2[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const locationRequired = Boolean(date && time && !locationId);
 
   useEffect(() => {
-    if (!serviceSlug) return;
-    if (date && time && !locationId) {
-      setCleaners([]);
-      setLoading(false);
-      setError("Select a suburb in Step 1 to see cleaners for your area.");
-      return;
-    }
+    if (!serviceSlug || locationRequired) return;
 
+    // This effect owns the external request lifecycle, including its loading state.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setError(null);
 
@@ -56,9 +53,11 @@ function useAvailableCleaners({ serviceSlug, date, time, durationMinutes, locati
       });
   // Re-fetch when date or time changes so the list stays slot-accurate
    
-  }, [serviceSlug, date, time, durationMinutes, locationId]);
+  }, [serviceSlug, date, time, durationMinutes, locationId, locationRequired]);
 
-  return { cleaners, loading, error };
+  return locationRequired
+    ? { cleaners: [], loading: false, error: "Select a suburb in Step 1 to see cleaners for your area." }
+    : { cleaners, loading, error };
 }
 
 type Props = {
@@ -73,7 +72,7 @@ type Props = {
   maxSelect: number;
   /** Called when a cleaner card is clicked (select or deselect). Full object provided so parent can persist details. */
   onToggle: (cleaner: AvailableCleanerV2) => void;
-  /** Called when "Best available cleaner" is chosen — clears all selections. */
+  /** Called when automatic Shalean matching is chosen — clears all selections. */
   onClearAll: () => void;
   /**
    * Called after cleaners load when stored `selectedDetails` is missing entries for some
@@ -126,10 +125,10 @@ export function CleanerPreferenceSection({
     <div className="space-y-4">
       {/* Heading */}
       <div className="text-center">
-        <h3 className="text-sm font-semibold text-slate-900">Cleaner preference</h3>
+        <h3 className="text-sm font-semibold text-slate-900">Choose your cleaner</h3>
       </div>
 
-      {/* Best available option */}
+      {/* Automatic matching option */}
       <button
         type="button"
         onClick={onClearAll}
@@ -157,10 +156,10 @@ export function CleanerPreferenceSection({
               bestAvailableSelected ? "text-blue-900" : "text-slate-900",
             )}
           >
-            Best available cleaner
+            Shalean chooses for me
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
-            We&apos;ll assign the highest-rated available cleaner for your booking.
+            We&apos;ll match your booking with a suitable available cleaner.
           </p>
         </div>
         {bestAvailableSelected && (
@@ -178,7 +177,7 @@ export function CleanerPreferenceSection({
       ) : error ? (
         <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-500">
           <AlertCircle className="h-4 w-4 shrink-0 text-slate-400" aria-hidden />
-          {error} We&apos;ll assign the best available cleaner.
+          Cleaner profiles couldn&apos;t load. You can continue and we&apos;ll confirm your cleaner.
         </div>
       ) : cleaners.length === 0 ? (
         !date || !time ? (
@@ -186,15 +185,18 @@ export function CleanerPreferenceSection({
             Select a date and time above to see available cleaners.
           </p>
         ) : (
-          <p className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-xs text-slate-500">
-            No cleaners online for this slot — reserve and we&apos;ll assign the best available.
-          </p>
+          <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-center">
+            <p className="text-sm font-semibold text-blue-950">No cleaner confirmed yet</p>
+            <p className="mt-0.5 text-xs text-blue-800">
+              We&apos;ll assign a suitable cleaner and confirm their details before your booking.
+            </p>
+          </div>
         )
       ) : (
         <>
           {/* Helper text above the grid */}
           <p className="text-center text-xs text-slate-500">
-            Select up to {maxSelect} preferred cleaner{maxSelect > 1 ? "s" : ""}, or we&apos;ll assign the best available cleaner.
+            Select up to {maxSelect} cleaner{maxSelect > 1 ? "s" : ""}, or let Shalean choose.
           </p>
 
           {/* At-limit notice */}
