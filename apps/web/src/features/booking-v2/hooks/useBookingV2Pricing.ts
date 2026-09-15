@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-import { useFormContext } from "react-hook-form";
+import { useEffect, useRef } from "react";
+import { useFormContext, useWatch } from "react-hook-form";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { buildCustomerPricingFromForm } from "@/lib/booking-v2/buildCustomerPricingFromForm";
@@ -14,31 +14,43 @@ import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
  */
 export function useBookingV2Pricing(): void {
   const { serviceSlug, liveConfig, feesConfig } = useBookingV2();
-  const { watch, setValue } = useFormContext<BookingV2FormData>();
+  const { control, setValue } = useFormContext<BookingV2FormData>();
   const { tier: vipTier } = useBookingVipTier();
+  const quoteRevision = useRef(0);
 
-  const serviceDetails = watch("serviceDetails");
-  const selectedExtras = watch("selectedExtras");
-  const cleanerMode = watch("cleanerMode");
-  const cleanerCount = watch("cleanerCount");
-  const bookingType = watch("bookingType");
-  const recurringFrequency = watch("recurringFrequency");
-
-  const equipmentRequired = watch("equipmentRequired");
-  const equipmentQuote = watch("equipmentQuote");
+  // useWatch subscribes this hook to nested field updates. React Hook Form may keep
+  // the serviceDetails object identity stable while changing a bedroom/bathroom
+  // property, so a serialized snapshot is used as the effect dependency below.
+  const serviceDetails = useWatch({ control, name: "serviceDetails" });
+  const selectedExtras = useWatch({ control, name: "selectedExtras" });
+  const cleanerMode = useWatch({ control, name: "cleanerMode" });
+  const cleanerCount = useWatch({ control, name: "cleanerCount" });
+  const bookingType = useWatch({ control, name: "bookingType" });
+  const recurringFrequency = useWatch({ control, name: "recurringFrequency" });
+  const equipmentRequired = useWatch({ control, name: "equipmentRequired" });
+  const equipmentQuote = useWatch({ control, name: "equipmentQuote" });
+  const serviceDetailsSnapshot = JSON.stringify(serviceDetails ?? {});
+  const selectedExtrasSnapshot = JSON.stringify(selectedExtras ?? []);
+  const equipmentQuoteSnapshot = JSON.stringify(equipmentQuote ?? null);
 
   useEffect(() => {
+    const revision = ++quoteRevision.current;
+    const currentServiceDetails = JSON.parse(serviceDetailsSnapshot) as NonNullable<
+      BookingV2FormData["serviceDetails"]
+    >;
+    const currentSelectedExtras = JSON.parse(selectedExtrasSnapshot) as BookingV2FormData["selectedExtras"];
+    const currentEquipmentQuote = JSON.parse(equipmentQuoteSnapshot) as BookingV2FormData["equipmentQuote"];
     const breakdown = buildCustomerPricingFromForm({
       serviceSlug,
       values: {
-        serviceDetails: serviceDetails ?? {},
-        selectedExtras: selectedExtras ?? [],
+        serviceDetails: currentServiceDetails,
+        selectedExtras: currentSelectedExtras,
         cleanerMode,
         cleanerCount: cleanerCount ?? 1,
         bookingType,
         recurringFrequency: recurringFrequency ?? "",
         equipmentRequired: equipmentRequired ?? "",
-        equipmentQuote: equipmentQuote ?? null,
+        equipmentQuote: currentEquipmentQuote,
       },
       liveConfig,
       feesConfig,
@@ -58,14 +70,14 @@ export function useBookingV2Pricing(): void {
         signal: controller.signal,
         body: JSON.stringify({
           serviceSlug,
-          serviceDetails: serviceDetails ?? {},
-          selectedExtras: selectedExtras ?? [],
+          serviceDetails: currentServiceDetails,
+          selectedExtras: currentSelectedExtras,
           cleanerMode,
           cleanerCount: cleanerCount ?? 1,
           bookingType,
           recurringFrequency: recurringFrequency ?? "",
           equipmentRequired: equipmentRequired ?? "",
-          equipmentQuote: equipmentQuote ?? null,
+          equipmentQuote: currentEquipmentQuote,
           vipTier,
         }),
       })
@@ -74,7 +86,9 @@ export function useBookingV2Pricing(): void {
           return response.json() as Promise<{ pricingSummary?: BookingV2FormData["pricingSummary"] }>;
         })
         .then(({ pricingSummary }) => {
-          if (pricingSummary) {
+          // A slower response for a previous room selection must never replace
+          // the immediately calculated total for the customer's latest choice.
+          if (pricingSummary && revision === quoteRevision.current) {
             setValue("pricingSummary", pricingSummary, {
               shouldDirty: false,
               shouldValidate: false,
@@ -103,8 +117,8 @@ export function useBookingV2Pricing(): void {
     recurringFrequency,
     equipmentRequired,
     setValue,
-    serviceDetails,
-    selectedExtras,
-    equipmentQuote,
+    serviceDetailsSnapshot,
+    selectedExtrasSnapshot,
+    equipmentQuoteSnapshot,
   ]);
 }
