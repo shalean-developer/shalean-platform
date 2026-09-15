@@ -127,37 +127,23 @@ export function TimeSlotPicker({
           })}
         </div>
       ) : (
-        <div className="space-y-2 rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-950">
-          <p className="font-semibold">We can still reserve your booking</p>
-          <p>{SOFT_FULFILLMENT_CUSTOMER_COPY.noInstantSlotsDay}</p>
-          <div className="flex flex-wrap gap-2 pt-1">
-            <a
-              href={callHref}
-              className="inline-flex items-center gap-1 rounded-lg bg-white px-3 py-1.5 text-sm font-semibold text-blue-700 ring-1 ring-blue-200"
-            >
-              <Phone className="h-3.5 w-3.5" />
-              Call office
-            </a>
-          </div>
-        </div>
+        <p className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm text-blue-950">
+          No cleaner is assigned yet. Reserve now and our team will confirm availability.
+        </p>
       )}
 
-      <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-600">
-        <p>
-          Online booking is available until{" "}
-          <span className="font-semibold text-slate-800">
-            {formatCustomerBookingSlotLabel(lastSlot)}
-          </span>
-          .
-        </p>
-        <p className="mt-1">
-          Need a later time?{" "}
-          <a href={callHref} className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline">
-            <Phone className="h-3.5 w-3.5" />
-            Call us to book
-          </a>
-        </p>
-      </div>
+      <p className="flex flex-wrap items-center gap-x-1.5 gap-y-1 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+        Book online until
+        <span className="font-semibold text-slate-800">
+          {formatCustomerBookingSlotLabel(lastSlot)}
+        </span>{" "}
+        <span aria-hidden>·</span>
+        <span>Later?</span>
+        <a href={callHref} className="inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline">
+          <Phone className="h-3.5 w-3.5" aria-hidden />
+          Call us
+        </a>
+      </p>
     </div>
   );
 }
