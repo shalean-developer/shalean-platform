@@ -54,6 +54,14 @@ describe("booking flow performance contracts", () => {
     expect(payment).toContain("setPendingBookingId(bookingId)");
   });
 
+  it("treats referral-credit request cleanup as expected cancellation", () => {
+    const payment = source("src/features/booking-v2/steps/Step4Payment.tsx");
+
+    expect(payment).toContain("if (!session?.access_token || controller.signal.aborted) return");
+    expect(payment).toContain("if (controller.signal.aborted) return");
+    expect(payment).toContain("return () => controller.abort()");
+  });
+
   it("uses persisted payment recovery before a remote Paystack retry", () => {
     const verify = source("app/api/paystack/verify/route.ts");
     const success = source("app/booking/success/page.tsx");
