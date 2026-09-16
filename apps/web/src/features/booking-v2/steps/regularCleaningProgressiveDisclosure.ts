@@ -6,12 +6,20 @@ export type RegularCleaningDetailsStage =
   | "equipment";
 
 export const REGULAR_CLEANING_DETAILS_STAGES: readonly RegularCleaningDetailsStage[] = [
+  "address",
   "property",
   "rooms",
   "pets",
-  "address",
   "equipment",
 ];
+
+export function regularCleaningDetailsStageFromSearchParam(
+  value: string | null,
+): RegularCleaningDetailsStage | null {
+  return REGULAR_CLEANING_DETAILS_STAGES.includes(value as RegularCleaningDetailsStage)
+    ? (value as RegularCleaningDetailsStage)
+    : null;
+}
 
 export function isRegularCleaningStageComplete(
   stage: RegularCleaningDetailsStage,
@@ -50,6 +58,13 @@ export function regularCleaningAutoAdvanceTarget(
     return "pets";
   }
 
+  if (
+    stage === "pets" &&
+    Boolean(String(serviceDetails.hasPets ?? "").trim())
+  ) {
+    return "equipment";
+  }
+
   return null;
 }
 
@@ -60,10 +75,23 @@ type RegularCleaningBookingDetails = {
   serviceAreaLocationId?: string;
 };
 
+export function regularCleaningAddressReady(
+  bookingDetails: RegularCleaningBookingDetails,
+): boolean {
+  return (
+    String(bookingDetails.address ?? "").trim().length >= 5 &&
+    String(bookingDetails.suburb ?? "").trim().length >= 2 &&
+    Boolean(String(bookingDetails.contactPhone ?? "").trim()) &&
+    Boolean(String(bookingDetails.serviceAreaLocationId ?? "").trim())
+  );
+}
+
 export function regularCleaningDetailsStage(
   serviceDetails: Record<string, string | number | boolean>,
   bookingDetails: RegularCleaningBookingDetails = {},
 ): RegularCleaningDetailsStage {
+  if (!regularCleaningAddressReady(bookingDetails)) return "address";
+
   if (!String(serviceDetails.propertyType ?? "").trim()) return "property";
 
   const hasBedrooms = Boolean(String(serviceDetails.bedrooms ?? "").trim());
@@ -73,11 +101,5 @@ export function regularCleaningDetailsStage(
 
   if (!String(serviceDetails.hasPets ?? "").trim()) return "pets";
 
-  const addressReady =
-    String(bookingDetails.address ?? "").trim().length >= 5 &&
-    String(bookingDetails.suburb ?? "").trim().length >= 2 &&
-    Boolean(String(bookingDetails.contactPhone ?? "").trim()) &&
-    Boolean(String(bookingDetails.serviceAreaLocationId ?? "").trim());
-
-  return addressReady ? "equipment" : "address";
+  return "equipment";
 }

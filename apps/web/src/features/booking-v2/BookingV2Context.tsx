@@ -18,6 +18,8 @@ import {
 } from "@/src/features/booking-v2/config/serviceConfig";
 import {
   defaultBookingFormData,
+  bookingStepFromQuery,
+  bookingStepQueryValue,
   type BookingV2FormData,
   type BookingStep,
 } from "@/src/features/booking-v2/types";
@@ -38,6 +40,7 @@ import { bookingServiceSlugFromBookingRow } from "@/lib/booking-v2/bookingV2Serv
 import { bookingV2FormPatchFromBookingRow } from "@/lib/booking-v2/rebookFromBookingRow";
 import {
   regularCleaningDetailsStage,
+  regularCleaningDetailsStageFromSearchParam,
   type RegularCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 import type { RegularCleaningScheduleStage } from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
@@ -149,10 +152,10 @@ export function BookingV2Provider({
   const searchParams = useSearchParams();
   const config = SERVICE_CONFIG[serviceSlug];
 
-  const rawStep = Number(searchParams.get("step") ?? "1");
-  const currentStep = (
-    rawStep >= 1 && rawStep <= 4 ? rawStep : 1
-  ) as BookingStep;
+  const currentStep = bookingStepFromQuery(searchParams.get("step"));
+  const requestedDetailsSection = regularCleaningDetailsStageFromSearchParam(
+    searchParams.get("section"),
+  );
 
   // Live pricing catalog from DB
   const [catalog, setCatalog] = useState<ServicesCatalog | null>(null);
@@ -163,7 +166,7 @@ export function BookingV2Provider({
     useState<BookingPricingAvailability>("loading");
   const [detailsSectionOverride, setDetailsSectionOverride] =
     useState<RegularCleaningDetailsStage | null>(
-      serviceSlug === "regular-cleaning" ? "property" : null,
+      serviceSlug === "regular-cleaning" ? requestedDetailsSection ?? "address" : null,
     );
   const [scheduleSectionOverride, setScheduleSectionOverride] =
     useState<RegularCleaningScheduleStage | null>(
@@ -281,8 +284,8 @@ export function BookingV2Provider({
       const rowSlug = bookingServiceSlugFromBookingRow(row);
       if (rowSlug !== serviceSlug) {
         const redirectUrl = rebookToken
-          ? `/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=2&rt=${encodeURIComponent(rebookToken)}`
-          : `/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=2`;
+          ? `/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=schedule&rt=${encodeURIComponent(rebookToken)}`
+          : `/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=schedule`;
         router.replace(redirectUrl);
         return;
       }
@@ -408,7 +411,7 @@ export function BookingV2Provider({
         if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) return;
       }
       const params = new URLSearchParams(searchParams.toString());
-      params.set("step", String(step));
+      params.set("step", bookingStepQueryValue(step));
       router.push(`/book/${serviceSlug}?${params.toString()}`);
     },
     [router, searchParams, serviceSlug, pricingAvailability, form],
@@ -441,13 +444,43 @@ export function BookingV2Provider({
   const clearBooking = useCallback(() => {
     clearStorage();
     form.reset(defaultBookingFormData(serviceSlug, cleanerMode));
-    setDetailsSectionOverride(serviceSlug === "regular-cleaning" ? "property" : null);
+    setDetailsSectionOverride(serviceSlug === "regular-cleaning" ? "address" : null);
     setScheduleSectionOverride(serviceSlug === "regular-cleaning" ? "booking_type" : null);
   }, [form, serviceSlug, cleanerMode]);
 
-  const editDetailsSection = useCallback((section: RegularCleaningDetailsStage) => {
-    setDetailsSectionOverride(section);
-  }, []);
+  const editDetailsSection = useCallback(
+    (section: RegularCleaningDetailsStage) => {
+      setDetailsSectionOverride(section);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("step", "details");
+      params.set("section", section);
+      router.replace(`/book/${serviceSlug}?${params.toString()}`);
+    },
+    [router, searchParams, serviceSlug],
+  );
+
+  useEffect(() => {
+    if (currentStep !== 1 || serviceSlug !== "regular-cleaning") return;
+
+    if (!requestedDetailsSection) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("step", "details");
+      params.set("section", detailsSectionOverride ?? "address");
+      router.replace(`/book/${serviceSlug}?${params.toString()}`);
+      return;
+    }
+
+    if (requestedDetailsSection !== detailsSectionOverride) {
+      setDetailsSectionOverride(requestedDetailsSection);
+    }
+  }, [
+    currentStep,
+    detailsSectionOverride,
+    requestedDetailsSection,
+    router,
+    searchParams,
+    serviceSlug,
+  ]);
 
   const editScheduleSection = useCallback((section: RegularCleaningScheduleStage) => {
     setScheduleSectionOverride(section);

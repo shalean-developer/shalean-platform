@@ -21,7 +21,7 @@ describe("legacyBookingToBookRedirect", () => {
     });
     const href = buildBookHrefFromLegacySearchParams(sp, "schedule");
     expect(href).toContain("/book/airbnb-cleaning?");
-    expect(href).toContain("step=2");
+    expect(href).toContain("step=schedule");
     expect(href).toContain("bedrooms=2");
     expect(href).toContain("source=services_hub");
   });
@@ -39,7 +39,7 @@ describe("legacyBookingToBookRedirect", () => {
     });
 
     expect(href).toBe(
-      "/book/deep-cleaning?service=deep&bedrooms=3&bathrooms=2&extraRooms=1&extrasMode=replace&source=home_hero&serviceAreaLocationId=11111111-1111-4111-8111-111111111111&serviceAreaName=Claremont&step=1",
+      "/book/deep-cleaning?service=deep&bedrooms=3&bathrooms=2&extraRooms=1&extrasMode=replace&source=home_hero&serviceAreaLocationId=11111111-1111-4111-8111-111111111111&serviceAreaName=Claremont&step=details",
     );
   });
 
@@ -51,7 +51,7 @@ describe("legacyBookingToBookRedirect", () => {
     });
 
     expect(href).toBe(
-      "/book/moving-cleaning?service=move&extrasMode=replace&source=live_widget&location=Sea+Point&step=1",
+      "/book/moving-cleaning?service=move&extrasMode=replace&source=live_widget&location=Sea+Point&step=details",
     );
   });
 
@@ -62,7 +62,7 @@ describe("legacyBookingToBookRedirect", () => {
     });
 
     expect(href).toBe(
-      "/book/carpet-cleaning?service=carpet&extras=stain-treatment&extrasMode=replace&step=1",
+      "/book/carpet-cleaning?service=carpet&extras=stain-treatment&extrasMode=replace&step=details",
     );
   });
 

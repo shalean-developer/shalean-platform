@@ -19,6 +19,7 @@ import {
 import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
 import {
   adjacentRegularCleaningStage,
+  regularCleaningAddressReady,
   regularCleaningAutoAdvanceTarget,
   regularCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
@@ -411,7 +412,9 @@ export function Step1Details() {
   const visibleQuestions = step1Questions.filter((question) => {
     if (question.key === "cleaningProducts" || !isQuestionVisible(question)) return false;
     if (!isRegularCleaning) return true;
-    if (question.key === "propertyType") return activeDetailsStage === "property";
+    if (question.key === "propertyType") {
+      return activeDetailsStage === "property" || activeDetailsStage === "rooms";
+    }
     if (question.group === "rooms") return activeDetailsStage === "rooms";
     if (question.key === "hasPets") return activeDetailsStage === "pets";
     return activeDetailsStage === "equipment";
@@ -427,7 +430,12 @@ export function Step1Details() {
         : activeDetailsStage === "pets"
           ? Boolean(String(serviceDetails.hasPets ?? "").trim())
           : activeDetailsStage === "address"
-            ? regularDetailsStage === "equipment"
+            ? regularCleaningAddressReady({
+                address,
+                suburb,
+                contactPhone,
+                serviceAreaLocationId,
+              })
             : true;
 
   function moveRegularStage(direction: "back" | "next") {
@@ -453,7 +461,9 @@ export function Step1Details() {
   }
 
   const autoAdvanceStage =
-    activeDetailsStage === "property" || activeDetailsStage === "rooms";
+    activeDetailsStage === "property" ||
+    activeDetailsStage === "rooms" ||
+    activeDetailsStage === "pets";
 
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
