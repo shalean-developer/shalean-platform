@@ -31,7 +31,8 @@ import { resolveCustomerTotalPaidZar } from "@/lib/booking/customerBookingRefere
 const VERIFY_MAX_ATTEMPTS = 3;
 const VERIFY_RETRY_DELAY_MS = 1500;
 /** Per-attempt fetch timeout — prevents "Confirming…" from hanging forever on a stuck verify. */
-const VERIFY_FETCH_TIMEOUT_MS = 15_000;
+// Must exceed the server's 12s Paystack timeout plus local/dev route compilation overhead.
+const VERIFY_FETCH_TIMEOUT_MS = 20_000;
 
 function PageShell({ children, className }: { children: ReactNode; className?: string }) {
   return (
