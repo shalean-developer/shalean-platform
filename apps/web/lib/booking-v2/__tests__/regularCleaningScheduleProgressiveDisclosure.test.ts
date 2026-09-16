@@ -16,15 +16,14 @@ describe("regular cleaning schedule progressive disclosure", () => {
       .toBe("cleaner");
   });
 
-  it("includes the recurring schedule for recurring bookings", () => {
+  it("keeps recurring frequency on booking type before date and time", () => {
     expect(regularCleaningScheduleStages("recurring")).toEqual([
       "booking_type",
       "date_time",
-      "recurring_schedule",
       "cleaner",
     ]);
     expect(adjacentRegularCleaningScheduleStage("cleaner", "back", "recurring"))
-      .toBe("recurring_schedule");
+      .toBe("date_time");
   });
 
   it("only marks earlier stages as complete", () => {

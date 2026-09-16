@@ -42,6 +42,10 @@ const RECURRING_FREQUENCIES = RECURRING_FREQUENCY_OPTIONS;
 const WEEKDAYS = [...RECURRING_WEEKDAYS];
 
 const FREQUENCY_PRESENTATION = {
+  custom: {
+    description: "Choose the visit days that suit you.",
+    icon: CalendarRange,
+  },
   weekly: {
     description: "Cleaning every week.",
     icon: CalendarDays,
@@ -337,13 +341,6 @@ export function Step2Schedule() {
 
   const today = new Date().toISOString().split("T")[0];
 
-  // Legacy saved forms used "custom" as its own frequency — fold into weekly + day picker.
-  useEffect(() => {
-    if (bookingType === "recurring" && recurringFrequency === "custom") {
-      setValue("recurringFrequency", "weekly", { shouldDirty: true });
-    }
-  }, [bookingType, recurringFrequency, setValue]);
-
   // The calendar date starts the recurring series; recurring bookings are open-ended.
   useEffect(() => {
     if (bookingType !== "recurring") return;
@@ -392,7 +389,11 @@ export function Step2Schedule() {
   }
 
   function stageIsReady(stage: RegularCleaningScheduleStage): boolean {
-    if (stage === "booking_type") return Boolean(bookingType);
+    if (stage === "booking_type") {
+      return Boolean(
+        bookingType && (bookingType !== "recurring" || recurringFrequency),
+      );
+    }
     if (stage === "date_time") {
       return Boolean(
         date &&
@@ -400,7 +401,6 @@ export function Step2Schedule() {
           isSelectedBookingSlotVerified(time, availability, slotsVerified),
       );
     }
-    if (stage === "recurring_schedule") return Boolean(recurringFrequency);
     return cleanerCount > 0;
   }
 
@@ -613,7 +613,7 @@ export function Step2Schedule() {
       </section>}
 
       {/* ── Recurring schedule ── */}
-      {bookingType === "recurring" && (!isRegularCleaning || activeScheduleStage === "recurring_schedule") && (
+      {bookingType === "recurring" && (!isRegularCleaning || activeScheduleStage === "booking_type") && (
         <>
           <hr className="border-slate-200" />
           <section className="space-y-5">
@@ -633,7 +633,7 @@ export function Step2Schedule() {
                 name="recurringFrequency"
                 control={control}
                 render={({ field }) => (
-                  <div className="mx-auto mt-6 grid w-full max-w-5xl gap-5 sm:grid-cols-3 sm:gap-6">
+                  <div className="mx-auto mt-6 grid w-full max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     {RECURRING_FREQUENCIES.map((opt) => {
                       const selected = field.value === opt.value;
                       const presentation = FREQUENCY_PRESENTATION[opt.value];

@@ -3,15 +3,12 @@ import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 export type RegularCleaningScheduleStage =
   | "booking_type"
   | "date_time"
-  | "recurring_schedule"
   | "cleaner";
 
 export function regularCleaningScheduleStages(
-  bookingType: BookingV2FormData["bookingType"],
+  _bookingType: BookingV2FormData["bookingType"],
 ): readonly RegularCleaningScheduleStage[] {
-  return bookingType === "recurring"
-    ? ["booking_type", "date_time", "recurring_schedule", "cleaner"]
-    : ["booking_type", "date_time", "cleaner"];
+  return ["booking_type", "date_time", "cleaner"];
 }
 
 export function adjacentRegularCleaningScheduleStage(
