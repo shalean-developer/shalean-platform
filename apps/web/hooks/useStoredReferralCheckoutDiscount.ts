@@ -52,6 +52,7 @@ export function useStoredReferralCheckoutDiscount(
     const storedCode = code;
 
     let cancelled = false;
+    const controller = new AbortController();
 
     async function validate() {
       try {
@@ -68,6 +69,7 @@ export function useStoredReferralCheckoutDiscount(
             bookingTotalZar: opts.bookingTotalZar,
             serviceSlug: opts.serviceSlug,
           }),
+          signal: controller.signal,
         });
         const json = (await res.json()) as {
           valid?: boolean;
@@ -89,7 +91,8 @@ export function useStoredReferralCheckoutDiscount(
           setInvalidReason(json.reason ?? null);
           setInvalidMessage(json.message?.trim() || null);
         }
-      } catch {
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
         if (!cancelled) {
           setReferralDiscount(null);
           setInvalidReason(null);
@@ -103,6 +106,7 @@ export function useStoredReferralCheckoutDiscount(
     void validate();
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [opts.email, opts.bookingTotalZar, opts.serviceSlug]);
 

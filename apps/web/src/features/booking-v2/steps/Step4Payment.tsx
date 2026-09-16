@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -341,58 +341,82 @@ function PaymentSection({
   const totalAfterReferral = Math.max(0, totalAfterPromo - referralToApply);
   const creditToApply = applyCredit ? Math.min(creditBalance, totalAfterReferral) : 0;
   const payTotal = Math.max(0, totalAfterReferral - creditToApply);
+  const promotionRequestKey = JSON.stringify({
+    serviceSlug,
+    selectedExtras: [...(values.selectedExtras ?? [])].sort(),
+    subtotalZar: baseTotal,
+    customerEmail: user.email?.trim().toLowerCase() ?? "",
+  });
+  const activePromotionRequestKey = useRef<string | null>(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     void (async () => {
       const session = await getSession();
       if (!session?.access_token) return;
       const res = await fetch("/api/referrals/credit", {
         headers: { Authorization: `Bearer ${session.access_token}` },
+        signal: controller.signal,
       });
       if (res.ok) {
         const j = (await res.json()) as { balance?: number };
         setCreditBalance(Number(j.balance ?? 0));
       }
     })();
+    return () => controller.abort();
   }, []);
 
   // Auto-apply eligible promotions (first booking, bundles, membership) on load
   useEffect(() => {
+    if (activePromotionRequestKey.current === promotionRequestKey) return;
+    activePromotionRequestKey.current = promotionRequestKey;
+    const controller = new AbortController();
     void (async () => {
-      const session = await getSession();
-      const res = await fetch("/api/promotions/validate", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-        },
-        body: JSON.stringify({
-          serviceSlug,
-          selectedExtraIds: values.selectedExtras ?? [],
-          subtotalZar: baseTotal,
-          customerEmail: user.email,
-          promoCode: promoCode.trim() || undefined,
-        }),
-      });
-      if (!res.ok) return;
-      const j = (await res.json()) as {
-        totalDiscountZar?: number;
-        applied?: { name: string; discountZar: number; source: string }[];
-        rejected?: { reason: string }[];
-      };
-      const autoOnly = (j.applied ?? []).filter((a) => a.source !== "code" || !promoCode.trim());
-      const total = autoOnly.reduce((sum, a) => sum + Math.round(Number(a.discountZar ?? 0)), 0);
-      if (total > 0 && autoOnly.length) {
-        setPromoDiscountZar(total);
-        setPromoLabel(autoOnly.map((a) => a.name).join(", "));
-        setPromoError(null);
-      } else if (!promoCode.trim()) {
-        setPromoDiscountZar(0);
-        setPromoLabel(null);
+      try {
+        const session = await getSession();
+        const res = await fetch("/api/promotions/validate", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          },
+          body: JSON.stringify({
+            serviceSlug,
+            selectedExtraIds: values.selectedExtras ?? [],
+            subtotalZar: baseTotal,
+            customerEmail: user.email,
+          }),
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const j = (await res.json()) as {
+          totalDiscountZar?: number;
+          applied?: { name: string; discountZar: number; source: string }[];
+          rejected?: { reason: string }[];
+        };
+        const autoOnly = (j.applied ?? []).filter((a) => a.source !== "code");
+        const total = autoOnly.reduce((sum, a) => sum + Math.round(Number(a.discountZar ?? 0)), 0);
+        if (total > 0 && autoOnly.length) {
+          setPromoDiscountZar(total);
+          setPromoLabel(autoOnly.map((a) => a.name).join(", "));
+          setPromoError(null);
+        } else {
+          setPromoDiscountZar(0);
+          setPromoLabel(null);
+        }
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- re-run when cart basics change
-  }, [serviceSlug, baseTotal, values.selectedExtras, user.email]);
+    return () => {
+      controller.abort();
+      if (activePromotionRequestKey.current === promotionRequestKey) {
+        activePromotionRequestKey.current = null;
+      }
+    };
+    // Request identity is intentionally represented by one stable serialized key.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [promotionRequestKey]);
 
   async function applyPromoCode() {
     setPromoChecking(true);
@@ -566,6 +590,10 @@ function PaymentSection({
         pricingSummary?: BookingV2FormData["pricingSummary"];
         creditAppliedZar?: number;
         requiresPayment?: boolean;
+        authorizationUrl?: string;
+        paymentReference?: string;
+        paymentAlreadyCompleted?: boolean;
+        paymentSessionError?: string;
         error?: string;
         code?: string;
         fulfillmentMode?: string;
@@ -666,6 +694,35 @@ function PaymentSection({
         // Land on success with bookingId — emit booking_submitted only after authoritative settle check.
         // Do not emit here before navigation (SHL-BK-000097 abort risk).
         window.location.assign(bookingV2CoveredSuccessHref(bookingId));
+        return;
+      }
+
+      const preparedReference =
+        confirmJson.paymentReference?.trim() || paystackReference?.trim() || bookingId;
+      if (confirmJson.paymentAlreadyCompleted) {
+        clearBookingV2DraftStorage();
+        window.location.assign(bookingV2SuccessHref(preparedReference));
+        return;
+      }
+      if (confirmJson.authorizationUrl?.trim()) {
+        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
+          service: serviceSlug,
+          service_type: serviceSlug,
+          serviceAreaName: values.suburb ?? null,
+          finalPrice: confirmJson.payAmountZar ?? payTotal,
+          extras: values.selectedExtras ?? null,
+        }, {
+          service_type: serviceSlug,
+          suburb: values.suburb ?? null,
+          estimated_price: confirmJson.payAmountZar ?? payTotal,
+          booking_id: bookingId,
+        });
+        window.location.assign(confirmJson.authorizationUrl.trim());
+        return;
+      }
+      if (confirmJson.paymentSessionError?.trim()) {
+        setError(confirmJson.paymentSessionError.trim());
+        setConfirming(false);
         return;
       }
 

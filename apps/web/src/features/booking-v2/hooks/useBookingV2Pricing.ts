@@ -100,7 +100,7 @@ export function useBookingV2Pricing(): void {
           // The immediate quote above remains usable; confirm still recalculates
           // and signs the authoritative amount before a booking is created.
         });
-    }, 120);
+    }, 450);
 
     return () => {
       window.clearTimeout(timer);

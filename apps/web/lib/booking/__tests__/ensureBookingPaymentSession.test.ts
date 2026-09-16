@@ -351,6 +351,39 @@ describe("ensureBookingPaymentSession", () => {
     expect(hist.some((h) => h.reference === "bv2_old")).toBe(true);
   });
 
+  it("skips remote verification when confirm is creating a fresh payment attempt", async () => {
+    const { fetchPaystackTransactionVerify } = await import("@/lib/payments/verifyPaystackTransaction");
+    const { admin } = buildAdmin({
+      id: BOOKING_ID,
+      status: "pending_payment",
+      payment_status: null,
+      payment_completed_at: null,
+      paystack_reference: "bv2_fresh_confirm",
+      payment_link: null,
+      payment_link_expires_at: null,
+      customer_email: "a@b.co.za",
+      customer_id: "22222222-2222-4222-8222-222222222222",
+      user_id: "22222222-2222-4222-8222-222222222222",
+      total_price: 400,
+      total_paid_zar: null,
+      price_snapshot: null,
+      booking_snapshot: {},
+      service: "Regular Cleaning",
+      date: "2026-07-20",
+      time: "10:00",
+    });
+
+    const result = await ensureBookingPaymentSession(admin, {
+      bookingId: BOOKING_ID,
+      access: { kind: "owner", userId: "22222222-2222-4222-8222-222222222222" },
+      freshAttempt: true,
+    });
+
+    expect(result.status).toBe("ready");
+    expect(fetchPaystackTransactionVerify).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("treats missing authorization_url as initialization failure", async () => {
     vi.stubGlobal(
       "fetch",

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearerAuth";
 import { bookingV2ConfirmSchema } from "@/src/features/booking-v2/schemas";
@@ -57,10 +57,44 @@ import type { AppliedPromotionDiscount } from "@/lib/promotions/types";
 import { resolveCheckoutPromoEligibilityExtras } from "@/lib/promotions/resolveCheckoutPromoEligibilityExtras";
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import { settleFullyCoveredBooking } from "@/lib/payments/settleFullyCoveredBooking";
+import { ensureBookingPaymentSession } from "@/lib/booking/ensureBookingPaymentSession";
 
 export const runtime = "nodejs";
 
 type SupabaseAdmin = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
+
+type ConfirmPaymentSessionFields = {
+  authorizationUrl?: string;
+  paymentReference?: string;
+  paymentAlreadyCompleted?: boolean;
+  paymentSessionError?: string;
+};
+
+async function prepareConfirmedBookingPaymentSession(
+  supabase: SupabaseAdmin,
+  bookingId: string,
+  requiresPayment: boolean,
+): Promise<ConfirmPaymentSessionFields> {
+  if (!requiresPayment) return {};
+  const session = await ensureBookingPaymentSession(supabase, {
+    bookingId,
+    access: { kind: "internal" },
+    freshAttempt: true,
+  });
+  if (session.status === "ready") {
+    return {
+      authorizationUrl: session.authorizationUrl,
+      paymentReference: session.reference,
+    };
+  }
+  if (session.status === "paid") {
+    return {
+      paymentAlreadyCompleted: true,
+      paymentReference: session.reference,
+    };
+  }
+  return { paymentSessionError: session.error };
+}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -183,6 +217,7 @@ async function saveBookingAddressToAccount(
 }
 
 export async function POST(request: Request) {
+  const confirmStartedAt = performance.now();
   // ── 1. Auth ──────────────────────────────────────────────────────────────────
   const auth = await resolveBookingRouteBearerAuth(request);
   if (auth.kind === "invalid_token") {
@@ -225,7 +260,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Service temporarily unavailable." }, { status: 503 });
   }
 
-  const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
+  const ownershipColumnPromise = resolveBookingOwnershipColumn(supabase);
+  const profilePromise = supabase
+    .from("user_profiles")
+    .select("full_name, tier")
+    .eq("id", userId)
+    .maybeSingle();
+  const customerPhonePromise = resolveCustomerPhoneFromAuthAdmin(supabase, userId);
 
   // ── 4. Team availability re-check (race protection) ───────────────────────────
   if (data.cleanerMode === "team") {
@@ -265,11 +306,12 @@ export async function POST(request: Request) {
   }
 
   // ── 5. Resolve customer name from user_profiles ──────────────────────────────
-  const { data: profileRow } = await supabase
-    .from("user_profiles")
-    .select("full_name, tier")
-    .eq("id", userId)
-    .maybeSingle();
+  const [ownershipColumn, profileResult, customerPhoneFromAuth] = await Promise.all([
+    ownershipColumnPromise,
+    profilePromise,
+    customerPhonePromise,
+  ]);
+  const profileRow = profileResult.data;
 
   const customerName: string = profileRow?.full_name ?? "";
   const vipTier =
@@ -277,7 +319,6 @@ export async function POST(request: Request) {
       ? String((profileRow as { tier: string }).tier)
       : null;
 
-  const customerPhoneFromAuth = await resolveCustomerPhoneFromAuthAdmin(supabase, userId);
   const customerPhone = trimCustomerPhone(data.contactPhone) ?? customerPhoneFromAuth;
 
   // ── 6. Server-side price verification ────────────────────────────────────────
@@ -766,13 +807,13 @@ export async function POST(request: Request) {
       );
     }
 
-    await saveBookingAddressToAccount(supabase, {
+    after(() => saveBookingAddressToAccount(supabase, {
       userId,
       line1: data.address,
       suburb: data.suburb,
       city: data.city,
       postalCode: data.postalCode,
-    });
+    }));
 
     let creditAppliedZar = 0;
     if (creditToApplyCap > 0) {
@@ -829,21 +870,36 @@ export async function POST(request: Request) {
     const r0Existing = await trySettleFullyCoveredOrError(supabase, existingBooking.id, payAmountZar);
     if ("errorResponse" in r0Existing) return r0Existing.errorResponse;
     const requiresPayment = r0Existing.requiresPayment;
-
-    return NextResponse.json({
-      success: true,
-      bookingId: existingBooking.id,
-      paystackReference,
-      payAmountZar,
-      creditAppliedZar,
-      referralAppliedZar,
-      promotionAppliedZar,
-      promotionsApplied: promotionApplied,
-      fulfillmentMode,
+    const paymentSessionStartedAt = performance.now();
+    const paymentSession = await prepareConfirmedBookingPaymentSession(
+      supabase,
+      existingBooking.id,
       requiresPayment,
-      customerMessage: fulfillmentCustomerMessage,
-      ...(getPaystackPublicKey() ? { paystackPublicKey: getPaystackPublicKey() } : {}),
-    });
+    );
+    const paymentSessionDuration = performance.now() - paymentSessionStartedAt;
+
+    return NextResponse.json(
+      {
+        success: true,
+        bookingId: existingBooking.id,
+        paystackReference,
+        payAmountZar,
+        creditAppliedZar,
+        referralAppliedZar,
+        promotionAppliedZar,
+        promotionsApplied: promotionApplied,
+        fulfillmentMode,
+        requiresPayment,
+        ...paymentSession,
+        customerMessage: fulfillmentCustomerMessage,
+        ...(getPaystackPublicKey() ? { paystackPublicKey: getPaystackPublicKey() } : {}),
+      },
+      {
+        headers: {
+          "Server-Timing": `confirm-total;dur=${(performance.now() - confirmStartedAt).toFixed(1)}, paystack-init;dur=${paymentSessionDuration.toFixed(1)}`,
+        },
+      },
+    );
   }
 
   // ── 9. Insert booking row ─────────────────────────────────────────────────────
@@ -986,13 +1042,13 @@ export async function POST(request: Request) {
     );
   }
 
-  await saveBookingAddressToAccount(supabase, {
+  after(() => saveBookingAddressToAccount(supabase, {
     userId,
     line1: data.address,
     suburb: data.suburb,
     city: data.city,
     postalCode: data.postalCode,
-  });
+  }));
 
   let creditAppliedZar = 0;
   if (creditToApplyCap > 0) {
@@ -1057,6 +1113,13 @@ export async function POST(request: Request) {
   const r0Inserted = await trySettleFullyCoveredOrError(supabase, inserted.id, payAmountZar);
   if ("errorResponse" in r0Inserted) return r0Inserted.errorResponse;
   const requiresPayment = r0Inserted.requiresPayment;
+  const paymentSessionStartedAt = performance.now();
+  const paymentSession = await prepareConfirmedBookingPaymentSession(
+    supabase,
+    inserted.id,
+    requiresPayment,
+  );
+  const paymentSessionDuration = performance.now() - paymentSessionStartedAt;
 
   return NextResponse.json({
     success: true,
@@ -1086,7 +1149,12 @@ export async function POST(request: Request) {
     promotionsApplied: promotionApplied,
     fulfillmentMode,
     requiresPayment,
+    ...paymentSession,
     customerMessage: fulfillmentCustomerMessage,
     ...(getPaystackPublicKey() ? { paystackPublicKey: getPaystackPublicKey() } : {}),
+  }, {
+    headers: {
+      "Server-Timing": `confirm-total;dur=${(performance.now() - confirmStartedAt).toFixed(1)}, paystack-init;dur=${paymentSessionDuration.toFixed(1)}`,
+    },
   });
 }

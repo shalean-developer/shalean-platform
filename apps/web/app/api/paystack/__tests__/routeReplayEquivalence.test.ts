@@ -4,6 +4,15 @@ const m = vi.hoisted(() => ({
   admin: vi.fn(), replay: vi.fn(), record: vi.fn(), sync: vi.fn(), pipeline: vi.fn(), finalize: vi.fn(),
   monthly: vi.fn(), sales: vi.fn(), monthlyRecord: vi.fn(), salesRecord: vi.fn(),
 }));
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return {
+    ...actual,
+    after: (task: () => void | Promise<void>) => {
+      void task();
+    },
+  };
+});
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: m.admin }));
 vi.mock("@/lib/booking/paystackReplayPaymentConfirmedNotify", () => ({ replayPaymentConfirmedNotifyForPersistedBooking: m.replay }));
 vi.mock("@/lib/booking/syncPaidBookingSideEffects", () => ({ syncPaidBookingSideEffects: m.sync }));

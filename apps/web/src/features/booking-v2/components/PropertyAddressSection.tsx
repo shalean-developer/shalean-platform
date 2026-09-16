@@ -22,6 +22,9 @@ const contactPhoneRules = {
   validate: (value: string) => isValidContactPhone(value) || CONTACT_PHONE_VALIDATION_MESSAGE,
 } as const;
 
+const LOCATION_CACHE_TTL_MS = 2 * 60 * 1000;
+let cachedServiceLocations: { rows: ServiceLocationRow[]; expiresAt: number } | null = null;
+
 type AddressMode = "saved" | "custom";
 
 function FieldError({ message }: { message?: string }) {
@@ -331,35 +334,50 @@ export function PropertyAddressSection() {
   const showSavedMode = Boolean(user && hasSavedAddresses && addressMode === "saved" && selectedAddress);
   const addressValue = watch("address");
   const suburbValue = watch("suburb");
+  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
   const showBookForSomeoneHint = addressMode === "custom" && !addressValue?.trim();
 
   useEffect(() => {
     let cancelled = false;
+    const controller = new AbortController();
 
     void (async () => {
       try {
-        const response = await fetch("/api/booking/service-locations?withActiveCleanersOnly=false");
-        const json = (await response.json()) as {
-          ok?: boolean;
-          locations?: ServiceLocationRow[];
-          error?: string;
-        };
-        if (cancelled) return;
-        if (!response.ok || json.ok !== true || !Array.isArray(json.locations)) {
-          setLocationOptions([]);
-          setLocationsError(json.error || "Could not load suburbs.");
-          return;
+        let rows: ServiceLocationRow[];
+        if (cachedServiceLocations && cachedServiceLocations.expiresAt > Date.now()) {
+          rows = cachedServiceLocations.rows;
+        } else {
+          const response = await fetch("/api/booking/service-locations?withActiveCleanersOnly=false", {
+            signal: controller.signal,
+          });
+          const json = (await response.json()) as {
+            ok?: boolean;
+            locations?: ServiceLocationRow[];
+            error?: string;
+          };
+          if (cancelled) return;
+          if (!response.ok || json.ok !== true || !Array.isArray(json.locations)) {
+            setLocationOptions([]);
+            setLocationsError(json.error || "Could not load suburbs.");
+            return;
+          }
+          rows = json.locations;
         }
 
         const uniqueLocations = Array.from(
           new Map(
-            json.locations
+            rows
               .filter((location) => location.id && location.name?.trim())
               .map((location) => [location.id, { ...location, name: location.name.trim() }]),
           ).values(),
         ).sort((a, b) => a.name.localeCompare(b.name, "en-ZA"));
+        cachedServiceLocations = {
+          rows: uniqueLocations,
+          expiresAt: Date.now() + LOCATION_CACHE_TTL_MS,
+        };
         setLocationOptions(uniqueLocations);
-      } catch {
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
         if (!cancelled) {
           setLocationOptions([]);
           setLocationsError("Could not load suburbs.");
@@ -371,11 +389,25 @@ export function PropertyAddressSection() {
 
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [locationLoadAttempt]);
 
+  const selectedLocationOption = useMemo(() => {
+    const id = serviceAreaLocationId.trim();
+    const label = suburbValue?.trim().toLowerCase() ?? "";
+    if (!id || !label) return null;
+    return locationOptions.find(
+      (location) => location.id === id && location.name.trim().toLowerCase() === label,
+    ) ?? null;
+  }, [locationOptions, serviceAreaLocationId, suburbValue]);
+
+  // A dropdown selection already carries the canonical location and city ids.
+  // Resolve by label only for legacy/free-text drafts that do not have a matching id.
   const { location: resolvedLocation, loading: locationLoading, error: locationError } =
-    useBookingV2LocationResolve(suburbValue ?? "");
+    useBookingV2LocationResolve(
+      !locationsLoading && !selectedLocationOption ? (suburbValue ?? "") : "",
+    );
 
   useEffect(() => {
     if (!suburbValue?.trim()) {
@@ -383,14 +415,24 @@ export function PropertyAddressSection() {
       setValue("serviceAreaCityId", "", { shouldDirty: true });
       return;
     }
-    if (resolvedLocation) {
+    if (selectedLocationOption) {
+      setValue("serviceAreaLocationId", selectedLocationOption.id, { shouldDirty: true });
+      setValue("serviceAreaCityId", selectedLocationOption.city_id ?? "", { shouldDirty: true });
+    } else if (resolvedLocation) {
       setValue("serviceAreaLocationId", resolvedLocation.locationId, { shouldDirty: true });
       setValue("serviceAreaCityId", resolvedLocation.cityId ?? "", { shouldDirty: true });
-    } else if (!locationLoading) {
+    } else if (!locationsLoading && !locationLoading) {
       setValue("serviceAreaLocationId", "", { shouldDirty: true });
       setValue("serviceAreaCityId", "", { shouldDirty: true });
     }
-  }, [suburbValue, resolvedLocation, locationLoading, setValue]);
+  }, [
+    suburbValue,
+    selectedLocationOption,
+    resolvedLocation,
+    locationsLoading,
+    locationLoading,
+    setValue,
+  ]);
 
   useEffect(() => {
     if (!locationLoading && locationError && suburbValue?.trim()) {

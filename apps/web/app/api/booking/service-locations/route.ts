@@ -21,6 +21,7 @@ export type ServiceLocationRow = {
  * the RLS-scoped server client, so the booking picker does not require admin credentials.
  */
 export async function GET(request: Request) {
+  const startedAt = performance.now();
   const url = new URL(request.url);
   const withActiveCleanersOnly = url.searchParams.get("withActiveCleanersOnly") !== "false";
   const client = withActiveCleanersOnly ? getSupabaseAdmin() : getSupabaseServer();
@@ -59,5 +60,15 @@ export async function GET(request: Request) {
       rows = rows.filter((r) => cover.has(String(r.id).trim().toLowerCase()));
     }
   }
-  return NextResponse.json({ ok: true as const, locations: rows });
+  return NextResponse.json(
+    { ok: true as const, locations: rows },
+    {
+      headers: {
+        "Cache-Control": withActiveCleanersOnly
+          ? "private, max-age=15, stale-while-revalidate=30"
+          : "private, max-age=120, stale-while-revalidate=300",
+        "Server-Timing": `locations;dur=${(performance.now() - startedAt).toFixed(1)}`,
+      },
+    },
+  );
 }

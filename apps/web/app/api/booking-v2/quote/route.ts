@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { buildCustomerPricingFromForm } from "@/lib/booking-v2/buildCustomerPricingFromForm";
-import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
+import { loadCachedBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 
@@ -23,13 +23,14 @@ const quoteSchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const startedAt = performance.now();
   const parsed = quoteSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "Invalid quote details." }, { status: 400 });
   }
 
   try {
-    const { catalog, feesConfig } = await loadBookingV2Catalog();
+    const { catalog, feesConfig } = await loadCachedBookingV2Catalog();
     const liveConfig = catalog[parsed.data.serviceSlug] ?? null;
     if (!liveConfig) {
       return NextResponse.json({ error: "Live pricing is unavailable." }, { status: 503 });
@@ -54,7 +55,12 @@ export async function POST(request: Request) {
 
     return NextResponse.json(
       { pricingSummary },
-      { headers: { "Cache-Control": "no-store" } },
+      {
+        headers: {
+          "Cache-Control": "no-store",
+          "Server-Timing": `quote;dur=${(performance.now() - startedAt).toFixed(1)}`,
+        },
+      },
     );
   } catch (error) {
     console.error("[booking-v2/quote] live pricing failed", error);

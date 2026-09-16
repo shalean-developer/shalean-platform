@@ -462,6 +462,7 @@ async function ensureBookingPaymentSessionInner(
   admin: SupabaseClient,
   bookingId: string,
   access: BookingPaymentSessionAccess,
+  options?: { freshAttempt?: boolean },
 ): Promise<EnsureBookingPaymentSessionResult> {
   const id = bookingId.trim();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
@@ -598,9 +599,14 @@ async function ensureBookingPaymentSessionInner(
     return readyFromRow(row, { reused: true, refreshed: false, amountZar });
   }
 
-  // Uncertain / abandoned prior attempt — verify with Paystack before creating another charge.
-  const paid = await maybeFinalizeSuccessfulCharge(admin, row, secret);
-  if (paid) return paid;
+  // A booking created by the current confirm request has never reached Paystack,
+  // so verifying its fresh reference first only adds a guaranteed failed remote
+  // request. Recovery paths still verify uncertain/abandoned attempts before
+  // creating a replacement charge.
+  if (!options?.freshAttempt) {
+    const paid = await maybeFinalizeSuccessfulCharge(admin, row, secret);
+    if (paid) return paid;
+  }
 
   const reason = !String(row.payment_link ?? "").trim()
     ? PAYMENT_ERROR_CODES.PAYMENT_LINK_MISSING
@@ -622,13 +628,15 @@ async function ensureBookingPaymentSessionInner(
  */
 export async function ensureBookingPaymentSession(
   admin: SupabaseClient,
-  params: { bookingId: string; access: BookingPaymentSessionAccess },
+  params: { bookingId: string; access: BookingPaymentSessionAccess; freshAttempt?: boolean },
 ): Promise<EnsureBookingPaymentSessionResult> {
   const bookingId = params.bookingId.trim();
   const existing = inflightByBookingId.get(bookingId);
   if (existing) return existing;
 
-  const promise = ensureBookingPaymentSessionInner(admin, bookingId, params.access).finally(() => {
+  const promise = ensureBookingPaymentSessionInner(admin, bookingId, params.access, {
+    freshAttempt: params.freshAttempt,
+  }).finally(() => {
     if (inflightByBookingId.get(bookingId) === promise) {
       inflightByBookingId.delete(bookingId);
     }

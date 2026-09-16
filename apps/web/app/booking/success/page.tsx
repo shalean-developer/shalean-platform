@@ -28,11 +28,13 @@ import { BookingConfirmationHero } from "@/components/booking/BookingConfirmatio
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { CUSTOMER_SUPPORT_WHATSAPP_E164 } from "@/lib/site/customerSupport";
 import { resolveCustomerTotalPaidZar } from "@/lib/booking/customerBookingReference";
-const VERIFY_MAX_ATTEMPTS = 3;
-const VERIFY_RETRY_DELAY_MS = 1500;
+const VERIFY_MAX_ATTEMPTS = 1;
+const VERIFY_RETRY_DELAY_MS = 750;
+const PERSISTENCE_POLL_ATTEMPTS = 2;
+const PERSISTENCE_POLL_DELAY_MS = 150;
 /** Per-attempt fetch timeout — prevents "Confirming…" from hanging forever on a stuck verify. */
 // Must exceed the server's 12s Paystack timeout plus local/dev route compilation overhead.
-const VERIFY_FETCH_TIMEOUT_MS = 20_000;
+const VERIFY_FETCH_TIMEOUT_MS = 13_000;
 
 function PageShell({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -230,6 +232,29 @@ function SuccessContent() {
 
     const runId = ++runIdRef.current;
     setPhase("finalizing");
+
+    // Give the signed Paystack webhook a brief opportunity to persist the paid
+    // booking. When it wins the race, `/api/paystack/verify` uses its trusted DB
+    // fast path and avoids another remote Paystack verification request.
+    for (let poll = 0; poll < PERSISTENCE_POLL_ATTEMPTS; poll++) {
+      if (runId !== runIdRef.current) return false;
+      try {
+        const statusRes = await fetch(
+          `/api/paystack/status?${new URLSearchParams({ reference }).toString()}`,
+          { cache: "no-store", signal: AbortSignal.timeout(600) },
+        );
+        const statusJson = (await statusRes.json()) as { status?: string };
+        const status = statusJson.status?.trim().toLowerCase() ?? "unknown";
+        if (statusRes.ok && !["unknown", "pending_payment", "payment_expired"].includes(status)) {
+          break;
+        }
+      } catch {
+        // Status polling is only an optimization; canonical verification follows.
+      }
+      if (poll < PERSISTENCE_POLL_ATTEMPTS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, PERSISTENCE_POLL_DELAY_MS));
+      }
+    }
 
     for (let attempt = 1; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
       if (runId !== runIdRef.current) return false;
