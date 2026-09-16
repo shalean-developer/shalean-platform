@@ -459,9 +459,6 @@ export function Step1Details() {
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
       {/* Service-specific questions */}
       <section className={cn("space-y-5", isRegularCleaning && questionGroups.length === 0 && "hidden")}>
-        <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
-          About the clean
-        </h3>
         {questionGroups.map((group) => {
           if (group.type === "inline") {
             const isRooms = group.groupName === "rooms";
