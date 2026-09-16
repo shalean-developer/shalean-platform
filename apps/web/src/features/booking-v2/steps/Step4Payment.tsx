@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -14,6 +14,7 @@ import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { useFormContext } from "react-hook-form";
 import { CustomerPriceBreakdown } from "@/src/features/booking-v2/components/CustomerPriceBreakdown";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
+import type { CustomerPricingBreakdown } from "@/lib/booking-v2/types";
 import type { User } from "@supabase/supabase-js";
 import {
   ANALYTICS_EVENTS,
@@ -37,6 +38,17 @@ import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurr
 
 type AuthMode = "sign_in" | "sign_up";
 type AuthMessage = { tone: "error" | "success"; text: string };
+
+type PendingPaymentSummary = {
+  bookingId: string;
+  status: string;
+  paymentStatus: string;
+  paid: boolean;
+  serviceLabel: string;
+  address: string;
+  amountZar: number;
+  pricingSummary: CustomerPricingBreakdown | null;
+};
 
 function friendlySignInError(message?: string): string {
   if (message?.toLowerCase().includes("invalid login credentials")) {
@@ -309,9 +321,14 @@ function PaymentSection({
   const [pendingBookingId, setPendingBookingIdState] = useState<string | null>(
     () => values.pendingBookingId?.trim() || null,
   );
-  const canStartPayment = Boolean(pendingBookingId) || quoteReadiness.ready;
+  const [pendingSummary, setPendingSummary] = useState<PendingPaymentSummary | null>(null);
+  const [pendingSummaryError, setPendingSummaryError] = useState<string | null>(null);
+  const pendingSummaryLoading = Boolean(pendingBookingId && !pendingSummary && !pendingSummaryError);
+  const canStartPayment = pendingBookingId ? Boolean(pendingSummary && !pendingSummaryLoading) : quoteReadiness.ready;
 
   function setPendingBookingId(id: string | null) {
+    setPendingSummary(null);
+    setPendingSummaryError(null);
     setPendingBookingIdState(id);
     setValue("pendingBookingId", id, { shouldDirty: false, shouldValidate: false });
   }
@@ -322,6 +339,44 @@ function PaymentSection({
     if (stored && !pendingBookingId) setPendingBookingIdState(stored);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount / draft hydrate only
   }, []);
+
+  // A pending booking has a canonical server-owned price. Never render or retry it
+  // using a tab-local draft, which can differ across tabs or after stale hydration.
+  useEffect(() => {
+    if (!pendingBookingId) return;
+
+    let active = true;
+    void (async () => {
+      try {
+        const session = await getSession();
+        if (!session?.access_token) {
+          if (active) onSessionLost("Your sign-in session expired. Please sign in again to complete payment.");
+          return;
+        }
+        const res = await fetch(`/api/bookings/${encodeURIComponent(pendingBookingId)}/payment-summary`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          cache: "no-store",
+        });
+        const json = (await res.json()) as PendingPaymentSummary & { error?: string };
+        if (!active) return;
+        if (res.status === 401) {
+          onSessionLost("Your sign-in session expired. Please sign in again to complete payment.");
+          return;
+        }
+        if (!res.ok || json.bookingId !== pendingBookingId || !Number.isFinite(json.amountZar)) {
+          setPendingSummaryError(json.error ?? "Could not load the saved booking total. Please return to Review.");
+          return;
+        }
+        setPendingSummary(json);
+      } catch {
+        if (active) setPendingSummaryError("Could not load the saved booking total. Please refresh this page and try again.");
+      }
+    })();
+
+    return () => {
+      active = false;
+    };
+  }, [onSessionLost, pendingBookingId]);
   const [creditBalance, setCreditBalance] = useState(0);
   const [applyCredit, setApplyCredit] = useState(false);
   const [promoCode, setPromoCode] = useState("");
@@ -341,6 +396,8 @@ function PaymentSection({
   const totalAfterReferral = Math.max(0, totalAfterPromo - referralToApply);
   const creditToApply = applyCredit ? Math.min(creditBalance, totalAfterReferral) : 0;
   const payTotal = Math.max(0, totalAfterReferral - creditToApply);
+  const displayedPricing = pendingBookingId ? pendingSummary?.pricingSummary ?? null : values.pricingSummary;
+  const displayedTotal = pendingBookingId ? pendingSummary?.amountZar ?? null : payTotal;
   const promotionRequestKey = JSON.stringify({
     serviceSlug,
     selectedExtras: [...(values.selectedExtras ?? [])].sort(),
@@ -847,13 +904,20 @@ function PaymentSection({
             <config.icon className="h-4.5 w-4.5 text-blue-600" aria-hidden />
           </div>
           <div>
-            <p className="text-sm font-bold text-slate-800">{config.label}</p>
-            <p className="text-xs text-slate-500">{values.address}, {values.suburb}</p>
+            <p className="text-sm font-bold text-slate-800">{pendingSummary?.serviceLabel || config.label}</p>
+            <p className="text-xs text-slate-500">{pendingSummary?.address || `${values.address}, ${values.suburb}`}</p>
           </div>
         </div>
         <div className="space-y-2 border-t border-slate-200 pt-3">
-          <CustomerPriceBreakdown pricing={values.pricingSummary} compact />
-          <div className="flex gap-2">
+          {pendingSummaryLoading ? (
+            <div className="flex items-center gap-2 py-3 text-sm text-slate-600" role="status">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              Loading your saved booking total…
+            </div>
+          ) : displayedPricing ? (
+            <CustomerPriceBreakdown pricing={displayedPricing} compact />
+          ) : null}
+          {!pendingBookingId ? <div className="flex gap-2">
             <input
               type="text"
               value={promoCode}
@@ -869,11 +933,11 @@ function PaymentSection({
             >
               {promoChecking ? "Checking…" : "Apply"}
             </button>
-          </div>
-          {promoError ? (
+          </div> : null}
+          {!pendingBookingId && promoError ? (
             <p className="text-xs text-amber-700">{promoError}</p>
           ) : null}
-          {promoDiscountZar > 0 ? (
+          {!pendingBookingId && promoDiscountZar > 0 ? (
             <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
               <p className="font-semibold">{promoLabel ?? "Promotion applied"}</p>
               <p className="mt-1 text-emerald-800">
@@ -881,7 +945,7 @@ function PaymentSection({
               </p>
             </div>
           ) : null}
-          {!referralLoading && referralDiscount ? (
+          {!pendingBookingId && !referralLoading && referralDiscount ? (
             <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
               <p className="font-semibold">Referral discount applied</p>
               <p className="mt-1 text-emerald-800">
@@ -889,25 +953,25 @@ function PaymentSection({
               </p>
             </div>
           ) : null}
-          {!referralLoading && !referralDiscount && invalidMessage ? (
+          {!pendingBookingId && !referralLoading && !referralDiscount && invalidMessage ? (
             <div className="rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               <p className="font-semibold">Referral discount not applied</p>
               <p className="mt-1 text-amber-800">{invalidMessage}</p>
             </div>
           ) : null}
-          {promoDiscountZar > 0 ? (
+          {!pendingBookingId && promoDiscountZar > 0 ? (
             <div className="flex items-center justify-between text-sm text-emerald-700">
               <span>Promotion discount</span>
               <span>- R {promoDiscountZar.toLocaleString("en-ZA")}</span>
             </div>
           ) : null}
-          {referralToApply > 0 ? (
+          {!pendingBookingId && referralToApply > 0 ? (
             <div className="flex items-center justify-between text-sm text-emerald-700">
               <span>Referral discount</span>
               <span>- R {referralToApply.toLocaleString("en-ZA")}</span>
             </div>
           ) : null}
-          {creditBalance > 0 ? (
+          {!pendingBookingId && creditBalance > 0 ? (
             <label className="flex cursor-pointer items-center justify-between rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3">
               <div>
                 <p className="text-sm font-semibold text-emerald-900">Apply Cleaning Credit</p>
@@ -921,7 +985,7 @@ function PaymentSection({
               />
             </label>
           ) : null}
-          {creditToApply > 0 ? (
+          {!pendingBookingId && creditToApply > 0 ? (
             <div className="flex items-center justify-between text-sm text-emerald-700">
               <span>Cleaning Credit</span>
               <span>- R {creditToApply.toLocaleString("en-ZA")}</span>
@@ -931,9 +995,11 @@ function PaymentSection({
             <span className="text-slate-800">
               {values.bookingType === "recurring" ? "Pay today (this visit)" : "Total to pay"}
             </span>
-            <span className="text-blue-700">R {payTotal.toLocaleString("en-ZA")}</span>
+            <span className="text-blue-700">
+              {displayedTotal === null ? "—" : `R ${displayedTotal.toLocaleString("en-ZA")}`}
+            </span>
           </div>
-          {values.bookingType === "recurring" && values.recurringFrequency ? (
+          {!pendingBookingId && values.bookingType === "recurring" && values.recurringFrequency ? (
             <p className="text-xs text-slate-500">
               {(() => {
                 const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
@@ -964,6 +1030,12 @@ function PaymentSection({
           {error}
         </div>
       )}
+      {!error && pendingSummaryError ? (
+        <div className="flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+          {pendingSummaryError}
+        </div>
+      ) : null}
       {!error && !pendingBookingId && !quoteReadiness.ready ? (
         <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
@@ -1031,6 +1103,11 @@ export function Step4Payment() {
     });
   }, []);
 
+  const handleSessionLost = useCallback((message: string) => {
+    setAuthNotice(message);
+    setUser(null);
+  }, []);
+
   if (checkingAuth) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -1058,10 +1135,7 @@ export function Step4Payment() {
       ) : (
         <PaymentSection
           user={user}
-          onSessionLost={(message) => {
-            setAuthNotice(message);
-            setUser(null);
-          }}
+          onSessionLost={handleSessionLost}
         />
       )}
     </div>
