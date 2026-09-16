@@ -31,7 +31,7 @@ describe("recurring schedule options", () => {
 
   it("keeps compact frequency cards tall enough to show their descriptions", () => {
     expect(scheduleSource).toContain(
-      "sm:aspect-auto sm:h-28 sm:min-h-0 sm:px-3 sm:py-2",
+      "sm:aspect-auto sm:h-[100px] sm:min-h-0 sm:px-3 sm:py-2",
     );
     expect(scheduleSource).not.toContain("sm:aspect-[2/1]");
   });
