@@ -29,6 +29,7 @@ import {
 import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
 import { filterCustomerOnlineBookingTimeSlots } from "@/lib/booking-v2/customerBookingTimeSlots";
 import { useBookingV2ScheduleAvailability } from "@/lib/booking-v2/useBookingV2ScheduleAvailability";
+import { isSelectedBookingSlotVerified } from "@/lib/booking-v2/bookingV2ScheduleVerification";
 import {
   adjacentRegularCleaningScheduleStage,
   type RegularCleaningScheduleStage,
@@ -323,7 +324,7 @@ export function Step2Schedule() {
   );
 
   const areaResolved = Boolean(serviceAreaLocationId?.trim());
-  const { availability, fulfillmentBySlot, dayFulfillmentMode, loading: slotsLoading, fetchError: slotsFetchError } =
+  const { availability, fulfillmentBySlot, dayFulfillmentMode, loading: slotsLoading, fetchError: slotsFetchError, slotsVerified } =
     useBookingV2ScheduleAvailability({
       dateYmd: date || null,
       locationId: serviceAreaLocationId?.trim() || null,
@@ -392,7 +393,13 @@ export function Step2Schedule() {
 
   function stageIsReady(stage: RegularCleaningScheduleStage): boolean {
     if (stage === "booking_type") return Boolean(bookingType);
-    if (stage === "date_time") return Boolean(date && time && areaResolved && !slotsLoading);
+    if (stage === "date_time") {
+      return Boolean(
+        date &&
+          areaResolved &&
+          isSelectedBookingSlotVerified(time, availability, slotsVerified),
+      );
+    }
     if (stage === "recurring_schedule") return Boolean(recurringFrequency);
     return cleanerCount > 0;
   }
@@ -591,6 +598,7 @@ export function Step2Schedule() {
                     dayFulfillmentMode={dayFulfillmentMode}
                     loading={slotsLoading}
                     areaResolved={areaResolved}
+                    slotsVerified={slotsVerified}
                   />
                 ) : (
                   <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">

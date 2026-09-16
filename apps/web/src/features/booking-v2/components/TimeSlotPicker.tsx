@@ -26,6 +26,7 @@ type TimeSlotPickerProps = {
   loading?: boolean;
   areaResolved?: boolean;
   dayFulfillmentMode?: SlotFulfillmentMode | null;
+  slotsVerified?: boolean;
 };
 
 export function TimeSlotPicker({
@@ -39,10 +40,11 @@ export function TimeSlotPicker({
   loading = false,
   areaResolved = true,
   dayFulfillmentMode = null,
+  slotsVerified = false,
 }: TimeSlotPickerProps) {
   const leadTimeSlots = filterCustomerOnlineBookingTimeSlots(dateYmd, { scheduling });
   /** While the API is in flight, still paint lead-time slots so Step 2 never blank-spins for seconds. */
-  const provisional = loading && areaResolved;
+  const provisional = !slotsVerified && areaResolved && (loading || availability == null);
   const slots =
     provisional
       ? leadTimeSlots
@@ -100,6 +102,12 @@ export function TimeSlotPicker({
                 key={slot}
                 type="button"
                 onClick={() => onChange(slot)}
+                disabled={!slotsVerified}
+                aria-label={
+                  !slotsVerified
+                    ? `${formatCustomerBookingSlotLabel(slot)} — availability being verified`
+                    : undefined
+                }
                 className={cn(
                   "min-h-10 rounded-lg border text-center font-semibold transition",
                   compact ? "px-1.5 py-2 text-sm" : "px-2 py-2.5 text-sm",
@@ -107,6 +115,7 @@ export function TimeSlotPicker({
                     ? "border-blue-600 bg-blue-600 text-white shadow-sm"
                     : "border-slate-200 bg-white text-slate-700 hover:border-blue-200 hover:bg-blue-50/60",
                   provisional && !selected ? "opacity-90" : null,
+                  !slotsVerified && "cursor-wait opacity-50",
                 )}
               >
                 <span className="block whitespace-nowrap">{formatCustomerBookingSlotLabel(slot)}</span>
