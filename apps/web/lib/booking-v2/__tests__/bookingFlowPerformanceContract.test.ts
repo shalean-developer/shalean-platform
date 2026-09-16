@@ -39,6 +39,19 @@ describe("booking flow performance contracts", () => {
     expect(payment).toContain("confirmJson.authorizationUrl");
   });
 
+  it("bounds payment preparation and preserves retry recovery", () => {
+    const paymentSession = source("lib/booking/ensureBookingPaymentSession.ts");
+    const payment = source("src/features/booking-v2/steps/Step4Payment.tsx");
+
+    expect(paymentSession).toContain("PAYSTACK_INITIALIZE_TIMEOUT_MS");
+    expect(paymentSession).toContain("signal: AbortSignal.timeout(PAYSTACK_INITIALIZE_TIMEOUT_MS)");
+    expect(payment).toContain("BOOKING_CONFIRM_TIMEOUT_MS");
+    expect(payment).toContain("PAYMENT_RECOVERY_TIMEOUT_MS");
+    expect(payment).toContain("fetchPaymentPreparation");
+    expect(payment).toContain("Secure payment preparation took too long. Your booking is saved");
+    expect(payment).toContain("setPendingBookingId(bookingId)");
+  });
+
   it("uses persisted payment recovery before a remote Paystack retry", () => {
     const verify = source("app/api/paystack/verify/route.ts");
     const success = source("app/booking/success/page.tsx");
