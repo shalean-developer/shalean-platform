@@ -643,16 +643,6 @@ export function PropertyAddressSection() {
                   This suburb isn&apos;t covered yet — view options
                 </button>
               ) : null}
-              {!locationsLoading &&
-              !locationsError &&
-              !locationLoading &&
-              !locationError &&
-              suburbValue?.trim() &&
-              !resolvedLocation?.locationId ? (
-                <p className="mt-1 text-xs text-amber-700" role="status">
-                  Select a supported suburb from the list to continue.
-                </p>
-              ) : null}
             </div>
             <div className="min-w-0 sm:col-span-2">
               <FieldLabel htmlFor="contactPhone" required>
