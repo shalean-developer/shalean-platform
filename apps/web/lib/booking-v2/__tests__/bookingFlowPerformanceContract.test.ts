@@ -71,4 +71,20 @@ describe("booking flow performance contracts", () => {
     expect(success).toContain("/api/paystack/status?");
     expect(success).toContain("VERIFY_MAX_ATTEMPTS = 1");
   });
+
+  it("renders payment recovery from the owned server booking instead of a tab-local draft", () => {
+    const summaryRoute = source("app/api/bookings/[id]/payment-summary/route.ts");
+    const payment = source("src/features/booking-v2/steps/Step4Payment.tsx");
+
+    expect(summaryRoute).toContain("resolveBookingRouteBearerAuth");
+    expect(summaryRoute).toContain("resolveBookingOwnershipColumn");
+    expect(summaryRoute).toContain('.eq(ownershipColumn, auth.userId)');
+    expect(summaryRoute).toContain('"Cache-Control": "private, no-store, max-age=0"');
+    expect(summaryRoute).toContain("estimated_total: amountZar");
+    expect(payment).toContain("/payment-summary");
+    expect(payment).toContain("pendingSummary?.pricingSummary");
+    expect(payment).toContain("pendingSummary?.amountZar");
+    expect(payment).toContain("!pendingBookingId ? <div");
+    expect(payment).toContain("Boolean(pendingSummary && !pendingSummaryLoading)");
+  });
 });
