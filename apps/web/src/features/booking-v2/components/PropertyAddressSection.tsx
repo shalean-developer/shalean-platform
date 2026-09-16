@@ -557,20 +557,25 @@ export function PropertyAddressSection() {
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <div className="min-w-0">
-              <FieldLabel htmlFor="address" required>
-                Street address
+              <FieldLabel htmlFor="contactPhone" required>
+                Contact phone
               </FieldLabel>
-              <input
-                id="address"
-                type="text"
-                placeholder="e.g. 12 Ocean View Drive"
-                {...register("address", {
-                  required: "Street address is required",
-                  minLength: { value: 5, message: "Enter a full street address" },
-                })}
-                className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-              <FieldError message={errors.address?.message} />
+              <div className="relative">
+                <Phone
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
+                  aria-hidden
+                />
+                <input
+                  id="contactPhone"
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder="+27 82 123 4567 or 0821234567"
+                  {...register("contactPhone", contactPhoneRules)}
+                  className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+              </div>
+              <FieldError message={errors.contactPhone?.message} />
             </div>
             <div className="min-w-0">
               <FieldLabel htmlFor="suburb" required>
@@ -645,25 +650,20 @@ export function PropertyAddressSection() {
               ) : null}
             </div>
             <div className="min-w-0 sm:col-span-2">
-              <FieldLabel htmlFor="contactPhone" required>
-                Contact phone
+              <FieldLabel htmlFor="address" required>
+                Street address
               </FieldLabel>
-              <div className="relative">
-                <Phone
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"
-                  aria-hidden
-                />
-                <input
-                  id="contactPhone"
-                  type="tel"
-                  inputMode="tel"
-                  autoComplete="tel"
-                  placeholder="+27 82 123 4567 or 0821234567"
-                  {...register("contactPhone", contactPhoneRules)}
-                  className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white py-2.5 pl-10 pr-4 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                />
-              </div>
-              <FieldError message={errors.contactPhone?.message} />
+              <input
+                id="address"
+                type="text"
+                placeholder="e.g. 12 Ocean View Drive"
+                {...register("address", {
+                  required: "Street address is required",
+                  minLength: { value: 5, message: "Enter a full street address" },
+                })}
+                className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+              <FieldError message={errors.address?.message} />
             </div>
           </div>
         </div>
