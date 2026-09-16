@@ -352,15 +352,20 @@ function PaymentSection({
   useEffect(() => {
     const controller = new AbortController();
     void (async () => {
-      const session = await getSession();
-      if (!session?.access_token) return;
-      const res = await fetch("/api/referrals/credit", {
-        headers: { Authorization: `Bearer ${session.access_token}` },
-        signal: controller.signal,
-      });
-      if (res.ok) {
-        const j = (await res.json()) as { balance?: number };
-        setCreditBalance(Number(j.balance ?? 0));
+      try {
+        const session = await getSession();
+        if (!session?.access_token || controller.signal.aborted) return;
+        const res = await fetch("/api/referrals/credit", {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+          signal: controller.signal,
+        });
+        if (res.ok && !controller.signal.aborted) {
+          const j = (await res.json()) as { balance?: number };
+          setCreditBalance(Number(j.balance ?? 0));
+        }
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        throw error;
       }
     })();
     return () => controller.abort();
