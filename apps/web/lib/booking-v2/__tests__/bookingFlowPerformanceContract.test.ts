@@ -47,6 +47,8 @@ describe("booking flow performance contracts", () => {
     expect(paymentSession).toContain("signal: AbortSignal.timeout(PAYSTACK_INITIALIZE_TIMEOUT_MS)");
     expect(payment).toContain("BOOKING_CONFIRM_TIMEOUT_MS");
     expect(payment).toContain("PAYMENT_RECOVERY_TIMEOUT_MS");
+    expect(payment).toContain("PAYMENT_RECOVERY_TIMEOUT_MS = 30_000");
+    expect(payment).toContain("BOOKING_CONFIRM_TIMEOUT_MS = 30_000");
     expect(payment).toContain("fetchPaymentPreparation");
     expect(payment).toContain("Secure payment preparation took too long. Your booking is saved");
     expect(payment).toContain("setPendingBookingId(bookingId)");
