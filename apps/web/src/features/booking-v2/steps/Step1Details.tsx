@@ -379,7 +379,8 @@ export function Step1Details() {
     ? detailsSectionOverride ?? regularDetailsStage
     : null;
   const showAddress = !isRegularCleaning || activeDetailsStage === "address";
-  const showEquipment = !isRegularCleaning || activeDetailsStage === "equipment";
+  const showEquipmentQuestion = !isRegularCleaning || activeDetailsStage === "pets";
+  const showExtras = !isRegularCleaning || activeDetailsStage === "equipment";
 
   function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
     if (!question.showWhen) return true;
@@ -528,12 +529,12 @@ export function Step1Details() {
         <PropertyAddressSection />
       </div>
 
-      <div className={cn(!showEquipment && "hidden")}>
+      <div className={cn(!showEquipmentQuestion && "hidden")}>
         <EquipmentSection />
       </div>
 
       {/* Extras */}
-      {showEquipment && extras.length > 0 && (
+      {showExtras && extras.length > 0 && (
         <>
           <hr className="border-slate-200" />
           <section className="space-y-4">

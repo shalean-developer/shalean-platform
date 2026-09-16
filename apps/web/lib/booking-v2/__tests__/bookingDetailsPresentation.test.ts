@@ -34,6 +34,17 @@ describe("booking details presentation", () => {
     expect(source).toContain('onClick={() => moveRegularStage("next")}');
   });
 
+  it("places the equipment delivery question with pets and keeps extras separate", () => {
+    expect(source).toContain(
+      'const showEquipmentQuestion = !isRegularCleaning || activeDetailsStage === "pets";',
+    );
+    expect(source).toContain(
+      'const showExtras = !isRegularCleaning || activeDetailsStage === "equipment";',
+    );
+    expect(source).toContain('<div className={cn(!showEquipmentQuestion && "hidden")}>');
+    expect(source).toContain('{showExtras && extras.length > 0 && (');
+  });
+
   it("places contact phone beside suburb and street address on the full-width row", () => {
     const customAddressGrid = addressSource.slice(
       addressSource.indexOf('<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">'),
