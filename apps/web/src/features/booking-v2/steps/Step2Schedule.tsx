@@ -647,7 +647,7 @@ export function Step2Schedule() {
                           aria-checked={selected}
                           onClick={() => field.onChange(opt.value)}
                           className={cn(
-                            "relative min-h-36 overflow-hidden rounded-xl border bg-white p-4 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600 sm:aspect-[2/1] sm:min-h-0 sm:p-4",
+                            "relative min-h-36 overflow-hidden rounded-xl border bg-white p-4 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600",
                             selected
                               ? "border-blue-600 bg-blue-50/60 ring-2 ring-blue-600/15"
                               : "border-slate-200 text-slate-800",
