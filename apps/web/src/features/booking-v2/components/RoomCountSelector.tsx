@@ -67,6 +67,12 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
     setCustomOpen(false);
   }
 
+  function adjustDraft(delta: -1 | 1) {
+    const current = Number.parseInt(draft, 10);
+    const safeCurrent = Number.isFinite(current) ? current : customMinimum;
+    setDraft(String(Math.min(25, Math.max(customMinimum, safeCurrent + delta))));
+  }
+
   return (
     <div>
       <div
@@ -125,16 +131,36 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
             <p className="mt-1 text-sm text-slate-500">
               Enter {customMinimum} or more. Pricing and duration use the exact number you enter.
             </p>
-            <input
-              type="number"
-              inputMode="numeric"
-              min={customMinimum}
-              max={25}
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              className="mt-4 block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              autoFocus
-            />
+            <div
+              className="mt-4 grid grid-cols-[3.5rem_1fr_3.5rem] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
+              role="group"
+              aria-label={`Exact ${kind === "bedrooms" ? "bedroom" : kind === "bathrooms" ? "bathroom" : "extra room"} count`}
+            >
+              <button
+                type="button"
+                onClick={() => adjustDraft(-1)}
+                disabled={Number(draft) <= customMinimum}
+                aria-label="Decrease count"
+                className="min-h-12 border-r border-slate-200 text-2xl font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                −
+              </button>
+              <output
+                className="flex min-h-12 items-center justify-center text-lg font-bold text-slate-900"
+                aria-live="polite"
+              >
+                {draft}
+              </output>
+              <button
+                type="button"
+                onClick={() => adjustDraft(1)}
+                disabled={Number(draft) >= 25}
+                aria-label="Increase count"
+                className="min-h-12 border-l border-slate-200 text-2xl font-medium text-slate-700 transition hover:bg-slate-50 focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 disabled:cursor-not-allowed disabled:text-slate-300"
+              >
+                +
+              </button>
+            </div>
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"

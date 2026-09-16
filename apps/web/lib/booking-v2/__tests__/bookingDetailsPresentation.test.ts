@@ -10,6 +10,10 @@ const addressSource = readFileSync(
   join(process.cwd(), "src/features/booking-v2/components/PropertyAddressSection.tsx"),
   "utf8",
 );
+const roomCountSource = readFileSync(
+  join(process.cwd(), "src/features/booking-v2/components/RoomCountSelector.tsx"),
+  "utf8",
+);
 
 describe("booking details presentation", () => {
   it("does not render the redundant About the clean heading", () => {
@@ -40,5 +44,14 @@ describe("booking details presentation", () => {
     expect(customAddressGrid).toContain(
       '<div className="min-w-0 sm:col-span-2">\n              <FieldLabel htmlFor="address" required>',
     );
+  });
+
+  it("uses an accessible bounded stepper for exact custom room counts", () => {
+    expect(roomCountSource).toContain('onClick={() => adjustDraft(-1)}');
+    expect(roomCountSource).toContain('onClick={() => adjustDraft(1)}');
+    expect(roomCountSource).toContain('aria-label="Decrease count"');
+    expect(roomCountSource).toContain('aria-label="Increase count"');
+    expect(roomCountSource).toContain('Math.min(25, Math.max(customMinimum');
+    expect(roomCountSource).not.toContain('type="number"');
   });
 });
