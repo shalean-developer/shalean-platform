@@ -1,5 +1,6 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { BOOKING_STEP_LABELS, type BookingStep } from "@/src/features/booking-v2/types";
 
@@ -35,7 +36,7 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                   !isClickable && "cursor-default",
                 )}
                 aria-current={isActive ? "step" : undefined}
-                aria-label={BOOKING_STEP_LABELS[step]}
+                aria-label={`${BOOKING_STEP_LABELS[step]}${isCompleted ? " completed" : ""}`}
               >
                 <div
                   className={cn(
@@ -45,7 +46,11 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                     !isCompleted && !isActive && "bg-slate-200 text-slate-700",
                   )}
                 >
-                  {step}
+                  {isCompleted ? (
+                    <Check className="h-4 w-4" strokeWidth={3} aria-hidden />
+                  ) : (
+                    step
+                  )}
                 </div>
                 <span
                   className={cn(
