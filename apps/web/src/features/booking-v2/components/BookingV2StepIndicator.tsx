@@ -61,7 +61,7 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                 </div>
                 <span
                   className={cn(
-                    "truncate text-xs font-medium leading-tight sm:text-sm",
+                    "truncate text-[11px] font-medium leading-tight sm:text-xs",
                     isActive && "text-slate-950",
                     isCompleted && "text-slate-950",
                     !isCompleted && !isActive && "text-muted-foreground",

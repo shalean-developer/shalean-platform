@@ -30,4 +30,8 @@ describe("booking step indicator", () => {
     expect(source).toContain('"flex h-8 w-8 items-center');
     expect(source).toContain('top-4 h-px');
   });
+
+  it("keeps the labels visually proportional to the compact circles", () => {
+    expect(source).toContain('"truncate text-[11px] font-medium leading-tight sm:text-xs"');
+  });
 });
