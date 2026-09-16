@@ -5,11 +5,13 @@ import { cn } from "@/lib/utils";
 import {
   BATHROOM_CHIP_VALUES,
   BEDROOM_CHIP_VALUES,
+  EXTRA_ROOM_CHIP_VALUES,
   roomCountChipLabel,
+  roomCountCustomChip,
+  roomCountCustomMinimum,
   roomCountToChip,
+  type RoomKind,
 } from "@/src/features/booking-v2/config/roomCountOptions";
-
-type RoomKind = "bedrooms" | "bathrooms";
 
 type RoomCountSelectorProps = {
   id: string;
@@ -20,14 +22,23 @@ type RoomCountSelectorProps = {
 };
 
 /**
- * Chip selector for bedrooms (0–5, 6+ Custom) or bathrooms (1–5, 6+ Custom).
- * The custom numeric input appears only after selecting 6+ Custom.
+ * Compact chip selector with a custom-count threshold for bedrooms, bathrooms,
+ * and extra rooms.
  */
 export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCountSelectorProps) {
-  const chips = kind === "bedrooms" ? BEDROOM_CHIP_VALUES : BATHROOM_CHIP_VALUES;
+  const chips =
+    kind === "bedrooms"
+      ? BEDROOM_CHIP_VALUES
+      : kind === "bathrooms"
+        ? BATHROOM_CHIP_VALUES
+        : EXTRA_ROOM_CHIP_VALUES;
+  const customMinimum = roomCountCustomMinimum(kind);
+  const customChip = roomCountCustomChip(kind);
   const selectedChip = roomCountToChip(value, kind);
   const [customOpen, setCustomOpen] = useState(false);
-  const [draft, setDraft] = useState(value && Number(value) >= 6 ? String(value) : "6");
+  const [draft, setDraft] = useState(
+    value && Number(value) >= customMinimum ? String(value) : String(customMinimum),
+  );
 
   useEffect(() => {
     if (!customOpen) return;
@@ -39,8 +50,10 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
   }, [customOpen]);
 
   function selectChip(chip: string) {
-    if (chip === "6+") {
-      setDraft(value && Number(value) >= 6 ? String(value) : "6");
+    if (chip === customChip) {
+      setDraft(
+        value && Number(value) >= customMinimum ? String(value) : String(customMinimum),
+      );
       setCustomOpen(true);
       return;
     }
@@ -49,7 +62,7 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
 
   function confirmCustom() {
     const n = Math.floor(Number(draft));
-    if (!Number.isFinite(n) || n < 6 || n > 25) return;
+    if (!Number.isFinite(n) || n < customMinimum || n > 25) return;
     onChange(String(n));
     setCustomOpen(false);
   }
@@ -59,7 +72,13 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
       <div
         id={id}
         role="group"
-        aria-label={kind === "bedrooms" ? "Number of bedrooms" : "Number of bathrooms"}
+        aria-label={
+          kind === "bedrooms"
+            ? "Number of bedrooms"
+            : kind === "bathrooms"
+              ? "Number of bathrooms"
+              : "Number of extra rooms"
+        }
         className="flex flex-wrap gap-2"
       >
         {chips.map((chip) => {
@@ -70,10 +89,10 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
               key={chip}
               type="button"
               onClick={() => selectChip(chip)}
-              aria-label={chip === "6+" ? label : undefined}
+              aria-label={chip === customChip ? label : undefined}
               className={cn(
                 "inline-flex min-h-10 items-center justify-center rounded-xl border px-3 text-sm font-semibold transition",
-                chip === "6+" ? "min-w-[5.5rem]" : "min-w-10",
+                chip === customChip ? "min-w-[5.5rem]" : "min-w-10",
                 active
                   ? "border-blue-600 bg-blue-600 text-white shadow-sm"
                   : "border-slate-200 bg-white text-slate-700 hover:border-blue-300 hover:bg-blue-50",
@@ -84,7 +103,7 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
           );
         })}
       </div>
-      {selectedChip === "6+" && value && Number(value) >= 6 ? (
+      {selectedChip === customChip && value && Number(value) >= customMinimum ? (
         <p className="mt-1.5 text-xs text-slate-500">
           Using exact count: <span className="font-semibold text-slate-700">{value}</span>
         </p>
@@ -101,15 +120,15 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCustomOpen(false)} />
           <div className="relative z-10 w-full max-w-sm rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl">
             <h4 id={`${id}-custom-title`} className="text-base font-bold text-slate-900">
-              Enter exact {kind === "bedrooms" ? "bedroom" : "bathroom"} count
+              Enter exact {kind === "bedrooms" ? "bedroom" : kind === "bathrooms" ? "bathroom" : "extra room"} count
             </h4>
             <p className="mt-1 text-sm text-slate-500">
-              Enter 6 or more. Pricing and duration use the exact number you enter.
+              Enter {customMinimum} or more. Pricing and duration use the exact number you enter.
             </p>
             <input
               type="number"
               inputMode="numeric"
-              min={6}
+              min={customMinimum}
               max={25}
               value={draft}
               onChange={(e) => setDraft(e.target.value)}

@@ -188,7 +188,11 @@ function ServiceQuestion({
     question.label
   );
 
-  if (question.key === "bedrooms" || question.key === "bathrooms") {
+  if (
+    question.key === "bedrooms" ||
+    question.key === "bathrooms" ||
+    question.key === "extraRooms"
+  ) {
     return (
       <div className="min-w-0 w-full">
         <FieldLabel htmlFor={question.key} required={question.required}>
@@ -201,7 +205,7 @@ function ServiceQuestion({
           render={({ field }) => (
             <RoomCountSelector
               id={question.key}
-              kind={question.key as "bedrooms" | "bathrooms"}
+              kind={question.key as "bedrooms" | "bathrooms" | "extraRooms"}
               value={String(field.value ?? "")}
               onChange={(value) => {
                 field.onChange(value);

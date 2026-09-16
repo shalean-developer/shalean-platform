@@ -10,6 +10,7 @@ import {
 import {
   BATHROOM_COUNT_OPTIONS,
   BEDROOM_COUNT_OPTIONS,
+  EXTRA_ROOM_COUNT_OPTIONS,
 } from "@/src/features/booking-v2/config/roomCountOptions";
 
 export const SERVICE_SLUGS = [
@@ -106,12 +107,7 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: false,
     group: "rooms",
-    options: [
-      { value: "0", label: "No extra rooms" },
-      { value: "1", label: "1 extra room" },
-      { value: "2", label: "2 extra rooms" },
-      { value: "3", label: "3+ extra rooms" },
-    ],
+    options: [...EXTRA_ROOM_COUNT_OPTIONS],
   },
   {
     key: "hasPets",
@@ -172,12 +168,7 @@ const DEEP_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: false,
     group: "rooms",
-    options: [
-      { value: "0", label: "No extra rooms" },
-      { value: "1", label: "1 extra room" },
-      { value: "2", label: "2 extra rooms" },
-      { value: "3", label: "3+ extra rooms" },
-    ],
+    options: [...EXTRA_ROOM_COUNT_OPTIONS],
   },
   {
     key: "lastCleaned",
@@ -262,12 +253,7 @@ const MOVING_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: false,
     group: "rooms",
-    options: [
-      { value: "0", label: "No extra rooms" },
-      { value: "1", label: "1 extra room" },
-      { value: "2", label: "2 extra rooms" },
-      { value: "3", label: "3+ extra rooms" },
-    ],
+    options: [...EXTRA_ROOM_COUNT_OPTIONS],
   },
   {
     key: "furnished",
@@ -511,12 +497,7 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: false,
     group: "rooms",
-    options: [
-      { value: "0", label: "No extra rooms" },
-      { value: "1", label: "1 extra room" },
-      { value: "2", label: "2 extra rooms" },
-      { value: "3", label: "3+ extra rooms" },
-    ],
+    options: [...EXTRA_ROOM_COUNT_OPTIONS],
   },
   {
     key: "linens",

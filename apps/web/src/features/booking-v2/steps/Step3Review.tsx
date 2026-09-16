@@ -178,8 +178,12 @@ function ModalQuestionField({ question }: { question: FormQuestion }) {
   const { register, control } = useFormContext() as any;
   const fieldKey = `serviceDetails.${question.key}`;
 
-  if (question.key === "bedrooms" || question.key === "bathrooms") {
-    const kind = question.key as "bedrooms" | "bathrooms";
+  if (
+    question.key === "bedrooms" ||
+    question.key === "bathrooms" ||
+    question.key === "extraRooms"
+  ) {
+    const kind = question.key as "bedrooms" | "bathrooms" | "extraRooms";
     return (
       <div>
         <label htmlFor={question.key} className="mb-1.5 block text-sm font-medium text-slate-700">
