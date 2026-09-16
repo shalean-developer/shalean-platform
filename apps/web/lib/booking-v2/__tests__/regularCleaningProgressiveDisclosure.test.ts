@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   adjacentRegularCleaningStage,
   isRegularCleaningStageComplete,
+  regularCleaningAutoAdvanceTarget,
   regularCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 
@@ -95,5 +96,28 @@ describe("regular cleaning progressive disclosure", () => {
     expect(adjacentRegularCleaningStage("property", "next")).toBe("rooms");
     expect(adjacentRegularCleaningStage("address", "back")).toBe("pets");
     expect(adjacentRegularCleaningStage("equipment", "next")).toBeNull();
+  });
+
+  it("auto-advances from property as soon as a property type is selected", () => {
+    expect(
+      regularCleaningAutoAdvanceTarget("property", { propertyType: "house" }),
+    ).toBe("rooms");
+    expect(regularCleaningAutoAdvanceTarget("property", {})).toBeNull();
+  });
+
+  it("auto-advances from rooms only after every room choice is explicit", () => {
+    expect(
+      regularCleaningAutoAdvanceTarget("rooms", {
+        bedrooms: "2",
+        bathrooms: "1",
+      }),
+    ).toBeNull();
+    expect(
+      regularCleaningAutoAdvanceTarget("rooms", {
+        bedrooms: "2",
+        bathrooms: "1",
+        extraRooms: "0",
+      }),
+    ).toBe("pets");
   });
 });

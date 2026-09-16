@@ -30,6 +30,29 @@ export function adjacentRegularCleaningStage(
   return REGULAR_CLEANING_DETAILS_STAGES[adjacentIndex] ?? null;
 }
 
+export function regularCleaningAutoAdvanceTarget(
+  stage: RegularCleaningDetailsStage,
+  serviceDetails: Record<string, string | number | boolean>,
+): RegularCleaningDetailsStage | null {
+  if (
+    stage === "property" &&
+    Boolean(String(serviceDetails.propertyType ?? "").trim())
+  ) {
+    return "rooms";
+  }
+
+  if (
+    stage === "rooms" &&
+    ["bedrooms", "bathrooms", "extraRooms"].every((key) =>
+      Boolean(String(serviceDetails[key] ?? "").trim()),
+    )
+  ) {
+    return "pets";
+  }
+
+  return null;
+}
+
 type RegularCleaningBookingDetails = {
   address?: string;
   suburb?: string;

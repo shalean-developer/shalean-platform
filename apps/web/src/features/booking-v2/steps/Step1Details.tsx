@@ -19,6 +19,7 @@ import {
 import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
 import {
   adjacentRegularCleaningStage,
+  regularCleaningAutoAdvanceTarget,
   regularCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 
@@ -156,7 +157,13 @@ function CustomSelect({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyForm = ReturnType<typeof useFormContext<any>>;
 
-function ServiceQuestion({ question }: { question: FormQuestion }) {
+function ServiceQuestion({
+  question,
+  onValueChange,
+}: {
+  question: FormQuestion;
+  onValueChange?: (key: string, value: string) => void;
+}) {
   const { register, control, formState: { errors } } = useFormContext() as AnyForm;
   const fieldKey = `serviceDetails.${question.key}`;
   const fieldError = (errors.serviceDetails as Record<string, { message?: string }> | undefined)?.[question.key]?.message;
@@ -195,7 +202,10 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
               id={question.key}
               kind={question.key as "bedrooms" | "bathrooms"}
               value={String(field.value ?? "")}
-              onChange={field.onChange}
+              onChange={(value) => {
+                field.onChange(value);
+                onValueChange?.(question.key, value);
+              }}
               error={fieldError}
             />
           )}
@@ -206,7 +216,12 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
   }
 
   if (shouldUseHorizontalOptionCards(question)) {
-    return <ServiceQuestionOptionCards question={question} />;
+    return (
+      <ServiceQuestionOptionCards
+        question={question}
+        onValueChange={(value) => onValueChange?.(question.key, value)}
+      />
+    );
   }
 
   if (question.type === "select") {
@@ -224,7 +239,10 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
               id={question.key}
               options={question.options ?? []}
               value={String(field.value ?? "")}
-              onChange={field.onChange}
+              onChange={(value) => {
+                field.onChange(value);
+                onValueChange?.(question.key, value);
+              }}
               placeholder={
                 question.key === "extraRooms" ? "Select extra rooms" : "Select…"
               }
@@ -425,6 +443,18 @@ export function Step1Details() {
     else void goNext();
   }
 
+  function handleRegularAnswer(key: string, value: string) {
+    if (!activeDetailsStage) return;
+    const target = regularCleaningAutoAdvanceTarget(activeDetailsStage, {
+      ...serviceDetails,
+      [key]: value,
+    });
+    if (target) editDetailsSection(target);
+  }
+
+  const autoAdvanceStage =
+    activeDetailsStage === "property" || activeDetailsStage === "rooms";
+
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
       {/* Service-specific questions */}
@@ -465,13 +495,22 @@ export function Step1Details() {
                         : null,
                     )}
                   >
-                    <ServiceQuestion question={q} />
+                    <ServiceQuestion
+                      question={q}
+                      onValueChange={handleRegularAnswer}
+                    />
                   </div>
                 ))}
               </div>
             );
           }
-          return <ServiceQuestion key={group.question.key} question={group.question} />;
+          return (
+            <ServiceQuestion
+              key={group.question.key}
+              question={group.question}
+              onValueChange={handleRegularAnswer}
+            />
+          );
         })}
       </section>
 
@@ -551,14 +590,16 @@ export function Step1Details() {
           >
             ← Back
           </button>
-          <button
-            type="button"
-            disabled={!regularStageReady}
-            onClick={() => moveRegularStage("next")}
-            className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
-          >
-            {activeDetailsStage === "equipment" ? "Continue to Schedule →" : "Continue →"}
-          </button>
+          {!autoAdvanceStage ? (
+            <button
+              type="button"
+              disabled={!regularStageReady}
+              onClick={() => moveRegularStage("next")}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {activeDetailsStage === "equipment" ? "Continue to Schedule →" : "Continue →"}
+            </button>
+          ) : null}
         </div>
       ) : null}
     </div>
