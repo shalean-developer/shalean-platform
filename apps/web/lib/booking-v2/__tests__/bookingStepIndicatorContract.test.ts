@@ -11,11 +11,18 @@ describe("booking step indicator", () => {
   it("shows a checkmark instead of the number for completed steps", () => {
     expect(source).toContain('import { Check } from "lucide-react"');
     expect(source).toContain("isCompleted ? (");
-    expect(source).toContain('<Check className="h-4 w-4" strokeWidth={3} aria-hidden />');
+    expect(source).toContain('<Check className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.5} aria-hidden />');
   });
 
   it("announces completed steps to assistive technology", () => {
     expect(source).toContain('isCompleted ? " completed" : ""');
     expect(source).toContain('aria-current={isActive ? "step" : undefined}');
+  });
+
+  it("uses Shalean branding for completed progress and a strong current-step state", () => {
+    expect(source).toContain("const completedProgress =");
+    expect(source).toContain('className="block h-full bg-primary');
+    expect(source).toContain('isCompleted && "bg-primary text-primary-foreground');
+    expect(source).toContain('isActive && "bg-slate-950 text-white"');
   });
 });

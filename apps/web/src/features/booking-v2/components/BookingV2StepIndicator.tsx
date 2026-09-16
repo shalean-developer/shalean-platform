@@ -12,13 +12,20 @@ type Props = {
 };
 
 export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
+  const completedProgress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
+
   return (
     <nav aria-label="Booking progress" className="w-full min-w-0">
-      <ol className="relative mx-auto grid w-full max-w-2xl grid-cols-4">
+      <ol className="relative mx-auto grid w-full max-w-3xl grid-cols-4">
         <li
-          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-4 h-px bg-border"
+          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-5 h-px bg-slate-200 sm:top-[22px]"
           aria-hidden
-        />
+        >
+          <span
+            className="block h-full bg-primary transition-[width] duration-300"
+            style={{ width: `${completedProgress}%` }}
+          />
+        </li>
         {STEPS.map((step) => {
           const isCompleted = step < currentStep;
           const isActive = step === currentStep;
@@ -31,8 +38,8 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
                 onClick={() => isClickable && onStepClick(step)}
                 disabled={!isClickable}
                 className={cn(
-                  "flex min-w-0 flex-col items-center gap-0.5 bg-transparent px-1 transition sm:px-3",
-                  isClickable && "cursor-pointer hover:bg-accent",
+                  "group flex min-w-0 flex-col items-center gap-1 bg-transparent px-1 transition sm:px-3",
+                  isClickable && "cursor-pointer",
                   !isClickable && "cursor-default",
                 )}
                 aria-current={isActive ? "step" : undefined}
@@ -40,23 +47,23 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
               >
                 <div
                   className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors",
-                    isCompleted && "bg-slate-200 text-slate-900",
-                    isActive && "bg-primary text-primary-foreground",
-                    !isCompleted && !isActive && "bg-slate-200 text-slate-700",
+                    "flex h-10 w-10 items-center justify-center rounded-full text-base font-medium shadow-sm ring-4 ring-background transition-colors sm:h-11 sm:w-11 sm:text-lg",
+                    isCompleted && "bg-primary text-primary-foreground group-hover:bg-primary/90",
+                    isActive && "bg-slate-950 text-white",
+                    !isCompleted && !isActive && "bg-slate-200 text-slate-800",
                   )}
                 >
                   {isCompleted ? (
-                    <Check className="h-4 w-4" strokeWidth={3} aria-hidden />
+                    <Check className="h-5 w-5 sm:h-6 sm:w-6" strokeWidth={2.5} aria-hidden />
                   ) : (
                     step
                   )}
                 </div>
                 <span
                   className={cn(
-                    "truncate text-[10px] font-medium leading-tight sm:text-xs",
-                    isActive && "text-foreground",
-                    isCompleted && "text-foreground",
+                    "truncate text-xs font-medium leading-tight sm:text-sm",
+                    isActive && "text-slate-950",
+                    isCompleted && "text-slate-950",
                     !isCompleted && !isActive && "text-muted-foreground",
                   )}
                 >
