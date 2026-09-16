@@ -18,7 +18,7 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
     <nav aria-label="Booking progress" className="w-full min-w-0">
       <ol className="relative mx-auto grid w-full max-w-3xl grid-cols-4">
         <li
-          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-[18px] h-px bg-slate-200"
+          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-4 h-px bg-slate-200"
           aria-hidden
         >
           <span
@@ -47,7 +47,7 @@ export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
               >
                 <div
                   className={cn(
-                    "flex h-9 w-9 items-center justify-center rounded-full text-sm font-medium shadow-sm ring-2 ring-background transition-colors",
+                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium shadow-sm ring-2 ring-background transition-colors",
                     isCompleted && "bg-primary text-primary-foreground group-hover:bg-primary/90",
                     isActive && "bg-slate-950 text-white",
                     !isCompleted && !isActive && "bg-slate-200 text-slate-800",

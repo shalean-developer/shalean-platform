@@ -27,7 +27,7 @@ describe("booking step indicator", () => {
   });
 
   it("keeps step circles compact beside the logo and account control", () => {
-    expect(source).toContain('"flex h-9 w-9 items-center');
-    expect(source).toContain('top-[18px] h-px');
+    expect(source).toContain('"flex h-8 w-8 items-center');
+    expect(source).toContain('top-4 h-px');
   });
 });
