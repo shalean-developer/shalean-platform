@@ -72,11 +72,15 @@ describe("booking flow performance contracts", () => {
   it("uses persisted payment recovery before a remote Paystack retry", () => {
     const verify = source("app/api/paystack/verify/route.ts");
     const success = source("app/booking/success/page.tsx");
+    const payReturn = source("app/pay/[bookingId]/page.tsx");
 
     expect(verify).toContain("findPersistedPaidBooking");
     expect(verify).toContain('X-Booking-Verify-Path": "persisted"');
     expect(success).toContain("/api/paystack/status?");
-    expect(success).toContain("VERIFY_MAX_ATTEMPTS = 1");
+    expect(success).toContain("recoverPersistedPaidBooking");
+    expect(success).toContain("VERIFY_MAX_ATTEMPTS = 2");
+    expect(success).toContain("OWNED_BOOKING_FETCH_TIMEOUT_MS");
+    expect(payReturn).toContain("bookingId=${encodeURIComponent(bookingId)}");
   });
 
   it("renders payment recovery from the owned server booking instead of a tab-local draft", () => {
@@ -88,6 +92,8 @@ describe("booking flow performance contracts", () => {
     expect(summaryRoute).toContain('.eq(ownershipColumn, auth.userId)');
     expect(summaryRoute).toContain('"Cache-Control": "private, no-store, max-age=0"');
     expect(summaryRoute).toContain("estimated_total: amountZar");
+    expect(summaryRoute).toContain('normalizedPaymentStatus === "success"');
+    expect(summaryRoute).toContain("bookingSnapshot: data.booking_snapshot");
     expect(payment).toContain("/payment-summary");
     expect(payment).toContain("pendingSummary?.pricingSummary");
     expect(payment).toContain("pendingSummary?.amountZar");

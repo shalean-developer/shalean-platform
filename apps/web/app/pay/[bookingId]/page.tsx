@@ -26,7 +26,9 @@ export default async function PayBookingPage({
   if (paymentReturn.kind === "callback") {
     // Paystack has returned from checkout. Verification/finalization is idempotent
     // and belongs on the success route; never render another payment button here.
-    redirect(`/account/success?reference=${encodeURIComponent(paymentReturn.reference)}`);
+    redirect(
+      `/account/success?reference=${encodeURIComponent(paymentReturn.reference)}&bookingId=${encodeURIComponent(bookingId)}`,
+    );
   }
 
   const reference = paymentReturn.kind === "payment_link" ? paymentReturn.reference : "";
@@ -55,7 +57,9 @@ export default async function PayBookingPage({
   if (!land.ok) {
     if (land.alreadyPaid) {
       const successRef = land.reference?.trim() || reference;
-      redirect(`/account/success?reference=${encodeURIComponent(successRef)}`);
+      redirect(
+        `/account/success?reference=${encodeURIComponent(successRef)}&bookingId=${encodeURIComponent(bookingId)}`,
+      );
     }
     return (
       <main className="mx-auto flex min-h-[60vh] max-w-lg flex-col justify-center gap-4 px-4 py-16 text-center">

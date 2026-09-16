@@ -7,4 +7,10 @@ describe("bookingV2PaymentRedirect", () => {
       "/account/success?reference=bv2_abc%20123",
     );
   });
+
+  it("carries the persisted booking id into payment recovery", () => {
+    expect(bookingV2SuccessHref("bps_paid", "123e4567-e89b-42d3-a456-426614174000")).toBe(
+      "/account/success?reference=bps_paid&bookingId=123e4567-e89b-42d3-a456-426614174000",
+    );
+  });
 });

@@ -28,13 +28,14 @@ import { BookingConfirmationHero } from "@/components/booking/BookingConfirmatio
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { CUSTOMER_SUPPORT_WHATSAPP_E164 } from "@/lib/site/customerSupport";
 import { resolveCustomerTotalPaidZar } from "@/lib/booking/customerBookingReference";
-const VERIFY_MAX_ATTEMPTS = 1;
-const VERIFY_RETRY_DELAY_MS = 750;
-const PERSISTENCE_POLL_ATTEMPTS = 2;
-const PERSISTENCE_POLL_DELAY_MS = 150;
+const VERIFY_MAX_ATTEMPTS = 2;
+const VERIFY_RETRY_DELAY_MS = 500;
+const PERSISTENCE_POLL_ATTEMPTS = 3;
+const PERSISTENCE_POLL_DELAY_MS = 250;
 /** Per-attempt fetch timeout — prevents "Confirming…" from hanging forever on a stuck verify. */
 // Must exceed the server's 12s Paystack timeout plus local/dev route compilation overhead.
-const VERIFY_FETCH_TIMEOUT_MS = 13_000;
+const VERIFY_FETCH_TIMEOUT_MS = 18_000;
+const OWNED_BOOKING_FETCH_TIMEOUT_MS = 4_000;
 
 function PageShell({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -64,6 +65,18 @@ type StatusPayload = {
   selectedCleanerId?: string | null;
   /** Credit-covered / zero-balance success — no Paystack charge. */
   coveredSettlement?: boolean;
+};
+
+type OwnedPaymentSummary = {
+  bookingId?: string;
+  paid?: boolean;
+  amountZar?: number;
+  amountPaidCents?: number | null;
+  totalPaidZar?: number | null;
+  bookingReference?: string | null;
+  paystackReference?: string | null;
+  bookingSnapshot?: unknown;
+  serviceLabel?: string;
 };
 
 function isSnapshot(v: unknown): v is Record<string, unknown> {
@@ -226,12 +239,105 @@ function SuccessContent() {
     return true;
   }, [bookingIdParam]);
 
+  const recoverPersistedPaidBooking = useCallback(
+    async (runId: number): Promise<boolean> => {
+      const bookingId = bookingIdParam?.trim() ?? "";
+      if (!bookingId || completedRef.current) return completedRef.current;
+
+      const sb = getSupabaseBrowser();
+      if (!sb) return false;
+      const { data: sessionData } = await sb.auth.getSession();
+      const token = sessionData.session?.access_token?.trim() ?? "";
+      if (!token || runId !== runIdRef.current) return false;
+
+      try {
+        const response = await fetch(
+          `/api/bookings/${encodeURIComponent(bookingId)}/payment-summary`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            cache: "no-store",
+            signal: AbortSignal.timeout(OWNED_BOOKING_FETCH_TIMEOUT_MS),
+          },
+        );
+        if (!response.ok || runId !== runIdRef.current) return false;
+        const summary = (await response.json()) as OwnedPaymentSummary;
+        if (!summary.paid || summary.bookingId !== bookingId) return false;
+
+        const amountCents =
+          typeof summary.amountPaidCents === "number" && Number.isFinite(summary.amountPaidCents)
+            ? Math.max(0, Math.round(summary.amountPaidCents))
+            : Math.max(
+                0,
+                Math.round(Number(summary.totalPaidZar ?? summary.amountZar ?? 0) * 100),
+              );
+        const persistedReference = summary.paystackReference?.trim() || reference || bookingId;
+        const snapshot = isSnapshot(summary.bookingSnapshot)
+          ? summary.bookingSnapshot
+          : {
+              total_zar: Number(summary.totalPaidZar ?? summary.amountZar ?? 0),
+              flat: { service: summary.serviceLabel ?? null },
+            };
+
+        setStatusData({
+          verified: true,
+          paymentStatus: "success",
+          reference: persistedReference,
+          amountCents,
+          currency: "ZAR",
+          bookingSnapshot: snapshot,
+          bookingInDatabase: true,
+          bookingId,
+          bookingReference: summary.bookingReference ?? null,
+        });
+        setErrorMessage(null);
+        completedRef.current = true;
+        setPhase("success");
+
+        emitBookingSubmittedAfterPaystackVerify({
+          bookingPersisted: true,
+          bookingId,
+          reference: summary.bookingReference ?? persistedReference,
+          service: summary.serviceLabel ?? null,
+          value: amountCents / 100,
+        });
+        try {
+          markRetargetingCandidate(false);
+          clearStoredReferral("customer");
+          clearBookingV2DraftStorage();
+          consumeBookingV2SuccessRedirect();
+          trackGrowthEvent(ANALYTICS_EVENTS.COMPLETE_BOOKING, {
+            reference: persistedReference,
+            booking_id: bookingId,
+            recovered_from_persisted_payment: true,
+          });
+          trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_COMPLETED, null, {
+            reference: persistedReference,
+            booking_id: bookingId,
+            service_type: summary.serviceLabel ?? null,
+            estimated_price: amountCents / 100,
+          });
+        } catch {
+          // Non-fatal: the authoritative paid booking is already displayed.
+        }
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    [bookingIdParam, reference],
+  );
+
   const finalizeBooking = useCallback(async (): Promise<boolean> => {
     if (!reference) return false;
     if (completedRef.current) return true;
 
     const runId = ++runIdRef.current;
     setPhase("finalizing");
+
+    // The Paystack callback carries the already-persisted booking id. On reloads,
+    // webhook wins, or a previous verify that completed after a browser timeout,
+    // recover from the customer-owned row without another remote Paystack call.
+    if (await recoverPersistedPaidBooking(runId)) return true;
 
     // Give the signed Paystack webhook a brief opportunity to persist the paid
     // booking. When it wins the race, `/api/paystack/verify` uses its trusted DB
@@ -241,11 +347,12 @@ function SuccessContent() {
       try {
         const statusRes = await fetch(
           `/api/paystack/status?${new URLSearchParams({ reference }).toString()}`,
-          { cache: "no-store", signal: AbortSignal.timeout(600) },
+          { cache: "no-store", signal: AbortSignal.timeout(1_500) },
         );
         const statusJson = (await statusRes.json()) as { status?: string };
         const status = statusJson.status?.trim().toLowerCase() ?? "unknown";
         if (statusRes.ok && !["unknown", "pending_payment", "payment_expired"].includes(status)) {
+          if (await recoverPersistedPaidBooking(runId)) return true;
           break;
         }
       } catch {
@@ -258,6 +365,7 @@ function SuccessContent() {
 
     for (let attempt = 1; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
       if (runId !== runIdRef.current) return false;
+      if (attempt > 1 && (await recoverPersistedPaidBooking(runId))) return true;
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), VERIFY_FETCH_TIMEOUT_MS);
       try {
@@ -430,6 +538,7 @@ function SuccessContent() {
         return false;
       } catch (err) {
         if (runId !== runIdRef.current) return false;
+        if (await recoverPersistedPaidBooking(runId)) return true;
         const aborted =
           (err instanceof DOMException && err.name === "AbortError") ||
           (err instanceof Error && err.name === "AbortError");
@@ -445,9 +554,10 @@ function SuccessContent() {
       }
     }
 
+    if (runId === runIdRef.current && (await recoverPersistedPaidBooking(runId))) return true;
     if (runId === runIdRef.current) setPhase("needs_retry");
     return false;
-  }, [reference]);
+  }, [recoverPersistedPaidBooking, reference]);
 
   useEffect(() => {
     if (successPath === "area_review" || successPath === "missing") return;

@@ -53,7 +53,7 @@ export async function GET(
   const { data, error } = await admin
     .from("bookings")
     .select(
-      `id, status, payment_status, payment_completed_at, total_price, pricing_summary, service, service_slug, location, suburb, ${ownershipColumn}`,
+      `id, status, payment_status, payment_completed_at, total_price, total_paid_zar, amount_paid_cents, pricing_summary, booking_snapshot, booking_reference, paystack_reference, service, service_slug, location, suburb, ${ownershipColumn}`,
     )
     .eq("id", bookingId)
     .eq(ownershipColumn, auth.userId)
@@ -89,14 +89,31 @@ export async function GET(
     ? { ...normalized, estimated_total: amountZar, total: amountZar }
     : null;
 
+  const normalizedPaymentStatus = String(data.payment_status ?? "").trim().toLowerCase();
+  const paid =
+    Boolean(data.payment_completed_at) ||
+    normalizedPaymentStatus === "paid" ||
+    normalizedPaymentStatus === "success";
+  const amountPaidCents = Number(data.amount_paid_cents);
+  const totalPaidZar = Number(data.total_paid_zar);
+
   return NextResponse.json(
     {
       bookingId,
       status: String(data.status ?? ""),
       paymentStatus: String(data.payment_status ?? ""),
-      paid:
-        Boolean(data.payment_completed_at) ||
-        String(data.payment_status ?? "").toLowerCase() === "paid",
+      paid,
+      amountPaidCents:
+        paid && Number.isFinite(amountPaidCents) && amountPaidCents >= 0
+          ? Math.round(amountPaidCents)
+          : null,
+      totalPaidZar:
+        paid && Number.isFinite(totalPaidZar) && totalPaidZar >= 0
+          ? totalPaidZar
+          : null,
+      bookingReference: String(data.booking_reference ?? "") || null,
+      paystackReference: String(data.paystack_reference ?? "") || null,
+      bookingSnapshot: data.booking_snapshot ?? null,
       serviceLabel: String(
         data.service ?? data.service_slug ?? "Cleaning service",
       ),

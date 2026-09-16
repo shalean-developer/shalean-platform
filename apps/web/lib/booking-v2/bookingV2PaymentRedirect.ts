@@ -36,8 +36,13 @@ export function clearBookingV2DraftStorage(): void {
   }
 }
 
-export function bookingV2SuccessHref(reference: string): string {
-  return `/account/success?reference=${encodeURIComponent(reference.trim())}`;
+export function bookingV2SuccessHref(reference: string, bookingId?: string | null): string {
+  const referenceParam = `reference=${encodeURIComponent(reference.trim())}`;
+  const persistedBookingId = bookingId?.trim() ?? "";
+  const bookingParam = persistedBookingId
+    ? `&bookingId=${encodeURIComponent(persistedBookingId)}`
+    : "";
+  return `/account/success?${referenceParam}${bookingParam}`;
 }
 
 /** Credit-covered / zero-balance bookings — no Paystack transaction to verify. */

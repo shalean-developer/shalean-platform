@@ -607,7 +607,7 @@ function PaymentSection({
         if (sessJson.status === "paid") {
           const ref = (sessJson.reference ?? "").trim();
           clearBookingV2DraftStorage();
-          window.location.assign(bookingV2SuccessHref(ref || pendingBookingId));
+          window.location.assign(bookingV2SuccessHref(ref || pendingBookingId, pendingBookingId));
           return;
         }
         if (sessJson.status === "ready" && sessJson.authorizationUrl?.trim()) {
@@ -808,7 +808,9 @@ function PaymentSection({
 
       if (sessJson.status === "paid") {
         clearBookingV2DraftStorage();
-        window.location.assign(bookingV2SuccessHref((sessJson.reference ?? paystackReference) || bookingId));
+        window.location.assign(
+          bookingV2SuccessHref((sessJson.reference ?? paystackReference) || bookingId, bookingId),
+        );
         return;
       }
 
