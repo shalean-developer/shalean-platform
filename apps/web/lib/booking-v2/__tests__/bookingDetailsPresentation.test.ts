@@ -24,6 +24,12 @@ describe("booking details presentation", () => {
     expect(source).toContain("{!autoAdvanceStage ? (");
   });
 
+  it("uses Continue as the only way to leave the rooms stage", () => {
+    expect(source).toContain('activeDetailsStage === "property" ||\n    activeDetailsStage === "pets"');
+    expect(source).toContain('disabled={!regularStageReady}');
+    expect(source).toContain('onClick={() => moveRegularStage("next")}');
+  });
+
   it("places contact phone beside suburb and street address on the full-width row", () => {
     const customAddressGrid = addressSource.slice(
       addressSource.indexOf('<div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">'),

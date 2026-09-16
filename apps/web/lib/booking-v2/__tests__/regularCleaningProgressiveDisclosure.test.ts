@@ -133,7 +133,7 @@ describe("regular cleaning progressive disclosure", () => {
     expect(regularCleaningAutoAdvanceTarget("property", {})).toBeNull();
   });
 
-  it("auto-advances from rooms only after every room choice is explicit", () => {
+  it("keeps rooms button-controlled even after every room choice is explicit", () => {
     expect(
       regularCleaningAutoAdvanceTarget("rooms", {
         bedrooms: "2",
@@ -146,7 +146,7 @@ describe("regular cleaning progressive disclosure", () => {
         bathrooms: "1",
         extraRooms: "0",
       }),
-    ).toBe("pets");
+    ).toBeNull();
   });
 
   it("auto-advances from pets as soon as the choice is explicit", () => {

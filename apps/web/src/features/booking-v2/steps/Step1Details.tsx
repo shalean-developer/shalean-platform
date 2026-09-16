@@ -466,7 +466,6 @@ export function Step1Details() {
 
   const autoAdvanceStage =
     activeDetailsStage === "property" ||
-    activeDetailsStage === "rooms" ||
     activeDetailsStage === "pets";
 
   return (

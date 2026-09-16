@@ -50,15 +50,6 @@ export function regularCleaningAutoAdvanceTarget(
   }
 
   if (
-    stage === "rooms" &&
-    ["bedrooms", "bathrooms", "extraRooms"].every((key) =>
-      Boolean(String(serviceDetails[key] ?? "").trim()),
-    )
-  ) {
-    return "pets";
-  }
-
-  if (
     stage === "pets" &&
     Boolean(String(serviceDetails.hasPets ?? "").trim())
   ) {
