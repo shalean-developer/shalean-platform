@@ -49,13 +49,6 @@ export function regularCleaningAutoAdvanceTarget(
     return "rooms";
   }
 
-  if (
-    stage === "pets" &&
-    Boolean(String(serviceDetails.hasPets ?? "").trim())
-  ) {
-    return "equipment";
-  }
-
   return null;
 }
 

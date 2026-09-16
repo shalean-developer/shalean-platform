@@ -28,8 +28,8 @@ describe("booking details presentation", () => {
     expect(source).toContain("{!autoAdvanceStage ? (");
   });
 
-  it("uses Continue as the only way to leave the rooms stage", () => {
-    expect(source).toContain('activeDetailsStage === "property" ||\n    activeDetailsStage === "pets"');
+  it("uses Continue as the only way to leave the rooms and pets stages", () => {
+    expect(source).toContain('const autoAdvanceStage = activeDetailsStage === "property";');
     expect(source).toContain('disabled={!regularStageReady}');
     expect(source).toContain('onClick={() => moveRegularStage("next")}');
   });

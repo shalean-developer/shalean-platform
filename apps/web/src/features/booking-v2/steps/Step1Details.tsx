@@ -464,9 +464,7 @@ export function Step1Details() {
     if (target) editDetailsSection(target);
   }
 
-  const autoAdvanceStage =
-    activeDetailsStage === "property" ||
-    activeDetailsStage === "pets";
+  const autoAdvanceStage = activeDetailsStage === "property";
 
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">

@@ -149,10 +149,10 @@ describe("regular cleaning progressive disclosure", () => {
     ).toBeNull();
   });
 
-  it("auto-advances from pets as soon as the choice is explicit", () => {
+  it("keeps pets button-controlled after the choice is explicit", () => {
     expect(
       regularCleaningAutoAdvanceTarget("pets", { hasPets: "no" }),
-    ).toBe("equipment");
+    ).toBeNull();
     expect(regularCleaningAutoAdvanceTarget("pets", {})).toBeNull();
   });
 });
