@@ -77,6 +77,8 @@ type BookingPayRow = {
 const SELECT_BASE_COLS =
   "id, status, payment_status, payment_completed_at, paystack_reference, payment_link, payment_link_expires_at, customer_email, total_price, total_paid_zar, price_snapshot, booking_snapshot, service, date, time";
 
+const PAYSTACK_INITIALIZE_TIMEOUT_MS = 12_000;
+
 type BookingLoadResult =
   | { row: BookingPayRow; error: null }
   | { row: null; error: { message: string; code?: string } | null };
@@ -338,6 +340,7 @@ async function initializeFreshPaystackSession(
   try {
     const res = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
+      signal: AbortSignal.timeout(PAYSTACK_INITIALIZE_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json",
