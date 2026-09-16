@@ -147,6 +147,7 @@ export async function runPaystackVerifyFinalizePipeline(
     paystackAuthorizationCode: authorizationCode || null,
     paystackCustomerCode: customerCode || null,
     paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+    deferNonCriticalSideEffects: opsLogSource === "paystack/verify",
   });
   const result = upsertResultFromFinalizePaidBookingOp(finalizeOp);
 

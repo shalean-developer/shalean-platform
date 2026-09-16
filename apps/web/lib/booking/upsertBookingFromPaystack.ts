@@ -1,4 +1,5 @@
 import { preservePaymentCustomerIdentity, paymentFinalizationReplayEquivalent } from "@/lib/booking/paymentCustomerIdentityGuard";
+import { after } from "next/server";
 import { syncPreferredCleanerRosterFromBookingRow } from "@/lib/booking/persistPreferredCleaners";
 import { resolveCustomerPhoneFromAuthAdmin } from "@/lib/admin/adminBookingCustomerContact";
 import { bookingCustomerKey, bookingCustomerOwnershipPatch } from "@/lib/booking/bookingCustomerIdentity";
@@ -177,6 +178,8 @@ export type UpsertBookingInput = {
   isTest?: boolean;
   /** Caller (verify / webhook / retry) for structured logs only. */
   paystackPersistSource?: "verify" | "webhook" | "retry";
+  /** Return after the paid booking is durable; finish dispatch and other idempotent work post-response. */
+  deferPostPersistSideEffects?: boolean;
 };
 
 function boolish(raw: string | undefined): boolean {
@@ -1112,6 +1115,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       ? bookingCustomerKey(inserted as { customer_id?: string | null; user_id?: string | null }) || userIdResolved
       : userIdResolved;
 
+  const runPostPersistSideEffects = async (): Promise<void> => {
   if (id) {
     const authCode = input.paystackAuthorizationCode?.trim() ?? "";
     if (authCode) {
@@ -1470,6 +1474,24 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         }
       })();
     }
+  }
+  };
+
+  if (input.deferPostPersistSideEffects) {
+    after(async () => {
+      try {
+        await runPostPersistSideEffects();
+      } catch (error) {
+        await reportOperationalIssue(
+          "error",
+          "upsertBookingFromPaystack/postPersist",
+          error instanceof Error ? error.message : String(error),
+          { bookingId: id, paystackReference: input.paystackReference },
+        );
+      }
+    });
+  } else {
+    await runPostPersistSideEffects();
   }
 
   logPaymentStructured("payment_finalize", {
