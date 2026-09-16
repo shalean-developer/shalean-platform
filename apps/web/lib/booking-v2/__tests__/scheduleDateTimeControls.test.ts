@@ -8,11 +8,16 @@ const source = readFileSync(
 );
 
 describe("booking schedule date and time controls", () => {
-  it("uses a calendar-backed date field and an available-time dropdown", () => {
-    expect(source).toContain('type="date"');
+  it("uses branded calendar and available-time dropdown popovers", () => {
+    expect(source).toContain("function BookingDateDropdown");
+    expect(source).toContain("function BookingTimeDropdown");
+    expect(source).toContain("<Popover open={open} onOpenChange={setOpen}>");
+    expect(source).toContain('id="booking-date"');
     expect(source).toContain('id="booking-time"');
-    expect(source).toContain("availableTimeSlots.map((slot)");
+    expect(source).toContain("slots.map((slot)");
     expect(source).toContain("formatCustomerBookingSlotLabel(slot)");
+    expect(source).not.toContain('type="date"');
+    expect(source).not.toContain("<select");
   });
 
   it("keeps time selection disabled until live availability is verified", () => {

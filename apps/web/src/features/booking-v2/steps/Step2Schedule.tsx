@@ -1,14 +1,25 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useFormContext, Controller } from "react-hook-form";
 import {
   CalendarDays,
   CalendarRange,
   CalendarPlus,
+  Calendar,
+  Check,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  Clock3,
   RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import type {
   AvailableCleanerV2,
@@ -114,6 +125,227 @@ const STEP2_COPY: Record<
 function FieldError({ message }: { message?: string }) {
   if (!message) return null;
   return <p className="mt-1.5 text-center text-xs text-red-500">{message}</p>;
+}
+
+const CALENDAR_MONTHS = [
+  "January",
+  "February",
+  "March",
+  "April",
+  "May",
+  "June",
+  "July",
+  "August",
+  "September",
+  "October",
+  "November",
+  "December",
+] as const;
+
+const CALENDAR_WEEKDAYS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] as const;
+
+function formatBookingDate(value: string): string {
+  if (!value) return "Choose a date";
+  return new Intl.DateTimeFormat("en-ZA", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function BookingDateDropdown({
+  id,
+  value,
+  onChange,
+  minDate,
+  disabled,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  minDate: string;
+  disabled: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const selectedDate = value ? new Date(`${value}T00:00:00`) : new Date(`${minDate}T00:00:00`);
+  const [viewYear, setViewYear] = useState(selectedDate.getFullYear());
+  const [viewMonth, setViewMonth] = useState(selectedDate.getMonth());
+
+  const firstDay = new Date(viewYear, viewMonth, 1).getDay();
+  const offset = firstDay === 0 ? 6 : firstDay - 1;
+  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+  const days: Array<number | null> = [
+    ...Array(offset).fill(null),
+    ...Array.from({ length: daysInMonth }, (_, index) => index + 1),
+  ];
+  while (days.length % 7 !== 0) days.push(null);
+
+  function dateValue(day: number): string {
+    return `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  }
+
+  function moveMonth(direction: -1 | 1) {
+    const next = new Date(viewYear, viewMonth + direction, 1);
+    setViewYear(next.getFullYear());
+    setViewMonth(next.getMonth());
+  }
+
+  function handleOpenChange(nextOpen: boolean) {
+    if (nextOpen && value) {
+      const next = new Date(`${value}T00:00:00`);
+      setViewYear(next.getFullYear());
+      setViewMonth(next.getMonth());
+    }
+    setOpen(nextOpen);
+  }
+
+  return (
+    <Popover open={open} onOpenChange={handleOpenChange}>
+      <PopoverTrigger asChild>
+        <button
+          id={id}
+          type="button"
+          disabled={disabled}
+          className="flex min-h-12 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-800 shadow-sm transition hover:border-blue-300 focus-visible:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        >
+          <span className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+              <Calendar className="h-4 w-4" aria-hidden />
+            </span>
+            {formatBookingDate(value)}
+          </span>
+          <ChevronDown className="h-4 w-4 text-slate-400" aria-hidden />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[320px] p-4">
+        <div className="mb-3 flex items-center justify-between">
+          <button
+            type="button"
+            onClick={() => moveMonth(-1)}
+            aria-label="Previous month"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-blue-50 hover:text-blue-700"
+          >
+            <ChevronLeft className="h-4 w-4" aria-hidden />
+          </button>
+          <p className="text-sm font-bold text-slate-900">
+            {CALENDAR_MONTHS[viewMonth]} {viewYear}
+          </p>
+          <button
+            type="button"
+            onClick={() => moveMonth(1)}
+            aria-label="Next month"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 transition hover:bg-blue-50 hover:text-blue-700"
+          >
+            <ChevronRight className="h-4 w-4" aria-hidden />
+          </button>
+        </div>
+        <div className="grid grid-cols-7">
+          {CALENDAR_WEEKDAYS.map((weekday) => (
+            <span key={weekday} className="py-1 text-center text-xs font-semibold text-slate-400">
+              {weekday}
+            </span>
+          ))}
+          {days.map((day, index) => {
+            if (day == null) return <span key={`empty-${index}`} />;
+            const nextValue = dateValue(day);
+            const unavailable = nextValue < minDate;
+            const selected = nextValue === value;
+            return (
+              <button
+                key={nextValue}
+                type="button"
+                disabled={unavailable}
+                onClick={() => {
+                  onChange(nextValue);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "mx-auto flex h-9 w-9 items-center justify-center rounded-lg text-sm transition",
+                  selected && "bg-blue-600 font-bold text-white shadow-sm",
+                  !selected && !unavailable && "text-slate-700 hover:bg-blue-50 hover:text-blue-700",
+                  unavailable && "cursor-not-allowed text-slate-300",
+                )}
+              >
+                {day}
+              </button>
+            );
+          })}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function BookingTimeDropdown({
+  id,
+  value,
+  onChange,
+  slots,
+  disabled,
+  loading,
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  slots: string[];
+  disabled: boolean;
+  loading: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const label = value
+    ? formatCustomerBookingSlotLabel(value)
+    : loading
+      ? "Checking available times…"
+      : slots.length === 0
+        ? "No times available"
+        : "Select a time";
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          id={id}
+          type="button"
+          disabled={disabled}
+          aria-busy={loading || undefined}
+          className="flex min-h-12 w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-4 py-3 text-left text-sm font-medium text-slate-800 shadow-sm transition hover:border-blue-300 focus-visible:border-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+        >
+          <span className="flex items-center gap-3">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
+              <Clock3 className="h-4 w-4" aria-hidden />
+            </span>
+            {label}
+          </span>
+          <ChevronDown className="h-4 w-4 text-slate-400" aria-hidden />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="max-h-64 overflow-y-auto p-1.5">
+        {slots.map((slot) => {
+          const selected = value === slot;
+          return (
+            <button
+              key={slot}
+              type="button"
+              onClick={() => {
+                onChange(slot);
+                setOpen(false);
+              }}
+              className={cn(
+                "flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-left text-sm font-medium transition",
+                selected
+                  ? "bg-blue-50 text-blue-700"
+                  : "text-slate-700 hover:bg-slate-50",
+              )}
+            >
+              {formatCustomerBookingSlotLabel(slot)}
+              {selected ? <Check className="h-4 w-4" aria-hidden /> : null}
+            </button>
+          );
+        })}
+      </PopoverContent>
+    </Popover>
+  );
 }
 
 // ─── Step 2 ─────────────────────────────────────────────────────────────────────
@@ -392,14 +624,12 @@ export function Step2Schedule() {
               control={control}
               rules={{ required: "Select a date" }}
               render={({ field }) => (
-                <input
+                <BookingDateDropdown
                   id="booking-date"
-                  type="date"
-                  min={today}
+                  minDate={today}
                   value={field.value ?? ""}
                   onChange={field.onChange}
                   disabled={!areaResolved}
-                  className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
                 />
               )}
             />
@@ -415,10 +645,12 @@ export function Step2Schedule() {
               control={control}
               rules={{ required: "Select a time" }}
               render={({ field }) => (
-                <select
+                <BookingTimeDropdown
                   id="booking-time"
                   value={field.value ?? ""}
                   onChange={field.onChange}
+                  slots={availableTimeSlots}
+                  loading={slotsLoading || Boolean(date && !slotsVerified)}
                   disabled={
                     !date ||
                     !areaResolved ||
@@ -426,26 +658,7 @@ export function Step2Schedule() {
                     !slotsVerified ||
                     availableTimeSlots.length === 0
                   }
-                  aria-busy={slotsLoading || undefined}
-                  className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
-                >
-                  <option value="">
-                    {!date
-                      ? "Select a date first"
-                      : slotsLoading || !slotsVerified
-                        ? "Checking available times…"
-                        : slotsFetchError
-                          ? "Could not load available times"
-                          : availableTimeSlots.length === 0
-                            ? "No times available"
-                            : "Select a time"}
-                  </option>
-                  {availableTimeSlots.map((slot) => (
-                    <option key={slot} value={slot}>
-                      {formatCustomerBookingSlotLabel(slot)}
-                    </option>
-                  ))}
-                </select>
+                />
               )}
             />
             <FieldError message={errors.time?.message} />
