@@ -463,6 +463,23 @@ function PaymentSection({
     }
   }
 
+  const PAYMENT_RECOVERY_TIMEOUT_MS = 15_000;
+  const BOOKING_CONFIRM_TIMEOUT_MS = 20_000;
+
+  async function fetchPaymentPreparation(
+    input: RequestInfo | URL,
+    init: RequestInit,
+    timeoutMs: number,
+  ): Promise<Response> {
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      return await fetch(input, { ...init, signal: controller.signal });
+    } finally {
+      window.clearTimeout(timeoutId);
+    }
+  }
+
   async function handleConfirmAndPay() {
     // A saved booking already has a server-owned canonical amount. Do not block its
     // idempotent payment-session recovery when the client quote catalogue is unavailable.
@@ -498,14 +515,14 @@ function PaymentSection({
 
       // Retry path: booking already created — recover Paystack session instead of inserting again.
       if (pendingBookingId) {
-        const sessRes = await fetch(`/api/bookings/${encodeURIComponent(pendingBookingId)}/payment-session`, {
+        const sessRes = await fetchPaymentPreparation(`/api/bookings/${encodeURIComponent(pendingBookingId)}/payment-session`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.access_token}`,
           },
           body: JSON.stringify({}),
-        });
+        }, PAYMENT_RECOVERY_TIMEOUT_MS);
         const sessJson = (await sessRes.json()) as {
           status?: string;
           authorizationUrl?: string;
@@ -566,7 +583,7 @@ function PaymentSection({
         }
       }
 
-      const confirmRes = await fetch("/api/booking-v2/confirm", {
+      const confirmRes = await fetchPaymentPreparation("/api/booking-v2/confirm", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -580,7 +597,7 @@ function PaymentSection({
             (referralDiscount?.code ?? getStoredReferral("customer") ?? "").trim() || undefined,
           promoCode: promoCode.trim() || undefined,
         }),
-      });
+      }, BOOKING_CONFIRM_TIMEOUT_MS);
 
       const confirmJson = (await confirmRes.json()) as {
         success?: boolean;
@@ -737,14 +754,14 @@ function PaymentSection({
 
       // Server-side Paystack session (persists authorization_url). Redirect is more reliable than
       // Inline popups on mobile / in-app browsers, and enables `/pay` recovery after refresh.
-      const sessRes = await fetch(`/api/bookings/${encodeURIComponent(bookingId)}/payment-session`, {
+      const sessRes = await fetchPaymentPreparation(`/api/bookings/${encodeURIComponent(bookingId)}/payment-session`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({ reference: paystackReference }),
-      });
+      }, PAYMENT_RECOVERY_TIMEOUT_MS);
       const sessJson = (await sessRes.json()) as {
         status?: string;
         authorizationUrl?: string;
@@ -791,7 +808,10 @@ function PaymentSection({
       setConfirming(false);
       return;
     } catch (err) {
-      const message = "An unexpected error occurred. Please try again.";
+      const message =
+        err instanceof DOMException && err.name === "AbortError"
+          ? "Secure payment preparation took too long. Your booking is saved — please try again."
+          : "An unexpected error occurred. Please try again.";
       setError(message);
       trackBookingFunnelEvent("payment", BOOKING_FUNNEL_ROW.ERROR, {
         flow: "booking_v2",
