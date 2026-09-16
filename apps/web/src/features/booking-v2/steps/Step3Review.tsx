@@ -24,6 +24,7 @@ import { EquipmentSection } from "@/src/features/booking-v2/components/Equipment
 import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
 import { TeamAvailabilitySection } from "@/src/features/booking-v2/components/TeamAvailabilitySection";
 import type { AvailableCleanerV2 } from "@/src/features/booking-v2/types";
+import { cachedClientRequest } from "@/lib/booking-v2/clientRequestCache";
 import { cn } from "@/lib/utils";
 import {
   SERVICE_CONFIG,
@@ -872,8 +873,16 @@ export function Step3Review() {
     params.set("durationMinutes", String(duration));
     if (locationId) params.set("locationId", locationId);
 
-    fetch(`/api/booking-v2/available-cleaners?${params.toString()}`)
-      .then((r) => r.json())
+    const url = `/api/booking-v2/available-cleaners?${params.toString()}`;
+    cachedClientRequest(
+      `available-cleaners:${url}`,
+      async () => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`available_cleaners_http_${response.status}`);
+        return response.json() as Promise<{ cleaners?: AvailableCleanerV2[] }>;
+      },
+      20_000,
+    )
       .then((json: { cleaners?: AvailableCleanerV2[] }) => {
         const all = json.cleaners ?? [];
         const matched = all.filter((c) => ids.includes(c.id));

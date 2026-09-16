@@ -100,4 +100,17 @@ describe("booking flow performance contracts", () => {
     expect(payment).toContain("!pendingBookingId ? <div");
     expect(payment).toContain("Boolean(pendingSummary && !pendingSummaryLoading)");
   });
+
+  it("deduplicates adjacent booking reads and avoids a new-booking summary round trip", () => {
+    const cleanerSection = source("src/features/booking-v2/components/CleanerPreferenceSection.tsx");
+    const review = source("src/features/booking-v2/steps/Step3Review.tsx");
+    const pricing = source("src/features/booking-v2/hooks/useBookingV2Pricing.ts");
+    const payment = source("src/features/booking-v2/steps/Step4Payment.tsx");
+
+    expect(cleanerSection).toContain("available-cleaners:${url}");
+    expect(review).toContain("available-cleaners:${url}");
+    expect(pricing).toContain("booking-quote:${requestBody}");
+    expect(payment).toContain("Confirmation already returned the server-authoritative amount");
+    expect(payment).toContain("setPendingSummary({");
+  });
 });

@@ -6,6 +6,7 @@ import { cn } from "@/lib/utils";
 import { PREFERRED_CLEANER_CUSTOMER_DISCLAIMER } from "@/lib/dispatch/preferredCleanerDispatchPolicy";
 import { CleanerCard } from "@/src/features/booking-v2/components/CleanerCard";
 import type { AvailableCleanerV2 } from "@/src/features/booking-v2/types";
+import { cachedClientRequest } from "@/lib/booking-v2/clientRequestCache";
 
 const INITIAL_VISIBLE = 4;
 
@@ -37,9 +38,19 @@ function useAvailableCleaners({ serviceSlug, date, time, durationMinutes, locati
     if (durationMinutes) params.set("durationMinutes", String(durationMinutes));
     if (locationId) params.set("locationId", locationId);
 
-    fetch(`/api/booking-v2/available-cleaners?${params.toString()}`)
-      .then((r) => r.json())
+    const url = `/api/booking-v2/available-cleaners?${params.toString()}`;
+    let active = true;
+    cachedClientRequest(
+      `available-cleaners:${url}`,
+      async () => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`available_cleaners_http_${response.status}`);
+        return response.json() as Promise<{ cleaners?: AvailableCleanerV2[]; error?: string }>;
+      },
+      20_000,
+    )
       .then((json: { cleaners?: AvailableCleanerV2[]; error?: string }) => {
+        if (!active) return;
         if (json.error) {
           setError(json.error);
         } else {
@@ -48,9 +59,13 @@ function useAvailableCleaners({ serviceSlug, date, time, durationMinutes, locati
         setLoading(false);
       })
       .catch(() => {
+        if (!active) return;
         setError("Could not load cleaners.");
         setLoading(false);
       });
+    return () => {
+      active = false;
+    };
   // Re-fetch when date or time changes so the list stays slot-accurate
    
   }, [serviceSlug, date, time, durationMinutes, locationId, locationRequired]);

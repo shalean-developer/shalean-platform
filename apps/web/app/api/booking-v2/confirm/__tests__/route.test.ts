@@ -10,6 +10,17 @@ import { bookingV2SlotHasEligibleCleaners, assessBookingV2SlotFulfillment } from
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import { isBookingSoftFulfillmentEnabled } from "@/lib/booking/availabilityFlags";
 
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return {
+    ...actual,
+    // Route handlers run inside a Next.js request scope in production. Vitest
+    // does not create that scope, so execute deferred work immediately here.
+    after: (task: () => void | Promise<void>) => {
+      void task();
+    },
+  };
+});
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: vi.fn() }));
 vi.mock("@/lib/supabase/bookingRouteBearerAuth", () => ({ resolveBookingRouteBearerAuth: vi.fn() }));
 vi.mock("@/lib/customer/customerBookingsForUser", () => ({

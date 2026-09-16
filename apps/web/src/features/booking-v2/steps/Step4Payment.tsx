@@ -742,6 +742,20 @@ function PaymentSection({
       const chargeAmount = confirmJson.payAmountZar ?? payTotal;
       const requiresPayment = confirmJson.requiresPayment !== false && chargeAmount > 0;
 
+      // Confirmation already returned the server-authoritative amount and pricing.
+      // Seed recovery state now so setting pendingBookingId does not immediately
+      // issue a redundant payment-summary query before Paystack initialization.
+      setPendingSummary({
+        bookingId,
+        status: "pending_payment",
+        paymentStatus: "pending",
+        paid: false,
+        serviceLabel: config.label,
+        address: [values.address, values.suburb].filter(Boolean).join(", "),
+        amountZar: chargeAmount,
+        pricingSummary: confirmJson.pricingSummary ?? null,
+      });
+
       // Replace the complete client quote with the server-authoritative breakdown,
       // including room factors and any checkout discounts—not only its final total.
       if (confirmJson.pricingSummary) {

@@ -6,6 +6,7 @@ import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { buildCustomerPricingFromForm } from "@/lib/booking-v2/buildCustomerPricingFromForm";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
+import { cachedClientRequest } from "@/lib/booking-v2/clientRequestCache";
 
 /**
  * Recomputes pricingSummary whenever booking inputs, live catalog/config, or VIP tier change.
@@ -62,13 +63,8 @@ export function useBookingV2Pricing(): void {
     // reloads pricing_services, so room rates, extras, fees, and discounts cannot
     // remain stuck on a persisted/static base price when the database changes.
     if (!liveConfig) return;
-    const controller = new AbortController();
     const timer = window.setTimeout(() => {
-      void fetch("/api/booking-v2/quote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
-        body: JSON.stringify({
+      const requestBody = JSON.stringify({
           serviceSlug,
           serviceDetails: currentServiceDetails,
           selectedExtras: currentSelectedExtras,
@@ -79,12 +75,20 @@ export function useBookingV2Pricing(): void {
           equipmentRequired: equipmentRequired ?? "",
           equipmentQuote: currentEquipmentQuote,
           vipTier,
-        }),
-      })
-        .then(async (response) => {
+        });
+      void cachedClientRequest(
+        `booking-quote:${requestBody}`,
+        async () => {
+          const response = await fetch("/api/booking-v2/quote", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: requestBody,
+          });
           if (!response.ok) throw new Error(`quote_http_${response.status}`);
           return response.json() as Promise<{ pricingSummary?: BookingV2FormData["pricingSummary"] }>;
-        })
+        },
+        30_000,
+      )
         .then(({ pricingSummary }) => {
           // A slower response for a previous room selection must never replace
           // the immediately calculated total for the customer's latest choice.
@@ -95,8 +99,7 @@ export function useBookingV2Pricing(): void {
             });
           }
         })
-        .catch((error: unknown) => {
-          if (error instanceof DOMException && error.name === "AbortError") return;
+        .catch(() => {
           // The immediate quote above remains usable; confirm still recalculates
           // and signs the authoritative amount before a booking is created.
         });
@@ -104,7 +107,6 @@ export function useBookingV2Pricing(): void {
 
     return () => {
       window.clearTimeout(timer);
-      controller.abort();
     };
   }, [
     serviceSlug,
