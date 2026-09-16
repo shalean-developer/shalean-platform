@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import type { CustomerTotalInput } from "@/lib/booking-v2/types";
@@ -383,8 +385,6 @@ describe("PRINCESS PRA2 — duration label + quote consumption", () => {
 
 describe("PRINCESS PRA2 — Paystack cancel recovery contracts", () => {
   it("Step4Payment persists pendingBookingId in form draft (static contract)", () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(
       join(process.cwd(), "src/features/booking-v2/steps/Step4Payment.tsx"),
       "utf8",
@@ -396,7 +396,7 @@ describe("PRINCESS PRA2 — Paystack cancel recovery contracts", () => {
     expect(src).toContain("confirmRes.status === 401");
     expect(src).toContain("sessRes.status === 401");
     expect(src).toContain("if (!requiresPayment)");
-    expect(src).toContain("Boolean(pendingBookingId) || quoteReadiness.ready");
+    expect(src).toContain("pendingBookingId ? Boolean(pendingSummary && !pendingSummaryLoading) : quoteReadiness.ready");
     expect(src).toContain("if (!pendingBookingId && !quoteReadiness.ready)");
     expect(src).toContain("Retry secure payment");
     expect(src).toContain("setPendingBookingId(null);");
@@ -404,16 +404,12 @@ describe("PRINCESS PRA2 — Paystack cancel recovery contracts", () => {
   });
 
   it("ensureBookingPaymentSession callback returns to /pay/{id}", () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(join(process.cwd(), "lib/booking/ensureBookingPaymentSession.ts"), "utf8");
     expect(src).toContain("/pay/");
     expect(src).not.toMatch(/callback_url: `\$\{appUrl\}\/account\/success`/);
   });
 
   it("payment-session supports owner retry without reference (idempotent path)", () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(
       join(process.cwd(), "app/api/bookings/[id]/payment-session/route.ts"),
       "utf8",

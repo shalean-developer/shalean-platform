@@ -29,14 +29,19 @@ describe("booking flow performance contracts", () => {
     expect(address).toContain("LOCATION_CACHE_TTL_MS");
   });
 
-  it("combines confirmation and payment initialization", () => {
+  it("separates persisted confirmation from payment initialization", () => {
     const confirm = source("app/api/booking-v2/confirm/route.ts");
+    const session = source("app/api/bookings/[id]/payment-session/route.ts");
     const payment = source("src/features/booking-v2/steps/Step4Payment.tsx");
 
-    expect(confirm).toContain("prepareConfirmedBookingPaymentSession");
-    expect(confirm).toContain("freshAttempt: true");
-    expect(confirm).toContain("authorizationUrl");
-    expect(payment).toContain("confirmJson.authorizationUrl");
+    expect(confirm).not.toContain("prepareConfirmedBookingPaymentSession");
+    expect(confirm).not.toContain("ensureBookingPaymentSession");
+    expect(confirm).toContain("paymentPreparationToken");
+    expect(confirm).toContain("booking-persist;dur=");
+    expect(session).toContain("verifyFreshPaymentPreparationToken");
+    expect(session).toContain("freshAttempt");
+    expect(session).toContain("payment-session-total;dur=");
+    expect(payment).toContain("paymentPreparationToken: confirmJson.paymentPreparationToken");
   });
 
   it("bounds payment preparation and preserves retry recovery", () => {
@@ -50,6 +55,8 @@ describe("booking flow performance contracts", () => {
     expect(payment).toContain("PAYMENT_RECOVERY_TIMEOUT_MS = 30_000");
     expect(payment).toContain("BOOKING_CONFIRM_TIMEOUT_MS = 30_000");
     expect(payment).toContain("fetchPaymentPreparation");
+    expect(payment).toContain("confirmedBookingId");
+    expect(payment).toContain("Booking confirmation took too long. No payment was taken");
     expect(payment).toContain("Secure payment preparation took too long. Your booking is saved");
     expect(payment).toContain("setPendingBookingId(bookingId)");
   });

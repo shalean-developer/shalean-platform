@@ -57,44 +57,11 @@ import type { AppliedPromotionDiscount } from "@/lib/promotions/types";
 import { resolveCheckoutPromoEligibilityExtras } from "@/lib/promotions/resolveCheckoutPromoEligibilityExtras";
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import { settleFullyCoveredBooking } from "@/lib/payments/settleFullyCoveredBooking";
-import { ensureBookingPaymentSession } from "@/lib/booking/ensureBookingPaymentSession";
+import { createFreshPaymentPreparationToken } from "@/lib/booking/freshPaymentPreparationToken";
 
 export const runtime = "nodejs";
 
 type SupabaseAdmin = NonNullable<ReturnType<typeof getSupabaseAdmin>>;
-
-type ConfirmPaymentSessionFields = {
-  authorizationUrl?: string;
-  paymentReference?: string;
-  paymentAlreadyCompleted?: boolean;
-  paymentSessionError?: string;
-};
-
-async function prepareConfirmedBookingPaymentSession(
-  supabase: SupabaseAdmin,
-  bookingId: string,
-  requiresPayment: boolean,
-): Promise<ConfirmPaymentSessionFields> {
-  if (!requiresPayment) return {};
-  const session = await ensureBookingPaymentSession(supabase, {
-    bookingId,
-    access: { kind: "internal" },
-    freshAttempt: true,
-  });
-  if (session.status === "ready") {
-    return {
-      authorizationUrl: session.authorizationUrl,
-      paymentReference: session.reference,
-    };
-  }
-  if (session.status === "paid") {
-    return {
-      paymentAlreadyCompleted: true,
-      paymentReference: session.reference,
-    };
-  }
-  return { paymentSessionError: session.error };
-}
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -698,6 +665,7 @@ export async function POST(request: Request) {
 
   // ── 7. Generate Paystack reference ────────────────────────────────────────────
   const paystackReference = `bv2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const bookingPersistenceStartedAt = performance.now();
 
   // ── 8. Build price_snapshot (required by bookings_price_snapshot_required_check) ──
   // total_price = Paystack charge (after promo / referral / credit). Keep gross for audit.
@@ -870,13 +838,14 @@ export async function POST(request: Request) {
     const r0Existing = await trySettleFullyCoveredOrError(supabase, existingBooking.id, payAmountZar);
     if ("errorResponse" in r0Existing) return r0Existing.errorResponse;
     const requiresPayment = r0Existing.requiresPayment;
-    const paymentSessionStartedAt = performance.now();
-    const paymentSession = await prepareConfirmedBookingPaymentSession(
-      supabase,
-      existingBooking.id,
-      requiresPayment,
-    );
-    const paymentSessionDuration = performance.now() - paymentSessionStartedAt;
+    const paymentPreparationToken = requiresPayment
+      ? createFreshPaymentPreparationToken({
+          bookingId: existingBooking.id,
+          reference: paystackReference,
+          userId,
+        })
+      : null;
+    const bookingPersistenceDuration = performance.now() - bookingPersistenceStartedAt;
 
     return NextResponse.json(
       {
@@ -890,13 +859,13 @@ export async function POST(request: Request) {
         promotionsApplied: promotionApplied,
         fulfillmentMode,
         requiresPayment,
-        ...paymentSession,
+        ...(paymentPreparationToken ? { paymentPreparationToken } : {}),
         customerMessage: fulfillmentCustomerMessage,
         ...(getPaystackPublicKey() ? { paystackPublicKey: getPaystackPublicKey() } : {}),
       },
       {
         headers: {
-          "Server-Timing": `confirm-total;dur=${(performance.now() - confirmStartedAt).toFixed(1)}, paystack-init;dur=${paymentSessionDuration.toFixed(1)}`,
+          "Server-Timing": `confirm-total;dur=${(performance.now() - confirmStartedAt).toFixed(1)}, booking-persist;dur=${bookingPersistenceDuration.toFixed(1)}`,
         },
       },
     );
@@ -1113,13 +1082,14 @@ export async function POST(request: Request) {
   const r0Inserted = await trySettleFullyCoveredOrError(supabase, inserted.id, payAmountZar);
   if ("errorResponse" in r0Inserted) return r0Inserted.errorResponse;
   const requiresPayment = r0Inserted.requiresPayment;
-  const paymentSessionStartedAt = performance.now();
-  const paymentSession = await prepareConfirmedBookingPaymentSession(
-    supabase,
-    inserted.id,
-    requiresPayment,
-  );
-  const paymentSessionDuration = performance.now() - paymentSessionStartedAt;
+  const paymentPreparationToken = requiresPayment
+    ? createFreshPaymentPreparationToken({
+        bookingId: inserted.id,
+        reference: paystackReference,
+        userId,
+      })
+    : null;
+  const bookingPersistenceDuration = performance.now() - bookingPersistenceStartedAt;
 
   return NextResponse.json({
     success: true,
@@ -1149,12 +1119,12 @@ export async function POST(request: Request) {
     promotionsApplied: promotionApplied,
     fulfillmentMode,
     requiresPayment,
-    ...paymentSession,
+    ...(paymentPreparationToken ? { paymentPreparationToken } : {}),
     customerMessage: fulfillmentCustomerMessage,
     ...(getPaystackPublicKey() ? { paystackPublicKey: getPaystackPublicKey() } : {}),
   }, {
     headers: {
-      "Server-Timing": `confirm-total;dur=${(performance.now() - confirmStartedAt).toFixed(1)}, paystack-init;dur=${paymentSessionDuration.toFixed(1)}`,
+      "Server-Timing": `confirm-total;dur=${(performance.now() - confirmStartedAt).toFixed(1)}, booking-persist;dur=${bookingPersistenceDuration.toFixed(1)}`,
     },
   });
 }

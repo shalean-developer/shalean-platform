@@ -555,6 +555,7 @@ function PaymentSection({
     }
     setConfirming(true);
     setError(null);
+    let confirmedBookingId = pendingBookingId;
 
     try {
       // 1. Confirm booking and get bookingId + paystackReference
@@ -673,10 +674,7 @@ function PaymentSection({
         pricingSummary?: BookingV2FormData["pricingSummary"];
         creditAppliedZar?: number;
         requiresPayment?: boolean;
-        authorizationUrl?: string;
-        paymentReference?: string;
-        paymentAlreadyCompleted?: boolean;
-        paymentSessionError?: string;
+        paymentPreparationToken?: string;
         error?: string;
         code?: string;
         fulfillmentMode?: string;
@@ -740,6 +738,7 @@ function PaymentSection({
 
       const { paystackReference, bookingId } = confirmJson;
       setPendingBookingId(bookingId);
+      confirmedBookingId = bookingId;
       const chargeAmount = confirmJson.payAmountZar ?? payTotal;
       const requiresPayment = confirmJson.requiresPayment !== false && chargeAmount > 0;
 
@@ -780,53 +779,18 @@ function PaymentSection({
         return;
       }
 
-      const preparedReference =
-        confirmJson.paymentReference?.trim() || paystackReference?.trim() || bookingId;
-      if (confirmJson.paymentAlreadyCompleted) {
-        clearBookingV2DraftStorage();
-        window.location.assign(bookingV2SuccessHref(preparedReference));
-        return;
-      }
-      if (confirmJson.authorizationUrl?.trim()) {
-        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_PAYSTACK_OPENED, {
-          service: serviceSlug,
-          service_type: serviceSlug,
-          serviceAreaName: values.suburb ?? null,
-          finalPrice: confirmJson.payAmountZar ?? payTotal,
-          extras: values.selectedExtras ?? null,
-        }, {
-          service_type: serviceSlug,
-          suburb: values.suburb ?? null,
-          estimated_price: confirmJson.payAmountZar ?? payTotal,
-          booking_id: bookingId,
-        });
-        window.location.assign(confirmJson.authorizationUrl.trim());
-        return;
-      }
-      if (confirmJson.paymentSessionError?.trim()) {
-        setError(confirmJson.paymentSessionError.trim());
-        setConfirming(false);
-        return;
-      }
-
-      const checkoutEmail = String(user.email ?? "")
-        .trim()
-        .toLowerCase();
-      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(checkoutEmail)) {
-        setError("Your account has no valid email for payment. Update your email, then try again.");
-        setConfirming(false);
-        return;
-      }
-
-      // Server-side Paystack session (persists authorization_url). Redirect is more reliable than
-      // Inline popups on mobile / in-app browsers, and enables `/pay` recovery after refresh.
+      // Confirmation deliberately returns as soon as the canonical booking is persisted.
+      // Paystack initialization is a separate, idempotent phase with its own deadline.
       const sessRes = await fetchPaymentPreparation(`/api/bookings/${encodeURIComponent(bookingId)}/payment-session`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({ reference: paystackReference }),
+        body: JSON.stringify({
+          reference: paystackReference,
+          paymentPreparationToken: confirmJson.paymentPreparationToken,
+        }),
       }, PAYMENT_RECOVERY_TIMEOUT_MS);
       const sessJson = (await sessRes.json()) as {
         status?: string;
@@ -876,8 +840,12 @@ function PaymentSection({
     } catch (err) {
       const message =
         err instanceof DOMException && err.name === "AbortError"
-          ? "Secure payment preparation took too long. Your booking is saved — please try again."
-          : "An unexpected error occurred. Please try again.";
+          ? confirmedBookingId
+            ? "Secure payment preparation took too long. Your booking is saved — please try again."
+            : "Booking confirmation took too long. No payment was taken — please try again."
+          : confirmedBookingId
+            ? "We could not open secure payment. Your booking is saved — please try again."
+            : "An unexpected error occurred. Please try again.";
       setError(message);
       trackBookingFunnelEvent("payment", BOOKING_FUNNEL_ROW.ERROR, {
         flow: "booking_v2",
