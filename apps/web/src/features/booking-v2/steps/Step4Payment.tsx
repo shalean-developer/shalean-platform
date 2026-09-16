@@ -463,8 +463,12 @@ function PaymentSection({
     }
   }
 
-  const PAYMENT_RECOVERY_TIMEOUT_MS = 15_000;
-  const BOOKING_CONFIRM_TIMEOUT_MS = 20_000;
+  // Recovery may safely spend up to 12s verifying the previous Paystack reference
+  // and another 12s initializing its replacement. Keep the browser deadline above
+  // that server-side maximum so it does not manufacture a false timeout while the
+  // idempotency protection is still completing.
+  const PAYMENT_RECOVERY_TIMEOUT_MS = 30_000;
+  const BOOKING_CONFIRM_TIMEOUT_MS = 30_000;
 
   async function fetchPaymentPreparation(
     input: RequestInfo | URL,
