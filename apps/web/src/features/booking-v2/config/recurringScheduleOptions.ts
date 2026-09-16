@@ -4,7 +4,7 @@ export const RECURRING_FREQUENCY_OPTIONS: {
   value: RecurringFrequency;
   label: string;
 }[] = [
-  { value: "custom", label: "Custom days" },
+  { value: "custom", label: "Custom" },
   { value: "weekly", label: "Weekly" },
   { value: "fortnightly", label: "Fortnightly" },
   { value: "monthly", label: "Monthly" },
@@ -33,7 +33,7 @@ export function shouldShowRecurringDayPicker(
 }
 
 export function recurringFrequencyLabel(frequency: RecurringFrequency | "" | undefined): string {
-  if (frequency === "custom") return "Custom days";
+  if (frequency === "custom") return "Custom";
   if (frequency === "weekly") return "Weekly";
   if (frequency === "fortnightly") return "Fortnightly";
   if (frequency === "monthly") return "Monthly";

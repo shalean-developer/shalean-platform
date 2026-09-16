@@ -15,7 +15,7 @@ const scheduleSource = readFileSync(
 describe("recurring schedule options", () => {
   it("offers custom days and the three standard repeat cadences", () => {
     expect(RECURRING_FREQUENCY_OPTIONS).toEqual([
-      { value: "custom", label: "Custom days" },
+      { value: "custom", label: "Custom" },
       { value: "weekly", label: "Weekly" },
       { value: "fortnightly", label: "Fortnightly" },
       { value: "monthly", label: "Monthly" },
@@ -23,7 +23,7 @@ describe("recurring schedule options", () => {
   });
 
   it("uses customer-facing labels for every cadence", () => {
-    expect(recurringFrequencyLabel("custom")).toBe("Custom days");
+    expect(recurringFrequencyLabel("custom")).toBe("Custom");
     expect(recurringFrequencyLabel("weekly")).toBe("Weekly");
     expect(recurringFrequencyLabel("fortnightly")).toBe("Fortnightly");
     expect(recurringFrequencyLabel("monthly")).toBe("Monthly");
