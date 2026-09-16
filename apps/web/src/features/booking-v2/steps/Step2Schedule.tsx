@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useFormContext, Controller } from "react-hook-form";
 import {
   CalendarDays,
   CalendarRange,
   CalendarPlus,
-  ChevronLeft,
-  ChevronRight,
   RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -26,8 +24,10 @@ import {
   RECURRING_WEEKDAYS,
   shouldShowRecurringDayPicker,
 } from "@/src/features/booking-v2/config/recurringScheduleOptions";
-import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
-import { filterCustomerOnlineBookingTimeSlots } from "@/lib/booking-v2/customerBookingTimeSlots";
+import {
+  filterCustomerOnlineBookingTimeSlots,
+  formatCustomerBookingSlotLabel,
+} from "@/lib/booking-v2/customerBookingTimeSlots";
 import { useBookingV2ScheduleAvailability } from "@/lib/booking-v2/useBookingV2ScheduleAvailability";
 import { isSelectedBookingSlotVerified } from "@/lib/booking-v2/bookingV2ScheduleVerification";
 import {
@@ -59,23 +59,6 @@ const FREQUENCY_PRESENTATION = {
     icon: CalendarPlus,
   },
 } as const;
-
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
-
-const DAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 // ─── Per-service copy ──────────────────────────────────────────────────────────
 
@@ -133,151 +116,6 @@ function FieldError({ message }: { message?: string }) {
   return <p className="mt-1.5 text-center text-xs text-red-500">{message}</p>;
 }
 
-// ─── Custom inline calendar ────────────────────────────────────────────────────
-
-function CustomCalendar({
-  value,
-  onChange,
-  minDate,
-  embedded,
-  disabled = false,
-}: {
-  value: string;
-  onChange: (date: string) => void;
-  minDate?: string;
-  /** Drop outer card chrome when nested inside a parent card. */
-  embedded?: boolean;
-  /** When true, all day cells are non-interactive (e.g. service area unresolved). */
-  disabled?: boolean;
-}) {
-  const todayStr = new Date().toISOString().split("T")[0];
-
-  const [viewYear, setViewYear] = useState<number>(() => {
-    if (value) return parseInt(value.split("-")[0]);
-    return new Date().getFullYear();
-  });
-  const [viewMonth, setViewMonth] = useState<number>(() => {
-    if (value) return parseInt(value.split("-")[1]) - 1;
-    return new Date().getMonth();
-  });
-
-  const firstDayOfWeek = new Date(viewYear, viewMonth, 1).getDay();
-  // Monday-first: Sun(0)→6, Mon(1)→0, Tue(2)→1 …
-  const startOffset = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1;
-  const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-
-  const cells: (number | null)[] = [
-    ...Array(startOffset).fill(null),
-    ...Array.from({ length: daysInMonth }, (_, i) => i + 1),
-  ];
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  function prevMonth() {
-    if (disabled) return;
-    if (viewMonth === 0) {
-      setViewMonth(11);
-      setViewYear((y) => y - 1);
-    } else {
-      setViewMonth((m) => m - 1);
-    }
-  }
-  function nextMonth() {
-    if (disabled) return;
-    if (viewMonth === 11) {
-      setViewMonth(0);
-      setViewYear((y) => y + 1);
-    } else {
-      setViewMonth((m) => m + 1);
-    }
-  }
-
-  function toDateStr(day: number) {
-    return `${viewYear}-${String(viewMonth + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  }
-
-  return (
-    <div
-      className={cn(
-        "w-full",
-        embedded ? "max-w-none p-0" : "max-w-sm rounded-2xl border border-slate-200 bg-white p-4 shadow-sm",
-        disabled && "pointer-events-none opacity-50",
-      )}
-      aria-disabled={disabled || undefined}
-    >
-      {/* Month / year header */}
-      <div className="mb-4 flex items-center justify-between">
-        <button
-          type="button"
-          onClick={prevMonth}
-          disabled={disabled}
-          aria-label="Previous month"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </button>
-        <p className="text-sm font-semibold text-slate-800">
-          {MONTH_NAMES[viewMonth]} {viewYear}
-        </p>
-        <button
-          type="button"
-          onClick={nextMonth}
-          disabled={disabled}
-          aria-label="Next month"
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-500 transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          <ChevronRight className="h-4 w-4" />
-        </button>
-      </div>
-
-      {/* Day-of-week headers */}
-      <div className="mb-1 grid grid-cols-7">
-        {DAY_LABELS.map((d) => (
-          <div
-            key={d}
-            className="py-1 text-center text-xs font-medium text-slate-400"
-          >
-            {d}
-          </div>
-        ))}
-      </div>
-
-      {/* Day cells */}
-      <div className="grid grid-cols-7 gap-0.5">
-        {cells.map((day, idx) => {
-          if (!day) return <div key={idx} />;
-          const ds = toDateStr(day);
-          const dayDisabled = disabled || !!(minDate && ds < minDate);
-          const selected = value === ds;
-          const isToday = todayStr === ds;
-          return (
-            <button
-              key={idx}
-              type="button"
-              disabled={dayDisabled}
-              onClick={() => !dayDisabled && onChange(ds)}
-              className={cn(
-                "flex h-10 w-full items-center justify-center rounded-lg text-sm transition sm:h-9",
-                dayDisabled && "cursor-not-allowed text-slate-200",
-                !dayDisabled &&
-                  !selected &&
-                  !isToday &&
-                  "text-slate-700 hover:bg-blue-50 hover:text-blue-600",
-                !dayDisabled &&
-                  isToday &&
-                  !selected &&
-                  "font-bold text-blue-600 ring-2 ring-blue-200 ring-offset-1",
-                selected && "bg-blue-600 font-bold text-white shadow-sm",
-              )}
-            >
-              {day}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 // ─── Step 2 ─────────────────────────────────────────────────────────────────────
 
 export function Step2Schedule() {
@@ -328,7 +166,7 @@ export function Step2Schedule() {
   );
 
   const areaResolved = Boolean(serviceAreaLocationId?.trim());
-  const { availability, fulfillmentBySlot, dayFulfillmentMode, loading: slotsLoading, fetchError: slotsFetchError, slotsVerified } =
+  const { availability, loading: slotsLoading, fetchError: slotsFetchError, slotsVerified } =
     useBookingV2ScheduleAvailability({
       dateYmd: date || null,
       locationId: serviceAreaLocationId?.trim() || null,
@@ -340,6 +178,12 @@ export function Step2Schedule() {
     });
 
   const today = new Date().toISOString().split("T")[0];
+  const availableTimeSlots =
+    date && areaResolved && slotsVerified && availability != null
+      ? filterCustomerOnlineBookingTimeSlots(date, { scheduling }).filter(
+          (slot) => availability[slot] === true,
+        )
+      : [];
 
   // The calendar date starts the recurring series; recurring bookings are open-ended.
   useEffect(() => {
@@ -353,19 +197,14 @@ export function Step2Schedule() {
   }, [bookingType, date, recurringEndDate, recurringStartDate, setValue]);
 
   useEffect(() => {
-    if (!date || slotsLoading) return;
-    const available =
-      availability != null
-        ? Object.entries(availability)
-            .filter(([, ok]) => ok)
-            .map(([slot]) => slot)
-        : areaResolved
-          ? filterCustomerOnlineBookingTimeSlots(date, { scheduling })
-          : [];
-    if (time && !available.includes(time)) {
-      setValue("time", available[0] ?? "", { shouldValidate: true });
+    if (!date || !slotsVerified || availability == null) return;
+    const verifiedAvailableTimeSlots = filterCustomerOnlineBookingTimeSlots(date, {
+      scheduling,
+    }).filter((slot) => availability[slot] === true);
+    if (time && !verifiedAvailableTimeSlots.includes(time)) {
+      setValue("time", "", { shouldValidate: true });
     }
-  }, [date, time, setValue, scheduling, availability, areaResolved, slotsLoading]);
+  }, [availability, date, scheduling, setValue, slotsVerified, time]);
 
   function toggleCleaner(cleaner: AvailableCleanerV2) {
     const ids = selectedCleanerIds;
@@ -540,74 +379,81 @@ export function Step2Schedule() {
           Date &amp; time
         </h3>
 
-        <div className="grid items-stretch gap-4 lg:grid-cols-[minmax(260px,0.85fr)_minmax(340px,1.15fr)]">
-          {/* Date card */}
-          <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-            <p className="mb-3 text-sm font-semibold text-slate-800">Pick a date</p>
-            <div className="flex w-full justify-center">
-              <Controller
-                name="date"
-                control={control}
-                rules={{ required: "Select a date" }}
-                render={({ field }) => (
-                  <CustomCalendar
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    minDate={today}
-                    embedded
-                    disabled={!areaResolved}
-                  />
-                )}
-              />
-            </div>
+        <div
+          className="mx-auto grid w-full max-w-3xl gap-4 sm:grid-cols-2"
+          data-compact-date-time-controls="true"
+        >
+          <div className="min-w-0">
+            <label htmlFor="booking-date" className="mb-2 block text-sm font-semibold text-slate-800">
+              Pick a date <span className="text-red-500">*</span>
+            </label>
+            <Controller
+              name="date"
+              control={control}
+              rules={{ required: "Select a date" }}
+              render={({ field }) => (
+                <input
+                  id="booking-date"
+                  type="date"
+                  min={today}
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  disabled={!areaResolved}
+                  className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                />
+              )}
+            />
             <FieldError message={errors.date?.message} />
           </div>
 
-          {/* Time card */}
-          <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:p-4">
-            <p className="mb-1 text-sm font-semibold text-slate-800">
+          <div className="min-w-0">
+            <label htmlFor="booking-time" className="mb-2 block text-sm font-semibold text-slate-800">
               Pick a time <span className="text-red-500">*</span>
-            </p>
-            <p className="mb-3 text-xs text-slate-500">
-              {date
-                ? areaResolved
-                  ? slotsFetchError
-                    ? "Could not load live availability — try again or call us."
-                    : "Choose your preferred time."
-                  : suburb?.trim()
-                    ? "Confirm your suburb in Step 1 to see available times."
-                    : "Select a suburb in Step 1 first."
-                : areaResolved
-                  ? "Select a date first."
-                  : "Return to Step 1 and select a supported suburb first."}
-            </p>
+            </label>
             <Controller
               name="time"
               control={control}
               rules={{ required: "Select a time" }}
-              render={({ field }) =>
-                date && areaResolved ? (
-                  <TimeSlotPicker
-                    dateYmd={date}
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    compact
-                    scheduling={scheduling}
-                    availability={availability}
-                    fulfillmentBySlot={fulfillmentBySlot}
-                    dayFulfillmentMode={dayFulfillmentMode}
-                    loading={slotsLoading}
-                    areaResolved={areaResolved}
-                    slotsVerified={slotsVerified}
-                  />
-                ) : (
-                  <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-400">
-                    {areaResolved ? "Choose a date to see available times" : "Confirm suburb in Step 1 first"}
-                  </p>
-                )
-              }
+              render={({ field }) => (
+                <select
+                  id="booking-time"
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  disabled={
+                    !date ||
+                    !areaResolved ||
+                    slotsLoading ||
+                    !slotsVerified ||
+                    availableTimeSlots.length === 0
+                  }
+                  aria-busy={slotsLoading || undefined}
+                  className="min-h-12 w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
+                >
+                  <option value="">
+                    {!date
+                      ? "Select a date first"
+                      : slotsLoading || !slotsVerified
+                        ? "Checking available times…"
+                        : slotsFetchError
+                          ? "Could not load available times"
+                          : availableTimeSlots.length === 0
+                            ? "No times available"
+                            : "Select a time"}
+                  </option>
+                  {availableTimeSlots.map((slot) => (
+                    <option key={slot} value={slot}>
+                      {formatCustomerBookingSlotLabel(slot)}
+                    </option>
+                  ))}
+                </select>
+              )}
             />
             <FieldError message={errors.time?.message} />
+            {slotsFetchError ? (
+              <p className="mt-2 text-xs text-red-600" role="status">
+                Could not load live availability. Please try another date or try again.
+              </p>
+            ) : null}
           </div>
         </div>
       </section>}
