@@ -130,9 +130,9 @@ test.describe("RD-P05F — Booking V2 Step 4 payment presentation smoke", () => 
     await seedDraft(page, "regular-cleaning");
     const forbiddenMutations = await installNonMutatingApiSandbox(page);
 
-    const response = await page.goto("/book/regular-cleaning?step=4", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/book/regular-cleaning?step=payment", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=4/);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=payment/);
 
     await expect(page.getByRole("heading", { name: "Welcome back!", exact: true })).toBeVisible();
     await expect(page.getByText("Your booking is saved. Sign in to continue to payment.", { exact: true })).toBeVisible();
@@ -168,14 +168,14 @@ test.describe("RD-P05F — Booking V2 Step 4 payment presentation smoke", () => 
     await seedDraft(page, "regular-cleaning");
     const forbiddenMutations = await installNonMutatingApiSandbox(page);
 
-    const response = await page.goto("/book/regular-cleaning?step=4", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/book/regular-cleaning?step=payment", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=4/);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=payment/);
     await expect(page.getByRole("heading", { name: "Welcome back!", exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "← Back", exact: true }).click();
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=3/);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=review/);
     await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible();
 
     await expectDraft(page, {
