@@ -759,8 +759,7 @@ function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
   const areas = formatAreasServedPreview(cleaner.areasServed);
 
   return (
-    <div className="flex min-w-0 max-w-full flex-col items-center gap-2 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-4 text-center">
-      {/* Avatar */}
+    <div className="flex min-w-0 max-w-full items-start gap-3 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/60 p-3 sm:p-4">
       <div
         className={cn(
           "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold",
@@ -771,34 +770,34 @@ function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
         {cleaner.initials}
       </div>
 
-      {/* Name */}
-      <p className="w-full truncate text-sm font-semibold leading-snug text-slate-900">{cleaner.name}</p>
+      <div className="min-w-0 flex-1">
+        <p className="break-words text-sm font-semibold leading-snug text-slate-900">
+          {cleaner.name}
+        </p>
 
-      {/* Rating + jobs */}
-      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-        {cleaner.rating != null && (
-          <span className="flex items-center gap-0.5">
-            <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden />
-            {cleaner.rating.toFixed(1)}
-          </span>
-        )}
-        <span>{cleaner.jobsCompleted.toLocaleString()} jobs</span>
-      </div>
-
-      {/* Areas */}
-      {areas ? (
-        <div className="w-full min-w-0 text-xs text-slate-400">
-          <p className="line-clamp-2 break-words">{areas.primary}</p>
-          {areas.moreCount > 0 ? (
-            <p className="mt-0.5 font-medium">+{areas.moreCount} more</p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+          {cleaner.rating != null ? (
+            <span className="inline-flex items-center gap-0.5">
+              <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden />
+              {cleaner.rating.toFixed(1)}
+            </span>
           ) : null}
+          <span>{cleaner.jobsCompleted.toLocaleString()} jobs</span>
         </div>
-      ) : null}
 
-      {/* Badge */}
-      <span className="rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-xs font-medium text-blue-700">
-        Preferred cleaner
-      </span>
+        {areas ? (
+          <div className="mt-1.5 min-w-0 text-xs text-slate-400">
+            <p className="line-clamp-2 break-words">{areas.primary}</p>
+            {areas.moreCount > 0 ? (
+              <p className="mt-0.5 font-medium">+{areas.moreCount} more</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <span className="mt-2 inline-flex rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-xs font-medium text-blue-700">
+          Preferred cleaner
+        </span>
+      </div>
     </div>
   );
 }
@@ -1170,6 +1169,7 @@ export function Step3Review() {
               number={serviceDetails.length > 0 ? 4 : 3}
               title="Cleaner preference"
               onEdit={() => openEdit("cleaner")}
+              className="sm:col-span-2"
             >
               {!hasDetails && !hasIds ? (
                 <div className="flex items-center gap-3">
@@ -1186,7 +1186,12 @@ export function Step3Review() {
                   </div>
                 </div>
               ) : hasDetails ? (
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                <div
+                  className={cn(
+                    "grid grid-cols-1 gap-2.5",
+                    cleanerDetails.length > 1 && "md:grid-cols-2",
+                  )}
+                >
                   {cleanerDetails.map((cleaner) => (
                     <CleanerPreviewCard key={cleaner.id} cleaner={cleaner} />
                   ))}

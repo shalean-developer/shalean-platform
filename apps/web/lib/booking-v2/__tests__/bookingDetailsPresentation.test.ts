@@ -14,6 +14,10 @@ const roomCountSource = readFileSync(
   join(process.cwd(), "src/features/booking-v2/components/RoomCountSelector.tsx"),
   "utf8",
 );
+const reviewSource = readFileSync(
+  join(process.cwd(), "src/features/booking-v2/steps/Step3Review.tsx"),
+  "utf8",
+);
 
 describe("booking details presentation", () => {
   it("does not render the redundant About the clean heading", () => {
@@ -80,5 +84,17 @@ describe("booking details presentation", () => {
     expect(addressSource).toContain('setValue("serviceAreaLocationId", savedLocation?.id ?? ""');
     expect(addressSource).toContain('setValue("serviceAreaCityId", savedLocation?.city_id ?? ""');
     expect(addressSource).toContain("[locationOptions, setValue]");
+  });
+
+  it("keeps the review cleaner preference readable at every breakpoint", () => {
+    expect(reviewSource).toContain('title="Cleaner preference"');
+    expect(reviewSource).toContain('className="sm:col-span-2"');
+    expect(reviewSource).toContain('cleanerDetails.length > 1 && "md:grid-cols-2"');
+    expect(reviewSource).toContain(
+      'className="break-words text-sm font-semibold leading-snug text-slate-900"',
+    );
+    expect(reviewSource).not.toContain(
+      'className="w-full truncate text-sm font-semibold leading-snug text-slate-900"',
+    );
   });
 });
