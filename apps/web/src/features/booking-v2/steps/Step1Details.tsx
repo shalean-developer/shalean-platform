@@ -476,7 +476,7 @@ export function Step1Details() {
   }
 
   function handleProgressiveAnswer(key: string, value: string) {
-    if (!activeDetailsStage || isDeepCleaning) return;
+    if (!activeDetailsStage || (isDeepCleaning && activeDetailsStage !== "property")) return;
     const target = regularCleaningAutoAdvanceTarget(activeDetailsStage, {
       ...serviceDetails,
       [key]: value,
