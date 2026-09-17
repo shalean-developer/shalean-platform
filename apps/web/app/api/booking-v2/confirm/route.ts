@@ -746,6 +746,9 @@ export async function POST(request: Request) {
         fulfillment_mode: fulfillmentMode,
         fulfillment_reason: fulfillmentReason,
         dispatch_status: fulfillmentMode === "ops_assignment" ? "unassigned" : "searching",
+        cleaner_mode: data.cleanerMode,
+        is_team_job: data.cleanerMode === "team",
+        assigned_team_id: data.cleanerMode === "team" ? data.assignedTeamId : null,
         ...(data.cleanerMode === "individual_cleaners"
           ? {
               cleaner_count: Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount,
@@ -998,6 +1001,7 @@ export async function POST(request: Request) {
 
       // Cleaner / team
       cleaner_mode: data.cleanerMode,
+      is_team_job: data.cleanerMode === "team",
       assigned_team_id: data.cleanerMode === "team" ? data.assignedTeamId : null,
       cleaner_count:
         data.cleanerMode === "individual_cleaners"
