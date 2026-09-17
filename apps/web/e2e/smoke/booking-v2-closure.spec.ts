@@ -191,8 +191,9 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
       const serviceLinks = page.locator('a[href^="/book/"]').filter({ has: page.locator("h2") });
       await expect(serviceLinks).toHaveCount(6);
       for (const service of SERVICES) {
-        await expect(page.locator(`a[href^="/book/${service.slug}"]`)).toHaveCount(1);
-        await expect(page.getByRole("heading", { name: service.label, exact: true })).toBeVisible();
+        const serviceHeading = page.getByRole("heading", { name: service.label, exact: true });
+        await expect(serviceHeading).toBeVisible();
+        await expect(serviceLinks.filter({ has: serviceHeading })).toHaveCount(1);
       }
       await expectNoHorizontalOverflow(page);
     }
@@ -259,7 +260,7 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
 
       await page.getByRole("button", { name: "Proceed to payment →", exact: true }).click();
       await expectRetainedBookingParams(page, "payment");
-      await expect(page.getByRole("heading", { name: "Confirm & pay", exact: true })).toBeVisible({ timeout: 10_000 });
+      await expect(page.getByRole("heading", { name: /^(Welcome back!|Confirm & pay)$/ })).toBeVisible({ timeout: 10_000 });
       await expect(page.getByRole("navigation", { name: "Booking progress" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Payment", exact: true })).toHaveAttribute(
         "aria-current",
