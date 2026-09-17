@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { CheckCircle2, Clock3, CreditCard, MessageCircle } from "lucide-react";
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useSearchParams } from "next/navigation";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -27,10 +28,14 @@ import { BookingConfirmationHero } from "@/components/booking/BookingConfirmatio
 import { bookingFlowHref } from "@/lib/booking/bookingFlow";
 import { CUSTOMER_SUPPORT_WHATSAPP_E164 } from "@/lib/site/customerSupport";
 import { resolveCustomerTotalPaidZar } from "@/lib/booking/customerBookingReference";
-const VERIFY_MAX_ATTEMPTS = 3;
-const VERIFY_RETRY_DELAY_MS = 1500;
+const VERIFY_MAX_ATTEMPTS = 2;
+const VERIFY_RETRY_DELAY_MS = 500;
+const PERSISTENCE_POLL_ATTEMPTS = 3;
+const PERSISTENCE_POLL_DELAY_MS = 250;
 /** Per-attempt fetch timeout — prevents "Confirming…" from hanging forever on a stuck verify. */
-const VERIFY_FETCH_TIMEOUT_MS = 15_000;
+// Must exceed the server's 12s Paystack timeout plus local/dev route compilation overhead.
+const VERIFY_FETCH_TIMEOUT_MS = 18_000;
+const OWNED_BOOKING_FETCH_TIMEOUT_MS = 4_000;
 
 function PageShell({ children, className }: { children: ReactNode; className?: string }) {
   return (
@@ -60,6 +65,18 @@ type StatusPayload = {
   selectedCleanerId?: string | null;
   /** Credit-covered / zero-balance success — no Paystack charge. */
   coveredSettlement?: boolean;
+};
+
+type OwnedPaymentSummary = {
+  bookingId?: string;
+  paid?: boolean;
+  amountZar?: number;
+  amountPaidCents?: number | null;
+  totalPaidZar?: number | null;
+  bookingReference?: string | null;
+  paystackReference?: string | null;
+  bookingSnapshot?: unknown;
+  serviceLabel?: string;
 };
 
 function isSnapshot(v: unknown): v is Record<string, unknown> {
@@ -222,6 +239,119 @@ function SuccessContent() {
     return true;
   }, [bookingIdParam]);
 
+  const recoverPersistedPaidBooking = useCallback(
+    async (runId: number): Promise<boolean> => {
+      const bookingId = bookingIdParam?.trim() ?? "";
+      if (!bookingId || completedRef.current) return completedRef.current;
+
+      let summary: OwnedPaymentSummary | null = null;
+      const sb = getSupabaseBrowser();
+
+      if (sb) {
+        try {
+          const { data: sessionData } = await sb.auth.getSession();
+          const token = sessionData.session?.access_token?.trim() ?? "";
+          if (token && runId === runIdRef.current) {
+            const response = await fetch(
+              `/api/bookings/${encodeURIComponent(bookingId)}/payment-summary`,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+                cache: "no-store",
+                signal: AbortSignal.timeout(OWNED_BOOKING_FETCH_TIMEOUT_MS),
+              },
+            );
+            if (response.ok && runId === runIdRef.current) {
+              summary = (await response.json()) as OwnedPaymentSummary;
+            }
+          }
+        } catch {
+          // Fall through to reference-bound database recovery.
+        }
+      }
+
+      if (!summary && reference && runId === runIdRef.current) {
+        try {
+          const query = new URLSearchParams({ reference, bookingId });
+          const response = await fetch(`/api/paystack/status?${query.toString()}`, {
+            cache: "no-store",
+            signal: AbortSignal.timeout(OWNED_BOOKING_FETCH_TIMEOUT_MS),
+          });
+          if (response.ok && runId === runIdRef.current) {
+            const payload = (await response.json()) as {
+              confirmation?: OwnedPaymentSummary | null;
+            };
+            summary = payload.confirmation ?? null;
+          }
+        } catch {
+          return false;
+        }
+      }
+
+      if (!summary?.paid || summary.bookingId !== bookingId || runId !== runIdRef.current) {
+        return false;
+      }
+
+      const amountCents =
+        typeof summary.amountPaidCents === "number" && Number.isFinite(summary.amountPaidCents)
+          ? Math.max(0, Math.round(summary.amountPaidCents))
+          : Math.max(
+              0,
+              Math.round(Number(summary.totalPaidZar ?? summary.amountZar ?? 0) * 100),
+            );
+      const persistedReference = summary.paystackReference?.trim() || reference || bookingId;
+      const snapshot = isSnapshot(summary.bookingSnapshot)
+        ? summary.bookingSnapshot
+        : {
+            total_zar: Number(summary.totalPaidZar ?? summary.amountZar ?? 0),
+            flat: { service: summary.serviceLabel ?? null },
+          };
+
+      setStatusData({
+        verified: true,
+        paymentStatus: "success",
+        reference: persistedReference,
+        amountCents,
+        currency: "ZAR",
+        bookingSnapshot: snapshot,
+        bookingInDatabase: true,
+        bookingId,
+        bookingReference: summary.bookingReference ?? null,
+      });
+      setErrorMessage(null);
+      completedRef.current = true;
+      setPhase("success");
+
+      emitBookingSubmittedAfterPaystackVerify({
+        bookingPersisted: true,
+        bookingId,
+        reference: summary.bookingReference ?? persistedReference,
+        service: summary.serviceLabel ?? null,
+        value: amountCents / 100,
+      });
+      try {
+        markRetargetingCandidate(false);
+        clearStoredReferral("customer");
+        clearBookingV2DraftStorage();
+        consumeBookingV2SuccessRedirect();
+        trackGrowthEvent(ANALYTICS_EVENTS.COMPLETE_BOOKING, {
+          reference: persistedReference,
+          booking_id: bookingId,
+          recovered_from_persisted_payment: true,
+        });
+        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_COMPLETED, null, {
+          reference: persistedReference,
+          booking_id: bookingId,
+          service_type: summary.serviceLabel ?? null,
+          estimated_price: amountCents / 100,
+        });
+      } catch {
+        // Non-fatal: the authoritative paid booking is already displayed.
+      }
+      return true;
+    },
+    [bookingIdParam, reference],
+  );
+
   const finalizeBooking = useCallback(async (): Promise<boolean> => {
     if (!reference) return false;
     if (completedRef.current) return true;
@@ -229,8 +359,38 @@ function SuccessContent() {
     const runId = ++runIdRef.current;
     setPhase("finalizing");
 
+    // The Paystack callback carries the already-persisted booking id. On reloads,
+    // webhook wins, or a previous verify that completed after a browser timeout,
+    // recover from the customer-owned row without another remote Paystack call.
+    if (await recoverPersistedPaidBooking(runId)) return true;
+
+    // Give the signed Paystack webhook a brief opportunity to persist the paid
+    // booking. When it wins the race, `/api/paystack/verify` uses its trusted DB
+    // fast path and avoids another remote Paystack verification request.
+    for (let poll = 0; poll < PERSISTENCE_POLL_ATTEMPTS; poll++) {
+      if (runId !== runIdRef.current) return false;
+      try {
+        const statusRes = await fetch(
+          `/api/paystack/status?${new URLSearchParams({ reference }).toString()}`,
+          { cache: "no-store", signal: AbortSignal.timeout(1_500) },
+        );
+        const statusJson = (await statusRes.json()) as { status?: string };
+        const status = statusJson.status?.trim().toLowerCase() ?? "unknown";
+        if (statusRes.ok && !["unknown", "pending_payment", "payment_expired"].includes(status)) {
+          if (await recoverPersistedPaidBooking(runId)) return true;
+          break;
+        }
+      } catch {
+        // Status polling is only an optimization; canonical verification follows.
+      }
+      if (poll < PERSISTENCE_POLL_ATTEMPTS - 1) {
+        await new Promise((resolve) => setTimeout(resolve, PERSISTENCE_POLL_DELAY_MS));
+      }
+    }
+
     for (let attempt = 1; attempt <= VERIFY_MAX_ATTEMPTS; attempt++) {
       if (runId !== runIdRef.current) return false;
+      if (attempt > 1 && (await recoverPersistedPaidBooking(runId))) return true;
       const controller = new AbortController();
       const timeoutId = window.setTimeout(() => controller.abort(), VERIFY_FETCH_TIMEOUT_MS);
       try {
@@ -403,6 +563,7 @@ function SuccessContent() {
         return false;
       } catch (err) {
         if (runId !== runIdRef.current) return false;
+        if (await recoverPersistedPaidBooking(runId)) return true;
         const aborted =
           (err instanceof DOMException && err.name === "AbortError") ||
           (err instanceof Error && err.name === "AbortError");
@@ -418,9 +579,10 @@ function SuccessContent() {
       }
     }
 
+    if (runId === runIdRef.current && (await recoverPersistedPaidBooking(runId))) return true;
     if (runId === runIdRef.current) setPhase("needs_retry");
     return false;
-  }, [reference]);
+  }, [recoverPersistedPaidBooking, reference]);
 
   useEffect(() => {
     if (successPath === "area_review" || successPath === "missing") return;
@@ -439,19 +601,71 @@ function SuccessContent() {
   }, [successPath, finalizeBooking, finalizeCoveredBooking]);
 
   if (phase === "area_review") {
+    const requestReference = bookingIdParam?.trim()
+      ? bookingIdParam.trim().split("-")[0].toUpperCase()
+      : null;
+
     return (
-      <PageShell>
-        <div className="rounded-2xl border border-zinc-200 bg-white p-6 text-center shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
-          <h1 className="text-xl font-semibold text-zinc-900 dark:text-zinc-50">Request received</h1>
-          <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            We&apos;re reviewing coverage for your area. This is not a confirmed booking yet — we&apos;ll be in touch.
-          </p>
-          <Link
-            href={bookingFlowHref("entry")}
-            className="mt-6 inline-flex rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
-          >
-            Back to booking
-          </Link>
+      <PageShell className="max-w-xl">
+        <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="px-6 pb-5 pt-7 text-center sm:px-8">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 dark:bg-emerald-950/50 dark:text-emerald-400">
+              <CheckCircle2 className="h-7 w-7" aria-hidden />
+            </div>
+            <p className="mt-4 text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+              Area review
+            </p>
+            <h1 className="mt-1 text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+              Request received
+            </h1>
+            <p className="mx-auto mt-2 max-w-md text-sm leading-6 text-zinc-600 dark:text-zinc-400">
+              We&apos;ll check coverage and cleaner availability, then contact you to confirm your booking.
+            </p>
+            {requestReference ? (
+              <p className="mt-3 text-xs text-zinc-500">
+                Request reference <span className="font-semibold text-zinc-700 dark:text-zinc-300">{requestReference}</span>
+              </p>
+            ) : null}
+          </div>
+
+          <div className="border-y border-zinc-200 bg-zinc-50 px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900/60 sm:px-8">
+            <div className="grid grid-cols-3 gap-3 text-center text-xs text-zinc-600 dark:text-zinc-400">
+              {[
+                { Icon: Clock3, label: "Review area" },
+                { Icon: CheckCircle2, label: "Check availability" },
+                { Icon: MessageCircle, label: "Contact you" },
+              ].map(({ Icon, label }) => (
+                <div key={label} className="flex flex-col items-center gap-1.5">
+                  <Icon className="h-4 w-4 text-primary" aria-hidden />
+                  <span>{label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="px-6 py-5 sm:px-8">
+            <div className="flex items-center justify-center gap-2 text-sm text-zinc-600 dark:text-zinc-400">
+              <CreditCard className="h-4 w-4 text-emerald-600" aria-hidden />
+              <span>No payment has been taken.</span>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2">
+              <Link
+                href={bookingFlowHref("entry")}
+                className="inline-flex items-center justify-center rounded-xl bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground"
+              >
+                Back to booking
+              </Link>
+              <a
+                href={`https://wa.me/${CUSTOMER_SUPPORT_WHATSAPP_E164.replace(/\D/g, "")}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-zinc-200 px-5 py-3 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden />
+                WhatsApp us
+              </a>
+            </div>
+          </div>
         </div>
       </PageShell>
     );

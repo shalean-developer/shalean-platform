@@ -50,6 +50,18 @@ describe("Paystack finalize gateway call sites", () => {
     expect(src).not.toMatch(/await\s+syncPaidBookingSideEffects\s*\(/);
   });
 
+  it("verify callback defers non-critical work until after the confirmation response", () => {
+    const pipeline = readFileSync(join(root, "lib/booking/runPaystackVerifyFinalizePipeline.ts"), "utf8");
+    const finalize = readFileSync(join(root, "lib/booking/finalizePaystackChargeSuccess.ts"), "utf8");
+    const upsert = readFileSync(join(root, "lib/booking/upsertBookingFromPaystack.ts"), "utf8");
+
+    expect(pipeline).toContain('deferNonCriticalSideEffects: opsLogSource === "paystack/verify"');
+    expect(finalize).toContain("deferPostPersistSideEffects: params.deferNonCriticalSideEffects");
+    expect(finalize).toMatch(/after\(async \(\) => \{/);
+    expect(upsert).toContain("deferPostPersistSideEffects?: boolean");
+    expect(upsert).toMatch(/if \(input\.deferPostPersistSideEffects\) \{\s*after\(async \(\) => \{/);
+  });
+
   it("webhook does not await Zoho side effects (Paystack retry hang guard)", () => {
     const src = readFileSync(join(root, "app/api/paystack/webhook/route.ts"), "utf8");
     expect(src).toMatch(/void\s+syncPaidBookingSideEffects\s*\(/);

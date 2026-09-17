@@ -34,10 +34,25 @@ function buildAdmin(initial: RowState) {
   const state = { row: { ...initial } as RowState };
   const admin = {
     from(table: string) {
+      if (table === "recurring_prepaid_packages") {
+        return {
+          update() {
+            const chain = {
+              eq() {
+                return chain;
+              },
+            };
+            return chain;
+          },
+        };
+      }
       if (table !== "bookings") throw new Error(`unexpected table ${table}`);
       return {
         select() {
           return {
+            async limit() {
+              return { data: [], error: null };
+            },
             eq() {
               return {
                 async maybeSingle() {
@@ -182,6 +197,101 @@ describe("ensureBookingPaymentSession", () => {
     expect(fetch).not.toHaveBeenCalled();
   });
 
+  it("loads a customer_id-only booking without requesting legacy user_id", async () => {
+    const selectedColumns: string[] = [];
+    const row = {
+      id: BOOKING_ID,
+      status: "pending_payment",
+      payment_status: "pending",
+      payment_completed_at: null,
+      paystack_reference: "ref_customer_only",
+      payment_link: "https://checkout.paystack.com/customer-only",
+      payment_link_expires_at: new Date(Date.now() + 60_000).toISOString(),
+      customer_email: "a@b.co.za",
+      customer_id: "22222222-2222-4222-8222-222222222222",
+      total_price: 400,
+      total_paid_zar: null,
+      price_snapshot: null,
+      booking_snapshot: {},
+      service: "Regular Cleaning",
+      date: "2026-07-20",
+      time: "10:00",
+    };
+    const admin = {
+      from() {
+        return {
+          select(columns: string) {
+            selectedColumns.push(columns);
+            return {
+              async limit() {
+                return { data: [{ customer_id: row.customer_id }], error: null };
+              },
+              eq() {
+                return {
+                  async maybeSingle() {
+                    if (columns.includes("user_id")) {
+                      return {
+                        data: null,
+                        error: { code: "42703", message: "column bookings.user_id does not exist" },
+                      };
+                    }
+                    return { data: row, error: null };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as SupabaseClient;
+
+    const result = await ensureBookingPaymentSession(admin, {
+      bookingId: BOOKING_ID,
+      access: { kind: "owner", userId: row.customer_id },
+    });
+
+    expect(result.status).toBe("ready");
+    expect(selectedColumns.some((columns) => columns.includes("customer_id"))).toBe(true);
+    expect(selectedColumns.some((columns) => columns.includes("user_id"))).toBe(false);
+  });
+
+  it("reports a booking lookup failure separately from a missing booking", async () => {
+    const admin = {
+      from() {
+        return {
+          select(columns: string) {
+            return {
+              async limit() {
+                return { data: [{ customer_id: "owner" }], error: null };
+              },
+              eq() {
+                return {
+                  async maybeSingle() {
+                    return {
+                      data: null,
+                      error: { code: "PGRST204", message: "schema cache lookup failed" },
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as SupabaseClient;
+
+    const result = await ensureBookingPaymentSession(admin, {
+      bookingId: BOOKING_ID,
+      access: { kind: "owner", userId: "owner" },
+    });
+
+    expect(result.status).toBe("failed");
+    if (result.status === "failed") {
+      expect(result.errorCode).toBe(PAYMENT_ERROR_CODES.PAYMENT_INITIALIZATION_FAILED);
+      expect(result.retryable).toBe(true);
+    }
+  });
+
   it("reuses a usable stored payment link", async () => {
     const expires = new Date(Date.now() + 60 * 60 * 1000).toISOString();
     const { admin } = buildAdmin({
@@ -251,6 +361,39 @@ describe("ensureBookingPaymentSession", () => {
     expect(fetch).toHaveBeenCalledTimes(1);
     const hist = readPaymentAttemptHistory(state.row.booking_snapshot);
     expect(hist.some((h) => h.reference === "bv2_old")).toBe(true);
+  });
+
+  it("skips remote verification when confirm is creating a fresh payment attempt", async () => {
+    const { fetchPaystackTransactionVerify } = await import("@/lib/payments/verifyPaystackTransaction");
+    const { admin } = buildAdmin({
+      id: BOOKING_ID,
+      status: "pending_payment",
+      payment_status: null,
+      payment_completed_at: null,
+      paystack_reference: "bv2_fresh_confirm",
+      payment_link: null,
+      payment_link_expires_at: null,
+      customer_email: "a@b.co.za",
+      customer_id: "22222222-2222-4222-8222-222222222222",
+      user_id: "22222222-2222-4222-8222-222222222222",
+      total_price: 400,
+      total_paid_zar: null,
+      price_snapshot: null,
+      booking_snapshot: {},
+      service: "Regular Cleaning",
+      date: "2026-07-20",
+      time: "10:00",
+    });
+
+    const result = await ensureBookingPaymentSession(admin, {
+      bookingId: BOOKING_ID,
+      access: { kind: "owner", userId: "22222222-2222-4222-8222-222222222222" },
+      freshAttempt: true,
+    });
+
+    expect(result.status).toBe("ready");
+    expect(fetchPaystackTransactionVerify).not.toHaveBeenCalled();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 
   it("treats missing authorization_url as initialization failure", async () => {

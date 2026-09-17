@@ -12,59 +12,64 @@ type Props = {
 };
 
 export function BookingV2StepIndicator({ currentStep, onStepClick }: Props) {
+  const completedProgress = ((currentStep - 1) / (STEPS.length - 1)) * 100;
+
   return (
     <nav aria-label="Booking progress" className="w-full min-w-0">
-      <ol className="flex items-center justify-center gap-0">
-        {STEPS.map((step, index) => {
+      <ol className="relative mx-auto grid w-full max-w-3xl grid-cols-4">
+        <li
+          className="pointer-events-none absolute left-[12.5%] right-[12.5%] top-4 h-px bg-slate-200"
+          aria-hidden
+        >
+          <span
+            className="block h-full bg-primary transition-[width] duration-300"
+            style={{ width: `${completedProgress}%` }}
+          />
+        </li>
+        {STEPS.map((step) => {
           const isCompleted = step < currentStep;
           const isActive = step === currentStep;
           const isClickable = onStepClick && step < currentStep;
 
           return (
-            <li key={step} className="flex min-w-0 items-center">
+            <li key={step} className="relative z-10 flex min-w-0 justify-center">
               <button
                 type="button"
                 onClick={() => isClickable && onStepClick(step)}
                 disabled={!isClickable}
                 className={cn(
-                  "flex min-h-11 min-w-0 flex-col items-center justify-center gap-0.5 rounded-lg px-1.5 transition sm:gap-1 sm:px-3 md:px-4",
-                  isClickable && "cursor-pointer hover:bg-accent",
+                  "group flex min-w-0 flex-col items-center gap-1 bg-transparent px-1 transition sm:px-3",
+                  isClickable && "cursor-pointer",
                   !isClickable && "cursor-default",
                 )}
                 aria-current={isActive ? "step" : undefined}
-                aria-label={BOOKING_STEP_LABELS[step]}
+                aria-label={`${BOOKING_STEP_LABELS[step]}${isCompleted ? " completed" : ""}`}
               >
                 <div
                   className={cn(
-                    "flex h-7 w-7 items-center justify-center rounded-full border-2 text-xs font-bold transition-colors sm:h-8 sm:w-8 sm:text-sm",
-                    isCompleted && "border-primary bg-primary text-primary-foreground",
-                    isActive && "border-primary bg-background text-primary shadow-[var(--ui-shadow-sm)]",
-                    !isCompleted && !isActive && "border-border bg-card text-muted-foreground",
+                    "flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium shadow-sm ring-2 ring-background transition-colors",
+                    isCompleted && "bg-primary text-primary-foreground group-hover:bg-primary/90",
+                    isActive && "bg-slate-950 text-white",
+                    !isCompleted && !isActive && "bg-slate-200 text-slate-800",
                   )}
                 >
-                  {isCompleted ? <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4" strokeWidth={3} /> : step}
+                  {isCompleted ? (
+                    <Check className="h-4 w-4" strokeWidth={2.5} aria-hidden />
+                  ) : (
+                    step
+                  )}
                 </div>
                 <span
                   className={cn(
-                    "hidden text-xs font-medium sm:block",
-                    isActive && "text-primary",
-                    isCompleted && "text-foreground",
+                    "truncate text-[11px] font-medium leading-tight sm:text-xs",
+                    isActive && "text-slate-950",
+                    isCompleted && "text-slate-950",
                     !isCompleted && !isActive && "text-muted-foreground",
                   )}
                 >
                   {BOOKING_STEP_LABELS[step]}
                 </span>
               </button>
-
-              {index < STEPS.length - 1 && (
-                <div
-                  className={cn(
-                    "h-0.5 w-3 shrink-0 rounded-full sm:w-8 md:w-12",
-                    step < currentStep ? "bg-primary" : "bg-border",
-                  )}
-                  aria-hidden
-                />
-              )}
             </li>
           );
         })}

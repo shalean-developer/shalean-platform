@@ -288,14 +288,6 @@ export function buildCustomerPriceLineItems(
         amountZar: 0,
       });
       lines.push({
-        label: `Equipment base fee: R${input.equipmentQuote.base_fee}`,
-        amountZar: input.equipmentQuote.base_fee,
-      });
-      lines.push({
-        label: `Distance charge: R${input.equipmentQuote.distance_charge}`,
-        amountZar: input.equipmentQuote.distance_charge,
-      });
-      lines.push({
         label: "Equipment logistics fee",
         amountZar: input.equipment_logistics_fee,
       });

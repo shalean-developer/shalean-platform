@@ -4,6 +4,7 @@ import { MarketingAreasSection } from "@/components/marketing-home/sections/Mark
 import { MarketingHomeFaqSection } from "@/components/marketing-home/sections/MarketingHomeFaqSection";
 import { MarketingHomeFinalCta } from "@/components/marketing-home/sections/MarketingHomeFinalCta";
 import { MarketingHomeHowItWorksSection } from "@/components/marketing-home/sections/MarketingHomeHowItWorksSection";
+import { MarketingHomeReferralSection } from "@/components/marketing-home/sections/MarketingHomeReferralSection";
 import { MarketingHomeServicesSection } from "@/components/marketing-home/sections/MarketingHomeServicesSection";
 import { MarketingHomeTrustSection } from "@/components/marketing-home/sections/MarketingHomeTrustSection";
 import { PromotionFeaturedCard } from "@/components/promotions/PromotionFeaturedCard";
@@ -26,6 +27,7 @@ export async function MarketingHomeDbSections() {
       <MarketingHomeTrustSection />
       <MarketingHomeServicesSection />
       <PromotionFeaturedCard />
+      <MarketingHomeReferralSection />
       <MarketingAreasSection />
       <MarketingHomeFinalCta />
       <MarketingHomeFaqSection faqs={resolvedFaqs} />

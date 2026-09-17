@@ -127,6 +127,38 @@ function buildFakeBookingsAdmin(opts: { onInsertReturnsId?: string } = {}) {
               }),
             };
           },
+          delete: () => ({ eq: async () => ({ error: null }) }),
+        };
+      }
+      if (table === "recurring_prepaid_allocations") {
+        return {
+          select: () => ({
+            eq: () => ({
+              eq: () => ({
+                eq: () => ({
+                  eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+                }),
+              }),
+            }),
+          }),
+        };
+      }
+      if (table === "recurring_prepaid_packages") {
+        return {
+          select: () => ({
+            eq: () => ({
+              contains: () => ({
+                in: () => ({
+                  order: () => ({
+                    limit: () => ({ maybeSingle: async () => ({ data: null, error: null }) }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+          upsert: () => ({
+            select: () => ({ single: async () => ({ data: { id: "pkg_test" }, error: null }) }),
+          }),
         };
       }
       if (table === "booking_payment_recovery_jobs") {
@@ -291,6 +323,8 @@ describe("M-6: insertRecurringOccurrenceBooking propagates preferred cleaner", (
         price: 600,
         booking_snapshot_template: buildLockedTemplate(),
         preferred_cleaner_id: VALID_CLEANER_A,
+        frequency: "weekly",
+        days_of_week: [2],
       },
       occurrenceDateYmd: "2026-05-19",
       customerEmail: "Sam@Example.com",
@@ -319,6 +353,8 @@ describe("M-6: insertRecurringOccurrenceBooking propagates preferred cleaner", (
         price: 600,
         booking_snapshot_template: buildLockedTemplate({ lockedCleanerId: VALID_CLEANER_B }),
         preferred_cleaner_id: null,
+        frequency: "weekly",
+        days_of_week: [2],
       },
       occurrenceDateYmd: "2026-05-19",
       customerEmail: "sam@example.com",
@@ -341,6 +377,8 @@ describe("M-6: insertRecurringOccurrenceBooking propagates preferred cleaner", (
         price: 600,
         booking_snapshot_template: buildLockedTemplate(),
         preferred_cleaner_id: null,
+        frequency: "weekly",
+        days_of_week: [2],
       },
       occurrenceDateYmd: "2026-05-19",
       customerEmail: "sam@example.com",
@@ -366,6 +404,8 @@ describe("M-6: insertRecurringOccurrenceBooking propagates preferred cleaner", (
           topCleanerId: "also-not-a-uuid",
         }),
         preferred_cleaner_id: "garbage",
+        frequency: "weekly",
+        days_of_week: [2],
       },
       occurrenceDateYmd: "2026-05-19",
       customerEmail: "sam@example.com",

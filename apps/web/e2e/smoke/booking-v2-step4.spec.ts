@@ -130,13 +130,12 @@ test.describe("RD-P05F — Booking V2 Step 4 payment presentation smoke", () => 
     await seedDraft(page, "regular-cleaning");
     const forbiddenMutations = await installNonMutatingApiSandbox(page);
 
-    const response = await page.goto("/book/regular-cleaning?step=4", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/book/regular-cleaning?step=payment", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=4/);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=payment/);
 
-    await expect(page.getByRole("heading", { name: "Payment", exact: true })).toBeVisible();
-    await expect(page.getByText("Sign in or create an account to complete your booking.", { exact: true })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Sign in to confirm your booking", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome back!", exact: true })).toBeVisible();
+    await expect(page.getByText("Your booking is saved. Sign in to continue to payment.", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Sign in", exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "Create account", exact: true })).toBeVisible();
     await expect(page.getByLabel("Email address")).toBeVisible();
@@ -144,13 +143,13 @@ test.describe("RD-P05F — Booking V2 Step 4 payment presentation smoke", () => 
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "Create account", exact: true }).click();
-    await expect(page.getByRole("heading", { name: "Create an account", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Create your account", exact: true })).toBeVisible();
     await expect(page.getByLabel(/Full name/)).toBeVisible();
     await expect(page.getByLabel(/Phone number/)).toBeVisible();
     await expect(page.getByRole("button", { name: "Create account & continue", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Sign in", exact: true }).first().click();
-    await expect(page.getByRole("heading", { name: "Sign in to confirm your booking", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Welcome back!", exact: true })).toBeVisible();
 
     await expectDraft(page, {
       serviceSlug: "regular-cleaning",
@@ -169,14 +168,14 @@ test.describe("RD-P05F — Booking V2 Step 4 payment presentation smoke", () => 
     await seedDraft(page, "regular-cleaning");
     const forbiddenMutations = await installNonMutatingApiSandbox(page);
 
-    const response = await page.goto("/book/regular-cleaning?step=4", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/book/regular-cleaning?step=payment", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=4/);
-    await expect(page.getByRole("heading", { name: "Payment", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=payment/);
+    await expect(page.getByRole("heading", { name: "Welcome back!", exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await page.getByRole("button", { name: "← Back", exact: true }).click();
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=3/);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=review/);
     await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible();
 
     await expectDraft(page, {

@@ -24,6 +24,7 @@ import { EquipmentSection } from "@/src/features/booking-v2/components/Equipment
 import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
 import { TeamAvailabilitySection } from "@/src/features/booking-v2/components/TeamAvailabilitySection";
 import type { AvailableCleanerV2 } from "@/src/features/booking-v2/types";
+import { cachedClientRequest } from "@/lib/booking-v2/clientRequestCache";
 import { cn } from "@/lib/utils";
 import {
   SERVICE_CONFIG,
@@ -40,7 +41,7 @@ import {
   recurringFrequencyLabel,
   shouldShowRecurringDayPicker,
 } from "@/src/features/booking-v2/config/recurringScheduleOptions";
-import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
+import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
 import {
   ServiceQuestionOptionCards,
@@ -177,8 +178,12 @@ function ModalQuestionField({ question }: { question: FormQuestion }) {
   const { register, control } = useFormContext() as any;
   const fieldKey = `serviceDetails.${question.key}`;
 
-  if (question.key === "bedrooms" || question.key === "bathrooms") {
-    const kind = question.key as "bedrooms" | "bathrooms";
+  if (
+    question.key === "bedrooms" ||
+    question.key === "bathrooms" ||
+    question.key === "extraRooms"
+  ) {
+    const kind = question.key as "bedrooms" | "bathrooms" | "extraRooms";
     return (
       <div>
         <label htmlFor={question.key} className="mb-1.5 block text-sm font-medium text-slate-700">
@@ -395,45 +400,6 @@ function LocationEditPanel() {
         />
       </div>
 
-      <div>
-        <label htmlFor="edit-access" className="mb-1.5 block text-sm font-medium text-slate-700">
-          Access instructions (optional)
-        </label>
-        <input
-          id="edit-access"
-          type="text"
-          placeholder="e.g. Ring bell, use side gate…"
-          {...register("accessInstructions")}
-          className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-        />
-      </div>
-
-      <div className="grid grid-cols-2 gap-3">
-        <div>
-          <label htmlFor="edit-parking" className="mb-1.5 block text-sm font-medium text-slate-700">
-            Parking (optional)
-          </label>
-          <input
-            id="edit-parking"
-            type="text"
-            placeholder="Street parking…"
-            {...register("parkingInstructions")}
-            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-        <div>
-          <label htmlFor="edit-gate" className="mb-1.5 block text-sm font-medium text-slate-700">
-            Gate code (optional)
-          </label>
-          <input
-            id="edit-gate"
-            type="text"
-            placeholder="e.g. #1234"
-            {...register("gateCode")}
-            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-      </div>
     </div>
   );
 }
@@ -793,8 +759,7 @@ function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
   const areas = formatAreasServedPreview(cleaner.areasServed);
 
   return (
-    <div className="flex min-w-0 max-w-full flex-col items-center gap-2 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/60 px-4 py-4 text-center">
-      {/* Avatar */}
+    <div className="flex min-w-0 max-w-full items-start gap-3 overflow-hidden rounded-2xl border border-blue-100 bg-blue-50/60 p-3 sm:p-4">
       <div
         className={cn(
           "flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-sm font-bold",
@@ -805,34 +770,34 @@ function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
         {cleaner.initials}
       </div>
 
-      {/* Name */}
-      <p className="w-full truncate text-sm font-semibold leading-snug text-slate-900">{cleaner.name}</p>
+      <div className="min-w-0 flex-1">
+        <p className="break-words text-sm font-semibold leading-snug text-slate-900">
+          {cleaner.name}
+        </p>
 
-      {/* Rating + jobs */}
-      <div className="flex flex-wrap items-center justify-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
-        {cleaner.rating != null && (
-          <span className="flex items-center gap-0.5">
-            <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden />
-            {cleaner.rating.toFixed(1)}
-          </span>
-        )}
-        <span>{cleaner.jobsCompleted.toLocaleString()} jobs</span>
-      </div>
-
-      {/* Areas */}
-      {areas ? (
-        <div className="w-full min-w-0 text-xs text-slate-400">
-          <p className="line-clamp-2 break-words">{areas.primary}</p>
-          {areas.moreCount > 0 ? (
-            <p className="mt-0.5 font-medium">+{areas.moreCount} more</p>
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
+          {cleaner.rating != null ? (
+            <span className="inline-flex items-center gap-0.5">
+              <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden />
+              {cleaner.rating.toFixed(1)}
+            </span>
           ) : null}
+          <span>{cleaner.jobsCompleted.toLocaleString()} jobs</span>
         </div>
-      ) : null}
 
-      {/* Badge */}
-      <span className="rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-xs font-medium text-blue-700">
-        Preferred cleaner
-      </span>
+        {areas ? (
+          <div className="mt-1.5 min-w-0 text-xs text-slate-400">
+            <p className="line-clamp-2 break-words">{areas.primary}</p>
+            {areas.moreCount > 0 ? (
+              <p className="mt-0.5 font-medium">+{areas.moreCount} more</p>
+            ) : null}
+          </div>
+        ) : null}
+
+        <span className="mt-2 inline-flex rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-xs font-medium text-blue-700">
+          Preferred cleaner
+        </span>
+      </div>
     </div>
   );
 }
@@ -843,17 +808,19 @@ function ReviewSection({
   number,
   title,
   onEdit,
+  className,
   children,
 }: {
   number: number;
   title: string;
   onEdit: () => void;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-100 bg-white">
+    <div className={cn("rounded-2xl border border-slate-100 bg-white", className)}>
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
             {number}
@@ -870,7 +837,7 @@ function ReviewSection({
         </button>
       </div>
       {/* Body */}
-      <div className="min-w-0 px-4 py-4 sm:px-5">{children}</div>
+      <div className="min-w-0 px-4 py-3 sm:px-5">{children}</div>
     </div>
   );
 }
@@ -909,8 +876,16 @@ export function Step3Review() {
     params.set("durationMinutes", String(duration));
     if (locationId) params.set("locationId", locationId);
 
-    fetch(`/api/booking-v2/available-cleaners?${params.toString()}`)
-      .then((r) => r.json())
+    const url = `/api/booking-v2/available-cleaners?${params.toString()}`;
+    cachedClientRequest(
+      `available-cleaners:${url}`,
+      async () => {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`available_cleaners_http_${response.status}`);
+        return response.json() as Promise<{ cleaners?: AvailableCleanerV2[] }>;
+      },
+      20_000,
+    )
       .then((json: { cleaners?: AvailableCleanerV2[] }) => {
         const all = json.cleaners ?? [];
         const matched = all.filter((c) => ids.includes(c.id));
@@ -986,10 +961,10 @@ export function Step3Review() {
       )}
 
       {/* ── Page ── */}
-      <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-3 space-y-5 sm:grid-cols-2 [&>*+*]:!mt-0">
 
         {/* Header */}
-        <div className="text-center">
+        <div className="text-center sm:col-span-2">
           <h2 className="text-xl font-bold text-slate-900">Review your booking</h2>
           <p className="mt-1 text-sm text-slate-500">
             Everything look right? Make any changes before you pay.
@@ -997,9 +972,9 @@ export function Step3Review() {
         </div>
 
         {/* Service badge */}
-        <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-4 sm:gap-4 sm:px-5">
-          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-blue-600">
-            <config.icon className="h-6 w-6 text-white" aria-hidden />
+        <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 sm:col-span-2 sm:px-5">
+          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600">
+            <config.icon className="h-5 w-5 text-white" aria-hidden />
           </div>
           <div className="min-w-0">
             <p className="text-base font-bold text-blue-900">{serviceLabel}</p>
@@ -1008,7 +983,16 @@ export function Step3Review() {
         </div>
 
         {/* ① Location */}
-        <ReviewSection number={1} title="Location" onEdit={() => openEdit("location")}>
+        <ReviewSection
+          number={1}
+          title="Location"
+          onEdit={() => openEdit("location")}
+          className={
+            values.equipmentRequired === "yes" || values.equipmentRequired === "no"
+              ? undefined
+              : "sm:col-span-2"
+          }
+        >
           <div className="flex items-start gap-2.5">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" aria-hidden />
             <div>
@@ -1022,25 +1006,6 @@ export function Step3Review() {
             </div>
           </div>
 
-          {(values.accessInstructions || values.gateCode || values.parkingInstructions) && (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {values.accessInstructions && (
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  Access: {values.accessInstructions}
-                </span>
-              )}
-              {values.gateCode && (
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  Gate: {values.gateCode}
-                </span>
-              )}
-              {values.parkingInstructions && (
-                <span className="rounded-lg bg-slate-100 px-2.5 py-1 text-xs text-slate-600">
-                  Parking: {values.parkingInstructions}
-                </span>
-              )}
-            </div>
-          )}
         </ReviewSection>
 
         {(values.equipmentRequired === "yes" || values.equipmentRequired === "no") && (
@@ -1074,7 +1039,12 @@ export function Step3Review() {
 
         {/* ② Clean details */}
         {serviceDetails.length > 0 && (
-          <ReviewSection number={2} title="Clean details" onEdit={() => openEdit("property")}>
+          <ReviewSection
+            number={3}
+            title="Clean details"
+            onEdit={() => openEdit("property")}
+            className="sm:col-span-2"
+          >
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               {serviceDetails.map(([key, val]) => {
                 const question = step1Questions.find((q) => q.key === key);
@@ -1107,10 +1077,11 @@ export function Step3Review() {
           number={serviceDetails.length > 0 ? 3 : 2}
           title="Schedule"
           onEdit={() => openEdit("schedule")}
+          className="sm:col-span-2"
         >
           {/* Date + time cards */}
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
+          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
               <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-400">
                 <Calendar className="h-3.5 w-3.5" aria-hidden />
                 Date
@@ -1119,17 +1090,17 @@ export function Step3Review() {
                 {values.date ? formatDate(values.date) : "—"}
               </p>
             </div>
-            <div className="flex flex-col items-center justify-center rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center">
+            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:flex-col sm:justify-center sm:text-center">
               <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-400">
                 <Clock className="h-3.5 w-3.5" aria-hidden />
                 Time
               </p>
-              <p className="text-2xl font-bold text-blue-600">{values.time || "—"}</p>
+              <p className="text-xl font-bold text-blue-600">{values.time || "—"}</p>
             </div>
           </div>
 
           {/* Booking meta chips */}
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
             <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
               {values.bookingType === "recurring" ? (
                 <>
@@ -1214,7 +1185,7 @@ export function Step3Review() {
                   </div>
                 </div>
               ) : hasDetails ? (
-                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                <div className="grid grid-cols-1 gap-2.5">
                   {cleanerDetails.map((cleaner) => (
                     <CleanerPreviewCard key={cleaner.id} cleaner={cleaner} />
                   ))}
@@ -1245,6 +1216,7 @@ export function Step3Review() {
           }
           title="Add-ons"
           onEdit={() => openEdit("extras")}
+          className={values.cleanerMode === "individual_cleaners" ? undefined : "sm:col-span-2"}
         >
           {selectedExtras.length === 0 ? (
             <div className="flex items-center gap-2 text-sm text-slate-400">
@@ -1272,12 +1244,12 @@ export function Step3Review() {
         </ReviewSection>
 
         {/* Price breakdown */}
-        <div className="rounded-2xl border border-slate-200 bg-white">
-          <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-3.5 sm:px-5">
+        <div className="rounded-2xl border border-slate-200 bg-white sm:col-span-2">
+          <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5">
             <h3 className="text-sm font-bold text-slate-800">Price breakdown</h3>
           </div>
 
-          <div className="min-w-0 space-y-2.5 px-4 py-4 sm:px-5">
+          <div className="min-w-0 space-y-2 px-4 py-3 sm:px-5">
             <CustomerPriceBreakdown pricing={pricingSummary} />
             <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3">
               <span className="text-base font-bold text-slate-900">
@@ -1290,22 +1262,23 @@ export function Step3Review() {
             {values.bookingType === "recurring" && values.recurringFrequency ? (
               <div className="space-y-1 border-t border-slate-100 pt-3 text-xs text-slate-600">
                 {(() => {
-                  const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                  const prepaid = buildRecurringPrepaymentQuote({
+                    startDate: values.recurringStartDate || values.date,
                     frequency: values.recurringFrequency,
-                    daysOfWeek: values.recurringDays ?? [],
-                    pricePerVisitZar: estimatedTotal,
+                    recurringDays: values.recurringDays ?? [],
+                    perVisitZar: estimatedTotal,
                   });
+                  if (!prepaid) return <p>Choose a supported recurring schedule to continue.</p>;
                   return (
                     <>
                       <p>
-                        About {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated
-                        monthly total{" "}
+                        First 30 days: {prepaid.visitCount} visit{prepaid.visitCount === 1 ? "" : "s"} · total{" "}
                         <span className="font-semibold text-slate-800">
-                          R{estimatedMonthlyZar.toLocaleString("en-ZA")}
+                          R{prepaid.grossPackageZar.toLocaleString("en-ZA")}
                         </span>
                       </p>
                       <p className="font-medium text-slate-700">
-                        Amount due today: R{estimatedTotal.toLocaleString("en-ZA")} (this visit)
+                        Amount due today: R{prepaid.grossPackageZar.toLocaleString("en-ZA")} (first 30 days)
                       </p>
                     </>
                   );
@@ -1314,17 +1287,17 @@ export function Step3Review() {
             ) : null}
           </div>
 
-          <div className="border-t border-slate-100 bg-slate-50 px-4 py-3 sm:px-5">
+          <div className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 sm:px-5">
             <p className="text-xs text-slate-400">
               {values.bookingType === "recurring"
-                ? "Pay today for this visit. Future visits bill at the same per-visit price (or on your monthly invoice if enabled)."
+                ? "Pay all visits in each 30-day billing cycle together. The package renews automatically while the recurring booking remains active."
                 : "Final amount confirmed before payment. No hidden fees."}
             </p>
           </div>
         </div>
 
         {/* Trust strip */}
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
+        <div className="grid grid-cols-1 gap-2 sm:col-span-2 sm:grid-cols-3 sm:gap-3">
           {[
             { Icon: ShieldCheck, label: "Vetted cleaners" },
             { Icon: CreditCard, label: "Secure payment" },
@@ -1332,7 +1305,7 @@ export function Step3Review() {
           ].map(({ Icon, label }) => (
             <div
               key={label}
-              className="flex flex-row items-center gap-2.5 rounded-xl border border-slate-100 bg-white p-3 sm:flex-col sm:items-center sm:gap-1.5 sm:text-center"
+              className="flex flex-row items-center gap-2.5 rounded-xl border border-slate-100 bg-white p-2.5 sm:justify-center sm:text-center"
             >
               <Icon className="h-5 w-5 shrink-0 text-blue-600" aria-hidden />
               <p className="text-xs font-medium text-slate-600">{label}</p>

@@ -1,12 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { signOut } from "@/lib/auth/authClient";
 import { useAuth } from "@/lib/auth/useAuth";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { readCachedUserRole } from "@/lib/auth/userRole";
+import {
+  publicHeaderAccountLabel,
+  publicHeaderDashboardHref,
+  publicHeaderPostAuthRedirect,
+  publicHeaderShowsCustomerBookings,
+} from "@/lib/auth/publicHeaderAuthRouting";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -18,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-type SiteTopBarAccountVariant = "topbar" | "header";
+type SiteTopBarAccountVariant = "topbar" | "header" | "promotion";
 
 function userDisplayName(user: User | null): string {
   const meta = user?.user_metadata as Record<string, unknown> | undefined;
@@ -29,8 +35,7 @@ function userDisplayName(user: User | null): string {
   return name || user?.email || "Account";
 }
 
-function avatarLetter(user: User | null, cleanerLoggedIn: boolean): string {
-  if (cleanerLoggedIn && !user) return "C";
+function avatarLetter(user: User | null): string {
   return userDisplayName(user).trim()[0]?.toUpperCase() ?? "S";
 }
 
@@ -48,36 +53,27 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [cleanerLoggedIn, setCleanerLoggedIn] = useState(false);
-
-  useEffect(() => {
-    const sb = getSupabaseBrowser();
-    if (!sb) {
-      setCleanerLoggedIn(false);
-      return;
-    }
-    const sync = () => {
-      void sb.auth.getSession().then(({ data }) => {
-        setCleanerLoggedIn(Boolean(data.session?.access_token));
-      });
-    };
-    sync();
-    const { data: sub } = sb.auth.onAuthStateChange(() => sync());
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  const redirectTarget = useMemo(() => {
-    const q = searchParams.toString();
-    return `${pathname}${q ? `?${q}` : ""}`;
-  }, [pathname, searchParams]);
+  const redirectTarget = useMemo(
+    () => publicHeaderPostAuthRedirect(pathname, searchParams.toString()),
+    [pathname, searchParams],
+  );
 
   const loginHref = `/auth/login?redirect=${encodeURIComponent(redirectTarget)}`;
-  const loggedIn = Boolean(user || cleanerLoggedIn);
-  const accountHref = user ? "/account" : "/jobs";
-  const avatarName = user ? userDisplayName(user) : "Cleaner account";
-  const avatarPhoto = user ? avatarImageUrl(user) : null;
-  const avatarInitial = avatarLetter(user, cleanerLoggedIn);
-  const headerVariant = variant === "header";
+  const loggedIn = Boolean(user);
+  const cachedRole = readCachedUserRole();
+  const accountHref = publicHeaderDashboardHref(cachedRole);
+  const accountLabel = publicHeaderAccountLabel(cachedRole);
+  const showCustomerBookings = publicHeaderShowsCustomerBookings(cachedRole);
+  const avatarName = userDisplayName(user);
+  const avatarPhoto = avatarImageUrl(user);
+  const avatarInitial = avatarLetter(user);
+  const headerVariant = variant !== "topbar";
+  const promotionVariant = variant === "promotion";
+
+  useEffect(() => {
+    router.prefetch(accountHref);
+    if (showCustomerBookings) router.prefetch("/account/bookings");
+  }, [accountHref, router, showCustomerBookings]);
 
   async function handleLogout() {
     if (user) await signOut();
@@ -106,12 +102,14 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
         href={loginHref}
         className={cn(
           "shrink-0 font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-          headerVariant
-            ? "inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm text-primary-foreground shadow-[var(--ui-shadow-sm)] hover:brightness-95"
-            : "rounded-lg border border-white/35 px-3 py-1 text-xs text-white hover:bg-white/10",
+          promotionVariant
+            ? "inline-flex min-h-11 items-center justify-center rounded-md border border-[#0051ff] px-4 text-sm text-[#0051ff] hover:bg-[#eef4ff]"
+            : headerVariant
+              ? "inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm text-primary-foreground shadow-[var(--ui-shadow-sm)] hover:brightness-95"
+              : "rounded-lg border border-white/35 px-3 py-1 text-xs text-white hover:bg-white/10",
         )}
       >
-        Log In
+        Sign in
       </Link>
     );
   }
@@ -147,12 +145,20 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
           <span className="block truncate text-sm">{avatarName}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href={accountHref}>{user ? "My Account" : "Cleaner Workspace"}</Link>
+        <DropdownMenuItem
+          onSelect={() => {
+            router.push(accountHref);
+          }}
+        >
+          {accountLabel}
         </DropdownMenuItem>
-        {user ? (
-          <DropdownMenuItem asChild>
-            <Link href="/account/bookings">My Bookings</Link>
+        {showCustomerBookings ? (
+          <DropdownMenuItem
+            onSelect={() => {
+              router.push("/account/bookings");
+            }}
+          >
+            My Bookings
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
@@ -175,9 +181,11 @@ function SiteTopBarAccountFallback({ variant }: { variant: SiteTopBarAccountVari
     <div
       className={cn(
         "shrink-0 animate-pulse",
-        variant === "header"
-          ? "h-11 w-[4.75rem] rounded-full bg-primary/25"
-          : "h-7 w-14 rounded-lg bg-white/20",
+        variant === "promotion"
+          ? "h-11 w-[4.75rem] rounded-md bg-primary/15"
+          : variant === "header"
+            ? "h-11 w-[4.75rem] rounded-full bg-primary/25"
+            : "h-7 w-14 rounded-lg bg-white/20",
       )}
       aria-hidden
     />

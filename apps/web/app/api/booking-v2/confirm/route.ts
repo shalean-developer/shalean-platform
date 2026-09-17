@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearerAuth";
 import { bookingV2ConfirmSchema } from "@/src/features/booking-v2/schemas";
@@ -57,6 +57,9 @@ import type { AppliedPromotionDiscount } from "@/lib/promotions/types";
 import { resolveCheckoutPromoEligibilityExtras } from "@/lib/promotions/resolveCheckoutPromoEligibilityExtras";
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import { settleFullyCoveredBooking } from "@/lib/payments/settleFullyCoveredBooking";
+import { createFreshPaymentPreparationToken } from "@/lib/booking/freshPaymentPreparationToken";
+import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
+import { upsertPendingRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
 
 export const runtime = "nodejs";
 
@@ -183,6 +186,7 @@ async function saveBookingAddressToAccount(
 }
 
 export async function POST(request: Request) {
+  const confirmStartedAt = performance.now();
   // ── 1. Auth ──────────────────────────────────────────────────────────────────
   const auth = await resolveBookingRouteBearerAuth(request);
   if (auth.kind === "invalid_token") {
@@ -225,7 +229,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Service temporarily unavailable." }, { status: 503 });
   }
 
-  const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
+  const ownershipColumnPromise = resolveBookingOwnershipColumn(supabase);
+  const profilePromise = supabase
+    .from("user_profiles")
+    .select("full_name, tier")
+    .eq("id", userId)
+    .maybeSingle();
+  const customerPhonePromise = resolveCustomerPhoneFromAuthAdmin(supabase, userId);
 
   // ── 4. Team availability re-check (race protection) ───────────────────────────
   if (data.cleanerMode === "team") {
@@ -265,11 +275,12 @@ export async function POST(request: Request) {
   }
 
   // ── 5. Resolve customer name from user_profiles ──────────────────────────────
-  const { data: profileRow } = await supabase
-    .from("user_profiles")
-    .select("full_name, tier")
-    .eq("id", userId)
-    .maybeSingle();
+  const [ownershipColumn, profileResult, customerPhoneFromAuth] = await Promise.all([
+    ownershipColumnPromise,
+    profilePromise,
+    customerPhonePromise,
+  ]);
+  const profileRow = profileResult.data;
 
   const customerName: string = profileRow?.full_name ?? "";
   const vipTier =
@@ -277,7 +288,6 @@ export async function POST(request: Request) {
       ? String((profileRow as { tier: string }).tier)
       : null;
 
-  const customerPhoneFromAuth = await resolveCustomerPhoneFromAuthAdmin(supabase, userId);
   const customerPhone = trimCustomerPhone(data.contactPhone) ?? customerPhoneFromAuth;
 
   // ── 6. Server-side price verification ────────────────────────────────────────
@@ -550,6 +560,24 @@ export async function POST(request: Request) {
   const preDiscountTotalZar = Math.round(
     Number(serverBreakdown.estimated_total ?? serverBreakdown.total ?? clientTotal),
   );
+  const recurringPrepaymentQuote = data.bookingType === "recurring"
+    ? buildRecurringPrepaymentQuote({
+        startDate: data.date,
+        frequency: data.recurringFrequency || "",
+        recurringDays: data.recurringDays ?? [],
+        perVisitZar: preDiscountTotalZar,
+      })
+    : null;
+  if (data.bookingType === "recurring" && !recurringPrepaymentQuote) {
+    return NextResponse.json(
+      {
+        error: "Choose a supported recurring frequency before payment.",
+        code: "RECURRING_PREPAYMENT_SCHEDULE_INVALID",
+      },
+      { status: 422 },
+    );
+  }
+  const checkoutSubtotalZar = recurringPrepaymentQuote?.grossPackageZar ?? preDiscountTotalZar;
   const referralCheckoutFingerprint = buildReferralCheckoutFingerprint({
     clientIp: resolveReferralClientIp(request),
     userAgent: request.headers.get("user-agent"),
@@ -566,7 +594,7 @@ export async function POST(request: Request) {
         code: referralCodeInput,
         userId,
         customerEmail: customerEmailNormalized,
-        bookingTotalZar: preDiscountTotalZar,
+        bookingTotalZar: checkoutSubtotalZar,
         serviceSlug: data.serviceSlug,
         checkoutFingerprint: referralCheckoutFingerprint,
       });
@@ -608,7 +636,7 @@ export async function POST(request: Request) {
       suburb: data.suburb,
       suburbId: promoExtras.suburbId,
       customerSegments: promoExtras.customerSegments,
-      subtotalZar: preDiscountTotalZar,
+      subtotalZar: checkoutSubtotalZar,
       promoCode: promoCodeInput || null,
       membershipDiscountPercent,
     });
@@ -625,7 +653,7 @@ export async function POST(request: Request) {
 
   // Payable amount must match what Paystack charges — otherwise webhook finalize
   // flags payment_mismatch (paid < stored total_price / price_snapshot).
-  const grossZar = preDiscountTotalZar;
+  const grossZar = checkoutSubtotalZar;
   const promotionAppliedZar = Math.min(Math.max(0, promotionDiscountZar), grossZar);
   let payAmountZar = Math.max(0, grossZar - promotionAppliedZar);
   const referralAppliedZar = Math.min(Math.max(0, referralDiscountZar), payAmountZar);
@@ -657,6 +685,7 @@ export async function POST(request: Request) {
 
   // ── 7. Generate Paystack reference ────────────────────────────────────────────
   const paystackReference = `bv2_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const bookingPersistenceStartedAt = performance.now();
 
   // ── 8. Build price_snapshot (required by bookings_price_snapshot_required_check) ──
   // total_price = Paystack charge (after promo / referral / credit). Keep gross for audit.
@@ -676,6 +705,16 @@ export async function POST(request: Request) {
     referral_discount_zar: referralAppliedZar,
     cleaning_credit_zar: creditToApplyCap,
     pay_total_zar: payAmountZar,
+    ...(recurringPrepaymentQuote
+      ? {
+          payment_scope: "recurring_first_30_days" as const,
+          per_visit_price_zar: recurringPrepaymentQuote.perVisitZar,
+          prepaid_visit_count: recurringPrepaymentQuote.visitCount,
+          prepaid_coverage_start_date: recurringPrepaymentQuote.coverageStartDate,
+          prepaid_coverage_end_date: recurringPrepaymentQuote.coverageEndDate,
+          prepaid_occurrence_dates: recurringPrepaymentQuote.occurrenceDates,
+        }
+      : {}),
   };
 
   // ── 9. Reuse an existing pending_payment booking for the same slot (retry path) ──
@@ -750,6 +789,19 @@ export async function POST(request: Request) {
               }
             : {}),
           payTotalZar: payAmountZar,
+          ...(recurringPrepaymentQuote
+            ? {
+                recurringPrepayment: {
+                  scope: "first_30_days",
+                  coverageStartDate: recurringPrepaymentQuote.coverageStartDate,
+                  coverageEndDate: recurringPrepaymentQuote.coverageEndDate,
+                  occurrenceDates: recurringPrepaymentQuote.occurrenceDates,
+                  visitCount: recurringPrepaymentQuote.visitCount,
+                  perVisitZar: recurringPrepaymentQuote.perVisitZar,
+                  packagePayableZar: payAmountZar,
+                },
+              }
+            : {}),
           fulfillmentMode,
           fulfillmentReason,
           ...preferredExtras.snapshotExtension,
@@ -766,13 +818,13 @@ export async function POST(request: Request) {
       );
     }
 
-    await saveBookingAddressToAccount(supabase, {
+    after(() => saveBookingAddressToAccount(supabase, {
       userId,
       line1: data.address,
       suburb: data.suburb,
       city: data.city,
       postalCode: data.postalCode,
-    });
+    }));
 
     let creditAppliedZar = 0;
     if (creditToApplyCap > 0) {
@@ -826,24 +878,79 @@ export async function POST(request: Request) {
       }
     }
 
+    if (recurringPrepaymentQuote) {
+      const packagePersist = await upsertPendingRecurringPrepayment(supabase, {
+        sourceBookingId: existingBooking.id,
+        customerId: userId,
+        paystackReference,
+        quote: recurringPrepaymentQuote,
+        paidPackageZar: payAmountZar,
+      });
+      if (!packagePersist.ok) {
+        console.error("[booking-v2/confirm] recurring prepayment save failed:", packagePersist.error);
+        return NextResponse.json(
+          { error: "Could not prepare recurring prepayment. Please try again.", code: "RECURRING_PREPAYMENT_SAVE_FAILED" },
+          { status: 503 },
+        );
+      }
+    }
+
     const r0Existing = await trySettleFullyCoveredOrError(supabase, existingBooking.id, payAmountZar);
     if ("errorResponse" in r0Existing) return r0Existing.errorResponse;
     const requiresPayment = r0Existing.requiresPayment;
+    const paymentPreparationToken = requiresPayment
+      ? createFreshPaymentPreparationToken({
+          bookingId: existingBooking.id,
+          reference: paystackReference,
+          userId,
+        })
+      : null;
+    const bookingPersistenceDuration = performance.now() - bookingPersistenceStartedAt;
 
-    return NextResponse.json({
-      success: true,
-      bookingId: existingBooking.id,
-      paystackReference,
-      payAmountZar,
-      creditAppliedZar,
-      referralAppliedZar,
-      promotionAppliedZar,
-      promotionsApplied: promotionApplied,
-      fulfillmentMode,
-      requiresPayment,
-      customerMessage: fulfillmentCustomerMessage,
-      ...(getPaystackPublicKey() ? { paystackPublicKey: getPaystackPublicKey() } : {}),
-    });
+    return NextResponse.json(
+      {
+        success: true,
+        bookingId: existingBooking.id,
+        paystackReference,
+        payAmountZar,
+        pricingSummary: {
+          ...serverBreakdown,
+          estimated_total: payAmountZar,
+          total: payAmountZar,
+          lineItems: [
+            ...(recurringPrepaymentQuote
+              ? [{
+                  label: `First 30 days (${recurringPrepaymentQuote.visitCount} visits × R${recurringPrepaymentQuote.perVisitZar.toLocaleString("en-ZA")})`,
+                  amountZar: recurringPrepaymentQuote.grossPackageZar,
+                }]
+              : serverBreakdown.lineItems),
+            ...(referralAppliedZar > 0
+              ? [{ label: "Referral discount", amountZar: -referralAppliedZar }]
+              : []),
+            ...(promotionAppliedZar > 0
+              ? [{ label: "Promotion discount", amountZar: -promotionAppliedZar }]
+              : []),
+            ...(creditAppliedZar > 0
+              ? [{ label: "Cleaning credit", amountZar: -creditAppliedZar }]
+              : []),
+          ],
+        },
+        creditAppliedZar,
+        referralAppliedZar,
+        promotionAppliedZar,
+        promotionsApplied: promotionApplied,
+        fulfillmentMode,
+        requiresPayment,
+        ...(paymentPreparationToken ? { paymentPreparationToken } : {}),
+        customerMessage: fulfillmentCustomerMessage,
+        ...(getPaystackPublicKey() ? { paystackPublicKey: getPaystackPublicKey() } : {}),
+      },
+      {
+        headers: {
+          "Server-Timing": `confirm-total;dur=${(performance.now() - confirmStartedAt).toFixed(1)}, booking-persist;dur=${bookingPersistenceDuration.toFixed(1)}`,
+        },
+      },
+    );
   }
 
   // ── 9. Insert booking row ─────────────────────────────────────────────────────
@@ -948,6 +1055,19 @@ export async function POST(request: Request) {
             }
           : {}),
         payTotalZar: payAmountZar,
+        ...(recurringPrepaymentQuote
+          ? {
+              recurringPrepayment: {
+                scope: "first_30_days",
+                coverageStartDate: recurringPrepaymentQuote.coverageStartDate,
+                coverageEndDate: recurringPrepaymentQuote.coverageEndDate,
+                occurrenceDates: recurringPrepaymentQuote.occurrenceDates,
+                visitCount: recurringPrepaymentQuote.visitCount,
+                perVisitZar: recurringPrepaymentQuote.perVisitZar,
+                packagePayableZar: payAmountZar,
+              },
+            }
+          : {}),
         fulfillmentMode,
         fulfillmentReason,
         ...preferredExtras.snapshotExtension,
@@ -986,13 +1106,13 @@ export async function POST(request: Request) {
     );
   }
 
-  await saveBookingAddressToAccount(supabase, {
+  after(() => saveBookingAddressToAccount(supabase, {
     userId,
     line1: data.address,
     suburb: data.suburb,
     city: data.city,
     postalCode: data.postalCode,
-  });
+  }));
 
   let creditAppliedZar = 0;
   if (creditToApplyCap > 0) {
@@ -1054,22 +1174,74 @@ export async function POST(request: Request) {
     }
   }
 
+  if (recurringPrepaymentQuote) {
+    const packagePersist = await upsertPendingRecurringPrepayment(supabase, {
+      sourceBookingId: inserted.id,
+      customerId: userId,
+      paystackReference,
+      quote: recurringPrepaymentQuote,
+      paidPackageZar: payAmountZar,
+    });
+    if (!packagePersist.ok) {
+      console.error("[booking-v2/confirm] recurring prepayment save failed:", packagePersist.error);
+      return NextResponse.json(
+        { error: "Could not prepare recurring prepayment. Please try again.", code: "RECURRING_PREPAYMENT_SAVE_FAILED" },
+        { status: 503 },
+      );
+    }
+  }
+
   const r0Inserted = await trySettleFullyCoveredOrError(supabase, inserted.id, payAmountZar);
   if ("errorResponse" in r0Inserted) return r0Inserted.errorResponse;
   const requiresPayment = r0Inserted.requiresPayment;
+  const paymentPreparationToken = requiresPayment
+    ? createFreshPaymentPreparationToken({
+        bookingId: inserted.id,
+        reference: paystackReference,
+        userId,
+      })
+    : null;
+  const bookingPersistenceDuration = performance.now() - bookingPersistenceStartedAt;
 
   return NextResponse.json({
     success: true,
     bookingId: inserted.id,
     paystackReference,
     payAmountZar,
+    pricingSummary: {
+      ...serverBreakdown,
+      estimated_total: payAmountZar,
+      total: payAmountZar,
+      lineItems: [
+        ...(recurringPrepaymentQuote
+          ? [{
+              label: `First 30 days (${recurringPrepaymentQuote.visitCount} visits × R${recurringPrepaymentQuote.perVisitZar.toLocaleString("en-ZA")})`,
+              amountZar: recurringPrepaymentQuote.grossPackageZar,
+            }]
+          : serverBreakdown.lineItems),
+        ...(referralAppliedZar > 0
+          ? [{ label: "Referral discount", amountZar: -referralAppliedZar }]
+          : []),
+        ...(promotionAppliedZar > 0
+          ? [{ label: "Promotion discount", amountZar: -promotionAppliedZar }]
+          : []),
+        ...(creditAppliedZar > 0
+          ? [{ label: "Cleaning credit", amountZar: -creditAppliedZar }]
+          : []),
+      ],
+    },
     creditAppliedZar,
     referralAppliedZar,
     promotionAppliedZar,
     promotionsApplied: promotionApplied,
     fulfillmentMode,
     requiresPayment,
+    ...(paymentPreparationToken ? { paymentPreparationToken } : {}),
     customerMessage: fulfillmentCustomerMessage,
     ...(getPaystackPublicKey() ? { paystackPublicKey: getPaystackPublicKey() } : {}),
+  }, {
+    headers: {
+      "Server-Timing": `confirm-total;dur=${(performance.now() - confirmStartedAt).toFixed(1)}, booking-persist;dur=${bookingPersistenceDuration.toFixed(1)}`,
+    },
   });
 }

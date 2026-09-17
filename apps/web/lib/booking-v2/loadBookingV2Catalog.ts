@@ -1,5 +1,6 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertAuthoritativePricingClientAvailable } from "@/lib/booking-v2/authoritativePricingClientAvailability";
 import { SERVICE_CONFIG, SERVICE_SLUGS, type ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
@@ -332,3 +333,15 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
     extrasCatalogAuthoritative,
   };
 }
+
+/**
+ * Short-lived catalogue cache for read-only booking UI and quote reconciliation.
+ * Final confirmation deliberately calls `loadBookingV2Catalog` directly so the
+ * amount persisted and sent to Paystack always comes from a fresh authoritative
+ * database read.
+ */
+export const loadCachedBookingV2Catalog = unstable_cache(
+  loadBookingV2Catalog,
+  ["booking-v2-catalog-v1"],
+  { revalidate: 30, tags: ["booking-v2-catalog"] },
+);

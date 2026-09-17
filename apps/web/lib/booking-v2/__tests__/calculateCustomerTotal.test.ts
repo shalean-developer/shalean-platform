@@ -82,6 +82,9 @@ describe("calculateCustomerTotal", () => {
     expect(r.equipment_logistics_fee).toBe(700);
     expect(r.subtotal_before_service_fee).toBe(544 + 700);
     expect(r.lineItems.some((l) => l.label === "Equipment logistics fee")).toBe(true);
+    expect(r.lineItems.some((l) => l.label.startsWith("Equipment base fee:"))).toBe(false);
+    expect(r.lineItems.some((l) => l.label.startsWith("Distance charge:"))).toBe(false);
+    expect(r.lineItems.reduce((sum, line) => sum + line.amountZar, 0)).toBe(r.estimated_total);
   });
 
   it("does not add equipment fee when manual quote required", () => {

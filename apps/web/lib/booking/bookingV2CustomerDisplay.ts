@@ -2,6 +2,7 @@ import type { BookingRow } from "@/lib/dashboard/types";
 import type { StoredPriceLine } from "@/lib/dashboard/storedPriceBreakdown";
 import { getServiceLabel, parseBookingServiceId } from "@/components/booking/serviceCategories";
 import { customerPriceLinesFromPricingSummary } from "@/lib/booking-v2/adminPricingDisplay";
+import { petAnswerLabel } from "@/lib/booking-v2/petOptions";
 
 /** Service labels for booking-v2 slugs (keep in sync with `SERVICE_CONFIG`). */
 export const BOOKING_V2_SERVICE_LABELS: Record<string, string> = {
@@ -103,7 +104,8 @@ function formatServiceDetailValue(key: string, value: unknown): string | null {
     if (s === "office") return "Office";
     if (s === "studio") return "Studio";
   }
-  if (key === "hasPets" || key === "cleaningProducts" || key === "furnished" || key === "laundryIncluded") {
+  if (key === "hasPets") return petAnswerLabel(s);
+  if (key === "cleaningProducts" || key === "furnished" || key === "laundryIncluded") {
     if (s === "yes") return "Yes";
     if (s === "no") return "No";
   }

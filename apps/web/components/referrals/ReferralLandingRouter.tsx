@@ -5,8 +5,8 @@ import { ReferralLandingView } from "@/components/referrals/ReferralLandingView"
 import { ReferredFriendLandingView } from "@/components/referrals/ReferredFriendLandingView";
 import { useReferralLandingAudience } from "@/hooks/useReferralLandingAudience";
 
-export function ReferralLandingRouter() {
-  const audience = useReferralLandingAudience();
+export function ReferralLandingRouter({ referralCode }: { referralCode: string | null }) {
+  const audience = useReferralLandingAudience(referralCode);
 
   if (audience === "loading") {
     return (

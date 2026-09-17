@@ -1,4 +1,5 @@
 import "server-only";
+import { after } from "next/server";
 
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 import type { BookingSnapshotV1 } from "@/lib/booking/paystackChargeTypes";
@@ -30,6 +31,8 @@ export type FinalizePaystackChargeSuccessParams = {
   paystackAuthorizationCode: string | null;
   paystackCustomerCode: string | null;
   paidAtIso: string | null;
+  /** Keep the customer callback fast after the paid booking row is durable. */
+  deferNonCriticalSideEffects?: boolean;
 };
 
 /**
@@ -94,6 +97,7 @@ export async function finalizePaystackChargeSuccess(
       paystackCustomerCode: params.paystackCustomerCode,
       paidAtIso: params.paidAtIso,
       paystackPersistSource: params.source,
+      deferPostPersistSideEffects: params.deferNonCriticalSideEffects,
     });
     notifyBookingDebug("finalize_paystack_upsert", {
       reference: params.paystackReference,
@@ -129,6 +133,7 @@ export async function finalizePaystackChargeSuccess(
     });
   }
 
+  const runNonCriticalSideEffects = async (): Promise<void> => {
   let resolvedCustomerEmail = normalizeEmail(params.customerEmail || "");
   if ((!resolvedCustomerEmail || resolvedCustomerEmail.length < 3) && result.bookingId && admin) {
     const { data: br } = await admin
@@ -243,6 +248,25 @@ export async function finalizePaystackChargeSuccess(
       gclid: gclid || null,
       fbclid: fbclid || null,
     });
+  }
+
+  };
+
+  if (params.deferNonCriticalSideEffects) {
+    after(async () => {
+      try {
+        await runNonCriticalSideEffects();
+      } catch (error) {
+        await reportOperationalIssue(
+          "error",
+          "finalizePaystackChargeSuccess/postPersist",
+          error instanceof Error ? error.message : String(error),
+          { bookingId: result.bookingId, reference: params.paystackReference },
+        );
+      }
+    });
+  } else {
+    await runNonCriticalSideEffects();
   }
 
   return result;

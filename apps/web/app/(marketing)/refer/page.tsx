@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
 import { ReferralLandingRouter } from "@/components/referrals/ReferralLandingRouter";
+import { referralCodeFromSearchParam } from "@/lib/referrals/referralLandingQuery";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
 import { clipSerpTitle } from "@/lib/seo/metaTitle";
 import {
@@ -52,12 +53,19 @@ const jsonLd = {
   },
 };
 
-export default function ReferPage() {
+type ReferPageProps = {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function ReferPage({ searchParams }: ReferPageProps) {
+  const query = await searchParams;
+  const referralCode = referralCodeFromSearchParam(query.ref);
+
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, "\\u003c") }} />
       <Suspense fallback={<div className="min-h-screen animate-pulse bg-background text-foreground" />}>
-        <ReferralLandingRouter />
+        <ReferralLandingRouter referralCode={referralCode} />
       </Suspense>
     </>
   );

@@ -106,6 +106,12 @@ export type CheckoutPriceSnapshotV1 = {
   cleaners_count: number;
   line_items: CheckoutPriceSnapshotLineV1[];
   pricing_version_id?: string | null;
+  payment_scope?: "booking_visit" | "recurring_first_30_days";
+  per_visit_price_zar?: number;
+  prepaid_visit_count?: number;
+  prepaid_coverage_start_date?: string;
+  prepaid_coverage_end_date?: string;
+  prepaid_occurrence_dates?: string[];
 };
 
 function finiteZar(v: unknown): number | null {
@@ -210,6 +216,22 @@ export function checkoutPriceSnapshotFromLegacyPriceSnapshotV1(raw: unknown): Ch
     cleaners_count: 1,
     line_items: [],
     pricing_version_id: null,
+    ...(o.payment_scope === "recurring_first_30_days"
+      ? {
+          payment_scope: "recurring_first_30_days" as const,
+          per_visit_price_zar: Math.round(finiteZar(o.per_visit_price_zar) ?? sub + extrasZar),
+          prepaid_visit_count: Math.max(1, Math.round(finiteZar(o.prepaid_visit_count) ?? 1)),
+          ...(typeof o.prepaid_coverage_start_date === "string"
+            ? { prepaid_coverage_start_date: o.prepaid_coverage_start_date }
+            : {}),
+          ...(typeof o.prepaid_coverage_end_date === "string"
+            ? { prepaid_coverage_end_date: o.prepaid_coverage_end_date }
+            : {}),
+          ...(Array.isArray(o.prepaid_occurrence_dates)
+            ? { prepaid_occurrence_dates: o.prepaid_occurrence_dates.map(String) }
+            : {}),
+        }
+      : {}),
   };
 }
 

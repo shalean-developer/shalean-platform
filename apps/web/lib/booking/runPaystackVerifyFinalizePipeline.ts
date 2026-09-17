@@ -1,5 +1,6 @@
 import "server-only";
 
+import { after } from "next/server";
 import { enqueuePaystackRecoveryFailedJobs } from "@/lib/booking/enqueuePaystackRecoveryFailedJobs";
 import { finalizePaidBooking, upsertResultFromFinalizePaidBookingOp } from "@/lib/booking/bookingOperations";
 import { syncPaidBookingSideEffects } from "@/lib/booking/syncPaidBookingSideEffects";
@@ -147,6 +148,7 @@ export async function runPaystackVerifyFinalizePipeline(
     paystackAuthorizationCode: authorizationCode || null,
     paystackCustomerCode: customerCode || null,
     paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+    deferNonCriticalSideEffects: opsLogSource === "paystack/verify",
   });
   const result = upsertResultFromFinalizePaidBookingOp(finalizeOp);
 
@@ -178,58 +180,62 @@ export async function runPaystackVerifyFinalizePipeline(
     });
   }
 
-  if (result.bookingId && !result.error) {
-    await logSystemEvent({
-      level: "info",
-      source: opsLogSource,
-      message: "paystack.booking.created",
-      context: { reference: ref, bookingId: result.bookingId, skipped: result.skipped },
-    });
-
-    // Idempotent: Zoho invoice + recurring plan. Fire-and-forget so the success
-    // page / verify HTTP response is not blocked on Zoho OAuth or rate-limit
-    // backoff (admin mark-paid already uses `void` for the same reason).
-    // Safe: syncPaidBookingSideEffects never throws to the caller.
-    if (adm) {
-      void syncPaidBookingSideEffects(adm, {
-        bookingId: result.bookingId,
-        reference: ref,
-        amountCents: amount,
+  const runPostFinalizeWork = async () => {
+    if (result.bookingId && !result.error) {
+      await logSystemEvent({
+        level: "info",
+        source: opsLogSource,
+        message: "paystack.booking.created",
+        context: { reference: ref, bookingId: result.bookingId, skipped: result.skipped },
       });
-      await recordPaystackBookingPayment(adm, {
-        reference: ref,
+
+      if (adm) {
+        void syncPaidBookingSideEffects(adm, {
+          bookingId: result.bookingId,
+          reference: ref,
+          amountCents: amount,
+        });
+        await recordPaystackBookingPayment(adm, {
+          reference: ref,
+          amountCents: amount,
+          bookingId: result.bookingId,
+          currency,
+          paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
+          chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
+        });
+      }
+    }
+
+    await enqueuePaystackRecoveryFailedJobs({
+      reference: ref,
+      result,
+      basePayload: {
+        paystackReference: ref,
         amountCents: amount,
-        bookingId: result.bookingId,
         currency,
-        paidAtIso: typeof tx.paid_at === "string" ? tx.paid_at : null,
-        chargeData: paystackChargeDataFromRecord(tx as Record<string, unknown>),
-      });
-    }
-  }
-
-  await enqueuePaystackRecoveryFailedJobs({
-    reference: ref,
-    result,
-    basePayload: {
-      paystackReference: ref,
-      amountCents: amount,
-      currency,
-      customerEmail: email,
-      snapshot,
-      paystackMetadata: metadata,
-    },
-  });
-
-  if (email && !result.bookingId) {
-    const cust = await sendCustomerBookingPaymentProcessingEmail({
-      customerEmail: email,
-      paymentReference: ref,
+        customerEmail: email,
+        snapshot,
+        paystackMetadata: metadata,
+      },
     });
-    if (!cust.sent && cust.error) {
-      await reportOperationalIssue("error", opsLogSource, `processing ack email not sent: ${cust.error}`, {
-        reference: ref,
+
+    if (email && !result.bookingId) {
+      const cust = await sendCustomerBookingPaymentProcessingEmail({
+        customerEmail: email,
+        paymentReference: ref,
       });
+      if (!cust.sent && cust.error) {
+        await reportOperationalIssue("error", opsLogSource, `processing ack email not sent: ${cust.error}`, {
+          reference: ref,
+        });
+      }
     }
+  };
+
+  if (opsLogSource === "paystack/verify") {
+    after(runPostFinalizeWork);
+  } else {
+    await runPostFinalizeWork();
   }
 
   return {

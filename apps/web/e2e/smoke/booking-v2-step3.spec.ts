@@ -193,9 +193,9 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await seedDraft(page, "regular-cleaning", "individual_cleaners");
     const forbiddenMutations = await installNonMutatingApiSandbox(page);
 
-    const response = await page.goto("/book/regular-cleaning?step=3", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/book/regular-cleaning?step=review", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=3/);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=review/);
     await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
 
     await expect(page.getByText("Regular Cleaning", { exact: true }).first()).toBeVisible();
@@ -238,7 +238,7 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await expectDraft(page, { address: "1 Review Test Street" });
 
     await page.getByRole("button", { name: "Proceed to payment →" }).click();
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=4/);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=payment/);
 
     expect(forbiddenMutations, "Review smoke must not submit a booking or payment mutation").toEqual([]);
   });
@@ -247,9 +247,9 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await seedDraft(page, "deep-cleaning", "team");
     const forbiddenMutations = await installNonMutatingApiSandbox(page);
 
-    const response = await page.goto("/book/deep-cleaning?step=3", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/book/deep-cleaning?step=review", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
-    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=3/);
+    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=review/);
     await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
     await expect(page.getByText("Deep Cleaning", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("RD Team Alpha", { exact: true })).toBeVisible();
@@ -272,7 +272,7 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     });
 
     await page.getByRole("button", { name: "Proceed to payment →" }).click();
-    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=4/);
+    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=payment/);
 
     expect(forbiddenMutations, "Team review smoke must not submit a booking or payment mutation").toEqual([]);
   });
@@ -281,19 +281,15 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await seedDraft(page, "regular-cleaning", "individual_cleaners", { time: "" });
     const forbiddenMutations = await installNonMutatingApiSandbox(page);
 
-    const response = await page.goto("/book/regular-cleaning?step=3", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/book/regular-cleaning?step=review", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=3/);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=review/);
     await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
     await expect(page.getByText("No time selected.", { exact: true })).toBeAttached();
 
     const scheduleHeading = page.getByRole("heading", { name: "Schedule", exact: true });
     const scheduleSection = scheduleHeading.locator("xpath=../../..");
-    const timeValue = scheduleSection.locator(".grid.grid-cols-2.gap-3 > div:nth-child(2) > p:last-child");
-    const fallbackContent = await timeValue.evaluate((element) =>
-      window.getComputedStyle(element, "::after").content,
-    );
-    expect(fallbackContent.replace(/[\"']/g, "")).toBe("Not selected");
+    await expect(scheduleSection.getByText("—", { exact: true })).toBeVisible();
 
     await expectDraft(page, { time: "" });
     expect(forbiddenMutations, "Missing-time presentation check must remain read-only").toEqual([]);

@@ -22,6 +22,14 @@
   box-shadow: var(--ui-shadow-sm);
 }
 
+.step1 > :global(.space-y-8) > section:first-child {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
 .step1 > :global(.space-y-8) > section h3 {
   color: var(--muted-foreground);
 }
@@ -84,11 +92,19 @@
 }
 
 .step2 > :global(.space-y-8) > section {
-  border: 1px solid var(--border);
-  border-radius: var(--ui-radius-xl);
-  background: var(--card);
-  padding: var(--ui-space-4);
-  box-shadow: var(--ui-shadow-sm);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
+}
+
+.step2 > :global(.space-y-8) > section[data-booking-type-options="true"] {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 0;
+  box-shadow: none;
 }
 
 .step2 > :global(.space-y-8) > section h3 {
@@ -331,22 +347,11 @@
   color: var(--foreground);
 }
 
-.step4 > :global(.space-y-6) > div:first-child {
-  text-align: center;
-}
-
-.step4 > :global(.space-y-6) > div:first-child h2 {
-  color: var(--foreground);
-  font-size: var(--ui-text-section-title);
-  line-height: var(--ui-leading-tight);
-}
-
 .step4 > :global(.space-y-6) > :global(.space-y-6) {
-  border: 1px solid var(--border);
-  border-radius: var(--ui-radius-xl);
-  background: var(--card);
-  padding: var(--ui-space-4);
-  box-shadow: var(--ui-shadow-sm);
+  margin-inline: auto;
+  max-width: 37.5rem;
+  background: transparent;
+  padding: 0;
 }
 
 .step4 h3,
@@ -459,9 +464,7 @@
 
 @media (min-width: 640px) {
   .step1 > :global(.space-y-8) > section,
-  .step1 > :global(.space-y-8) > :global(.space-y-4),
-  .step2 > :global(.space-y-8) > section,
-  .step4 > :global(.space-y-6) > :global(.space-y-6) {
+  .step1 > :global(.space-y-8) > :global(.space-y-4) {
     padding: var(--ui-space-5);
   }
 }
