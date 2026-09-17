@@ -65,4 +65,13 @@ describe("booking details presentation", () => {
     expect(roomCountSource).toContain('Math.min(25, Math.max(customMinimum');
     expect(roomCountSource).not.toContain('type="number"');
   });
+
+  it("uses the branded accessible dropdown for saved properties", () => {
+    expect(addressSource).toContain("function SavedPropertySelect");
+    expect(addressSource).toContain('aria-haspopup="listbox"');
+    expect(addressSource).toContain('role="listbox"');
+    expect(addressSource).toContain('role="option"');
+    expect(addressSource).toContain('event.key === "Escape"');
+    expect(addressSource).not.toContain('<select\n                id="saved-property"');
+  });
 });

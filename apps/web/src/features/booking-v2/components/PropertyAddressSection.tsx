@@ -187,6 +187,105 @@ function formatSavedAddressLine(addr: CustomerAddressRow): string {
   return parts.join(", ");
 }
 
+function savedPropertyLabel(addr: CustomerAddressRow): string {
+  return `${addr.label || "Property"} — ${addr.line1}, ${addr.suburb}`;
+}
+
+function SavedPropertySelect({
+  addresses,
+  selectedId,
+  onChange,
+}: {
+  addresses: CustomerAddressRow[];
+  selectedId: string;
+  onChange: (address: CustomerAddressRow) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selected = addresses.find((address) => address.id === selectedId) ?? null;
+
+  useEffect(() => {
+    function closeOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        id="saved-property"
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls="saved-property-options"
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 text-sm shadow-sm transition",
+          open
+            ? "border-blue-500 ring-2 ring-blue-500/20"
+            : "border-slate-200 hover:border-slate-300",
+        )}
+      >
+        <span className="min-w-0 flex-1 truncate text-left text-slate-800" title={selected ? savedPropertyLabel(selected) : undefined}>
+          {selected ? savedPropertyLabel(selected) : "Select a saved property"}
+        </span>
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            "h-4 w-4 shrink-0 text-slate-500 transition-transform duration-150",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {open ? (
+        <div
+          id="saved-property-options"
+          role="listbox"
+          aria-label="Saved property"
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+        >
+          {addresses.map((address) => {
+            const isSelected = address.id === selectedId;
+            return (
+              <button
+                key={address.id}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => {
+                  onChange(address);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition",
+                  isSelected
+                    ? "bg-blue-50 font-medium text-blue-700"
+                    : "text-slate-700 hover:bg-slate-50",
+                )}
+              >
+                <span className="min-w-0 break-words">{savedPropertyLabel(address)}</span>
+                {isSelected ? <Check aria-hidden className="h-4 w-4 shrink-0 text-blue-600" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function PropertyAddressSection() {
   const { user, loading: userLoading } = useUser();
   const { addresses, loading: addressesLoading } = useAddresses();
@@ -478,21 +577,11 @@ export function PropertyAddressSection() {
           {savedAddresses.length > 1 ? (
             <div>
               <FieldLabel htmlFor="saved-property">Saved property</FieldLabel>
-              <select
-                id="saved-property"
-                value={selectedAddress.id}
-                onChange={(e) => {
-                  const next = savedAddresses.find((a) => a.id === e.target.value);
-                  if (next) applySavedAddress(next);
-                }}
-                className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              >
-                {savedAddresses.map((addr) => (
-                  <option key={addr.id} value={addr.id}>
-                    {(addr.label || "Property") + " — " + addr.line1 + ", " + addr.suburb}
-                  </option>
-                ))}
-              </select>
+              <SavedPropertySelect
+                addresses={savedAddresses}
+                selectedId={selectedAddress.id}
+                onChange={applySavedAddress}
+              />
             </div>
           ) : null}
 
