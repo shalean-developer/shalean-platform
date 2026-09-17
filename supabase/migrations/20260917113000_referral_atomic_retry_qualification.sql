@@ -1,10 +1,4 @@
--- Complete and credit a customer referral in one database transaction.
-insert into public.referral_program_settings (id, reward_on)
-values ('default', 'first_completed_booking')
-on conflict (id) do update
-set reward_on = excluded.reward_on,
-    updated_at = now();
-
+-- Qualify output-column names in the idempotent rewarded-referral retry path.
 create or replace function public.award_customer_referral_credit(
   p_referral_id uuid,
   p_referred_user_id uuid default null,
