@@ -18,6 +18,10 @@ const reviewSource = readFileSync(
   join(process.cwd(), "src/features/booking-v2/steps/Step3Review.tsx"),
   "utf8",
 );
+const shellSource = readFileSync(
+  join(process.cwd(), "src/features/booking-v2/BookingV2Shell.tsx"),
+  "utf8",
+);
 
 describe("booking details presentation", () => {
   it("does not render the redundant About the clean heading", () => {
@@ -97,6 +101,15 @@ describe("booking details presentation", () => {
     );
     expect(reviewSource).not.toContain(
       'className="w-full truncate text-sm font-semibold leading-snug text-slate-900"',
+    );
+  });
+
+  it("centres review and payment while preserving the sidebar offset on earlier steps", () => {
+    expect(shellSource).toContain(
+      'showSidebarSummary ? "lg:translate-x-6 xl:translate-x-20" : "mx-auto"',
+    );
+    expect(shellSource).not.toContain(
+      'currentStep === 4 ? "mx-auto" : "lg:translate-x-6 xl:translate-x-20"',
     );
   });
 });

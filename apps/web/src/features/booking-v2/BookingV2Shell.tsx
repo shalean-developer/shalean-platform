@@ -139,7 +139,7 @@ function BookingV2Inner() {
           <div
             className={cn(
               "min-w-0 w-full justify-self-center",
-              currentStep === 4 ? "mx-auto" : "lg:translate-x-6 xl:translate-x-20",
+              showSidebarSummary ? "lg:translate-x-6 xl:translate-x-20" : "mx-auto",
               currentStep === 2
                 ? "max-w-[720px]"
                 : currentStep === 3
