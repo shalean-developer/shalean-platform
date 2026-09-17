@@ -25,8 +25,11 @@ describe("compact booking summary panel", () => {
     expect(source).toContain('label="Pets & supplies"');
   });
 
-  it("does not invent a monthly estimate for custom recurrence", () => {
-    expect(source).toContain('values.recurringFrequency === "custom"');
-    expect(source).toContain("Custom schedule · Each visit is charged separately.");
+  it("shows the exact first-30-day package as due today for recurring bookings", () => {
+    expect(source).toContain("const recurringPrepayment =");
+    expect(source).toContain("recurringPrepayment.grossPackageZar");
+    expect(source).toContain("Pay all visits now");
+    expect(source).toContain('recurringPrepayment ? "Due today" : "Est. price"');
+    expect(source).not.toContain('values.bookingType === "recurring" ? "Price per visit"');
   });
 });

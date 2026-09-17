@@ -47,4 +47,23 @@ describe("first-30-day recurring prepayment contract", () => {
     expect(source).toContain("paid_package_zar");
     expect(source).toContain("refunded_cents: workflow.refunded_cents");
   });
+
+  it("charges the exact package total instead of one visit", () => {
+    const confirmSource = readFileSync(
+      resolve(__dirname, "../../app/api/booking-v2/confirm/route.ts"),
+      "utf8",
+    );
+    const paymentSource = readFileSync(
+      resolve(__dirname, "../../src/features/booking-v2/steps/Step4Payment.tsx"),
+      "utf8",
+    );
+    expect(confirmSource).toContain(
+      "const checkoutSubtotalZar = recurringPrepaymentQuote?.grossPackageZar ?? preDiscountTotalZar",
+    );
+    expect(confirmSource).toContain("const grossZar = checkoutSubtotalZar");
+    expect(paymentSource).toContain(
+      "const checkoutSubtotal = recurringPrepayment?.grossPackageZar ?? baseTotal",
+    );
+    expect(paymentSource).toContain('values.bookingType === "recurring" ? "Pay first 30 days"');
+  });
 });

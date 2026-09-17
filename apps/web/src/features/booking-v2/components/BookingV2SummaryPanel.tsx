@@ -74,6 +74,14 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const config = SERVICE_CONFIG[values.serviceSlug];
   const pricing = values.pricingSummary;
   const displayTotal = pricing.estimated_total ?? pricing.total ?? 0;
+  const recurringPrepayment = values.bookingType === "recurring" && values.recurringFrequency
+    ? buildRecurringPrepaymentQuote({
+        startDate: values.recurringStartDate || values.date,
+        frequency: values.recurringFrequency,
+        recurringDays: values.recurringDays ?? [],
+        perVisitZar: displayTotal,
+      })
+    : null;
   const durationHours = estimatedCleaningHoursFromMinutes(
     pricing.estimated_duration_minutes,
     liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours,
@@ -101,6 +109,9 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const priceLabel = hasPriceBreakdown
     ? `R${displayTotal.toLocaleString("en-ZA")}`
     : `From R${(liveConfig?.basePrice ?? config.basePrice).toLocaleString("en-ZA")}`;
+  const checkoutPriceLabel = recurringPrepayment
+    ? `R${recurringPrepayment.grossPackageZar.toLocaleString("en-ZA")}`
+    : priceLabel;
   const isRegularCleaning = values.serviceSlug === "regular-cleaning";
   const detailsStage = regularCleaningDetailsStage(values.serviceDetails, {
     address: values.address,
@@ -255,28 +266,15 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             </div>
           )}
 
-          {values.bookingType === "recurring" && values.recurringFrequency ? (
-            (
+          {recurringPrepayment ? (
               <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-slate-600">
-                {(() => {
-                  const prepaid = buildRecurringPrepaymentQuote({
-                    startDate: values.recurringStartDate || values.date,
-                    frequency: values.recurringFrequency,
-                    recurringDays: values.recurringDays ?? [],
-                    perVisitZar: displayTotal,
-                  });
-                  if (!prepaid) return <p>Recurring schedule incomplete</p>;
-                  return (
-                    <p>
-                      <span className="font-semibold text-slate-800">
-                        First 30 days · {prepaid.visitCount} visit{prepaid.visitCount === 1 ? "" : "s"}
-                      </span>
-                      {` · Due R${prepaid.grossPackageZar.toLocaleString("en-ZA")}`}
-                    </p>
-                  );
-                })()}
+                <p>
+                  <span className="font-semibold text-slate-800">
+                    First 30 days · {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"}
+                  </span>
+                  {` · Pay all visits now`}
+                </p>
               </div>
-            )
           ) : null}
         </div>
 
@@ -286,9 +284,9 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             <span className="text-[11px] font-medium text-slate-300">Est. hours</span>
           </div>
           <div className="flex flex-col items-center justify-center px-2 text-center">
-            <span className="text-2xl font-semibold tabular-nums">{priceLabel}</span>
+            <span className="text-2xl font-semibold tabular-nums">{checkoutPriceLabel}</span>
             <span className="text-[11px] font-medium text-slate-300">
-              {values.bookingType === "recurring" ? "Price per visit" : "Est. price"}
+              {recurringPrepayment ? "Due today" : "Est. price"}
             </span>
           </div>
         </div>
