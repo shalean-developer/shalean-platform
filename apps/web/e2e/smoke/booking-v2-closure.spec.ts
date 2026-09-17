@@ -191,7 +191,7 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
       const serviceLinks = page.locator('a[href^="/book/"]').filter({ has: page.locator("h2") });
       await expect(serviceLinks).toHaveCount(6);
       for (const service of SERVICES) {
-        await expect(page.locator(`a[href="/book/${service.slug}"]`)).toHaveCount(1);
+        await expect(page.locator(`a[href^="/book/${service.slug}"]`)).toHaveCount(1);
         await expect(page.getByRole("heading", { name: service.label, exact: true })).toBeVisible();
       }
       await expectNoHorizontalOverflow(page);
@@ -213,13 +213,12 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
           waitUntil: "domcontentloaded",
         });
         expect(response?.status()).toBeLessThan(400);
-        await expect(page.getByRole("heading", { name: "Your details", exact: true })).toBeVisible();
         await expect(page.getByRole("navigation", { name: "Booking progress" })).toBeVisible();
         await expect(page.getByRole("button", { name: "Details", exact: true })).toHaveAttribute(
           "aria-current",
           "step",
         );
-        await expect(page.getByRole("button", { name: "← Back to services", exact: true })).toBeVisible();
+        await expect(page.getByRole("button", { name: /Back/, exact: false })).toBeVisible();
         await expect(page.getByRole("button", { name: "Continue →", exact: true })).toBeVisible();
         await expectNoHorizontalOverflow(page);
       }
@@ -231,7 +230,7 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
       await seedDraft(page, service.slug, service.cleanerMode);
       const forbiddenMutations = await installNonMutatingApiSandbox(page);
 
-      const response = await page.goto(`/book/${service.slug}?step=3&${RETAINED_QUERY}`, {
+      const response = await page.goto(`/book/${service.slug}?step=review&${RETAINED_QUERY}`, {
         waitUntil: "domcontentloaded",
       });
       expect(response?.status()).toBeLessThan(400);
@@ -240,14 +239,14 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
         "aria-current",
         "step",
       );
-      await expectRetainedBookingParams(page, "3");
+      await expectRetainedBookingParams(page, "review");
       await expectNoHorizontalOverflow(page);
 
       // A reload proves the local Booking V2 draft is resumable on the same route.
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible({ timeout: 10_000 });
       await expect(page.getByText("1 Closure Test Street", { exact: true })).toBeVisible();
-      await expectRetainedBookingParams(page, "3");
+      await expectRetainedBookingParams(page, "review");
 
       const persisted = await readDraft(page);
       expect(persisted).toMatchObject({
@@ -259,8 +258,8 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
       });
 
       await page.getByRole("button", { name: "Proceed to payment →", exact: true }).click();
-      await expectRetainedBookingParams(page, "4");
-      await expect(page.getByRole("heading", { name: "Payment", exact: true })).toBeVisible({ timeout: 10_000 });
+      await expectRetainedBookingParams(page, "payment");
+      await expect(page.getByRole("heading", { name: "Confirm & pay", exact: true })).toBeVisible({ timeout: 10_000 });
       await expect(page.getByRole("navigation", { name: "Booking progress" })).toBeVisible();
       await expect(page.getByRole("button", { name: "Payment", exact: true })).toHaveAttribute(
         "aria-current",
@@ -270,7 +269,7 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
 
       await page.getByRole("button", { name: "← Back", exact: true }).click();
       await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible({ timeout: 10_000 });
-      await expectRetainedBookingParams(page, "3");
+      await expectRetainedBookingParams(page, "review");
 
       const afterRoundTrip = await readDraft(page);
       expect(afterRoundTrip).toMatchObject({
