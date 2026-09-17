@@ -52,6 +52,23 @@ describe("calculateCustomerTotal", () => {
     expect(r.estimated_total).toBe(574);
   });
 
+  it("uses the service-specific fee instead of the global fallback", () => {
+    const r = calculateCustomerTotal(
+      baseInput({
+        serviceSlug: "deep-cleaning",
+        serviceLabel: "Deep Cleaning",
+        cleanerMode: "team",
+        catalog: {
+          ...baseInput().catalog,
+          serviceFeeZar: 60,
+        },
+      }),
+    );
+
+    expect(r.service_fee).toBe(60);
+    expect(r.lineItems).toContainEqual({ label: "Service fee", amountZar: 60 });
+  });
+
   it("does not charge equipment fee when not requested", () => {
     const r = calculateCustomerTotal(baseInput());
     expect(r.equipment_logistics_fee).toBe(0);
