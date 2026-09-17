@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
+import { recurringScheduleAllowedForService } from "@/lib/booking-v2/serviceRecurringPolicy";
 import {
   filterCustomerOnlineBookingTimeSlots,
   isCustomerOnlineBookingTimeSlot,
@@ -244,6 +245,24 @@ export const bookingV2ConfirmSchema = z.object({
     (v) => (v == null || v === "" ? undefined : v),
     z.string().optional(),
   ),
+}).superRefine((data, ctx) => {
+  if (
+    !recurringScheduleAllowedForService({
+      serviceSlug: data.serviceSlug,
+      bookingType: data.bookingType,
+      recurringFrequency: data.recurringFrequency ?? "",
+      recurringDays: data.recurringDays ?? [],
+    })
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        data.serviceSlug === "deep-cleaning"
+          ? "Deep Cleaning recurring bookings must be monthly with one visit per cycle."
+          : "Select a valid recurring schedule.",
+      path: ["recurringFrequency"],
+    });
+  }
 });
 
 export type BookingV2ConfirmPayload = z.infer<typeof bookingV2ConfirmSchema>;
