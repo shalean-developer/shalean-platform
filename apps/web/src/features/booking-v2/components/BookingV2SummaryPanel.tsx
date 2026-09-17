@@ -39,7 +39,7 @@ function formatDate(dateStr: string): string {
 function SummaryRow({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
   return (
     <div className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
-      <p className="min-w-0 flex-1 truncate text-sm text-slate-700">
+      <p className="min-w-0 flex-1 truncate text-sm text-slate-700" title={`${label}: ${value}`}>
         <span className="font-medium text-slate-500">{label}:</span>{" "}
         <span className="font-semibold text-slate-900">{value}</span>
       </p>
@@ -57,6 +57,7 @@ function SummaryRow({ label, value, onEdit }: { label: string; value: string; on
 
 export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: { collapsed?: boolean }) {
   const [open, setOpen] = useState(!defaultCollapsed);
+  const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
   const [priceBreakdownOpen, setPriceBreakdownOpen] = useState(false);
   const { watch } = useFormContext<BookingV2FormData>();
   const {
@@ -120,6 +121,37 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const equipmentLabel = values.equipmentRequired === "yes" ? "Shalean supplies" : "Customer supplies";
   const displayedScheduleStage = scheduleSectionOverride ?? "booking_type";
   const bookingTypeLabel = values.bookingType === "recurring" ? "Recurring" : "Once-off";
+  const scheduleIsVisible =
+    !isRegularCleaning ||
+    currentStep > 2 ||
+    isRegularCleaningScheduleStageComplete("booking_type", displayedScheduleStage, values.bookingType);
+  const dateIsVisible =
+    hasDate &&
+    (!isRegularCleaning ||
+      currentStep > 2 ||
+      isRegularCleaningScheduleStageComplete("date_time", displayedScheduleStage, values.bookingType));
+  const scheduleLabel = [
+    values.bookingType === "recurring" && values.recurringFrequency
+      ? recurringFrequencyLabel(values.recurringFrequency)
+      : bookingTypeLabel,
+    dateIsVisible ? formatDate(values.date) : "",
+    dateIsVisible && values.time ? values.time : "",
+  ].filter(Boolean).join(" · ");
+  const propertyIsVisible =
+    isRegularCleaning && isRegularCleaningStageComplete("property", displayedDetailsStage);
+  const roomsAreVisible =
+    isRegularCleaning && isRegularCleaningStageComplete("rooms", displayedDetailsStage);
+  const homeLabel = [propertyIsVisible ? propertyLabel : "", roomsAreVisible ? roomsLabel : ""]
+    .filter(Boolean)
+    .join(" · ");
+  const petsAreVisible =
+    isRegularCleaning && isRegularCleaningStageComplete("pets", displayedDetailsStage);
+  const equipmentIsVisible = isRegularCleaning && currentStep > 1;
+  const hasMoreDetails = petsAreVisible || equipmentIsVisible;
+  const moreDetailsLabel = [
+    petsAreVisible ? petsLabel : "",
+    equipmentIsVisible ? equipmentLabel : "",
+  ].filter(Boolean).join(" · ");
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -129,7 +161,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         className="flex min-h-10 w-full items-center justify-between gap-2 px-3 py-2.5 lg:hidden"
         aria-expanded={open}
       >
-        <span className="truncate text-sm font-semibold text-slate-900">Booking details</span>
+        <span className="truncate text-sm font-semibold text-slate-900">Booking summary</span>
         <span className="flex shrink-0 items-center gap-2">
           <span className="text-sm font-bold text-blue-600">{priceLabel}</span>
           {open
@@ -140,34 +172,53 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
 
       <div className={cn("lg:block", !open && "hidden")}>
         <div className="space-y-2 p-3">
-          <h2 className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">Booking Details</h2>
+          <h2 className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">Booking summary</h2>
 
           {hasAddress && (!isRegularCleaning || displayedDetailsStage === "equipment") ? (
-            <SummaryRow label="Where" value={addressLabel} onEdit={isRegularCleaning ? editDetail("address") : edit(1)} />
+            <SummaryRow label="Address" value={addressLabel} onEdit={isRegularCleaning ? editDetail("address") : edit(1)} />
           ) : null}
-          <SummaryRow label="What" value={config.label} onEdit={edit(1)} />
-          {isRegularCleaning && currentStep === 2 && isRegularCleaningScheduleStageComplete("booking_type", displayedScheduleStage, values.bookingType) ? (
-            <SummaryRow label="Booking" value={bookingTypeLabel} onEdit={editSchedule("booking_type")} />
-          ) : null}
-          {hasDate && (!isRegularCleaning || currentStep > 2 || isRegularCleaningScheduleStageComplete("date_time", displayedScheduleStage, values.bookingType)) && (
+          <SummaryRow label="Service" value={config.label} onEdit={edit(1)} />
+          {scheduleIsVisible ? (
             <SummaryRow
-              label="When"
-              value={`${formatDate(values.date)}${values.time ? ` · ${values.time}` : ""}`}
-              onEdit={isRegularCleaning ? editSchedule("date_time") : edit(2)}
+              label="Schedule"
+              value={scheduleLabel}
+              onEdit={
+                isRegularCleaning
+                  ? editSchedule(dateIsVisible ? "date_time" : "booking_type")
+                  : edit(2)
+              }
             />
-          )}
-          {hasCleaner && <SummaryRow label="Who" value={cleanerLabel} onEdit={isRegularCleaning ? editSchedule("cleaner") : edit(2)} />}
-          {isRegularCleaning && isRegularCleaningStageComplete("property", displayedDetailsStage) ? (
-            <SummaryRow label="Property" value={propertyLabel} onEdit={editDetail("property")} />
           ) : null}
-          {isRegularCleaning && isRegularCleaningStageComplete("rooms", displayedDetailsStage) ? (
-            <SummaryRow label="Rooms" value={roomsLabel} onEdit={editDetail("rooms")} />
+          {hasCleaner ? (
+            <SummaryRow label="Cleaners" value={cleanerLabel} onEdit={isRegularCleaning ? editSchedule("cleaner") : edit(2)} />
           ) : null}
-          {isRegularCleaning && isRegularCleaningStageComplete("pets", displayedDetailsStage) ? (
-            <SummaryRow label="Pets" value={petsLabel} onEdit={editDetail("pets")} />
+          {homeLabel ? (
+            <SummaryRow label="Home" value={homeLabel} onEdit={editDetail("property")} />
           ) : null}
-          {isRegularCleaning && currentStep > 1 ? (
-            <SummaryRow label="Equipment" value={equipmentLabel} onEdit={editDetail("equipment")} />
+
+          {hasMoreDetails ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setMoreDetailsOpen((current) => !current)}
+                className="flex w-full items-center justify-between gap-2 px-1 py-1.5 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+                aria-expanded={moreDetailsOpen}
+              >
+                <span>More details</span>
+                {moreDetailsOpen
+                  ? <ChevronUp className="h-4 w-4" aria-hidden />
+                  : <ChevronDown className="h-4 w-4" aria-hidden />}
+              </button>
+              {moreDetailsOpen ? (
+                <div className="rounded-xl bg-slate-50 p-2">
+                  <SummaryRow
+                    label="Pets & supplies"
+                    value={moreDetailsLabel}
+                    onEdit={editDetail(petsAreVisible ? "pets" : "equipment")}
+                  />
+                </div>
+              ) : null}
+            </div>
           ) : null}
 
           {values.equipmentRequired === "yes" && values.equipmentQuote?.manual_quote_required && (
@@ -204,26 +255,31 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             </div>
           )}
 
-          {values.bookingType === "recurring" && values.recurringFrequency && (
-            <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-slate-600">
-              {(() => {
-                const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
-                  frequency: values.recurringFrequency,
-                  daysOfWeek: values.recurringDays ?? [],
-                  pricePerVisitZar: displayTotal,
-                });
-                return (
-                  <>
-                    <p className="font-semibold text-slate-800">
-                      {recurringFrequencyLabel(values.recurringFrequency)} · about {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month
+          {values.bookingType === "recurring" && values.recurringFrequency ? (
+            values.recurringFrequency === "custom" ? (
+              <p className="px-1 text-xs text-slate-500">
+                Custom schedule · Each visit is charged separately.
+              </p>
+            ) : (
+              <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-slate-600">
+                {(() => {
+                  const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                    frequency: values.recurringFrequency,
+                    daysOfWeek: values.recurringDays ?? [],
+                    pricePerVisitZar: displayTotal,
+                  });
+                  return (
+                    <p>
+                      <span className="font-semibold text-slate-800">
+                        About {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month
+                      </span>
+                      {` · Est. R${estimatedMonthlyZar.toLocaleString("en-ZA")}/month`}
                     </p>
-                    <p>Estimated monthly total: R{estimatedMonthlyZar.toLocaleString("en-ZA")}</p>
-                    <p>Each visit is charged separately at the displayed per-visit price.</p>
-                  </>
-                );
-              })()}
-            </div>
-          )}
+                  );
+                })()}
+              </div>
+            )
+          ) : null}
         </div>
 
         <div className="grid grid-cols-2 bg-slate-950 px-3 py-3 text-white">
