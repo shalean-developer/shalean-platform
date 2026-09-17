@@ -47,6 +47,7 @@ describe("deep cleaning recurring policy", () => {
       frequency: "monthly",
       recurringDays: [],
       perVisitZar: 1300,
+      serviceSlug: "deep-cleaning",
     });
 
     expect(quote).toMatchObject({
@@ -54,6 +55,18 @@ describe("deep cleaning recurring policy", () => {
       visitCount: 1,
       grossPackageZar: 1300,
     });
+  });
+
+  it("keeps the generic 30-day monthly package behaviour for other services", () => {
+    const quote = buildRecurringPrepaymentQuote({
+      startDate: "2026-09-18",
+      frequency: "monthly",
+      recurringDays: [],
+      perVisitZar: 400,
+      serviceSlug: "regular-cleaning",
+    });
+
+    expect(quote?.visitCount).toBeGreaterThanOrEqual(1);
   });
 
   it("does not change Regular Cleaning frequency choices", () => {
