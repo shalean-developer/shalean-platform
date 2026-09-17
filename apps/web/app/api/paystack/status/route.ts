@@ -38,7 +38,7 @@ export async function GET(request: Request) {
   const { data: booking, error } = await admin
     .from("bookings")
     .select(
-      "id, status, payment_status, payment_completed_at, total_price, total_paid_zar, amount_paid_cents, booking_snapshot, booking_reference, paystack_reference, service, service_slug",
+      "id, status, payment_status, payment_completed_at, total_price, total_paid_zar, amount_paid_cents, booking_reference, paystack_reference, service, service_slug",
     )
     .eq("id", requestedBookingId)
     .eq("paystack_reference", reference)
@@ -72,7 +72,12 @@ export async function GET(request: Request) {
         : null,
       bookingReference: String(booking.booking_reference ?? "") || null,
       paystackReference: String(booking.paystack_reference ?? "") || null,
-      bookingSnapshot: booking.booking_snapshot ?? null,
+      bookingSnapshot: {
+        total_zar: Number(booking.total_paid_zar ?? booking.total_price ?? 0),
+        flat: {
+          service: String(booking.service ?? booking.service_slug ?? "Cleaning service"),
+        },
+      },
       serviceLabel: String(booking.service ?? booking.service_slug ?? "Cleaning service"),
     },
   });
