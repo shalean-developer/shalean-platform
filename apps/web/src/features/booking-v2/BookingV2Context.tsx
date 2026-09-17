@@ -33,6 +33,7 @@ import {
 } from "@/lib/booking-v2/bookingPricingAvailability";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import { bookingV2PrefillPatchFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
+import { setReferralCapture } from "@/lib/referrals/client";
 import { buildStep2Schema, step1Schema } from "@/src/features/booking-v2/schemas";
 import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import type { BookingRow } from "@/lib/dashboard/types";
@@ -156,6 +157,14 @@ export function BookingV2Provider({
   const requestedDetailsSection = regularCleaningDetailsStageFromSearchParam(
     searchParams.get("section"),
   );
+
+  // Persist referral invitations again at booking entry. This makes the offer survive
+  // account creation, email confirmation, and direct /book links even if the landing
+  // page component was remounted before localStorage completed.
+  useEffect(() => {
+    const referralCode = searchParams.get("ref")?.trim();
+    if (referralCode) setReferralCapture(referralCode, "customer");
+  }, [searchParams]);
 
   // Live pricing catalog from DB
   const [catalog, setCatalog] = useState<ServicesCatalog | null>(null);
