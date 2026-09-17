@@ -44,6 +44,19 @@ describe("first-30-day recurring prepayment", () => {
     ]);
   });
 
+  it("prices the next 30-day cycle as another complete package", () => {
+    const quote = buildRecurringPrepaymentQuote({
+      startDate: "2026-10-24",
+      frequency: "weekly",
+      recurringDays: ["Saturday", "Tuesday"],
+      perVisitZar: 3_641,
+    });
+
+    expect(quote?.occurrenceDates).toHaveLength(9);
+    expect(quote?.grossPackageZar).toBe(32_769);
+    expect(quote?.perVisitZar).toBe(3_641);
+  });
+
   it("rejects custom schedules until they have explicit occurrence dates", () => {
     expect(buildRecurringPrepaymentQuote({
       startDate: "2026-09-24",

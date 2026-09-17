@@ -30,8 +30,11 @@ import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   applyReservedRecurringPrepaymentAllocation,
+  findRecurringPrepaymentCycleForDate,
   findReservedRecurringPrepaymentAllocation,
+  upsertPendingRecurringPrepayment,
 } from "@/lib/recurring/recurringPrepaymentLedger";
+import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 
 const FAR_LOCK_DAYS = 120;
 
@@ -46,7 +49,11 @@ export type RecurringRowForInsert = {
    * inside {@link resolveRecurringPreferredCleanerId}.
    */
   preferred_cleaner_id?: string | null;
+  frequency?: string | null;
+  days_of_week?: number[] | null;
 };
+
+const ISO_DAY_NAMES = ["", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] as const;
 
 export function cloneSnapshotTemplate(raw: unknown): BookingSnapshotV1 | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
@@ -89,6 +96,35 @@ export async function insertRecurringOccurrenceBooking(
   });
 
   const priceZar = Math.max(1, Math.round(Number(params.recurring.price)));
+  const existingPrepaidAllocation = await findReservedRecurringPrepaymentAllocation(
+    admin,
+    params.recurring.id,
+    params.occurrenceDateYmd,
+  );
+  const existingCycle = existingPrepaidAllocation
+    ? null
+    : await findRecurringPrepaymentCycleForDate(admin, params.recurring.id, params.occurrenceDateYmd);
+  if (existingCycle) {
+    return {
+      ok: false,
+      error: existingCycle.status === "pending_payment"
+        ? "recurring_package_payment_pending"
+        : "recurring_package_allocation_missing",
+    };
+  }
+  const renewalQuote = existingPrepaidAllocation
+    ? null
+    : buildRecurringPrepaymentQuote({
+        startDate: params.occurrenceDateYmd,
+        frequency: String(params.recurring.frequency ?? ""),
+        recurringDays: (params.recurring.days_of_week ?? [])
+          .map((day) => ISO_DAY_NAMES[Math.round(Number(day))] ?? "")
+          .filter(Boolean),
+        perVisitZar: priceZar,
+      });
+  if (!existingPrepaidAllocation && !renewalQuote) {
+    return { ok: false, error: "recurring_package_schedule_invalid" };
+  }
   const lockedNow = new Date().toISOString();
   const lockExpiresAt = addDaysYmd(params.occurrenceDateYmd, FAR_LOCK_DAYS);
   const locked: LockedBooking = {
@@ -102,6 +138,17 @@ export async function insertRecurringOccurrenceBooking(
     booking_id: null,
   };
 
+  const recurringPrepayment = renewalQuote
+    ? {
+        scope: "rolling_30_days",
+        coverageStartDate: renewalQuote.coverageStartDate,
+        coverageEndDate: renewalQuote.coverageEndDate,
+        occurrenceDates: renewalQuote.occurrenceDates,
+        visitCount: renewalQuote.visitCount,
+        perVisitZar: renewalQuote.perVisitZar,
+        packagePayableZar: renewalQuote.grossPackageZar,
+      }
+    : null;
   const snapshot: BookingSnapshotV1 = {
     v: template.v ?? 1,
     locked,
@@ -109,19 +156,16 @@ export async function insertRecurringOccurrenceBooking(
     tip_zar: template.tip_zar ?? 0,
     discount_zar: template.discount_zar ?? 0,
     promo_code: template.promo_code ?? null,
-    total_zar: priceZar,
+    total_zar: renewalQuote?.grossPackageZar ?? priceZar,
     ...(preferredCleanerIds.length > 0 ? { selectedCleanerIds: preferredCleanerIds } : {}),
+    ...(recurringPrepayment ? { recurringPrepayment } : {}),
   };
 
   const email = normalizeEmail(params.customerEmail);
   if (!email) return { ok: false, error: "Customer email missing for recurring booking." };
 
   const paystackReference = `rec_${crypto.randomUUID()}`;
-  const prepaidAllocation = await findReservedRecurringPrepaymentAllocation(
-    admin,
-    params.recurring.id,
-    params.occurrenceDateYmd,
-  );
+  const prepaidAllocation = existingPrepaidAllocation;
   const occurrencePaidZar = prepaidAllocation?.allocatedZar ?? 0;
 
   const pricing_version_id =
@@ -183,11 +227,26 @@ export async function insertRecurringOccurrenceBooking(
     city_id: null,
     date: params.occurrenceDateYmd,
     time: locked.time ?? null,
-    total_paid_zar: prepaidAllocation ? occurrencePaidZar : priceZar,
+    total_paid_zar: prepaidAllocation
+      ? occurrencePaidZar
+      : renewalQuote?.grossPackageZar ?? priceZar,
     pricing_version_id,
     price_breakdown: null,
     total_price: prepaidAllocation ? occurrencePaidZar : null,
-    price_snapshot: provisionalPriceSnapshotJson(locked),
+    price_snapshot: renewalQuote
+      ? {
+          ...provisionalPriceSnapshotJson(locked),
+          total_price: renewalQuote.grossPackageZar,
+          pay_total_zar: renewalQuote.grossPackageZar,
+          server_computed_total: renewalQuote.grossPackageZar,
+          payment_scope: "recurring_first_30_days",
+          per_visit_price_zar: renewalQuote.perVisitZar,
+          prepaid_visit_count: renewalQuote.visitCount,
+          prepaid_coverage_start_date: renewalQuote.coverageStartDate,
+          prepaid_coverage_end_date: renewalQuote.coverageEndDate,
+          prepaid_occurrence_dates: renewalQuote.occurrenceDates,
+        }
+      : provisionalPriceSnapshotJson(locked),
     recurring_id: params.recurring.id,
     is_recurring_generated: true,
     payment_status: prepaidAllocation ? ("success" as const) : ("pending" as const),
@@ -248,6 +307,21 @@ export async function insertRecurringOccurrenceBooking(
   }
   const id = data && typeof data === "object" && "id" in data ? String((data as { id: string }).id) : "";
   if (!id) return { ok: false, error: "Insert returned no id." };
+
+  if (renewalQuote) {
+    const pendingPackage = await upsertPendingRecurringPrepayment(admin, {
+      sourceBookingId: id,
+      recurringId: params.recurring.id,
+      customerId: params.recurring.customer_id,
+      paystackReference,
+      quote: renewalQuote,
+      paidPackageZar: renewalQuote.grossPackageZar,
+    });
+    if (!pendingPackage.ok) {
+      await admin.from("bookings").delete().eq("id", id);
+      return { ok: false, error: `recurring_package_save_failed:${pendingPackage.error}` };
+    }
+  }
 
   if (prepaidAllocation) {
     const claim = await applyReservedRecurringPrepaymentAllocation(admin, {

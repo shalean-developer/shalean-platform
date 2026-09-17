@@ -1291,7 +1291,7 @@ export function Step3Review() {
           <div className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 sm:px-5">
             <p className="text-xs text-slate-400">
               {values.bookingType === "recurring"
-                ? "Pay all visits in the first 30 days today. Visits after that are billed separately at the displayed per-visit price."
+                ? "Pay all visits in each 30-day billing cycle together. The package renews automatically while the recurring booking remains active."
                 : "Final amount confirmed before payment. No hidden fees."}
             </p>
           </div>

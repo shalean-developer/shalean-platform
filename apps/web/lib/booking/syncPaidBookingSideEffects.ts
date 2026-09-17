@@ -92,7 +92,7 @@ function recurringPrepaymentFromSnapshot(raw: unknown): { perVisitZar: number; p
   const nested = o.recurringPrepayment;
   if (!nested || typeof nested !== "object" || Array.isArray(nested)) return null;
   const r = nested as Record<string, unknown>;
-  if (r.scope !== "first_30_days") return null;
+  if (r.scope !== "first_30_days" && r.scope !== "rolling_30_days") return null;
   const perVisitZar = Number(r.perVisitZar);
   const packagePaidZar = Number(r.packagePayableZar);
   if (!Number.isFinite(perVisitZar) || !Number.isFinite(packagePaidZar)) return null;

@@ -66,4 +66,40 @@ describe("first-30-day recurring prepayment contract", () => {
     );
     expect(paymentSource).toContain('values.bookingType === "recurring" ? "Pay first 30 days"');
   });
+
+  it("creates every later cycle as a complete rolling package with no per-visit fallback", () => {
+    const occurrenceSource = readFileSync(
+      resolve(__dirname, "insertRecurringOccurrenceBooking.ts"),
+      "utf8",
+    );
+    expect(occurrenceSource).toContain('scope: "rolling_30_days"');
+    expect(occurrenceSource).toContain("renewalQuote?.grossPackageZar ?? priceZar");
+    expect(occurrenceSource).toContain('error: "recurring_package_schedule_invalid"');
+    expect(occurrenceSource).toContain("upsertPendingRecurringPrepayment");
+  });
+
+  it("never auto-charges a package after its recurring plan stops being active", () => {
+    const chargeSource = readFileSync(
+      resolve(__dirname, "../../app/api/cron/charge-recurring-bookings/route.ts"),
+      "utf8",
+    );
+    expect(chargeSource).toContain('.select("paystack_authorization_code, status")');
+    expect(chargeSource).toContain('if (recurringStatus !== "active")');
+    expect(chargeSource).toContain("recurring_package_charge_skipped_inactive_plan");
+  });
+
+  it("tells customers that complete 30-day packages renew automatically", () => {
+    const reviewSource = readFileSync(
+      resolve(__dirname, "../../src/features/booking-v2/steps/Step3Review.tsx"),
+      "utf8",
+    );
+    const paymentSource = readFileSync(
+      resolve(__dirname, "../../src/features/booking-v2/steps/Step4Payment.tsx"),
+      "utf8",
+    );
+    expect(reviewSource).toContain("each 30-day billing cycle together");
+    expect(paymentSource).toContain("charge each complete 30-day visit package automatically");
+    expect(reviewSource).not.toContain("Visits after that are billed separately");
+    expect(paymentSource).not.toContain("each visit is billed separately");
+  });
 });

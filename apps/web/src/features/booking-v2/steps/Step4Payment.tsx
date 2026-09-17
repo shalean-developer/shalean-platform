@@ -994,7 +994,7 @@ function PaymentSection({
           {!pendingBookingId && recurringPrepayment ? (
             <p className="text-xs text-slate-500">
               Covers {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"} from{" "}
-              {recurringPrepayment.coverageStartDate} to {recurringPrepayment.coverageEndDate}. After that, each visit is billed separately at the per-visit price.
+              {recurringPrepayment.coverageStartDate} to {recurringPrepayment.coverageEndDate}. The next 30-day package renews automatically while your recurring booking remains active.
             </p>
           ) : null}
         </div>
@@ -1060,7 +1060,10 @@ function PaymentSection({
         By paying, you agree to our{" "}
         <Link href="/terms-of-service" className="underline hover:text-slate-600">Terms of Service</Link>
         {" "}and{" "}
-        <Link href="/privacy-policy" className="underline hover:text-slate-600">Privacy Policy</Link>.
+        <Link href="/privacy-policy" className="underline hover:text-slate-600">Privacy Policy</Link>
+        {values.bookingType === "recurring"
+          ? ", and authorise Shalean to charge each complete 30-day visit package automatically until you pause, cancel, or change the recurring booking."
+          : "."}
       </p>
     </div>
   );

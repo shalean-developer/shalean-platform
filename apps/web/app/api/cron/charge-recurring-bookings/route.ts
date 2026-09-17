@@ -123,6 +123,7 @@ export async function POST(request: Request) {
   let fallback = 0;
   let skippedMonthlyDeferred = 0;
   let skippedFutureVisitDate = 0;
+  let skippedInactivePlan = 0;
   const todayYmd = todayJohannesburg();
 
   try {
@@ -176,11 +177,27 @@ export async function POST(request: Request) {
 
     const { data: rec, error: recErr } = await admin
       .from("recurring_bookings")
-      .select("paystack_authorization_code")
+      .select("paystack_authorization_code, status")
       .eq("id", row.recurring_id)
       .maybeSingle();
 
     if (recErr || !rec) continue;
+    const recurringStatus = String((rec as { status?: string | null }).status ?? "").trim().toLowerCase();
+    if (recurringStatus !== "active") {
+      skippedInactivePlan++;
+      await admin
+        .from("bookings")
+        .update({ recurring_next_charge_attempt_at: new Date(Date.now() + 24 * 3600_000).toISOString() })
+        .eq("id", row.id)
+        .eq("status", "pending_payment");
+      await logSystemEvent({
+        level: "info",
+        source: "cron/charge-recurring-bookings",
+        message: "recurring_package_charge_skipped_inactive_plan",
+        context: { booking_id: row.id, recurring_id: row.recurring_id, recurring_status: recurringStatus || null },
+      });
+      continue;
+    }
     const authCode = String((rec as { paystack_authorization_code?: string | null }).paystack_authorization_code ?? "").trim();
     if (!authCode) {
       const sendCount = Number(row.payment_link_send_count ?? 0);
@@ -371,6 +388,7 @@ export async function POST(request: Request) {
       fallback,
       skipped_monthly_deferred: skippedMonthlyDeferred,
       skipped_future_visit_date: skippedFutureVisitDate,
+      skipped_inactive_plan: skippedInactivePlan,
     },
   });
   await logCronRun({
@@ -385,6 +403,7 @@ export async function POST(request: Request) {
       fallback,
       skipped_monthly_deferred: skippedMonthlyDeferred,
       skipped_future_visit_date: skippedFutureVisitDate,
+      skipped_inactive_plan: skippedInactivePlan,
     }),
   });
 
@@ -398,6 +417,7 @@ export async function POST(request: Request) {
     fallback,
     skipped_monthly_deferred: skippedMonthlyDeferred,
     skipped_future_visit_date: skippedFutureVisitDate,
+    skipped_inactive_plan: skippedInactivePlan,
   });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);

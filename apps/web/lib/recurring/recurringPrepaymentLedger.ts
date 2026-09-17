@@ -10,6 +10,7 @@ export async function upsertPendingRecurringPrepayment(
   admin: SupabaseClient,
   input: {
     sourceBookingId: string;
+    recurringId?: string | null;
     customerId: string;
     paystackReference: string;
     quote: RecurringPrepaymentQuote;
@@ -20,6 +21,7 @@ export async function upsertPendingRecurringPrepayment(
     .from("recurring_prepaid_packages")
     .upsert({
       source_booking_id: input.sourceBookingId,
+      ...(input.recurringId ? { recurring_id: input.recurringId } : {}),
       customer_id: input.customerId,
       paystack_reference: input.paystackReference,
       coverage_start_date: input.quote.coverageStartDate,
@@ -132,6 +134,24 @@ export type ReservedRecurringPrepaymentAllocation = {
   allocatedZar: number;
   paidAt: string;
 };
+
+export async function findRecurringPrepaymentCycleForDate(
+  admin: SupabaseClient,
+  recurringId: string,
+  occurrenceDate: string,
+): Promise<{ packageId: string; status: string } | null> {
+  const { data, error } = await admin
+    .from("recurring_prepaid_packages")
+    .select("id, status")
+    .eq("recurring_id", recurringId)
+    .contains("occurrence_dates", [occurrenceDate])
+    .in("status", ["pending_payment", "active", "exhausted"])
+    .order("coverage_start_date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error || !data?.id) return null;
+  return { packageId: String(data.id), status: String(data.status ?? "") };
+}
 
 export async function findReservedRecurringPrepaymentAllocation(
   admin: SupabaseClient,
