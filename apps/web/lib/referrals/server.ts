@@ -188,8 +188,8 @@ async function referrerRewardAbuseBlocked(admin: SupabaseClient, referrerId: str
 }
 
 /**
- * When a referred customer completes their **first paid** booking, finalize the referral and credit the referrer.
- * Idempotent: only the first qualifying payment triggers a reward.
+ * When a referred customer reaches the configured first-booking milestone, finalize the referral and credit the referrer.
+ * The production setting requires the first completed and fully paid booking. Idempotent across retries.
  */
 export async function processCustomerReferralAfterFirstPaidBooking(params: {
   admin: SupabaseClient;
@@ -251,7 +251,6 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
   }
 
   const reward = Number((pending as { reward_amount?: number }).reward_amount ?? programSettings.rewardAmountZar);
-  const now = new Date().toISOString();
   const creditExpiresAt =
     programSettings.rewardExpiryDays != null
       ? new Date(Date.now() + programSettings.rewardExpiryDays * 24 * 60 * 60 * 1000).toISOString()
