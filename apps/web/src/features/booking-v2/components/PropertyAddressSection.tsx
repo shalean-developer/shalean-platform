@@ -407,7 +407,7 @@ export function PropertyAddressSection() {
   }, [getValues, setValue]);
 
   useEffect(() => {
-    if (userLoading || addressesLoading || prefilled) return;
+    if (userLoading || addressesLoading || locationsLoading || prefilled) return;
     if (!user || !hasSavedAddresses) {
       setPrefilled(true);
       return;
@@ -423,7 +423,13 @@ export function PropertyAddressSection() {
       );
       if (match) {
         setAddressMode("saved");
-        setSelectedAddressId(match.id);
+        // Re-apply after service locations are ready so the saved suburb also
+        // restores its canonical location/city IDs for scheduling.
+        if (!getValues("serviceAreaLocationId")?.trim()) {
+          applySavedAddress(match);
+        } else {
+          setSelectedAddressId(match.id);
+        }
       }
       setPrefilled(true);
       return;
@@ -438,6 +444,7 @@ export function PropertyAddressSection() {
   }, [
     userLoading,
     addressesLoading,
+    locationsLoading,
     prefilled,
     user,
     hasSavedAddresses,
