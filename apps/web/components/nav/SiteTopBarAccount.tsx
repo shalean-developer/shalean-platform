@@ -1,12 +1,16 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { signOut } from "@/lib/auth/authClient";
 import { useAuth } from "@/lib/auth/useAuth";
-import { getSupabaseBrowser } from "@/lib/supabase/browser";
+import { readCachedUserRole } from "@/lib/auth/userRole";
+import {
+  publicHeaderDashboardHref,
+  publicHeaderPostAuthRedirect,
+} from "@/lib/auth/publicHeaderAuthRouting";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   DropdownMenu,
@@ -29,8 +33,7 @@ function userDisplayName(user: User | null): string {
   return name || user?.email || "Account";
 }
 
-function avatarLetter(user: User | null, cleanerLoggedIn: boolean): string {
-  if (cleanerLoggedIn && !user) return "C";
+function avatarLetter(user: User | null): string {
   return userDisplayName(user).trim()[0]?.toUpperCase() ?? "S";
 }
 
@@ -48,35 +51,17 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [cleanerLoggedIn, setCleanerLoggedIn] = useState(false);
-
-  useEffect(() => {
-    const sb = getSupabaseBrowser();
-    if (!sb) {
-      setCleanerLoggedIn(false);
-      return;
-    }
-    const sync = () => {
-      void sb.auth.getSession().then(({ data }) => {
-        setCleanerLoggedIn(Boolean(data.session?.access_token));
-      });
-    };
-    sync();
-    const { data: sub } = sb.auth.onAuthStateChange(() => sync());
-    return () => sub.subscription.unsubscribe();
-  }, []);
-
-  const redirectTarget = useMemo(() => {
-    const q = searchParams.toString();
-    return `${pathname}${q ? `?${q}` : ""}`;
-  }, [pathname, searchParams]);
+  const redirectTarget = useMemo(
+    () => publicHeaderPostAuthRedirect(pathname, searchParams.toString()),
+    [pathname, searchParams],
+  );
 
   const loginHref = `/auth/login?redirect=${encodeURIComponent(redirectTarget)}`;
-  const loggedIn = Boolean(user || cleanerLoggedIn);
-  const accountHref = user ? "/account" : "/jobs";
-  const avatarName = user ? userDisplayName(user) : "Cleaner account";
-  const avatarPhoto = user ? avatarImageUrl(user) : null;
-  const avatarInitial = avatarLetter(user, cleanerLoggedIn);
+  const loggedIn = Boolean(user);
+  const accountHref = publicHeaderDashboardHref(readCachedUserRole());
+  const avatarName = userDisplayName(user);
+  const avatarPhoto = avatarImageUrl(user);
+  const avatarInitial = avatarLetter(user);
   const headerVariant = variant === "header";
 
   async function handleLogout() {
