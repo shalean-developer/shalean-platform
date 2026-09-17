@@ -66,3 +66,10 @@ export function adjacentDeepCleaningStage(
   const targetIndex = direction === "next" ? index + 1 : index - 1;
   return DEEP_CLEANING_STAGES[targetIndex] ?? null;
 }
+
+/** Deep-clean add-ons belong to the final details stage before scheduling. */
+export function deepCleaningShowsExtras(
+  stage: RegularCleaningDetailsStage | null,
+): boolean {
+  return stage === "pets";
+}
