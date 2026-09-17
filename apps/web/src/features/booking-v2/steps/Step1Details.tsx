@@ -26,6 +26,7 @@ import {
 import {
   adjacentDeepCleaningStage,
   deepCleaningDetailsStage,
+  deepCleaningShowsExtras,
   deepCleaningStageReady,
 } from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
 
@@ -394,7 +395,10 @@ export function Step1Details() {
     : null;
   const showAddress = !isProgressiveHomeCleaning || activeDetailsStage === "address";
   const showEquipmentQuestion = isRegularCleaning && activeDetailsStage === "pets";
-  const showExtras = !isProgressiveHomeCleaning || (isRegularCleaning && activeDetailsStage === "equipment");
+  const showExtras =
+    !isProgressiveHomeCleaning ||
+    (isRegularCleaning && activeDetailsStage === "equipment") ||
+    (isDeepCleaning && deepCleaningShowsExtras(activeDetailsStage));
 
   function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
     if (!question.showWhen) return true;
