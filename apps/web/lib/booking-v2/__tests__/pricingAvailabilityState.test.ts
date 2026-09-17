@@ -56,7 +56,11 @@ describe("SPC-01-04 SR-04D1 pricing availability state", () => {
   it("preserves the server-owned pending payment-session recovery path", () => {
     const src = read("src/features/booking-v2/steps/Step4Payment.tsx");
 
-    expect(src).toContain("const canStartPayment = pendingBookingId ? Boolean(pendingSummary && !pendingSummaryLoading) : quoteReadiness.ready");
+    expect(src).toContain("const referralValidationPending = Boolean(");
+    expect(src).toContain("const canStartPayment = referralValidationPending");
+    expect(src).toContain("? false");
+    expect(src).toContain("? Boolean(pendingSummary && !pendingSummaryLoading)");
+    expect(src).toContain(": quoteReadiness.ready");
     expect(src).toContain("if (pendingBookingId)");
     expect(src).toContain("/payment-session");
     expect(src).toContain("only fall through when a new canonical quote is ready");
