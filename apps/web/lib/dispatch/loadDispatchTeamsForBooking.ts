@@ -10,6 +10,7 @@ import {
   countPlatformTeamJobsOnDate,
   fetchTeamCapacityUsageSlotsByTeam,
   MAX_TEAM_BOOKINGS_PER_DAY,
+  TEAM_CAPACITY_CONSUMING_STATUSES,
   TEAM_MIN_ROSTER_MEMBERS,
 } from "@/lib/dispatch/teamJobsPerDay";
 import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
@@ -24,13 +25,6 @@ export type DispatchTeamAvailabilityRow = {
   qualified_member_count: number;
 };
 
-const TEAM_BOOKING_RESERVATION_STATUSES = [
-  "pending",
-  "pending_payment",
-  "assigned",
-  "in_progress",
-  "confirmed",
-] as const;
 
 function capabilityGateFromBookingV2Slug(serviceSlug: string): ServiceCapabilityGate {
   return String(serviceSlug ?? "").trim().toLowerCase() === "moving-cleaning" ? "move" : "deep";
@@ -45,7 +39,7 @@ async function loadTeamSlotUsageByTeamOnDate(
     .from("bookings")
     .select("team_id, assigned_team_id, is_team_job, status")
     .eq("date", dateYmd)
-    .in("status", [...TEAM_BOOKING_RESERVATION_STATUSES]);
+    .in("status", [...TEAM_CAPACITY_CONSUMING_STATUSES]);
   if (error) return { map: new Map(), error: error.message };
 
   const map = new Map<string, number>();
