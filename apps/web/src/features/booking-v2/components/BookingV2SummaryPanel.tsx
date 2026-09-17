@@ -139,14 +139,17 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const displayedScheduleStage = scheduleSectionOverride ?? "booking_type";
   const cleanerIsVisible =
     hasCleaner &&
+    !(isDeepCleaning && currentStep === 1) &&
     (!isRegularCleaning || currentStep > 2 || displayedScheduleStage === "cleaner");
   const bookingTypeLabel = values.bookingType === "recurring" ? "Recurring" : "Once-off";
   const scheduleIsVisible =
-    !isRegularCleaning ||
+    !(isDeepCleaning && currentStep === 1) &&
+    (!isRegularCleaning ||
     currentStep > 2 ||
-    isRegularCleaningScheduleStageComplete("booking_type", displayedScheduleStage, values.bookingType);
+    isRegularCleaningScheduleStageComplete("booking_type", displayedScheduleStage, values.bookingType));
   const dateIsVisible =
     hasDate &&
+    !(isDeepCleaning && currentStep === 1) &&
     (!isRegularCleaning ||
       currentStep > 2 ||
       isRegularCleaningScheduleStageComplete("date_time", displayedScheduleStage, values.bookingType));
