@@ -24,6 +24,7 @@ import {
   regularCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 import {
+  adjacentDeepCleaningStage,
   deepCleaningDetailsStage,
   deepCleaningStageReady,
 } from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
@@ -393,7 +394,7 @@ export function Step1Details() {
     : null;
   const showAddress = !isProgressiveHomeCleaning || activeDetailsStage === "address";
   const showEquipmentQuestion = isRegularCleaning && activeDetailsStage === "pets";
-  const showExtras = !isProgressiveHomeCleaning || activeDetailsStage === "equipment";
+  const showExtras = !isProgressiveHomeCleaning || (isRegularCleaning && activeDetailsStage === "equipment");
 
   function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
     if (!question.showWhen) return true;
@@ -433,10 +434,10 @@ export function Step1Details() {
     if (question.key === "propertyType") {
       return activeDetailsStage === "property" || activeDetailsStage === "rooms";
     }
-    if (question.group === "rooms" || (isDeepCleaning && question.key === "lastCleaned")) {
-      return activeDetailsStage === "rooms";
+    if (question.group === "rooms") return activeDetailsStage === "rooms";
+    if (question.key === "hasPets" || (isDeepCleaning && question.key === "lastCleaned")) {
+      return activeDetailsStage === "pets";
     }
-    if (question.key === "hasPets") return activeDetailsStage === "pets";
     return activeDetailsStage === "equipment";
   });
   const questionGroups = groupQuestions(visibleQuestions);
@@ -461,7 +462,9 @@ export function Step1Details() {
 
   function moveProgressiveStage(direction: "back" | "next") {
     if (!activeDetailsStage) return;
-    const adjacentStage = adjacentRegularCleaningStage(activeDetailsStage, direction);
+    const adjacentStage = isDeepCleaning
+      ? adjacentDeepCleaningStage(activeDetailsStage, direction)
+      : adjacentRegularCleaningStage(activeDetailsStage, direction);
     if (direction === "back") {
       if (adjacentStage) editDetailsSection(adjacentStage);
       else goBack();
@@ -473,7 +476,7 @@ export function Step1Details() {
   }
 
   function handleProgressiveAnswer(key: string, value: string) {
-    if (!activeDetailsStage) return;
+    if (!activeDetailsStage || isDeepCleaning) return;
     const target = regularCleaningAutoAdvanceTarget(activeDetailsStage, {
       ...serviceDetails,
       [key]: value,
@@ -622,7 +625,9 @@ export function Step1Details() {
               onClick={() => moveProgressiveStage("next")}
               className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {activeDetailsStage === "equipment" ? "Continue to Schedule →" : "Continue →"}
+              {activeDetailsStage === "equipment" || (isDeepCleaning && activeDetailsStage === "pets")
+                ? "Continue to Schedule →"
+                : "Continue →"}
             </button>
           ) : null}
         </div>
