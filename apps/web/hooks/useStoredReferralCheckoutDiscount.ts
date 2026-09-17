@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getDashboardAccessToken } from "@/lib/dashboard/dashboardFetch";
-import { getStoredReferral } from "@/lib/referrals/client";
+import { getStoredReferral, setReferralCapture } from "@/lib/referrals/client";
 import type { ReferralCheckoutInvalidReason } from "@/lib/referrals/referralCheckoutReasons";
 
 export type StoredReferralCheckoutDiscount = {
@@ -14,6 +14,7 @@ export type UseStoredReferralCheckoutDiscountOptions = {
   email?: string | null;
   bookingTotalZar?: number;
   serviceSlug?: string;
+  referralCode?: string | null;
 };
 
 /**
@@ -40,7 +41,9 @@ export function useStoredReferralCheckoutDiscount(
   const [invalidMessage, setInvalidMessage] = useState<string | null>(null);
 
   useEffect(() => {
-    const code = getStoredReferral("customer");
+    const explicitCode = opts.referralCode?.trim().toUpperCase() ?? "";
+    if (explicitCode) setReferralCapture(explicitCode, "customer");
+    const code = explicitCode || getStoredReferral("customer");
     if (!code) {
       setReferralDiscount(null);
       setInvalidReason(null);
@@ -108,7 +111,7 @@ export function useStoredReferralCheckoutDiscount(
       cancelled = true;
       controller.abort();
     };
-  }, [opts.email, opts.bookingTotalZar, opts.serviceSlug]);
+  }, [opts.email, opts.bookingTotalZar, opts.referralCode, opts.serviceSlug]);
 
   return { referralDiscount, loading, invalidReason, invalidMessage };
 }
