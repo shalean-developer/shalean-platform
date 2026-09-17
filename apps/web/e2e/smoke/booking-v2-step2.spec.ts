@@ -217,7 +217,7 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await expectDraft(page, { bookingType: "once_off" });
 
     await page.getByRole("radio", { name: /Repeat/ }).click();
-    await page.getByRole("button", { name: "Weekly", exact: true }).click();
+    await page.getByRole("button", { name: /Weekly/ }).click();
     await page.getByRole("button", { name: "Mon", exact: true }).click();
     await expectDraft(page, {
       bookingType: "recurring",
