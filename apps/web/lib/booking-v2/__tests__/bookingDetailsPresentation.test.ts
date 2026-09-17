@@ -86,10 +86,12 @@ describe("booking details presentation", () => {
     expect(addressSource).toContain("[locationOptions, setValue]");
   });
 
-  it("keeps the review cleaner preference readable at every breakpoint", () => {
-    expect(reviewSource).toContain('title="Cleaner preference"');
-    expect(reviewSource).toContain('className="sm:col-span-2"');
-    expect(reviewSource).toContain('cleanerDetails.length > 1 && "md:grid-cols-2"');
+  it("keeps cleaner preference and add-ons side by side without narrowing cleaner summaries", () => {
+    expect(reviewSource).toContain(
+      'title="Cleaner preference"\n              onEdit={() => openEdit("cleaner")}\n            >',
+    );
+    expect(reviewSource).toContain('<div className="grid grid-cols-1 gap-2.5">');
+    expect(reviewSource).not.toContain('cleanerDetails.length > 1 && "md:grid-cols-2"');
     expect(reviewSource).toContain(
       'className="break-words text-sm font-semibold leading-snug text-slate-900"',
     );

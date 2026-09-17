@@ -1169,7 +1169,6 @@ export function Step3Review() {
               number={serviceDetails.length > 0 ? 4 : 3}
               title="Cleaner preference"
               onEdit={() => openEdit("cleaner")}
-              className="sm:col-span-2"
             >
               {!hasDetails && !hasIds ? (
                 <div className="flex items-center gap-3">
@@ -1186,12 +1185,7 @@ export function Step3Review() {
                   </div>
                 </div>
               ) : hasDetails ? (
-                <div
-                  className={cn(
-                    "grid grid-cols-1 gap-2.5",
-                    cleanerDetails.length > 1 && "md:grid-cols-2",
-                  )}
-                >
+                <div className="grid grid-cols-1 gap-2.5">
                   {cleanerDetails.map((cleaner) => (
                     <CleanerPreviewCard key={cleaner.id} cleaner={cleaner} />
                   ))}
