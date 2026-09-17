@@ -189,7 +189,7 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
 }
 
 async function chooseFutureCalendarDate(page: Page, day: number): Promise<string> {
-  await page.getByRole("button", { name: "Choose a date", exact: true }).click();
+  await page.locator("#booking-date").click();
   await page.getByRole("button", { name: "Next month" }).click();
   await page.getByRole("button", { name: "Next month" }).click();
   await page.getByRole("button", { name: String(day), exact: true }).click();
@@ -210,13 +210,13 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
 
     await expect.poll(async () => Number((await readDraft(page)).pricingSummary?.total ?? 0)).toBeGreaterThan(0);
 
-    await page.getByRole("button", { name: "Repeat", exact: true }).click();
+    await page.getByRole("radio", { name: "Repeat", exact: true }).click();
     await expectDraft(page, { bookingType: "recurring" });
 
-    await page.getByRole("button", { name: "One Time", exact: true }).click();
+    await page.getByRole("radio", { name: "One Time", exact: true }).click();
     await expectDraft(page, { bookingType: "once_off" });
 
-    await page.getByRole("button", { name: "Repeat", exact: true }).click();
+    await page.getByRole("radio", { name: "Repeat", exact: true }).click();
     await page.getByRole("button", { name: "Weekly", exact: true }).click();
     await page.getByRole("button", { name: "Mon", exact: true }).click();
     await expectDraft(page, {
