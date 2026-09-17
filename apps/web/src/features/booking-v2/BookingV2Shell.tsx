@@ -18,6 +18,7 @@ import { useBookingV2FunnelTelemetry } from "@/src/features/booking-v2/hooks/use
 import { useBookingV2Pricing } from "@/src/features/booking-v2/hooks/useBookingV2Pricing";
 import { useClientMounted } from "@/src/features/booking-v2/hooks/useClientMounted";
 import { cn } from "@/lib/utils";
+import { shouldShowBookingShellNavigation } from "@/lib/booking-v2/bookingShellNavigation";
 import {
   BOOKING_PRICING_LOADING_MESSAGE,
   BOOKING_PRICING_UNAVAILABLE_MESSAGE,
@@ -117,7 +118,7 @@ function BookingV2Inner() {
   /** Steps 2–4 already use their own section cards — avoid duplicate outer card chrome. */
   const useOuterStepCard = currentStep === 1;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
-  const showShellNavigation = currentStep > 2 || serviceSlug !== "regular-cleaning";
+  const showShellNavigation = shouldShowBookingShellNavigation(currentStep, serviceSlug);
   const paymentBlockMessage =
     pricingAvailability === "loading"
       ? BOOKING_PRICING_LOADING_MESSAGE
