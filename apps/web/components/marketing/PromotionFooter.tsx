@@ -8,37 +8,36 @@ import {
 } from "@/lib/site/customerSupport";
 
 /**
- * Compact footer for campaign and promotion landing pages.
- * It keeps the conversion journey focused while preserving essential support,
- * legal and brand destinations.
+ * Fixed-height footer for campaign and promotion pages.
+ * Mobile is 80px and desktop is 160px.
  */
 export function PromotionFooter() {
   return (
-    <footer className="border-t-4 border-[#0051ff] bg-[#00164e] text-white">
-      <div className="mx-auto flex min-h-20 w-full max-w-[var(--ui-container-marketing)] flex-wrap items-center justify-between gap-x-6 gap-y-2 px-[var(--ui-page-gutter)] py-3 md:min-h-40 md:py-6">
+    <footer className="h-20 border-t-4 border-[#0051ff] bg-[#00164e] text-white md:h-40">
+      <div className="mx-auto flex h-full w-full max-w-[var(--ui-container-marketing)] items-center justify-between gap-3 px-[var(--ui-page-gutter)] md:grid md:grid-cols-[auto_1fr] md:grid-rows-[1fr_auto] md:gap-x-8 md:pb-4 md:pt-5">
         <Link href="/" aria-label="Shalean home" className="shrink-0 rounded-md bg-white px-2 py-1.5">
-          <ShaleanNavLogo className="h-7 w-auto md:h-9" intrinsicHeight={96} />
+          <ShaleanNavLogo className="h-6 w-auto md:h-9" intrinsicHeight={96} />
         </Link>
 
-        <div className="flex flex-wrap items-center justify-end gap-x-5 gap-y-2 text-xs text-white/80 md:text-sm">
-          <a href={CUSTOMER_SUPPORT_TELEPHONE_TEL} className="inline-flex min-h-10 items-center gap-2 transition hover:text-white">
+        <nav aria-label="Promotion footer" className="flex items-center justify-end gap-3 text-xs text-white/85 md:gap-5 md:text-sm">
+          <a href={CUSTOMER_SUPPORT_TELEPHONE_TEL} aria-label={`Call ${CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}`} className="inline-flex min-h-10 items-center gap-2 transition hover:text-white">
             <Phone className="h-4 w-4 text-[#66a3ff]" aria-hidden />
-            {CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}
+            <span className="hidden sm:inline">{CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}</span>
           </a>
-          <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="hidden min-h-10 items-center gap-2 transition hover:text-white sm:inline-flex">
+          <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="hidden min-h-10 items-center gap-2 transition hover:text-white md:inline-flex">
             <Mail className="h-4 w-4 text-[#66a3ff]" aria-hidden />
             Support
           </a>
-          <Link href="/terms-of-service" className="inline-flex min-h-10 items-center transition hover:text-white">
+          <Link href="/terms-of-service" className="hidden min-h-10 items-center transition hover:text-white sm:inline-flex">
             Terms
           </Link>
           <Link href="/privacy-policy" className="inline-flex min-h-10 items-center transition hover:text-white">
             Privacy
           </Link>
-        </div>
+        </nav>
 
-        <p className="w-full text-[10px] text-white/45 md:text-xs">
-          © {new Date().getFullYear()} Shalean Cleaning Services. Cape Town, South Africa.
+        <p className="col-span-2 hidden border-t border-white/10 pt-3 text-xs text-white/65 md:block">
+          © {new Date().getFullYear()} Shalean Cleaning Services · Cape Town, South Africa
         </p>
       </div>
     </footer>
