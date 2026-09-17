@@ -858,8 +858,14 @@ export function Step2Schedule() {
             serviceSlug={serviceSlug}
             selectedTeamId={assignedTeamId}
             onSelect={(id, name) => {
-              setValue("assignedTeamId", id);
-              setValue("assignedTeamName", name);
+              setValue("assignedTeamId", id, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+              setValue("assignedTeamName", name, {
+                shouldDirty: true,
+              });
+              void goNext();
             }}
           />
           <FieldError message={errors.assignedTeamId?.message} />
