@@ -294,14 +294,12 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await page.getByRole("button", { name: "9:00 AM", exact: true }).click();
     await expect(page.getByRole("button", { name: /RD Team Alpha/ })).toBeVisible();
     await page.getByRole("button", { name: /RD Team Alpha/ }).click();
+    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=review/);
     await expectDraft(page, {
       date: chosenDate,
       time: "09:00",
       assignedTeamId: "team-alpha",
     });
-
-    await page.getByRole("button", { name: "Continue →" }).click();
-    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=review/);
 
     expect(forbiddenMutations, "Team-mode smoke must never submit a booking or payment mutation").toEqual([]);
   });

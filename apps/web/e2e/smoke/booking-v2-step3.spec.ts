@@ -257,7 +257,6 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await expect(page.getByText(/Recurring · Weekly/)).toBeVisible();
     await expectReviewSectionNumbers(page, [
       "Location",
-      "Equipment",
       "Clean details",
       "Schedule",
       "Add-ons",
