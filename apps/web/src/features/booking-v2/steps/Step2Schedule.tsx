@@ -28,7 +28,10 @@ import type {
 } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { CleanerCountSelector } from "@/src/features/booking-v2/components/CleanerCountSelector";
-import { CleanerPreferenceSection } from "@/src/features/booking-v2/components/CleanerPreferenceSection";
+import {
+  CleanerPreferenceSection,
+  prefetchAvailableCleaners,
+} from "@/src/features/booking-v2/components/CleanerPreferenceSection";
 import { TeamAvailabilitySection } from "@/src/features/booking-v2/components/TeamAvailabilitySection";
 import {
   RECURRING_FREQUENCY_OPTIONS,
@@ -437,6 +440,37 @@ export function Step2Schedule() {
       setValue("time", "", { shouldValidate: true });
     }
   }, [availability, date, scheduling, setValue, slotsVerified, time]);
+
+  // Start cleaner eligibility as soon as a verified slot is selected. By the
+  // time the customer advances to cleaner preference, the shared request cache
+  // normally already contains the server-authoritative list.
+  useEffect(() => {
+    if (
+      isTeamMode ||
+      !date ||
+      !time ||
+      !serviceAreaLocationId?.trim() ||
+      !isSelectedBookingSlotVerified(time, availability, slotsVerified)
+    ) {
+      return;
+    }
+    void prefetchAvailableCleaners({
+      serviceSlug,
+      date,
+      time,
+      durationMinutes,
+      locationId: serviceAreaLocationId.trim(),
+    }).catch(() => undefined);
+  }, [
+    availability,
+    date,
+    durationMinutes,
+    isTeamMode,
+    serviceAreaLocationId,
+    serviceSlug,
+    slotsVerified,
+    time,
+  ]);
 
   function toggleCleaner(cleaner: AvailableCleanerV2) {
     const ids = selectedCleanerIds;
