@@ -142,14 +142,18 @@ export function useBookingV2ScheduleAvailability(args: {
 
     const ac = new AbortController();
     const cached = slotAvailabilityCache.get(requestKey);
+    const hasFreshCache =
+      Boolean(cached) && Date.now() - (cached?.verifiedAt ?? 0) <= SLOT_AVAILABILITY_CACHE_MS;
     queueMicrotask(() => {
       if (ac.signal.aborted) return;
-      if (cached && Date.now() - cached.verifiedAt <= SLOT_AVAILABILITY_CACHE_MS) {
+      if (hasFreshCache && cached) {
         setSnapshot(cached);
       } else {
         setSnapshot((current) => (current?.key === requestKey ? current : null));
       }
-      setLoading(true);
+      // A verified cached result remains immediately interactive while the
+      // background refresh keeps server-authoritative availability current.
+      setLoading(!hasFreshCache);
       setFetchError(false);
     });
 
@@ -234,7 +238,7 @@ export function useBookingV2ScheduleAvailability(args: {
     availability,
     fulfillmentBySlot,
     dayFulfillmentMode,
-    loading: canFetch && loading,
+    loading: canFetch && loading && !slotsVerified,
     fetchError: canFetch && fetchError,
     slotsVerified,
   };
