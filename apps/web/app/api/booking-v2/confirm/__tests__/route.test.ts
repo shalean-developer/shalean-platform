@@ -10,6 +10,7 @@ import { bookingV2SlotHasEligibleCleaners, assessBookingV2SlotFulfillment } from
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import { isBookingSoftFulfillmentEnabled } from "@/lib/booking/availabilityFlags";
 import { loadDispatchTeamsForBooking } from "@/lib/dispatch/loadDispatchTeamsForBooking";
+import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
 
 vi.mock("next/server", async (importOriginal) => {
   const actual = await importOriginal<typeof import("next/server")>();
@@ -53,6 +54,9 @@ vi.mock("@/lib/booking/availabilityFlags", async (importOriginal) => {
 vi.mock("@/lib/booking/getEligibleCleaners", () => ({ getEligibleCleaners: vi.fn() }));
 vi.mock("@/lib/dispatch/loadDispatchTeamsForBooking", () => ({
   loadDispatchTeamsForBooking: vi.fn(),
+}));
+vi.mock("@/lib/booking/assignTeamAndSyncRoster", () => ({
+  assignTeamAndSyncRoster: vi.fn(),
 }));
 vi.mock("@/lib/referrals/validateReferral", () => ({
   validateReferralForCheckout: vi.fn().mockResolvedValue({ valid: false }),
@@ -128,6 +132,7 @@ function mockAdminForConfirm() {
         select: vi.fn().mockReturnValue(eqChain),
         insert,
         update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        delete: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
       };
     }
     if (table === "user_profiles") {
@@ -230,6 +235,7 @@ describe("POST /api/booking-v2/confirm", () => {
     });
     vi.mocked(isBookingSoftFulfillmentEnabled).mockReturnValue(true);
     vi.mocked(getEligibleCleaners).mockResolvedValue([]);
+    vi.mocked(assignTeamAndSyncRoster).mockResolvedValue({ ok: true });
     vi.mocked(loadDispatchTeamsForBooking).mockResolvedValue({
       teams: [{
         id: "00000000-0000-4000-8000-000000000030",
@@ -432,10 +438,23 @@ describe("POST /api/booking-v2/confirm", () => {
 
     expect(res.status).toBe(200);
     const row = admin.insert.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(row.is_team_job).toBe(true);
-    expect(row.team_id).toBe(teamId);
+    // The initial row is deliberately non-team-shaped. The approved RPC then
+    // assigns the team and materializes booking_cleaners in one DB transaction.
+    expect(row.is_team_job).toBe(false);
+    expect(row.team_id).toBeNull();
     expect(row.assigned_team_id).toBe(teamId);
-    expect(row.payout_owner_cleaner_id).toBe(payoutOwnerId);
+    expect(row.payout_owner_cleaner_id).toBeNull();
+    expect(assignTeamAndSyncRoster).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        bookingId: "00000000-0000-4000-8000-000000000099",
+        teamId,
+        payoutOwnerCleanerId: payoutOwnerId,
+        teamMemberCountSnapshot: 3,
+        variant: "admin",
+        source: "booking_v2_confirm",
+      }),
+    );
   });
 
   it("inserts booking with location_id and canonical service_slug when eligible", async () => {
