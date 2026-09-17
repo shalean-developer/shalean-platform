@@ -19,6 +19,7 @@ export const BOOKING_ALLOWED_PARAMS = [
   "extras",
   "extrasMode",
   "promo",
+  "ref",
   "source",
   "location",
   "serviceAreaLocationId",
