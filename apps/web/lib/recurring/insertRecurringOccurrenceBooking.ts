@@ -28,6 +28,10 @@ import { scheduleBookingPaymentRecoveryJobs } from "@/lib/booking/bookingPayment
 import { buildExactSourceLineItems } from "@/lib/booking/buildBookingLineItems";
 import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import {
+  applyReservedRecurringPrepaymentAllocation,
+  findReservedRecurringPrepaymentAllocation,
+} from "@/lib/recurring/recurringPrepaymentLedger";
 
 const FAR_LOCK_DAYS = 120;
 
@@ -113,6 +117,12 @@ export async function insertRecurringOccurrenceBooking(
   if (!email) return { ok: false, error: "Customer email missing for recurring booking." };
 
   const paystackReference = `rec_${crypto.randomUUID()}`;
+  const prepaidAllocation = await findReservedRecurringPrepaymentAllocation(
+    admin,
+    params.recurring.id,
+    params.occurrenceDateYmd,
+  );
+  const occurrencePaidZar = prepaidAllocation?.allocatedZar ?? 0;
 
   const pricing_version_id =
     typeof locked.pricing_version_id === "string" && locked.pricing_version_id.trim()
@@ -140,7 +150,7 @@ export async function insertRecurringOccurrenceBooking(
     snapshotTemplate: template,
   });
   const cleanerPatch = recurringOccurrenceCleanerPatch(preferredCleanerId, {
-    operationalStatus: "pending_payment",
+    operationalStatus: prepaidAllocation ? "pending" : "pending_payment",
   });
 
   const customerOwnershipPatch = await recurringBookingCustomerOwnershipPatch(
@@ -149,16 +159,17 @@ export async function insertRecurringOccurrenceBooking(
   );
 
   const baseRow = {
-    paystack_reference: paystackReference,
+    paystack_reference: prepaidAllocation ? `rpp_${prepaidAllocation.allocationId}` : paystackReference,
     customer_email: email,
     customer_name: params.customerName,
     customer_phone: params.customerPhone,
     ...customerOwnershipPatch,
-    amount_paid_cents: 0,
+    amount_paid_cents: occurrencePaidZar * 100,
+    total_paid_cents: occurrencePaidZar * 100,
     currency: "ZAR",
     booking_snapshot: snapshot,
     ...lockedDurationMinutesPatch(locked),
-    status: "pending_payment" as const,
+    status: prepaidAllocation ? ("pending" as const) : ("pending_payment" as const),
     dispatch_status: "searching" as const,
     surge_multiplier: 1,
     surge_reason: null,
@@ -172,14 +183,17 @@ export async function insertRecurringOccurrenceBooking(
     city_id: null,
     date: params.occurrenceDateYmd,
     time: locked.time ?? null,
-    total_paid_zar: priceZar,
+    total_paid_zar: prepaidAllocation ? occurrencePaidZar : priceZar,
     pricing_version_id,
     price_breakdown: null,
-    total_price: null,
+    total_price: prepaidAllocation ? occurrencePaidZar : null,
     price_snapshot: provisionalPriceSnapshotJson(locked),
     recurring_id: params.recurring.id,
     is_recurring_generated: true,
-    payment_status: "pending" as const,
+    payment_status: prepaidAllocation ? ("success" as const) : ("pending" as const),
+    ...(prepaidAllocation
+      ? { payment_completed_at: prepaidAllocation.paidAt, billing_type: "prepaid" }
+      : {}),
     recurring_retry_count: 0,
     ...(preferredCleanerIds.length > 1 ? { cleaner_count: preferredCleanerIds.length } : {}),
     ...cleanerPatch,
@@ -235,25 +249,38 @@ export async function insertRecurringOccurrenceBooking(
   const id = data && typeof data === "object" && "id" in data ? String((data as { id: string }).id) : "";
   if (!id) return { ok: false, error: "Insert returned no id." };
 
+  if (prepaidAllocation) {
+    const claim = await applyReservedRecurringPrepaymentAllocation(admin, {
+      allocationId: prepaidAllocation.allocationId,
+      bookingId: id,
+    });
+    if (!claim.ok) {
+      await admin.from("bookings").delete().eq("id", id);
+      return { ok: false, error: claim.error };
+    }
+  }
+
   await persistBookingLineItems(
     admin,
     id,
     buildExactSourceLineItems({
-      declaredTotalCents: priceZar * 100,
+      declaredTotalCents: (prepaidAllocation ? occurrencePaidZar : priceZar) * 100,
       source: "recurring_occurrence",
       lines: [{
         name: "Recurring service",
         quantity: 1,
-        unitPriceCents: priceZar * 100,
+        unitPriceCents: (prepaidAllocation ? occurrencePaidZar : priceZar) * 100,
       }],
     }),
   );
 
-  void scheduleBookingPaymentRecoveryJobs(admin, {
-    bookingId: id,
-    customerEmail: email,
-    createdAt: new Date().toISOString(),
-  });
+  if (!prepaidAllocation) {
+    void scheduleBookingPaymentRecoveryJobs(admin, {
+      bookingId: id,
+      customerEmail: email,
+      createdAt: new Date().toISOString(),
+    });
+  }
 
   if (preferredCleanerIds.length >= 2) {
     const continuity = await applyRecurringOccurrenceRosterContinuity(admin, {
@@ -272,5 +299,9 @@ export async function insertRecurringOccurrenceBooking(
     });
   }
 
-  return { ok: true, bookingId: id, paystackReference };
+  return {
+    ok: true,
+    bookingId: id,
+    paystackReference: prepaidAllocation ? `rpp_${prepaidAllocation.allocationId}` : paystackReference,
+  };
 }

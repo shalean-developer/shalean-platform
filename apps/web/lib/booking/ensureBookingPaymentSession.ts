@@ -19,6 +19,7 @@ import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
 import { runPaystackVerifyFinalizePipeline } from "@/lib/booking/runPaystackVerifyFinalizePipeline";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { syncRecurringPrepaymentReference } from "@/lib/recurring/recurringPrepaymentLedger";
 
 export type BookingPaymentSessionAccess =
   | { kind: "paystack_ref"; reference: string }
@@ -327,6 +328,7 @@ async function initializeFreshPaystackSession(
       retryable: true,
     };
   }
+  await syncRecurringPrepaymentReference(admin, row.id, newRef);
 
   const appUrl = getPublicAppUrlBase();
   // Paystack appends reference/trxref; /pay page accepts those for cancel/retry recovery.
@@ -358,6 +360,13 @@ async function initializeFreshPaystackSession(
           expected_total_zar: String(amountZar),
           payment_path: "ensure_booking_payment_session",
           ensure_reason: reason,
+          payment_scope:
+            row.price_snapshot &&
+            typeof row.price_snapshot === "object" &&
+            !Array.isArray(row.price_snapshot) &&
+            (row.price_snapshot as { payment_scope?: unknown }).payment_scope === "recurring_first_30_days"
+              ? "recurring_first_30_days"
+              : "booking_visit",
         },
       }),
     });
@@ -444,6 +453,7 @@ async function initializeFreshPaystackSession(
   }
 
   const persistedRow = persisted as BookingPayRow;
+  await syncRecurringPrepaymentReference(admin, row.id, returnedRef || newRef);
   logPaymentStructured("payment_initialize", {
     booking_id: row.id,
     reference: returnedRef || newRef,

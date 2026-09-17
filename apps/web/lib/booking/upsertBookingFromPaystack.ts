@@ -632,17 +632,28 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         ? { cleaner_id: null as string | null, selected_cleaner_id: null as string | null }
         : { cleaner_id: null as string | null };
 
+  const isRecurringPrepayment = priceSnapshot.payment_scope === "recurring_first_30_days";
+  const bookingVisitZar = isRecurringPrepayment
+    ? Math.max(0, Math.round(priceSnapshot.per_visit_price_zar ?? priceSnapshot.visit_total_zar))
+    : Math.max(0, Math.round(priceSnapshot.total_zar));
   const price_breakdown: Record<string, unknown> = {
     subtotalZar: priceSnapshot.subtotal_zar,
     extrasZar: priceSnapshot.extras_total_zar,
     discountZar: priceSnapshot.discount_zar,
     visitTotalZar: priceSnapshot.visit_total_zar,
     tipZar: priceSnapshot.tip_zar,
-    totalPayableZar: priceSnapshot.total_zar,
+    totalPayableZar: bookingVisitZar,
+    ...(isRecurringPrepayment
+      ? {
+          paymentScope: "recurring_first_30_days",
+          packagePaidZar: priceSnapshot.total_zar,
+          prepaidVisitCount: priceSnapshot.prepaid_visit_count ?? null,
+        }
+      : {}),
     source: "checkout_price_snapshot_v1",
     line_items: priceSnapshot.line_items,
   };
-  const total_price = priceSnapshot.total_zar;
+  const total_price = bookingVisitZar;
   const pricing_version_id =
     priceSnapshot.pricing_version_id ?? lockedRow?.pricing_version_id?.trim() ?? null;
 
@@ -668,9 +679,11 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const flat = buildSnapshotFlat(locked ?? undefined);
   const bookingSnapshotMerged = mergeSnapshotWithFlat(input.snapshot, flat);
 
-  const baseAmountCents = Math.max(0, Math.round(priceSnapshot.subtotal_zar * 100));
-  const extrasAmountCents = Math.max(0, Math.round(priceSnapshot.extras_total_zar * 100));
-  const totalPaidCents = Math.max(0, Math.round(input.amountCents));
+  const baseAmountCents = Math.max(0, Math.round((isRecurringPrepayment ? bookingVisitZar : priceSnapshot.subtotal_zar) * 100));
+  const extrasAmountCents = isRecurringPrepayment ? 0 : Math.max(0, Math.round(priceSnapshot.extras_total_zar * 100));
+  const totalPaidCents = isRecurringPrepayment
+    ? Math.max(0, Math.round(bookingVisitZar * 100))
+    : Math.max(0, Math.round(input.amountCents));
   const serviceFeeCents =
     baseAmountCents != null ? Math.max(0, totalPaidCents - baseAmountCents) : 0;
   const isTest =
@@ -866,7 +879,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     customer_name: cust?.name?.trim() || null,
     customer_phone: customerPhone,
     ...(userIdResolved ? bookingCustomerOwnershipPatch(userIdResolved, ownershipColumn) : {}),
-    amount_paid_cents: input.amountCents,
+    amount_paid_cents: totalPaidCents,
     total_paid_cents: totalPaidCents,
     base_amount_cents: baseAmountCents,
     extras_amount_cents: extrasAmountCents,
@@ -907,7 +920,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     city_id: cityId,
     date: locked?.date ?? pendingExisting?.date ?? null,
     time: locked?.time ?? pendingExisting?.time ?? null,
-    total_paid_zar: Math.round(paidZar),
+    total_paid_zar: bookingVisitZar,
     pricing_version_id: pricing_version_id || null,
     price_breakdown: price_breakdown,
     price_snapshot: priceSnapshot as unknown as Record<string, unknown>,

@@ -41,7 +41,7 @@ import {
   recurringFrequencyLabel,
   shouldShowRecurringDayPicker,
 } from "@/src/features/booking-v2/config/recurringScheduleOptions";
-import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
+import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
 import {
   ServiceQuestionOptionCards,
@@ -1263,22 +1263,23 @@ export function Step3Review() {
             {values.bookingType === "recurring" && values.recurringFrequency ? (
               <div className="space-y-1 border-t border-slate-100 pt-3 text-xs text-slate-600">
                 {(() => {
-                  const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                  const prepaid = buildRecurringPrepaymentQuote({
+                    startDate: values.recurringStartDate || values.date,
                     frequency: values.recurringFrequency,
-                    daysOfWeek: values.recurringDays ?? [],
-                    pricePerVisitZar: estimatedTotal,
+                    recurringDays: values.recurringDays ?? [],
+                    perVisitZar: estimatedTotal,
                   });
+                  if (!prepaid) return <p>Choose a supported recurring schedule to continue.</p>;
                   return (
                     <>
                       <p>
-                        About {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated
-                        monthly total{" "}
+                        First 30 days: {prepaid.visitCount} visit{prepaid.visitCount === 1 ? "" : "s"} · total{" "}
                         <span className="font-semibold text-slate-800">
-                          R{estimatedMonthlyZar.toLocaleString("en-ZA")}
+                          R{prepaid.grossPackageZar.toLocaleString("en-ZA")}
                         </span>
                       </p>
                       <p className="font-medium text-slate-700">
-                        Amount due today: R{estimatedTotal.toLocaleString("en-ZA")} (this visit)
+                        Amount due today: R{prepaid.grossPackageZar.toLocaleString("en-ZA")} (first 30 days)
                       </p>
                     </>
                   );
@@ -1290,7 +1291,7 @@ export function Step3Review() {
           <div className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 sm:px-5">
             <p className="text-xs text-slate-400">
               {values.bookingType === "recurring"
-                ? "Pay today for this visit. Future visits bill at the same per-visit price (or on your monthly invoice if enabled)."
+                ? "Pay all visits in the first 30 days today. Visits after that are billed separately at the displayed per-visit price."
                 : "Final amount confirmed before payment. No hidden fees."}
             </p>
           </div>

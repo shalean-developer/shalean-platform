@@ -10,7 +10,7 @@ import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurr
 import type { BookingV2FormData, BookingStep } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { estimatedCleaningHoursFromMinutes } from "@/lib/booking-v2/formatEstimatedCleaningTime";
-import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
+import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import {
   isRegularCleaningStageComplete,
   regularCleaningDetailsStage,
@@ -256,24 +256,22 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
           )}
 
           {values.bookingType === "recurring" && values.recurringFrequency ? (
-            values.recurringFrequency === "custom" ? (
-              <p className="px-1 text-xs text-slate-500">
-                Custom schedule · Each visit is charged separately.
-              </p>
-            ) : (
+            (
               <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-slate-600">
                 {(() => {
-                  const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
+                  const prepaid = buildRecurringPrepaymentQuote({
+                    startDate: values.recurringStartDate || values.date,
                     frequency: values.recurringFrequency,
-                    daysOfWeek: values.recurringDays ?? [],
-                    pricePerVisitZar: displayTotal,
+                    recurringDays: values.recurringDays ?? [],
+                    perVisitZar: displayTotal,
                   });
+                  if (!prepaid) return <p>Recurring schedule incomplete</p>;
                   return (
                     <p>
                       <span className="font-semibold text-slate-800">
-                        About {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month
+                        First 30 days · {prepaid.visitCount} visit{prepaid.visitCount === 1 ? "" : "s"}
                       </span>
-                      {` · Est. R${estimatedMonthlyZar.toLocaleString("en-ZA")}/month`}
+                      {` · Due R${prepaid.grossPackageZar.toLocaleString("en-ZA")}`}
                     </p>
                   );
                 })()}

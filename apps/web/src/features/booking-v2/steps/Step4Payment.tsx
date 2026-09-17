@@ -31,8 +31,7 @@ import {
   consumeBookingV2SuccessRedirect,
 } from "@/lib/booking-v2/bookingV2PaymentRedirect";
 import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
-import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
-import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurringScheduleOptions";
+import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 
 // ??? Auth Form ?????????????????????????????????????????????????????????????????
 
@@ -385,14 +384,23 @@ function PaymentSection({
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
   const baseTotal = values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? config.basePrice;
+  const recurringPrepayment = values.bookingType === "recurring" && values.recurringFrequency
+    ? buildRecurringPrepaymentQuote({
+        startDate: values.recurringStartDate || values.date,
+        frequency: values.recurringFrequency,
+        recurringDays: values.recurringDays ?? [],
+        perVisitZar: baseTotal,
+      })
+    : null;
+  const checkoutSubtotal = recurringPrepayment?.grossPackageZar ?? baseTotal;
   const { referralDiscount, loading: referralLoading, invalidMessage } = useStoredReferralCheckoutDiscount({
     email: user.email,
-    bookingTotalZar: Math.max(0, baseTotal - promoDiscountZar),
+    bookingTotalZar: Math.max(0, checkoutSubtotal - promoDiscountZar),
     serviceSlug,
   });
 
   const referralToApply = referralDiscount?.discountZar ?? 0;
-  const totalAfterPromo = Math.max(0, baseTotal - promoDiscountZar);
+  const totalAfterPromo = Math.max(0, checkoutSubtotal - promoDiscountZar);
   const totalAfterReferral = Math.max(0, totalAfterPromo - referralToApply);
   const creditToApply = applyCredit ? Math.min(creditBalance, totalAfterReferral) : 0;
   const payTotal = Math.max(0, totalAfterReferral - creditToApply);
@@ -401,7 +409,7 @@ function PaymentSection({
   const promotionRequestKey = JSON.stringify({
     serviceSlug,
     selectedExtras: [...(values.selectedExtras ?? [])].sort(),
-    subtotalZar: baseTotal,
+    subtotalZar: checkoutSubtotal,
     customerEmail: user.email?.trim().toLowerCase() ?? "",
   });
   const activePromotionRequestKey = useRef<string | null>(null);
@@ -445,7 +453,7 @@ function PaymentSection({
           body: JSON.stringify({
             serviceSlug,
             selectedExtraIds: values.selectedExtras ?? [],
-            subtotalZar: baseTotal,
+            subtotalZar: checkoutSubtotal,
             customerEmail: user.email,
           }),
           signal: controller.signal,
@@ -494,7 +502,7 @@ function PaymentSection({
         body: JSON.stringify({
           serviceSlug,
           selectedExtraIds: values.selectedExtras ?? [],
-          subtotalZar: baseTotal,
+          subtotalZar: checkoutSubtotal,
           customerEmail: user.email,
           promoCode: promoCode.trim(),
         }),
@@ -977,31 +985,16 @@ function PaymentSection({
           ) : null}
           <div className="flex items-center justify-between text-base font-bold">
             <span className="text-slate-800">
-              {values.bookingType === "recurring" ? "Pay today (this visit)" : "Total to pay"}
+              {values.bookingType === "recurring" ? "Pay first 30 days" : "Total to pay"}
             </span>
             <span className="text-blue-700">
               {displayedTotal === null ? "—" : `R ${displayedTotal.toLocaleString("en-ZA")}`}
             </span>
           </div>
-          {!pendingBookingId && values.bookingType === "recurring" && values.recurringFrequency ? (
+          {!pendingBookingId && recurringPrepayment ? (
             <p className="text-xs text-slate-500">
-              {(() => {
-                const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
-                  frequency: values.recurringFrequency,
-                  daysOfWeek: values.recurringDays ?? [],
-                  pricePerVisitZar: payTotal,
-                });
-                return (
-                  <>
-                    {recurringFrequencyLabel(values.recurringFrequency)}
-                    {(values.recurringDays?.length ?? 0) > 1
-                      ? ` · ${values.recurringDays?.length ?? 0} visit days per cycle`
-                      : ""}{" "}
-                    · about {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated R
-                    {estimatedMonthlyZar.toLocaleString("en-ZA")}/month. Future visits billed per visit.
-                  </>
-                );
-              })()}
+              Covers {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"} from{" "}
+              {recurringPrepayment.coverageStartDate} to {recurringPrepayment.coverageEndDate}. After that, each visit is billed separately at the per-visit price.
             </p>
           ) : null}
         </div>
