@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 
-type SiteTopBarAccountVariant = "topbar" | "header";
+type SiteTopBarAccountVariant = "topbar" | "header" | "promotion";
 
 function userDisplayName(user: User | null): string {
   const meta = user?.user_metadata as Record<string, unknown> | undefined;
@@ -67,7 +67,8 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
   const avatarName = userDisplayName(user);
   const avatarPhoto = avatarImageUrl(user);
   const avatarInitial = avatarLetter(user);
-  const headerVariant = variant === "header";
+  const headerVariant = variant !== "topbar";
+  const promotionVariant = variant === "promotion";
 
   useEffect(() => {
     router.prefetch(accountHref);
@@ -101,12 +102,14 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
         href={loginHref}
         className={cn(
           "shrink-0 font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2",
-          headerVariant
-            ? "inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm text-primary-foreground shadow-[var(--ui-shadow-sm)] hover:brightness-95"
-            : "rounded-lg border border-white/35 px-3 py-1 text-xs text-white hover:bg-white/10",
+          promotionVariant
+            ? "inline-flex min-h-11 items-center justify-center rounded-md border border-[#0051ff] px-4 text-sm text-[#0051ff] hover:bg-[#eef4ff]"
+            : headerVariant
+              ? "inline-flex min-h-11 items-center justify-center rounded-full bg-primary px-5 py-2.5 text-sm text-primary-foreground shadow-[var(--ui-shadow-sm)] hover:brightness-95"
+              : "rounded-lg border border-white/35 px-3 py-1 text-xs text-white hover:bg-white/10",
         )}
       >
-        Log In
+        Sign in
       </Link>
     );
   }
@@ -178,9 +181,11 @@ function SiteTopBarAccountFallback({ variant }: { variant: SiteTopBarAccountVari
     <div
       className={cn(
         "shrink-0 animate-pulse",
-        variant === "header"
-          ? "h-11 w-[4.75rem] rounded-full bg-primary/25"
-          : "h-7 w-14 rounded-lg bg-white/20",
+        variant === "promotion"
+          ? "h-11 w-[4.75rem] rounded-md bg-primary/15"
+          : variant === "header"
+            ? "h-11 w-[4.75rem] rounded-full bg-primary/25"
+            : "h-7 w-14 rounded-lg bg-white/20",
       )}
       aria-hidden
     />

@@ -1,12 +1,13 @@
 import Link from "next/link";
 import { Phone } from "lucide-react";
+import { SiteTopBarAccount } from "@/components/nav/SiteTopBarAccount";
 import { ShaleanNavLogo } from "@/components/brand/ShaleanNavLogo";
 import {
   CUSTOMER_SUPPORT_TELEPHONE_DISPLAY,
   CUSTOMER_SUPPORT_TELEPHONE_TEL,
 } from "@/lib/site/customerSupport";
 
-export function PromotionHeader({ signInHref }: { signInHref: string }) {
+export function PromotionHeader() {
   return (
     <header className="border-b border-[#dce7ff] bg-white text-[#00164e]">
       <div className="mx-auto flex h-16 w-full max-w-[var(--ui-container-marketing)] items-center justify-between gap-4 px-[var(--ui-page-gutter)] md:h-20">
@@ -22,12 +23,7 @@ export function PromotionHeader({ signInHref }: { signInHref: string }) {
             <Phone className="h-4 w-4 text-[#0051ff]" aria-hidden />
             {CUSTOMER_SUPPORT_TELEPHONE_DISPLAY}
           </a>
-          <Link
-            href={signInHref}
-            className="inline-flex min-h-11 items-center justify-center rounded-md border border-[#0051ff] px-4 text-sm font-semibold text-[#0051ff] transition hover:bg-[#eef4ff]"
-          >
-            Sign in
-          </Link>
+          <SiteTopBarAccount variant="promotion" />
         </div>
       </div>
     </header>

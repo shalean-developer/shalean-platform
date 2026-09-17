@@ -26,7 +26,6 @@ type PublicSettings = {
   termsAndConditions: string | null;
 };
 
-const loginHref = "/auth/login?redirect=%2Frefer&intent=customer";
 
 export function ReferralLandingView() {
   const [settings, setSettings] = useState<PublicSettings | null>(null);
@@ -79,7 +78,7 @@ export function ReferralLandingView() {
   if (settings?.enabled === false) {
     return (
       <div className="min-h-screen bg-white text-foreground">
-        <PromotionHeader signInHref={loginHref} />
+        <PromotionHeader />
         <main className="mx-auto flex min-h-[60vh] max-w-xl flex-col items-center justify-center px-[var(--ui-page-gutter)] py-12 text-center">
           <h1 className="text-3xl font-semibold tracking-tight text-[#00164e]">Referral program paused</h1>
           <p className="mt-3 text-slate-600">Our referral program is temporarily unavailable. Please check back soon.</p>
@@ -94,7 +93,7 @@ export function ReferralLandingView() {
 
   return (
     <div className="min-h-screen bg-white text-foreground">
-      <PromotionHeader signInHref={loginHref} />
+      <PromotionHeader />
 
       <main>
         <section className="relative isolate overflow-hidden bg-[#00164e] text-white">
