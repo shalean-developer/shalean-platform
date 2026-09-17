@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { User } from "@supabase/supabase-js";
 import { signOut } from "@/lib/auth/authClient";
@@ -12,7 +12,6 @@ import {
   publicHeaderDashboardHref,
   publicHeaderPostAuthRedirect,
   publicHeaderShowsCustomerBookings,
-  publicHeaderUsesDirectDashboardLink,
 } from "@/lib/auth/publicHeaderAuthRouting";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -70,6 +69,11 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
   const avatarInitial = avatarLetter(user);
   const headerVariant = variant === "header";
 
+  useEffect(() => {
+    router.prefetch(accountHref);
+    if (showCustomerBookings) router.prefetch("/account/bookings");
+  }, [accountHref, router, showCustomerBookings]);
+
   async function handleLogout() {
     if (user) await signOut();
     if (typeof window !== "undefined") localStorage.removeItem("cleaner_id");
@@ -107,23 +111,6 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
     );
   }
 
-  if (publicHeaderUsesDirectDashboardLink(variant)) {
-    return (
-      <Link
-        href={accountHref}
-        className="inline-flex h-11 w-11 items-center justify-center rounded-full outline-none ring-1 ring-border transition hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-        aria-label={`Open ${accountLabel}`}
-      >
-        <Avatar className="h-10 w-10 border-border">
-          {avatarPhoto ? <AvatarImage src={avatarPhoto} alt="" referrerPolicy="no-referrer" /> : null}
-          <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
-            {avatarInitial}
-          </AvatarFallback>
-        </Avatar>
-      </Link>
-    );
-  }
-
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -155,12 +142,20 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
           <span className="block truncate text-sm">{avatarName}</span>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuItem asChild>
-          <Link href={accountHref}>{accountLabel}</Link>
+        <DropdownMenuItem
+          onSelect={() => {
+            router.push(accountHref);
+          }}
+        >
+          {accountLabel}
         </DropdownMenuItem>
         {showCustomerBookings ? (
-          <DropdownMenuItem asChild>
-            <Link href="/account/bookings">My Bookings</Link>
+          <DropdownMenuItem
+            onSelect={() => {
+              router.push("/account/bookings");
+            }}
+          >
+            My Bookings
           </DropdownMenuItem>
         ) : null}
         <DropdownMenuSeparator />
