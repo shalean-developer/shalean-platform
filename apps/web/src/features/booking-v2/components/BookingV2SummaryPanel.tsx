@@ -161,14 +161,17 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     dateIsVisible && values.time ? values.time : "",
   ].filter(Boolean).join(" · ");
   const propertyIsVisible =
-    isProgressiveHomeCleaning && isRegularCleaningStageComplete("property", displayedDetailsStage);
+    isProgressiveHomeCleaning &&
+    (currentStep > 1 || isRegularCleaningStageComplete("property", displayedDetailsStage));
   const roomsAreVisible =
-    isProgressiveHomeCleaning && isRegularCleaningStageComplete("rooms", displayedDetailsStage);
+    isProgressiveHomeCleaning &&
+    (currentStep > 1 || isRegularCleaningStageComplete("rooms", displayedDetailsStage));
   const homeLabel = [propertyIsVisible ? propertyLabel : "", roomsAreVisible ? roomsLabel : ""]
     .filter(Boolean)
     .join(" · ");
   const petsAreVisible =
-    isProgressiveHomeCleaning && isRegularCleaningStageComplete("pets", displayedDetailsStage);
+    isProgressiveHomeCleaning &&
+    (currentStep > 1 || isRegularCleaningStageComplete("pets", displayedDetailsStage));
   const equipmentIsVisible = isRegularCleaning && currentStep > 1;
   const hasMoreDetails = petsAreVisible || equipmentIsVisible;
   const moreDetailsLabel = [
@@ -197,7 +200,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         <div className="space-y-2 p-3">
           <h2 className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">Booking summary</h2>
 
-          {hasAddress && (!isProgressiveHomeCleaning || displayedDetailsStage === "equipment") ? (
+          {hasAddress && (!isProgressiveHomeCleaning || currentStep > 1 || displayedDetailsStage === "equipment") ? (
             <SummaryRow label="Address" value={addressLabel} onEdit={isProgressiveHomeCleaning ? editDetail("address") : edit(1)} />
           ) : null}
           <SummaryRow label="Service" value={config.label} onEdit={isProgressiveHomeCleaning ? editDetail("property") : edit(1)} />
