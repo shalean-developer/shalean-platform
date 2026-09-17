@@ -5,6 +5,7 @@ import {
   publicHeaderDashboardHref,
   publicHeaderPostAuthRedirect,
   publicHeaderShowsCustomerBookings,
+  publicHeaderUsesDirectDashboardLink,
 } from "@/lib/auth/publicHeaderAuthRouting";
 
 describe("public header authentication routing", () => {
@@ -24,6 +25,11 @@ describe("public header authentication routing", () => {
   ] as const)("renders the correct %s menu destinations", (role, label, showsBookings) => {
     expect(publicHeaderAccountLabel(role)).toBe(label);
     expect(publicHeaderShowsCustomerBookings(role)).toBe(showsBookings);
+  });
+
+  it("uses a one-click dashboard link in the public homepage header", () => {
+    expect(publicHeaderUsesDirectDashboardLink("header")).toBe(true);
+    expect(publicHeaderUsesDirectDashboardLink("topbar")).toBe(false);
   });
 
   it("sends homepage login and signup through role-aware dashboard resolution", () => {

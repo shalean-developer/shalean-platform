@@ -27,3 +27,7 @@ export function publicHeaderAccountLabel(role: AppUserRole | null): string {
 export function publicHeaderShowsCustomerBookings(role: AppUserRole | null): boolean {
   return role === null || role === "customer";
 }
+
+export function publicHeaderUsesDirectDashboardLink(variant: "topbar" | "header"): boolean {
+  return variant === "header";
+}

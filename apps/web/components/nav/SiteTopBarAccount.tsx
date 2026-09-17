@@ -12,6 +12,7 @@ import {
   publicHeaderDashboardHref,
   publicHeaderPostAuthRedirect,
   publicHeaderShowsCustomerBookings,
+  publicHeaderUsesDirectDashboardLink,
 } from "@/lib/auth/publicHeaderAuthRouting";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -102,6 +103,23 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
         )}
       >
         Log In
+      </Link>
+    );
+  }
+
+  if (publicHeaderUsesDirectDashboardLink(variant)) {
+    return (
+      <Link
+        href={accountHref}
+        className="inline-flex h-11 w-11 items-center justify-center rounded-full outline-none ring-1 ring-border transition hover:bg-primary/10 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        aria-label={`Open ${accountLabel}`}
+      >
+        <Avatar className="h-10 w-10 border-border">
+          {avatarPhoto ? <AvatarImage src={avatarPhoto} alt="" referrerPolicy="no-referrer" /> : null}
+          <AvatarFallback className="bg-primary text-xs font-semibold text-primary-foreground">
+            {avatarInitial}
+          </AvatarFallback>
+        </Avatar>
       </Link>
     );
   }
