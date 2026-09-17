@@ -55,7 +55,12 @@ function baseDraft(serviceSlug: string, cleanerMode: CleanerMode): Record<string
 }
 
 async function seedDraft(page: Page, serviceSlug: string, cleanerMode: CleanerMode) {
-  const draft = baseDraft(serviceSlug, cleanerMode);
+  const draft = {
+    ...baseDraft(serviceSlug, cleanerMode),
+    ...(serviceSlug === "regular-cleaning"
+      ? { bookingType: "recurring", recurringFrequency: "weekly", recurringDays: ["Monday"] }
+      : {}),
+  };
   await page.addInitScript(
     ({ key, value }) => {
       if (!window.localStorage.getItem(key)) {
@@ -217,8 +222,6 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await expectDraft(page, { bookingType: "once_off" });
 
     await page.getByRole("radio", { name: /Repeat/ }).click();
-    await page.getByRole("button", { name: /Weekly/ }).click();
-    await page.getByRole("button", { name: "Mon", exact: true }).click();
     await expectDraft(page, {
       bookingType: "recurring",
       recurringFrequency: "weekly",
