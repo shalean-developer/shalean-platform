@@ -151,6 +151,18 @@ function mockAdminForConfirm() {
         }),
       };
     }
+    if (table === "recurring_prepaid_packages") {
+      return {
+        upsert: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { id: "00000000-0000-4000-8000-000000000040" },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
     if (table === "customer_saved_addresses") {
       return {
         select: vi.fn().mockReturnValue({
