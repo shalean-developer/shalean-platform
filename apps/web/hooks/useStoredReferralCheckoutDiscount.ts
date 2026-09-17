@@ -99,7 +99,7 @@ export function useStoredReferralCheckoutDiscount(
         if (!cancelled) {
           setReferralDiscount(null);
           setInvalidReason(null);
-          setInvalidMessage(null);
+          setInvalidMessage("We could not verify your referral discount. Please retry before paying.");
         }
       } finally {
         if (!cancelled) setLoading(false);
