@@ -131,6 +131,9 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const petsLabel = petAnswerLabel(values.serviceDetails.hasPets);
   const equipmentLabel = values.equipmentRequired === "yes" ? "Shalean supplies" : "Customer supplies";
   const displayedScheduleStage = scheduleSectionOverride ?? "booking_type";
+  const cleanerIsVisible =
+    hasCleaner &&
+    (!isRegularCleaning || currentStep > 2 || displayedScheduleStage === "cleaner");
   const bookingTypeLabel = values.bookingType === "recurring" ? "Recurring" : "Once-off";
   const scheduleIsVisible =
     !isRegularCleaning ||
@@ -200,7 +203,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
               }
             />
           ) : null}
-          {hasCleaner ? (
+          {cleanerIsVisible ? (
             <SummaryRow label="Cleaners" value={cleanerLabel} onEdit={isRegularCleaning ? editSchedule("cleaner") : edit(2)} />
           ) : null}
           {homeLabel ? (
