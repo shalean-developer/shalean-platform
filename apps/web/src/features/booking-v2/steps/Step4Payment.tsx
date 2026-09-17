@@ -326,7 +326,6 @@ function PaymentSection({
   const [pendingSummary, setPendingSummary] = useState<PendingPaymentSummary | null>(null);
   const [pendingSummaryError, setPendingSummaryError] = useState<string | null>(null);
   const pendingSummaryLoading = Boolean(pendingBookingId && !pendingSummary && !pendingSummaryError);
-  const canStartPayment = pendingBookingId ? Boolean(pendingSummary && !pendingSummaryLoading) : quoteReadiness.ready;
 
   function setPendingBookingId(id: string | null) {
     setPendingSummary(null);
@@ -403,6 +402,16 @@ function PaymentSection({
     referralCode: referralCodeFromUrl,
   });
 
+  const referralValidationPending = Boolean(
+    !pendingBookingId &&
+      referralLoading &&
+      (referralCodeFromUrl?.trim() || getStoredReferral("customer")),
+  );
+  const canStartPayment = referralValidationPending
+    ? false
+    : pendingBookingId
+      ? Boolean(pendingSummary && !pendingSummaryLoading)
+      : quoteReadiness.ready;
   const referralToApply = referralDiscount?.discountZar ?? 0;
   const totalAfterPromo = Math.max(0, checkoutSubtotal - promoDiscountZar);
   const totalAfterReferral = Math.max(0, totalAfterPromo - referralToApply);
@@ -1004,6 +1013,12 @@ function PaymentSection({
               </p>
             </div>
           ) : null}
+          {!pendingBookingId && referralValidationPending ? (
+            <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900" role="status">
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+              Checking your referral discount…
+            </div>
+          ) : null}
           {!pendingBookingId && !referralLoading && referralDiscount ? (
             <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
               <p className="font-semibold">Referral discount applied</p>
@@ -1094,7 +1109,12 @@ function PaymentSection({
         disabled={confirming || !canStartPayment}
         className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-4 text-base font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:opacity-60"
       >
-        {confirming ? (
+        {referralValidationPending ? (
+          <>
+            <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+            Checking referral discount…
+          </>
+        ) : confirming ? (
           <>
             <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
             {pendingBookingId ? "Reopening secure payment…" : "Preparing secure payment…"}
