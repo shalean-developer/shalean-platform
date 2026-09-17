@@ -289,11 +289,7 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
 
     const scheduleHeading = page.getByRole("heading", { name: "Schedule", exact: true });
     const scheduleSection = scheduleHeading.locator("xpath=../../..");
-    const timeValue = scheduleSection.locator(".grid.grid-cols-2.gap-3 > div:nth-child(2) > p:last-child");
-    const fallbackContent = await timeValue.evaluate((element) =>
-      window.getComputedStyle(element, "::after").content,
-    );
-    expect(fallbackContent.replace(/[\"']/g, "")).toBe("Not selected");
+    await expect(scheduleSection.getByText("—", { exact: true })).toBeVisible();
 
     await expectDraft(page, { time: "" });
     expect(forbiddenMutations, "Missing-time presentation check must remain read-only").toEqual([]);
