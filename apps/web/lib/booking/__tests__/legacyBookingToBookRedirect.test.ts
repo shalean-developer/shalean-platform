@@ -3,6 +3,7 @@ import {
   bookingV2PrefillPatchFromLegacySearchParams,
   buildBookHrefFromLegacySearchParams,
   buildBookHrefFromWidgetSelection,
+  buildBookServiceSelectionHref,
   legacyServiceIdToBookSlug,
 } from "@/lib/booking/legacyBookingToBookRedirect";
 
@@ -24,6 +25,17 @@ describe("legacyBookingToBookRedirect", () => {
     expect(href).toContain("step=schedule");
     expect(href).toContain("bedrooms=2");
     expect(href).toContain("source=services_hub");
+  });
+
+  it("preserves referral code when selecting a service on the booking hub", () => {
+    const href = buildBookServiceSelectionHref(
+      new URLSearchParams({ ref: "SHALEANQ2L2RADB" }),
+      "regular-cleaning",
+    );
+
+    expect(href).toBe(
+      "/book/regular-cleaning?service=regular-cleaning&ref=SHALEANQ2L2RADB&step=details&section=address",
+    );
   });
 
   it("hands widget selections directly to the matching canonical funnel", () => {
