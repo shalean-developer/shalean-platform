@@ -244,85 +244,110 @@ function SuccessContent() {
       const bookingId = bookingIdParam?.trim() ?? "";
       if (!bookingId || completedRef.current) return completedRef.current;
 
+      let summary: OwnedPaymentSummary | null = null;
       const sb = getSupabaseBrowser();
-      if (!sb) return false;
-      const { data: sessionData } = await sb.auth.getSession();
-      const token = sessionData.session?.access_token?.trim() ?? "";
-      if (!token || runId !== runIdRef.current) return false;
 
-      try {
-        const response = await fetch(
-          `/api/bookings/${encodeURIComponent(bookingId)}/payment-summary`,
-          {
-            headers: { Authorization: `Bearer ${token}` },
+      if (sb) {
+        try {
+          const { data: sessionData } = await sb.auth.getSession();
+          const token = sessionData.session?.access_token?.trim() ?? "";
+          if (token && runId === runIdRef.current) {
+            const response = await fetch(
+              `/api/bookings/${encodeURIComponent(bookingId)}/payment-summary`,
+              {
+                headers: { Authorization: `Bearer ${token}` },
+                cache: "no-store",
+                signal: AbortSignal.timeout(OWNED_BOOKING_FETCH_TIMEOUT_MS),
+              },
+            );
+            if (response.ok && runId === runIdRef.current) {
+              summary = (await response.json()) as OwnedPaymentSummary;
+            }
+          }
+        } catch {
+          // Fall through to reference-bound database recovery.
+        }
+      }
+
+      if (!summary && reference && runId === runIdRef.current) {
+        try {
+          const query = new URLSearchParams({ reference, bookingId });
+          const response = await fetch(`/api/paystack/status?${query.toString()}`, {
             cache: "no-store",
             signal: AbortSignal.timeout(OWNED_BOOKING_FETCH_TIMEOUT_MS),
-          },
-        );
-        if (!response.ok || runId !== runIdRef.current) return false;
-        const summary = (await response.json()) as OwnedPaymentSummary;
-        if (!summary.paid || summary.bookingId !== bookingId) return false;
-
-        const amountCents =
-          typeof summary.amountPaidCents === "number" && Number.isFinite(summary.amountPaidCents)
-            ? Math.max(0, Math.round(summary.amountPaidCents))
-            : Math.max(
-                0,
-                Math.round(Number(summary.totalPaidZar ?? summary.amountZar ?? 0) * 100),
-              );
-        const persistedReference = summary.paystackReference?.trim() || reference || bookingId;
-        const snapshot = isSnapshot(summary.bookingSnapshot)
-          ? summary.bookingSnapshot
-          : {
-              total_zar: Number(summary.totalPaidZar ?? summary.amountZar ?? 0),
-              flat: { service: summary.serviceLabel ?? null },
+          });
+          if (response.ok && runId === runIdRef.current) {
+            const payload = (await response.json()) as {
+              confirmation?: OwnedPaymentSummary | null;
             };
-
-        setStatusData({
-          verified: true,
-          paymentStatus: "success",
-          reference: persistedReference,
-          amountCents,
-          currency: "ZAR",
-          bookingSnapshot: snapshot,
-          bookingInDatabase: true,
-          bookingId,
-          bookingReference: summary.bookingReference ?? null,
-        });
-        setErrorMessage(null);
-        completedRef.current = true;
-        setPhase("success");
-
-        emitBookingSubmittedAfterPaystackVerify({
-          bookingPersisted: true,
-          bookingId,
-          reference: summary.bookingReference ?? persistedReference,
-          service: summary.serviceLabel ?? null,
-          value: amountCents / 100,
-        });
-        try {
-          markRetargetingCandidate(false);
-          clearStoredReferral("customer");
-          clearBookingV2DraftStorage();
-          consumeBookingV2SuccessRedirect();
-          trackGrowthEvent(ANALYTICS_EVENTS.COMPLETE_BOOKING, {
-            reference: persistedReference,
-            booking_id: bookingId,
-            recovered_from_persisted_payment: true,
-          });
-          trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_COMPLETED, null, {
-            reference: persistedReference,
-            booking_id: bookingId,
-            service_type: summary.serviceLabel ?? null,
-            estimated_price: amountCents / 100,
-          });
+            summary = payload.confirmation ?? null;
+          }
         } catch {
-          // Non-fatal: the authoritative paid booking is already displayed.
+          return false;
         }
-        return true;
-      } catch {
+      }
+
+      if (!summary?.paid || summary.bookingId !== bookingId || runId !== runIdRef.current) {
         return false;
       }
+
+      const amountCents =
+        typeof summary.amountPaidCents === "number" && Number.isFinite(summary.amountPaidCents)
+          ? Math.max(0, Math.round(summary.amountPaidCents))
+          : Math.max(
+              0,
+              Math.round(Number(summary.totalPaidZar ?? summary.amountZar ?? 0) * 100),
+            );
+      const persistedReference = summary.paystackReference?.trim() || reference || bookingId;
+      const snapshot = isSnapshot(summary.bookingSnapshot)
+        ? summary.bookingSnapshot
+        : {
+            total_zar: Number(summary.totalPaidZar ?? summary.amountZar ?? 0),
+            flat: { service: summary.serviceLabel ?? null },
+          };
+
+      setStatusData({
+        verified: true,
+        paymentStatus: "success",
+        reference: persistedReference,
+        amountCents,
+        currency: "ZAR",
+        bookingSnapshot: snapshot,
+        bookingInDatabase: true,
+        bookingId,
+        bookingReference: summary.bookingReference ?? null,
+      });
+      setErrorMessage(null);
+      completedRef.current = true;
+      setPhase("success");
+
+      emitBookingSubmittedAfterPaystackVerify({
+        bookingPersisted: true,
+        bookingId,
+        reference: summary.bookingReference ?? persistedReference,
+        service: summary.serviceLabel ?? null,
+        value: amountCents / 100,
+      });
+      try {
+        markRetargetingCandidate(false);
+        clearStoredReferral("customer");
+        clearBookingV2DraftStorage();
+        consumeBookingV2SuccessRedirect();
+        trackGrowthEvent(ANALYTICS_EVENTS.COMPLETE_BOOKING, {
+          reference: persistedReference,
+          booking_id: bookingId,
+          recovered_from_persisted_payment: true,
+        });
+        trackBookingAnalyticsEvent(ANALYTICS_EVENTS.BOOKING_COMPLETED, null, {
+          reference: persistedReference,
+          booking_id: bookingId,
+          service_type: summary.serviceLabel ?? null,
+          estimated_price: amountCents / 100,
+        });
+      } catch {
+        // Non-fatal: the authoritative paid booking is already displayed.
+      }
+      return true;
     },
     [bookingIdParam, reference],
   );
