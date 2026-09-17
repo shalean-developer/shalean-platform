@@ -33,6 +33,20 @@ describe("first-30-day recurring prepayment", () => {
     expect(quote?.grossPackageZar).toBe(11_499);
   });
 
+  it("charges one monthly deep-clean visit even when the 30-day window reaches the next calendar date", () => {
+    const quote = buildRecurringPrepaymentQuote({
+      startDate: "2026-09-24",
+      frequency: "monthly",
+      recurringDays: [],
+      perVisitZar: 1_380,
+      serviceSlug: "deep-cleaning",
+    });
+
+    expect(quote?.occurrenceDates).toEqual(["2026-09-24"]);
+    expect(quote?.visitCount).toBe(1);
+    expect(quote?.grossPackageZar).toBe(1_380);
+  });
+
   it("allocates the aggregate payment once without changing the plan price", () => {
     expect(allocateRecurringPrepayment({
       occurrenceDates: ["2026-09-24", "2026-10-08"],
