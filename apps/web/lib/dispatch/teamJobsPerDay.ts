@@ -111,7 +111,7 @@ export async function countPlatformTeamJobsOnDate(
     .from("bookings")
     .select("id", { count: "exact", head: true })
     .eq("date", dateYmd)
-    .eq("is_team_job", true)
+    .or("is_team_job.eq.true,assigned_team_id.not.is.null")
     .in("status", [...CAPACITY_CONSUMING_STATUSES]);
   if (excludeBookingId) {
     q = q.neq("id", excludeBookingId);
