@@ -74,4 +74,11 @@ describe("booking details presentation", () => {
     expect(addressSource).toContain('event.key === "Escape"');
     expect(addressSource).not.toContain('<select\n                id="saved-property"');
   });
+
+  it("makes a saved property immediately ready for one-click continuation", () => {
+    expect(addressSource).toContain("const savedLocation =");
+    expect(addressSource).toContain('setValue("serviceAreaLocationId", savedLocation?.id ?? ""');
+    expect(addressSource).toContain('setValue("serviceAreaCityId", savedLocation?.city_id ?? ""');
+    expect(addressSource).toContain("[locationOptions, setValue]");
+  });
 });

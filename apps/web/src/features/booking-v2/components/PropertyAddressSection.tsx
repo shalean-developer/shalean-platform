@@ -316,13 +316,29 @@ export function PropertyAddressSection() {
 
   const applySavedAddress = useCallback(
     (addr: CustomerAddressRow) => {
+      const savedSuburb = addr.suburb.trim();
+      const savedLocation =
+        locationOptions.find(
+          (location) => location.name.trim().toLowerCase() === savedSuburb.toLowerCase(),
+        ) ?? null;
+
       setValue("address", addr.line1.trim(), { shouldDirty: false, shouldValidate: true });
-      setValue("suburb", addr.suburb.trim(), { shouldDirty: false, shouldValidate: true });
-      setValue("city", addr.city?.trim() || "Cape Town", { shouldDirty: false });
+      setValue("suburb", savedSuburb, { shouldDirty: false, shouldValidate: true });
+      setValue("city", addr.city?.trim() || savedLocation?.city?.trim() || "Cape Town", {
+        shouldDirty: false,
+      });
       setValue("postalCode", addr.postal_code?.trim() || "", { shouldDirty: false });
+      setValue("serviceAreaLocationId", savedLocation?.id ?? "", {
+        shouldDirty: false,
+        shouldValidate: true,
+      });
+      setValue("serviceAreaCityId", savedLocation?.city_id ?? "", {
+        shouldDirty: false,
+        shouldValidate: true,
+      });
       setSelectedAddressId(addr.id);
     },
-    [setValue],
+    [locationOptions, setValue],
   );
 
   const switchToCustom = useCallback(() => {
