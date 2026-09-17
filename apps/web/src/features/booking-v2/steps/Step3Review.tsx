@@ -42,6 +42,11 @@ import {
   shouldShowRecurringDayPicker,
 } from "@/src/features/booking-v2/config/recurringScheduleOptions";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
+import {
+  DEEP_CLEANING_RECURRING_FREQUENCY,
+  recurringFrequenciesForService,
+  serviceUsesRecurringDayPicker,
+} from "@/lib/booking-v2/serviceRecurringPolicy";
 import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
 import {
   ServiceQuestionOptionCards,
@@ -425,7 +430,12 @@ function PropertyEditPanel() {
 // ─── Schedule edit panel ───────────────────────────────────────────────────────
 
 function ScheduleEditPanel() {
-  const { scheduling } = useBookingV2();
+  const { scheduling, serviceSlug } = useBookingV2();
+  const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
+  const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
+    serviceRecurringFrequencies.includes(option.value),
+  );
 
   const { control, watch, setValue } = useFormContext<BookingV2FormData>();
   const bookingType = watch("bookingType");
@@ -435,10 +445,21 @@ function ScheduleEditPanel() {
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
-    if (bookingType === "recurring" && recurringFrequency === "custom") {
+    if (bookingType !== "recurring") return;
+    if (isDeepCleaning) {
+      if (recurringFrequency !== DEEP_CLEANING_RECURRING_FREQUENCY) {
+        setValue("recurringFrequency", DEEP_CLEANING_RECURRING_FREQUENCY, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+      return;
+    }
+    if (recurringFrequency === "custom") {
       setValue("recurringFrequency", "weekly", { shouldDirty: true });
     }
-  }, [bookingType, recurringFrequency, setValue]);
+  }, [bookingType, isDeepCleaning, recurringFrequency, setValue]);
 
   return (
     <div className="space-y-5">
@@ -450,8 +471,18 @@ function ScheduleEditPanel() {
         <Controller name="bookingType" control={control}
           render={({ field }) => (
             <div className="flex gap-3">
-              {[{ value: "once_off", label: "Once-off" }, { value: "recurring", label: "Recurring" }].map((opt) => (
-                <button key={opt.value} type="button" onClick={() => field.onChange(opt.value)}
+              {[{ value: "once_off", label: "Once-off" }, { value: "recurring", label: isDeepCleaning ? "Monthly" : "Recurring" }].map((opt) => (
+                <button key={opt.value} type="button" onClick={() => {
+                  field.onChange(opt.value);
+                  if (isDeepCleaning) {
+                    setValue(
+                      "recurringFrequency",
+                      opt.value === "recurring" ? DEEP_CLEANING_RECURRING_FREQUENCY : "",
+                      { shouldDirty: true, shouldValidate: true },
+                    );
+                    setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+                  }
+                }}
                   className={cn(
                     "flex-1 rounded-xl border py-2.5 text-sm font-semibold transition",
                     field.value === opt.value
@@ -503,7 +534,7 @@ function ScheduleEditPanel() {
       </div>
 
       {/* Recurring options */}
-      {bookingType === "recurring" && (
+      {bookingType === "recurring" && !isDeepCleaning && (
         <>
           <hr className="border-slate-100" />
           <div className="space-y-4">
@@ -515,7 +546,7 @@ function ScheduleEditPanel() {
               <Controller name="recurringFrequency" control={control}
                 render={({ field }) => (
                   <div className="flex flex-wrap gap-2">
-                    {RECURRING_FREQUENCIES.map((opt) => (
+                    {recurringFrequencyOptions.map((opt) => (
                       <button key={opt.value} type="button" onClick={() => field.onChange(opt.value)}
                         className={cn(
                           "rounded-xl border px-4 py-2 text-sm font-medium transition",
@@ -531,7 +562,7 @@ function ScheduleEditPanel() {
               />
             </div>
 
-            {shouldShowRecurringDayPicker(recurringFrequency) && (
+            {serviceUsesRecurringDayPicker(serviceSlug) && shouldShowRecurringDayPicker(recurringFrequency) && (
               <div>
                 <p className="mb-1 text-sm font-medium text-slate-700">Preferred days</p>
                 <p className="mb-2 text-xs text-slate-500">
@@ -1149,6 +1180,7 @@ export function Step3Review() {
 
           {/* Recurring preferred days */}
           {values.bookingType === "recurring" &&
+            serviceUsesRecurringDayPicker(values.serviceSlug) &&
             shouldShowRecurringDayPicker(values.recurringFrequency) &&
             (values.recurringDays ?? []).length > 0 && (
               <p className="mt-2 text-xs text-slate-500">
