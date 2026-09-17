@@ -81,6 +81,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         frequency: values.recurringFrequency,
         recurringDays: values.recurringDays ?? [],
         perVisitZar: displayTotal,
+        serviceSlug: values.serviceSlug,
       })
     : null;
   const durationHours = estimatedCleaningHoursFromMinutes(
@@ -285,9 +286,9 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
               <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-slate-600">
                 <p>
                   <span className="font-semibold text-slate-800">
-                    First 30 days · {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"}
+                    {isDeepCleaning ? "Monthly plan" : "First 30 days"} · {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"}
                   </span>
-                  {` · Pay all visits now`}
+                  {` · ${isDeepCleaning ? "Pay this month now" : "Pay all visits now"}`}
                 </p>
               </div>
           ) : null}
