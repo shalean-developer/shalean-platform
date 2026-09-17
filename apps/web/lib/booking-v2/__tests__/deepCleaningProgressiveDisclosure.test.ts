@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adjacentDeepCleaningStage,
   deepCleaningDetailsStage,
   deepCleaningStageReady,
 } from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
@@ -32,7 +33,7 @@ describe("deep cleaning progressive disclosure", () => {
     expect(deepCleaningDetailsStage({}, completeAddress)).toBe("property");
   });
 
-  it("keeps condition and room inputs together before pets", () => {
+  it("requires room inputs before the combined condition and pets stage", () => {
     expect(
       deepCleaningDetailsStage(
         {
@@ -40,43 +41,38 @@ describe("deep cleaning progressive disclosure", () => {
           bedrooms: "3",
           bathrooms: "2",
           extraRooms: "0",
-        },
-        completeAddress,
-      ),
-    ).toBe("rooms");
-    expect(
-      deepCleaningDetailsStage(
-        {
-          propertyType: "house",
-          bedrooms: "3",
-          bathrooms: "2",
-          extraRooms: "0",
-          lastCleaned: "6_months_plus",
         },
         completeAddress,
       ),
     ).toBe("pets");
   });
 
-  it("reveals add-ons only after the pets choice", () => {
-    expect(deepCleaningDetailsStage(completeDetails, completeAddress)).toBe("equipment");
-  });
-
-  it("requires every room and condition choice before continuing", () => {
+  it("keeps last-cleaned and pets answers together on the final details stage", () => {
     expect(
       deepCleaningStageReady(
-        "rooms",
+        "pets",
         { ...completeDetails, lastCleaned: "" },
         completeAddress,
       ),
     ).toBe(false);
-    expect(deepCleaningStageReady("rooms", completeDetails, completeAddress)).toBe(true);
-  });
-
-  it("requires an explicit pets answer", () => {
     expect(
-      deepCleaningStageReady("pets", { ...completeDetails, hasPets: "" }, completeAddress),
+      deepCleaningStageReady(
+        "pets",
+        { ...completeDetails, hasPets: "" },
+        completeAddress,
+      ),
     ).toBe(false);
     expect(deepCleaningStageReady("pets", completeDetails, completeAddress)).toBe(true);
+  });
+
+  it("continues directly from pets to schedule without an equipment stage", () => {
+    expect(adjacentDeepCleaningStage("rooms", "next")).toBe("pets");
+    expect(adjacentDeepCleaningStage("pets", "next")).toBeNull();
+    expect(adjacentDeepCleaningStage("pets", "back")).toBe("rooms");
+  });
+
+  it("does not accept the retired equipment stage", () => {
+    expect(deepCleaningStageReady("equipment", completeDetails, completeAddress)).toBe(false);
+    expect(adjacentDeepCleaningStage("equipment", "next")).toBeNull();
   });
 });
