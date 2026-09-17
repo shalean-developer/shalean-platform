@@ -564,6 +564,7 @@ function PaymentSection({
     setConfirming(true);
     setError(null);
     let confirmedBookingId = pendingBookingId;
+    let paymentAccessToken = "";
 
     try {
       // 1. Confirm booking and get bookingId + paystackReference
@@ -587,6 +588,7 @@ function PaymentSection({
         setConfirming(false);
         return;
       }
+      paymentAccessToken = session.access_token;
 
       // Retry path: booking already created — recover Paystack session instead of inserting again.
       if (pendingBookingId) {
@@ -862,6 +864,67 @@ function PaymentSection({
       setConfirming(false);
       return;
     } catch (err) {
+      if (
+        err instanceof DOMException &&
+        err.name === "AbortError" &&
+        confirmedBookingId &&
+        paymentAccessToken
+      ) {
+        try {
+          // The server keeps safely completing Paystack initialization after a
+          // browser abort. Re-enter through the idempotent owner recovery path:
+          // it reuses the stored link (or the same in-flight promise) and never
+          // inserts another booking or creates a duplicate payable amount.
+          const recoveryRes = await fetchPaymentPreparation(
+            `/api/bookings/${encodeURIComponent(confirmedBookingId)}/payment-session`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${paymentAccessToken}`,
+              },
+              body: JSON.stringify({}),
+            },
+            PAYMENT_RECOVERY_TIMEOUT_MS,
+          );
+          const recoveryJson = (await recoveryRes.json()) as {
+            status?: string;
+            authorizationUrl?: string;
+            reference?: string;
+            error?: string;
+            message?: string;
+          };
+          if (recoveryRes.status === 401) {
+            onSessionLost("Your sign-in session expired. Please sign in again to complete payment.");
+            setConfirming(false);
+            return;
+          }
+          if (recoveryJson.status === "paid") {
+            clearBookingV2DraftStorage();
+            window.location.assign(
+              bookingV2SuccessHref(
+                recoveryJson.reference?.trim() || confirmedBookingId,
+                confirmedBookingId,
+              ),
+            );
+            return;
+          }
+          if (recoveryJson.status === "ready" && recoveryJson.authorizationUrl?.trim()) {
+            window.location.assign(recoveryJson.authorizationUrl.trim());
+            return;
+          }
+          setError(
+            recoveryJson.error?.trim() ||
+              recoveryJson.message?.trim() ||
+              "We could not open secure payment. Your booking is saved — please try again.",
+          );
+          setConfirming(false);
+          return;
+        } catch {
+          // Fall through to the bounded retry message below. The saved booking
+          // remains the sole source for the next manual retry.
+        }
+      }
       const message =
         err instanceof DOMException && err.name === "AbortError"
           ? confirmedBookingId

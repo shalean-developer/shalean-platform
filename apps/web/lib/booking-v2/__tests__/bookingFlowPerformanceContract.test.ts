@@ -59,6 +59,10 @@ describe("booking flow performance contracts", () => {
     expect(payment).toContain("Booking confirmation took too long. No payment was taken");
     expect(payment).toContain("Secure payment preparation took too long. Your booking is saved");
     expect(payment).toContain("setPendingBookingId(bookingId)");
+    expect(payment).toContain("The server keeps safely completing Paystack initialization after a");
+    expect(payment).toContain("paymentAccessToken");
+    expect(payment).toContain("recoveryJson.status === \"ready\"");
+    expect(payment).toContain("recoveryJson.authorizationUrl?.trim()");
   });
 
   it("treats referral-credit request cleanup as expected cancellation", () => {

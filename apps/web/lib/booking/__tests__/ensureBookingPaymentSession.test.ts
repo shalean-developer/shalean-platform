@@ -34,6 +34,18 @@ function buildAdmin(initial: RowState) {
   const state = { row: { ...initial } as RowState };
   const admin = {
     from(table: string) {
+      if (table === "recurring_prepaid_packages") {
+        return {
+          update() {
+            const chain = {
+              eq() {
+                return chain;
+              },
+            };
+            return chain;
+          },
+        };
+      }
       if (table !== "bookings") throw new Error(`unexpected table ${table}`);
       return {
         select() {
