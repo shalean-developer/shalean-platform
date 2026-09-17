@@ -238,6 +238,7 @@ export async function POST(request: Request) {
   const customerPhonePromise = resolveCustomerPhoneFromAuthAdmin(supabase, userId);
 
   // ── 4. Team availability re-check (race protection) ───────────────────────────
+  let selectedTeamPayoutOwnerId: string | null = null;
   if (data.cleanerMode === "team") {
     if (!data.assignedTeamId) {
       return NextResponse.json({ error: "Select a team." }, { status: 422 });
@@ -263,6 +264,25 @@ export async function POST(request: Request) {
     if (!picked) {
       return NextResponse.json({ error: "Selected team was not found. Refresh and try again." }, { status: 422 });
     }
+
+    const { data: selectedTeam, error: selectedTeamError } = await supabase
+      .from("teams")
+      .select("lead_cleaner_id")
+      .eq("id", picked.id)
+      .maybeSingle();
+    selectedTeamPayoutOwnerId = String(selectedTeam?.lead_cleaner_id ?? "").trim() || null;
+    if (selectedTeamError || !selectedTeamPayoutOwnerId) {
+      console.error(
+        "[booking-v2/confirm] selected team has no payout owner:",
+        picked.id,
+        selectedTeamError?.message,
+      );
+      return NextResponse.json(
+        { error: "The selected team is not ready for booking. Please choose another team." },
+        { status: 409 },
+      );
+    }
+
     if (!picked.available) {
       if (!isBookingSoftFulfillmentEnabled()) {
         const reason = teamLoad.platformAtCapacity
@@ -748,7 +768,10 @@ export async function POST(request: Request) {
         dispatch_status: fulfillmentMode === "ops_assignment" ? "unassigned" : "searching",
         cleaner_mode: data.cleanerMode,
         is_team_job: data.cleanerMode === "team",
+        team_id: data.cleanerMode === "team" ? data.assignedTeamId : null,
         assigned_team_id: data.cleanerMode === "team" ? data.assignedTeamId : null,
+        payout_owner_cleaner_id:
+          data.cleanerMode === "team" ? selectedTeamPayoutOwnerId : null,
         ...(data.cleanerMode === "individual_cleaners"
           ? {
               cleaner_count: Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount,
@@ -1002,7 +1025,10 @@ export async function POST(request: Request) {
       // Cleaner / team
       cleaner_mode: data.cleanerMode,
       is_team_job: data.cleanerMode === "team",
+      team_id: data.cleanerMode === "team" ? data.assignedTeamId : null,
       assigned_team_id: data.cleanerMode === "team" ? data.assignedTeamId : null,
+      payout_owner_cleaner_id:
+        data.cleanerMode === "team" ? selectedTeamPayoutOwnerId : null,
       cleaner_count:
         data.cleanerMode === "individual_cleaners"
           ? Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount
