@@ -202,9 +202,9 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await seedDraft(page, "regular-cleaning", "individual_cleaners");
     const forbiddenMutations = await installNonMutatingApiSandbox(page);
 
-    const response = await page.goto("/book/regular-cleaning?step=2", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/book/regular-cleaning?step=schedule", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=2/);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=schedule/);
     await expect(page.getByRole("heading", { name: "Schedule your clean" })).toBeVisible();
 
     await expect.poll(async () => Number((await readDraft(page)).pricingSummary?.total ?? 0)).toBeGreaterThan(0);
@@ -249,7 +249,7 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await expect(page.getByText("Proceed to payment →")).toBeVisible();
 
     await page.goBack();
-    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=2/);
+    await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=schedule/);
     await expectDraft(page, {
       bookingType: "recurring",
       recurringFrequency: "weekly",
@@ -270,9 +270,9 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await seedDraft(page, "deep-cleaning", "team");
     const forbiddenMutations = await installNonMutatingApiSandbox(page);
 
-    const response = await page.goto("/book/deep-cleaning?step=2", { waitUntil: "domcontentloaded" });
+    const response = await page.goto("/book/deep-cleaning?step=schedule", { waitUntil: "domcontentloaded" });
     expect(response?.status()).toBeLessThan(400);
-    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=2/);
+    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=schedule/);
     await expect(page.getByRole("heading", { name: "Book your deep clean" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Team availability" })).toBeVisible();
 
