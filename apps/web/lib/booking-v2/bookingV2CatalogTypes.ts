@@ -76,6 +76,8 @@ export type LiveServiceConfig = {
   pricePerBathroom: number;
   pricePerExtraRoom: number;
   pricePerExtraCleaner: number;
+  /** Service-specific customer fee from pricing_services; global fee config is the fallback. */
+  serviceFeeZar?: number;
   estimatedDurationHours: number;
   /** Admin-configured duration clamp from `pricing_services`. */
   minDurationHours: number;
