@@ -4,6 +4,7 @@
  */
 export const BOOKING_V2_PENDING_SUCCESS_REF_KEY = "shalean:booking-v2:pending-success-ref";
 export const BOOKING_V2_DRAFT_STORAGE_KEY = "shalean:booking-v2:v1";
+export const BOOKING_V2_COMPLETED_RESET_KEY = "shalean:booking-v2:completed-reset";
 
 export function rememberBookingV2SuccessRedirect(reference: string): void {
   const ref = reference.trim();
@@ -31,8 +32,21 @@ export function clearBookingV2DraftStorage(): void {
   if (typeof window === "undefined") return;
   try {
     localStorage.removeItem(BOOKING_V2_DRAFT_STORAGE_KEY);
+    sessionStorage.setItem(BOOKING_V2_COMPLETED_RESET_KEY, "1");
   } catch {
     /* ignore */
+  }
+}
+
+/** Consume the one-time signal that a verified payment completed. */
+export function consumeBookingV2CompletedReset(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const shouldReset = sessionStorage.getItem(BOOKING_V2_COMPLETED_RESET_KEY) === "1";
+    if (shouldReset) sessionStorage.removeItem(BOOKING_V2_COMPLETED_RESET_KEY);
+    return shouldReset;
+  } catch {
+    return false;
   }
 }
 
