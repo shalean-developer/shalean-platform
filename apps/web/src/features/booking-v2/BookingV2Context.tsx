@@ -46,6 +46,7 @@ import {
   type RegularCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
 import type { RegularCleaningScheduleStage } from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
+import { deepCleaningDetailsStage } from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
 import {
   BOOKING_FUNNEL_ROW,
   bookingV2StepToFunnelStep,
@@ -176,7 +177,9 @@ export function BookingV2Provider({
     useState<BookingPricingAvailability>("loading");
   const [detailsSectionOverride, setDetailsSectionOverride] =
     useState<RegularCleaningDetailsStage | null>(
-      serviceSlug === "regular-cleaning" ? requestedDetailsSection ?? "address" : null,
+      serviceSlug === "regular-cleaning" || serviceSlug === "deep-cleaning"
+        ? requestedDetailsSection ?? "address"
+        : null,
     );
   const [scheduleSectionOverride, setScheduleSectionOverride] =
     useState<RegularCleaningScheduleStage | null>(
@@ -457,7 +460,9 @@ export function BookingV2Provider({
   const clearBooking = useCallback(() => {
     clearStorage();
     form.reset(defaultBookingFormData(serviceSlug, cleanerMode));
-    setDetailsSectionOverride(serviceSlug === "regular-cleaning" ? "address" : null);
+    setDetailsSectionOverride(
+      serviceSlug === "regular-cleaning" || serviceSlug === "deep-cleaning" ? "address" : null,
+    );
     setScheduleSectionOverride(serviceSlug === "regular-cleaning" ? "booking_type" : null);
   }, [form, serviceSlug, cleanerMode]);
 
@@ -468,7 +473,9 @@ export function BookingV2Provider({
       service: serviceSlug,
       step: "details",
     });
-    if (serviceSlug === "regular-cleaning") params.set("section", "address");
+    if (serviceSlug === "regular-cleaning" || serviceSlug === "deep-cleaning") {
+      params.set("section", "address");
+    }
     window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
   }, [clearBooking, serviceSlug]);
 
@@ -490,7 +497,10 @@ export function BookingV2Provider({
   );
 
   useEffect(() => {
-    if (currentStep !== 1 || serviceSlug !== "regular-cleaning") return;
+    if (
+      currentStep !== 1 ||
+      (serviceSlug !== "regular-cleaning" && serviceSlug !== "deep-cleaning")
+    ) return;
 
     if (!requestedDetailsSection) {
       const params = new URLSearchParams(searchParams.toString());
@@ -518,17 +528,20 @@ export function BookingV2Provider({
   useEffect(() => {
     if (
       currentStep !== 1 ||
-      serviceSlug !== "regular-cleaning" ||
+      (serviceSlug !== "regular-cleaning" && serviceSlug !== "deep-cleaning") ||
       detailsSectionOverride !== null
     ) return;
     const values = form.getValues();
+    const bookingDetails = {
+      address: values.address,
+      suburb: values.suburb,
+      contactPhone: values.contactPhone,
+      serviceAreaLocationId: values.serviceAreaLocationId,
+    };
     setDetailsSectionOverride(
-      regularCleaningDetailsStage(values.serviceDetails, {
-        address: values.address,
-        suburb: values.suburb,
-        contactPhone: values.contactPhone,
-        serviceAreaLocationId: values.serviceAreaLocationId,
-      }),
+      serviceSlug === "deep-cleaning"
+        ? deepCleaningDetailsStage(values.serviceDetails, bookingDetails)
+        : regularCleaningDetailsStage(values.serviceDetails, bookingDetails),
     );
   }, [currentStep, detailsSectionOverride, form, serviceSlug]);
 
