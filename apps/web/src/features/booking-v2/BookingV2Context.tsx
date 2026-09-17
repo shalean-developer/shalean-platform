@@ -34,6 +34,7 @@ import {
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import { bookingV2PrefillPatchFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
 import { setReferralCapture } from "@/lib/referrals/client";
+import { consumeBookingV2CompletedReset } from "@/lib/booking-v2/bookingV2PaymentRedirect";
 import { buildStep2Schema, step1Schema } from "@/src/features/booking-v2/schemas";
 import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import type { BookingRow } from "@/lib/dashboard/types";
@@ -459,6 +460,23 @@ export function BookingV2Provider({
     setDetailsSectionOverride(serviceSlug === "regular-cleaning" ? "address" : null);
     setScheduleSectionOverride(serviceSlug === "regular-cleaning" ? "booking_type" : null);
   }, [form, serviceSlug, cleanerMode]);
+
+  const resetCompletedBooking = useCallback(() => {
+    if (!consumeBookingV2CompletedReset()) return;
+    clearBooking();
+    const params = new URLSearchParams({
+      service: serviceSlug,
+      step: "details",
+    });
+    if (serviceSlug === "regular-cleaning") params.set("section", "address");
+    window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+  }, [clearBooking, serviceSlug]);
+
+  useEffect(() => {
+    resetCompletedBooking();
+    window.addEventListener("pageshow", resetCompletedBooking);
+    return () => window.removeEventListener("pageshow", resetCompletedBooking);
+  }, [resetCompletedBooking]);
 
   const editDetailsSection = useCallback(
     (section: RegularCleaningDetailsStage) => {
