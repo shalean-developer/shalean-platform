@@ -18,6 +18,31 @@ type CleanerFetchParams = {
   locationId: string;
 };
 
+function availableCleanersUrl({ serviceSlug, date, time, durationMinutes, locationId }: CleanerFetchParams): string {
+  const params = new URLSearchParams({ serviceSlug });
+  if (date) params.set("date", date);
+  if (time) params.set("time", time);
+  if (durationMinutes) params.set("durationMinutes", String(durationMinutes));
+  if (locationId) params.set("locationId", locationId);
+  return `/api/booking-v2/available-cleaners?${params.toString()}`;
+}
+
+export function prefetchAvailableCleaners(params: CleanerFetchParams): Promise<{
+  cleaners?: AvailableCleanerV2[];
+  error?: string;
+}> {
+  const url = availableCleanersUrl(params);
+  return cachedClientRequest(
+    `available-cleaners:${url}`,
+    async () => {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`available_cleaners_http_${response.status}`);
+      return response.json() as Promise<{ cleaners?: AvailableCleanerV2[]; error?: string }>;
+    },
+    20_000,
+  );
+}
+
 function useAvailableCleaners({ serviceSlug, date, time, durationMinutes, locationId }: CleanerFetchParams) {
   const [cleaners, setCleaners] = useState<AvailableCleanerV2[]>([]);
   const [loading, setLoading] = useState(false);
@@ -32,23 +57,8 @@ function useAvailableCleaners({ serviceSlug, date, time, durationMinutes, locati
     setLoading(true);
     setError(null);
 
-    const params = new URLSearchParams({ serviceSlug });
-    if (date) params.set("date", date);
-    if (time) params.set("time", time);
-    if (durationMinutes) params.set("durationMinutes", String(durationMinutes));
-    if (locationId) params.set("locationId", locationId);
-
-    const url = `/api/booking-v2/available-cleaners?${params.toString()}`;
     let active = true;
-    cachedClientRequest(
-      `available-cleaners:${url}`,
-      async () => {
-        const response = await fetch(url);
-        if (!response.ok) throw new Error(`available_cleaners_http_${response.status}`);
-        return response.json() as Promise<{ cleaners?: AvailableCleanerV2[]; error?: string }>;
-      },
-      20_000,
-    )
+    prefetchAvailableCleaners({ serviceSlug, date, time, durationMinutes, locationId })
       .then((json: { cleaners?: AvailableCleanerV2[]; error?: string }) => {
         if (!active) return;
         if (json.error) {
