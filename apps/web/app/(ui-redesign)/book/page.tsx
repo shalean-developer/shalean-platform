@@ -2,7 +2,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { BookIndexHeader } from "@/components/booking/BookIndexHeader";
-import { buildBookHubHrefFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
+import {
+  buildBookHubHrefFromLegacySearchParams,
+  buildBookServiceSelectionHref,
+} from "@/lib/booking/legacyBookingToBookRedirect";
 import { collectLegacyBookingSearchParams } from "@/lib/booking/legacyBookingSearchParams";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { SERVICE_CONFIG, SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
@@ -70,11 +73,7 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
               return (
                 <Link
                   key={slug}
-                  href={
-                    slug === "regular-cleaning"
-                      ? `/book/${slug}?step=details&section=address`
-                      : `/book/${slug}`
-                  }
+                  href={buildBookServiceSelectionHref(params, slug)}
                   data-growth-cta-source={`book_hub_${slug}`}
                   className="group flex min-h-[15rem] flex-col justify-between rounded-[var(--ui-radius-xl)] border border-border bg-card p-5 text-card-foreground shadow-[var(--ui-shadow-sm)] transition hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-[var(--ui-shadow-md)] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring sm:p-6"
                 >
