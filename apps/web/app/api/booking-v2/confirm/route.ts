@@ -566,6 +566,7 @@ export async function POST(request: Request) {
         frequency: data.recurringFrequency || "",
         recurringDays: data.recurringDays ?? [],
         perVisitZar: preDiscountTotalZar,
+        serviceSlug: data.serviceSlug,
       })
     : null;
   if (data.bookingType === "recurring" && !recurringPrepaymentQuote) {
