@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   adjacentDeepCleaningStage,
   deepCleaningDetailsStage,
+  deepCleaningShowsExtras,
   deepCleaningStageReady,
 } from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
 
@@ -69,6 +70,14 @@ describe("deep cleaning progressive disclosure", () => {
     expect(adjacentDeepCleaningStage("rooms", "next")).toBe("pets");
     expect(adjacentDeepCleaningStage("pets", "next")).toBeNull();
     expect(adjacentDeepCleaningStage("pets", "back")).toBe("rooms");
+  });
+
+  it("shows add-on extras only on the final pets stage", () => {
+    expect(deepCleaningShowsExtras("address")).toBe(false);
+    expect(deepCleaningShowsExtras("property")).toBe(false);
+    expect(deepCleaningShowsExtras("rooms")).toBe(false);
+    expect(deepCleaningShowsExtras("pets")).toBe(true);
+    expect(deepCleaningShowsExtras(null)).toBe(false);
   });
 
   it("does not accept the retired equipment stage", () => {
