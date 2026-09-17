@@ -15,8 +15,14 @@ export const TEAM_MAX_ROSTER_MEMBERS = 15;
 /** @deprecated Use {@link TEAM_JOBS_PER_TEAM_PER_DAY}. */
 export const TEAM_JOBS_PER_DAY = TEAM_JOBS_PER_TEAM_PER_DAY;
 
-/** Statuses that consume a team-day slot — keep aligned with `assignTeamToBooking` / `claim_team_capacity_slot`. */
-export const TEAM_CAPACITY_CONSUMING_STATUSES = ["pending", "assigned", "in_progress"] as const;
+/** Statuses that reserve a shared Deep / Move team-day slot from checkout through service. */
+export const TEAM_CAPACITY_CONSUMING_STATUSES = [
+  "pending",
+  "pending_payment",
+  "confirmed",
+  "assigned",
+  "in_progress",
+] as const;
 
 const CAPACITY_CONSUMING_STATUSES = TEAM_CAPACITY_CONSUMING_STATUSES;
 
