@@ -421,9 +421,12 @@ export function BookingV2Provider({
       }
       const params = new URLSearchParams(searchParams.toString());
       params.set("step", bookingStepQueryValue(step));
-      router.push(`/book/${serviceSlug}?${params.toString()}`);
+      // The service page is already mounted; only the client-owned step changes.
+      // Native history is integrated with the Next.js App Router and avoids an
+      // unnecessary RSC request for every Continue/Back/Edit click.
+      window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
     },
-    [router, searchParams, serviceSlug, pricingAvailability, form],
+    [searchParams, serviceSlug, pricingAvailability, form],
   );
 
   const goNext = useCallback(async () => {
@@ -463,9 +466,9 @@ export function BookingV2Provider({
       const params = new URLSearchParams(searchParams.toString());
       params.set("step", "details");
       params.set("section", section);
-      router.replace(`/book/${serviceSlug}?${params.toString()}`);
+      window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
     },
-    [router, searchParams, serviceSlug],
+    [searchParams, serviceSlug],
   );
 
   useEffect(() => {
@@ -475,7 +478,7 @@ export function BookingV2Provider({
       const params = new URLSearchParams(searchParams.toString());
       params.set("step", "details");
       params.set("section", detailsSectionOverride ?? "address");
-      router.replace(`/book/${serviceSlug}?${params.toString()}`);
+      window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
       return;
     }
 
@@ -486,7 +489,6 @@ export function BookingV2Provider({
     currentStep,
     detailsSectionOverride,
     requestedDetailsSection,
-    router,
     searchParams,
     serviceSlug,
   ]);
