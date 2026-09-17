@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Loader2, AlertCircle, ShieldCheck, CreditCard, Lock, CheckCircle2 } from "lucide-react";
@@ -300,6 +301,8 @@ function PaymentSection({
   onSessionLost: (message: string) => void;
 }) {
   const { serviceSlug, clearBooking, catalogLoading } = useBookingV2();
+  const searchParams = useSearchParams();
+  const referralCodeFromUrl = searchParams.get("ref");
   const { watch, setValue } = useFormContext<BookingV2FormData>();
   const values = watch();
   const config = SERVICE_CONFIG[serviceSlug];
@@ -397,6 +400,7 @@ function PaymentSection({
     email: user.email,
     bookingTotalZar: Math.max(0, checkoutSubtotal - promoDiscountZar),
     serviceSlug,
+    referralCode: referralCodeFromUrl,
   });
 
   const referralToApply = referralDiscount?.discountZar ?? 0;
@@ -671,7 +675,7 @@ function PaymentSection({
           applyCleaningCreditZar: creditToApply,
           // Omit when unset ? Zod optional strings reject JSON `null` from getStoredReferral.
           referralCode:
-            (referralDiscount?.code ?? getStoredReferral("customer") ?? "").trim() || undefined,
+            (referralDiscount?.code ?? referralCodeFromUrl ?? getStoredReferral("customer") ?? "").trim() || undefined,
           promoCode: promoCode.trim() || undefined,
         }),
       }, BOOKING_CONFIRM_TIMEOUT_MS);
