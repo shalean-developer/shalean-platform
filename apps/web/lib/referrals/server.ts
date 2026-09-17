@@ -6,7 +6,6 @@ import {
   emitCleanerReferralRewardCredited,
   emitCustomerReferralLifecycleRewardEvents,
 } from "@/lib/referrals/referralLifecycleEvents";
-import { creditCleaningCredit } from "@/lib/referrals/credits";
 import { countQualifyingBookingsForCustomer } from "@/lib/referrals/eligibility";
 import {
   referrerAtMaxRewards,
@@ -258,20 +257,31 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
       ? new Date(Date.now() + programSettings.rewardExpiryDays * 24 * 60 * 60 * 1000).toISOString()
       : null;
 
-  const { error: upErr } = await params.admin
-    .from("referrals")
-    .update({
-      status: "rewarded",
-      completed_at: now,
-      rewarded_at: now,
-      credit_expires_at: creditExpiresAt,
-      referred_user_id: params.bookingUserId ?? (pending as { referred_user_id?: string | null }).referred_user_id ?? null,
-    })
-    .eq("id", pending.id)
-    .eq("status", "pending");
+  const refereeResolved =
+    params.bookingUserId ?? (pending as { referred_user_id?: string | null }).referred_user_id ?? null;
+  const bookingUuid =
+    typeof params.bookingId === "string" && /^[0-9a-f-]{36}$/i.test(params.bookingId.trim()) ? params.bookingId.trim() : null;
 
-  if (upErr) {
-    await reportOperationalIssue("warn", "referrals/finalize", upErr.message, { referralId: pending.id });
+  const { data: awardData, error: awardError } = await params.admin.rpc(
+    "award_customer_referral_credit",
+    {
+      p_referral_id: pending.id,
+      p_referred_user_id: refereeResolved,
+      p_booking_id: bookingUuid,
+      p_credit_expires_at: creditExpiresAt,
+      p_note: `Referral reward for ${email}`,
+    },
+  );
+  const awardRow = (
+    Array.isArray(awardData) ? awardData[0] : awardData
+  ) as { ok?: boolean; balance_after_zar?: number; error_message?: string | null } | null;
+  if (awardError || !awardRow?.ok) {
+    await reportOperationalIssue(
+      "warn",
+      "referrals/atomicAward",
+      awardError?.message ?? awardRow?.error_message ?? "Referral reward transaction failed.",
+      { referralId: pending.id, referrerId, bookingId: params.bookingId ?? null },
+    );
     return;
   }
 
@@ -283,21 +293,6 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
   });
 
   const credit = Math.max(0, reward);
-  const creditResult = await creditCleaningCredit({
-    admin: params.admin,
-    userId: referrerId,
-    amountZar: credit,
-    referralId: pending.id,
-    note: `Referral reward for ${email}`,
-  });
-  if (!creditResult.ok) {
-    await reportOperationalIssue("warn", "referrals/walletCredit", creditResult.error, {
-      referralId: pending.id,
-      referrerId,
-      bookingId: params.bookingId ?? null,
-    });
-    return;
-  }
 
   await logReferralUserEvent({
     admin: params.admin,
@@ -311,10 +306,6 @@ export async function processCustomerReferralAfterFirstPaidBooking(params: {
     },
   });
 
-  const refereeResolved =
-    params.bookingUserId ?? (pending as { referred_user_id?: string | null }).referred_user_id ?? null;
-  const bookingUuid =
-    typeof params.bookingId === "string" && /^[0-9a-f-]{36}$/i.test(params.bookingId.trim()) ? params.bookingId.trim() : null;
   await emitCustomerReferralLifecycleRewardEvents({
     admin: params.admin,
     referralId: pending.id,
