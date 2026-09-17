@@ -210,13 +210,13 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
 
     await expect.poll(async () => Number((await readDraft(page)).pricingSummary?.total ?? 0)).toBeGreaterThan(0);
 
-    await page.getByRole("radio", { name: "Repeat", exact: true }).click();
+    await page.getByRole("radio", { name: /Repeat/ }).click();
     await expectDraft(page, { bookingType: "recurring" });
 
-    await page.getByRole("radio", { name: "One Time", exact: true }).click();
+    await page.getByRole("radio", { name: /One Time/ }).click();
     await expectDraft(page, { bookingType: "once_off" });
 
-    await page.getByRole("radio", { name: "Repeat", exact: true }).click();
+    await page.getByRole("radio", { name: /Repeat/ }).click();
     await page.getByRole("button", { name: "Weekly", exact: true }).click();
     await page.getByRole("button", { name: "Mon", exact: true }).click();
     await expectDraft(page, {
@@ -231,6 +231,7 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     expect(chosenDate).toMatch(/^\d{4}-\d{2}-15$/);
 
     await expect(page.getByText("Confirming which times are free in your area…")).toHaveCount(0);
+    await page.locator("#booking-time").click();
     await expect(page.getByRole("button", { name: "8:30 AM", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "9:30 AM", exact: true })).toHaveCount(0);
     await page.getByRole("button", { name: "8:30 AM", exact: true }).click();
@@ -286,6 +287,7 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     expect(chosenDate).toMatch(/^\d{4}-\d{2}-16$/);
 
     await expect(page.getByText("Confirming which times are free in your area…")).toHaveCount(0);
+    await page.locator("#booking-time").click();
     await page.getByRole("button", { name: "9:00 AM", exact: true }).click();
     await expect(page.getByRole("button", { name: /RD Team Alpha/ })).toBeVisible();
     await page.getByRole("button", { name: /RD Team Alpha/ }).click();
