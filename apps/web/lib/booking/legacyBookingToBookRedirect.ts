@@ -79,6 +79,19 @@ export function buildBookHubHrefFromLegacySearchParams(sp: URLSearchParams): str
   return qs ? `/book?${qs}` : "/book";
 }
 
+/** Preserve referral/marketing context when a service is selected on the /book hub. */
+export function buildBookServiceSelectionHref(
+  sp: URLSearchParams,
+  serviceSlug: ServiceSlug,
+): string {
+  const next = new URLSearchParams(sp);
+  next.set("service", serviceSlug);
+  const href = buildBookHrefFromLegacySearchParams(next, "details");
+  return serviceSlug === "regular-cleaning"
+    ? `${href}&section=address`
+    : href;
+}
+
 export type WidgetBookingSelection = {
   service: string;
   bedrooms?: number;
