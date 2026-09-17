@@ -8,8 +8,10 @@ import { signOut } from "@/lib/auth/authClient";
 import { useAuth } from "@/lib/auth/useAuth";
 import { readCachedUserRole } from "@/lib/auth/userRole";
 import {
+  publicHeaderAccountLabel,
   publicHeaderDashboardHref,
   publicHeaderPostAuthRedirect,
+  publicHeaderShowsCustomerBookings,
 } from "@/lib/auth/publicHeaderAuthRouting";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
@@ -58,7 +60,10 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
 
   const loginHref = `/auth/login?redirect=${encodeURIComponent(redirectTarget)}`;
   const loggedIn = Boolean(user);
-  const accountHref = publicHeaderDashboardHref(readCachedUserRole());
+  const cachedRole = readCachedUserRole();
+  const accountHref = publicHeaderDashboardHref(cachedRole);
+  const accountLabel = publicHeaderAccountLabel(cachedRole);
+  const showCustomerBookings = publicHeaderShowsCustomerBookings(cachedRole);
   const avatarName = userDisplayName(user);
   const avatarPhoto = avatarImageUrl(user);
   const avatarInitial = avatarLetter(user);
@@ -133,9 +138,9 @@ function SiteTopBarAccountInner({ variant }: { variant: SiteTopBarAccountVariant
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild>
-          <Link href={accountHref}>{user ? "My Account" : "Cleaner Workspace"}</Link>
+          <Link href={accountHref}>{accountLabel}</Link>
         </DropdownMenuItem>
-        {user ? (
+        {showCustomerBookings ? (
           <DropdownMenuItem asChild>
             <Link href="/account/bookings">My Bookings</Link>
           </DropdownMenuItem>

@@ -17,3 +17,13 @@ export function publicHeaderPostAuthRedirect(pathname: string, query = ""): stri
 export function publicHeaderDashboardHref(role: AppUserRole | null): string {
   return role ? dashboardRouteForRole(role) : "/account";
 }
+
+export function publicHeaderAccountLabel(role: AppUserRole | null): string {
+  if (role === "admin") return "Office Dashboard";
+  if (role === "cleaner") return "Cleaner Workspace";
+  return "My Account";
+}
+
+export function publicHeaderShowsCustomerBookings(role: AppUserRole | null): boolean {
+  return role === null || role === "customer";
+}
