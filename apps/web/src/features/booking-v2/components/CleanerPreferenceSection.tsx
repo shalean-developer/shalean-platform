@@ -227,7 +227,9 @@ export function CleanerPreferenceSection({
           {/* At-limit notice */}
           {selectedIds.length >= maxSelect && (
             <p className="text-center text-xs font-medium text-blue-600">
-              You can select up to {maxSelect} preferred cleaner{maxSelect > 1 ? "s" : ""}.
+              {maxSelect === 1
+                ? "Select another cleaner to replace your current choice, or click the selected cleaner to remove it."
+                : `You can select up to ${maxSelect} preferred cleaners. Click a selected cleaner to remove it.`}
             </p>
           )}
 
@@ -248,12 +250,10 @@ export function CleanerPreferenceSection({
                   cleaner={cleaner}
                   isSelected={isSelected}
                   isDisabled={isDisabled}
-                  onSelect={() => {
-                    // Always allow deselect; allow select only when under limit
-                    if (isSelected || selectedIds.length < maxSelect) {
-                      onToggle(cleaner);
-                    }
-                  }}
+                  // The parent owns limit handling: clicking a selected cleaner
+                  // removes it; clicking another cleaner at capacity replaces the
+                  // oldest selection (one click when maxSelect is 1).
+                  onSelect={() => onToggle(cleaner)}
                 />
               );
             })}
