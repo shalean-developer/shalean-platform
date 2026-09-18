@@ -113,6 +113,22 @@ jobs:
           for (const row of rows) {
             console.log(`- ${row.slug}: R${row.base_price} (${row.name})`);
           }
+
+          const expected = {
+            standard: 250,
+            office: 300,
+            airbnb: 250,
+            deep: 1200,
+            move: 1200,
+            carpet: 500,
+          };
+          const actual = Object.fromEntries(rows.map((row) => [row.slug, Number(row.base_price)]));
+          for (const [slug, price] of Object.entries(expected)) {
+            if (actual[slug] !== price) {
+              throw new Error(`production pricing mismatch for ${slug}: expected R${price}, got R${actual[slug] ?? "missing"}`);
+            }
+          }
+          console.log("Production six-service base-price contract verified.");
           NODE
 
       - name: Validate governed blog routes
