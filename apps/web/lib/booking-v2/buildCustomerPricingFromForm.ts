@@ -129,6 +129,7 @@ export function buildCustomerTotalInputFromForm(
       pricePerBathroom: rates.pricePerBathroom,
       pricePerExtraRoom: rates.pricePerExtraRoom,
       pricePerExtraCleaner: catalogSource.pricePerExtraCleaner,
+      serviceFeeZar: catalogSource.serviceFeeZar,
       estimatedDurationHours: catalogSource.estimatedDurationHours,
       minDurationHours: catalogSource.minDurationHours,
       maxDurationHours: catalogSource.maxDurationHours,

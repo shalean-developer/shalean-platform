@@ -20,6 +20,7 @@ import {
   isRegularCleaningScheduleStageComplete,
   type RegularCleaningScheduleStage,
 } from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
+import { deepCleaningDetailsStage } from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
@@ -80,6 +81,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         frequency: values.recurringFrequency,
         recurringDays: values.recurringDays ?? [],
         perVisitZar: displayTotal,
+        serviceSlug: values.serviceSlug,
       })
     : null;
   const durationHours = estimatedCleaningHoursFromMinutes(
@@ -113,12 +115,17 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     ? `R${recurringPrepayment.grossPackageZar.toLocaleString("en-ZA")}`
     : priceLabel;
   const isRegularCleaning = values.serviceSlug === "regular-cleaning";
-  const detailsStage = regularCleaningDetailsStage(values.serviceDetails, {
+  const isDeepCleaning = values.serviceSlug === "deep-cleaning";
+  const isProgressiveHomeCleaning = isRegularCleaning || isDeepCleaning;
+  const bookingDetails = {
     address: values.address,
     suburb: values.suburb,
     contactPhone: values.contactPhone,
     serviceAreaLocationId: values.serviceAreaLocationId,
-  });
+  };
+  const detailsStage = isDeepCleaning
+    ? deepCleaningDetailsStage(values.serviceDetails, bookingDetails)
+    : regularCleaningDetailsStage(values.serviceDetails, bookingDetails);
   const displayedDetailsStage = detailsSectionOverride ?? detailsStage;
   const propertyType = String(values.serviceDetails.propertyType ?? "");
   const propertyLabel = config.step1Questions
@@ -133,14 +140,17 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const displayedScheduleStage = scheduleSectionOverride ?? "booking_type";
   const cleanerIsVisible =
     hasCleaner &&
+    !(isDeepCleaning && currentStep === 1) &&
     (!isRegularCleaning || currentStep > 2 || displayedScheduleStage === "cleaner");
   const bookingTypeLabel = values.bookingType === "recurring" ? "Recurring" : "Once-off";
   const scheduleIsVisible =
-    !isRegularCleaning ||
+    !(isDeepCleaning && currentStep === 1) &&
+    (!isRegularCleaning ||
     currentStep > 2 ||
-    isRegularCleaningScheduleStageComplete("booking_type", displayedScheduleStage, values.bookingType);
+    isRegularCleaningScheduleStageComplete("booking_type", displayedScheduleStage, values.bookingType));
   const dateIsVisible =
     hasDate &&
+    !(isDeepCleaning && currentStep === 1) &&
     (!isRegularCleaning ||
       currentStep > 2 ||
       isRegularCleaningScheduleStageComplete("date_time", displayedScheduleStage, values.bookingType));
@@ -152,14 +162,17 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     dateIsVisible && values.time ? values.time : "",
   ].filter(Boolean).join(" · ");
   const propertyIsVisible =
-    isRegularCleaning && isRegularCleaningStageComplete("property", displayedDetailsStage);
+    isProgressiveHomeCleaning &&
+    (currentStep > 1 || isRegularCleaningStageComplete("property", displayedDetailsStage));
   const roomsAreVisible =
-    isRegularCleaning && isRegularCleaningStageComplete("rooms", displayedDetailsStage);
+    isProgressiveHomeCleaning &&
+    (currentStep > 1 || isRegularCleaningStageComplete("rooms", displayedDetailsStage));
   const homeLabel = [propertyIsVisible ? propertyLabel : "", roomsAreVisible ? roomsLabel : ""]
     .filter(Boolean)
     .join(" · ");
   const petsAreVisible =
-    isRegularCleaning && isRegularCleaningStageComplete("pets", displayedDetailsStage);
+    isProgressiveHomeCleaning &&
+    (currentStep > 1 || isRegularCleaningStageComplete("pets", displayedDetailsStage));
   const equipmentIsVisible = isRegularCleaning && currentStep > 1;
   const hasMoreDetails = petsAreVisible || equipmentIsVisible;
   const moreDetailsLabel = [
@@ -188,10 +201,10 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         <div className="space-y-2 p-3">
           <h2 className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">Booking summary</h2>
 
-          {hasAddress && (!isRegularCleaning || displayedDetailsStage === "equipment") ? (
-            <SummaryRow label="Address" value={addressLabel} onEdit={isRegularCleaning ? editDetail("address") : edit(1)} />
+          {hasAddress && (!isProgressiveHomeCleaning || currentStep > 1 || displayedDetailsStage === "equipment") ? (
+            <SummaryRow label="Address" value={addressLabel} onEdit={isProgressiveHomeCleaning ? editDetail("address") : edit(1)} />
           ) : null}
-          <SummaryRow label="Service" value={config.label} onEdit={edit(1)} />
+          <SummaryRow label="Service" value={config.label} onEdit={isProgressiveHomeCleaning ? editDetail("property") : edit(1)} />
           {scheduleIsVisible ? (
             <SummaryRow
               label="Schedule"
@@ -273,9 +286,9 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
               <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-slate-600">
                 <p>
                   <span className="font-semibold text-slate-800">
-                    First 30 days · {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"}
+                    {isDeepCleaning ? "Monthly plan" : "First 30 days"} · {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"}
                   </span>
-                  {` · Pay all visits now`}
+                  {` · ${isDeepCleaning ? "Pay this month now" : "Pay all visits now"}`}
                 </p>
               </div>
           ) : null}

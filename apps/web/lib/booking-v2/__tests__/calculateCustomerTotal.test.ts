@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateCustomerTotal, computeServiceFeeZar, applyRecurringDiscountZar } from "@/lib/booking-v2/calculateCustomerTotal";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
+import { buildCustomerTotalInputFromForm } from "@/lib/booking-v2/buildCustomerPricingFromForm";
 import type { CustomerTotalInput } from "@/lib/booking-v2/types";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
 
@@ -50,6 +51,74 @@ describe("calculateCustomerTotal", () => {
     expect(r.subtotal_before_service_fee).toBe(544);
     expect(r.service_fee).toBe(30);
     expect(r.estimated_total).toBe(574);
+  });
+
+  it("uses the service-specific fee instead of the global fallback", () => {
+    const r = calculateCustomerTotal(
+      baseInput({
+        serviceSlug: "deep-cleaning",
+        serviceLabel: "Deep Cleaning",
+        cleanerMode: "team",
+        catalog: {
+          ...baseInput().catalog,
+          serviceFeeZar: 60,
+        },
+      }),
+    );
+
+    expect(r.service_fee).toBe(60);
+    expect(r.lineItems).toContainEqual({ label: "Service fee", amountZar: 60 });
+  });
+
+  it("preserves the service-specific fee through the booking form quote input", () => {
+    const feesConfig = defaultBookingV2FeesConfig();
+    feesConfig.serviceFeeRule = "flat";
+    feesConfig.serviceFeeFlatCents = 3000;
+
+    const input = buildCustomerTotalInputFromForm({
+      serviceSlug: "deep-cleaning",
+      values: {
+        serviceDetails: {
+          bedrooms: "1",
+          bathrooms: "2",
+          extraRooms: "2",
+          propertyType: "townhouse",
+          lastCleaned: "6_months_plus",
+          hasPets: "cats",
+        },
+        selectedExtras: [],
+        cleanerMode: "team",
+        cleanerCount: 1,
+        bookingType: "recurring",
+        recurringFrequency: "monthly",
+        equipmentRequired: "no",
+        equipmentQuote: null,
+      },
+      liveConfig: {
+        slug: "deep-cleaning",
+        label: "Deep Cleaning",
+        shortLabel: "Deep Clean",
+        description: "Deep cleaning",
+        cleanerMode: "team",
+        showEquipmentQuestion: false,
+        allowsExtraCleaner: false,
+        step1Questions: [],
+        basePrice: 950,
+        pricePerBedroom: 100,
+        pricePerBathroom: 80,
+        pricePerExtraRoom: 30,
+        pricePerExtraCleaner: 0,
+        serviceFeeZar: 60,
+        estimatedDurationHours: 7.3,
+        minDurationHours: 3.5,
+        maxDurationHours: 8,
+        extras: [],
+      },
+      feesConfig,
+    });
+
+    expect(input.catalog.serviceFeeZar).toBe(60);
+    expect(calculateCustomerTotal(input).service_fee).toBe(60);
   });
 
   it("does not charge equipment fee when not requested", () => {

@@ -60,6 +60,7 @@ import { settleFullyCoveredBooking } from "@/lib/payments/settleFullyCoveredBook
 import { createFreshPaymentPreparationToken } from "@/lib/booking/freshPaymentPreparationToken";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import { upsertPendingRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
+import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
 
 export const runtime = "nodejs";
 
@@ -238,6 +239,8 @@ export async function POST(request: Request) {
   const customerPhonePromise = resolveCustomerPhoneFromAuthAdmin(supabase, userId);
 
   // ── 4. Team availability re-check (race protection) ───────────────────────────
+  let selectedTeamPayoutOwnerId: string | null = null;
+  let selectedTeamMemberCountSnapshot: number | null = null;
   if (data.cleanerMode === "team") {
     if (!data.assignedTeamId) {
       return NextResponse.json({ error: "Select a team." }, { status: 422 });
@@ -263,6 +266,27 @@ export async function POST(request: Request) {
     if (!picked) {
       return NextResponse.json({ error: "Selected team was not found. Refresh and try again." }, { status: 422 });
     }
+
+    selectedTeamMemberCountSnapshot = picked.active_member_count;
+
+    const { data: selectedTeam, error: selectedTeamError } = await supabase
+      .from("teams")
+      .select("lead_cleaner_id")
+      .eq("id", picked.id)
+      .maybeSingle();
+    selectedTeamPayoutOwnerId = String(selectedTeam?.lead_cleaner_id ?? "").trim() || null;
+    if (selectedTeamError || !selectedTeamPayoutOwnerId) {
+      console.error(
+        "[booking-v2/confirm] selected team has no payout owner:",
+        picked.id,
+        selectedTeamError?.message,
+      );
+      return NextResponse.json(
+        { error: "The selected team is not ready for booking. Please choose another team." },
+        { status: 409 },
+      );
+    }
+
     if (!picked.available) {
       if (!isBookingSoftFulfillmentEnabled()) {
         const reason = teamLoad.platformAtCapacity
@@ -566,6 +590,7 @@ export async function POST(request: Request) {
         frequency: data.recurringFrequency || "",
         recurringDays: data.recurringDays ?? [],
         perVisitZar: preDiscountTotalZar,
+        serviceSlug: data.serviceSlug,
       })
     : null;
   if (data.bookingType === "recurring" && !recurringPrepaymentQuote) {
@@ -745,6 +770,15 @@ export async function POST(request: Request) {
         fulfillment_mode: fulfillmentMode,
         fulfillment_reason: fulfillmentReason,
         dispatch_status: fulfillmentMode === "ops_assignment" ? "unassigned" : "searching",
+        cleaner_mode: data.cleanerMode,
+        ...(data.cleanerMode === "team"
+          ? { assigned_team_id: data.assignedTeamId }
+          : {
+              is_team_job: false,
+              team_id: null,
+              assigned_team_id: null,
+              payout_owner_cleaner_id: null,
+            }),
         ...(data.cleanerMode === "individual_cleaners"
           ? {
               cleaner_count: Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount,
@@ -816,6 +850,24 @@ export async function POST(request: Request) {
         { error: "Could not save your booking. Please try again." },
         { status: 500 },
       );
+    }
+
+    if (data.cleanerMode === "team") {
+      const assignment = await assignTeamAndSyncRoster(supabase, {
+        bookingId: existingBooking.id,
+        teamId: data.assignedTeamId,
+        payoutOwnerCleanerId: selectedTeamPayoutOwnerId!,
+        teamMemberCountSnapshot: selectedTeamMemberCountSnapshot,
+        variant: "admin",
+        source: "booking_v2_confirm",
+      });
+      if (!assignment.ok) {
+        console.error("[booking-v2/confirm] existing team roster assignment failed:", assignment.message);
+        return NextResponse.json(
+          { error: "Could not reserve the selected team. Please choose another team or try again.", code: "TEAM_ASSIGNMENT_FAILED" },
+          { status: 503 },
+        );
+      }
     }
 
     after(() => saveBookingAddressToAccount(supabase, {
@@ -997,7 +1049,12 @@ export async function POST(request: Request) {
 
       // Cleaner / team
       cleaner_mode: data.cleanerMode,
+      // Team header + booking_cleaners roster must be written atomically by
+      // assign_team_and_sync_roster after this provisional booking exists.
+      is_team_job: false,
+      team_id: null,
       assigned_team_id: data.cleanerMode === "team" ? data.assignedTeamId : null,
+      payout_owner_cleaner_id: null,
       cleaner_count:
         data.cleanerMode === "individual_cleaners"
           ? Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount
@@ -1104,6 +1161,28 @@ export async function POST(request: Request) {
       },
       { status: 500 },
     );
+  }
+
+  if (data.cleanerMode === "team") {
+    const assignment = await assignTeamAndSyncRoster(supabase, {
+      bookingId: inserted.id,
+      teamId: data.assignedTeamId,
+      payoutOwnerCleanerId: selectedTeamPayoutOwnerId!,
+      teamMemberCountSnapshot: selectedTeamMemberCountSnapshot,
+      variant: "admin",
+      source: "booking_v2_confirm",
+    });
+    if (!assignment.ok) {
+      console.error("[booking-v2/confirm] team roster assignment failed:", assignment.message);
+      const { error: cleanupError } = await supabase.from("bookings").delete().eq("id", inserted.id);
+      if (cleanupError) {
+        console.error("[booking-v2/confirm] provisional booking cleanup failed:", cleanupError.message);
+      }
+      return NextResponse.json(
+        { error: "Could not reserve the selected team. Please choose another team or try again.", code: "TEAM_ASSIGNMENT_FAILED" },
+        { status: 503 },
+      );
+    }
   }
 
   after(() => saveBookingAddressToAccount(supabase, {

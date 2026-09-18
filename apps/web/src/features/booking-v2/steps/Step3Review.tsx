@@ -42,6 +42,11 @@ import {
   shouldShowRecurringDayPicker,
 } from "@/src/features/booking-v2/config/recurringScheduleOptions";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
+import {
+  DEEP_CLEANING_RECURRING_FREQUENCY,
+  recurringFrequenciesForService,
+  serviceUsesRecurringDayPicker,
+} from "@/lib/booking-v2/serviceRecurringPolicy";
 import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
 import {
   ServiceQuestionOptionCards,
@@ -425,7 +430,12 @@ function PropertyEditPanel() {
 // ─── Schedule edit panel ───────────────────────────────────────────────────────
 
 function ScheduleEditPanel() {
-  const { scheduling } = useBookingV2();
+  const { scheduling, serviceSlug } = useBookingV2();
+  const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
+  const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
+    serviceRecurringFrequencies.includes(option.value),
+  );
 
   const { control, watch, setValue } = useFormContext<BookingV2FormData>();
   const bookingType = watch("bookingType");
@@ -435,10 +445,21 @@ function ScheduleEditPanel() {
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
-    if (bookingType === "recurring" && recurringFrequency === "custom") {
+    if (bookingType !== "recurring") return;
+    if (isDeepCleaning) {
+      if (recurringFrequency !== DEEP_CLEANING_RECURRING_FREQUENCY) {
+        setValue("recurringFrequency", DEEP_CLEANING_RECURRING_FREQUENCY, {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+      }
+      setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+      return;
+    }
+    if (recurringFrequency === "custom") {
       setValue("recurringFrequency", "weekly", { shouldDirty: true });
     }
-  }, [bookingType, recurringFrequency, setValue]);
+  }, [bookingType, isDeepCleaning, recurringFrequency, setValue]);
 
   return (
     <div className="space-y-5">
@@ -450,8 +471,18 @@ function ScheduleEditPanel() {
         <Controller name="bookingType" control={control}
           render={({ field }) => (
             <div className="flex gap-3">
-              {[{ value: "once_off", label: "Once-off" }, { value: "recurring", label: "Recurring" }].map((opt) => (
-                <button key={opt.value} type="button" onClick={() => field.onChange(opt.value)}
+              {[{ value: "once_off", label: "Once-off" }, { value: "recurring", label: isDeepCleaning ? "Monthly" : "Recurring" }].map((opt) => (
+                <button key={opt.value} type="button" onClick={() => {
+                  field.onChange(opt.value);
+                  if (isDeepCleaning) {
+                    setValue(
+                      "recurringFrequency",
+                      opt.value === "recurring" ? DEEP_CLEANING_RECURRING_FREQUENCY : "",
+                      { shouldDirty: true, shouldValidate: true },
+                    );
+                    setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+                  }
+                }}
                   className={cn(
                     "flex-1 rounded-xl border py-2.5 text-sm font-semibold transition",
                     field.value === opt.value
@@ -503,7 +534,7 @@ function ScheduleEditPanel() {
       </div>
 
       {/* Recurring options */}
-      {bookingType === "recurring" && (
+      {bookingType === "recurring" && !isDeepCleaning && (
         <>
           <hr className="border-slate-100" />
           <div className="space-y-4">
@@ -515,7 +546,7 @@ function ScheduleEditPanel() {
               <Controller name="recurringFrequency" control={control}
                 render={({ field }) => (
                   <div className="flex flex-wrap gap-2">
-                    {RECURRING_FREQUENCIES.map((opt) => (
+                    {recurringFrequencyOptions.map((opt) => (
                       <button key={opt.value} type="button" onClick={() => field.onChange(opt.value)}
                         className={cn(
                           "rounded-xl border px-4 py-2 text-sm font-medium transition",
@@ -531,7 +562,7 @@ function ScheduleEditPanel() {
               />
             </div>
 
-            {shouldShowRecurringDayPicker(recurringFrequency) && (
+            {serviceUsesRecurringDayPicker(serviceSlug) && shouldShowRecurringDayPicker(recurringFrequency) && (
               <div>
                 <p className="mb-1 text-sm font-medium text-slate-700">Preferred days</p>
                 <p className="mb-2 text-xs text-slate-500">
@@ -925,6 +956,15 @@ export function Step3Review() {
   const extrasSource = liveConfig?.extras ?? [];
   const estimatedTotal =
     pricingSummary?.estimated_total ?? pricingSummary?.total ?? liveConfig?.basePrice ?? config.basePrice;
+  const showEquipment =
+    serviceSlug !== "deep-cleaning" &&
+    (values.equipmentRequired === "yes" || values.equipmentRequired === "no");
+  const hasServiceDetails = serviceDetails.length > 0;
+  const cleanDetailsNumber = 2 + Number(showEquipment);
+  const scheduleNumber = 2 + Number(showEquipment) + Number(hasServiceDetails);
+  const cleanerNumber = scheduleNumber + 1;
+  const extrasNumber =
+    scheduleNumber + 1 + Number(values.cleanerMode === "individual_cleaners");
 
   return (
     <>
@@ -934,7 +974,7 @@ export function Step3Review() {
           <LocationEditPanel />
         </EditModal>
       )}
-      {editPanel === "equipment" && (
+      {showEquipment && editPanel === "equipment" && (
         <EditModal title="Edit equipment" onSave={saveEdit} onCancel={cancelEdit}>
           <EquipmentEditPanel />
         </EditModal>
@@ -987,11 +1027,7 @@ export function Step3Review() {
           number={1}
           title="Location"
           onEdit={() => openEdit("location")}
-          className={
-            values.equipmentRequired === "yes" || values.equipmentRequired === "no"
-              ? undefined
-              : "sm:col-span-2"
-          }
+          className={showEquipment ? undefined : "sm:col-span-2"}
         >
           <div className="flex items-start gap-2.5">
             <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" aria-hidden />
@@ -1008,7 +1044,7 @@ export function Step3Review() {
 
         </ReviewSection>
 
-        {(values.equipmentRequired === "yes" || values.equipmentRequired === "no") && (
+        {showEquipment && (
           <ReviewSection number={2} title="Equipment" onEdit={() => openEdit("equipment")}>
             <div className="flex items-start gap-2.5">
               <Package className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" aria-hidden />
@@ -1040,7 +1076,7 @@ export function Step3Review() {
         {/* ② Clean details */}
         {serviceDetails.length > 0 && (
           <ReviewSection
-            number={3}
+            number={cleanDetailsNumber}
             title="Clean details"
             onEdit={() => openEdit("property")}
             className="sm:col-span-2"
@@ -1074,7 +1110,7 @@ export function Step3Review() {
 
         {/* ③ Schedule */}
         <ReviewSection
-          number={serviceDetails.length > 0 ? 3 : 2}
+          number={scheduleNumber}
           title="Schedule"
           onEdit={() => openEdit("schedule")}
           className="sm:col-span-2"
@@ -1149,6 +1185,7 @@ export function Step3Review() {
 
           {/* Recurring preferred days */}
           {values.bookingType === "recurring" &&
+            serviceUsesRecurringDayPicker(values.serviceSlug) &&
             shouldShowRecurringDayPicker(values.recurringFrequency) &&
             (values.recurringDays ?? []).length > 0 && (
               <p className="mt-2 text-xs text-slate-500">
@@ -1166,7 +1203,7 @@ export function Step3Review() {
           const hasIds = cleanerIds.length > 0;
           return (
             <ReviewSection
-              number={serviceDetails.length > 0 ? 4 : 3}
+              number={cleanerNumber}
               title="Cleaner preference"
               onEdit={() => openEdit("cleaner")}
             >
@@ -1209,11 +1246,7 @@ export function Step3Review() {
 
         {/* ⑤ Add-ons */}
         <ReviewSection
-          number={
-            values.cleanerMode === "individual_cleaners"
-              ? serviceDetails.length > 0 ? 5 : 4
-              : serviceDetails.length > 0 ? 4 : 3
-          }
+          number={extrasNumber}
           title="Add-ons"
           onEdit={() => openEdit("extras")}
           className={values.cleanerMode === "individual_cleaners" ? undefined : "sm:col-span-2"}
@@ -1267,18 +1300,24 @@ export function Step3Review() {
                     frequency: values.recurringFrequency,
                     recurringDays: values.recurringDays ?? [],
                     perVisitZar: estimatedTotal,
+                    serviceSlug,
                   });
                   if (!prepaid) return <p>Choose a supported recurring schedule to continue.</p>;
                   return (
                     <>
                       <p>
-                        First 30 days: {prepaid.visitCount} visit{prepaid.visitCount === 1 ? "" : "s"} · total{" "}
+                        {serviceSlug === "deep-cleaning"
+                          ? "Monthly plan"
+                          : `First 30 days: ${prepaid.visitCount} visit${prepaid.visitCount === 1 ? "" : "s"}`}{" "}
+                        · total{" "}
                         <span className="font-semibold text-slate-800">
                           R{prepaid.grossPackageZar.toLocaleString("en-ZA")}
                         </span>
                       </p>
                       <p className="font-medium text-slate-700">
-                        Amount due today: R{prepaid.grossPackageZar.toLocaleString("en-ZA")} (first 30 days)
+                        {serviceSlug === "deep-cleaning"
+                          ? `Amount due today: R${prepaid.grossPackageZar.toLocaleString("en-ZA")} (one monthly visit)`
+                          : `Amount due today: R${prepaid.grossPackageZar.toLocaleString("en-ZA")} (first 30 days)`}
                       </p>
                     </>
                   );
@@ -1290,7 +1329,9 @@ export function Step3Review() {
           <div className="border-t border-slate-100 bg-slate-50 px-4 py-2.5 sm:px-5">
             <p className="text-xs text-slate-400">
               {values.bookingType === "recurring"
-                ? "Pay all visits in each 30-day billing cycle together. The package renews automatically while the recurring booking remains active."
+                ? serviceSlug === "deep-cleaning"
+                  ? "One deep-clean visit is charged each month while the monthly plan remains active."
+                  : "Pay all visits in each 30-day billing cycle together. The package renews automatically while the recurring booking remains active."
                 : "Final amount confirmed before payment. No hidden fees."}
             </p>
           </div>

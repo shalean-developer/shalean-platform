@@ -43,6 +43,7 @@ export function buildRecurringPrepaymentQuote(input: {
   frequency: string;
   recurringDays: readonly string[];
   perVisitZar: number;
+  serviceSlug?: string;
 }): RecurringPrepaymentQuote | null {
   const frequency = frequencyForSchedule(input.frequency);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(input.startDate) || !frequency) return null;
@@ -56,7 +57,11 @@ export function buildRecurringPrepaymentQuote(input: {
     monthly_pattern: "mirror_start_date",
     monthly_nth: null,
   };
-  const occurrenceDates = occurrenceDatesInclusive(schedule, input.startDate, coverageEndDate);
+  const isDeepCleaningMonthly =
+    input.serviceSlug?.trim().toLowerCase() === "deep-cleaning" && frequency === "monthly";
+  const occurrenceDates = isDeepCleaningMonthly
+    ? [input.startDate]
+    : occurrenceDatesInclusive(schedule, input.startDate, coverageEndDate);
   if (!occurrenceDates.includes(input.startDate)) occurrenceDates.unshift(input.startDate);
   const uniqueDates = [...new Set(occurrenceDates)].sort();
   const perVisitZar = Math.max(0, Math.round(input.perVisitZar));

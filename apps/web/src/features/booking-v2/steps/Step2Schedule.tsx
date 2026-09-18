@@ -45,6 +45,11 @@ import {
 import { useBookingV2ScheduleAvailability } from "@/lib/booking-v2/useBookingV2ScheduleAvailability";
 import { isSelectedBookingSlotVerified } from "@/lib/booking-v2/bookingV2ScheduleVerification";
 import {
+  DEEP_CLEANING_RECURRING_FREQUENCY,
+  recurringFrequenciesForService,
+  serviceUsesRecurringDayPicker,
+} from "@/lib/booking-v2/serviceRecurringPolicy";
+import {
   adjacentRegularCleaningScheduleStage,
   type RegularCleaningScheduleStage,
 } from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
@@ -390,6 +395,11 @@ export function Step2Schedule() {
   const selectedCleanerDetails = watch("selectedCleanerDetails") ?? [];
   const assignedTeamId = watch("assignedTeamId") ?? "";
   const isRegularCleaning = serviceSlug === "regular-cleaning";
+  const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
+  const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
+    serviceRecurringFrequencies.includes(option.value),
+  );
   const activeScheduleStage = isRegularCleaning
     ? scheduleSectionOverride ?? "booking_type"
     : null;
@@ -419,6 +429,17 @@ export function Step2Schedule() {
           (slot) => availability[slot] === true,
         )
       : [];
+
+  useEffect(() => {
+    if (!isDeepCleaning || bookingType !== "recurring") return;
+    if (recurringFrequency !== DEEP_CLEANING_RECURRING_FREQUENCY) {
+      setValue("recurringFrequency", DEEP_CLEANING_RECURRING_FREQUENCY, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+    setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+  }, [bookingType, isDeepCleaning, recurringFrequency, setValue]);
 
   // The calendar date starts the recurring series; recurring bookings are open-ended.
   useEffect(() => {
@@ -590,8 +611,10 @@ export function Step2Schedule() {
                 },
                 {
                   value: "recurring",
-                  label: isRegularCleaning ? "Repeat" : "Recurring",
-                  description: "For repeat services every few days or weeks.",
+                  label: isRegularCleaning ? "Repeat" : isDeepCleaning ? "Monthly" : "Recurring",
+                  description: isDeepCleaning
+                    ? "One deep clean every month, charged monthly."
+                    : "For repeat services every few days or weeks.",
                   icon: RefreshCw,
                 },
               ].map((opt) => {
@@ -603,7 +626,17 @@ export function Step2Schedule() {
                     type="button"
                     role="radio"
                     aria-checked={selected}
-                    onClick={() => field.onChange(opt.value)}
+                    onClick={() => {
+                      field.onChange(opt.value);
+                      if (isDeepCleaning) {
+                        setValue(
+                          "recurringFrequency",
+                          opt.value === "recurring" ? DEEP_CLEANING_RECURRING_FREQUENCY : "",
+                          { shouldDirty: true, shouldValidate: true },
+                        );
+                        setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+                      }
+                    }}
                     disabled={!areaResolved}
                     className={cn(
                       isRegularCleaning
@@ -706,7 +739,7 @@ export function Step2Schedule() {
       </section>}
 
       {/* ── Recurring schedule ── */}
-      {bookingType === "recurring" && (!isRegularCleaning || activeScheduleStage === "booking_type") && (
+      {bookingType === "recurring" && !isDeepCleaning && (!isRegularCleaning || activeScheduleStage === "booking_type") && (
         <>
           <hr className="border-slate-200" />
           <section className="space-y-5">
@@ -727,7 +760,7 @@ export function Step2Schedule() {
                 control={control}
                 render={({ field }) => (
                   <div className="mx-auto mt-6 grid w-full max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                    {RECURRING_FREQUENCIES.map((opt) => {
+                    {recurringFrequencyOptions.map((opt) => {
                       const selected = field.value === opt.value;
                       const presentation = FREQUENCY_PRESENTATION[opt.value];
                       const Icon = presentation.icon;
@@ -767,7 +800,7 @@ export function Step2Schedule() {
             </div>
 
             {/* Preferred days (part of weekly / fortnightly / monthly) */}
-            {shouldShowRecurringDayPicker(recurringFrequency) && (
+            {serviceUsesRecurringDayPicker(serviceSlug) && shouldShowRecurringDayPicker(recurringFrequency) && (
               <div className="flex flex-col items-center gap-3">
                 <p className="text-sm font-medium text-slate-700">
                   Preferred days
@@ -825,8 +858,14 @@ export function Step2Schedule() {
             serviceSlug={serviceSlug}
             selectedTeamId={assignedTeamId}
             onSelect={(id, name) => {
-              setValue("assignedTeamId", id);
-              setValue("assignedTeamName", name);
+              setValue("assignedTeamId", id, {
+                shouldDirty: true,
+                shouldValidate: true,
+              });
+              setValue("assignedTeamName", name, {
+                shouldDirty: true,
+              });
+              void goNext();
             }}
           />
           <FieldError message={errors.assignedTeamId?.message} />

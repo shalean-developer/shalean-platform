@@ -42,6 +42,7 @@ type DbServiceRow = {
   price_per_bedroom: number;
   price_per_bathroom: number;
   price_per_extra_room: number;
+  service_fee_zar: number | null;
   duration_base: number;
   min_hours: number;
   max_hours: number;
@@ -81,6 +82,7 @@ function ratesFromDbRow(dbSvc: DbServiceRow | null | undefined, staticFallback: 
     pricePerBathroom: dbSvc?.price_per_bathroom && dbSvc.price_per_bathroom > 0 ? dbSvc.price_per_bathroom : 0,
     pricePerExtraRoom:
       dbSvc?.price_per_extra_room && dbSvc.price_per_extra_room > 0 ? dbSvc.price_per_extra_room : 0,
+    ...(dbSvc?.service_fee_zar != null ? { serviceFeeZar: dbSvc.service_fee_zar } : {}),
   };
 }
 
@@ -159,7 +161,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       admin
         .from("pricing_services")
         .select(
-          "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, duration_base, min_hours, max_hours",
+          "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, service_fee_zar, duration_base, min_hours, max_hours",
         )
         .eq("is_active", true)
         .order("sort_order", { ascending: true }),
@@ -192,6 +194,8 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
           price_per_bedroom: Math.round(Number(row.price_per_bedroom) || 0),
           price_per_bathroom: Math.round(Number(row.price_per_bathroom) || 0),
           price_per_extra_room: Math.round(Number(row.price_per_extra_room) || 0),
+          service_fee_zar:
+            row.service_fee_zar == null ? null : Math.max(0, Math.round(Number(row.service_fee_zar) || 0)),
           duration_base: Number(row.duration_base) || 0,
           min_hours:
             Number.isFinite(Number(row.min_hours)) && Number(row.min_hours) > 0
@@ -311,6 +315,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         pricePerBedroom: dbSvc?.price_per_bedroom && dbSvc.price_per_bedroom > 0 ? dbSvc.price_per_bedroom : 0,
         pricePerBathroom: dbSvc?.price_per_bathroom && dbSvc.price_per_bathroom > 0 ? dbSvc.price_per_bathroom : 0,
         pricePerExtraRoom: dbSvc?.price_per_extra_room && dbSvc.price_per_extra_room > 0 ? dbSvc.price_per_extra_room : 0,
+        ...(dbSvc?.service_fee_zar != null ? { serviceFeeZar: dbSvc.service_fee_zar } : {}),
         pricePerExtraCleaner: feesConfig.extraCleanerFeeZar || staticFallback.pricePerExtraCleaner,
         estimatedDurationHours: dbSvc?.duration_base
           ? Math.max(1, Math.round(dbSvc.duration_base))

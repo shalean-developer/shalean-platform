@@ -392,6 +392,7 @@ function PaymentSection({
         frequency: values.recurringFrequency,
         recurringDays: values.recurringDays ?? [],
         perVisitZar: baseTotal,
+        serviceSlug,
       })
     : null;
   const checkoutSubtotal = recurringPrepayment?.grossPackageZar ?? baseTotal;
@@ -1067,7 +1068,9 @@ function PaymentSection({
           ) : null}
           <div className="flex items-center justify-between text-base font-bold">
             <span className="text-slate-800">
-              {values.bookingType === "recurring" ? "Pay first 30 days" : "Total to pay"}
+              {values.bookingType === "recurring"
+                ? serviceSlug === "deep-cleaning" ? "Pay this month" : "Pay first 30 days"
+                : "Total to pay"}
             </span>
             <span className="text-blue-700">
               {displayedTotal === null ? "—" : `R ${displayedTotal.toLocaleString("en-ZA")}`}
@@ -1075,8 +1078,10 @@ function PaymentSection({
           </div>
           {!pendingBookingId && recurringPrepayment ? (
             <p className="text-xs text-slate-500">
-              Covers {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"} from{" "}
-              {recurringPrepayment.coverageStartDate} to {recurringPrepayment.coverageEndDate}. The next 30-day package renews automatically while your recurring booking remains active.
+              {serviceSlug === "deep-cleaning"
+                ? `Covers one deep-clean visit on ${recurringPrepayment.coverageStartDate}. The next monthly visit is charged in its billing month while your plan remains active.`
+                : <>Covers {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"} from{" "}
+                    {recurringPrepayment.coverageStartDate} to {recurringPrepayment.coverageEndDate}. The next 30-day package renews automatically while your recurring booking remains active.</>}
             </p>
           ) : null}
         </div>
@@ -1149,7 +1154,9 @@ function PaymentSection({
         {" "}and{" "}
         <Link href="/privacy-policy" className="underline hover:text-slate-600">Privacy Policy</Link>
         {values.bookingType === "recurring"
-          ? ", and authorise Shalean to charge each complete 30-day visit package automatically until you pause, cancel, or change the recurring booking."
+          ? serviceSlug === "deep-cleaning"
+            ? ", and authorise Shalean to charge one monthly deep-clean visit until you pause or cancel the plan."
+            : ", and authorise Shalean to charge each complete 30-day visit package automatically until you pause, cancel, or change the recurring booking."
           : "."}
       </p>
     </div>

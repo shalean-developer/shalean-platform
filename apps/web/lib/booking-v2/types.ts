@@ -115,6 +115,7 @@ export type CustomerTotalInput = {
     pricePerBathroom: number;
     pricePerExtraRoom: number;
     pricePerExtraCleaner: number;
+    serviceFeeZar?: number;
     estimatedDurationHours: number;
     minDurationHours: number;
     maxDurationHours: number;
