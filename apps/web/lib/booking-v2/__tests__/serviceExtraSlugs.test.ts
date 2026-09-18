@@ -47,7 +47,6 @@ describe("SERVICE_EXTRA_SLUGS", () => {
       "interior-walls",
     ]);
     expect(SERVICE_EXTRA_SLUGS["moving-cleaning"]).toEqual([
-      "deposit-preparation",
       "appliances-cleaning",
       "inside-cabinets",
       "garage-cleaning",

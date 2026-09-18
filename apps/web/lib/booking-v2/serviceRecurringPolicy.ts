@@ -2,9 +2,14 @@ import type { RecurringFrequency, ServiceSlug } from "@/src/features/booking-v2/
 
 export const DEEP_CLEANING_RECURRING_FREQUENCY: RecurringFrequency = "monthly";
 
+export function serviceAllowsRecurringBookings(serviceSlug: ServiceSlug): boolean {
+  return serviceSlug !== "moving-cleaning";
+}
+
 export function recurringFrequenciesForService(
   serviceSlug: ServiceSlug,
 ): RecurringFrequency[] {
+  if (!serviceAllowsRecurringBookings(serviceSlug)) return [];
   return serviceSlug === "deep-cleaning"
     ? [DEEP_CLEANING_RECURRING_FREQUENCY]
     : ["custom", "weekly", "fortnightly", "monthly"];
@@ -17,6 +22,7 @@ export function recurringScheduleAllowedForService(input: {
   recurringDays: readonly string[];
 }): boolean {
   if (input.bookingType !== "recurring") return true;
+  if (!serviceAllowsRecurringBookings(input.serviceSlug)) return false;
   if (input.serviceSlug !== "deep-cleaning") {
     return Boolean(input.recurringFrequency);
   }
@@ -27,5 +33,5 @@ export function recurringScheduleAllowedForService(input: {
 }
 
 export function serviceUsesRecurringDayPicker(serviceSlug: ServiceSlug): boolean {
-  return serviceSlug !== "deep-cleaning";
+  return serviceAllowsRecurringBookings(serviceSlug) && serviceSlug !== "deep-cleaning";
 }

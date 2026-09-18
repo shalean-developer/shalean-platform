@@ -1083,6 +1083,11 @@ function PaymentSection({
                 : <>Covers {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"} from{" "}
                     {recurringPrepayment.coverageStartDate} to {recurringPrepayment.coverageEndDate}. The next 30-day package renews automatically while your recurring booking remains active.</>}
             </p>
+          ) : serviceSlug === "moving-cleaning" && !pendingBookingId ? (
+            <p className="text-xs text-slate-500">
+              Covers one move-in or move-out clean on {values.date}. Your Shalean team,
+              cleaning supplies, and equipment are included.
+            </p>
           ) : null}
         </div>
       </div>

@@ -68,4 +68,23 @@ describe("bookingV2ConfirmSchema schedule validation", () => {
       );
     }
   });
+
+  it("rejects recurring Moving Cleaning payloads at the server boundary", () => {
+    const parsed = bookingV2ConfirmSchema.safeParse({
+      ...base,
+      bookingType: "recurring",
+      recurringFrequency: "monthly",
+      recurringDays: [],
+    });
+
+    expect(parsed.success).toBe(false);
+    if (!parsed.success) {
+      expect(parsed.error.issues).toContainEqual(
+        expect.objectContaining({
+          path: ["recurringFrequency"],
+          message: "Moving Cleaning is available as a once-off booking only.",
+        }),
+      );
+    }
+  });
 });
