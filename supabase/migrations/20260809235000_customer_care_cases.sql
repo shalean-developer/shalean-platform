@@ -5,6 +5,7 @@ create table if not exists public.customer_care_cases (
   case_number bigint generated always as identity unique,
   booking_id uuid references public.bookings(id) on delete set null,
   customer_id uuid references auth.users(id) on delete set null,
+  crm_customer_id uuid references public.customers(id) on delete set null,
   customer_email text,
   customer_phone text,
   category text not null check (category in ('complaint','service_quality','damage','late_arrival','no_show','billing','refund','reschedule','communication','other')),
@@ -36,8 +37,16 @@ create index if not exists customer_care_cases_booking_idx
   on public.customer_care_cases(booking_id, created_at desc);
 create index if not exists customer_care_cases_customer_idx
   on public.customer_care_cases(customer_id, created_at desc);
+create index if not exists customer_care_cases_crm_customer_idx
+  on public.customer_care_cases(crm_customer_id, created_at desc);
 create index if not exists customer_care_cases_assignee_idx
   on public.customer_care_cases(assigned_to, status, resolution_due_at);
+
+drop trigger if exists customer_care_cases_crm_customer_convergence on public.customer_care_cases;
+create trigger customer_care_cases_crm_customer_convergence
+before insert or update of customer_id, customer_email, customer_phone
+on public.customer_care_cases
+for each row execute function public.crm_customer_write_convergence_trigger();
 
 create table if not exists public.customer_care_case_events (
   id uuid primary key default gen_random_uuid(),

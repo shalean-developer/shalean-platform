@@ -58,7 +58,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog.pricePerBathroom + duration bathrooms" },
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog.pricePerExtraRoom + duration extraRooms" },
       { key: "hasPets", effect: "informational", consumedBy: "persisted in serviceDetails only" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
   "deep-cleaning": {
@@ -72,7 +71,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "lastCleaned", effect: "price_and_duration", consumedBy: "propertyFactorRates.lastCleaned" },
       { key: "hasPets", effect: "informational", consumedBy: "persisted only" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
   "moving-cleaning": {
@@ -91,7 +89,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "furnished", effect: "price_and_duration", consumedBy: "propertyFactorRates.furnished" },
       { key: "depositInspection", effect: "informational", consumedBy: "ops hint; deposit-preparation is an Extra" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
   "office-cleaning": {
@@ -108,7 +105,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
         consumedBy: `Model ${OFFICE_FREQUENCY_MODEL}: commitment only — no per-visit price change`,
       },
       { key: "afterHours", effect: "informational", consumedBy: "persisted scheduling preference" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
   "carpet-cleaning": {
@@ -127,7 +123,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
         consumedBy: "legacy: priced if present; new bookings use sofa-upholstery Extra",
       },
       { key: "hasPets", effect: "informational", consumedBy: "persisted only" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
   "airbnb-cleaning": {
@@ -143,7 +138,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "guestCheckout", effect: "informational", consumedBy: "scheduling logistics" },
       { key: "keyAccess", effect: "informational", consumedBy: "access logistics" },
       { key: "welcomeBasket", effect: "informational", consumedBy: "ops; welcome-setup Extra distinct" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
 };

@@ -1,6 +1,8 @@
 import "server-only";
 
+import { unstable_cache } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { assertAuthoritativePricingClientAvailable } from "@/lib/booking-v2/authoritativePricingClientAvailability";
 import { SERVICE_CONFIG, SERVICE_SLUGS, type ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import {
   defaultBookingV2FeesConfig,
@@ -20,9 +22,10 @@ import type {
 } from "@/lib/booking-v2/bookingV2CatalogTypes";
 import { DB_SLUG_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
 import {
-  resolveMovingPricingServiceRow,
+  resolveBookingV2PricingServiceRow,
   resolvePricingServiceRow,
 } from "@/lib/booking-v2/resolvePricingServiceSlug";
+import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
 export type {
@@ -39,10 +42,38 @@ type DbServiceRow = {
   price_per_bedroom: number;
   price_per_bathroom: number;
   price_per_extra_room: number;
+  service_fee_zar: number | null;
   duration_base: number;
   min_hours: number;
   max_hours: number;
 };
+
+type PricingCatalogReadError = { message: string; code?: string | null } | null;
+
+/**
+ * SR-04C: once the authoritative pricing client is configured, read errors from
+ * pricing_services, pricing_extras, or pricing_booking_config must fail closed.
+ * Returning a static/default catalog after a failed authoritative read would let
+ * downstream booking flows treat fallback pricing as if the live catalog loaded.
+ */
+export function assertAuthoritativePricingCatalogReads(params: {
+  servicesError: PricingCatalogReadError;
+  extrasError: PricingCatalogReadError;
+  configError: PricingCatalogReadError;
+}): void {
+  const failures = [
+    ["pricing_services", params.servicesError],
+    ["pricing_extras", params.extrasError],
+    ["pricing_booking_config", params.configError],
+  ] as const;
+  const failed = failures.filter(([, error]) => Boolean(error));
+  if (!failed.length) return;
+
+  const detail = failed
+    .map(([table, error]) => `${table}: ${error?.message ?? "unknown read error"}`)
+    .join("; ");
+  throw new Error(`Authoritative booking pricing could not be read (${detail})`);
+}
 
 function ratesFromDbRow(dbSvc: DbServiceRow | null | undefined, staticFallback: { basePrice: number }) {
   return {
@@ -51,6 +82,7 @@ function ratesFromDbRow(dbSvc: DbServiceRow | null | undefined, staticFallback: 
     pricePerBathroom: dbSvc?.price_per_bathroom && dbSvc.price_per_bathroom > 0 ? dbSvc.price_per_bathroom : 0,
     pricePerExtraRoom:
       dbSvc?.price_per_extra_room && dbSvc.price_per_extra_room > 0 ? dbSvc.price_per_extra_room : 0,
+    ...(dbSvc?.service_fee_zar != null ? { serviceFeeZar: dbSvc.service_fee_zar } : {}),
   };
 }
 
@@ -117,17 +149,19 @@ const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
 
 export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   const admin = getSupabaseAdmin();
+  assertAuthoritativePricingClientAvailable({ adminAvailable: Boolean(admin) });
+  let extrasCatalogAuthoritative = false;
 
   const dbServices: Record<string, DbServiceRow> = {};
   const dbExtras: Record<string, DbExtraRow> = {};
   let configJson: unknown = null;
 
   if (admin) {
-    const [{ data: svcRows }, { data: extRows }, { data: configRow }] = await Promise.all([
+    const [servicesResult, extrasResult, configResult] = await Promise.all([
       admin
         .from("pricing_services")
         .select(
-          "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, duration_base, min_hours, max_hours",
+          "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, service_fee_zar, duration_base, min_hours, max_hours",
         )
         .eq("is_active", true)
         .order("sort_order", { ascending: true }),
@@ -139,6 +173,17 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       admin.from("pricing_booking_config").select("config").eq("id", "default").maybeSingle(),
     ]);
 
+    assertAuthoritativePricingCatalogReads({
+      servicesError: servicesResult.error,
+      extrasError: extrasResult.error,
+      configError: configResult.error,
+    });
+
+    const { data: svcRows } = servicesResult;
+    const { data: extRows } = extrasResult;
+    const { data: configRow } = configResult;
+    extrasCatalogAuthoritative = extrasResult.error == null;
+
     if (svcRows) {
       for (const raw of svcRows) {
         const row = raw as Record<string, unknown>;
@@ -149,6 +194,8 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
           price_per_bedroom: Math.round(Number(row.price_per_bedroom) || 0),
           price_per_bathroom: Math.round(Number(row.price_per_bathroom) || 0),
           price_per_extra_room: Math.round(Number(row.price_per_extra_room) || 0),
+          service_fee_zar:
+            row.service_fee_zar == null ? null : Math.max(0, Math.round(Number(row.service_fee_zar) || 0)),
           duration_base: Number(row.duration_base) || 0,
           min_hours:
             Number.isFinite(Number(row.min_hours)) && Number(row.min_hours) > 0
@@ -216,12 +263,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
     if (serviceDef.isActive === false) continue;
     const slug = serviceDef.slug;
     const staticFallback = SERVICE_CONFIG[slug];
-    const dbSlug = serviceDef.pricingSlug || DB_SLUG_MAP[slug];
-    const dbSvc =
-      (slug === "moving-cleaning"
-        ? resolveMovingPricingServiceRow(dbServices, null)
-        : resolvePricingServiceRow(dbServices, dbSlug)) ??
-      resolvePricingServiceRow(dbServices, "standard");
+    const dbSvc = resolveBookingV2PricingServiceRow(dbServices, slug, serviceDef.pricingSlug);
 
     const extras = buildExtrasForService(slug, dbExtras);
     const rates = ratesFromDbRow(dbSvc, staticFallback);
@@ -257,24 +299,23 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   for (const slug of SERVICE_SLUGS) {
     if (!catalog[slug]) {
       const staticFallback = SERVICE_CONFIG[slug];
-      const dbSlug = DB_SLUG_MAP[slug];
-      const dbSvc =
-        resolvePricingServiceRow(dbServices, dbSlug) ??
-        resolvePricingServiceRow(dbServices, "standard");
+      const dbSvc = resolveBookingV2PricingServiceRow(dbServices, slug);
+      const showEquipmentQuestion = serviceRequiresCustomerEquipmentChoice(slug);
       catalog[slug] = {
         slug,
         label: staticFallback.label,
         shortLabel: staticFallback.shortLabel,
         description: staticFallback.description,
         cleanerMode: staticFallback.cleanerMode,
-        showEquipmentQuestion: slug === "regular-cleaning",
-        showCleaningProductsQuestion: slug === "regular-cleaning",
+        showEquipmentQuestion,
+        showCleaningProductsQuestion: showEquipmentQuestion,
         allowsExtraCleaner: slug === "regular-cleaning" || slug === "airbnb-cleaning" || slug === "office-cleaning" || slug === "carpet-cleaning",
         step1Questions: staticFallback.step1Questions,
         basePrice: dbSvc?.base_price && dbSvc.base_price > 0 ? dbSvc.base_price : staticFallback.basePrice,
         pricePerBedroom: dbSvc?.price_per_bedroom && dbSvc.price_per_bedroom > 0 ? dbSvc.price_per_bedroom : 0,
         pricePerBathroom: dbSvc?.price_per_bathroom && dbSvc.price_per_bathroom > 0 ? dbSvc.price_per_bathroom : 0,
         pricePerExtraRoom: dbSvc?.price_per_extra_room && dbSvc.price_per_extra_room > 0 ? dbSvc.price_per_extra_room : 0,
+        ...(dbSvc?.service_fee_zar != null ? { serviceFeeZar: dbSvc.service_fee_zar } : {}),
         pricePerExtraCleaner: feesConfig.extraCleanerFeeZar || staticFallback.pricePerExtraCleaner,
         estimatedDurationHours: dbSvc?.duration_base
           ? Math.max(1, Math.round(dbSvc.duration_base))
@@ -294,5 +335,18 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
     feesConfig,
     scheduling,
     activeServiceSlugs,
+    extrasCatalogAuthoritative,
   };
 }
+
+/**
+ * Short-lived catalogue cache for read-only booking UI and quote reconciliation.
+ * Final confirmation deliberately calls `loadBookingV2Catalog` directly so the
+ * amount persisted and sent to Paystack always comes from a fresh authoritative
+ * database read.
+ */
+export const loadCachedBookingV2Catalog = unstable_cache(
+  loadBookingV2Catalog,
+  ["booking-v2-catalog-v1"],
+  { revalidate: 30, tags: ["booking-v2-catalog"] },
+);

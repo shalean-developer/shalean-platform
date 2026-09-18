@@ -3,6 +3,9 @@ import type { AdminPermission } from "@/lib/admin/requirePermission";
 export type OfficeRoleKey = "owner" | "manager" | "operations" | "finance" | "customer-care" | "workforce" | "marketing" | "supervisor" | "restricted";
 export type OfficeAccessPolicy = { path: string; anyOf: AdminPermission[]; audience: OfficeRoleKey[] };
 
+/** Explicit Office entry routes that intentionally do not require a page-level RBAC policy. */
+export const OFFICE_POLICY_EXEMPT_PATHS = ["/office"] as const;
+
 /** Single source of truth for page visibility, sidebar navigation and command search. More-specific prefixes must appear first. */
 export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
   { path: "/office/payouts/approvals", anyOf: ["payout.approve"], audience: ["owner"] },
@@ -48,6 +51,8 @@ export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
   { path: "/office/security", anyOf: ["role.manage", "audit.view"], audience: ["owner"] },
   { path: "/office/admin-users", anyOf: ["user.manage", "role.manage"], audience: ["owner"] },
 
+  { path: "/office/customer-care", anyOf: ["customer.view", "customer.contact", "incident.manage"], audience: ["owner", "manager", "operations", "customer-care"] },
+  { path: "/office/workforce/training", anyOf: ["cleaner.view", "cleaner.documents.view", "incident.manage"], audience: ["owner", "manager", "workforce"] },
   { path: "/office/recurring", anyOf: ["booking.view"], audience: ["owner", "manager", "operations", "customer-care", "supervisor"] },
   { path: "/office/schedule", anyOf: ["booking.view", "team.view"], audience: ["owner", "manager", "operations", "workforce", "supervisor"] },
   { path: "/office/cleaner-applications", anyOf: ["application.decide"], audience: ["owner", "manager", "workforce"] },
@@ -83,6 +88,10 @@ export const OFFICE_ACCESS_POLICIES: OfficeAccessPolicy[] = [
 
 export function policyForOfficePath(pathname: string): OfficeAccessPolicy | null {
   return OFFICE_ACCESS_POLICIES.find(({ path }) => pathname === path || pathname.startsWith(`${path}/`)) ?? null;
+}
+
+export function isOfficePolicyExemptPath(pathname: string): boolean {
+  return OFFICE_POLICY_EXEMPT_PATHS.some((path) => pathname === path);
 }
 
 export function hasAnyOfficePermission(permissions: ReadonlySet<string> | readonly string[], required: readonly AdminPermission[]): boolean {

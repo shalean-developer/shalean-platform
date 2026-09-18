@@ -17,7 +17,18 @@ import {
   shouldUseHorizontalOptionCards,
 } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
 import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
-import { WhatsIncludedModal } from "@/src/features/booking-v2/components/WhatsIncludedModal";
+import {
+  adjacentRegularCleaningStage,
+  regularCleaningAddressReady,
+  regularCleaningAutoAdvanceTarget,
+  regularCleaningDetailsStage,
+} from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
+import {
+  adjacentDeepCleaningStage,
+  deepCleaningDetailsStage,
+  deepCleaningShowsExtras,
+  deepCleaningStageReady,
+} from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
 
 // ─── Shared field components ───────────────────────────────────────────────────
 
@@ -153,7 +164,13 @@ function CustomSelect({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyForm = ReturnType<typeof useFormContext<any>>;
 
-function ServiceQuestion({ question }: { question: FormQuestion }) {
+function ServiceQuestion({
+  question,
+  onValueChange,
+}: {
+  question: FormQuestion;
+  onValueChange?: (key: string, value: string) => void;
+}) {
   const { register, control, formState: { errors } } = useFormContext() as AnyForm;
   const fieldKey = `serviceDetails.${question.key}`;
   const fieldError = (errors.serviceDetails as Record<string, { message?: string }> | undefined)?.[question.key]?.message;
@@ -177,7 +194,11 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
     question.label
   );
 
-  if (question.key === "bedrooms" || question.key === "bathrooms") {
+  if (
+    question.key === "bedrooms" ||
+    question.key === "bathrooms" ||
+    question.key === "extraRooms"
+  ) {
     return (
       <div className="min-w-0 w-full">
         <FieldLabel htmlFor={question.key} required={question.required}>
@@ -190,9 +211,12 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
           render={({ field }) => (
             <RoomCountSelector
               id={question.key}
-              kind={question.key as "bedrooms" | "bathrooms"}
+              kind={question.key as "bedrooms" | "bathrooms" | "extraRooms"}
               value={String(field.value ?? "")}
-              onChange={field.onChange}
+              onChange={(value) => {
+                field.onChange(value);
+                onValueChange?.(question.key, value);
+              }}
               error={fieldError}
             />
           )}
@@ -203,7 +227,12 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
   }
 
   if (shouldUseHorizontalOptionCards(question)) {
-    return <ServiceQuestionOptionCards question={question} />;
+    return (
+      <ServiceQuestionOptionCards
+        question={question}
+        onValueChange={(value) => onValueChange?.(question.key, value)}
+      />
+    );
   }
 
   if (question.type === "select") {
@@ -221,7 +250,10 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
               id={question.key}
               options={question.options ?? []}
               value={String(field.value ?? "")}
-              onChange={field.onChange}
+              onChange={(value) => {
+                field.onChange(value);
+                onValueChange?.(question.key, value);
+              }}
               placeholder={
                 question.key === "extraRooms" ? "Select extra rooms" : "Select…"
               }
@@ -323,14 +355,50 @@ function groupQuestions(questions: FormQuestion[]): QuestionGroup[] {
 // ─── Step 1 ─────────────────────────────────────────────────────────────────────
 
 export function Step1Details() {
-  const { serviceSlug, liveConfig } = useBookingV2();
+  const {
+    serviceSlug,
+    liveConfig,
+    detailsSectionOverride,
+    editDetailsSection,
+    goBack,
+    goNext,
+  } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
-  const { register, watch, setValue } = useFormContext<BookingV2FormData>();
+  const { watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
   const serviceDetails = watch("serviceDetails") ?? {};
+  const address = watch("address") ?? "";
+  const suburb = watch("suburb") ?? "";
+  const contactPhone = watch("contactPhone") ?? "";
+  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+  const isRegularCleaning = serviceSlug === "regular-cleaning";
+  const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const isProgressiveHomeCleaning = isRegularCleaning || isDeepCleaning;
+  const bookingDetails = {
+    address,
+    suburb,
+    contactPhone,
+    serviceAreaLocationId,
+  };
+  const regularDetailsStage = regularCleaningDetailsStage(serviceDetails, {
+    address,
+    suburb,
+    contactPhone,
+    serviceAreaLocationId,
+  });
+  const deepDetailsStage = deepCleaningDetailsStage(serviceDetails, bookingDetails);
+  const activeDetailsStage = isProgressiveHomeCleaning
+    ? detailsSectionOverride ?? (isDeepCleaning ? deepDetailsStage : regularDetailsStage)
+    : null;
+  const showAddress = !isProgressiveHomeCleaning || activeDetailsStage === "address";
+  const showEquipmentQuestion = isRegularCleaning && activeDetailsStage === "pets";
+  const showExtras =
+    !isProgressiveHomeCleaning ||
+    (isRegularCleaning && activeDetailsStage === "equipment") ||
+    (isDeepCleaning && deepCleaningShowsExtras(activeDetailsStage));
 
   function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
     if (!question.showWhen) return true;
@@ -364,31 +432,68 @@ export function Step1Details() {
     setValue("selectedExtras", updated, { shouldDirty: true });
   }
 
-  const questionGroups = groupQuestions(
-    step1Questions.filter((q) => q.key !== "cleaningProducts" && isQuestionVisible(q)),
-  );
+  const visibleQuestions = step1Questions.filter((question) => {
+    if (question.key === "cleaningProducts" || !isQuestionVisible(question)) return false;
+    if (!isProgressiveHomeCleaning) return true;
+    if (question.key === "propertyType") {
+      return activeDetailsStage === "property" || activeDetailsStage === "rooms";
+    }
+    if (question.group === "rooms") return activeDetailsStage === "rooms";
+    if (question.key === "hasPets" || (isDeepCleaning && question.key === "lastCleaned")) {
+      return activeDetailsStage === "pets";
+    }
+    return activeDetailsStage === "equipment";
+  });
+  const questionGroups = groupQuestions(visibleQuestions);
+  const regularStageReady = isDeepCleaning && activeDetailsStage
+    ? deepCleaningStageReady(activeDetailsStage, serviceDetails, bookingDetails)
+    : activeDetailsStage === "property"
+      ? Boolean(String(serviceDetails.propertyType ?? "").trim())
+      : activeDetailsStage === "rooms"
+        ? ["bedrooms", "bathrooms", "extraRooms"].every((key) =>
+            Boolean(String(serviceDetails[key] ?? "").trim()),
+          )
+        : activeDetailsStage === "pets"
+          ? Boolean(String(serviceDetails.hasPets ?? "").trim())
+          : activeDetailsStage === "address"
+            ? regularCleaningAddressReady({
+                address,
+                suburb,
+                contactPhone,
+                serviceAreaLocationId,
+              })
+            : true;
+
+  function moveProgressiveStage(direction: "back" | "next") {
+    if (!activeDetailsStage) return;
+    const adjacentStage = isDeepCleaning
+      ? adjacentDeepCleaningStage(activeDetailsStage, direction)
+      : adjacentRegularCleaningStage(activeDetailsStage, direction);
+    if (direction === "back") {
+      if (adjacentStage) editDetailsSection(adjacentStage);
+      else goBack();
+      return;
+    }
+    if (!regularStageReady) return;
+    if (adjacentStage) editDetailsSection(adjacentStage);
+    else void goNext();
+  }
+
+  function handleProgressiveAnswer(key: string, value: string) {
+    if (!activeDetailsStage || (isDeepCleaning && activeDetailsStage !== "property")) return;
+    const target = regularCleaningAutoAdvanceTarget(activeDetailsStage, {
+      ...serviceDetails,
+      [key]: value,
+    });
+    if (target) editDetailsSection(target);
+  }
+
+  const autoAdvanceStage = activeDetailsStage === "property";
 
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
-      <div className="text-center">
-        <h2 className="text-xl font-bold text-slate-900">Your details</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Tell us about the property and what you need cleaned.
-        </p>
-      </div>
-
-      <hr className="border-slate-200" />
-
       {/* Service-specific questions */}
-      <section className="space-y-5">
-        <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
-          About the clean
-        </h3>
-        {serviceSlug === "regular-cleaning" ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <WhatsIncludedModal />
-          </div>
-        ) : null}
+      <section className={cn("space-y-5", isProgressiveHomeCleaning && questionGroups.length === 0 && "hidden")}>
         {questionGroups.map((group) => {
           if (group.type === "inline") {
             const isRooms = group.groupName === "rooms";
@@ -422,66 +527,37 @@ export function Step1Details() {
                         : null,
                     )}
                   >
-                    <ServiceQuestion question={q} />
+                    <ServiceQuestion
+                      question={q}
+                      onValueChange={handleProgressiveAnswer}
+                    />
                   </div>
                 ))}
               </div>
             );
           }
-          return <ServiceQuestion key={group.question.key} question={group.question} />;
+          return (
+            <ServiceQuestion
+              key={group.question.key}
+              question={group.question}
+              onValueChange={handleProgressiveAnswer}
+            />
+          );
         })}
       </section>
 
-      <hr className="border-slate-200" />
+      <hr className={cn("border-slate-200", !showAddress && "hidden")} />
 
-      <PropertyAddressSection />
+      <div className={cn(!showAddress && "hidden")}>
+        <PropertyAddressSection />
+      </div>
 
-      <EquipmentSection />
-
-      <div className="space-y-4">
-        <div>
-          <FieldLabel htmlFor="accessInstructions">Access instructions (optional)</FieldLabel>
-          <input
-            id="accessInstructions"
-            type="text"
-            placeholder="e.g. Ring bell, use side gate…"
-            {...register("accessInstructions")}
-            autoComplete="off"
-            suppressHydrationWarning
-            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <FieldLabel htmlFor="parkingInstructions">Parking (optional)</FieldLabel>
-            <input
-              id="parkingInstructions"
-              type="text"
-              placeholder="Street parking, driveway…"
-              {...register("parkingInstructions")}
-              autoComplete="off"
-              suppressHydrationWarning
-              className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-          <div>
-            <FieldLabel htmlFor="gateCode">Gate / security code (optional)</FieldLabel>
-            <input
-              id="gateCode"
-              type="text"
-              placeholder="e.g. #1234"
-              {...register("gateCode")}
-              autoComplete="off"
-              suppressHydrationWarning
-              className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-        </div>
+      <div className={cn(!showEquipmentQuestion && "hidden")}>
+        <EquipmentSection />
       </div>
 
       {/* Extras */}
-      {extras.length > 0 && (
+      {showExtras && extras.length > 0 && (
         <>
           <hr className="border-slate-200" />
           <section className="space-y-4">
@@ -536,6 +612,30 @@ export function Step1Details() {
           </section>
         </>
       )}
+
+      {isProgressiveHomeCleaning ? (
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={() => moveProgressiveStage("back")}
+            className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+          >
+            ← Back
+          </button>
+          {!autoAdvanceStage ? (
+            <button
+              type="button"
+              disabled={!regularStageReady}
+              onClick={() => moveProgressiveStage("next")}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {activeDetailsStage === "equipment" || (isDeepCleaning && activeDetailsStage === "pets")
+                ? "Continue to Schedule →"
+                : "Continue →"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

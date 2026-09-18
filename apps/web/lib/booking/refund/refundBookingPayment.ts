@@ -139,6 +139,47 @@ export async function refundBookingPayment(
     return { ok: false, error: "monthly_child_use_invoice_refund" };
   }
 
+  const childAllocation = await (async () => {
+    try {
+      const result = await admin
+        .from("recurring_prepaid_allocations")
+        .select("package_id, recurring_prepaid_packages!inner(source_booking_id)")
+        .eq("booking_id", row.id)
+        .maybeSingle();
+      return result.data ?? null;
+    } catch {
+      // Backward-compatible when the isolated prepayment migration is not installed yet.
+      return null;
+    }
+  })();
+  if (childAllocation) {
+    const relation = Array.isArray(childAllocation.recurring_prepaid_packages)
+      ? childAllocation.recurring_prepaid_packages[0]
+      : childAllocation.recurring_prepaid_packages;
+    const sourceBookingId = relation && typeof relation === "object"
+      ? String((relation as { source_booking_id?: unknown }).source_booking_id ?? "")
+      : "";
+    if (sourceBookingId && sourceBookingId !== row.id) {
+      return { ok: false, error: "recurring_prepaid_child_use_package_refund" };
+    }
+  }
+
+  const prepaidPackage = await (async () => {
+    try {
+      const result = await admin
+        .from("recurring_prepaid_packages")
+        .select("id, paid_package_zar")
+        .eq("source_booking_id", row.id)
+        .maybeSingle();
+      return result.data ?? null;
+    } catch {
+      return null;
+    }
+  })();
+  const prepaidCapturedCents = prepaidPackage
+    ? Math.max(0, Math.round(Number(prepaidPackage.paid_package_zar ?? 0) * 100))
+    : 0;
+
   const existingRefund = String(row.refund_status ?? "").toLowerCase();
   if (["chargeback", "reversed"].includes(existingRefund)) {
     return { ok: false, error: "already_refunded" };
@@ -147,10 +188,10 @@ export async function refundBookingPayment(
   let workflow =
     readRefundWorkflow(row.booking_snapshot) ??
     initRefundWorkflow({
-      capturedCents: resolveCapturedCents({
-        ...row,
-        original_captured_cents: null,
-      }),
+      capturedCents: prepaidCapturedCents || resolveCapturedCents({
+          ...row,
+          original_captured_cents: null,
+        }),
       currency: row.currency ?? "ZAR",
     });
 
@@ -179,7 +220,7 @@ export async function refundBookingPayment(
 
   const capturedCents = workflow.captured_cents > 0
     ? workflow.captured_cents
-    : resolveCapturedCents(row);
+    : prepaidCapturedCents || resolveCapturedCents(row);
   if (workflow.captured_cents <= 0 && capturedCents > 0) {
     workflow = { ...workflow, captured_cents: capturedCents };
   }
@@ -327,7 +368,7 @@ async function retryFailedRefund(
   if (!amountDecision.ok) return { ok: false, error: amountDecision.error };
 
   const nowIso = new Date().toISOString();
-  let record: BookingRefundRecord = {
+  const record: BookingRefundRecord = {
     ...existing,
     provider_state: "submitted_to_provider",
     retry_count: existing.retry_count + 1,
@@ -367,7 +408,7 @@ async function submitAndFinalizeRefund(
 ): Promise<RefundBookingPaymentResult> {
   const nowIso = new Date().toISOString();
   const refundId = newRefundId();
-  let record: BookingRefundRecord = {
+  const record: BookingRefundRecord = {
     id: refundId,
     amount_cents: amountDecision.requestedCents,
     currency: workflow.currency,
@@ -494,6 +535,18 @@ async function markRefundSucceeded(
   },
 ): Promise<RefundBookingPaymentResult> {
   const nowIso = new Date().toISOString();
+  const recurringPackage = await (async () => {
+    try {
+      const result = await admin
+        .from("recurring_prepaid_packages")
+        .select("id")
+        .eq("source_booking_id", row.id)
+        .maybeSingle();
+      return result.data ?? null;
+    } catch {
+      return null;
+    }
+  })();
   if (
     record.provider_state !== "submitted_to_provider" &&
     record.provider_state !== "pending" &&
@@ -569,7 +622,7 @@ async function markRefundSucceeded(
   // MODEL A: do not rewrite payment_status — capture remains governed
   // (pending|success|failed|pending_monthly). Refund presentation uses refund_status.
   // Keep original paid columns as capture audit when full; for partial store remaining net.
-  if (aggregate === "partial") {
+  if (aggregate === "partial" && !recurringPackage) {
     patch.amount_paid_cents = remainingCents;
     patch.total_paid_cents = remainingCents;
     patch.total_paid_zar = Math.round(remainingCents) / 100;
@@ -577,6 +630,42 @@ async function markRefundSucceeded(
 
   const saved = await persistWorkflow(admin, row.id, row.booking_snapshot, workflow, patch);
   if (!saved.ok) return { ok: false, error: saved.error };
+
+  const updatedPackage = recurringPackage
+    ? await (async () => {
+        try {
+          const result = await admin
+            .from("recurring_prepaid_packages")
+            .update({
+              refunded_cents: workflow.refunded_cents,
+              status: aggregate === "full" ? "refunded" : "partially_refunded",
+              updated_at: nowIso,
+            })
+            .eq("source_booking_id", row.id)
+            .select("id")
+            .maybeSingle();
+          return result.data ?? null;
+        } catch {
+          return null;
+        }
+      })()
+    : null;
+  if (aggregate === "full" && updatedPackage?.id) {
+    const { data: allocations } = await admin
+      .from("recurring_prepaid_allocations")
+      .select("id, allocated_zar")
+      .eq("package_id", String(updatedPackage.id));
+    for (const allocation of allocations ?? []) {
+      await admin
+        .from("recurring_prepaid_allocations")
+        .update({
+          status: "refunded",
+          refunded_cents: Math.max(0, Math.round(Number(allocation.allocated_zar ?? 0) * 100)),
+          updated_at: nowIso,
+        })
+        .eq("id", String(allocation.id));
+    }
+  }
 
   if (row.paystack_reference?.trim()) {
     await recordGatewayRefund(admin, {

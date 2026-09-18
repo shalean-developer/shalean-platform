@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
+import { recurringScheduleAllowedForService } from "@/lib/booking-v2/serviceRecurringPolicy";
 import {
   filterCustomerOnlineBookingTimeSlots,
   isCustomerOnlineBookingTimeSlot,
@@ -160,7 +161,11 @@ export const signInSchema = z.object({
 });
 
 export const signUpSchema = z.object({
-  fullName: z.string().min(2, "Enter your full name"),
+  fullName: z
+    .string()
+    .trim()
+    .min(2, "Enter your full name")
+    .refine((value) => !value.includes("@"), "Enter your full name, not your email address"),
   email: z.string().email("Enter a valid email address"),
   phone: contactPhoneField,
   password: z.string().min(8, "Password must be at least 8 characters"),
@@ -197,7 +202,7 @@ export const bookingV2ConfirmSchema = z.object({
   equipmentQuote: equipmentQuoteSchema.nullable().optional().default(null),
   bookingType: z.enum(["once_off", "recurring"]),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  time: z.string().min(1),
+  time: z.string().min(1, "Return to Schedule and select a time before paying."),
   alternativeDate: z.string().optional().default(""),
   alternativeTime: z.string().optional().default(""),
   recurringFrequency: z.enum(["weekly", "fortnightly", "monthly", "custom", ""]).optional(),
@@ -240,6 +245,24 @@ export const bookingV2ConfirmSchema = z.object({
     (v) => (v == null || v === "" ? undefined : v),
     z.string().optional(),
   ),
+}).superRefine((data, ctx) => {
+  if (
+    !recurringScheduleAllowedForService({
+      serviceSlug: data.serviceSlug,
+      bookingType: data.bookingType,
+      recurringFrequency: data.recurringFrequency ?? "",
+      recurringDays: data.recurringDays ?? [],
+    })
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        data.serviceSlug === "deep-cleaning"
+          ? "Deep Cleaning recurring bookings must be monthly with one visit per cycle."
+          : "Select a valid recurring schedule.",
+      path: ["recurringFrequency"],
+    });
+  }
 });
 
 export type BookingV2ConfirmPayload = z.infer<typeof bookingV2ConfirmSchema>;

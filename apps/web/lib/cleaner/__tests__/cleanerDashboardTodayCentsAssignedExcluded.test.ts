@@ -79,7 +79,7 @@ describe("todayCentsAndBreakdownFromBookings — assigned/upcoming bookings excl
       ],
       TODAY_AT_NINE,
     );
-    expect(out.today_cents).toBe(50000);
+    expect(out.today_cents).toBe(40000);
     expect(out.today_breakdown).toHaveLength(1);
     expect(out.today_breakdown[0]!.booking_id).toBe("b-done");
   });

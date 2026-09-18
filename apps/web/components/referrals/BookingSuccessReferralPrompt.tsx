@@ -44,23 +44,25 @@ export function BookingSuccessReferralPrompt({ hasSession }: { hasSession: boole
   const href = hasSession && referralCode ? "/account/referrals" : "/refer";
 
   return (
-    <section className="mt-6 rounded-2xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-5 text-left dark:border-blue-900/40 dark:from-blue-950/40 dark:to-indigo-950/30">
-      <div className="flex items-start gap-3">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600 text-white">
-          <Gift className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+    <section className="mt-4 rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50 to-indigo-50 p-3.5 text-left dark:border-blue-900/40 dark:from-blue-950/40 dark:to-indigo-950/30">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
+            <Gift className="h-4.5 w-4.5" strokeWidth={1.75} aria-hidden />
+          </div>
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">Refer a friend</h2>
+            <p className="mt-0.5 text-xs leading-relaxed text-zinc-600 dark:text-zinc-400">
+              Earn Cleaning Credit after their first booking.
+            </p>
+          </div>
         </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-base font-semibold text-zinc-900 dark:text-zinc-50">Love your clean? Refer a friend</h2>
-          <p className="mt-1 text-sm leading-relaxed text-zinc-600 dark:text-zinc-400">
-            Share Shalean with friends and earn Cleaning Credit when they complete their first booking.
-          </p>
-          <Link
-            href={href}
-            className="mt-4 inline-flex min-h-10 items-center justify-center rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700"
-          >
-            {hasSession ? "Get your referral link" : "Learn about referrals"}
-          </Link>
-        </div>
+        <Link
+          href={href}
+          className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-blue-700"
+        >
+          {hasSession ? "Get referral link" : "Learn more"}
+        </Link>
       </div>
     </section>
   );

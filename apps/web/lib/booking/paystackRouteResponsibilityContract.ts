@@ -8,10 +8,10 @@
  * | `POST /api/paystack/initialize` | Initialize payment | **Creates/updates `pending_payment` row** + returns Paystack authorization URL | {@link processPaystackInitializeBody} |
  * | `POST /api/paystack/webhook` | **Authoritative charge finalizer** | **Yes** — `charge.success` → {@link finalizePaidBooking} (idempotent skip if already not `pending_payment`) | Also handles `charge.failed`, monthly invoice settlement branches |
  * | `GET/POST /api/paystack/verify` | **Verify + fallback finalizer** | **Yes** when charge `success` — {@link runPaystackVerifyFinalizePipeline} → {@link finalizePaidBooking} | Rate-limited; idempotent with webhook |
- * | `GET /api/payments/verify` | Legacy verify alias | **Same as verify** (pipeline) | Kept for older clients; see `paystackFinalizeGatewayCallSites` tests |
- * | `GET /api/booking/status` | **Polling / display only** | **No booking writes** — Paystack verify + optional **read** `bookings` | Success page polling |
- * | `POST /api/booking/complete` | **Display / helper only** | **No** — Paystack verify JSON for UI only | Name is historical; not service completion |
- * | `GET /api/paystack/status` | DB lookup only | **No** — read id/status by reference | Does not call Paystack |
+ * | `POST /api/payments/verify` | **Retired legacy verify alias** | **No** — always returns `410 Gone` | Tombstone only; older clients must move to `/api/paystack/verify` |
+ * | `GET /api/booking/status` | **Retired legacy polling route** | **No** — always returns `410 Gone` | Tombstone only; use `/api/paystack/status` |
+ * | `POST /api/booking/complete` | **Retired legacy display/helper route** | **No** — always returns `410 Gone` | Tombstone only; use `/api/paystack/verify` or `/api/paystack/status` |
+ * | `GET /api/paystack/status` | Active DB lookup only | **No** — read id/status by reference | Does not call Paystack |
  * | `POST /api/webhooks/paystack` | **Transfer / payout rail** | **No checkout booking finalize** — `transfer.success` / `transfer.failed` only | Not `charge.success` |
  *
  * ### Library layering (not routes)

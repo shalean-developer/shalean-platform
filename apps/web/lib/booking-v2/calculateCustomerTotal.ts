@@ -151,7 +151,10 @@ export function calculateCustomerTotal(input: CustomerTotalInput): CustomerPrici
 
   const subtotal_before_service_fee = cleaning_service_subtotal + equipment_logistics_fee;
 
-  const service_fee = computeServiceFeeZar(subtotal_before_service_fee, feesConfig);
+  const service_fee =
+    catalog.serviceFeeZar != null && Number.isFinite(catalog.serviceFeeZar)
+      ? Math.max(0, Math.round(catalog.serviceFeeZar))
+      : computeServiceFeeZar(subtotal_before_service_fee, feesConfig);
 
   const beforeDiscount = subtotal_before_service_fee + service_fee;
   const recurring_discount = applyRecurringDiscountZar(
@@ -286,14 +289,6 @@ export function buildCustomerPriceLineItems(
       lines.push({
         label: `Equipment distance: ${input.equipmentQuote.distance_km} km`,
         amountZar: 0,
-      });
-      lines.push({
-        label: `Equipment base fee: R${input.equipmentQuote.base_fee}`,
-        amountZar: input.equipmentQuote.base_fee,
-      });
-      lines.push({
-        label: `Distance charge: R${input.equipmentQuote.distance_charge}`,
-        amountZar: input.equipmentQuote.distance_charge,
       });
       lines.push({
         label: "Equipment logistics fee",

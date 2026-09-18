@@ -17,6 +17,7 @@ import { buildZohoLineItemsWithReferralPromos } from "@/lib/referrals/zohoLineIt
 import { resolveZohoCustomerContactForBooking } from "@/lib/zoho/resolveZohoCustomerContact";
 import { provisionV2RecurringPlan } from "@/lib/recurring/provisionV2RecurringPlan";
 import { preferredCleanerIdsFromSnapshot } from "@/lib/booking/persistPreferredCleaners";
+import { activateRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
 
 export type SyncPaidBookingInvoiceResult =
   | {
@@ -83,6 +84,19 @@ type PaidBookingRow = {
 
 function zohoConfigured(): boolean {
   return Boolean(process.env.ZOHO_CLIENT_ID?.trim() && process.env.ZOHO_REFRESH_TOKEN?.trim());
+}
+
+function recurringPrepaymentFromSnapshot(raw: unknown): { perVisitZar: number; packagePaidZar: number } | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const nested = o.recurringPrepayment;
+  if (!nested || typeof nested !== "object" || Array.isArray(nested)) return null;
+  const r = nested as Record<string, unknown>;
+  if (r.scope !== "first_30_days" && r.scope !== "rolling_30_days") return null;
+  const perVisitZar = Number(r.perVisitZar);
+  const packagePaidZar = Number(r.packagePayableZar);
+  if (!Number.isFinite(perVisitZar) || !Number.isFinite(packagePaidZar)) return null;
+  return { perVisitZar: Math.max(0, Math.round(perVisitZar)), packagePaidZar: Math.max(0, Math.round(packagePaidZar)) };
 }
 
 /** Authoritative paid confirmation — never invent a zero balance. */
@@ -521,6 +535,7 @@ export async function syncPaidBookingSideEffects(
 
   if (isRecurring) {
     try {
+      const prepaid = recurringPrepaymentFromSnapshot(row.booking_snapshot);
       const planResult = await provisionV2RecurringPlan(admin, {
         bookingId,
         customerId: customerId!,
@@ -529,6 +544,7 @@ export async function syncPaidBookingSideEffects(
         startDate: row.recurring_start_date || row.date || new Date().toISOString().slice(0, 10),
         endDate: row.recurring_end_date ?? null,
         totalPaidZar: totalZar,
+        perVisitPriceZar: prepaid?.perVisitZar ?? totalZar,
         durationMinutes: row.duration_minutes ?? 120,
         service: row.service ?? "regular-cleaning",
         time: row.time ?? "09:00",
@@ -546,6 +562,21 @@ export async function syncPaidBookingSideEffects(
           message: "recurring_plan_provision_failed",
           context: { bookingId, error: planResult.error },
         });
+      } else if (prepaid) {
+        const activation = await activateRecurringPrepayment(admin, {
+          sourceBookingId: bookingId,
+          recurringId: planResult.planId,
+          paidPackageZar: prepaid.packagePaidZar || Math.round(amountCents / 100),
+          paidAt: new Date().toISOString(),
+        });
+        if (!activation.ok) {
+          await logSystemEvent({
+            level: "warn",
+            source: "booking/side_effects",
+            message: "recurring_prepayment_activation_failed",
+            context: { bookingId, planId: planResult.planId, error: activation.error },
+          });
+        }
       }
     } catch (err) {
       await logSystemEvent({

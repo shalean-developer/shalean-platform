@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 import { AboutPageView } from "@/components/about/AboutPageView";
-import { FooterSection } from "@/components/home/sections/FooterSection";
 import { GrowthTracking } from "@/components/growth/GrowthTracking";
-import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { MarketingHomeHeader } from "@/components/marketing-home/MarketingHomeHeader";
+import { SiteFooter } from "@/components/nav/SiteFooter";
+import { ANALYTICS_EVENTS } from "@/lib/analytics/userEventRegistry";
 import { marketingHomeBookingHref } from "@/lib/marketing/marketingHomeAssets";
 import { marketingWhatsAppFloatMainPadding } from "@/lib/marketing/marketingMobileLayout";
 import { clampMetaDescription } from "@/lib/seo/metaDescription";
@@ -62,7 +62,7 @@ export default function AboutPage() {
   const bookingHref = marketingHomeBookingHref();
 
   return (
-    <div className="bg-white text-zinc-900">
+    <div className="bg-background text-foreground">
       <GrowthTracking
         event={ANALYTICS_EVENTS.PAGE_VIEW}
         payload={{ page_type: "about", content_group: "marketing_about", primary_kw: "Shalean cleaning Cape Town" }}
@@ -71,7 +71,7 @@ export default function AboutPage() {
       <main className={marketingWhatsAppFloatMainPadding}>
         <AboutPageView />
       </main>
-      <FooterSection />
+      <SiteFooter />
     </div>
   );
 }

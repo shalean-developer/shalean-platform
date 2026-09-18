@@ -8,12 +8,12 @@ import { getSession, getUser } from "@/lib/auth/authClient";
 import { useUser } from "@/hooks/useUser";
 import { useAddresses } from "@/hooks/useAddresses";
 import type { CustomerAddressRow } from "@/lib/dashboard/types";
+import type { ServiceLocationRow } from "@/app/api/booking/service-locations/route";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import {
   CONTACT_PHONE_VALIDATION_MESSAGE,
   isValidContactPhone,
 } from "@/lib/booking/contactPhoneValidation";
-import { getBookingLocationOptions } from "@/lib/locations/bookingLocations";
 import { useBookingV2LocationResolve } from "@/lib/booking-v2/useBookingV2LocationResolve";
 import { UnsupportedSuburbModal } from "@/src/features/booking-v2/components/UnsupportedSuburbModal";
 
@@ -21,6 +21,9 @@ const contactPhoneRules = {
   required: "Enter a contact phone number",
   validate: (value: string) => isValidContactPhone(value) || CONTACT_PHONE_VALIDATION_MESSAGE,
 } as const;
+
+const LOCATION_CACHE_TTL_MS = 2 * 60 * 1000;
+let cachedServiceLocations: { rows: ServiceLocationRow[]; expiresAt: number } | null = null;
 
 type AddressMode = "saved" | "custom";
 
@@ -49,17 +52,21 @@ function FieldLabel({
 function SearchableSelect({
   id,
   options,
+  selectedId,
   value,
   onChange,
   placeholder = "Select…",
   error,
+  disabled,
 }: {
   id: string;
-  options: string[];
+  options: ServiceLocationRow[];
+  selectedId: string;
   value: string;
-  onChange: (v: string) => void;
+  onChange: (location: ServiceLocationRow) => void;
   placeholder?: string;
   error?: string;
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
@@ -85,7 +92,7 @@ function SearchableSelect({
     () =>
       query.trim() === ""
         ? options
-        : options.filter((o) => o.toLowerCase().includes(query.toLowerCase())),
+        : options.filter((option) => option.name.toLowerCase().includes(query.toLowerCase())),
     [options, query],
   );
 
@@ -94,11 +101,13 @@ function SearchableSelect({
       <button
         id={id}
         type="button"
+        disabled={disabled}
         onClick={() => setOpen((v) => !v)}
         className={cn(
           "flex w-full min-w-0 items-center justify-between gap-2 rounded-xl border bg-white px-3 py-2.5 text-sm shadow-sm transition sm:px-4",
           open ? "border-blue-500 ring-2 ring-blue-500/20" : "border-slate-200 hover:border-slate-300",
           error && "border-red-400",
+          disabled && "cursor-not-allowed bg-slate-50 text-slate-400",
         )}
       >
         <span
@@ -139,14 +148,14 @@ function SearchableSelect({
             {filtered.length === 0 ? (
               <p className="px-4 py-3 text-sm text-slate-400">No suburbs found</p>
             ) : (
-              filtered.map((opt) => {
-                const isSelected = opt === value;
+              filtered.map((option) => {
+                const isSelected = option.id === selectedId;
                 return (
                   <button
-                    key={opt}
+                    key={option.id}
                     type="button"
                     onClick={() => {
-                      onChange(opt);
+                      onChange(option);
                       setOpen(false);
                       setQuery("");
                     }}
@@ -157,7 +166,10 @@ function SearchableSelect({
                         : "text-slate-700 hover:bg-slate-50",
                     )}
                   >
-                    <span className="min-w-0 break-words">{opt}</span>
+                    <span className="min-w-0 break-words">
+                      {option.name}
+                      {option.city && option.city !== "Cape Town" ? ` (${option.city})` : ""}
+                    </span>
                     {isSelected ? <Check className="h-4 w-4 shrink-0 text-blue-600" /> : null}
                   </button>
                 );
@@ -173,6 +185,105 @@ function SearchableSelect({
 function formatSavedAddressLine(addr: CustomerAddressRow): string {
   const parts = [addr.suburb, addr.city, addr.postal_code].map((p) => (p ?? "").trim()).filter(Boolean);
   return parts.join(", ");
+}
+
+function savedPropertyLabel(addr: CustomerAddressRow): string {
+  return `${addr.label || "Property"} — ${addr.line1}, ${addr.suburb}`;
+}
+
+function SavedPropertySelect({
+  addresses,
+  selectedId,
+  onChange,
+}: {
+  addresses: CustomerAddressRow[];
+  selectedId: string;
+  onChange: (address: CustomerAddressRow) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const selected = addresses.find((address) => address.id === selectedId) ?? null;
+
+  useEffect(() => {
+    function closeOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setOpen(false);
+      }
+    }
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setOpen(false);
+    }
+    document.addEventListener("mousedown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("mousedown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
+
+  return (
+    <div ref={containerRef} className="relative">
+      <button
+        id="saved-property"
+        type="button"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls="saved-property-options"
+        onClick={() => setOpen((value) => !value)}
+        className={cn(
+          "flex w-full min-w-0 items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 text-sm shadow-sm transition",
+          open
+            ? "border-blue-500 ring-2 ring-blue-500/20"
+            : "border-slate-200 hover:border-slate-300",
+        )}
+      >
+        <span className="min-w-0 flex-1 truncate text-left text-slate-800" title={selected ? savedPropertyLabel(selected) : undefined}>
+          {selected ? savedPropertyLabel(selected) : "Select a saved property"}
+        </span>
+        <ChevronDown
+          aria-hidden
+          className={cn(
+            "h-4 w-4 shrink-0 text-slate-500 transition-transform duration-150",
+            open && "rotate-180",
+          )}
+        />
+      </button>
+
+      {open ? (
+        <div
+          id="saved-property-options"
+          role="listbox"
+          aria-label="Saved property"
+          className="absolute left-0 right-0 top-full z-50 mt-1 max-h-60 overflow-y-auto rounded-xl border border-slate-200 bg-white py-1 shadow-lg"
+        >
+          {addresses.map((address) => {
+            const isSelected = address.id === selectedId;
+            return (
+              <button
+                key={address.id}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => {
+                  onChange(address);
+                  setOpen(false);
+                }}
+                className={cn(
+                  "flex w-full items-center justify-between gap-3 px-4 py-3 text-left text-sm transition",
+                  isSelected
+                    ? "bg-blue-50 font-medium text-blue-700"
+                    : "text-slate-700 hover:bg-slate-50",
+                )}
+              >
+                <span className="min-w-0 break-words">{savedPropertyLabel(address)}</span>
+                {isSelected ? <Check aria-hidden className="h-4 w-4 shrink-0 text-blue-600" /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 export function PropertyAddressSection() {
@@ -191,6 +302,10 @@ export function PropertyAddressSection() {
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
   const [prefilled, setPrefilled] = useState(false);
   const [unsupportedOpen, setUnsupportedOpen] = useState(false);
+  const [locationOptions, setLocationOptions] = useState<ServiceLocationRow[]>([]);
+  const [locationsLoading, setLocationsLoading] = useState(true);
+  const [locationsError, setLocationsError] = useState<string | null>(null);
+  const [locationLoadAttempt, setLocationLoadAttempt] = useState(0);
 
   const savedAddresses = addresses;
   const hasSavedAddresses = savedAddresses.length > 0;
@@ -201,16 +316,29 @@ export function PropertyAddressSection() {
 
   const applySavedAddress = useCallback(
     (addr: CustomerAddressRow) => {
+      const savedSuburb = addr.suburb.trim();
+      const savedLocation =
+        locationOptions.find(
+          (location) => location.name.trim().toLowerCase() === savedSuburb.toLowerCase(),
+        ) ?? null;
+
       setValue("address", addr.line1.trim(), { shouldDirty: false, shouldValidate: true });
-      setValue("suburb", addr.suburb.trim(), { shouldDirty: false, shouldValidate: true });
-      setValue("city", addr.city?.trim() || "Cape Town", { shouldDirty: false });
+      setValue("suburb", savedSuburb, { shouldDirty: false, shouldValidate: true });
+      setValue("city", addr.city?.trim() || savedLocation?.city?.trim() || "Cape Town", {
+        shouldDirty: false,
+      });
       setValue("postalCode", addr.postal_code?.trim() || "", { shouldDirty: false });
-      if (addr.notes?.trim() && !getValues("accessInstructions")?.trim()) {
-        setValue("accessInstructions", addr.notes.trim(), { shouldDirty: false });
-      }
+      setValue("serviceAreaLocationId", savedLocation?.id ?? "", {
+        shouldDirty: false,
+        shouldValidate: true,
+      });
+      setValue("serviceAreaCityId", savedLocation?.city_id ?? "", {
+        shouldDirty: false,
+        shouldValidate: true,
+      });
       setSelectedAddressId(addr.id);
     },
-    [getValues, setValue],
+    [locationOptions, setValue],
   );
 
   const switchToCustom = useCallback(() => {
@@ -279,7 +407,7 @@ export function PropertyAddressSection() {
   }, [getValues, setValue]);
 
   useEffect(() => {
-    if (userLoading || addressesLoading || prefilled) return;
+    if (userLoading || addressesLoading || locationsLoading || prefilled) return;
     if (!user || !hasSavedAddresses) {
       setPrefilled(true);
       return;
@@ -295,7 +423,13 @@ export function PropertyAddressSection() {
       );
       if (match) {
         setAddressMode("saved");
-        setSelectedAddressId(match.id);
+        // Re-apply after service locations are ready so the saved suburb also
+        // restores its canonical location/city IDs for scheduling.
+        if (!getValues("serviceAreaLocationId")?.trim()) {
+          applySavedAddress(match);
+        } else {
+          setSelectedAddressId(match.id);
+        }
       }
       setPrefilled(true);
       return;
@@ -310,6 +444,7 @@ export function PropertyAddressSection() {
   }, [
     userLoading,
     addressesLoading,
+    locationsLoading,
     prefilled,
     user,
     hasSavedAddresses,
@@ -321,10 +456,80 @@ export function PropertyAddressSection() {
   const showSavedMode = Boolean(user && hasSavedAddresses && addressMode === "saved" && selectedAddress);
   const addressValue = watch("address");
   const suburbValue = watch("suburb");
+  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
   const showBookForSomeoneHint = addressMode === "custom" && !addressValue?.trim();
 
+  useEffect(() => {
+    let cancelled = false;
+    const controller = new AbortController();
+
+    void (async () => {
+      try {
+        let rows: ServiceLocationRow[];
+        if (cachedServiceLocations && cachedServiceLocations.expiresAt > Date.now()) {
+          rows = cachedServiceLocations.rows;
+        } else {
+          const response = await fetch("/api/booking/service-locations?withActiveCleanersOnly=false", {
+            signal: controller.signal,
+          });
+          const json = (await response.json()) as {
+            ok?: boolean;
+            locations?: ServiceLocationRow[];
+            error?: string;
+          };
+          if (cancelled) return;
+          if (!response.ok || json.ok !== true || !Array.isArray(json.locations)) {
+            setLocationOptions([]);
+            setLocationsError(json.error || "Could not load suburbs.");
+            return;
+          }
+          rows = json.locations;
+        }
+
+        const uniqueLocations = Array.from(
+          new Map(
+            rows
+              .filter((location) => location.id && location.name?.trim())
+              .map((location) => [location.id, { ...location, name: location.name.trim() }]),
+          ).values(),
+        ).sort((a, b) => a.name.localeCompare(b.name, "en-ZA"));
+        cachedServiceLocations = {
+          rows: uniqueLocations,
+          expiresAt: Date.now() + LOCATION_CACHE_TTL_MS,
+        };
+        setLocationOptions(uniqueLocations);
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
+        if (!cancelled) {
+          setLocationOptions([]);
+          setLocationsError("Could not load suburbs.");
+        }
+      } finally {
+        if (!cancelled) setLocationsLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+    };
+  }, [locationLoadAttempt]);
+
+  const selectedLocationOption = useMemo(() => {
+    const id = serviceAreaLocationId.trim();
+    const label = suburbValue?.trim().toLowerCase() ?? "";
+    if (!id || !label) return null;
+    return locationOptions.find(
+      (location) => location.id === id && location.name.trim().toLowerCase() === label,
+    ) ?? null;
+  }, [locationOptions, serviceAreaLocationId, suburbValue]);
+
+  // A dropdown selection already carries the canonical location and city ids.
+  // Resolve by label only for legacy/free-text drafts that do not have a matching id.
   const { location: resolvedLocation, loading: locationLoading, error: locationError } =
-    useBookingV2LocationResolve(suburbValue ?? "");
+    useBookingV2LocationResolve(
+      !locationsLoading && !selectedLocationOption ? (suburbValue ?? "") : "",
+    );
 
   useEffect(() => {
     if (!suburbValue?.trim()) {
@@ -332,14 +537,24 @@ export function PropertyAddressSection() {
       setValue("serviceAreaCityId", "", { shouldDirty: true });
       return;
     }
-    if (resolvedLocation) {
+    if (selectedLocationOption) {
+      setValue("serviceAreaLocationId", selectedLocationOption.id, { shouldDirty: true });
+      setValue("serviceAreaCityId", selectedLocationOption.city_id ?? "", { shouldDirty: true });
+    } else if (resolvedLocation) {
       setValue("serviceAreaLocationId", resolvedLocation.locationId, { shouldDirty: true });
       setValue("serviceAreaCityId", resolvedLocation.cityId ?? "", { shouldDirty: true });
-    } else if (!locationLoading) {
+    } else if (!locationsLoading && !locationLoading) {
       setValue("serviceAreaLocationId", "", { shouldDirty: true });
       setValue("serviceAreaCityId", "", { shouldDirty: true });
     }
-  }, [suburbValue, resolvedLocation, locationLoading, setValue]);
+  }, [
+    suburbValue,
+    selectedLocationOption,
+    resolvedLocation,
+    locationsLoading,
+    locationLoading,
+    setValue,
+  ]);
 
   useEffect(() => {
     if (!locationLoading && locationError && suburbValue?.trim()) {
@@ -385,21 +600,11 @@ export function PropertyAddressSection() {
           {savedAddresses.length > 1 ? (
             <div>
               <FieldLabel htmlFor="saved-property">Saved property</FieldLabel>
-              <select
-                id="saved-property"
-                value={selectedAddress.id}
-                onChange={(e) => {
-                  const next = savedAddresses.find((a) => a.id === e.target.value);
-                  if (next) applySavedAddress(next);
-                }}
-                className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              >
-                {savedAddresses.map((addr) => (
-                  <option key={addr.id} value={addr.id}>
-                    {(addr.label || "Property") + " — " + addr.line1 + ", " + addr.suburb}
-                  </option>
-                ))}
-              </select>
+              <SavedPropertySelect
+                addresses={savedAddresses}
+                selectedId={selectedAddress.id}
+                onChange={applySavedAddress}
+              />
             </div>
           ) : null}
 
@@ -464,66 +669,6 @@ export function PropertyAddressSection() {
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
             <div className="min-w-0">
-              <FieldLabel htmlFor="address" required>
-                Street address
-              </FieldLabel>
-              <input
-                id="address"
-                type="text"
-                placeholder="e.g. 12 Ocean View Drive"
-                {...register("address", {
-                  required: "Street address is required",
-                  minLength: { value: 5, message: "Enter a full street address" },
-                })}
-                className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-              />
-              <FieldError message={errors.address?.message} />
-            </div>
-            <div className="min-w-0">
-              <FieldLabel htmlFor="suburb" required>
-                Suburb
-              </FieldLabel>
-              <Controller
-                name="suburb"
-                control={control}
-                rules={{ required: "Suburb is required" }}
-                render={({ field }) => (
-                  <SearchableSelect
-                    id="suburb"
-                    options={getBookingLocationOptions()}
-                    value={field.value ?? ""}
-                    onChange={field.onChange}
-                    placeholder="Select suburb…"
-                    error={errors.suburb?.message}
-                  />
-                )}
-              />
-              <FieldError message={errors.suburb?.message} />
-              <FieldError message={errors.serviceAreaLocationId?.message} />
-              {locationLoading && suburbValue?.trim() ? (
-                <p className="mt-1 text-xs text-slate-500" role="status">
-                  Checking service area…
-                </p>
-              ) : null}
-              {!locationLoading && locationError && suburbValue?.trim() ? (
-                <button
-                  type="button"
-                  onClick={() => setUnsupportedOpen(true)}
-                  className="mt-2 text-left text-xs font-semibold text-red-700 underline-offset-2 hover:underline"
-                >
-                  This suburb isn&apos;t covered yet — view options
-                </button>
-              ) : null}
-              {!locationLoading &&
-              !locationError &&
-              suburbValue?.trim() &&
-              !resolvedLocation?.locationId ? (
-                <p className="mt-1 text-xs text-amber-700" role="status">
-                  Select a supported suburb from the list to continue.
-                </p>
-              ) : null}
-            </div>
-            <div className="min-w-0 sm:col-span-2">
               <FieldLabel htmlFor="contactPhone" required>
                 Contact phone
               </FieldLabel>
@@ -543,6 +688,94 @@ export function PropertyAddressSection() {
                 />
               </div>
               <FieldError message={errors.contactPhone?.message} />
+            </div>
+            <div className="min-w-0">
+              <FieldLabel htmlFor="suburb" required>
+                Suburb
+              </FieldLabel>
+              <Controller
+                name="suburb"
+                control={control}
+                rules={{ required: "Suburb is required" }}
+                render={({ field }) => (
+                  <SearchableSelect
+                    id="suburb"
+                    options={locationOptions}
+                    selectedId={getValues("serviceAreaLocationId") ?? ""}
+                    value={field.value ?? ""}
+                    onChange={(location) => {
+                      field.onChange(location.name);
+                      setValue("serviceAreaLocationId", location.id, { shouldDirty: true });
+                      setValue("serviceAreaCityId", location.city_id ?? "", { shouldDirty: true });
+                      if (location.city) {
+                        setValue("city", location.city, { shouldDirty: true });
+                      }
+                    }}
+                    placeholder={locationsLoading ? "Loading suburbs…" : "Select suburb…"}
+                    error={errors.suburb?.message}
+                    disabled={locationsLoading}
+                  />
+                )}
+              />
+              {locationsError ? (
+                <div className="mt-1 flex items-center gap-2 text-xs text-amber-700" role="status">
+                  <span>{locationsError}</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLocationsLoading(true);
+                      setLocationsError(null);
+                      setLocationLoadAttempt((attempt) => attempt + 1);
+                    }}
+                    className="font-semibold text-blue-600 hover:underline"
+                  >
+                    Try again
+                  </button>
+                </div>
+              ) : null}
+              {!locationsLoading && !locationsError && locationOptions.length === 0 ? (
+                <p className="mt-1 text-xs font-medium text-amber-700" role="status">
+                  No booking suburbs are configured yet. Please contact us for assistance.
+                </p>
+              ) : null}
+              {!locationsLoading && !locationsError && locationOptions.length > 0 ? (
+                <>
+                  <FieldError message={errors.suburb?.message} />
+                  {!locationLoading ? (
+                    <FieldError message={errors.serviceAreaLocationId?.message} />
+                  ) : null}
+                </>
+              ) : null}
+              {!locationsLoading && !locationsError && locationLoading && suburbValue?.trim() ? (
+                <p className="mt-1 text-xs text-slate-500" role="status">
+                  Checking service area…
+                </p>
+              ) : null}
+              {!locationsLoading && !locationsError && !locationLoading && locationError && suburbValue?.trim() ? (
+                <button
+                  type="button"
+                  onClick={() => setUnsupportedOpen(true)}
+                  className="mt-2 text-left text-xs font-semibold text-red-700 underline-offset-2 hover:underline"
+                >
+                  This suburb isn&apos;t covered yet — view options
+                </button>
+              ) : null}
+            </div>
+            <div className="min-w-0 sm:col-span-2">
+              <FieldLabel htmlFor="address" required>
+                Street address
+              </FieldLabel>
+              <input
+                id="address"
+                type="text"
+                placeholder="e.g. 12 Ocean View Drive"
+                {...register("address", {
+                  required: "Street address is required",
+                  minLength: { value: 5, message: "Enter a full street address" },
+                })}
+                className="block w-full min-w-0 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+              <FieldError message={errors.address?.message} />
             </div>
           </div>
         </div>

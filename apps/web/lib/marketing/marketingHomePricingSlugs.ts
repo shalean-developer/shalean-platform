@@ -7,7 +7,7 @@ export const MARKETING_TO_PRICING_SLUG: Record<MarketingHomeServiceKey, string> 
   move: "move",
   airbnb: "airbnb",
   carpet: "carpet",
-  office: "quick",
+  office: "office",
 };
 
 export function pricingSlugForMarketingKey(key: MarketingHomeServiceKey): string {

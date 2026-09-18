@@ -5,6 +5,7 @@ import { sanitizeGa4Params } from "@/lib/analytics/ga4Pii";
 import { tagReplay } from "@/lib/analytics/sessionReplay";
 import { getAnalyticsSessionId } from "@/lib/analytics/sessionId";
 import { ANALYTICS_EVENTS, type AnalyticsClientEventName } from "@/lib/analytics/userEventRegistry";
+import { shouldSendClientEvent } from "@/lib/analytics/clientEventDedupe";
 
 export type GrowthEventType = AnalyticsClientEventName;
 
@@ -108,6 +109,8 @@ export function trackGrowthEvent(
     referrer: document.referrer || null,
     retargeting_pending: retargetingPending,
   };
+
+  if (!shouldSendClientEvent(`growth:${eventType}`, enriched)) return;
 
   const body = JSON.stringify({
     event_type: eventType,

@@ -39,17 +39,17 @@ function formatJohannesburgDateTime(value: string): string {
 function addDaysYmd(ymd: string, days: number): string { const d = new Date(`${ymd}T12:00:00+02:00`); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
 function categoryFor(item: OfficeWorkItem): Exclude<MyWorkCategory, "all"> { if (item.type === "booking.assignment") return "operations"; if (item.type === "system.cron") return "system-health"; if (item.type.startsWith("finance.")) return "finance"; if (item.type.startsWith("workforce.")) return "workforce"; if (item.type.startsWith("customer_care.")) return "customer-care"; return "marketing"; }
 
-export function bookingNeedsAllocationWork(row: BookingRow, nearTermEnd: string): boolean {
+function bookingNeedsAllocationWork(row: BookingRow, nearTermEnd: string): boolean {
   if (!row.id || hasBookingAssignee(row)) return false;
   if (row.status === "completed" || row.status === "cancelled") return false;
   return !row.date || row.date <= nearTermEnd;
 }
 
-export function cronStaleAfterMs(jobName: string): number {
+function cronStaleAfterMs(jobName: string): number {
   return CRON_STALE_AFTER_MS[jobName] ?? DEFAULT_CRON_STALE_AFTER_MS;
 }
 
-export function cronJobIsStale(job: CronJob, now = Date.now()): boolean {
+function cronJobIsStale(job: CronJob, now = Date.now()): boolean {
   if (!job.job_name) return false;
   const last = job.last_success_at ? Date.parse(job.last_success_at) : Number.NaN;
   return !Number.isFinite(last) || now - last > cronStaleAfterMs(job.job_name);
