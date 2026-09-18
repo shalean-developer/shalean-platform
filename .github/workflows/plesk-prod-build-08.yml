@@ -1,0 +1,225 @@
+name: Plesk production standalone artifact
+
+on:
+  push:
+    branches:
+      - test/plesk-prod-build-08
+      - fix/plesk-prod-converge-08b
+      - integration/shalean-release
+    paths:
+      - ".github/workflows/plesk-prod-build-08.yml"
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plesk-prod-build-08-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build production standalone Next.js runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      SHALEAN_APP_ENV: "production"
+      SHALEAN_ENFORCE_ENV_SAFETY: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SITE_URL: "https://shalean.co.za"
+      NEXT_PUBLIC_APP_URL: "https://shalean.co.za"
+      NEXT_PUBLIC_SUPABASE_URL: "https://tchayecuvzssixyxlvfu.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ secrets.PLESK_PROD_SUPABASE_PUBLISHABLE_KEY }}"
+
+    steps:
+      - name: Checkout exact production-build branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard approved release lineage
+        run: |
+          set -euo pipefail
+          case "${GITHUB_REF_NAME}" in
+            test/plesk-prod-build-08|fix/plesk-prod-converge-08b|integration/shalean-release) ;;
+            *) echo "::error::Unexpected production-artifact branch: ${GITHUB_REF_NAME}"; exit 1 ;;
+          esac
+          git merge-base --is-ancestor f5dd54548ac4b1c50c7ce0cde744b05c4d8913e9 HEAD
+          echo "Approved source release: f5dd54548ac4b1c50c7ce0cde744b05c4d8913e9"
+          echo "Artifact branch head: ${GITHUB_SHA}"
+
+      - name: Require production public Supabase key
+        run: |
+          set -euo pipefail
+          test -n "${NEXT_PUBLIC_SUPABASE_ANON_KEY}" || {
+            echo "::error::Missing GitHub Actions secret PLESK_PROD_SUPABASE_PUBLISHABLE_KEY."
+            echo "::error::Set it to the production Supabase publishable/anon key for tchayecuvzssixyxlvfu, then rerun."
+            exit 1
+          }
+          case "${NEXT_PUBLIC_SUPABASE_ANON_KEY}" in
+            sb_publishable_*|eyJ*) ;;
+            *)
+              echo "::error::Production Supabase public key has an unexpected format."
+              exit 1
+              ;;
+          esac
+          echo "Production Supabase public key present; value intentionally not printed."
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @tailwindcss/postcss@^4
+          node -e "require.resolve('@tailwindcss/postcss')"
+          test -f node_modules/@shalean/utils/package.json
+          test -d ../../packages/utils/src
+
+      - name: Validate production public identity
+        run: |
+          set -euo pipefail
+          test "${SHALEAN_APP_ENV}" = "production"
+          test "${NEXT_PUBLIC_SITE_URL}" = "https://shalean.co.za"
+          test "${NEXT_PUBLIC_APP_URL}" = "https://shalean.co.za"
+          test "${NEXT_PUBLIC_SUPABASE_URL}" = "https://tchayecuvzssixyxlvfu.supabase.co"
+
+      - name: Audit production public pricing catalog
+        run: |
+          node <<'NODE'
+          const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+          const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+          const endpoint = new URL("/rest/v1/pricing_services", url);
+          endpoint.searchParams.set("select", "slug,name,base_price,is_active,sort_order");
+          endpoint.searchParams.set("is_active", "eq.true");
+          endpoint.searchParams.set("order", "sort_order.asc");
+          const res = await fetch(endpoint, {
+            headers: { apikey: key, Authorization: `Bearer ${key}` },
+          });
+          if (!res.ok) {
+            throw new Error(`pricing catalog read failed: ${res.status} ${await res.text()}`);
+          }
+          const rows = await res.json();
+          console.log("Active production public pricing catalog:");
+          for (const row of rows) {
+            console.log(`- ${row.slug}: R${row.base_price} (${row.name})`);
+          }
+
+          const expected = {
+            standard: 250,
+            office: 300,
+            airbnb: 250,
+            deep: 1200,
+            move: 1200,
+            carpet: 500,
+          };
+          const actual = Object.fromEntries(rows.map((row) => [row.slug, Number(row.base_price)]));
+          for (const [slug, price] of Object.entries(expected)) {
+            if (actual[slug] !== price) {
+              throw new Error(`production pricing mismatch for ${slug}: expected R${price}, got R${actual[slug] ?? "missing"}`);
+            }
+          }
+          console.log("Production six-service base-price contract verified.");
+          NODE
+
+      - name: Validate governed blog routes
+        working-directory: apps/web
+        run: npm run validate:blog-routes
+
+      - name: Build production standalone output
+        working-directory: apps/web
+        env:
+          FACEBOOK_APP_ID: "build-only-placeholder"
+          FACEBOOK_APP_SECRET: "build-only-placeholder"
+        run: |
+          set -euo pipefail
+          node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
+          test -f .next/BUILD_ID
+          test -d .next/standalone
+          test -f .next/standalone/apps/web/server.js
+
+      - name: Add public and static assets
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          RUNTIME=".next/standalone/apps/web"
+          rm -rf "$RUNTIME/public" "$RUNTIME/.next/static"
+          mkdir -p "$RUNTIME/.next"
+          cp -a public "$RUNTIME/public"
+          cp -a .next/static "$RUNTIME/.next/static"
+          test -d "$RUNTIME/public"
+          test -d "$RUNTIME/.next/static"
+
+      - name: Verify standalone server starts
+        working-directory: apps/web/.next/standalone/apps/web
+        env:
+          HOSTNAME: "127.0.0.1"
+          PORT: "3000"
+          FACEBOOK_APP_ID: "build-only-placeholder"
+          FACEBOOK_APP_SECRET: "build-only-placeholder"
+        run: |
+          set -euo pipefail
+          nohup node server.js > /tmp/plesk-prod-build-08.log 2>&1 &
+          echo $! > /tmp/plesk-prod-build-08.pid
+          cleanup() {
+            if [ -f /tmp/plesk-prod-build-08.pid ]; then
+              kill "$(cat /tmp/plesk-prod-build-08.pid)" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+          for i in $(seq 1 90); do
+            if curl -fsS "http://127.0.0.1:3000/api/health" >/tmp/plesk-prod-health.json; then
+              cat /tmp/plesk-prod-health.json
+              echo
+              echo "Production standalone server ready after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+          cat /tmp/plesk-prod-build-08.log || true
+          exit 1
+
+      - name: Create production artifact
+        run: |
+          set -euo pipefail
+          rm -rf artifact-stage
+          mkdir -p artifact-stage
+          cp -a apps/web/.next/standalone artifact-stage/runtime
+          cat > artifact-stage/build-meta.json <<META
+          {
+            "source_release_ref": "integration/shalean-release",
+            "source_release_sha": "f5dd54548ac4b1c50c7ce0cde744b05c4d8913e9",
+            "artifact_branch": "${GITHUB_REF_NAME}",
+            "artifact_sha": "${GITHUB_SHA}",
+            "target_host": "shalean.co.za",
+            "deployment_environment": "production",
+            "supabase_ref": "tchayecuvzssixyxlvfu",
+            "runtime_entry": "runtime/apps/web/server.js",
+            "document_root": "runtime/apps/web/public",
+            "server_secrets_baked_in": false,
+            "deployment_performed": false
+          }
+          META
+          tar -czf "plesk-prod-${GITHUB_SHA}.tar.gz" -C artifact-stage .
+
+      - name: Upload production standalone artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plesk-prod-${{ github.sha }}
+          path: plesk-prod-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7

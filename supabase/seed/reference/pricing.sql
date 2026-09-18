@@ -21,12 +21,12 @@ INSERT INTO public.pricing_services (
   is_active, sort_order
 ) VALUES
   -- standard → regular-cleaning / office-cleaning
-  ('standard',  'Regular Cleaning',  350, 80, 60, 30, 2.0,  8.0, 3.5, 0.75, 0.50, 0.30, true,  10),
-  ('deep',      'Deep Cleaning',     950, 100, 80, 40, 3.0, 10.0, 5.0, 1.00, 0.75, 0.50, true,  20),
-  ('move',      'Moving Cleaning',  1100, 120, 90, 45, 4.0, 12.0, 6.0, 1.00, 0.75, 0.50, true,  30),
-  ('office',    'Office Cleaning',   450, 60,  50, 30, 2.0,  8.0, 3.5, 0.50, 0.50, 0.30, true,  40),
+  ('standard',  'Regular Cleaning',  250, 80, 60, 30, 2.0,  8.0, 3.5, 0.75, 0.50, 0.30, true,  10),
+  ('deep',      'Deep Cleaning',    1200, 100, 80, 40, 3.0, 10.0, 5.0, 1.00, 0.75, 0.50, true,  20),
+  ('move',      'Moving Cleaning',  1200, 120, 90, 45, 4.0, 12.0, 6.0, 1.00, 0.75, 0.50, true,  30),
+  ('office',    'Office Cleaning',   300, 60,  50, 30, 2.0,  8.0, 3.5, 0.50, 0.50, 0.30, true,  40),
   ('carpet',    'Carpet Cleaning',   500, 120, 0,  0,  2.0,  8.0, 2.0, 0.75, 0.00, 0.00, true,  50),
-  ('airbnb',    'Airbnb Cleaning',   400, 80,  60, 30, 2.0,  8.0, 3.0, 0.75, 0.50, 0.30, true,  60)
+  ('airbnb',    'Airbnb Cleaning',   250, 80,  60, 30, 2.0,  8.0, 3.0, 0.75, 0.50, 0.30, true,  60)
 ON CONFLICT (slug) DO UPDATE SET
   name                   = EXCLUDED.name,
   base_price             = EXCLUDED.base_price,
@@ -97,22 +97,22 @@ INSERT INTO public.services (
 ) VALUES
   ('22222222-aaaa-4000-8000-000000000001', 'regular-cleaning',
     'Regular Cleaning',  'Keep your home fresh and comfortable with a reliable weekly or once-off clean.',
-    350, ARRAY['Bedrooms & bathrooms','Kitchen & living areas','Vacuuming & mopping'], 10, true),
+    250, ARRAY['Bedrooms & bathrooms','Kitchen & living areas','Vacuuming & mopping'], 10, true),
   ('22222222-aaaa-4000-8000-000000000002', 'deep-cleaning',
     'Deep Cleaning', 'A thorough top-to-bottom clean of every surface, corner, and room.',
-    950, ARRAY['All regular areas','Walls, skirting, blinds','Oven & fridge interior'], 20, true),
+    1200, ARRAY['All regular areas','Walls, skirting, blinds','Oven & fridge interior'], 20, true),
   ('22222222-aaaa-4000-8000-000000000003', 'moving-cleaning',
     'Moving Cleaning', 'Move-in or move-out clean for a smooth handover and full deposit return.',
-    1100, ARRAY['Full property deep clean','Deposit-ready standard','Furnished or empty'], 30, true),
+    1200, ARRAY['Full property deep clean','Deposit-ready standard','Furnished or empty'], 30, true),
   ('22222222-aaaa-4000-8000-000000000004', 'office-cleaning',
     'Office Cleaning', 'Professional cleaning for offices and workspaces.',
-    450, ARRAY['Desks & workstations','Kitchenette & bathrooms','Vacuuming & bins'], 40, true),
+    300, ARRAY['Desks & workstations','Kitchenette & bathrooms','Vacuuming & bins'], 40, true),
   ('22222222-aaaa-4000-8000-000000000005', 'carpet-cleaning',
     'Carpet Cleaning', 'Steam and shampoo carpets, rugs and upholstery.',
     500, ARRAY['Hot-water extraction','Stain pre-treatment','Rugs & upholstery'], 50, true),
   ('22222222-aaaa-4000-8000-000000000006', 'airbnb-cleaning',
     'Airbnb Cleaning', 'Fast, reliable turnovers that keep your listing sparkling.',
-    400, ARRAY['Linen changeover','Restocking & welcome setup','Photo-ready result'], 60, true)
+    250, ARRAY['Linen changeover','Restocking & welcome setup','Photo-ready result'], 60, true)
 ON CONFLICT (id) DO UPDATE SET
   title         = EXCLUDED.title,
   description   = EXCLUDED.description,

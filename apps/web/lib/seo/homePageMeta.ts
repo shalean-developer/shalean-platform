@@ -10,8 +10,8 @@ export const HOME_OG_IMAGE_HEIGHT = 630;
 
 export const HOME_OG_IMAGE_ALT = "Professional cleaning services in Cape Town";
 
-/** Canonical marketing entry-price contract, aligned to the active homepage pricing catalog (R350). */
-export const HOME_STARTING_PRICE_ZAR = 350;
+/** Canonical marketing entry-price contract, aligned to the active homepage pricing catalog (R250). */
+export const HOME_STARTING_PRICE_ZAR = 250;
 
 /** Visible H1 phrase aligned to Cape Town cleaning-service search intent. */
 export const HOME_PAGE_H1 = "Cleaning Services Cape Town";
