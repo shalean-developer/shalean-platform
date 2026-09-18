@@ -12,6 +12,7 @@ import {
 } from "@/lib/booking/bookingPaymentAttemptHistory";
 import { PAYMENT_ERROR_CODES, type PaymentErrorCode } from "@/lib/booking/paymentErrorCodes";
 import { detectPaystackKeyModeMismatch } from "@/lib/booking/paystackKeyModeConsistency";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { assertEnvironmentPaymentSafety } from "@/lib/env/assertEnvironmentSafety";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
@@ -73,8 +74,12 @@ type BookingPayRow = {
   time: string | null;
 };
 
-const SELECT_COLS =
-  "id, status, payment_status, payment_completed_at, paystack_reference, payment_link, payment_link_expires_at, customer_email, customer_id, user_id, total_price, total_paid_zar, price_snapshot, booking_snapshot, service, date, time";
+const SELECT_BASE_COLS =
+  "id, status, payment_status, payment_completed_at, paystack_reference, payment_link, payment_link_expires_at, customer_email, total_price, total_paid_zar, price_snapshot, booking_snapshot, service, date, time";
+
+type BookingLoadResult =
+  | { row: BookingPayRow; error: null }
+  | { row: null; error: { message: string; code?: string } | null };
 
 /** In-process dedupe for concurrent ensure calls on the same instance. */
 const inflightByBookingId = new Map<string, Promise<EnsureBookingPaymentSessionResult>>();
@@ -145,10 +150,24 @@ function accessAllowed(row: BookingPayRow, access: BookingPaymentSessionAccess):
   );
 }
 
-async function loadBooking(admin: SupabaseClient, bookingId: string): Promise<BookingPayRow | null> {
-  const { data, error } = await admin.from("bookings").select(SELECT_COLS).eq("id", bookingId).maybeSingle();
-  if (error || !data || typeof data !== "object") return null;
-  return data as BookingPayRow;
+async function loadBooking(admin: SupabaseClient, bookingId: string): Promise<BookingLoadResult> {
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  const { data, error } = await admin
+    .from("bookings")
+    .select(`${SELECT_BASE_COLS}, ${ownershipColumn}`)
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error) {
+    return {
+      row: null,
+      error: {
+        message: String(error.message ?? "booking_lookup_failed").slice(0, 240),
+        code: typeof error.code === "string" ? error.code : undefined,
+      },
+    };
+  }
+  if (!data || typeof data !== "object") return { row: null, error: null };
+  return { row: data as BookingPayRow, error: null };
 }
 
 function readyFromRow(
@@ -284,7 +303,7 @@ async function initializeFreshPaystackSession(
     .maybeSingle();
 
   if (claimErr || !claimed) {
-    const latest = await loadBooking(admin, row.id);
+    const { row: latest } = await loadBooking(admin, row.id);
     if (latest && isAlreadyPaid(latest)) {
       return { status: "paid", bookingId: row.id, reference: String(latest.paystack_reference ?? "") };
     }
@@ -390,12 +409,12 @@ async function initializeFreshPaystackSession(
     })
     .eq("id", row.id)
     .eq("paystack_reference", newRef)
-    .select(SELECT_COLS)
+    .select(`${SELECT_BASE_COLS}, ${await resolveBookingOwnershipColumn(admin)}`)
     .maybeSingle();
 
   if (persistErr || !persisted) {
     // Lost the race after Paystack init — prefer the winning row's usable link.
-    const latest = await loadBooking(admin, row.id);
+    const { row: latest } = await loadBooking(admin, row.id);
     if (
       latest &&
       isStoredPaymentLinkUsable({
@@ -488,7 +507,26 @@ async function ensureBookingPaymentSessionInner(
     };
   }
 
-  const row = await loadBooking(admin, id);
+  const loaded = await loadBooking(admin, id);
+  if (loaded.error) {
+    logPaymentStructured("payment_initialize", {
+      booking_id: id,
+      result: "failed",
+      error_code: PAYMENT_ERROR_CODES.PAYMENT_INITIALIZATION_FAILED,
+      database_error_code: loaded.error.code ?? null,
+      message: loaded.error.message,
+    });
+    return {
+      status: "failed",
+      bookingId: id,
+      errorCode: PAYMENT_ERROR_CODES.PAYMENT_INITIALIZATION_FAILED,
+      error:
+        "We could not verify your booking for payment. No payment was started. Please try again.",
+      retryable: true,
+    };
+  }
+
+  const row = loaded.row;
   if (!row) {
     return {
       status: "failed",
