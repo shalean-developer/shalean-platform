@@ -1,5 +1,7 @@
 name: Plesk production standalone artifact
 
+# PLESK-PROD-BUILD-09A: CI-only exact-head production artifact trigger.
+
 on:
   push:
     branches:
