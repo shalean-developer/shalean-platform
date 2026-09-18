@@ -1,6 +1,7 @@
 name: Plesk production standalone artifact
 
 # PLESK-PROD-BUILD-09A: CI-only exact-head production artifact trigger.
+# PLESK-PROD-BUILD-09B: require the live Paystack public key in the client build.
 
 on:
   push:
@@ -40,6 +41,7 @@ jobs:
       NEXT_PUBLIC_APP_URL: "https://shalean.co.za"
       NEXT_PUBLIC_SUPABASE_URL: "https://tchayecuvzssixyxlvfu.supabase.co"
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ secrets.PLESK_PROD_SUPABASE_PUBLISHABLE_KEY }}"
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ secrets.PLESK_PROD_PAYSTACK_PUBLIC_KEY }}"
 
     steps:
       - name: Checkout exact production-build branch
@@ -74,6 +76,23 @@ jobs:
               ;;
           esac
           echo "Production Supabase public key present; value intentionally not printed."
+
+      - name: Require production Paystack public key
+        run: |
+          set -euo pipefail
+          test -n "${NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY}" || {
+            echo "::error::Missing GitHub Actions secret PLESK_PROD_PAYSTACK_PUBLIC_KEY."
+            echo "::error::Set it to the existing production Paystack public key, then rerun."
+            exit 1
+          }
+          case "${NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY}" in
+            pk_live_*) ;;
+            *)
+              echo "::error::Production Paystack public key must use the live pk_live_... format."
+              exit 1
+              ;;
+          esac
+          echo "Production Paystack public key present in live mode; value intentionally not printed."
 
       - name: Use Node.js 24
         uses: actions/setup-node@v4
