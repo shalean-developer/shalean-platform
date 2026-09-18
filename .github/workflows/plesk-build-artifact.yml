@@ -68,7 +68,10 @@ jobs:
           NEXT_PUBLIC_SITE_URL: "https://plesk-test.shalean.co.za"
           NEXT_PUBLIC_APP_URL: "https://plesk-test.shalean.co.za"
           SHALEAN_APP_ENV: "preview"
+          SHALEAN_ENFORCE_ENV_SAFETY: "true"
           OUTBOUND_MESSAGING_DISABLED: "true"
+          NEXT_PUBLIC_SUPABASE_URL: "https://jhubpsbwmjgydkzztxeu.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_IlDDZwioRpJRr2F6-B8WFA_uBrbZnkT"
           FACEBOOK_APP_ID: "ci-test-app-id"
           FACEBOOK_APP_SECRET: "ci-meta-data-deletion-test-secret"
         run: |
@@ -102,7 +105,10 @@ jobs:
           NEXT_PUBLIC_SITE_URL: "https://plesk-test.shalean.co.za"
           NEXT_PUBLIC_APP_URL: "https://plesk-test.shalean.co.za"
           SHALEAN_APP_ENV: "preview"
+          SHALEAN_ENFORCE_ENV_SAFETY: "true"
           OUTBOUND_MESSAGING_DISABLED: "true"
+          NEXT_PUBLIC_SUPABASE_URL: "https://jhubpsbwmjgydkzztxeu.supabase.co"
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: "sb_publishable_IlDDZwioRpJRr2F6-B8WFA_uBrbZnkT"
           FACEBOOK_APP_ID: "ci-test-app-id"
           FACEBOOK_APP_SECRET: "ci-meta-data-deletion-test-secret"
         run: |
