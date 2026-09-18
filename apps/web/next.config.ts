@@ -67,6 +67,8 @@ function portalCutoverRedirects() {
 }
 
 const nextConfig: NextConfig = {
+  // PLESK-RUNTIME-03: emit a minimal self-hosted runtime for Passenger/Plesk.
+  output: "standalone",
   // Keep Next's file tracing and bundler rooted at the same monorepo directory. Vercel
   // traces from the repository root, and warns when Turbopack uses apps/web instead.
   outputFileTracingRoot: workspaceRoot,
