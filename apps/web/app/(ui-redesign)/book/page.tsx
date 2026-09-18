@@ -7,6 +7,7 @@ import {
   buildBookServiceSelectionHref,
 } from "@/lib/booking/legacyBookingToBookRedirect";
 import { collectLegacyBookingSearchParams } from "@/lib/booking/legacyBookingSearchParams";
+import { loadBookHubCatalogSafely } from "@/lib/booking-v2/bookHubCatalog";
 import { loadBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { SERVICE_CONFIG, SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 
@@ -44,7 +45,11 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
     redirect(buildBookHubHrefFromLegacySearchParams(params));
   }
 
-  const { catalog } = await loadBookingV2Catalog();
+  const catalog = await loadBookHubCatalogSafely(loadBookingV2Catalog, (error) => {
+    console.error("[book-hub] authoritative booking catalog unavailable", {
+      error: error instanceof Error ? error.message : "unknown catalog error",
+    });
+  });
 
   return (
     <div className="min-h-dvh bg-muted/35 text-foreground">
@@ -67,8 +72,9 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {SERVICE_SLUGS.map((slug) => {
               const config = SERVICE_CONFIG[slug];
-              const basePrice = catalog[slug].basePrice;
-              const hasRoomPricing = catalog[slug].pricePerBedroom > 0;
+              const liveService = catalog?.[slug] ?? null;
+              const basePrice = liveService?.basePrice ?? null;
+              const hasRoomPricing = (liveService?.pricePerBedroom ?? 0) > 0;
 
               return (
                 <Link
@@ -89,11 +95,28 @@ export default async function BookIndexPage({ searchParams }: BookIndexPageProps
 
                   <div className="mt-5 flex items-end justify-between gap-4 border-t border-border pt-4">
                     <div>
-                      <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">Price from</span>
-                      <span className="mt-0.5 block text-lg font-bold text-primary">
-                        R{basePrice.toLocaleString("en-ZA")}
-                        {hasRoomPricing && <span className="ml-1 text-xs font-medium text-muted-foreground">+ room pricing</span>}
-                      </span>
+                      {basePrice != null ? (
+                        <>
+                          <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Price from
+                          </span>
+                          <span className="mt-0.5 block text-lg font-bold text-primary">
+                            R{basePrice.toLocaleString("en-ZA")}
+                            {hasRoomPricing && (
+                              <span className="ml-1 text-xs font-medium text-muted-foreground">+ room pricing</span>
+                            )}
+                          </span>
+                        </>
+                      ) : (
+                        <>
+                          <span className="block text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                            Live pricing
+                          </span>
+                          <span className="mt-0.5 block text-sm font-semibold text-primary">
+                            Continue to see your price
+                          </span>
+                        </>
+                      )}
                     </div>
                     <span className="inline-flex items-center gap-1 text-sm font-semibold text-primary">
                       See price
