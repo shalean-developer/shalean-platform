@@ -1,0 +1,145 @@
+name: Plesk build artifact
+
+on:
+  push:
+    branches:
+      - test/plesk-production-build
+    paths:
+      - ".github/workflows/plesk-build-artifact.yml"
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plesk-build-artifact-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build Next.js artifact
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Guard isolated Plesk branch
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "test/plesk-production-build"
+          echo "Building commit ${GITHUB_SHA}"
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: |
+          set -euo pipefail
+          npm ci
+          npm install --no-save --package-lock=false @tailwindcss/postcss@^4
+          node -e "require.resolve('@tailwindcss/postcss')"
+          test -f node_modules/@shalean/utils/package.json
+          test -d ../../packages/utils/src
+
+      - name: Validate governed blog routes
+        working-directory: apps/web
+        run: npm run validate:blog-routes
+
+      - name: Build production Next.js output
+        working-directory: apps/web
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_SITE_URL: "https://plesk-test.shalean.co.za"
+          NEXT_PUBLIC_APP_URL: "https://plesk-test.shalean.co.za"
+          SHALEAN_APP_ENV: "preview"
+          OUTBOUND_MESSAGING_DISABLED: "true"
+          FACEBOOK_APP_ID: "ci-test-app-id"
+          FACEBOOK_APP_SECRET: "ci-meta-data-deletion-test-secret"
+        run: |
+          set -euo pipefail
+          node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
+          test -f .next/BUILD_ID
+
+      - name: Verify production server starts
+        working-directory: apps/web
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+          NEXT_PUBLIC_SITE_URL: "https://plesk-test.shalean.co.za"
+          NEXT_PUBLIC_APP_URL: "https://plesk-test.shalean.co.za"
+          SHALEAN_APP_ENV: "preview"
+          OUTBOUND_MESSAGING_DISABLED: "true"
+          FACEBOOK_APP_ID: "ci-test-app-id"
+          FACEBOOK_APP_SECRET: "ci-meta-data-deletion-test-secret"
+        run: |
+          set -euo pipefail
+          nohup npm run start -- -H 127.0.0.1 -p 3000 > /tmp/plesk-next-start.log 2>&1 &
+          echo $! > /tmp/plesk-next.pid
+          cleanup() {
+            if [ -f /tmp/plesk-next.pid ]; then
+              kill "$(cat /tmp/plesk-next.pid)" 2>/dev/null || true
+            fi
+          }
+          trap cleanup EXIT
+
+          for i in $(seq 1 90); do
+            if curl -fsS "http://127.0.0.1:3000/api/health" >/dev/null; then
+              echo "Production server ready after ${i} attempt(s)"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "Production server failed to become ready."
+          cat /tmp/plesk-next-start.log || true
+          exit 1
+
+      - name: Create Plesk build bundle
+        run: |
+          set -euo pipefail
+          rm -rf artifact-stage
+          mkdir -p artifact-stage/apps/web
+
+          cp -a apps/web/.next artifact-stage/apps/web/.next
+          rm -rf artifact-stage/apps/web/.next/cache
+          cp -a apps/web/public artifact-stage/apps/web/public
+          cp apps/web/package.json artifact-stage/apps/web/package.json
+          cp apps/web/package-lock.json artifact-stage/apps/web/package-lock.json
+          cp apps/web/next.config.ts artifact-stage/apps/web/next.config.ts
+
+          cat > artifact-stage/build-meta.json <<META
+          {
+            "repository": "${GITHUB_REPOSITORY}",
+            "ref": "${GITHUB_REF_NAME}",
+            "sha": "${GITHUB_SHA}",
+            "node": "$(node --version)",
+            "npm": "$(npm --version)",
+            "target": "plesk-test.shalean.co.za",
+            "deployment": "none"
+          }
+          META
+
+          tar -czf "plesk-next-build-${GITHUB_SHA}.tar.gz" -C artifact-stage .
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plesk-next-build-${{ github.sha }}
+          path: plesk-next-build-${{ github.sha }}.tar.gz
+          if-no-files-found: error
+          retention-days: 7
