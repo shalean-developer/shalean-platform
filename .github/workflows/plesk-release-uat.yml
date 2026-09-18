@@ -1,0 +1,143 @@
+name: Plesk release UAT
+
+on:
+  push:
+    branches:
+      - test/plesk-release-uat
+    paths:
+      - ".github/workflows/plesk-release-uat.yml"
+      - "apps/web/e2e/**"
+      - "apps/web/playwright.config.ts"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plesk-release-uat-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  uat:
+    name: Remote Plesk release UAT
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    defaults:
+      run:
+        shell: bash
+
+    env:
+      PLAYWRIGHT_BASE_URL: "https://plesk-test.shalean.co.za"
+      PLAYWRIGHT_SKIP_WEBSERVER: "1"
+      E2E_LAUNCH: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+
+    steps:
+      - name: Checkout exact UAT branch
+        uses: actions/checkout@v4
+
+      - name: Guard release UAT lineage
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "test/plesk-release-uat"
+          git merge-base --is-ancestor f5dd54548ac4b1c50c7ce0cde744b05c4d8913e9 HEAD
+
+      - name: Use Node.js 24
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Install Chromium
+        working-directory: apps/web
+        run: npx playwright install --with-deps chromium
+
+      - name: Verify public runtime endpoints
+        run: |
+          set -euo pipefail
+          mkdir -p uat-evidence
+
+          curl -fsS https://plesk-test.shalean.co.za/api/health | tee uat-evidence/health.json
+          curl -fsS https://plesk-test.shalean.co.za/api/booking-v2/services | tee uat-evidence/services.json
+
+          node <<'NODE'
+          const fs = require("fs");
+          const health = JSON.parse(fs.readFileSync("uat-evidence/health.json", "utf8"));
+          if (health.status !== "ok") throw new Error("health endpoint is not ok");
+
+          const body = JSON.parse(fs.readFileSync("uat-evidence/services.json", "utf8"));
+          const catalog = body.catalog || {};
+          const required = [
+            "regular-cleaning",
+            "deep-cleaning",
+            "moving-cleaning",
+            "office-cleaning",
+            "carpet-cleaning",
+            "airbnb-cleaning",
+          ];
+          const missing = required.filter((slug) => !catalog[slug]);
+          if (missing.length) throw new Error("missing booking services: " + missing.join(", "));
+          console.log("Health and six-service catalog verified.");
+          NODE
+
+          for path in / /book /login /auth/forgot-password; do
+            code=$(curl -L -sS -o /dev/null -w "%{http_code}" "https://plesk-test.shalean.co.za${path}")
+            echo "${path} -> ${code}" | tee -a uat-evidence/public-routes.txt
+            test "${code}" -lt 400
+          done
+
+      - name: Run read-only booking smoke
+        working-directory: apps/web
+        run: npx playwright test e2e/smoke/booking.spec.ts e2e/smoke/booking-v2-closure.spec.ts
+
+      - name: Run launch booking API smoke
+        working-directory: apps/web
+        run: npx playwright test e2e/launch/booking-v2-ui.spec.ts
+
+      - name: Capture runtime env contract inventory
+        run: |
+          set -euo pipefail
+          mkdir -p uat-evidence
+          grep -RhoE 'process\.env\.[A-Z0-9_]+' apps/web \
+            --exclude-dir=node_modules --exclude-dir=.next \
+            | sed 's/process\.env\.//' \
+            | sort -u > uat-evidence/runtime-env-refs.txt
+
+          cat > uat-evidence/plesk-uat-required-env.txt <<'EOF'
+          PLESK RELEASE UAT REQUIRED/ACTIVE
+          SHALEAN_APP_ENV=preview
+          SHALEAN_ENFORCE_ENV_SAFETY=true
+          OUTBOUND_MESSAGING_DISABLED=true
+          NEXT_TELEMETRY_DISABLED=1
+          NEXT_PUBLIC_SITE_URL=https://plesk-test.shalean.co.za
+          NEXT_PUBLIC_APP_URL=https://plesk-test.shalean.co.za
+          NEXT_PUBLIC_SUPABASE_URL=<test project>
+          NEXT_PUBLIC_SUPABASE_ANON_KEY=<test publishable key>
+          SUPABASE_SERVICE_ROLE_KEY=<test service-role key>
+          BOOKING_LOCK_HMAC_SECRET=<test-only random secret>
+          PAYSTACK_SECRET_KEY=<sk_test_...>
+          NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY=<pk_test_... if configured>
+
+          DEFERRED UNTIL PRODUCTION CUTOVER
+          Production Supabase credentials
+          Paystack live keys
+          Resend / Twilio / WhatsApp outbound credentials
+          Customer-production host identity
+          EOF
+
+      - name: Upload UAT evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: plesk-release-uat-evidence-${{ github.sha }}
+          path: |
+            uat-evidence/
+            apps/web/playwright-report/
+            apps/web/test-results/
+          if-no-files-found: ignore
+          retention-days: 7
