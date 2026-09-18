@@ -19,6 +19,11 @@ import { SEO_INDEX_FOLLOW } from "@/lib/site/seoRobots";
 
 const CANONICAL = cleaningPricesHubCanonicalUrl();
 
+// PLESK-PROD-BUILD-08: authoritative pricing requires the server-only Supabase client.
+// Render this route at runtime so production service-role credentials remain runtime-only
+// on Plesk and are never supplied to or baked into the build artifact.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: CLEANING_PRICES_META_TITLE,
   description: CLEANING_PRICES_META_DESCRIPTION,
