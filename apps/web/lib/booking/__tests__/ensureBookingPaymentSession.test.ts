@@ -38,6 +38,9 @@ function buildAdmin(initial: RowState) {
       return {
         select() {
           return {
+            async limit() {
+              return { data: [], error: null };
+            },
             eq() {
               return {
                 async maybeSingle() {
@@ -180,6 +183,101 @@ describe("ensureBookingPaymentSession", () => {
     });
     expect(result.status).toBe("paid");
     expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("loads a customer_id-only booking without requesting legacy user_id", async () => {
+    const selectedColumns: string[] = [];
+    const row = {
+      id: BOOKING_ID,
+      status: "pending_payment",
+      payment_status: "pending",
+      payment_completed_at: null,
+      paystack_reference: "ref_customer_only",
+      payment_link: "https://checkout.paystack.com/customer-only",
+      payment_link_expires_at: new Date(Date.now() + 60_000).toISOString(),
+      customer_email: "a@b.co.za",
+      customer_id: "22222222-2222-4222-8222-222222222222",
+      total_price: 400,
+      total_paid_zar: null,
+      price_snapshot: null,
+      booking_snapshot: {},
+      service: "Regular Cleaning",
+      date: "2026-07-20",
+      time: "10:00",
+    };
+    const admin = {
+      from() {
+        return {
+          select(columns: string) {
+            selectedColumns.push(columns);
+            return {
+              async limit() {
+                return { data: [{ customer_id: row.customer_id }], error: null };
+              },
+              eq() {
+                return {
+                  async maybeSingle() {
+                    if (columns.includes("user_id")) {
+                      return {
+                        data: null,
+                        error: { code: "42703", message: "column bookings.user_id does not exist" },
+                      };
+                    }
+                    return { data: row, error: null };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as SupabaseClient;
+
+    const result = await ensureBookingPaymentSession(admin, {
+      bookingId: BOOKING_ID,
+      access: { kind: "owner", userId: row.customer_id },
+    });
+
+    expect(result.status).toBe("ready");
+    expect(selectedColumns.some((columns) => columns.includes("customer_id"))).toBe(true);
+    expect(selectedColumns.some((columns) => columns.includes("user_id"))).toBe(false);
+  });
+
+  it("reports a booking lookup failure separately from a missing booking", async () => {
+    const admin = {
+      from() {
+        return {
+          select(columns: string) {
+            return {
+              async limit() {
+                return { data: [{ customer_id: "owner" }], error: null };
+              },
+              eq() {
+                return {
+                  async maybeSingle() {
+                    return {
+                      data: null,
+                      error: { code: "PGRST204", message: "schema cache lookup failed" },
+                    };
+                  },
+                };
+              },
+            };
+          },
+        };
+      },
+    } as unknown as SupabaseClient;
+
+    const result = await ensureBookingPaymentSession(admin, {
+      bookingId: BOOKING_ID,
+      access: { kind: "owner", userId: "owner" },
+    });
+
+    expect(result.status).toBe("failed");
+    if (result.status === "failed") {
+      expect(result.errorCode).toBe(PAYMENT_ERROR_CODES.PAYMENT_INITIALIZATION_FAILED);
+      expect(result.retryable).toBe(true);
+    }
   });
 
   it("reuses a usable stored payment link", async () => {
