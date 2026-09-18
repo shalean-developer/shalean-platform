@@ -93,6 +93,28 @@ jobs:
           test "${NEXT_PUBLIC_APP_URL}" = "https://shalean.co.za"
           test "${NEXT_PUBLIC_SUPABASE_URL}" = "https://tchayecuvzssixyxlvfu.supabase.co"
 
+      - name: Audit production public pricing catalog
+        run: |
+          node <<'NODE'
+          const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+          const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+          const endpoint = new URL("/rest/v1/pricing_services", url);
+          endpoint.searchParams.set("select", "slug,name,base_price,is_active,sort_order");
+          endpoint.searchParams.set("is_active", "eq.true");
+          endpoint.searchParams.set("order", "sort_order.asc");
+          const res = await fetch(endpoint, {
+            headers: { apikey: key, Authorization: `Bearer ${key}` },
+          });
+          if (!res.ok) {
+            throw new Error(`pricing catalog read failed: ${res.status} ${await res.text()}`);
+          }
+          const rows = await res.json();
+          console.log("Active production public pricing catalog:");
+          for (const row of rows) {
+            console.log(`- ${row.slug}: R${row.base_price} (${row.name})`);
+          }
+          NODE
+
       - name: Validate governed blog routes
         working-directory: apps/web
         run: npm run validate:blog-routes
