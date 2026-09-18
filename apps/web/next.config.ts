@@ -67,6 +67,8 @@ function portalCutoverRedirects() {
 }
 
 const nextConfig: NextConfig = {
+  // PLESK-RELEASE-05: emit a minimal self-hosted runtime for Plesk UAT.
+  output: "standalone",
   // The development tools launcher overlaps the mobile sticky CTA. Browser and
   // terminal diagnostics remain available without rendering the floating badge.
   devIndicators: false,
