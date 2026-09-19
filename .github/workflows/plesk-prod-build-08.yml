@@ -54,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           case "${GITHUB_REF_NAME}" in
-            test/plesk-prod-build-08|fix/plesk-prod-converge-08b|integration/shalean-release) ;;
+            test/plesk-prod-build-08|fix/plesk-prod-converge-08b|integration/shalean-release|fix/supa-prod-schema-convergence) ;;
             *) echo "::error::Unexpected production-artifact branch: ${GITHUB_REF_NAME}"; exit 1 ;;
           esac
           git merge-base --is-ancestor f5dd54548ac4b1c50c7ce0cde744b05c4d8913e9 HEAD
