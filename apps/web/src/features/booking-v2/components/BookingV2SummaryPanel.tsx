@@ -116,7 +116,8 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     : priceLabel;
   const isRegularCleaning = values.serviceSlug === "regular-cleaning";
   const isDeepCleaning = values.serviceSlug === "deep-cleaning";
-  const isProgressiveHomeCleaning = isRegularCleaning || isDeepCleaning;
+  const isMovingCleaning = values.serviceSlug === "moving-cleaning";
+  const isProgressiveHomeCleaning = isRegularCleaning || isDeepCleaning || isMovingCleaning;
   const bookingDetails = {
     address: values.address,
     suburb: values.suburb,
@@ -161,18 +162,25 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     dateIsVisible ? formatDate(values.date) : "",
     dateIsVisible && values.time ? values.time : "",
   ].filter(Boolean).join(" · ");
+  const regularDisplayedDetailsStage = displayedDetailsStage as RegularCleaningDetailsStage;
   const propertyIsVisible =
     isProgressiveHomeCleaning &&
-    (currentStep > 1 || isRegularCleaningStageComplete("property", displayedDetailsStage));
+    (currentStep > 1 ||
+      isMovingCleaning ||
+      isRegularCleaningStageComplete("property", regularDisplayedDetailsStage));
   const roomsAreVisible =
     isProgressiveHomeCleaning &&
-    (currentStep > 1 || isRegularCleaningStageComplete("rooms", displayedDetailsStage));
+    (currentStep > 1 ||
+      isMovingCleaning ||
+      isRegularCleaningStageComplete("rooms", regularDisplayedDetailsStage));
   const homeLabel = [propertyIsVisible ? propertyLabel : "", roomsAreVisible ? roomsLabel : ""]
     .filter(Boolean)
     .join(" · ");
   const petsAreVisible =
     isProgressiveHomeCleaning &&
-    (currentStep > 1 || isRegularCleaningStageComplete("pets", displayedDetailsStage));
+    (currentStep > 1 ||
+      isMovingCleaning ||
+      isRegularCleaningStageComplete("pets", regularDisplayedDetailsStage));
   const equipmentIsVisible = isRegularCleaning && currentStep > 1;
   const hasMoreDetails = petsAreVisible || equipmentIsVisible;
   const moreDetailsLabel = [
