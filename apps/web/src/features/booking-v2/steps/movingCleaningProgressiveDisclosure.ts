@@ -85,3 +85,11 @@ export function movingCleaningAutoAdvanceTarget(
   if (stage === "move" && has(details, "moveType")) return "rooms";
   return null;
 }
+
+export function movingCleaningDetailsStageFromSearchParam(
+  value: string | null | undefined,
+): MovingCleaningDetailsStage | null {
+  return STAGES.includes(value as MovingCleaningDetailsStage)
+    ? (value as MovingCleaningDetailsStage)
+    : null;
+}
