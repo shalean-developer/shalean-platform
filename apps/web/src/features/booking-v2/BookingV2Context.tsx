@@ -48,6 +48,13 @@ import {
 import type { RegularCleaningScheduleStage } from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
 import { deepCleaningDetailsStage } from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
 import {
+  movingCleaningDetailsStage,
+  movingCleaningDetailsStageFromSearchParam,
+  type MovingCleaningDetailsStage,
+} from "@/src/features/booking-v2/steps/movingCleaningProgressiveDisclosure";
+
+type BookingDetailsStage = RegularCleaningDetailsStage | MovingCleaningDetailsStage;
+import {
   BOOKING_FUNNEL_ROW,
   bookingV2StepToFunnelStep,
   trackBookingFunnelEvent,
@@ -69,8 +76,8 @@ type BookingV2ContextValue = {
   feesConfig: BookingV2FeesConfig;
   catalogLoading: boolean;
   pricingAvailability: BookingPricingAvailability;
-  detailsSectionOverride: RegularCleaningDetailsStage | null;
-  editDetailsSection: (section: RegularCleaningDetailsStage) => void;
+  detailsSectionOverride: BookingDetailsStage | null;
+  editDetailsSection: (section: BookingDetailsStage) => void;
   scheduleSectionOverride: RegularCleaningScheduleStage | null;
   editScheduleSection: (section: RegularCleaningScheduleStage) => void;
   goToStep: (step: BookingStep) => void;
@@ -156,9 +163,10 @@ export function BookingV2Provider({
   const config = SERVICE_CONFIG[serviceSlug];
 
   const currentStep = bookingStepFromQuery(searchParams.get("step"));
-  const requestedDetailsSection = regularCleaningDetailsStageFromSearchParam(
-    searchParams.get("section"),
-  );
+  const requestedDetailsSection =
+    serviceSlug === "moving-cleaning"
+      ? movingCleaningDetailsStageFromSearchParam(searchParams.get("section"))
+      : regularCleaningDetailsStageFromSearchParam(searchParams.get("section"));
 
   // Persist referral invitations again at booking entry. This makes the offer survive
   // account creation, email confirmation, and direct /book links even if the landing
@@ -176,8 +184,10 @@ export function BookingV2Provider({
   const [pricingAvailability, setPricingAvailability] =
     useState<BookingPricingAvailability>("loading");
   const [detailsSectionOverride, setDetailsSectionOverride] =
-    useState<RegularCleaningDetailsStage | null>(
-      serviceSlug === "regular-cleaning" || serviceSlug === "deep-cleaning"
+    useState<BookingDetailsStage | null>(
+      serviceSlug === "regular-cleaning" ||
+      serviceSlug === "deep-cleaning" ||
+      serviceSlug === "moving-cleaning"
         ? requestedDetailsSection ?? "address"
         : null,
     );
@@ -255,14 +265,18 @@ export function BookingV2Provider({
       urlPatch.replaceSelectedExtras
     ) {
       form.reset(merged, { keepDefaultValues: false });
-      if (serviceSlug === "regular-cleaning") {
+      if (serviceSlug === "regular-cleaning" || serviceSlug === "moving-cleaning") {
+        const details = merged.serviceDetails ?? {};
+        const address = {
+          address: merged.address,
+          suburb: merged.suburb,
+          contactPhone: merged.contactPhone,
+          serviceAreaLocationId: merged.serviceAreaLocationId,
+        };
         setDetailsSectionOverride(
-          regularCleaningDetailsStage(merged.serviceDetails ?? {}, {
-            address: merged.address,
-            suburb: merged.suburb,
-            contactPhone: merged.contactPhone,
-            serviceAreaLocationId: merged.serviceAreaLocationId,
-          }),
+          serviceSlug === "moving-cleaning"
+            ? movingCleaningDetailsStage(details, address)
+            : regularCleaningDetailsStage(details, address),
         );
       }
     }
@@ -461,7 +475,11 @@ export function BookingV2Provider({
     clearStorage();
     form.reset(defaultBookingFormData(serviceSlug, cleanerMode));
     setDetailsSectionOverride(
-      serviceSlug === "regular-cleaning" || serviceSlug === "deep-cleaning" ? "address" : null,
+      serviceSlug === "regular-cleaning" ||
+      serviceSlug === "deep-cleaning" ||
+      serviceSlug === "moving-cleaning"
+        ? "address"
+        : null,
     );
     setScheduleSectionOverride(serviceSlug === "regular-cleaning" ? "booking_type" : null);
   }, [form, serviceSlug, cleanerMode]);
@@ -473,7 +491,11 @@ export function BookingV2Provider({
       service: serviceSlug,
       step: "details",
     });
-    if (serviceSlug === "regular-cleaning" || serviceSlug === "deep-cleaning") {
+    if (
+      serviceSlug === "regular-cleaning" ||
+      serviceSlug === "deep-cleaning" ||
+      serviceSlug === "moving-cleaning"
+    ) {
       params.set("section", "address");
     }
     window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
@@ -486,7 +508,7 @@ export function BookingV2Provider({
   }, [resetCompletedBooking]);
 
   const editDetailsSection = useCallback(
-    (section: RegularCleaningDetailsStage) => {
+    (section: BookingDetailsStage) => {
       setDetailsSectionOverride(section);
       const params = new URLSearchParams(searchParams.toString());
       params.set("step", "details");
@@ -499,7 +521,9 @@ export function BookingV2Provider({
   useEffect(() => {
     if (
       currentStep !== 1 ||
-      (serviceSlug !== "regular-cleaning" && serviceSlug !== "deep-cleaning")
+      (serviceSlug !== "regular-cleaning" &&
+        serviceSlug !== "deep-cleaning" &&
+        serviceSlug !== "moving-cleaning")
     ) return;
 
     if (!requestedDetailsSection) {
@@ -528,7 +552,9 @@ export function BookingV2Provider({
   useEffect(() => {
     if (
       currentStep !== 1 ||
-      (serviceSlug !== "regular-cleaning" && serviceSlug !== "deep-cleaning") ||
+      (serviceSlug !== "regular-cleaning" &&
+        serviceSlug !== "deep-cleaning" &&
+        serviceSlug !== "moving-cleaning") ||
       detailsSectionOverride !== null
     ) return;
     const values = form.getValues();
@@ -541,7 +567,9 @@ export function BookingV2Provider({
     setDetailsSectionOverride(
       serviceSlug === "deep-cleaning"
         ? deepCleaningDetailsStage(values.serviceDetails, bookingDetails)
-        : regularCleaningDetailsStage(values.serviceDetails, bookingDetails),
+        : serviceSlug === "moving-cleaning"
+          ? movingCleaningDetailsStage(values.serviceDetails, bookingDetails)
+          : regularCleaningDetailsStage(values.serviceDetails, bookingDetails),
     );
   }, [currentStep, detailsSectionOverride, form, serviceSlug]);
 
