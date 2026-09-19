@@ -47,6 +47,7 @@ import { isSelectedBookingSlotVerified } from "@/lib/booking-v2/bookingV2Schedul
 import {
   DEEP_CLEANING_RECURRING_FREQUENCY,
   recurringFrequenciesForService,
+  serviceAllowsRecurringBookings,
   serviceUsesRecurringDayPicker,
 } from "@/lib/booking-v2/serviceRecurringPolicy";
 import {
@@ -396,6 +397,7 @@ export function Step2Schedule() {
   const assignedTeamId = watch("assignedTeamId") ?? "";
   const isRegularCleaning = serviceSlug === "regular-cleaning";
   const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
   const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
   const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
     serviceRecurringFrequencies.includes(option.value),
@@ -429,6 +431,13 @@ export function Step2Schedule() {
           (slot) => availability[slot] === true,
         )
       : [];
+
+  useEffect(() => {
+    if (allowsRecurringBookings || bookingType === "once_off") return;
+    setValue("bookingType", "once_off", { shouldDirty: true, shouldValidate: true });
+    setValue("recurringFrequency", "", { shouldDirty: true, shouldValidate: true });
+    setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+  }, [allowsRecurringBookings, bookingType, setValue]);
 
   useEffect(() => {
     if (!isDeepCleaning || bookingType !== "recurring") return;
@@ -617,7 +626,7 @@ export function Step2Schedule() {
                     : "For repeat services every few days or weeks.",
                   icon: RefreshCw,
                 },
-              ].map((opt) => {
+              ].filter((opt) => opt.value === "once_off" || allowsRecurringBookings).map((opt) => {
                 const selected = field.value === opt.value;
                 const Icon = opt.icon;
                 return (
@@ -739,7 +748,7 @@ export function Step2Schedule() {
       </section>}
 
       {/* ── Recurring schedule ── */}
-      {bookingType === "recurring" && !isDeepCleaning && (!isRegularCleaning || activeScheduleStage === "booking_type") && (
+      {allowsRecurringBookings && bookingType === "recurring" && !isDeepCleaning && (!isRegularCleaning || activeScheduleStage === "booking_type") && (
         <>
           <hr className="border-slate-200" />
           <section className="space-y-5">
