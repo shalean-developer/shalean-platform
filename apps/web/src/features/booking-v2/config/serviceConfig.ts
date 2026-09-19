@@ -229,7 +229,7 @@ const MOVING_QUESTIONS: FormQuestion[] = [
       { value: "move_out", label: "Move-out" },
       { value: "move_in", label: "Move-in" },
     ],
-    hint: "Choose one — we’ll tailor questions for that clean.",
+    hint: "Choose one — we’ll tailor the remaining questions for that clean.",
   },
   {
     key: "bedrooms",
@@ -251,7 +251,7 @@ const MOVING_QUESTIONS: FormQuestion[] = [
     key: "extraRooms",
     label: "Number of extra rooms",
     type: "select",
-    required: false,
+    required: true,
     group: "rooms",
     options: [...EXTRA_ROOM_COUNT_OPTIONS],
   },
@@ -260,23 +260,35 @@ const MOVING_QUESTIONS: FormQuestion[] = [
     label: "Is the property furnished or empty?",
     type: "radio",
     required: true,
-    group: "yesno",
+    group: "condition",
     centered: true,
-    showWhen: { key: "moveType", values: ["move_out", "both"] },
     options: [
-      { value: "yes", label: "Furnished — furniture still inside" },
-      { value: "no", label: "Empty — cleared for handover" },
+      { value: "yes", label: "Furnished — furniture is inside" },
+      { value: "no", label: "Empty — cleared for the move" },
     ],
     hint: "Empty homes are usually quicker; furnished homes need more care around belongings.",
+  },
+  {
+    key: "hasPets",
+    label: "Will any pets be at the property during the clean?",
+    type: "radio",
+    required: true,
+    group: "condition",
+    centered: true,
+    options: [
+      { value: "yes", label: "Yes" },
+      { value: "no", label: "No" },
+    ],
+    hint: "This helps the team plan safe access on moving day.",
   },
   {
     key: "depositInspection",
     label: "Is this for a final rental / deposit inspection?",
     type: "radio",
     required: true,
-    group: "yesno",
+    group: "condition",
     centered: true,
-    showWhen: { key: "moveType", values: ["move_out", "both"] },
+    showWhen: { key: "moveType", values: ["move_out"] },
     options: [
       { value: "yes", label: "Yes — landlord or agency inspection" },
       { value: "no", label: "No — general move-out clean" },
@@ -286,7 +298,6 @@ const MOVING_QUESTIONS: FormQuestion[] = [
 ];
 
 const MOVING_EXTRAS: ServiceExtra[] = [
-  { id: "deposit-preparation", label: "Deposit preparation", description: "Extra detail for rental deposit / inspection readiness", priceZar: 250 },
   { id: "appliances-cleaning", label: "Appliances", description: "Clean major kitchen appliances inside and out", priceZar: 220 },
   { id: "inside-cabinets", label: "Cupboards", description: "Clean inside cabinets and cupboards", priceZar: 180 },
   { id: "garage-cleaning", label: "Garage", description: "Sweep and clean the garage", priceZar: 200 },
