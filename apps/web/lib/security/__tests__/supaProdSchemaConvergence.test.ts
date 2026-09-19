@@ -36,16 +36,24 @@ describe("SUPA-MIG-08A production schema convergence", () => {
     }
   });
 
-  it("reapplies the approved security-hardening posture", () => {
+  it("reapplies the approved security-hardening posture before creating new runtime objects", () => {
     expect(sql).toContain("security_invoker = true");
     expect(sql).toContain("revoke truncate, references, trigger, maintain on all tables in schema public from anon");
     expect(sql).toContain("alter default privileges for role postgres in schema public");
     expect(sql).toContain("phase111a_deny_anon_auth_booking_service_photos");
     expect(sql).toContain("promotions_public_read_active");
+
+    expect(sql.indexOf("approved default-privilege hardening")).toBeLessThan(
+      sql.indexOf("inventory runtime dependency"),
+    );
+    expect(sql).toContain("revoke all on table public.booking_inventory_costs from anon, authenticated");
+    expect(sql).toContain("revoke all on table public.transport_run_cost_summary from anon, authenticated");
+    expect(sql).toContain("revoke all on table public.transport_fleet_summary from anon, authenticated");
   });
 
   it("preserves the approved 14-day system-log retention without scheduling pruning", () => {
     expect(sql).toMatch(/'system_logs',\s*14,\s*10000,\s*true/);
+    expect(sql).toContain("on conflict (table_name) do update");
     expect(sql).not.toContain("cron.schedule(");
     expect(sql).not.toContain("insert into cron.job");
   });
