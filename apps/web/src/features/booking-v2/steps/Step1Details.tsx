@@ -28,6 +28,7 @@ import {
   deepCleaningDetailsStage,
   deepCleaningShowsExtras,
   deepCleaningStageReady,
+  type DeepCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
 import {
   adjacentMovingCleaningStage,
@@ -35,6 +36,7 @@ import {
   movingCleaningDetailsStage,
   movingCleaningShowsExtras,
   movingCleaningStageReady,
+  type MovingCleaningDetailsStage,
 } from "@/src/features/booking-v2/steps/movingCleaningProgressiveDisclosure";
 
 // ─── Shared field components ───────────────────────────────────────────────────
@@ -408,8 +410,10 @@ export function Step1Details() {
   const showExtras =
     !isProgressiveHomeCleaning ||
     (isRegularCleaning && activeDetailsStage === "equipment") ||
-    (isDeepCleaning && deepCleaningShowsExtras(activeDetailsStage)) ||
-    (isMovingCleaning && movingCleaningShowsExtras(activeDetailsStage as never));
+    (isDeepCleaning &&
+      deepCleaningShowsExtras(activeDetailsStage as DeepCleaningDetailsStage | null)) ||
+    (isMovingCleaning &&
+      movingCleaningShowsExtras(activeDetailsStage as MovingCleaningDetailsStage | null));
 
   function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
     if (!question.showWhen) return true;
@@ -459,9 +463,17 @@ export function Step1Details() {
   });
   const questionGroups = groupQuestions(visibleQuestions);
   const regularStageReady = isDeepCleaning && activeDetailsStage
-    ? deepCleaningStageReady(activeDetailsStage, serviceDetails, bookingDetails)
+    ? deepCleaningStageReady(
+        activeDetailsStage as DeepCleaningDetailsStage,
+        serviceDetails,
+        bookingDetails,
+      )
     : isMovingCleaning && activeDetailsStage
-      ? movingCleaningStageReady(activeDetailsStage as never, serviceDetails, bookingDetails)
+      ? movingCleaningStageReady(
+          activeDetailsStage as MovingCleaningDetailsStage,
+          serviceDetails,
+          bookingDetails,
+        )
     : activeDetailsStage === "property"
       ? Boolean(String(serviceDetails.propertyType ?? "").trim())
       : activeDetailsStage === "rooms"
@@ -482,10 +494,10 @@ export function Step1Details() {
   function moveProgressiveStage(direction: "back" | "next") {
     if (!activeDetailsStage) return;
     const adjacentStage = isDeepCleaning
-      ? adjacentDeepCleaningStage(activeDetailsStage, direction)
+      ? adjacentDeepCleaningStage(activeDetailsStage as DeepCleaningDetailsStage, direction)
       : isMovingCleaning
-        ? adjacentMovingCleaningStage(activeDetailsStage as never, direction)
-        : adjacentRegularCleaningStage(activeDetailsStage, direction);
+        ? adjacentMovingCleaningStage(activeDetailsStage as MovingCleaningDetailsStage, direction)
+        : adjacentRegularCleaningStage(activeDetailsStage as import("@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure").RegularCleaningDetailsStage, direction);
     if (direction === "back") {
       if (adjacentStage) editDetailsSection(adjacentStage);
       else goBack();
@@ -500,8 +512,14 @@ export function Step1Details() {
     if (!activeDetailsStage || (isDeepCleaning && activeDetailsStage !== "property")) return;
     const nextDetails = { ...serviceDetails, [key]: value };
     const target = isMovingCleaning
-      ? movingCleaningAutoAdvanceTarget(activeDetailsStage as never, nextDetails)
-      : regularCleaningAutoAdvanceTarget(activeDetailsStage, nextDetails);
+      ? movingCleaningAutoAdvanceTarget(
+          activeDetailsStage as MovingCleaningDetailsStage,
+          nextDetails,
+        )
+      : regularCleaningAutoAdvanceTarget(
+          activeDetailsStage as import("@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure").RegularCleaningDetailsStage,
+          nextDetails,
+        );
     if (target) editDetailsSection(target);
   }
 
