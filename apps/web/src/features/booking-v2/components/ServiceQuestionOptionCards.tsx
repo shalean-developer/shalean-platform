@@ -238,7 +238,10 @@ export function ServiceQuestionOptionCards({
                 <button
                   key={opt.value}
                   type="button"
-                  onClick={() => field.onChange(opt.value)}
+                  onClick={() => {
+                    field.onChange(opt.value);
+                    onValueChange?.(opt.value);
+                  }}
                   suppressHydrationWarning
                   className={cn(
                     "min-h-11 rounded-xl border text-center font-medium transition",
