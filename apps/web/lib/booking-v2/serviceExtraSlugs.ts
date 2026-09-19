@@ -20,7 +20,6 @@ export const SERVICE_EXTRA_SLUGS: Record<ServiceSlug, readonly string[]> = {
     "interior-walls",
   ],
   "moving-cleaning": [
-    "deposit-preparation",
     "appliances-cleaning",
     "inside-cabinets",
     "garage-cleaning",
