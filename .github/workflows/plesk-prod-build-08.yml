@@ -39,7 +39,7 @@ jobs:
       NEXT_TELEMETRY_DISABLED: "1"
       NEXT_PUBLIC_SITE_URL: "https://shalean.co.za"
       NEXT_PUBLIC_APP_URL: "https://shalean.co.za"
-      NEXT_PUBLIC_SUPABASE_URL: "https://tchayecuvzssixyxlvfu.supabase.co"
+      NEXT_PUBLIC_SUPABASE_URL: "https://paqjwfulwywtsyyvdxrq.supabase.co"
       NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ secrets.PLESK_PROD_SUPABASE_PUBLISHABLE_KEY }}"
       NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ secrets.PLESK_PROD_PAYSTACK_PUBLIC_KEY }}"
 
@@ -65,7 +65,7 @@ jobs:
           set -euo pipefail
           test -n "${NEXT_PUBLIC_SUPABASE_ANON_KEY}" || {
             echo "::error::Missing GitHub Actions secret PLESK_PROD_SUPABASE_PUBLISHABLE_KEY."
-            echo "::error::Set it to the production Supabase publishable/anon key for tchayecuvzssixyxlvfu, then rerun."
+            echo "::error::Set it to the production Supabase publishable/anon key for paqjwfulwywtsyyvdxrq, then rerun."
             exit 1
           }
           case "${NEXT_PUBLIC_SUPABASE_ANON_KEY}" in
@@ -117,7 +117,7 @@ jobs:
           test "${SHALEAN_APP_ENV}" = "production"
           test "${NEXT_PUBLIC_SITE_URL}" = "https://shalean.co.za"
           test "${NEXT_PUBLIC_APP_URL}" = "https://shalean.co.za"
-          test "${NEXT_PUBLIC_SUPABASE_URL}" = "https://tchayecuvzssixyxlvfu.supabase.co"
+          test "${NEXT_PUBLIC_SUPABASE_URL}" = "https://paqjwfulwywtsyyvdxrq.supabase.co"
 
       - name: Audit production public pricing catalog
         run: |
@@ -228,7 +228,7 @@ jobs:
             "artifact_sha": "${GITHUB_SHA}",
             "target_host": "shalean.co.za",
             "deployment_environment": "production",
-            "supabase_ref": "tchayecuvzssixyxlvfu",
+            "supabase_ref": "paqjwfulwywtsyyvdxrq",
             "runtime_entry": "runtime/apps/web/server.js",
             "document_root": "runtime/apps/web/public",
             "server_secrets_baked_in": false,
