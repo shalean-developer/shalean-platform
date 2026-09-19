@@ -201,7 +201,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     (currentStep > 1 ||
       (isMovingCleaning
         ? movingStageIndex >= 4
-        : isRegularCleaningStageComplete("pets", regularDisplayedDetailsStage));
+        : isRegularCleaningStageComplete("pets", regularDisplayedDetailsStage)));
   const equipmentIsVisible = isRegularCleaning && currentStep > 1;
   const hasMoreDetails = petsAreVisible || equipmentIsVisible;
   const moreDetailsLabel = [
