@@ -18,6 +18,55 @@
 BEGIN;
 
 -- ============================================================================
+-- Approved default-privilege hardening
+-- ============================================================================
+-- Phase 1.11C — Stop dump-pattern default privileges for future objects
+-- Audit: F-SEC-005 / default privilege amplifier
+--
+-- Baseline ALTER DEFAULT PRIVILEGES granted ALL on TABLES/SEQUENCES/FUNCTIONS
+-- created by role postgres to anon + authenticated. That reopens privilege debt
+-- on every new migration object. Close the amplifier; service_role retains ALL.
+--
+-- Owner/schema: FOR ROLE postgres IN SCHEMA public (migration object owner).
+-- TYPES default privileges are out of scope for 1.11C.
+-- Does NOT revoke default privileges from service_role or postgres.
+
+-- Why: future tables must not auto-grant ALL (incl. TRUNCATE) to public API roles.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE ALL ON TABLES FROM anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE ALL ON TABLES FROM authenticated;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE ALL ON SEQUENCES FROM anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE ALL ON SEQUENCES FROM authenticated;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE ALL ON FUNCTIONS FROM anon;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  REVOKE ALL ON FUNCTIONS FROM authenticated;
+
+-- Why: keep service_role and postgres able to use newly created objects.
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON TABLES TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON TABLES TO service_role;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON SEQUENCES TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON SEQUENCES TO service_role;
+
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON FUNCTIONS TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
+  GRANT ALL ON FUNCTIONS TO service_role;
+
+COMMENT ON SCHEMA public IS
+  'Phase 1.11C: default privileges no longer auto-grant ALL to anon/authenticated. New public objects need explicit GRANT + RLS.';
+
+-- ============================================================================
 -- Production-only booking extras preservation
 -- ============================================================================
 -- Preserve the production-only booking extras quantity map required by the current booking flow.
@@ -610,6 +659,11 @@ grant execute on function public.record_inventory_movement(uuid,text,numeric,uui
 grant execute on function public.issue_inventory_equipment(uuid,numeric,uuid,uuid,uuid,timestamptz,text,text,uuid) to service_role;
 grant execute on function public.close_inventory_equipment_issue(uuid,text,text,text,uuid) to service_role;
 
+-- Defense-in-depth for service-only operational views created above. This is explicit so the
+-- convergence remains safe even if the target inherited legacy default privileges before this migration.
+REVOKE ALL ON TABLE public.booking_inventory_costs FROM anon, authenticated;
+GRANT SELECT ON TABLE public.booking_inventory_costs TO service_role;
+
 -- ============================================================================
 -- Transport runtime dependency
 -- ============================================================================
@@ -740,6 +794,11 @@ grant all on table public.fleet_vehicles,public.transport_drivers,public.transpo
 grant select on public.transport_run_cost_summary to service_role;
 grant select on public.transport_fleet_summary to service_role;
 grant execute on function public.complete_transport_run(uuid,numeric,uuid) to service_role;
+
+REVOKE ALL ON TABLE public.transport_run_cost_summary FROM anon, authenticated;
+REVOKE ALL ON TABLE public.transport_fleet_summary FROM anon, authenticated;
+GRANT SELECT ON TABLE public.transport_run_cost_summary TO service_role;
+GRANT SELECT ON TABLE public.transport_fleet_summary TO service_role;
 
 -- ============================================================================
 -- Cleaner early-finish runtime dependency
@@ -1139,6 +1198,25 @@ REVOKE ALL ON FUNCTION public.prune_system_logs(integer, integer) FROM PUBLIC;
 REVOKE ALL ON FUNCTION public.prune_system_logs(integer, integer) FROM anon;
 REVOKE ALL ON FUNCTION public.prune_system_logs(integer, integer) FROM authenticated;
 GRANT EXECUTE ON FUNCTION public.prune_system_logs(integer, integer) TO service_role;
+
+-- Keep the converged environment on the currently approved production retention policy even when
+-- an earlier migration already inserted the legacy 30-day setting.
+INSERT INTO public.data_retention_settings (
+  table_name, retention_days, batch_size, prune_enabled, notes
+)
+VALUES (
+  'system_logs',
+  14,
+  10000,
+  true,
+  'SUPA-MIG-08A preserves the approved production system_logs retention: 14 days, bounded batches.'
+)
+ON CONFLICT (table_name) DO UPDATE
+SET retention_days = EXCLUDED.retention_days,
+    batch_size = EXCLUDED.batch_size,
+    prune_enabled = EXCLUDED.prune_enabled,
+    notes = EXCLUDED.notes,
+    updated_at = now();
 
 -- ============================================================================
 -- Approved Storage least-privilege policies
@@ -1722,54 +1800,5 @@ BEGIN
     EXECUTE format('GRANT EXECUTE ON FUNCTION %s TO service_role', r.sig);
   END LOOP;
 END $$;
-
--- ============================================================================
--- Approved default-privilege hardening
--- ============================================================================
--- Phase 1.11C — Stop dump-pattern default privileges for future objects
--- Audit: F-SEC-005 / default privilege amplifier
---
--- Baseline ALTER DEFAULT PRIVILEGES granted ALL on TABLES/SEQUENCES/FUNCTIONS
--- created by role postgres to anon + authenticated. That reopens privilege debt
--- on every new migration object. Close the amplifier; service_role retains ALL.
---
--- Owner/schema: FOR ROLE postgres IN SCHEMA public (migration object owner).
--- TYPES default privileges are out of scope for 1.11C.
--- Does NOT revoke default privileges from service_role or postgres.
-
--- Why: future tables must not auto-grant ALL (incl. TRUNCATE) to public API roles.
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE ALL ON TABLES FROM anon;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE ALL ON TABLES FROM authenticated;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE ALL ON SEQUENCES FROM anon;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE ALL ON SEQUENCES FROM authenticated;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE ALL ON FUNCTIONS FROM anon;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  REVOKE ALL ON FUNCTIONS FROM authenticated;
-
--- Why: keep service_role and postgres able to use newly created objects.
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT ALL ON TABLES TO postgres;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT ALL ON TABLES TO service_role;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT ALL ON SEQUENCES TO postgres;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT ALL ON SEQUENCES TO service_role;
-
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT ALL ON FUNCTIONS TO postgres;
-ALTER DEFAULT PRIVILEGES FOR ROLE postgres IN SCHEMA public
-  GRANT ALL ON FUNCTIONS TO service_role;
-
-COMMENT ON SCHEMA public IS
-  'Phase 1.11C: default privileges no longer auto-grant ALL to anon/authenticated. New public objects need explicit GRANT + RLS.';
 
 COMMIT;
