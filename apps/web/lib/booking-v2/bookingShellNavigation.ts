@@ -3,6 +3,7 @@ import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig
 const PROGRESSIVE_DETAILS_SERVICES: ReadonlySet<ServiceSlug> = new Set([
   "regular-cleaning",
   "deep-cleaning",
+  "moving-cleaning",
 ]);
 
 export function shouldShowBookingShellNavigation(
