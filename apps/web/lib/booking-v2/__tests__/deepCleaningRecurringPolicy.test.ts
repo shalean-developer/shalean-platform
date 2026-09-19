@@ -3,6 +3,7 @@ import {
   DEEP_CLEANING_RECURRING_FREQUENCY,
   recurringFrequenciesForService,
   recurringScheduleAllowedForService,
+  serviceAllowsRecurringBookings,
   serviceUsesRecurringDayPicker,
 } from "@/lib/booking-v2/serviceRecurringPolicy";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
@@ -78,4 +79,22 @@ describe("deep cleaning recurring policy", () => {
     ]);
     expect(serviceUsesRecurringDayPicker("regular-cleaning")).toBe(true);
   });
+  it("keeps Moving Cleaning once-off only", () => {
+    expect(serviceAllowsRecurringBookings("moving-cleaning")).toBe(false);
+    expect(recurringFrequenciesForService("moving-cleaning")).toEqual([]);
+    expect(serviceUsesRecurringDayPicker("moving-cleaning")).toBe(false);
+    expect(recurringScheduleAllowedForService({
+      serviceSlug: "moving-cleaning",
+      bookingType: "once_off",
+      recurringFrequency: "",
+      recurringDays: [],
+    })).toBe(true);
+    expect(recurringScheduleAllowedForService({
+      serviceSlug: "moving-cleaning",
+      bookingType: "recurring",
+      recurringFrequency: "monthly",
+      recurringDays: [],
+    })).toBe(false);
+  });
+
 });
