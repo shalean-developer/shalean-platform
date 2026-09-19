@@ -9,6 +9,7 @@ on:
       - test/plesk-prod-build-08
       - fix/plesk-prod-converge-08b
       - integration/shalean-release
+      - fix/supa-prod-schema-convergence
     paths:
       - ".github/workflows/plesk-prod-build-08.yml"
       - "apps/web/**"
