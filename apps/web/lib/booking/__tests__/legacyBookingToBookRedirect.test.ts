@@ -4,6 +4,7 @@ import {
   buildBookHrefFromLegacySearchParams,
   buildBookHrefFromWidgetSelection,
   buildBookServiceSelectionHref,
+  explicitBookServiceSlugFromParam,
   legacyServiceIdToBookSlug,
 } from "@/lib/booking/legacyBookingToBookRedirect";
 
@@ -11,6 +12,14 @@ describe("legacyBookingToBookRedirect", () => {
   it("maps airbnb to airbnb-cleaning slug", () => {
     expect(legacyServiceIdToBookSlug("airbnb")).toBe("airbnb-cleaning");
   });
+
+  it("resolves explicit Office intent without falling back to Regular", () => {
+    expect(explicitBookServiceSlugFromParam("office-cleaning")).toBe("office-cleaning");
+    expect(explicitBookServiceSlugFromParam("office")).toBe("office-cleaning");
+    expect(explicitBookServiceSlugFromParam("not-a-service")).toBeNull();
+  });
+
+
 
   it("builds /book slug path with step and marketing params", () => {
     const sp = new URLSearchParams({
