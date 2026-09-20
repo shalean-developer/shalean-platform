@@ -214,7 +214,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
                 : "",
             ]
           : values.serviceSlug === "office-cleaning"
-            ? [optionLabel("afterHours", values.serviceDetails.afterHours)]
+            ? []
             : values.serviceSlug === "carpet-cleaning"
               ? [
                   values.serviceDetails.stains
@@ -339,7 +339,13 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
           ) : null}
           {homeLabel ? (
             <SummaryRow
-              label={isCarpetCleaning ? "Carpet scope" : "Home"}
+              label={
+                isCarpetCleaning
+                  ? "Carpet scope"
+                  : values.serviceSlug === "office-cleaning"
+                    ? "Office scope"
+                    : "Home"
+              }
               value={homeLabel}
               onEdit={editDetail("property")}
             />
