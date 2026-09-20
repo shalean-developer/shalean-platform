@@ -105,7 +105,10 @@ export function bookingDetailsStage(
 
     case "carpet-cleaning":
       if (!has(details, "propertyType")) return "property";
-      if (!all(details, ["carpetRooms", "rugCount", "carpetType"])) return "rooms";
+      // rugCount is part of the current static flow, but older live catalog
+      // definitions used sofaCount instead. The active stage readiness check
+      // validates whichever required room questions the catalog actually exposes.
+      if (!all(details, ["carpetRooms", "carpetType"])) return "rooms";
       return "condition";
 
     case "airbnb-cleaning":
