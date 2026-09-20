@@ -98,9 +98,7 @@ export function buildBookServiceSelectionHref(
   const next = new URLSearchParams(sp);
   next.set("service", serviceSlug);
   const href = buildBookHrefFromLegacySearchParams(next, "details");
-  return serviceSlug === "regular-cleaning"
-    ? `${href}&section=address`
-    : href;
+  return `${href}&section=address`;
 }
 
 export type WidgetBookingSelection = {
