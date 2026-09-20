@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   adjacentBookingDetailsStage,
@@ -22,6 +24,32 @@ const address = {
 };
 
 describe("six-service progressive booking details", () => {
+  it("uses the shortened Carpet room label everywhere", () => {
+    const carpetRooms = SERVICE_CONFIG["carpet-cleaning"].step1Questions.find(
+      (question) => question.key === "carpetRooms",
+    );
+    expect(carpetRooms?.label).toBe("Carpeted rooms");
+
+    const catalogSeed = readFileSync(
+      join(process.cwd(), "../../supabase/seeds/booking_v2_catalog_config.json"),
+      "utf8",
+    );
+    expect(catalogSeed).toContain('"label": "Carpeted rooms"');
+    expect(catalogSeed).not.toContain('"label": "Number of carpeted rooms"');
+
+    const runtimeCatalogSource = readFileSync(
+      join(process.cwd(), "lib/booking-v2/loadBookingV2Catalog.ts"),
+      "utf8",
+    );
+    expect(runtimeCatalogSource).toContain(
+      'question.key === "carpetRooms"',
+    );
+    expect(runtimeCatalogSource).toContain(
+      'label: "Carpeted rooms"',
+    );
+  });
+
+
   it("keeps Regular stages unchanged", () => {
     expect(bookingDetailsStage("regular-cleaning", {}, address)).toBe("property");
     expect(bookingDetailsStage("regular-cleaning", { propertyType: "house" }, address)).toBe("rooms");
