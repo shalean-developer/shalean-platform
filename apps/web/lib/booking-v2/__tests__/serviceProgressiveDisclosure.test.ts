@@ -98,6 +98,39 @@ describe("six-service progressive booking details", () => {
     expect(bookingDetailsShowsExtras("airbnb-cleaning", "turnover")).toBe(true);
   });
 
+  it("keeps the preceding selection visible while completing size/room details", () => {
+    const property = { key: "propertyType", group: undefined };
+    const officeType = { key: "officeType", group: undefined };
+    const moveType = { key: "moveType", group: undefined };
+
+    expect(
+      bookingDetailsQuestionVisibleAtStage("regular-cleaning", property, "rooms"),
+    ).toBe(true);
+    expect(
+      bookingDetailsQuestionVisibleAtStage("deep-cleaning", property, "rooms"),
+    ).toBe(true);
+    expect(
+      bookingDetailsQuestionVisibleAtStage("airbnb-cleaning", property, "rooms"),
+    ).toBe(true);
+    expect(
+      bookingDetailsQuestionVisibleAtStage("carpet-cleaning", property, "rooms"),
+    ).toBe(true);
+    expect(
+      bookingDetailsQuestionVisibleAtStage("office-cleaning", officeType, "rooms"),
+    ).toBe(true);
+
+    // Moving preserves the earlier approved no-duplicate-Property-on-Rooms fix.
+    expect(
+      bookingDetailsQuestionVisibleAtStage("moving-cleaning", property, "move"),
+    ).toBe(true);
+    expect(
+      bookingDetailsQuestionVisibleAtStage("moving-cleaning", property, "rooms"),
+    ).toBe(false);
+    expect(
+      bookingDetailsQuestionVisibleAtStage("moving-cleaning", moveType, "rooms"),
+    ).toBe(true);
+  });
+
   it("uses progressive Carpet stages and accepts live room-group questions", () => {
     expect(bookingDetailsStage("carpet-cleaning", {}, address)).toBe("property");
     expect(bookingDetailsStage("carpet-cleaning", { propertyType: "house" }, address)).toBe("rooms");
