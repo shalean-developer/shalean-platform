@@ -102,6 +102,33 @@ const CLEANER_IDS = {
   c6: "f1000001-0006-4001-8001-000000000006",
 };
 
+const TEAM_IDS = {
+  move_alpha: "f9000001-0001-4009-8009-000000000001",
+  move_bravo: "f9000001-0002-4009-8009-000000000002",
+  move_charlie: "f9000001-0003-4009-8009-000000000003",
+};
+
+const DEV_TEAMS = [
+  {
+    id: TEAM_IDS.move_alpha,
+    name: "Dev Move Team Alpha",
+    service_type: "move_cleaning",
+    members: [CLEANER_IDS.c1, CLEANER_IDS.c3],
+  },
+  {
+    id: TEAM_IDS.move_bravo,
+    name: "Dev Move Team Bravo",
+    service_type: "move_cleaning",
+    members: [CLEANER_IDS.c3, CLEANER_IDS.c5],
+  },
+  {
+    id: TEAM_IDS.move_charlie,
+    name: "Dev Move Team Charlie",
+    service_type: "move_cleaning",
+    members: [CLEANER_IDS.c1, CLEANER_IDS.c5],
+  },
+];
+
 /** Fixed UUIDs for bookings (paystack_reference is the conflict key but id is also fixed). */
 const BOOKING_IDS = {
   completed_standard:     "f2000001-0001-4002-8002-000000000001",
@@ -612,7 +639,42 @@ async function seedCleaners(admin, userIdMap, locationIdMap) {
 }
 
 // ──────────────────────────────────────────────────────────────────────────────
-// Phase 5 — Bookings
+// Phase 5 — Dispatch Teams
+// ──────────────────────────────────────────────────────────────────────────────
+
+async function seedTeams(admin) {
+  for (const team of DEV_TEAMS) {
+    const { error: teamError } = await admin.from("teams").upsert(
+      {
+        id: team.id,
+        name: team.name,
+        service_type: team.service_type,
+        capacity_per_day: 1,
+        is_active: true,
+        lead_cleaner_id: team.members[0],
+      },
+      { onConflict: "id" },
+    );
+    if (teamError) throw new Error(`Team ${team.name}: ${teamError.message}`);
+
+    await admin.from("team_members").delete().eq("team_id", team.id);
+
+    const roster = team.members.map((cleanerId) => ({
+      team_id: team.id,
+      cleaner_id: cleanerId,
+      active_from: "2026-01-01T00:00:00Z",
+      active_to: null,
+    }));
+
+    const { error: rosterError } = await admin.from("team_members").insert(roster);
+    if (rosterError) throw new Error(`Team roster ${team.name}: ${rosterError.message}`);
+  }
+
+  return DEV_TEAMS.length;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// Phase 6 — Bookings
 // ──────────────────────────────────────────────────────────────────────────────
 
 async function seedBookings(admin, userIdMap, locationIdMap) {
@@ -1316,6 +1378,10 @@ async function resetSeedRows(admin) {
     .delete().in("id", Object.values(RECURRING_IDS));
   await admin.from("bookings")
     .delete().like("paystack_reference", `${SEED_TAG}-%`);
+  await admin.from("team_members")
+    .delete().in("team_id", Object.values(TEAM_IDS));
+  await admin.from("teams")
+    .delete().in("id", Object.values(TEAM_IDS));
   for (const cleanerId of Object.values(CLEANER_IDS)) {
     await admin.from("cleaner_availability").delete().eq("cleaner_id", cleanerId);
     await admin.from("cleaner_locations").delete().eq("cleaner_id", cleanerId);
@@ -1364,6 +1430,7 @@ async function main() {
     console.log("  Catalog: 6 pricing_services, 26 pricing_extras, 1 pricing_booking_config, 6 services");
     console.log(`  Auth users: ${ADMIN_USERS.length} admins, ${CLEANER_USERS.length} cleaners, ${CUSTOMER_USERS.length} customers`);
     console.log("  Cleaners: 6 (with cleaner_locations + cleaner_availability)");
+    console.log(`  Dispatch teams: ${DEV_TEAMS.length} move-clean teams`);
     console.log("  Bookings: 15 representative");
     console.log("  Recurring: 3 (weekly, fortnightly, monthly)");
     console.log("  Earnings: 5 | Payout runs: 2 | Payouts: 5");
@@ -1399,23 +1466,27 @@ async function main() {
   await seedCleaners(admin, userIdMap, locationIdMap);
   console.log(`  Cleaners: ${Object.keys(CLEANER_IDS).length}`);
 
-  console.log("[seed-dev] Phase 5: Bookings");
+  console.log("[seed-dev] Phase 5: Dispatch Teams");
+  const teamCount = await seedTeams(admin);
+  console.log(`  Teams: ${teamCount}`);
+
+  console.log("[seed-dev] Phase 6: Bookings");
   const { count: bookingCount } = await seedBookings(admin, userIdMap, locationIdMap);
   console.log(`  Bookings: ${bookingCount}`);
 
-  console.log("[seed-dev] Phase 6: Recurring Bookings");
+  console.log("[seed-dev] Phase 7: Recurring Bookings");
   const recurringCount = await seedRecurringBookings(admin, userIdMap, locationIdMap);
   console.log(`  Recurring: ${recurringCount}`);
 
-  console.log("[seed-dev] Phase 7: Finance (earnings, payouts)");
+  console.log("[seed-dev] Phase 8: Finance (earnings, payouts)");
   const { earningsCount, payoutsCount } = await seedFinance(admin, userIdMap);
   console.log(`  Earnings: ${earningsCount} | Payouts: ${payoutsCount}`);
 
-  console.log("[seed-dev] Phase 8: Monthly Invoices");
+  console.log("[seed-dev] Phase 9: Monthly Invoices");
   const invoiceCount = await seedInvoices(admin, userIdMap);
   console.log(`  Invoices: ${invoiceCount}`);
 
-  console.log("[seed-dev] Phase 9: Admin Proposals");
+  console.log("[seed-dev] Phase 10: Admin Proposals");
   const proposalCount = await seedProposals(admin, userIdMap);
   console.log(`  Proposals: ${proposalCount}`);
 
@@ -1426,6 +1497,7 @@ async function main() {
   console.log(`  pricing_services: ${pricingServicesCount}  |  pricing_extras: ${extrasCount}`);
   console.log(`  Auth users: ${Object.keys(userIdMap).length} (3 admin, 6 cleaner, 8 customer)`);
   console.log("  Cleaners: 6  |  cleaner_locations: up to 12  |  cleaner_availability: ~120 rows");
+  console.log(`  Dispatch teams: ${teamCount}`);
   console.log(`  Bookings: ${bookingCount}  |  Recurring: ${recurringCount}`);
   console.log(`  Earnings: ${earningsCount}  |  Payout runs: 2  |  Payouts: ${payoutsCount}`);
   console.log(`  Monthly invoices: ${invoiceCount}  |  Admin proposals: ${proposalCount}`);
