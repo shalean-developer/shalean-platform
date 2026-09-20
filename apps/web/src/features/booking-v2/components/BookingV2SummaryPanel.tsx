@@ -238,13 +238,15 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const bookingTypeLabel = values.bookingType === "recurring" ? "Recurring" : "Once-off";
   const scheduleIsVisible =
     !(isDeepCleaning && currentStep === 1) &&
-    (!progressiveSchedule ||
-      currentStep > 2 ||
-      isRegularCleaningScheduleStageComplete(
-        "booking_type",
-        displayedScheduleStage,
-        values.bookingType,
-      ));
+    (isCarpetCleaning
+      ? currentStep > 2 || displayedScheduleStage === "cleaner"
+      : !progressiveSchedule ||
+        currentStep > 2 ||
+        isRegularCleaningScheduleStageComplete(
+          "booking_type",
+          displayedScheduleStage,
+          values.bookingType,
+        ));
   const dateIsVisible =
     hasDate &&
     !(isDeepCleaning && currentStep === 1) &&
