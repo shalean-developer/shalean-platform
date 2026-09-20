@@ -340,20 +340,6 @@ const OFFICE_QUESTIONS: FormQuestion[] = [
     options: [...BATHROOM_COUNT_OPTIONS],
   },
   {
-    key: "frequency",
-    label: "Cleaning frequency",
-    type: "select",
-    required: true,
-    group: "rooms",
-    options: [
-      { value: "daily", label: "Daily (Mon–Fri)" },
-      { value: "twice_week", label: "Twice a week" },
-      { value: "weekly", label: "Weekly" },
-      { value: "once_off", label: "Once-off" },
-    ],
-    hint: "How often you need cleaning — this does not change today’s visit price. Choose a recurring plan on the schedule step if you want a plan discount.",
-  },
-  {
     key: "afterHours",
     label: "Preferred cleaning time",
     type: "radio",
