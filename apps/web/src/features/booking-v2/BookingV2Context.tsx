@@ -32,7 +32,10 @@ import {
   type BookingPricingAvailability,
 } from "@/lib/booking-v2/bookingPricingAvailability";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
-import { bookingV2PrefillPatchFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
+import {
+  bookingV2PrefillPatchFromLegacySearchParams,
+  explicitBookServiceSlugFromParam,
+} from "@/lib/booking/legacyBookingToBookRedirect";
 import { setReferralCapture } from "@/lib/referrals/client";
 import { consumeBookingV2CompletedReset } from "@/lib/booking-v2/bookingV2PaymentRedirect";
 import { buildStep2Schema, step1Schema } from "@/src/features/booking-v2/schemas";
@@ -158,10 +161,21 @@ export function BookingV2Provider({
   const config = SERVICE_CONFIG[serviceSlug];
 
   const currentStep = bookingStepFromQuery(searchParams.get("step"));
+  const requestedQueryServiceSlug = explicitBookServiceSlugFromParam(
+    searchParams.get("service"),
+  );
   const requestedDetailsSection = bookingDetailsStageFromSearchParam(
     serviceSlug,
     searchParams.get("section"),
   );
+
+  useEffect(() => {
+    if (!requestedQueryServiceSlug || requestedQueryServiceSlug === serviceSlug) return;
+
+    const params = new URLSearchParams(window.location.search);
+    params.set("service", requestedQueryServiceSlug);
+    router.replace(`/book/${requestedQueryServiceSlug}?${params.toString()}`);
+  }, [requestedQueryServiceSlug, router, serviceSlug]);
 
   // Persist referral invitations again at booking entry. This makes the offer survive
   // account creation, email confirmation, and direct /book links even if the landing
@@ -668,6 +682,10 @@ export function BookingV2Provider({
       clearBooking,
     ],
   );
+
+  if (requestedQueryServiceSlug && requestedQueryServiceSlug !== serviceSlug) {
+    return null;
+  }
 
   return (
     <BookingV2Context.Provider value={value}>
