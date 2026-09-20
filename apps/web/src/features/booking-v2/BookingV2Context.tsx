@@ -521,6 +521,33 @@ export function BookingV2Provider({
   useEffect(() => {
     if (
       currentStep !== 1 ||
+      (serviceSlug !== "regular-cleaning" && serviceSlug !== "deep-cleaning")
+    ) return;
+
+    if (!requestedDetailsSection) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("step", "details");
+      params.set("section", detailsSectionOverride ?? "address");
+      window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+      return;
+    }
+
+    if (requestedDetailsSection !== detailsSectionOverride) {
+      setDetailsSectionOverride(requestedDetailsSection);
+    }
+  }, [
+    currentStep,
+    detailsSectionOverride,
+    requestedDetailsSection,
+    searchParams,
+    serviceSlug,
+  ]);
+
+  useEffect(() => {
+    if (
+      currentStep !== 1 ||
+      serviceSlug === "regular-cleaning" ||
+      serviceSlug === "deep-cleaning" ||
       !isProgressiveBookingDetailsService(serviceSlug)
     ) return;
 
