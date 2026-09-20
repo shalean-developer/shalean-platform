@@ -321,13 +321,23 @@ export function bookingDetailsQuestionVisibleAtStage(
   const questionStage = bookingDetailsQuestionStage(serviceSlug, question);
   if (!questionStage) return false;
 
-  // Preserve the approved Regular/Deep presentation where Property remains
-  // visible while the room-count controls are being completed.
-  if (
-    (serviceSlug === "regular-cleaning" || serviceSlug === "deep-cleaning") &&
-    question.key === "propertyType"
-  ) {
+  // Match the approved Regular/Deep presentation: keep the immediately
+  // preceding choice visible while the customer completes the room/size stage.
+  // Moving is deliberately different only to preserve the approved fix that
+  // prevents Property type from repeating on the Rooms stage.
+  if (question.key === "propertyType") {
+    if (serviceSlug === "moving-cleaning") {
+      return stage === "property" || stage === "move";
+    }
     return stage === "property" || stage === "rooms";
+  }
+
+  if (serviceSlug === "office-cleaning" && question.key === "officeType") {
+    return stage === "property" || stage === "rooms";
+  }
+
+  if (serviceSlug === "moving-cleaning" && question.key === "moveType") {
+    return stage === "move" || stage === "rooms";
   }
 
   return questionStage === stage;
