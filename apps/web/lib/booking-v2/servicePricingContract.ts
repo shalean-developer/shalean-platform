@@ -108,12 +108,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "rugCount", effect: "price_and_duration", consumedBy: "rugs_per_unit_zar + duration rug minutes" },
       { key: "carpetType", effect: "price_and_duration", consumedBy: "propertyFactorRates.carpetType" },
       { key: "stains", effect: "price_and_duration", consumedBy: "propertyFactorRates.stains" },
-      {
-        key: "sofaCount",
-        effect: "extras_or_remove",
-        consumedBy: "legacy: priced if present; new bookings use sofa-upholstery Extra",
-      },
-      { key: "hasPets", effect: "informational", consumedBy: "persisted only" },
     ],
   },
   "airbnb-cleaning": {
