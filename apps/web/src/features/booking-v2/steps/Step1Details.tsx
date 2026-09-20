@@ -442,6 +442,7 @@ export function Step1Details() {
         activeDetailsStage,
         serviceDetails,
         bookingDetails,
+        step1Questions,
       )
     : true;
 
