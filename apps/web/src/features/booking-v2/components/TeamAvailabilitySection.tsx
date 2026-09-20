@@ -18,6 +18,26 @@ function useTeamAvailability(date: string, serviceSlug: string) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    if (serviceSlug !== "moving-cleaning") {
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        setData(null);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      fetch(`/api/booking-v2/team-availability?date=${date}&service=${serviceSlug}`)
+        .then((r) => r.json())
+        .then((json: TeamAvailabilityData) => {
+          setData(json);
+          setLoading(false);
+        })
+        .catch(() => {
+          setError("Could not check team availability. Please try again.");
+          setLoading(false);
+        });
+      return;
+    }
+
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       setData(null);
       setLoading(false);
