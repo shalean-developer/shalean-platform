@@ -20,6 +20,7 @@ import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTra
 import { runPaystackVerifyFinalizePipeline } from "@/lib/booking/runPaystackVerifyFinalizePipeline";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncRecurringPrepaymentReference } from "@/lib/recurring/recurringPrepaymentLedger";
+import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
 
 export type BookingPaymentSessionAccess =
   | { kind: "paystack_ref"; reference: string }
@@ -79,6 +80,20 @@ const SELECT_BASE_COLS =
   "id, status, payment_status, payment_completed_at, paystack_reference, payment_link, payment_link_expires_at, customer_email, total_price, total_paid_zar, price_snapshot, booking_snapshot, service, date, time";
 
 const PAYSTACK_INITIALIZE_TIMEOUT_MS = 12_000;
+
+function strictLocalPaymentSimulationEnabled(): boolean {
+  if (resolveDeploymentEnvironment() !== "local") return false;
+  const raw = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "").trim();
+  try {
+    const url = new URL(raw);
+    return (
+      (url.hostname === "127.0.0.1" || url.hostname === "localhost") &&
+      url.port === "54321"
+    );
+  } catch {
+    return false;
+  }
+}
 
 type BookingLoadResult =
   | { row: BookingPayRow; error: null }
@@ -488,37 +503,42 @@ async function ensureBookingPaymentSessionInner(
     };
   }
 
-  const keyMismatch = detectPaystackKeyModeMismatch();
-  if (keyMismatch) {
-    return {
-      status: "failed",
-      bookingId: id,
-      errorCode: keyMismatch.errorCode,
-      error: keyMismatch.error,
-      retryable: false,
-    };
-  }
+  const localPaymentSimulation = strictLocalPaymentSimulationEnabled();
+  let secret = "";
 
-  const envSafety = assertEnvironmentPaymentSafety();
-  if (envSafety) {
-    return {
-      status: "failed",
-      bookingId: id,
-      errorCode: PAYMENT_ERROR_CODES.PAYMENT_CONFIGURATION_ERROR,
-      error: envSafety.message,
-      retryable: false,
-    };
-  }
+  if (!localPaymentSimulation) {
+    const keyMismatch = detectPaystackKeyModeMismatch();
+    if (keyMismatch) {
+      return {
+        status: "failed",
+        bookingId: id,
+        errorCode: keyMismatch.errorCode,
+        error: keyMismatch.error,
+        retryable: false,
+      };
+    }
 
-  const secret = (process.env.PAYSTACK_SECRET_KEY ?? "").trim();
-  if (!secret) {
-    return {
-      status: "failed",
-      bookingId: id,
-      errorCode: PAYMENT_ERROR_CODES.PAYMENT_CONFIGURATION_ERROR,
-      error: "Paystack is not configured.",
-      retryable: false,
-    };
+    const envSafety = assertEnvironmentPaymentSafety();
+    if (envSafety) {
+      return {
+        status: "failed",
+        bookingId: id,
+        errorCode: PAYMENT_ERROR_CODES.PAYMENT_CONFIGURATION_ERROR,
+        error: envSafety.message,
+        retryable: false,
+      };
+    }
+
+    secret = (process.env.PAYSTACK_SECRET_KEY ?? "").trim();
+    if (!secret) {
+      return {
+        status: "failed",
+        bookingId: id,
+        errorCode: PAYMENT_ERROR_CODES.PAYMENT_CONFIGURATION_ERROR,
+        error: "Paystack is not configured.",
+        retryable: false,
+      };
+    }
   }
 
   const loaded = await loadBooking(admin, id);
@@ -594,6 +614,60 @@ async function ensureBookingPaymentSessionInner(
       errorCode: PAYMENT_ERROR_CODES.PAYMENT_AMOUNT_MISMATCH,
       error: "Booking amount is invalid. Contact support.",
       retryable: false,
+    };
+  }
+
+  if (localPaymentSimulation) {
+    const reference =
+      String(row.paystack_reference ?? "").trim() ||
+      `local_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`;
+    const amountCents = Math.round(amountZar * 100);
+
+    const finalized = await runPaystackVerifyFinalizePipeline(
+      {
+        status: "success",
+        reference,
+        amount: amountCents,
+        currency: "ZAR",
+        paid_at: new Date().toISOString(),
+        channel: "local_simulator",
+        customer: { email: String(row.customer_email ?? "").trim() },
+        metadata: {
+          booking_id: row.id,
+          shalean_booking_id: row.id,
+          customer_email: String(row.customer_email ?? "").trim(),
+          pay_total_zar: String(amountZar),
+          expected_total_zar: String(amountZar),
+          is_test: "true",
+          payment_path: "local_payment_simulator",
+        },
+      },
+      reference,
+      "local/payment-simulator",
+    );
+
+    if (finalized.result.error || !finalized.result.bookingId) {
+      return {
+        status: "failed",
+        bookingId: id,
+        errorCode: PAYMENT_ERROR_CODES.PAYMENT_INITIALIZATION_FAILED,
+        error: finalized.result.error ?? "Local test payment could not be finalized.",
+        retryable: true,
+      };
+    }
+
+    logPaymentStructured("payment_initialize", {
+      booking_id: id,
+      reference,
+      result: "local_simulated_paid",
+      amount_cents: amountCents,
+    });
+
+    return {
+      status: "paid",
+      bookingId: finalized.result.bookingId,
+      reference,
+      errorCode: PAYMENT_ERROR_CODES.PAYMENT_ALREADY_COMPLETED,
     };
   }
 
