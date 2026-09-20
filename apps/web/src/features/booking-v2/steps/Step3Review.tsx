@@ -999,9 +999,25 @@ export function Step3Review() {
   const showEquipment =
     serviceShowsEquipmentQuestion(serviceSlug) &&
     (values.equipmentRequired === "yes" || values.equipmentRequired === "no");
+  const carpetScopeKeys = new Set([
+    "propertyType",
+    "carpetRooms",
+    "rugCount",
+    "carpetType",
+  ]);
+  const carpetScopeDetails = isCarpetCleaning
+    ? serviceDetails.filter(([key]) => carpetScopeKeys.has(key))
+    : [];
+  const carpetConditionDetails = isCarpetCleaning
+    ? serviceDetails.filter(([key]) => key === "stains")
+    : [];
   const hasServiceDetails = serviceDetails.length > 0;
+  const detailSectionCount = isCarpetCleaning
+    ? Number(carpetScopeDetails.length > 0) + Number(carpetConditionDetails.length > 0)
+    : Number(hasServiceDetails);
   const cleanDetailsNumber = 2 + Number(showEquipment);
-  const scheduleNumber = 2 + Number(showEquipment) + Number(hasServiceDetails);
+  const conditionNumber = cleanDetailsNumber + 1;
+  const scheduleNumber = 2 + Number(showEquipment) + detailSectionCount;
   const cleanerNumber = scheduleNumber + 1;
   const extrasNumber =
     scheduleNumber + 1 + Number(values.cleanerMode === "individual_cleaners");
@@ -1121,11 +1137,63 @@ export function Step3Review() {
           </ReviewSection>
         )}
 
-        {/* ② Clean details */}
-        {serviceDetails.length > 0 && (
+        {/* ② Service details / Carpet scope + condition */}
+        {isCarpetCleaning ? (
+          <>
+            {carpetScopeDetails.length > 0 ? (
+              <ReviewSection
+                number={cleanDetailsNumber}
+                title="Carpet scope"
+                onEdit={() => openEdit("property")}
+                className="sm:col-span-2"
+              >
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                  {carpetScopeDetails.map(([key, val]) => {
+                    const question = step1Questions.find((q) => q.key === key);
+                    const displayVal =
+                      question?.options?.find((o) => o.value === String(val))?.label ??
+                      String(val);
+                    return (
+                      <div key={key}>
+                        <p className="text-xs text-slate-400">{question?.label ?? key}</p>
+                        <p className="mt-0.5 text-sm font-medium capitalize text-slate-800">
+                          {displayVal}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ReviewSection>
+            ) : null}
+
+            {carpetConditionDetails.length > 0 ? (
+              <ReviewSection
+                number={conditionNumber}
+                title="Condition"
+                onEdit={() => openEdit("property")}
+                className="sm:col-span-2"
+              >
+                {carpetConditionDetails.map(([key, val]) => {
+                  const question = step1Questions.find((q) => q.key === key);
+                  const displayVal =
+                    question?.options?.find((o) => o.value === String(val))?.label ??
+                    String(val);
+                  return (
+                    <div key={key}>
+                      <p className="text-xs text-slate-400">{question?.label ?? key}</p>
+                      <p className="mt-0.5 text-sm font-medium text-slate-800">
+                        {displayVal}
+                      </p>
+                    </div>
+                  );
+                })}
+              </ReviewSection>
+            ) : null}
+          </>
+        ) : serviceDetails.length > 0 ? (
           <ReviewSection
             number={cleanDetailsNumber}
-            title={isCarpetCleaning ? "Carpet scope" : "Clean details"}
+            title="Clean details"
             onEdit={() => openEdit("property")}
             className="sm:col-span-2"
           >
@@ -1154,7 +1222,7 @@ export function Step3Review() {
               })}
             </div>
           </ReviewSection>
-        )}
+        ) : null}
 
         {/* ③ Schedule */}
         <ReviewSection
