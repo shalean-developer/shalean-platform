@@ -57,6 +57,7 @@ import {
   CONTACT_PHONE_VALIDATION_MESSAGE,
   isValidContactPhone,
 } from "@/lib/booking/contactPhoneValidation";
+import { bookingDetailsQuestionStage } from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -415,8 +416,16 @@ function EquipmentEditPanel() {
 
 function PropertyEditPanel() {
   const { serviceSlug, liveConfig } = useBookingV2();
+  const { watch } = useFormContext<BookingV2FormData>();
   const config = SERVICE_CONFIG[serviceSlug];
-  const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+  const serviceDetails = watch("serviceDetails") ?? {};
+  const step1Questions = (liveConfig?.step1Questions ?? config.step1Questions).filter((question) => {
+    if (bookingDetailsQuestionStage(serviceSlug, question) == null) return false;
+    if (!question.showWhen) return true;
+    return question.showWhen.values.includes(
+      String(serviceDetails[question.showWhen.key] ?? ""),
+    );
+  });
 
   return (
     <div className="space-y-4">
