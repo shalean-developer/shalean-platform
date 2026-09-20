@@ -175,6 +175,30 @@ describe("six-service progressive booking details", () => {
     expect(bookingDetailsShowsExtras("carpet-cleaning", "condition")).toBe(true);
   });
 
+  it("falls back to the current Carpet room contract when catalog questions are unavailable", () => {
+    expect(
+      bookingDetailsStageReady(
+        "carpet-cleaning",
+        "rooms",
+        { propertyType: "house", carpetRooms: "2", carpetType: "standard" },
+        address,
+      ),
+    ).toBe(false);
+    expect(
+      bookingDetailsStageReady(
+        "carpet-cleaning",
+        "rooms",
+        {
+          propertyType: "house",
+          carpetRooms: "2",
+          rugCount: "0",
+          carpetType: "standard",
+        },
+        address,
+      ),
+    ).toBe(true);
+  });
+
   it("validates required live questions for the new progressive services", () => {
     const officeQuestions = SERVICE_CONFIG["office-cleaning"].step1Questions;
     expect(
