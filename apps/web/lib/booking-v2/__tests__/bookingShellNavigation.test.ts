@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import { shouldShowBookingShellNavigation } from "@/lib/booking-v2/bookingShellNavigation";
 
 describe("booking shell navigation", () => {
-  it.each(["regular-cleaning", "deep-cleaning", "moving-cleaning"] as const)(
+  it.each([
+    "regular-cleaning",
+    "deep-cleaning",
+    "moving-cleaning",
+    "office-cleaning",
+    "carpet-cleaning",
+    "airbnb-cleaning",
+  ] as const)(
     "hides generic navigation during progressive details and schedule for %s",
     (serviceSlug) => {
       expect(shouldShowBookingShellNavigation(1, serviceSlug)).toBe(false);
@@ -10,7 +17,14 @@ describe("booking shell navigation", () => {
     },
   );
 
-  it.each(["regular-cleaning", "deep-cleaning", "moving-cleaning"] as const)(
+  it.each([
+    "regular-cleaning",
+    "deep-cleaning",
+    "moving-cleaning",
+    "office-cleaning",
+    "carpet-cleaning",
+    "airbnb-cleaning",
+  ] as const)(
     "restores shell navigation after schedule for %s",
     (serviceSlug) => {
       expect(shouldShowBookingShellNavigation(3, serviceSlug)).toBe(true);
