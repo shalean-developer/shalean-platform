@@ -189,7 +189,7 @@ export function CleanerPreferenceSection({
             Shalean chooses for me
           </p>
           <p className="mt-0.5 text-xs text-slate-500">
-            We&apos;ll match your booking with a suitable available cleaner.
+            We&apos;ll match your booking with a suitable available {personLabel}.
           </p>
         </div>
         {bestAvailableSelected && (
@@ -242,7 +242,9 @@ export function CleanerPreferenceSection({
 
           {selectedIds.length > 0 ? (
             <p className="rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-center text-xs leading-relaxed text-blue-900">
-              {PREFERRED_CLEANER_CUSTOMER_DISCLAIMER}
+              {personLabel === "specialist"
+                ? "We'll offer this booking to your preferred specialist first. If they're unavailable or don't accept in time, we'll assign the best available specialist to keep your booking on schedule."
+                : PREFERRED_CLEANER_CUSTOMER_DISCLAIMER}
             </p>
           ) : null}
 
