@@ -14,6 +14,7 @@ const scheduleSource = source("src/features/booking-v2/steps/Step2Schedule.tsx")
 const teamAvailabilitySource = source(
   "src/features/booking-v2/components/TeamAvailabilitySection.tsx",
 );
+const contextSource = source("src/features/booking-v2/BookingV2Context.tsx");
 
 const address = {
   address: "12 Ocean View Drive",
@@ -44,6 +45,15 @@ describe("Regular and Deep production parity during six-service convergence", ()
     expect(bookingDetailsStage("deep-cleaning", {
       propertyType: "house", bedrooms: "2", bathrooms: "1", extraRooms: "0",
     }, address)).toBe("pets");
+  });
+
+  it("keeps Regular and Deep on their existing section-sync path", () => {
+    expect(contextSource).toContain(
+      'serviceSlug !== "regular-cleaning" && serviceSlug !== "deep-cleaning"',
+    );
+    expect(contextSource).toContain(
+      'serviceSlug === "regular-cleaning" ||\n      serviceSlug === "deep-cleaning"',
+    );
   });
 
   it("limits date-change team clearing to Moving Cleaning", () => {
