@@ -3,6 +3,7 @@ import {
   adjacentBookingDetailsStage,
   bookingDetailsAutoAdvanceTarget,
   bookingDetailsQuestionStage,
+  bookingDetailsQuestionVisibleAtStage,
   bookingDetailsShowsExtras,
   bookingDetailsStage,
   bookingDetailsStageReady,
