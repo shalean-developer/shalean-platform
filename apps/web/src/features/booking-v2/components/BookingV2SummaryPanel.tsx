@@ -12,19 +12,17 @@ import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import { estimatedCleaningHoursFromMinutes } from "@/lib/booking-v2/formatEstimatedCleaningTime";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import {
-  isRegularCleaningStageComplete,
-  regularCleaningDetailsStage,
-  type RegularCleaningDetailsStage,
-} from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
-import {
   isRegularCleaningScheduleStageComplete,
   type RegularCleaningScheduleStage,
 } from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
-import { deepCleaningDetailsStage } from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
 import {
-  movingCleaningDetailsStage,
-  type MovingCleaningDetailsStage,
-} from "@/src/features/booking-v2/steps/movingCleaningProgressiveDisclosure";
+  bookingDetailsFinalStage,
+  bookingDetailsStage,
+  bookingDetailsStageIndex,
+  isProgressiveBookingDetailsService,
+  usesProgressiveIndividualSchedule,
+  type BookingDetailsStage,
+} from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
@@ -97,7 +95,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const hasCleaner = values.cleanerMode === "team" || values.cleanerCount > 0;
   const hasPriceBreakdown = pricing.lineItems.length > 0;
   const edit = (step: BookingStep) => () => goToStep(step);
-  const editDetail = (section: RegularCleaningDetailsStage | MovingCleaningDetailsStage) => () => {
+  const editDetail = (section: BookingDetailsStage) => () => {
     goToStep(1);
     editDetailsSection(section);
   };
@@ -121,55 +119,138 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const isRegularCleaning = values.serviceSlug === "regular-cleaning";
   const isDeepCleaning = values.serviceSlug === "deep-cleaning";
   const isMovingCleaning = values.serviceSlug === "moving-cleaning";
-  const isProgressiveHomeCleaning = isRegularCleaning || isDeepCleaning || isMovingCleaning;
+  const progressiveDetails = isProgressiveBookingDetailsService(values.serviceSlug);
+  const progressiveSchedule = usesProgressiveIndividualSchedule(values.serviceSlug);
   const bookingDetails = {
     address: values.address,
     suburb: values.suburb,
     contactPhone: values.contactPhone,
     serviceAreaLocationId: values.serviceAreaLocationId,
   };
-  const detailsStage = isDeepCleaning
-    ? deepCleaningDetailsStage(values.serviceDetails, bookingDetails)
-    : isMovingCleaning
-      ? movingCleaningDetailsStage(values.serviceDetails, bookingDetails)
-      : regularCleaningDetailsStage(values.serviceDetails, bookingDetails);
+  const detailsStage = bookingDetailsStage(
+    values.serviceSlug,
+    values.serviceDetails,
+    bookingDetails,
+  );
   const displayedDetailsStage = detailsSectionOverride ?? detailsStage;
-  const propertyType = String(values.serviceDetails.propertyType ?? "");
-  const propertyLabel = config.step1Questions
-    .find((question) => question.key === "propertyType")
-    ?.options?.find((option) => option.value === propertyType)?.label ?? propertyType;
+  const detailsStageIndex = bookingDetailsStageIndex(
+    values.serviceSlug,
+    displayedDetailsStage,
+  );
+  const finalDetailsStage = bookingDetailsFinalStage(values.serviceSlug);
+  const finalDetailsStageIndex = bookingDetailsStageIndex(
+    values.serviceSlug,
+    finalDetailsStage,
+  );
+  const questions = liveConfig?.step1Questions ?? config.step1Questions;
+  const optionLabel = (key: string, raw: unknown): string => {
+    const value = String(raw ?? "");
+    return (
+      questions
+        .find((question) => question.key === key)
+        ?.options?.find((option) => option.value === value)?.label ?? value
+    );
+  };
+
+  const propertyLabel =
+    values.serviceSlug === "office-cleaning"
+      ? optionLabel("officeType", values.serviceDetails.officeType)
+      : optionLabel("propertyType", values.serviceDetails.propertyType);
+
   const bedrooms = String(values.serviceDetails.bedrooms ?? "");
   const bathrooms = String(values.serviceDetails.bathrooms ?? "");
-  const extraRooms = isMovingCleaning
-    ? String(values.serviceDetails.extraRooms ?? "")
-    : String(values.serviceDetails.extraRooms ?? "0");
-  const roomsComplete = [bedrooms, bathrooms, extraRooms].every((value) => value.trim() !== "");
-  const roomsLabel = isMovingCleaning
-    ? roomsComplete
-      ? `${bedrooms} bed · ${bathrooms} bath${extraRooms !== "0" ? ` · ${extraRooms} extra` : ""}`
-      : ""
-    : `${bedrooms} bed · ${bathrooms} bath${extraRooms !== "0" ? ` · ${extraRooms} extra` : ""}`;
+  const extraRooms = String(values.serviceDetails.extraRooms ?? "");
+  const homeRoomsComplete = [bedrooms, bathrooms, extraRooms].every(
+    (value) => value.trim() !== "",
+  );
+  const homeRoomsLabel = homeRoomsComplete
+    ? `${bedrooms} bed · ${bathrooms} bath${extraRooms !== "0" ? ` · ${extraRooms} extra` : ""}`
+    : "";
+
+  const roomsLabel =
+    values.serviceSlug === "office-cleaning"
+      ? [
+          optionLabel("officeSize", values.serviceDetails.officeSize),
+          bathrooms ? `${bathrooms} bathroom${bathrooms === "1" ? "" : "s"}` : "",
+        ].filter(Boolean).join(" · ")
+      : values.serviceSlug === "carpet-cleaning"
+        ? [
+            values.serviceDetails.carpetRooms
+              ? `${values.serviceDetails.carpetRooms} carpeted room${String(values.serviceDetails.carpetRooms) === "1" ? "" : "s"}`
+              : "",
+            values.serviceDetails.rugCount
+              ? `${values.serviceDetails.rugCount} rug${String(values.serviceDetails.rugCount) === "1" ? "" : "s"}`
+              : "",
+            optionLabel("carpetType", values.serviceDetails.carpetType),
+          ].filter(Boolean).join(" · ")
+        : homeRoomsLabel;
+
   const moveType = String(values.serviceDetails.moveType ?? "");
-  const moveTypeLabel = moveType === "move_in" ? "Move-in" : moveType === "move_out" ? "Move-out" : "";
+  const moveTypeLabel =
+    moveType === "move_in" ? "Move-in" : moveType === "move_out" ? "Move-out" : "";
+
   const petsLabel = petAnswerLabel(values.serviceDetails.hasPets);
-  const equipmentLabel = values.equipmentRequired === "yes" ? "Shalean supplies" : "Customer supplies";
+  const equipmentLabel =
+    values.equipmentRequired === "yes" ? "Shalean supplies" : "Customer supplies";
+
+  const finalDetailValues =
+    values.serviceSlug === "regular-cleaning"
+      ? [petsLabel, equipmentLabel]
+      : values.serviceSlug === "deep-cleaning"
+        ? [
+            optionLabel("lastCleaned", values.serviceDetails.lastCleaned),
+            petsLabel,
+          ]
+        : values.serviceSlug === "moving-cleaning"
+          ? [
+              optionLabel("furnished", values.serviceDetails.furnished),
+              petsLabel,
+              values.serviceDetails.depositInspection
+                ? `Deposit inspection: ${optionLabel("depositInspection", values.serviceDetails.depositInspection)}`
+                : "",
+            ]
+          : values.serviceSlug === "office-cleaning"
+            ? [optionLabel("afterHours", values.serviceDetails.afterHours)]
+            : values.serviceSlug === "carpet-cleaning"
+              ? [
+                  values.serviceDetails.stains
+                    ? `Stains: ${optionLabel("stains", values.serviceDetails.stains)}`
+                    : "",
+                  petsLabel,
+                ]
+              : [
+                  optionLabel("linens", values.serviceDetails.linens),
+                  optionLabel("guestCheckout", values.serviceDetails.guestCheckout),
+                  optionLabel("keyAccess", values.serviceDetails.keyAccess),
+                  optionLabel("welcomeBasket", values.serviceDetails.welcomeBasket),
+                ];
+  const moreDetailsLabel = finalDetailValues.filter(Boolean).join(" · ");
+
   const displayedScheduleStage = scheduleSectionOverride ?? "booking_type";
   const cleanerIsVisible =
     hasCleaner &&
     !(isDeepCleaning && currentStep === 1) &&
-    (!isRegularCleaning || currentStep > 2 || displayedScheduleStage === "cleaner");
+    (!progressiveSchedule || currentStep > 2 || displayedScheduleStage === "cleaner");
   const bookingTypeLabel = values.bookingType === "recurring" ? "Recurring" : "Once-off";
   const scheduleIsVisible =
     !(isDeepCleaning && currentStep === 1) &&
-    (!isRegularCleaning ||
-    currentStep > 2 ||
-    isRegularCleaningScheduleStageComplete("booking_type", displayedScheduleStage, values.bookingType));
+    (!progressiveSchedule ||
+      currentStep > 2 ||
+      isRegularCleaningScheduleStageComplete(
+        "booking_type",
+        displayedScheduleStage,
+        values.bookingType,
+      ));
   const dateIsVisible =
     hasDate &&
     !(isDeepCleaning && currentStep === 1) &&
-    (!isRegularCleaning ||
+    (!progressiveSchedule ||
       currentStep > 2 ||
-      isRegularCleaningScheduleStageComplete("date_time", displayedScheduleStage, values.bookingType));
+      isRegularCleaningScheduleStageComplete(
+        "date_time",
+        displayedScheduleStage,
+        values.bookingType,
+      ));
   const scheduleLabel = [
     values.bookingType === "recurring" && values.recurringFrequency
       ? recurringFrequencyLabel(values.recurringFrequency)
@@ -177,39 +258,24 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     dateIsVisible ? formatDate(values.date) : "",
     dateIsVisible && values.time ? values.time : "",
   ].filter(Boolean).join(" · ");
-  const regularDisplayedDetailsStage = displayedDetailsStage as RegularCleaningDetailsStage;
-  const movingDisplayedDetailsStage = displayedDetailsStage as MovingCleaningDetailsStage;
-  const movingStageIndex = ["address", "property", "move", "rooms", "condition"].indexOf(
-    movingDisplayedDetailsStage,
-  );
+
   const propertyIsVisible =
-    isProgressiveHomeCleaning &&
-    (isMovingCleaning
-      ? Boolean(propertyLabel) && (currentStep > 1 || movingStageIndex >= 2)
-      : currentStep > 1 ||
-        isRegularCleaningStageComplete("property", regularDisplayedDetailsStage));
+    progressiveDetails &&
+    Boolean(propertyLabel) &&
+    (currentStep > 1 || detailsStageIndex >= 2);
   const roomsAreVisible =
-    isProgressiveHomeCleaning &&
-    (isMovingCleaning
-      ? roomsComplete && (currentStep > 1 || movingStageIndex >= 4)
-      : currentStep > 1 ||
-        isRegularCleaningStageComplete("rooms", regularDisplayedDetailsStage));
+    progressiveDetails &&
+    Boolean(roomsLabel) &&
+    (currentStep > 1 || detailsStageIndex > 2);
   const homeLabel = [propertyIsVisible ? propertyLabel : "", roomsAreVisible ? roomsLabel : ""]
     .filter(Boolean)
     .join(" · ");
-  const petsAreVisible =
-    isProgressiveHomeCleaning &&
-    (isMovingCleaning
-      ? Boolean(String(values.serviceDetails.hasPets ?? "").trim()) &&
-        (currentStep > 1 || movingStageIndex >= 4)
-      : currentStep > 1 ||
-        isRegularCleaningStageComplete("pets", regularDisplayedDetailsStage));
+  const finalDetailsVisible =
+    progressiveDetails &&
+    Boolean(moreDetailsLabel) &&
+    (currentStep > 1 || detailsStageIndex >= finalDetailsStageIndex);
   const equipmentIsVisible = isRegularCleaning && currentStep > 1;
-  const hasMoreDetails = petsAreVisible || equipmentIsVisible;
-  const moreDetailsLabel = [
-    petsAreVisible ? petsLabel : "",
-    equipmentIsVisible ? equipmentLabel : "",
-  ].filter(Boolean).join(" · ");
+  const hasMoreDetails = finalDetailsVisible || equipmentIsVisible;
 
   return (
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -232,25 +298,25 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         <div className="space-y-2 p-3">
           <h2 className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">Booking summary</h2>
 
-          {hasAddress && (!isProgressiveHomeCleaning || currentStep > 1 || displayedDetailsStage === "equipment") ? (
-            <SummaryRow label="Address" value={addressLabel} onEdit={isProgressiveHomeCleaning ? editDetail("address") : edit(1)} />
+          {hasAddress && (!progressiveDetails || currentStep > 1 || detailsStageIndex >= finalDetailsStageIndex) ? (
+            <SummaryRow label="Address" value={addressLabel} onEdit={progressiveDetails ? editDetail("address") : edit(1)} />
           ) : null}
-          <SummaryRow label="Service" value={config.label} onEdit={isProgressiveHomeCleaning ? editDetail("property") : edit(1)} />
+          <SummaryRow label="Service" value={config.label} onEdit={progressiveDetails ? editDetail("property") : edit(1)} />
           {scheduleIsVisible ? (
             <SummaryRow
               label="Schedule"
               value={scheduleLabel}
               onEdit={
-                isRegularCleaning
+                progressiveSchedule
                   ? editSchedule(dateIsVisible ? "date_time" : "booking_type")
                   : edit(2)
               }
             />
           ) : null}
           {cleanerIsVisible ? (
-            <SummaryRow label="Cleaners" value={cleanerLabel} onEdit={isRegularCleaning ? editSchedule("cleaner") : edit(2)} />
+            <SummaryRow label="Cleaners" value={cleanerLabel} onEdit={progressiveSchedule ? editSchedule("cleaner") : edit(2)} />
           ) : null}
-          {isMovingCleaning && moveTypeLabel && (currentStep > 1 || movingStageIndex >= 3) ? (
+          {isMovingCleaning && moveTypeLabel && (currentStep > 1 || detailsStageIndex >= 3) ? (
             <SummaryRow label="Move" value={moveTypeLabel} onEdit={editDetail("move")} />
           ) : null}
           {homeLabel ? (
@@ -273,9 +339,9 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
               {moreDetailsOpen ? (
                 <div className="rounded-xl bg-slate-50 p-2">
                   <SummaryRow
-                    label="Pets & supplies"
+                    label="Details"
                     value={moreDetailsLabel}
-                    onEdit={editDetail(petsAreVisible ? "pets" : "equipment")}
+                    onEdit={editDetail(finalDetailsStage)}
                   />
                 </div>
               ) : null}
