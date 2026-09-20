@@ -908,6 +908,7 @@ type EditPanel = "location" | "equipment" | "property" | "schedule" | "cleaner" 
 export function Step3Review() {
   const { serviceSlug, liveConfig } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
+  const isCarpetCleaning = serviceSlug === "carpet-cleaning";
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
   const serviceLabel = liveConfig?.label ?? config.label;
   const serviceDescription = liveConfig?.description ?? config.description;
@@ -976,8 +977,13 @@ export function Step3Review() {
     setSnapshot(null);
   }
 
+  const visibleServiceDetailKeys = new Set(step1Questions.map((question) => question.key));
   const serviceDetails = Object.entries(values.serviceDetails ?? {}).filter(
-    ([, val]) => val !== "" && val !== null && val !== undefined,
+    ([key, val]) =>
+      visibleServiceDetailKeys.has(key) &&
+      val !== "" &&
+      val !== null &&
+      val !== undefined,
   );
   const selectedExtras = values.selectedExtras ?? [];
   const pricingSummary = values.pricingSummary;
@@ -1008,7 +1014,11 @@ export function Step3Review() {
         </EditModal>
       )}
       {editPanel === "property" && (
-        <EditModal title="Edit clean details" onSave={saveEdit} onCancel={cancelEdit}>
+        <EditModal
+          title={isCarpetCleaning ? "Edit carpet scope" : "Edit clean details"}
+          onSave={saveEdit}
+          onCancel={cancelEdit}
+        >
           <PropertyEditPanel />
         </EditModal>
       )}
@@ -1018,7 +1028,11 @@ export function Step3Review() {
         </EditModal>
       )}
       {editPanel === "cleaner" && (
-        <EditModal title="Edit cleaner preference" onSave={saveEdit} onCancel={cancelEdit}>
+        <EditModal
+          title={isCarpetCleaning ? "Edit specialist preference" : "Edit cleaner preference"}
+          onSave={saveEdit}
+          onCancel={cancelEdit}
+        >
           <CleanerEditPanel />
         </EditModal>
       )}
@@ -1105,7 +1119,7 @@ export function Step3Review() {
         {serviceDetails.length > 0 && (
           <ReviewSection
             number={cleanDetailsNumber}
-            title="Clean details"
+            title={isCarpetCleaning ? "Carpet scope" : "Clean details"}
             onEdit={() => openEdit("property")}
             className="sm:col-span-2"
           >
@@ -1165,33 +1179,39 @@ export function Step3Review() {
 
           {/* Booking meta chips */}
           <div className="mt-2.5 flex flex-wrap gap-1.5">
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-              {values.bookingType === "recurring" ? (
-                <>
-                  <RefreshCw className="h-3 w-3 text-blue-500" />
-                  Recurring
-                  {values.recurringFrequency
-                    ? ` · ${recurringFrequencyLabel(values.recurringFrequency)}`
-                    : ""}
-                </>
-              ) : (
-                "Once-off"
-              )}
-            </span>
+            {!isCarpetCleaning ? (
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
+                {values.bookingType === "recurring" ? (
+                  <>
+                    <RefreshCw className="h-3 w-3 text-blue-500" />
+                    Recurring
+                    {values.recurringFrequency
+                      ? ` · ${recurringFrequencyLabel(values.recurringFrequency)}`
+                      : ""}
+                  </>
+                ) : (
+                  "Once-off"
+                )}
+              </span>
+            ) : null}
 
-            {values.cleanerMode === "individual_cleaners" && (
+            {values.cleanerMode === "individual_cleaners" && !isCarpetCleaning ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
                 <Users className="h-3 w-3 text-blue-500" />
                 {values.cleanerCount} cleaner{values.cleanerCount > 1 ? "s" : ""}
               </span>
-            )}
+            ) : null}
             {values.cleanerMode === "individual_cleaners" && (() => {
               const n = (values.selectedCleanerDetails ?? []).length;
               return (
                 <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                  {n > 0
-                    ? `${n} preferred cleaner${n > 1 ? "s" : ""} selected`
-                    : "Best available cleaner"}
+                  {isCarpetCleaning
+                    ? n > 0
+                      ? "Preferred specialist selected"
+                      : "Shalean chooses specialist"
+                    : n > 0
+                      ? `${n} preferred cleaner${n > 1 ? "s" : ""} selected`
+                      : "Best available cleaner"}
                 </span>
               );
             })()}
@@ -1232,7 +1252,7 @@ export function Step3Review() {
           return (
             <ReviewSection
               number={cleanerNumber}
-              title="Cleaner preference"
+              title={isCarpetCleaning ? "Specialist" : "Cleaner preference"}
               onEdit={() => openEdit("cleaner")}
             >
               {!hasDetails && !hasIds ? (
@@ -1242,10 +1262,12 @@ export function Step3Review() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-slate-800">
-                      Best available cleaner
+                      {isCarpetCleaning ? "Shalean chooses specialist" : "Best available cleaner"}
                     </p>
                     <p className="mt-0.5 text-xs text-slate-500">
-                      We&apos;ll assign the best available cleaner for your booking.
+                      {isCarpetCleaning
+                        ? "We’ll assign a suitable carpet-cleaning specialist for your booking."
+                        : "We’ll assign the best available cleaner for your booking."}
                     </p>
                   </div>
                 </div>
@@ -1258,7 +1280,9 @@ export function Step3Review() {
               ) : (
                 /* IDs saved but details not yet synced (e.g. navigated directly to Step 3) */
                 <p className="text-sm text-slate-500">
-                  {cleanerIds.length} preferred cleaner{cleanerIds.length > 1 ? "s" : ""} selected.
+                  {isCarpetCleaning
+                    ? "Preferred specialist selected."
+                    : `${cleanerIds.length} preferred cleaner${cleanerIds.length > 1 ? "s" : ""} selected.`}
                   <button
                     type="button"
                     onClick={() => openEdit("cleaner")}
