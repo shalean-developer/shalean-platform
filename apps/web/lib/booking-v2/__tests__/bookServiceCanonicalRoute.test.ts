@@ -1,7 +1,10 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { explicitBookServiceSlugFromParam } from "@/lib/booking/legacyBookingToBookRedirect";
+import {
+  buildBookServiceSelectionHref,
+  explicitBookServiceSlugFromParam,
+} from "@/lib/booking/legacyBookingToBookRedirect";
 
 const pageSource = readFileSync(
   join(process.cwd(), "app/(ui-redesign)/book/[serviceSlug]/page.tsx"),
@@ -14,6 +17,14 @@ describe("Booking V2 canonical service route", () => {
       "office-cleaning",
     );
     expect(explicitBookServiceSlugFromParam("office")).toBe("office-cleaning");
+  });
+
+  it("builds Office picker navigation on the Office path", () => {
+    expect(
+      buildBookServiceSelectionHref(new URLSearchParams(), "office-cleaning"),
+    ).toBe(
+      "/book/office-cleaning?service=office-cleaning&step=details&section=address",
+    );
   });
 
   it("supports all six canonical service slugs", () => {
