@@ -814,7 +814,13 @@ function ExtrasEditPanel() {
 
 // ─── Cleaner preview card (read-only, used in the Review step) ─────────────────
 
-function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
+function CleanerPreviewCard({
+  cleaner,
+  preferenceLabel = "Preferred cleaner",
+}: {
+  cleaner: AvailableCleanerV2;
+  preferenceLabel?: string;
+}) {
   const areas = formatAreasServedPreview(cleaner.areasServed);
 
   return (
@@ -854,7 +860,7 @@ function CleanerPreviewCard({ cleaner }: { cleaner: AvailableCleanerV2 }) {
         ) : null}
 
         <span className="mt-2 inline-flex rounded-full border border-blue-200 bg-white px-2.5 py-0.5 text-xs font-medium text-blue-700">
-          Preferred cleaner
+          {preferenceLabel}
         </span>
       </div>
     </div>
@@ -1274,7 +1280,13 @@ export function Step3Review() {
               ) : hasDetails ? (
                 <div className="grid grid-cols-1 gap-2.5">
                   {cleanerDetails.map((cleaner) => (
-                    <CleanerPreviewCard key={cleaner.id} cleaner={cleaner} />
+                    <CleanerPreviewCard
+                      key={cleaner.id}
+                      cleaner={cleaner}
+                      preferenceLabel={
+                        isCarpetCleaning ? "Preferred specialist" : "Preferred cleaner"
+                      }
+                    />
                   ))}
                 </div>
               ) : (
