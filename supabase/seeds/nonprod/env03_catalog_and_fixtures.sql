@@ -53,22 +53,82 @@ AND slug IN ('standard-cleaning', 'deep-cleaning');
 
 INSERT INTO public.pricing_services (
   id, slug, name, base_price, price_per_bedroom, price_per_bathroom,
-  min_hours, max_hours, is_active, sort_order
+  price_per_extra_room, duration_base, min_hours, max_hours, is_active, sort_order
 )
 VALUES
-  ('11111111-1111-4111-8111-111111111101', 'standard', 'TEST Regular Cleaning', 350, 80, 60, 2, 8, true, 10),
-  ('11111111-1111-4111-8111-111111111102', 'deep', 'TEST Deep Cleaning', 950, 100, 80, 3, 10, true, 20),
-  ('11111111-1111-4111-8111-111111111103', 'move', 'TEST Moving Cleaning', 1100, 120, 90, 4, 12, true, 30),
-  ('11111111-1111-4111-8111-111111111104', 'airbnb', 'TEST Airbnb Cleaning', 400, 80, 60, 2, 8, true, 40),
-  ('11111111-1111-4111-8111-111111111105', 'quick', 'TEST Office Cleaning', 450, 60, 50, 2, 8, true, 50),
-  ('11111111-1111-4111-8111-111111111106', 'carpet', 'TEST Carpet Cleaning', 500, 120, 0, 2, 8, true, 60)
+  ('11111111-1111-4111-8111-111111111101', 'standard', 'TEST Regular Cleaning', 250, 80, 60, 30, 3.5, 2, 8, true, 10),
+  ('11111111-1111-4111-8111-111111111102', 'deep', 'TEST Deep Cleaning', 1200, 100, 80, 40, 5.0, 3, 10, true, 20),
+  ('11111111-1111-4111-8111-111111111103', 'move', 'TEST Moving Cleaning', 1200, 120, 90, 45, 6.0, 4, 12, true, 30),
+  ('11111111-1111-4111-8111-111111111104', 'airbnb', 'TEST Airbnb Cleaning', 250, 80, 60, 30, 3.0, 2, 8, true, 40),
+  ('11111111-1111-4111-8111-111111111105', 'office', 'TEST Office Cleaning', 300, 60, 50, 30, 3.5, 2, 8, true, 50),
+  ('11111111-1111-4111-8111-111111111106', 'carpet', 'TEST Carpet Cleaning', 500, 120, 0, 0, 2.0, 2, 8, true, 60)
 ON CONFLICT (slug) DO UPDATE SET
   name = EXCLUDED.name,
   base_price = EXCLUDED.base_price,
   price_per_bedroom = EXCLUDED.price_per_bedroom,
   price_per_bathroom = EXCLUDED.price_per_bathroom,
+  price_per_extra_room = EXCLUDED.price_per_extra_room,
+  duration_base = EXCLUDED.duration_base,
   min_hours = EXCLUDED.min_hours,
   max_hours = EXCLUDED.max_hours,
+  is_active = true,
+  sort_order = EXCLUDED.sort_order,
+  updated_at = now();
+
+INSERT INTO public.pricing_extras (
+  slug, name, description, price, service_type, service_slugs,
+  is_popular, is_active, sort_order
+)
+VALUES
+  ('inside-fridge', 'Inside Fridge', 'Interior fridge clean', 150, 'light',
+    ARRAY['regular-cleaning']::text[], true, true, 10),
+  ('inside-oven', 'Inside Oven', 'Deep clean inside the oven', 200, 'light',
+    ARRAY['regular-cleaning','airbnb-cleaning']::text[], true, true, 20),
+  ('laundry', 'Laundry', 'Wash and hang up to 1 load', 150, 'light',
+    ARRAY['regular-cleaning','airbnb-cleaning']::text[], false, true, 30),
+  ('ironing', 'Ironing', 'Ironing up to 1 load', 150, 'light',
+    ARRAY['regular-cleaning']::text[], false, true, 40),
+  ('interior-windows', 'Interior Windows', 'Clean all interior windows', 180, 'light',
+    ARRAY['regular-cleaning','airbnb-cleaning']::text[], false, true, 50),
+  ('inside-cabinets', 'Cupboards', 'Clean inside kitchen and bathroom cupboards', 180, 'heavy',
+    ARRAY['deep-cleaning','moving-cleaning']::text[], false, true, 60),
+  ('inside-wardrobes', 'Wardrobes', 'Clean inside wardrobes and shelving', 180, 'heavy',
+    ARRAY['deep-cleaning']::text[], false, true, 70),
+  ('blinds-cleaning', 'Blinds', 'Dust and wipe blinds', 200, 'heavy',
+    ARRAY['deep-cleaning']::text[], false, true, 80),
+  ('interior-walls', 'Walls', 'Wipe down interior walls', 150, 'heavy',
+    ARRAY['deep-cleaning']::text[], false, true, 90),
+  ('appliances-cleaning', 'Appliances', 'Clean major kitchen appliances inside and out', 220, 'heavy',
+    ARRAY['moving-cleaning']::text[], false, true, 100),
+  ('garage-cleaning', 'Garage', 'Sweep and clean the garage', 200, 'heavy',
+    ARRAY['moving-cleaning']::text[], false, true, 110),
+  ('office-kitchen', 'Office Kitchen', 'Clean shared office kitchenette', 200, 'light',
+    ARRAY['office-cleaning']::text[], false, true, 120),
+  ('office-sanitisation', 'Sanitisation', 'High-touch sanitisation of desks and common areas', 250, 'light',
+    ARRAY['office-cleaning']::text[], false, true, 130),
+  ('waste-removal', 'Waste Removal', 'Remove bagged office waste', 180, 'light',
+    ARRAY['office-cleaning']::text[], false, true, 140),
+  ('sofa-upholstery', 'Sofa / Upholstery', 'Clean one sofa or upholstered seat', 250, 'heavy',
+    ARRAY['carpet-cleaning']::text[], false, true, 150),
+  ('stain-treatment', 'Stain Treatment', 'Professional stain removal', 200, 'heavy',
+    ARRAY['carpet-cleaning']::text[], true, true, 160),
+  ('pet-odour-treatment', 'Pet Odour', 'Enzyme-based odour neutraliser', 220, 'heavy',
+    ARRAY['carpet-cleaning']::text[], false, true, 170),
+  ('fabric-protector', 'Fabric Protector', 'Scotchgard-style protection spray', 180, 'heavy',
+    ARRAY['carpet-cleaning']::text[], false, true, 180),
+  ('mattress-cleaning', 'Mattress', 'Clean and sanitise one mattress', 250, 'heavy',
+    ARRAY['carpet-cleaning']::text[], false, true, 190),
+  ('welcome-setup', 'Welcome Setup', 'Arrange towels, toiletries and staging', 150, 'light',
+    ARRAY['airbnb-cleaning']::text[], false, true, 200),
+  ('inspection-photos', 'Post-clean Photos', 'Timestamped photos for your records', 100, 'light',
+    ARRAY['airbnb-cleaning']::text[], false, true, 210)
+ON CONFLICT (slug) DO UPDATE SET
+  name = EXCLUDED.name,
+  description = EXCLUDED.description,
+  price = EXCLUDED.price,
+  service_type = EXCLUDED.service_type,
+  service_slugs = EXCLUDED.service_slugs,
+  is_popular = EXCLUDED.is_popular,
   is_active = true,
   sort_order = EXCLUDED.sort_order,
   updated_at = now();
@@ -109,7 +169,7 @@ VALUES
     'standard',
     'TEST Regular Cleaning',
     'ENV-03 synthetic regular home cleaning service.',
-    350,
+    250,
     ARRAY['TEST fixture']::text[],
     10,
     true
@@ -119,7 +179,7 @@ VALUES
     'deep',
     'TEST Deep Cleaning',
     'ENV-03 synthetic deep cleaning service.',
-    950,
+    1200,
     ARRAY['TEST fixture']::text[],
     20,
     true
@@ -129,7 +189,7 @@ VALUES
     'move',
     'TEST Moving Cleaning',
     'ENV-03 synthetic move-in and move-out cleaning service.',
-    1100,
+    1200,
     ARRAY['TEST fixture']::text[],
     30,
     true
@@ -139,7 +199,7 @@ VALUES
     'airbnb',
     'TEST Airbnb Cleaning',
     'ENV-03 synthetic Airbnb turnover cleaning service.',
-    400,
+    250,
     ARRAY['TEST fixture']::text[],
     40,
     true
@@ -149,7 +209,7 @@ VALUES
     'office',
     'TEST Office Cleaning',
     'ENV-03 synthetic office and workspace cleaning service.',
-    450,
+    300,
     ARRAY['TEST fixture']::text[],
     50,
     true
