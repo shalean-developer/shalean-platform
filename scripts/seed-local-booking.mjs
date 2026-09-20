@@ -143,9 +143,11 @@ async function main() {
   const locationBySlug = new Map((locations ?? []).map((row) => [row.slug, row.id]));
   const athloneId = locationBySlug.get("athlone");
   const claremontId = locationBySlug.get("claremont");
-  if (!athloneId || !claremontId) {
-    throw new Error(
-      "Athlone/Claremont locations are missing. Run generate-locations-seed.mjs and locations_seed.sql first.",
+  const cleanerLocationIds = [athloneId, claremontId].filter(Boolean);
+  if (cleanerLocationIds.length === 0) {
+    console.warn(
+      "[seed-local-booking] WARN: Athlone/Claremont location fixtures are absent; " +
+        "continuing because team availability does not require cleaner_locations.",
     );
   }
 
@@ -175,11 +177,15 @@ async function main() {
     if (cleanerError) throw new Error(`Upsert cleaner ${def.email}: ${cleanerError.message}`);
 
     await admin.from("cleaner_locations").delete().eq("cleaner_id", def.id);
-    const { error: locInsertError } = await admin.from("cleaner_locations").insert([
-      { cleaner_id: def.id, location_id: athloneId },
-      { cleaner_id: def.id, location_id: claremontId },
-    ]);
-    if (locInsertError) throw new Error(`Assign locations ${def.email}: ${locInsertError.message}`);
+    if (cleanerLocationIds.length > 0) {
+      const { error: locInsertError } = await admin.from("cleaner_locations").insert(
+        cleanerLocationIds.map((locationId) => ({
+          cleaner_id: def.id,
+          location_id: locationId,
+        })),
+      );
+      if (locInsertError) throw new Error(`Assign locations ${def.email}: ${locInsertError.message}`);
+    }
 
     await admin.from("cleaner_availability").delete().eq("cleaner_id", def.id);
     const availability = [];
@@ -224,9 +230,25 @@ async function main() {
     if (memberError) throw new Error(`Seed roster ${team.name}: ${memberError.message}`);
   }
 
+  const teamIds = teams.map((team) => team.id);
+  const { data: seededTeams, error: verifyTeamError } = await admin
+    .from("teams")
+    .select("id, name, service_type, is_active")
+    .in("id", teamIds);
+  if (verifyTeamError) throw new Error(`Verify teams: ${verifyTeamError.message}`);
+
+  const { data: seededMembers, error: verifyMemberError } = await admin
+    .from("team_members")
+    .select("team_id, cleaner_id")
+    .in("team_id", teamIds);
+  if (verifyMemberError) throw new Error(`Verify team members: ${verifyMemberError.message}`);
+
   console.log(
-    `[seed-local-booking] OK: seeded ${cleaners.length} synthetic cleaners and ${teams.length} move-clean teams.`,
+    `[seed-local-booking] OK: seeded ${cleaners.length} synthetic cleaners and ${seededTeams?.length ?? 0} move-clean teams with ${seededMembers?.length ?? 0} roster rows.`,
   );
+  for (const team of seededTeams ?? []) {
+    console.log(`  - ${team.name} [${team.service_type}] active=${team.is_active}`);
+  }
   console.log("[seed-local-booking] No production/customer/payment data was copied.");
 }
 
