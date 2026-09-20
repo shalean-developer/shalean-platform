@@ -130,6 +130,12 @@ function sanitizeStoredForm(
     delete serviceDetails.specialInstructions;
   }
 
+  if (serviceSlug === "office-cleaning") {
+    delete serviceDetails.frequency;
+    delete serviceDetails.afterHours;
+    delete serviceDetails.specialInstructions;
+  }
+
   return {
     ...data,
     serviceDetails,
