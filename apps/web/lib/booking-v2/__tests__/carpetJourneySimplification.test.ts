@@ -154,7 +154,7 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
     );
   });
 
-  it("Step 3 uses Carpet scope and Specialist presentation without recurring or cleaner-count noise", () => {
+  it("Step 3 separates Carpet scope and Condition and uses Specialist presentation", () => {
     expect(reviewSource).toContain('title="Carpet scope"');
     expect(reviewSource).toContain('title="Condition"');
     expect(reviewSource).toContain(
