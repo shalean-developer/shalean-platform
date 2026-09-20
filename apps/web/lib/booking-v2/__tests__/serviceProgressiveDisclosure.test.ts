@@ -11,10 +11,7 @@ import {
   bookingDetailsStageReady,
   usesProgressiveIndividualSchedule,
 } from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
-import {
-  SERVICE_CONFIG,
-  type FormQuestion,
-} from "@/src/features/booking-v2/config/serviceConfig";
+import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 
 const address = {
   address: "12 Ocean View Drive",
@@ -42,10 +39,10 @@ describe("six-service progressive booking details", () => {
       "utf8",
     );
     expect(runtimeCatalogSource).toContain(
-      'question.key === "carpetRooms"',
+      'serviceSlug === "carpet-cleaning"',
     );
     expect(runtimeCatalogSource).toContain(
-      'label: "Carpeted rooms"',
+      'SERVICE_CONFIG["carpet-cleaning"].step1Questions',
     );
   });
 
@@ -163,43 +160,46 @@ describe("six-service progressive booking details", () => {
     ).toBe(true);
   });
 
-  it("uses progressive Carpet stages and follows the active room catalog", () => {
+  it("uses the simplified canonical Carpet stages", () => {
+    const questionKeys = SERVICE_CONFIG["carpet-cleaning"].step1Questions.map(
+      (question) => question.key,
+    );
+    expect(questionKeys).toEqual([
+      "propertyType",
+      "carpetRooms",
+      "rugCount",
+      "carpetType",
+      "stains",
+    ]);
+    expect(questionKeys).not.toContain("sofaCount");
+    expect(questionKeys).not.toContain("hasPets");
+    expect(questionKeys).not.toContain("specialInstructions");
+
     expect(bookingDetailsStage("carpet-cleaning", {}, address)).toBe("property");
-    expect(bookingDetailsStage("carpet-cleaning", { propertyType: "house" }, address)).toBe("rooms");
-    expect(bookingDetailsStage("carpet-cleaning", {
-      propertyType: "house",
-      carpetRooms: "2",
-      rugCount: "1",
-      carpetType: "standard",
-    }, address)).toBe("condition");
-
-    const legacyQuestions: FormQuestion[] = [
-      { key: "propertyType", label: "Property type", type: "radio", required: true },
-      { key: "carpetRooms", label: "Rooms", type: "select", required: true, group: "rooms" },
-      { key: "carpetType", label: "Carpet type", type: "select", required: true, group: "rooms" },
-      { key: "sofaCount", label: "Sofas", type: "select", required: true, group: "rooms" },
-      { key: "stains", label: "Stains", type: "radio", required: true },
-      { key: "hasPets", label: "Pets", type: "radio", required: true },
-    ];
-
-    expect(bookingDetailsStage("carpet-cleaning", {
-      propertyType: "house",
-      carpetRooms: "2",
-      carpetType: "standard",
-    }, address, legacyQuestions)).toBe("rooms");
-    expect(bookingDetailsStage("carpet-cleaning", {
-      propertyType: "house",
-      carpetRooms: "2",
-      carpetType: "standard",
-      sofaCount: "1",
-    }, address, legacyQuestions)).toBe("condition");
-
     expect(
-      bookingDetailsQuestionStage("carpet-cleaning", {
-        key: "sofaCount",
-        group: "rooms",
-      }),
+      bookingDetailsStage("carpet-cleaning", { propertyType: "house" }, address),
     ).toBe("rooms");
+    expect(
+      bookingDetailsStage(
+        "carpet-cleaning",
+        {
+          propertyType: "house",
+          carpetRooms: "2",
+          rugCount: "1",
+          carpetType: "standard",
+        },
+        address,
+      ),
+    ).toBe("condition");
+    expect(
+      bookingDetailsStageReady(
+        "carpet-cleaning",
+        "condition",
+        { stains: "yes" },
+        address,
+        SERVICE_CONFIG["carpet-cleaning"].step1Questions,
+      ),
+    ).toBe(true);
     expect(bookingDetailsShowsExtras("carpet-cleaning", "condition")).toBe(true);
   });
 
