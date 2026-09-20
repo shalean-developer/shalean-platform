@@ -6,8 +6,28 @@ const seed = readFileSync(
   join(process.cwd(), "../../supabase/seeds/nonprod/env03_catalog_and_fixtures.sql"),
   "utf8",
 );
+const rootPackage = readFileSync(
+  join(process.cwd(), "../../package.json"),
+  "utf8",
+);
+const localSqlRunner = readFileSync(
+  join(process.cwd(), "../../scripts/run-local-supabase-sql.mjs"),
+  "utf8",
+);
 
 describe("local ENV-03 booking catalog parity", () => {
+  it("executes the multi-statement catalog seed through the local Docker Postgres runner", () => {
+    expect(rootPackage).toContain(
+      "node scripts/run-local-supabase-sql.mjs supabase/seeds/nonprod/env03_catalog_and_fixtures.sql",
+    );
+    expect(rootPackage).not.toContain(
+      "supabase db query --local -f supabase/seeds/nonprod/env03_catalog_and_fixtures.sql",
+    );
+    expect(localSqlRunner).toContain('name.startsWith("supabase_db_")');
+    expect(localSqlRunner).toContain("54322->5432");
+    expect(localSqlRunner).toContain('"ON_ERROR_STOP=1"');
+  });
+
   it("uses the current service base prices for manual local UAT", () => {
     expect(seed).toContain("'standard', 'TEST Regular Cleaning', 250");
     expect(seed).toContain("'deep', 'TEST Deep Cleaning', 1200");
