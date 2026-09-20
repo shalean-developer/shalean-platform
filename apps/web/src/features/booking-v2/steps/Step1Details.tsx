@@ -402,6 +402,19 @@ export function Step1Details() {
 
   const moveTypeValue = String(serviceDetails.moveType ?? "");
 
+  useEffect(() => {
+    if (
+      serviceSlug === "office-cleaning" &&
+      serviceDetails.frequency !== undefined &&
+      serviceDetails.frequency !== ""
+    ) {
+      setValue("serviceDetails.frequency", "", {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [serviceDetails.frequency, serviceSlug, setValue]);
+
   // Clear answers for questions hidden by move-type (and similar) gates.
   useEffect(() => {
     for (const q of step1Questions) {
