@@ -451,7 +451,9 @@ export function Step1Details() {
     if (question.key === "cleaningProducts" || !isQuestionVisible(question)) return false;
     if (!isProgressiveHomeCleaning) return true;
     if (question.key === "propertyType") {
-      return activeDetailsStage === "property";
+      return isMovingCleaning
+        ? activeDetailsStage === "property"
+        : activeDetailsStage === "property" || activeDetailsStage === "rooms";
     }
     if (isMovingCleaning && question.key === "moveType") return activeDetailsStage === "move";
     if (question.group === "rooms") return activeDetailsStage === "rooms";
