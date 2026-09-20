@@ -111,7 +111,10 @@ function writeToStorage(data: BookingV2FormData): void {
   }
 }
 
-function sanitizeStoredForm(data: Partial<BookingV2FormData>): Partial<BookingV2FormData> {
+function sanitizeStoredForm(
+  data: Partial<BookingV2FormData>,
+  serviceSlug: ServiceSlug,
+): Partial<BookingV2FormData> {
   const serviceDetails = { ...(data.serviceDetails ?? {}) };
   for (const [key, value] of Object.entries(serviceDetails)) {
     if (value === null) {
@@ -121,11 +124,32 @@ function sanitizeStoredForm(data: Partial<BookingV2FormData>): Partial<BookingV2
     }
   }
 
+  if (serviceSlug === "carpet-cleaning") {
+    delete serviceDetails.sofaCount;
+    delete serviceDetails.hasPets;
+    delete serviceDetails.specialInstructions;
+  }
+
   return {
     ...data,
     serviceDetails,
     ...(data.equipmentRequired != null
       ? { equipmentRequired: coerceYesNoValue(data.equipmentRequired) }
+      : {}),
+    ...(serviceSlug === "carpet-cleaning"
+      ? {
+          bookingType: "once_off" as const,
+          recurringFrequency: "" as const,
+          recurringDays: [],
+          recurringStartDate: "",
+          recurringEndDate: "",
+          cleanerCount: 1,
+          selectedCleanerIds: (data.selectedCleanerIds ?? []).slice(0, 1),
+          selectedCleanerDetails: (data.selectedCleanerDetails ?? []).slice(0, 1),
+          selectedExtras: (data.selectedExtras ?? []).filter(
+            (extraId) => extraId !== "stain-treatment",
+          ),
+        }
       : {}),
   };
 }
@@ -200,7 +224,11 @@ export function BookingV2Provider({
     );
   const [scheduleSectionOverride, setScheduleSectionOverride] =
     useState<RegularCleaningScheduleStage | null>(
-      usesProgressiveIndividualSchedule(serviceSlug) ? "booking_type" : null,
+      usesProgressiveIndividualSchedule(serviceSlug)
+        ? serviceSlug === "carpet-cleaning"
+          ? "date_time"
+          : "booking_type"
+        : null,
     );
 
   useEffect(() => {
@@ -240,7 +268,7 @@ export function BookingV2Provider({
   // After mount: restore persisted state, then merge marketing URL prefill (legacy /booking links).
   useEffect(() => {
     const saved = readFromStorage(serviceSlug);
-    const sanitized = saved ? sanitizeStoredForm(saved) : null;
+    const sanitized = saved ? sanitizeStoredForm(saved, serviceSlug) : null;
     const urlPatch = bookingV2PrefillPatchFromLegacySearchParams(searchParams);
     const merged = {
       ...defaults,
@@ -328,23 +356,27 @@ export function BookingV2Provider({
       }
 
       const patch = bookingV2FormPatchFromBookingRow(row, serviceSlug, cleanerMode);
-      form.reset(patch, { keepDefaultValues: false });
+      const normalizedPatch = sanitizeStoredForm(
+        patch,
+        serviceSlug,
+      ) as BookingV2FormData;
+      form.reset(normalizedPatch, { keepDefaultValues: false });
       if (isProgressiveBookingDetailsService(serviceSlug)) {
         setDetailsSectionOverride(
           bookingDetailsStage(
             serviceSlug,
-            patch.serviceDetails,
+            normalizedPatch.serviceDetails,
             {
-              address: patch.address,
-              suburb: patch.suburb,
-              contactPhone: patch.contactPhone,
-              serviceAreaLocationId: patch.serviceAreaLocationId,
+              address: normalizedPatch.address,
+              suburb: normalizedPatch.suburb,
+              contactPhone: normalizedPatch.contactPhone,
+              serviceAreaLocationId: normalizedPatch.serviceAreaLocationId,
             },
             config.step1Questions,
           ),
         );
       }
-      writeToStorage(patch);
+      writeToStorage(normalizedPatch);
     })();
     return () => {
       cancelled = true;
@@ -498,7 +530,11 @@ export function BookingV2Provider({
       isProgressiveBookingDetailsService(serviceSlug) ? "address" : null,
     );
     setScheduleSectionOverride(
-      usesProgressiveIndividualSchedule(serviceSlug) ? "booking_type" : null,
+      usesProgressiveIndividualSchedule(serviceSlug)
+        ? serviceSlug === "carpet-cleaning"
+          ? "date_time"
+          : "booking_type"
+        : null,
     );
   }, [form, serviceSlug, cleanerMode]);
 
