@@ -182,6 +182,7 @@ function catalogStageQuestionsReady(
     (question) => question.required || (stage === "rooms" && question.group === "rooms"),
   );
 
+  if (blockingQuestions.length === 0) return null;
   return blockingQuestions.every((question) => has(details, question.key));
 }
 
@@ -242,7 +243,7 @@ export function bookingDetailsStageReady(
       );
       if (dynamicReady != null) return dynamicReady;
       if (stage === "property") return has(details, "propertyType");
-      if (stage === "rooms") return all(details, ["carpetRooms", "carpetType"]);
+      if (stage === "rooms") return all(details, ["carpetRooms", "rugCount", "carpetType"]);
       if (stage === "condition") return all(details, ["stains", "hasPets"]);
       return false;
     }
