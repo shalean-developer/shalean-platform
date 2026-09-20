@@ -106,6 +106,7 @@ jobs:
           lib/booking-v2/__tests__/pricingAvailabilityState.test.ts
           lib/booking-v2/__tests__/authoritativePricingClientAvailability.test.ts
           lib/booking-v2/__tests__/serviceProgressiveDisclosure.test.ts
+          lib/booking-v2/__tests__/carpetJourneySimplification.test.ts
           lib/booking-v2/__tests__/regularDeepProductionParity.test.ts
           lib/booking-v2/__tests__/bookingDetailsPresentation.test.ts
           lib/booking-v2/__tests__/bookingDetailsSectionUrlLifecycle.test.ts
