@@ -20,20 +20,42 @@ function useTeamAvailability(date: string, serviceSlug: string) {
   useEffect(() => {
     if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
       setData(null);
+      setLoading(false);
+      setError(null);
       return;
     }
+
+    const controller = new AbortController();
+    setData(null);
     setLoading(true);
     setError(null);
-    fetch(`/api/booking-v2/team-availability?date=${date}&service=${serviceSlug}`)
-      .then((r) => r.json())
-      .then((json: TeamAvailabilityData) => {
+
+    async function load() {
+      try {
+        const response = await fetch(
+          `/api/booking-v2/team-availability?date=${date}&service=${serviceSlug}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) {
+          throw new Error(`Team availability request failed with ${response.status}`);
+        }
+        const json = (await response.json()) as TeamAvailabilityData;
+        if (controller.signal.aborted) return;
         setData(json);
-        setLoading(false);
-      })
-      .catch(() => {
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("[booking-v2/team-availability]", error);
         setError("Could not check team availability. Please try again.");
-        setLoading(false);
-      });
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => controller.abort();
   }, [date, serviceSlug]);
 
   return { data, loading, error };
