@@ -42,7 +42,7 @@ describe("six-service progressive booking details", () => {
       'serviceSlug === "carpet-cleaning"',
     );
     expect(runtimeCatalogSource).toContain(
-      'SERVICE_CONFIG["carpet-cleaning"].step1Questions',
+      "SERVICE_CONFIG[serviceSlug].step1Questions",
     );
   });
 
