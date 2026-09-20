@@ -276,7 +276,7 @@ export function BookingV2Provider({
       ...(urlPatch.serviceDetails
         ? {
             serviceDetails: {
-              ...(saved?.serviceDetails ?? defaults.serviceDetails),
+              ...(sanitized?.serviceDetails ?? defaults.serviceDetails),
               ...urlPatch.serviceDetails,
             },
           }
@@ -287,11 +287,18 @@ export function BookingV2Provider({
         : urlPatch.selectedExtras?.length
           ? {
               selectedExtras: [
-                ...new Set([...(saved?.selectedExtras ?? defaults.selectedExtras), ...urlPatch.selectedExtras]),
+                ...new Set([
+                  ...(sanitized?.selectedExtras ?? defaults.selectedExtras),
+                  ...urlPatch.selectedExtras,
+                ]),
               ],
             }
           : {}),
     };
+    const normalizedMerged = sanitizeStoredForm(
+      merged,
+      serviceSlug,
+    ) as BookingV2FormData;
     if (
       sanitized ||
       urlPatch.serviceDetails ||
@@ -299,14 +306,14 @@ export function BookingV2Provider({
       urlPatch.selectedExtras?.length ||
       urlPatch.replaceSelectedExtras
     ) {
-      form.reset(merged, { keepDefaultValues: false });
+      form.reset(normalizedMerged, { keepDefaultValues: false });
       if (isProgressiveBookingDetailsService(serviceSlug)) {
-        const details = merged.serviceDetails ?? {};
+        const details = normalizedMerged.serviceDetails ?? {};
         const address = {
-          address: merged.address,
-          suburb: merged.suburb,
-          contactPhone: merged.contactPhone,
-          serviceAreaLocationId: merged.serviceAreaLocationId,
+          address: normalizedMerged.address,
+          suburb: normalizedMerged.suburb,
+          contactPhone: normalizedMerged.contactPhone,
+          serviceAreaLocationId: normalizedMerged.serviceAreaLocationId,
         };
         setDetailsSectionOverride(
           bookingDetailsStage(
