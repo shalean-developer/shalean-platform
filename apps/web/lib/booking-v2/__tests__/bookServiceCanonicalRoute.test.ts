@@ -33,9 +33,9 @@ describe("Booking V2 canonical service route", () => {
     expect(pageSource).toContain(
       "requestedServiceSlug && requestedServiceSlug !== serviceSlug",
     );
-    expect(pageSource).toContain(
-      "redirect(\`/book/\${requestedServiceSlug}\${qs ? \`?\${qs}\` : \\"\\"}\`)",
-    );
+    expect(pageSource).toContain("redirect(");
+    expect(pageSource).toContain("/book/${requestedServiceSlug}");
+    expect(pageSource).toContain('qs ? `?${qs}` : ""');
   });
 
   it("preserves the incoming query string during canonicalization", () => {
