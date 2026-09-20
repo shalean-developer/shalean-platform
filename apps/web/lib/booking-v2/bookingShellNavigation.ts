@@ -4,6 +4,9 @@ const PROGRESSIVE_DETAILS_SERVICES: ReadonlySet<ServiceSlug> = new Set([
   "regular-cleaning",
   "deep-cleaning",
   "moving-cleaning",
+  "office-cleaning",
+  "carpet-cleaning",
+  "airbnb-cleaning",
 ]);
 
 export function shouldShowBookingShellNavigation(
