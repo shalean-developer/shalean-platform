@@ -10,6 +10,10 @@ const pageSource = readFileSync(
   join(process.cwd(), "app/(ui-redesign)/book/[serviceSlug]/page.tsx"),
   "utf8",
 );
+const contextSource = readFileSync(
+  join(process.cwd(), "src/features/booking-v2/BookingV2Context.tsx"),
+  "utf8",
+);
 
 describe("Booking V2 canonical service route", () => {
   it("maps Office query intent to the Office booking slug", () => {
@@ -47,6 +51,15 @@ describe("Booking V2 canonical service route", () => {
     expect(pageSource).toContain("redirect(");
     expect(pageSource).toContain("/book/${requestedServiceSlug}");
     expect(pageSource).toContain('qs ? `?${qs}` : ""');
+  });
+
+  it("canonicalizes an already-mounted mismatched booking route on the client", () => {
+    expect(contextSource).toContain(
+      "requestedQueryServiceSlug && requestedQueryServiceSlug !== serviceSlug",
+    );
+    expect(contextSource).toContain(
+      "router.replace(\`/book/\${requestedQueryServiceSlug}?\${params.toString()}\`)",
+    );
   });
 
   it("preserves the incoming query string during canonicalization", () => {
