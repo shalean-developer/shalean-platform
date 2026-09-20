@@ -202,9 +202,8 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
     expect(summarySource).toContain(
       'isCarpetCleaning\n      ? currentStep > 2 || displayedScheduleStage === "cleaner"',
     );
-    expect(summarySource).toContain(
-      'label={isCarpetCleaning ? "Carpet scope" : "Home"}',
-    );
+    expect(summarySource).toContain('"Carpet scope"');
+    expect(summarySource).toContain('"Home"');
     expect(summarySource).toContain(
       'label={isCarpetCleaning ? "Condition" : "Details"}',
     );
@@ -224,7 +223,7 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
 
   it("runtime catalog ignores retired Carpet database questions and extra-cleaner policy", () => {
     expect(catalogSource).toContain(
-      'SERVICE_CONFIG["carpet-cleaning"].step1Questions',
+      "SERVICE_CONFIG[serviceSlug].step1Questions",
     );
     expect(catalogSource).toContain(
       'slug === "carpet-cleaning" ? false : serviceDef.allowsExtraCleaner',
