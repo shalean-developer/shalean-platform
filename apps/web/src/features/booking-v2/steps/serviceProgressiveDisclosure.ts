@@ -303,3 +303,17 @@ export function bookingDetailsStageIndex(
 ): number {
   return STAGES[serviceSlug].indexOf(stage);
 }
+
+
+const PROGRESSIVE_INDIVIDUAL_SCHEDULE_SERVICES = new Set<ServiceSlug>([
+  "regular-cleaning",
+  "office-cleaning",
+  "carpet-cleaning",
+  "airbnb-cleaning",
+]);
+
+export function usesProgressiveIndividualSchedule(
+  serviceSlug: ServiceSlug,
+): boolean {
+  return PROGRESSIVE_INDIVIDUAL_SCHEDULE_SERVICES.has(serviceSlug);
+}
