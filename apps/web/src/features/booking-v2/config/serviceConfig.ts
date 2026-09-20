@@ -376,7 +376,7 @@ const CARPET_QUESTIONS: FormQuestion[] = [
   },
   {
     key: "carpetRooms",
-    label: "Number of carpeted rooms",
+    label: "Carpeted rooms",
     type: "select",
     required: true,
     group: "rooms",
