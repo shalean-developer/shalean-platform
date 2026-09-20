@@ -61,6 +61,8 @@ const admin = createClient(supabaseUrl, serviceRoleKey, {
 });
 
 const TEST_PASSWORD = "ShaleanLocal!2026#Cleaner";
+const LOCAL_CUSTOMER_EMAIL = "local.customer@example.com";
+const LOCAL_CUSTOMER_PASSWORD = (process.env.LOCAL_BOOKING_CUSTOMER_PASSWORD || "").trim();
 const cleaners = [
   {
     id: "fa100001-0001-4001-8001-000000000001",
@@ -131,8 +133,78 @@ async function ensureAuthUser(def) {
   return data.user.id;
 }
 
+async function ensureLocalCustomer() {
+  if (!LOCAL_CUSTOMER_PASSWORD) {
+    throw new Error(
+      "LOCAL_BOOKING_CUSTOMER_PASSWORD is required to seed the local customer account.",
+    );
+  }
+
+  const { data: listed, error: listError } = await admin.auth.admin.listUsers({
+    page: 1,
+    perPage: 1000,
+  });
+  if (listError) throw new Error(`List auth users: ${listError.message}`);
+
+  const existing = listed.users.find(
+    (user) => user.email?.toLowerCase() === LOCAL_CUSTOMER_EMAIL.toLowerCase(),
+  );
+
+  let user;
+  if (existing) {
+    const { data, error } = await admin.auth.admin.updateUserById(existing.id, {
+      password: LOCAL_CUSTOMER_PASSWORD,
+      email_confirm: true,
+      user_metadata: {
+        ...(existing.user_metadata ?? {}),
+        full_name: "Local Test Customer",
+        role: "customer",
+        local_fixture: true,
+      },
+    });
+    if (error || !data.user) {
+      throw new Error(`Update local customer: ${error?.message ?? "no user returned"}`);
+    }
+    user = data.user;
+  } else {
+    const { data, error } = await admin.auth.admin.createUser({
+      email: LOCAL_CUSTOMER_EMAIL,
+      password: LOCAL_CUSTOMER_PASSWORD,
+      email_confirm: true,
+      user_metadata: {
+        full_name: "Local Test Customer",
+        role: "customer",
+        local_fixture: true,
+      },
+    });
+    if (error || !data.user) {
+      throw new Error(`Create local customer: ${error?.message ?? "no user returned"}`);
+    }
+    user = data.user;
+  }
+
+  const { error: profileError } = await admin.from("user_profiles").upsert(
+    {
+      id: user.id,
+      tier: "regular",
+      role: "customer",
+      booking_count: 0,
+      total_spent_cents: 0,
+      updated_at: new Date().toISOString(),
+    },
+    { onConflict: "id" },
+  );
+  if (profileError) {
+    throw new Error(`Upsert local customer profile: ${profileError.message}`);
+  }
+
+  return user;
+}
+
 async function main() {
   console.log(`[seed-local-booking] Target verified: ${parsedUrl.origin}`);
+
+  const localCustomer = await ensureLocalCustomer();
 
   const { data: locations, error: locationError } = await admin
     .from("locations")
@@ -246,6 +318,7 @@ async function main() {
   console.log(
     `[seed-local-booking] OK: seeded ${cleaners.length} synthetic cleaners and ${seededTeams?.length ?? 0} move-clean teams with ${seededMembers?.length ?? 0} roster rows.`,
   );
+  console.log(`  - Local customer auth: ${localCustomer.email}`);
   for (const team of seededTeams ?? []) {
     console.log(`  - ${team.name} [${team.service_type}] active=${team.is_active}`);
   }
