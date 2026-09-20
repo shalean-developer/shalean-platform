@@ -28,6 +28,7 @@ import { cachedClientRequest } from "@/lib/booking-v2/clientRequestCache";
 import { cn } from "@/lib/utils";
 import {
   SERVICE_CONFIG,
+  serviceShowsEquipmentQuestion,
   type FormQuestion,
 } from "@/src/features/booking-v2/config/serviceConfig";
 import type {
@@ -45,6 +46,7 @@ import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayme
 import {
   DEEP_CLEANING_RECURRING_FREQUENCY,
   recurringFrequenciesForService,
+  serviceAllowsRecurringBookings,
   serviceUsesRecurringDayPicker,
 } from "@/lib/booking-v2/serviceRecurringPolicy";
 import { TimeSlotPicker } from "@/src/features/booking-v2/components/TimeSlotPicker";
@@ -441,6 +443,7 @@ function PropertyEditPanel() {
 function ScheduleEditPanel() {
   const { scheduling, serviceSlug } = useBookingV2();
   const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
   const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
   const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
     serviceRecurringFrequencies.includes(option.value),
@@ -454,6 +457,12 @@ function ScheduleEditPanel() {
   const today = new Date().toISOString().split("T")[0];
 
   useEffect(() => {
+    if (!allowsRecurringBookings && bookingType === "recurring") {
+      setValue("bookingType", "once_off", { shouldDirty: true, shouldValidate: true });
+      setValue("recurringFrequency", "", { shouldDirty: true, shouldValidate: true });
+      setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+      return;
+    }
     if (bookingType !== "recurring") return;
     if (isDeepCleaning) {
       if (recurringFrequency !== DEEP_CLEANING_RECURRING_FREQUENCY) {
@@ -468,7 +477,7 @@ function ScheduleEditPanel() {
     if (recurringFrequency === "custom") {
       setValue("recurringFrequency", "weekly", { shouldDirty: true });
     }
-  }, [bookingType, isDeepCleaning, recurringFrequency, setValue]);
+  }, [allowsRecurringBookings, bookingType, isDeepCleaning, recurringFrequency, setValue]);
 
   return (
     <div className="space-y-5">
@@ -543,7 +552,7 @@ function ScheduleEditPanel() {
       </div>
 
       {/* Recurring options */}
-      {bookingType === "recurring" && !isDeepCleaning && (
+      {allowsRecurringBookings && bookingType === "recurring" && !isDeepCleaning && (
         <>
           <hr className="border-slate-100" />
           <div className="space-y-4">
@@ -966,7 +975,7 @@ export function Step3Review() {
   const estimatedTotal =
     pricingSummary?.estimated_total ?? pricingSummary?.total ?? liveConfig?.basePrice ?? config.basePrice;
   const showEquipment =
-    serviceSlug !== "deep-cleaning" &&
+    serviceShowsEquipmentQuestion(serviceSlug) &&
     (values.equipmentRequired === "yes" || values.equipmentRequired === "no");
   const hasServiceDetails = serviceDetails.length > 0;
   const cleanDetailsNumber = 2 + Number(showEquipment);
