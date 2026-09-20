@@ -18,26 +18,15 @@ import {
 } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
 import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
 import {
-  adjacentRegularCleaningStage,
-  regularCleaningAddressReady,
-  regularCleaningAutoAdvanceTarget,
-  regularCleaningDetailsStage,
-} from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
-import {
-  adjacentDeepCleaningStage,
-  deepCleaningDetailsStage,
-  deepCleaningShowsExtras,
-  deepCleaningStageReady,
-} from "@/src/features/booking-v2/steps/deepCleaningProgressiveDisclosure";
-import type { RegularCleaningDetailsStage } from "@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure";
-import {
-  adjacentMovingCleaningStage,
-  movingCleaningAutoAdvanceTarget,
-  movingCleaningDetailsStage,
-  movingCleaningShowsExtras,
-  movingCleaningStageReady,
-  type MovingCleaningDetailsStage,
-} from "@/src/features/booking-v2/steps/movingCleaningProgressiveDisclosure";
+  adjacentBookingDetailsStage,
+  bookingDetailsAutoAdvanceTarget,
+  bookingDetailsQuestionVisibleAtStage,
+  bookingDetailsShowsExtras,
+  bookingDetailsStage,
+  bookingDetailsStageAutoAdvances,
+  bookingDetailsStageReady,
+  isProgressiveBookingDetailsService,
+} from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 
 // ─── Shared field components ───────────────────────────────────────────────────
 
@@ -384,36 +373,26 @@ export function Step1Details() {
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
   const isRegularCleaning = serviceSlug === "regular-cleaning";
-  const isDeepCleaning = serviceSlug === "deep-cleaning";
-  const isMovingCleaning = serviceSlug === "moving-cleaning";
-  const isProgressiveHomeCleaning = isRegularCleaning || isDeepCleaning || isMovingCleaning;
+  const isProgressiveDetails = isProgressiveBookingDetailsService(serviceSlug);
   const bookingDetails = {
     address,
     suburb,
     contactPhone,
     serviceAreaLocationId,
   };
-  const regularDetailsStage = regularCleaningDetailsStage(serviceDetails, {
-    address,
-    suburb,
-    contactPhone,
-    serviceAreaLocationId,
-  });
-  const deepDetailsStage = deepCleaningDetailsStage(serviceDetails, bookingDetails);
-  const movingDetailsStage = movingCleaningDetailsStage(serviceDetails, bookingDetails);
-  const activeDetailsStage = isProgressiveHomeCleaning
-    ? detailsSectionOverride ??
-      (isDeepCleaning ? deepDetailsStage : isMovingCleaning ? movingDetailsStage : regularDetailsStage)
+  const derivedDetailsStage = bookingDetailsStage(
+    serviceSlug,
+    serviceDetails,
+    bookingDetails,
+  );
+  const activeDetailsStage = isProgressiveDetails
+    ? detailsSectionOverride ?? derivedDetailsStage
     : null;
-  const showAddress = !isProgressiveHomeCleaning || activeDetailsStage === "address";
+  const showAddress = !isProgressiveDetails || activeDetailsStage === "address";
   const showEquipmentQuestion = isRegularCleaning && activeDetailsStage === "pets";
   const showExtras =
-    !isProgressiveHomeCleaning ||
-    (isRegularCleaning && activeDetailsStage === "equipment") ||
-    (isDeepCleaning &&
-      deepCleaningShowsExtras(activeDetailsStage as RegularCleaningDetailsStage | null)) ||
-    (isMovingCleaning &&
-      movingCleaningShowsExtras(activeDetailsStage as MovingCleaningDetailsStage | null));
+    !isProgressiveDetails ||
+    bookingDetailsShowsExtras(serviceSlug, activeDetailsStage);
 
   function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
     if (!question.showWhen) return true;
@@ -449,89 +428,58 @@ export function Step1Details() {
 
   const visibleQuestions = step1Questions.filter((question) => {
     if (question.key === "cleaningProducts" || !isQuestionVisible(question)) return false;
-    if (!isProgressiveHomeCleaning) return true;
-    if (question.key === "propertyType") {
-      return isMovingCleaning
-        ? activeDetailsStage === "property"
-        : activeDetailsStage === "property" || activeDetailsStage === "rooms";
-    }
-    if (isMovingCleaning && question.key === "moveType") return activeDetailsStage === "move";
-    if (question.group === "rooms") return activeDetailsStage === "rooms";
-    if (isMovingCleaning && question.group === "condition") return activeDetailsStage === "condition";
-    if (question.key === "hasPets" || (isDeepCleaning && question.key === "lastCleaned")) {
-      return activeDetailsStage === "pets";
-    }
-    return activeDetailsStage === "equipment";
+    if (!isProgressiveDetails) return true;
+    return bookingDetailsQuestionVisibleAtStage(
+      serviceSlug,
+      question,
+      activeDetailsStage,
+    );
   });
   const questionGroups = groupQuestions(visibleQuestions);
-  const regularStageReady = isDeepCleaning && activeDetailsStage
-    ? deepCleaningStageReady(
-        activeDetailsStage as RegularCleaningDetailsStage,
+  const detailsStageReady = activeDetailsStage
+    ? bookingDetailsStageReady(
+        serviceSlug,
+        activeDetailsStage,
         serviceDetails,
         bookingDetails,
       )
-    : isMovingCleaning && activeDetailsStage
-      ? movingCleaningStageReady(
-          activeDetailsStage as MovingCleaningDetailsStage,
-          serviceDetails,
-          bookingDetails,
-        )
-    : activeDetailsStage === "property"
-      ? Boolean(String(serviceDetails.propertyType ?? "").trim())
-      : activeDetailsStage === "rooms"
-        ? ["bedrooms", "bathrooms", "extraRooms"].every((key) =>
-            Boolean(String(serviceDetails[key] ?? "").trim()),
-          )
-        : activeDetailsStage === "pets"
-          ? Boolean(String(serviceDetails.hasPets ?? "").trim())
-          : activeDetailsStage === "address"
-            ? regularCleaningAddressReady({
-                address,
-                suburb,
-                contactPhone,
-                serviceAreaLocationId,
-              })
-            : true;
+    : true;
 
   function moveProgressiveStage(direction: "back" | "next") {
     if (!activeDetailsStage) return;
-    const adjacentStage = isDeepCleaning
-      ? adjacentDeepCleaningStage(activeDetailsStage as RegularCleaningDetailsStage, direction)
-      : isMovingCleaning
-        ? adjacentMovingCleaningStage(activeDetailsStage as MovingCleaningDetailsStage, direction)
-        : adjacentRegularCleaningStage(activeDetailsStage as import("@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure").RegularCleaningDetailsStage, direction);
+    const adjacentStage = adjacentBookingDetailsStage(
+      serviceSlug,
+      activeDetailsStage,
+      direction,
+    );
     if (direction === "back") {
       if (adjacentStage) editDetailsSection(adjacentStage);
       else goBack();
       return;
     }
-    if (!regularStageReady) return;
+    if (!detailsStageReady) return;
     if (adjacentStage) editDetailsSection(adjacentStage);
     else void goNext();
   }
 
   function handleProgressiveAnswer(key: string, value: string) {
-    if (!activeDetailsStage || (isDeepCleaning && activeDetailsStage !== "property")) return;
-    const nextDetails = { ...serviceDetails, [key]: value };
-    const target = isMovingCleaning
-      ? movingCleaningAutoAdvanceTarget(
-          activeDetailsStage as MovingCleaningDetailsStage,
-          nextDetails,
-        )
-      : regularCleaningAutoAdvanceTarget(
-          activeDetailsStage as import("@/src/features/booking-v2/steps/regularCleaningProgressiveDisclosure").RegularCleaningDetailsStage,
-          nextDetails,
-        );
+    if (!activeDetailsStage) return;
+    const target = bookingDetailsAutoAdvanceTarget(
+      serviceSlug,
+      activeDetailsStage,
+      { ...serviceDetails, [key]: value },
+    );
     if (target) editDetailsSection(target);
   }
 
   const autoAdvanceStage =
-    activeDetailsStage === "property" || (isMovingCleaning && activeDetailsStage === "move");
+    activeDetailsStage != null &&
+    bookingDetailsStageAutoAdvances(serviceSlug, activeDetailsStage);
 
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
       {/* Service-specific questions */}
-      <section className={cn("space-y-5", isProgressiveHomeCleaning && questionGroups.length === 0 && "hidden")}>
+      <section className={cn("space-y-5", isProgressiveDetails && questionGroups.length === 0 && "hidden")}>
         {questionGroups.map((group) => {
           if (group.type === "inline") {
             const isRooms = group.groupName === "rooms";
@@ -651,7 +599,7 @@ export function Step1Details() {
         </>
       )}
 
-      {isProgressiveHomeCleaning ? (
+      {isProgressiveDetails ? (
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
@@ -663,13 +611,11 @@ export function Step1Details() {
           {!autoAdvanceStage ? (
             <button
               type="button"
-              disabled={!regularStageReady}
+              disabled={!detailsStageReady}
               onClick={() => moveProgressiveStage("next")}
               className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
-              {activeDetailsStage === "equipment" ||
-              (isDeepCleaning && activeDetailsStage === "pets") ||
-              (isMovingCleaning && activeDetailsStage === "condition")
+              {bookingDetailsShowsExtras(serviceSlug, activeDetailsStage)
                 ? "Continue to Schedule →"
                 : "Continue →"}
             </button>
