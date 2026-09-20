@@ -132,6 +132,7 @@ function buildExtrasForService(
 ): LiveExtra[] {
   return Object.entries(dbExtras)
     .filter(([slug]) => !BOOKING_V2_INTERNAL_EXTRA_SLUGS.has(slug))
+    .filter(([slug]) => !(serviceSlug === "carpet-cleaning" && slug === "stain-treatment"))
     .filter(([, row]) => row.service_slugs.includes(serviceSlug))
     .filter(([, row]) => Number.isFinite(row.price) && row.price > 0)
     .sort((a, b) => a[1].sort_order - b[1].sort_order || a[0].localeCompare(b[0]))
@@ -152,15 +153,24 @@ const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
   timezone: "Africa/Johannesburg",
 };
 
-export function normalizeBookingV2QuestionLabels(
+export function normalizeBookingV2Questions(
   serviceSlug: ServiceSlug,
   questions: readonly FormQuestion[],
 ): FormQuestion[] {
-  return questions.map((question) =>
-    serviceSlug === "carpet-cleaning" && question.key === "carpetRooms"
-      ? { ...question, label: "Carpeted rooms" }
-      : { ...question },
-  );
+  if (serviceSlug === "carpet-cleaning") {
+    // Carpet uses a deliberately small canonical intake. Ignore legacy catalog
+    // questions such as sofaCount, hasPets and specialInstructions; legacy
+    // stored bookings remain readable/priced elsewhere.
+    return SERVICE_CONFIG["carpet-cleaning"].step1Questions.map((question) => ({
+      ...question,
+      options: question.options?.map((option) => ({ ...option })),
+    }));
+  }
+
+  return questions.map((question) => ({
+    ...question,
+    options: question.options?.map((option) => ({ ...option })),
+  }));
 }
 
 export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
@@ -292,8 +302,9 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       cleanerMode: serviceDef.cleanerMode,
       showEquipmentQuestion: serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
       showCleaningProductsQuestion: serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
-      allowsExtraCleaner: serviceDef.allowsExtraCleaner,
-      step1Questions: normalizeBookingV2QuestionLabels(
+      allowsExtraCleaner:
+        slug === "carpet-cleaning" ? false : serviceDef.allowsExtraCleaner,
+      step1Questions: normalizeBookingV2Questions(
         slug,
         serviceDef.step1Questions,
       ),
@@ -328,8 +339,11 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         cleanerMode: staticFallback.cleanerMode,
         showEquipmentQuestion,
         showCleaningProductsQuestion: showEquipmentQuestion,
-        allowsExtraCleaner: slug === "regular-cleaning" || slug === "airbnb-cleaning" || slug === "office-cleaning" || slug === "carpet-cleaning",
-        step1Questions: normalizeBookingV2QuestionLabels(
+        allowsExtraCleaner:
+          slug === "regular-cleaning" ||
+          slug === "airbnb-cleaning" ||
+          slug === "office-cleaning",
+        step1Questions: normalizeBookingV2Questions(
           slug,
           staticFallback.step1Questions,
         ),
