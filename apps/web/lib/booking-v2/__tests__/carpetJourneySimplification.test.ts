@@ -139,6 +139,8 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
       }),
     ).toBe(false);
     expect(EXTRA_CLEANER_SERVICE_SLUGS.has("carpet-cleaning")).toBe(false);
+    expect(contextSource).toContain("const normalizedMerged = sanitizeStoredForm(");
+    expect(contextSource).toContain('extraId !== "stain-treatment"');
 
     expect(contextSource).toContain(
       'serviceSlug === "carpet-cleaning"\n          ? "date_time"',
@@ -166,9 +168,15 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
     expect(reviewSource).toContain("{!isCarpetCleaning ? (");
   });
 
-  it("Step 4 cannot accept a recurring Carpet booking", () => {
+  it("Step 4 enforces the Carpet once-off and one-specialist contract", () => {
     expect(schemaSource).toContain(
       '"Carpet Cleaning is available as a once-off booking only."',
+    );
+    expect(schemaSource).toContain(
+      '"Carpet Cleaning uses one specialist per booking."',
+    );
+    expect(schemaSource).toContain(
+      '"Choose at most one preferred Carpet Cleaning specialist."',
     );
   });
 
