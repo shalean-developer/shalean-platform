@@ -333,23 +333,11 @@ const OFFICE_QUESTIONS: FormQuestion[] = [
   },
   {
     key: "bathrooms",
-    label: "Bathrooms / kitchenettes",
+    label: "Bathrooms",
     type: "select",
     required: true,
     group: "rooms",
     options: [...BATHROOM_COUNT_OPTIONS],
-  },
-  {
-    key: "afterHours",
-    label: "Preferred cleaning time",
-    type: "radio",
-    required: true,
-    centered: true,
-    options: [
-      { value: "during_hours", label: "During office hours" },
-      { value: "after_hours", label: "After hours / evenings" },
-      { value: "weekends", label: "Weekends only" },
-    ],
   },
 ];
 
