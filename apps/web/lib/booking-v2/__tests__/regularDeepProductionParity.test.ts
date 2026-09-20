@@ -53,7 +53,7 @@ describe("Regular and Deep production parity during six-service convergence", ()
 
   it("preserves Deep team-selection auto-advance and Moving explicit continuation", () => {
     expect(scheduleSource).toMatch(
-      /if \\(isDeepCleaning\\) \\{\\s*void goNext\\(\\);\\s*\\}/,
+      /if \(isDeepCleaning\) \{\s*void goNext\(\);\s*\}/,
     );
     expect(scheduleSource).toContain("{isMovingCleaning && isTeamMode ? (");
     expect(scheduleSource).toContain("Continue to Review →");
