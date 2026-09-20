@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
+import { buildCustomerTotalInputFromForm } from "@/lib/booking-v2/buildCustomerPricingFromForm";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import {
   recurringScheduleAllowedForService,
@@ -17,6 +18,10 @@ const step2Source = readFileSync(
 );
 const reviewSource = readFileSync(
   join(process.cwd(), "src/features/booking-v2/steps/Step3Review.tsx"),
+  "utf8",
+);
+const summarySource = readFileSync(
+  join(process.cwd(), "src/features/booking-v2/components/BookingV2SummaryPanel.tsx"),
   "utf8",
 );
 const contextSource = readFileSync(
@@ -156,6 +161,34 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
     );
   });
 
+  it("static Carpet pricing fallback still forces one specialist", () => {
+    const input = buildCustomerTotalInputFromForm({
+      serviceSlug: "carpet-cleaning",
+      values: {
+        serviceDetails: {
+          propertyType: "house",
+          carpetRooms: "2",
+          rugCount: "0",
+          carpetType: "standard",
+          stains: "no",
+        },
+        selectedExtras: [],
+        cleanerMode: "individual_cleaners",
+        cleanerCount: 3,
+        bookingType: "once_off",
+        recurringFrequency: "",
+        equipmentRequired: "no",
+        equipmentQuote: null,
+      },
+      liveConfig: null,
+      feesConfig: defaultBookingV2FeesConfig(),
+      vipTier: null,
+    });
+
+    expect(input.cleanerCount).toBe(1);
+    expect(input.catalog.allowsExtraCleaner).toBe(false);
+  });
+
   it("Step 3 separates Carpet scope and Condition and uses Specialist presentation", () => {
     expect(reviewSource).toContain('title="Carpet scope"');
     expect(reviewSource).toContain('title="Condition"');
@@ -166,6 +199,15 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
       'values.cleanerMode === "individual_cleaners" && !isCarpetCleaning',
     );
     expect(reviewSource).toContain("{!isCarpetCleaning ? (");
+    expect(summarySource).toContain(
+      'isCarpetCleaning\n      ? currentStep > 2 || displayedScheduleStage === "cleaner"',
+    );
+    expect(summarySource).toContain(
+      'label={isCarpetCleaning ? "Carpet scope" : "Home"}',
+    );
+    expect(summarySource).toContain(
+      'label={isCarpetCleaning ? "Condition" : "Details"}',
+    );
   });
 
   it("Step 4 enforces the Carpet once-off and one-specialist contract", () => {
