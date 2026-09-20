@@ -127,10 +127,12 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     contactPhone: values.contactPhone,
     serviceAreaLocationId: values.serviceAreaLocationId,
   };
+  const questions = liveConfig?.step1Questions ?? config.step1Questions;
   const detailsStage = bookingDetailsStage(
     values.serviceSlug,
     values.serviceDetails,
     bookingDetails,
+    questions,
   );
   const displayedDetailsStage = detailsSectionOverride ?? detailsStage;
   const detailsStageIndex = bookingDetailsStageIndex(
@@ -142,7 +144,6 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     values.serviceSlug,
     finalDetailsStage,
   );
-  const questions = liveConfig?.step1Questions ?? config.step1Questions;
   const optionLabel = (key: string, raw: unknown): string => {
     const value = String(raw ?? "");
     return (
