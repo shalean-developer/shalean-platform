@@ -88,8 +88,9 @@ describe("booking details presentation", () => {
 
   it("keeps cleaner preference and add-ons side by side without narrowing cleaner summaries", () => {
     expect(reviewSource).toContain(
-      'title="Cleaner preference"\n              onEdit={() => openEdit("cleaner")}\n            >',
+      'title={isCarpetCleaning ? "Specialist" : "Cleaner preference"}',
     );
+    expect(reviewSource).toContain('onEdit={() => openEdit("cleaner")}');
     expect(reviewSource).toContain('<div className="grid grid-cols-1 gap-2.5">');
     expect(reviewSource).not.toContain('cleanerDetails.length > 1 && "md:grid-cols-2"');
     expect(reviewSource).toContain(
