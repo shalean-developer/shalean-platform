@@ -31,22 +31,33 @@ const LEGACY_SERVICE_TO_BOOK_SLUG: Record<string, ServiceSlug> = {
   office: "office-cleaning",
 };
 
-export function legacyServiceIdToBookSlug(service: string | null | undefined): ServiceSlug {
+export function explicitBookServiceSlugFromParam(
+  service: string | null | undefined,
+): ServiceSlug | null {
   const normalized = serviceFromUrlParam(service ?? undefined);
   if (normalized && LEGACY_SERVICE_TO_BOOK_SLUG[normalized]) {
     return LEGACY_SERVICE_TO_BOOK_SLUG[normalized];
   }
+
   const raw = String(service ?? "")
     .trim()
     .toLowerCase()
     .replace(/_/g, "-");
-  if (raw && LEGACY_SERVICE_TO_BOOK_SLUG[raw]) {
+
+  if (!raw) return null;
+  if (LEGACY_SERVICE_TO_BOOK_SLUG[raw]) {
     return LEGACY_SERVICE_TO_BOOK_SLUG[raw];
   }
+
   for (const slug of SERVICE_SLUGS) {
     if (slug === raw || slug.replace(/-cleaning$/, "") === raw) return slug;
   }
-  return "regular-cleaning";
+
+  return null;
+}
+
+export function legacyServiceIdToBookSlug(service: string | null | undefined): ServiceSlug {
+  return explicitBookServiceSlugFromParam(service) ?? "regular-cleaning";
 }
 
 export function bookSlugFromLegacyServiceParam(sp: URLSearchParams): ServiceSlug {
