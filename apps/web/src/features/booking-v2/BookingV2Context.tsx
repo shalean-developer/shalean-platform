@@ -437,14 +437,19 @@ export function BookingV2Provider({
         const hasPendingBooking = Boolean(form.getValues("pendingBookingId")?.trim());
         if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) return;
       }
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(window.location.search);
       params.set("step", bookingStepQueryValue(step));
+      if (step === 1) {
+        if (detailsSectionOverride) params.set("section", detailsSectionOverride);
+      } else {
+        params.delete("section");
+      }
       // The service page is already mounted; only the client-owned step changes.
       // Native history is integrated with the Next.js App Router and avoids an
       // unnecessary RSC request for every Continue/Back/Edit click.
       window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
     },
-    [searchParams, serviceSlug, pricingAvailability, form],
+    [detailsSectionOverride, serviceSlug, pricingAvailability, form],
   );
 
   const goNext = useCallback(async () => {
@@ -510,12 +515,12 @@ export function BookingV2Provider({
   const editDetailsSection = useCallback(
     (section: BookingDetailsStage) => {
       setDetailsSectionOverride(section);
-      const params = new URLSearchParams(searchParams.toString());
+      const params = new URLSearchParams(window.location.search);
       params.set("step", "details");
       params.set("section", section);
       window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
     },
-    [searchParams, serviceSlug],
+    [serviceSlug],
   );
 
   useEffect(() => {
