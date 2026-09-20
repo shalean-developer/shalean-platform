@@ -399,6 +399,7 @@ export function Step2Schedule() {
   const isRegularCleaning = serviceSlug === "regular-cleaning";
   const isDeepCleaning = serviceSlug === "deep-cleaning";
   const isMovingCleaning = serviceSlug === "moving-cleaning";
+  const isCarpetCleaning = serviceSlug === "carpet-cleaning";
   const progressiveIndividualSchedule = usesProgressiveIndividualSchedule(serviceSlug);
   const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
   const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
@@ -406,7 +407,7 @@ export function Step2Schedule() {
     serviceRecurringFrequencies.includes(option.value),
   );
   const activeScheduleStage = progressiveIndividualSchedule
-    ? scheduleSectionOverride ?? "booking_type"
+    ? scheduleSectionOverride ?? (isCarpetCleaning ? "date_time" : "booking_type")
     : null;
   const isBookingTypeStage =
     progressiveIndividualSchedule && activeScheduleStage === "booking_type";
@@ -456,6 +457,23 @@ export function Step2Schedule() {
     setValue("recurringFrequency", "", { shouldDirty: true, shouldValidate: true });
     setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
   }, [allowsRecurringBookings, bookingType, setValue]);
+
+  useEffect(() => {
+    if (!isCarpetCleaning) return;
+    if (cleanerCount !== 1) {
+      setValue("cleanerCount", 1, { shouldDirty: true, shouldValidate: true });
+    }
+    if (selectedCleanerIds.length > 1) {
+      setValue("selectedCleanerIds", selectedCleanerIds.slice(0, 1), { shouldDirty: true });
+      setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, 1), { shouldDirty: true });
+    }
+  }, [
+    cleanerCount,
+    isCarpetCleaning,
+    selectedCleanerDetails,
+    selectedCleanerIds,
+    setValue,
+  ]);
 
   useEffect(() => {
     if (!isDeepCleaning || bookingType !== "recurring") return;
@@ -559,6 +577,20 @@ export function Step2Schedule() {
 
   function moveScheduleStage(direction: "back" | "next") {
     if (!activeScheduleStage) return;
+
+    if (isCarpetCleaning) {
+      if (activeScheduleStage === "date_time") {
+        if (direction === "back") goBack();
+        else editScheduleSection("cleaner");
+        return;
+      }
+      if (activeScheduleStage === "cleaner") {
+        if (direction === "back") editScheduleSection("date_time");
+        else void goNext();
+        return;
+      }
+    }
+
     const adjacent = adjacentRegularCleaningScheduleStage(
       activeScheduleStage,
       direction,
@@ -915,17 +947,19 @@ export function Step2Schedule() {
       {/* ── Cleaner count + preference (individual mode) ── */}
       {!isTeamMode && (!progressiveIndividualSchedule || activeScheduleStage === "cleaner") && (
         <section className="space-y-6">
-          <CleanerCountSelector
-            value={cleanerCount}
-            onChange={(n) => {
-              setValue("cleanerCount", n);
-              // Trim excess selections when reducing count
-              if (selectedCleanerIds.length > n) {
-                setValue("selectedCleanerIds", selectedCleanerIds.slice(0, n));
-                setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, n));
-              }
-            }}
-          />
+          {!isCarpetCleaning ? (
+            <CleanerCountSelector
+              value={cleanerCount}
+              onChange={(n) => {
+                setValue("cleanerCount", n);
+                // Trim excess selections when reducing count
+                if (selectedCleanerIds.length > n) {
+                  setValue("selectedCleanerIds", selectedCleanerIds.slice(0, n));
+                  setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, n));
+                }
+              }}
+            />
+          ) : null}
 
           <CleanerPreferenceSection
             serviceSlug={serviceSlug}
@@ -935,7 +969,9 @@ export function Step2Schedule() {
             locationId={serviceAreaLocationId?.trim() ?? ""}
             selectedIds={selectedCleanerIds}
             selectedDetails={selectedCleanerDetails}
-            maxSelect={cleanerCount}
+            maxSelect={isCarpetCleaning ? 1 : cleanerCount}
+            heading={isCarpetCleaning ? "Choose your specialist" : undefined}
+            personLabel={isCarpetCleaning ? "specialist" : undefined}
             onToggle={toggleCleaner}
             onClearAll={clearCleanerSelection}
             onResync={(matched) =>
