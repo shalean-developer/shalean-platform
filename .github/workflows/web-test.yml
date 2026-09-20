@@ -108,6 +108,7 @@ jobs:
           lib/booking-v2/__tests__/serviceProgressiveDisclosure.test.ts
           lib/booking-v2/__tests__/regularDeepProductionParity.test.ts
           lib/booking-v2/__tests__/bookingDetailsPresentation.test.ts
+          lib/booking-v2/__tests__/bookingDetailsSectionUrlLifecycle.test.ts
           lib/booking-v2/__tests__/bookingShellNavigation.test.ts
           lib/booking/__tests__/cleanerServicePreferenceEligibility.test.ts
           lib/customer/__tests__/sr10CustomerBookingAddressBatching.test.ts
