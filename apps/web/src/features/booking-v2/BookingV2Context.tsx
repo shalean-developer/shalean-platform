@@ -44,6 +44,7 @@ import type { RegularCleaningScheduleStage } from "@/src/features/booking-v2/ste
 import {
   bookingDetailsStage,
   bookingDetailsStageFromSearchParam,
+  bookingDetailsStageIndex,
   isProgressiveBookingDetailsService,
   usesProgressiveIndividualSchedule,
   type BookingDetailsStage,
@@ -513,22 +514,45 @@ export function BookingV2Provider({
       !isProgressiveBookingDetailsService(serviceSlug)
     ) return;
 
-    if (!requestedDetailsSection) {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("step", "details");
-      params.set("section", detailsSectionOverride ?? "address");
-      window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
-      return;
+    const values = form.getValues();
+    const bookingDetails = {
+      address: values.address,
+      suburb: values.suburb,
+      contactPhone: values.contactPhone,
+      serviceAreaLocationId: values.serviceAreaLocationId,
+    };
+    const questions = liveConfig?.step1Questions ?? config.step1Questions;
+    const derivedStage = bookingDetailsStage(
+      serviceSlug,
+      values.serviceDetails,
+      bookingDetails,
+      questions,
+    );
+
+    let safeStage = requestedDetailsSection ?? detailsSectionOverride ?? derivedStage;
+    if (
+      requestedDetailsSection &&
+      bookingDetailsStageIndex(serviceSlug, requestedDetailsSection) >
+        bookingDetailsStageIndex(serviceSlug, derivedStage)
+    ) {
+      safeStage = derivedStage;
     }
 
-    if (requestedDetailsSection !== detailsSectionOverride) {
-      setDetailsSectionOverride(requestedDetailsSection);
+    if (safeStage !== detailsSectionOverride) {
+      setDetailsSectionOverride(safeStage);
+    }
+
+    if (!requestedDetailsSection || safeStage !== requestedDetailsSection) {
+      const params = new URLSearchParams(window.location.search);
+      params.set("step", "details");
+      params.set("section", safeStage);
+      window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
     }
   }, [
     currentStep,
-    detailsSectionOverride,
+    form,
+    liveConfig,
     requestedDetailsSection,
-    searchParams,
     serviceSlug,
   ]);
 
@@ -550,9 +574,14 @@ export function BookingV2Provider({
       serviceAreaLocationId: values.serviceAreaLocationId,
     };
     setDetailsSectionOverride(
-      bookingDetailsStage(serviceSlug, values.serviceDetails, bookingDetails),
+      bookingDetailsStage(
+        serviceSlug,
+        values.serviceDetails,
+        bookingDetails,
+        liveConfig?.step1Questions ?? config.step1Questions,
+      ),
     );
-  }, [currentStep, detailsSectionOverride, form, serviceSlug]);
+  }, [currentStep, detailsSectionOverride, form, liveConfig, serviceSlug]);
 
   const value = useMemo<BookingV2ContextValue>(
     () => ({
