@@ -78,6 +78,41 @@ const cleaners = [
     latitude: -33.9740,
     longitude: 18.4820,
   },
+  {
+    id: "fa100001-0003-4001-8001-000000000003",
+    email: "local.cleaner.three@example.com",
+    name: "Local Cleaner Three",
+    phone: "+27000000103",
+    latitude: -33.9690,
+    longitude: 18.4760,
+  },
+];
+
+const teams = [
+  {
+    id: "fa900001-0001-4009-8009-000000000001",
+    name: "Local Move Team Alpha",
+    members: [
+      "fa100001-0001-4001-8001-000000000001",
+      "fa100001-0002-4001-8001-000000000002",
+    ],
+  },
+  {
+    id: "fa900001-0002-4009-8009-000000000002",
+    name: "Local Move Team Bravo",
+    members: [
+      "fa100001-0002-4001-8001-000000000002",
+      "fa100001-0003-4001-8001-000000000003",
+    ],
+  },
+  {
+    id: "fa900001-0003-4009-8009-000000000003",
+    name: "Local Move Team Charlie",
+    members: [
+      "fa100001-0001-4001-8001-000000000001",
+      "fa100001-0003-4001-8001-000000000003",
+    ],
+  },
 ];
 
 async function ensureAuthUser(def) {
@@ -163,7 +198,35 @@ async function main() {
     if (availabilityError) throw new Error(`Insert availability ${def.email}: ${availabilityError.message}`);
   }
 
-  console.log("[seed-local-booking] OK: seeded 2 synthetic cleaners with Athlone/Claremont coverage for 30 days.");
+  for (const team of teams) {
+    const { error: teamError } = await admin.from("teams").upsert(
+      {
+        id: team.id,
+        name: team.name,
+        service_type: "move_cleaning",
+        capacity_per_day: 1,
+        is_active: true,
+        lead_cleaner_id: team.members[0],
+      },
+      { onConflict: "id" },
+    );
+    if (teamError) throw new Error(`Upsert team ${team.name}: ${teamError.message}`);
+
+    await admin.from("team_members").delete().eq("team_id", team.id);
+    const { error: memberError } = await admin.from("team_members").insert(
+      team.members.map((cleanerId) => ({
+        team_id: team.id,
+        cleaner_id: cleanerId,
+        active_from: "2026-01-01T00:00:00Z",
+        active_to: null,
+      })),
+    );
+    if (memberError) throw new Error(`Seed roster ${team.name}: ${memberError.message}`);
+  }
+
+  console.log(
+    `[seed-local-booking] OK: seeded ${cleaners.length} synthetic cleaners and ${teams.length} move-clean teams.`,
+  );
   console.log("[seed-local-booking] No production/customer/payment data was copied.");
 }
 
