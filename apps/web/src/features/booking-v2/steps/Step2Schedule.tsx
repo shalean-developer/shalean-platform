@@ -432,6 +432,17 @@ export function Step2Schedule() {
         )
       : [];
 
+  const teamScheduleReady =
+    isTeamMode &&
+    Boolean(
+      bookingType &&
+        (bookingType !== "recurring" || recurringFrequency) &&
+        date &&
+        areaResolved &&
+        isSelectedBookingSlotVerified(time, availability, slotsVerified) &&
+        assignedTeamId,
+    );
+
   useEffect(() => {
     if (allowsRecurringBookings || bookingType === "once_off") return;
     setValue("bookingType", "once_off", { shouldDirty: true, shouldValidate: true });
@@ -874,7 +885,6 @@ export function Step2Schedule() {
               setValue("assignedTeamName", name, {
                 shouldDirty: true,
               });
-              void goNext();
             }}
           />
           <FieldError message={errors.assignedTeamId?.message} />
@@ -916,6 +926,26 @@ export function Step2Schedule() {
           />
         </section>
       )}
+
+      {!isRegularCleaning && isTeamMode ? (
+        <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={goBack}
+            className="min-h-11 w-full rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:bg-slate-50 sm:w-auto"
+          >
+            ← Back
+          </button>
+          <button
+            type="button"
+            onClick={() => void goNext()}
+            disabled={!teamScheduleReady}
+            className="min-h-11 w-full rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+          >
+            Continue to Review →
+          </button>
+        </div>
+      ) : null}
 
       {isRegularCleaning && activeScheduleStage ? (
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
