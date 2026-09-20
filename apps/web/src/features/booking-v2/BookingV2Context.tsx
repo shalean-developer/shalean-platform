@@ -309,9 +309,9 @@ export function BookingV2Provider({
 
       const patch = bookingV2FormPatchFromBookingRow(row, serviceSlug, cleanerMode);
       form.reset(patch, { keepDefaultValues: false });
-      if (serviceSlug === "regular-cleaning") {
+      if (isProgressiveBookingDetailsService(serviceSlug)) {
         setDetailsSectionOverride(
-          regularCleaningDetailsStage(patch.serviceDetails, {
+          bookingDetailsStage(serviceSlug, patch.serviceDetails, {
             address: patch.address,
             suburb: patch.suburb,
             contactPhone: patch.contactPhone,
