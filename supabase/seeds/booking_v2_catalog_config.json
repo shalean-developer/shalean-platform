@@ -670,13 +670,13 @@
         "all"
       ],
       "extraSlugs": [
-        "stain-treatment",
+        "sofa-upholstery",
         "pet-odour-treatment",
         "fabric-protector",
         "mattress-cleaning"
       ],
-      "showCleaningProductsQuestion": true,
-      "allowsExtraCleaner": true,
+      "showCleaningProductsQuestion": false,
+      "allowsExtraCleaner": false,
       "step1Questions": [
         {
           "key": "propertyType",
@@ -724,9 +724,44 @@
             },
             {
               "value": "5",
-              "label": "5+ rooms"
+              "label": "5 rooms"
+            },
+            {
+              "value": "6",
+              "label": "6+ rooms"
             }
-          ]
+          ],
+          "hint": "Each carpeted room is priced and timed separately."
+        },
+        {
+          "key": "rugCount",
+          "label": "Number of rugs",
+          "type": "select",
+          "required": true,
+          "group": "rooms",
+          "options": [
+            {
+              "value": "0",
+              "label": "No rugs"
+            },
+            {
+              "value": "1",
+              "label": "1 rug"
+            },
+            {
+              "value": "2",
+              "label": "2 rugs"
+            },
+            {
+              "value": "3",
+              "label": "3 rugs"
+            },
+            {
+              "value": "4",
+              "label": "4+ rugs"
+            }
+          ],
+          "hint": "Area rugs and runners — priced per rug."
         },
         {
           "key": "carpetType",
@@ -749,32 +784,7 @@
             },
             {
               "value": "persian_rug",
-              "label": "Persian / area rug"
-            }
-          ]
-        },
-        {
-          "key": "sofaCount",
-          "label": "Number of sofas to clean",
-          "type": "select",
-          "required": true,
-          "group": "rooms",
-          "options": [
-            {
-              "value": "0",
-              "label": "No sofas"
-            },
-            {
-              "value": "1",
-              "label": "1 sofa"
-            },
-            {
-              "value": "2",
-              "label": "2 sofas"
-            },
-            {
-              "value": "3",
-              "label": "3+ sofas"
+              "label": "Persian / delicate"
             }
           ]
         },
@@ -795,34 +805,11 @@
               "label": "No"
             }
           ]
-        },
-        {
-          "key": "hasPets",
-          "label": "Do you have any pets?",
-          "type": "radio",
-          "required": true,
-          "group": "yesno",
-          "centered": true,
-          "options": [
-            {
-              "value": "yes",
-              "label": "Yes"
-            },
-            {
-              "value": "no",
-              "label": "No"
-            }
-          ]
-        },
-        {
-          "key": "specialInstructions",
-          "label": "Special instructions (optional)",
-          "type": "textarea",
-          "placeholder": "Problem areas, delicate rugs, stain details..."
         }
       ],
       "isActive": true,
-      "sortOrder": 50
+      "sortOrder": 50,
+      "showEquipmentQuestion": false
     },
     {
       "slug": "airbnb-cleaning",
