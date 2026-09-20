@@ -31,7 +31,6 @@ export const SERVICE_EXTRA_SLUGS: Record<ServiceSlug, readonly string[]> = {
   ],
   "carpet-cleaning": [
     "sofa-upholstery",
-    "stain-treatment",
     "pet-odour-treatment",
     "fabric-protector",
     "mattress-cleaning",
