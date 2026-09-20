@@ -246,6 +246,23 @@ export const bookingV2ConfirmSchema = z.object({
     z.string().optional(),
   ),
 }).superRefine((data, ctx) => {
+  if (data.serviceSlug === "carpet-cleaning") {
+    if (data.cleanerCount !== 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Carpet Cleaning uses one specialist per booking.",
+        path: ["cleanerCount"],
+      });
+    }
+    if ((data.selectedCleanerIds ?? []).length > 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose at most one preferred Carpet Cleaning specialist.",
+        path: ["selectedCleanerIds"],
+      });
+    }
+  }
+
   if (
     !recurringScheduleAllowedForService({
       serviceSlug: data.serviceSlug,
