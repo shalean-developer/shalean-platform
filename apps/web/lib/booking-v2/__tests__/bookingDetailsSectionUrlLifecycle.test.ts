@@ -15,6 +15,17 @@ describe("Booking V2 details section URL lifecycle", () => {
     expect(source).toContain('params.set("section", section);');
   });
 
+  it("prevents a section query from jumping ahead of unanswered required details", () => {
+    expect(source).toContain("bookingDetailsStageIndex");
+    expect(source).toContain(
+      "bookingDetailsStageIndex(serviceSlug, requestedDetailsSection) >",
+    );
+    expect(source).toContain(
+      "bookingDetailsStageIndex(serviceSlug, derivedStage)",
+    );
+    expect(source).toContain("safeStage = derivedStage;");
+  });
+
   it("removes stale details section state after leaving Step 1", () => {
     expect(source).toContain('if (step === 1) {');
     expect(source).toContain(
