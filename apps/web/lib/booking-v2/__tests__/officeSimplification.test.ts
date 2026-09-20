@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
+import { bookingDetailsStageReady } from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 import { serviceAllowsRecurringBookings } from "@/lib/booking-v2/serviceRecurringPolicy";
 import {
   informationalFieldKeys,
@@ -59,6 +60,27 @@ describe("Office Booking V2 simplification", () => {
     expect(
       questions.some((question) => question.key === "specialInstructions"),
     ).toBe(false);
+  });
+
+  it("lets the add-ons-only final Office details stage continue", () => {
+    expect(
+      bookingDetailsStageReady(
+        "office-cleaning",
+        "preferences",
+        {
+          officeType: "open_plan",
+          officeSize: "medium",
+          bathrooms: "2",
+        },
+        {
+          address: "12 Long Street",
+          suburb: "Cape Town",
+          contactPhone: "0821234567",
+          serviceAreaLocationId: "13bb6c75-58a4-4a89-9416-bab320aa203b",
+        },
+        SERVICE_CONFIG["office-cleaning"].step1Questions,
+      ),
+    ).toBe(true);
   });
 
   it("keeps Office size and bathrooms as pricing inputs while recurrence stays in Schedule", () => {
