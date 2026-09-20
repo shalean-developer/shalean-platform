@@ -915,6 +915,7 @@ export function Step3Review() {
   const { serviceSlug, liveConfig } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
   const isCarpetCleaning = serviceSlug === "carpet-cleaning";
+  const isOfficeCleaning = serviceSlug === "office-cleaning";
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
   const serviceLabel = liveConfig?.label ?? config.label;
   const serviceDescription = liveConfig?.description ?? config.description;
@@ -1037,7 +1038,13 @@ export function Step3Review() {
       )}
       {editPanel === "property" && (
         <EditModal
-          title={isCarpetCleaning ? "Edit carpet scope" : "Edit clean details"}
+          title={
+            isCarpetCleaning
+              ? "Edit carpet scope"
+              : isOfficeCleaning
+                ? "Edit office scope"
+                : "Edit clean details"
+          }
           onSave={saveEdit}
           onCancel={cancelEdit}
         >
@@ -1193,7 +1200,7 @@ export function Step3Review() {
         ) : serviceDetails.length > 0 ? (
           <ReviewSection
             number={cleanDetailsNumber}
-            title="Clean details"
+            title={isOfficeCleaning ? "Office scope" : "Clean details"}
             onEdit={() => openEdit("property")}
             className="sm:col-span-2"
           >
