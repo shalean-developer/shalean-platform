@@ -230,7 +230,8 @@ export function bookingDetailsStageReady(
       if (dynamicReady != null) return dynamicReady;
       if (stage === "property") return has(details, "officeType");
       if (stage === "rooms") return all(details, ["officeSize", "bathrooms"]);
-      if (stage === "preferences") return has(details, "afterHours");
+      // The final Office stage now contains optional add-ons only.
+      if (stage === "preferences") return true;
       return false;
     }
 
