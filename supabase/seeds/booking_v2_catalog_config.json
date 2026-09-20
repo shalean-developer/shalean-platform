@@ -538,7 +538,7 @@
     },
     {
       "slug": "office-cleaning",
-      "pricingSlug": "standard",
+      "pricingSlug": "office",
       "label": "Office Cleaning",
       "shortLabel": "Office",
       "description": "Professional cleaning for offices and workspaces to keep your team productive.",
@@ -549,11 +549,10 @@
       ],
       "extraSlugs": [
         "office-kitchen",
-        "interior-windows",
-        "carpet-cleaning",
-        "office-sanitisation"
+        "office-sanitisation",
+        "waste-removal"
       ],
-      "showCleaningProductsQuestion": true,
+      "showCleaningProductsQuestion": false,
       "allowsExtraCleaner": true,
       "step1Questions": [
         {
@@ -604,59 +603,33 @@
         },
         {
           "key": "bathrooms",
-          "label": "Bathrooms / kitchenettes",
+          "label": "Bathrooms",
           "type": "select",
           "required": true,
           "group": "rooms",
           "options": [
             {
               "value": "1",
-              "label": "1"
+              "label": "1 bathroom"
             },
             {
               "value": "2",
-              "label": "2"
+              "label": "2 bathrooms"
             },
             {
               "value": "3",
-              "label": "3"
+              "label": "3 bathrooms"
             },
             {
               "value": "4",
-              "label": "4+"
+              "label": "4+ bathrooms"
             }
           ]
-        },
-        {
-          "key": "afterHours",
-          "label": "Preferred cleaning time",
-          "type": "radio",
-          "required": true,
-          "centered": true,
-          "options": [
-            {
-              "value": "during_hours",
-              "label": "During office hours"
-            },
-            {
-              "value": "after_hours",
-              "label": "After hours / evenings"
-            },
-            {
-              "value": "weekends",
-              "label": "Weekends only"
-            }
-          ]
-        },
-        {
-          "key": "specialInstructions",
-          "label": "Special instructions (optional)",
-          "type": "textarea",
-          "placeholder": "Access code, areas to avoid, IT equipment notes..."
         }
       ],
       "isActive": true,
-      "sortOrder": 40
+      "sortOrder": 40,
+      "showEquipmentQuestion": false
     },
     {
       "slug": "carpet-cleaning",
