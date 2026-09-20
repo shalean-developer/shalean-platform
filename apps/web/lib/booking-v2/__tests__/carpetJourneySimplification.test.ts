@@ -117,7 +117,7 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
       vipTier: null,
     });
 
-    const stainLines = breakdown.factorLines.filter(
+    const stainLines = (breakdown.factorLines ?? []).filter(
       (line) => line.key === "stains",
     );
     expect(stainLines).toHaveLength(1);
