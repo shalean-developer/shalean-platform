@@ -105,11 +105,14 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   };
 
   const addressLabel = [values.address, values.suburb, values.city].filter(Boolean).join(", ");
+  const isCarpetCleaning = values.serviceSlug === "carpet-cleaning";
   const cleanerLabel = values.cleanerMode === "team"
     ? values.assignedTeamName?.trim() || "Best available team"
     : values.selectedCleanerDetails.length > 0
       ? values.selectedCleanerDetails.map((cleaner) => cleaner.name).join(", ")
-      : `${values.cleanerCount} cleaner${values.cleanerCount === 1 ? "" : "s"}`;
+      : isCarpetCleaning
+        ? "Shalean chooses specialist"
+        : `${values.cleanerCount} cleaner${values.cleanerCount === 1 ? "" : "s"}`;
   const priceLabel = hasPriceBreakdown
     ? `R${displayTotal.toLocaleString("en-ZA")}`
     : `From R${(liveConfig?.basePrice ?? config.basePrice).toLocaleString("en-ZA")}`;
@@ -215,9 +218,8 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
             : values.serviceSlug === "carpet-cleaning"
               ? [
                   values.serviceDetails.stains
-                    ? `Stains: ${optionLabel("stains", values.serviceDetails.stains)}`
+                    ? `Visible stains: ${optionLabel("stains", values.serviceDetails.stains)}`
                     : "",
-                  petsLabel,
                 ]
               : [
                   optionLabel("linens", values.serviceDetails.linens),
@@ -227,7 +229,8 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
                 ];
   const moreDetailsLabel = finalDetailValues.filter(Boolean).join(" · ");
 
-  const displayedScheduleStage = scheduleSectionOverride ?? "booking_type";
+  const displayedScheduleStage =
+    scheduleSectionOverride ?? (isCarpetCleaning ? "date_time" : "booking_type");
   const cleanerIsVisible =
     hasCleaner &&
     !(isDeepCleaning && currentStep === 1) &&
@@ -253,9 +256,11 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         values.bookingType,
       ));
   const scheduleLabel = [
-    values.bookingType === "recurring" && values.recurringFrequency
-      ? recurringFrequencyLabel(values.recurringFrequency)
-      : bookingTypeLabel,
+    !isCarpetCleaning
+      ? values.bookingType === "recurring" && values.recurringFrequency
+        ? recurringFrequencyLabel(values.recurringFrequency)
+        : bookingTypeLabel
+      : "",
     dateIsVisible ? formatDate(values.date) : "",
     dateIsVisible && values.time ? values.time : "",
   ].filter(Boolean).join(" · ");
@@ -309,19 +314,33 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
               value={scheduleLabel}
               onEdit={
                 progressiveSchedule
-                  ? editSchedule(dateIsVisible ? "date_time" : "booking_type")
+                  ? editSchedule(
+                      isCarpetCleaning
+                        ? "date_time"
+                        : dateIsVisible
+                          ? "date_time"
+                          : "booking_type",
+                    )
                   : edit(2)
               }
             />
           ) : null}
           {cleanerIsVisible ? (
-            <SummaryRow label="Cleaners" value={cleanerLabel} onEdit={progressiveSchedule ? editSchedule("cleaner") : edit(2)} />
+            <SummaryRow
+              label={isCarpetCleaning ? "Specialist" : "Cleaners"}
+              value={cleanerLabel}
+              onEdit={progressiveSchedule ? editSchedule("cleaner") : edit(2)}
+            />
           ) : null}
           {isMovingCleaning && moveTypeLabel && (currentStep > 1 || detailsStageIndex >= 3) ? (
             <SummaryRow label="Move" value={moveTypeLabel} onEdit={editDetail("move")} />
           ) : null}
           {homeLabel ? (
-            <SummaryRow label="Home" value={homeLabel} onEdit={editDetail("property")} />
+            <SummaryRow
+              label={isCarpetCleaning ? "Carpet scope" : "Home"}
+              value={homeLabel}
+              onEdit={editDetail("property")}
+            />
           ) : null}
 
           {hasMoreDetails ? (
@@ -340,7 +359,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
               {moreDetailsOpen ? (
                 <div className="rounded-xl bg-slate-50 p-2">
                   <SummaryRow
-                    label="Details"
+                    label={isCarpetCleaning ? "Condition" : "Details"}
                     value={moreDetailsLabel}
                     onEdit={editDetail(finalDetailsStage)}
                   />
