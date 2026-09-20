@@ -404,17 +404,22 @@ export function Step1Details() {
   const moveTypeValue = String(serviceDetails.moveType ?? "");
 
   useEffect(() => {
-    if (
-      serviceSlug === "office-cleaning" &&
-      serviceDetails.frequency !== undefined &&
-      serviceDetails.frequency !== ""
-    ) {
-      setValue("serviceDetails.frequency", "", {
+    if (serviceSlug !== "office-cleaning") return;
+
+    for (const key of ["frequency", "afterHours", "specialInstructions"] as const) {
+      if (serviceDetails[key] === undefined || serviceDetails[key] === "") continue;
+      setValue(`serviceDetails.${key}` as "serviceDetails.bedrooms", "" as never, {
         shouldDirty: true,
         shouldValidate: false,
       });
     }
-  }, [serviceDetails.frequency, serviceSlug, setValue]);
+  }, [
+    serviceDetails.afterHours,
+    serviceDetails.frequency,
+    serviceDetails.specialInstructions,
+    serviceSlug,
+    setValue,
+  ]);
 
   // Clear answers for questions hidden by move-type (and similar) gates.
   useEffect(() => {
