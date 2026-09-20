@@ -397,6 +397,7 @@ export function Step2Schedule() {
   const assignedTeamId = watch("assignedTeamId") ?? "";
   const isRegularCleaning = serviceSlug === "regular-cleaning";
   const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const isMovingCleaning = serviceSlug === "moving-cleaning";
   const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
   const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
   const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
@@ -899,6 +900,9 @@ export function Step2Schedule() {
               setValue("assignedTeamName", name, {
                 shouldDirty: true,
               });
+              if (isDeepCleaning) {
+                void goNext();
+              }
             }}
           />
           <FieldError message={errors.assignedTeamId?.message} />
@@ -941,7 +945,7 @@ export function Step2Schedule() {
         </section>
       )}
 
-      {!isRegularCleaning && isTeamMode ? (
+      {isMovingCleaning && isTeamMode ? (
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
