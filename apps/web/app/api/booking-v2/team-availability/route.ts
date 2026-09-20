@@ -4,6 +4,8 @@ import { MAX_TEAM_BOOKINGS_PER_DAY, TEAM_SERVICES } from "@/src/features/booking
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -36,16 +38,23 @@ export async function GET(request: Request) {
   const availableTeams = teams.filter((t) => t.available);
   const available = !platformAtCapacity && availableTeams.length > 0;
 
-  return NextResponse.json({
-    available,
-    totalBooked,
-    maxSlots: MAX_TEAM_BOOKINGS_PER_DAY,
-    teams: teams.map((team) => ({
-      id: team.id,
-      name: team.name,
-      available: team.available,
-      active_member_count: team.active_member_count,
-      qualified_member_count: team.qualified_member_count,
-    })),
-  });
+  return NextResponse.json(
+    {
+      available,
+      totalBooked,
+      maxSlots: MAX_TEAM_BOOKINGS_PER_DAY,
+      teams: teams.map((team) => ({
+        id: team.id,
+        name: team.name,
+        available: team.available,
+        active_member_count: team.active_member_count,
+        qualified_member_count: team.qualified_member_count,
+      })),
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, max-age=0",
+      },
+    },
+  );
 }
