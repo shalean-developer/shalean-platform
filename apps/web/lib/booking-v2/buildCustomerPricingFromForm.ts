@@ -92,8 +92,7 @@ export function buildCustomerTotalInputFromForm(
       allowsExtraCleaner:
         serviceSlug === "regular-cleaning" ||
         serviceSlug === "airbnb-cleaning" ||
-        serviceSlug === "office-cleaning" ||
-        serviceSlug === "carpet-cleaning",
+        serviceSlug === "office-cleaning",
       step1Questions: staticConfig.step1Questions,
       basePrice: staticConfig.basePrice,
       pricePerBedroom: 0,
