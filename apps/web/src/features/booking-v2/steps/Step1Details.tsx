@@ -384,6 +384,7 @@ export function Step1Details() {
     serviceSlug,
     serviceDetails,
     bookingDetails,
+    step1Questions,
   );
   const activeDetailsStage = isProgressiveDetails
     ? detailsSectionOverride ?? derivedDetailsStage
