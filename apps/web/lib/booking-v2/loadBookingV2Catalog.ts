@@ -157,11 +157,11 @@ export function normalizeBookingV2Questions(
   serviceSlug: ServiceSlug,
   questions: readonly FormQuestion[],
 ): FormQuestion[] {
-  if (serviceSlug === "carpet-cleaning") {
-    // Carpet uses a deliberately small canonical intake. Ignore legacy catalog
-    // questions such as sofaCount, hasPets and specialInstructions; legacy
-    // stored bookings remain readable/priced elsewhere.
-    return SERVICE_CONFIG["carpet-cleaning"].step1Questions.map((question) => ({
+  if (serviceSlug === "carpet-cleaning" || serviceSlug === "office-cleaning") {
+    // Carpet and Office use deliberately small canonical intakes. Ignore
+    // retired database-backed questions so legacy catalog drift cannot
+    // re-introduce duplicate scheduling or notes fields.
+    return SERVICE_CONFIG[serviceSlug].step1Questions.map((question) => ({
       ...question,
       options: question.options?.map((option) => ({ ...option })),
     }));
@@ -300,8 +300,14 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       shortLabel: serviceDef.shortLabel,
       description: serviceDef.description,
       cleanerMode: serviceDef.cleanerMode,
-      showEquipmentQuestion: serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
-      showCleaningProductsQuestion: serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
+      showEquipmentQuestion:
+        slug === "office-cleaning"
+          ? false
+          : serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
+      showCleaningProductsQuestion:
+        slug === "office-cleaning"
+          ? false
+          : serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
       allowsExtraCleaner:
         slug === "carpet-cleaning" ? false : serviceDef.allowsExtraCleaner,
       step1Questions: normalizeBookingV2Questions(
