@@ -244,7 +244,7 @@ export function bookingDetailsStageReady(
       if (dynamicReady != null) return dynamicReady;
       if (stage === "property") return has(details, "propertyType");
       if (stage === "rooms") return all(details, ["carpetRooms", "rugCount", "carpetType"]);
-      if (stage === "condition") return all(details, ["stains", "hasPets"]);
+      if (stage === "condition") return has(details, "stains");
       return false;
     }
 
