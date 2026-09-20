@@ -715,7 +715,18 @@ export function Step2Schedule() {
                   id="booking-date"
                   minDate={today}
                   value={field.value ?? ""}
-                  onChange={field.onChange}
+                  onChange={(nextDate) => {
+                    if (isTeamMode && nextDate !== field.value) {
+                      setValue("assignedTeamId", "", {
+                        shouldDirty: true,
+                        shouldValidate: true,
+                      });
+                      setValue("assignedTeamName", "", {
+                        shouldDirty: true,
+                      });
+                    }
+                    field.onChange(nextDate);
+                  }}
                   disabled={!areaResolved}
                 />
               )}
