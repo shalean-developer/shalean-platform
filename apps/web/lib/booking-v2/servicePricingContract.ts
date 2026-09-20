@@ -38,14 +38,10 @@ export type ServicePricingContract = {
 };
 
 /**
- * Office frequency model (approved for PRA2):
- * C — frequency records recurring commitment / ops preference only;
- * it does not change the per-visit price. Recurring discounts come only from
- * Step 2 bookingType + recurringFrequency when the customer chooses a plan.
+ * Office recurrence ownership:
+ * Booking frequency is selected in Step 2 using bookingType + recurringFrequency.
+ * The retired Step-1 serviceDetails.frequency field never affected per-visit pricing.
  */
-export const OFFICE_FREQUENCY_MODEL = "C" as const;
-export const OFFICE_FREQUENCY_UI_HINT =
-  "How often you need cleaning — this does not change today’s visit price. Choose a recurring plan on the schedule step if you want a plan discount.";
 
 export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContract> = {
   "regular-cleaning": {
@@ -99,11 +95,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "officeType", effect: "informational", consumedBy: "persisted for ops" },
       { key: "officeSize", effect: "price_and_duration", consumedBy: "propertyFactorRates.officeSize + duration proxy rooms" },
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog.pricePerBathroom + duration" },
-      {
-        key: "frequency",
-        effect: "informational",
-        consumedBy: `Model ${OFFICE_FREQUENCY_MODEL}: commitment only — no per-visit price change`,
-      },
       { key: "afterHours", effect: "informational", consumedBy: "persisted scheduling preference" },
     ],
   },
