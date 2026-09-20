@@ -430,28 +430,15 @@ const CARPET_QUESTIONS: FormQuestion[] = [
       { value: "no", label: "No" },
     ],
   },
-  {
-    key: "hasPets",
-    label: "Do you have any pets?",
-    type: "radio",
-    required: true,
-    group: "yesno",
-    centered: true,
-    options: [
-      { value: "yes", label: "Yes" },
-      { value: "no", label: "No" },
-    ],
-  },
 ];
 
 const CARPET_EXTRAS: ServiceExtra[] = [
   {
     id: "sofa-upholstery",
     label: "Sofa / upholstery",
-    description: "Clean one sofa or upholstered seat (add more via notes if needed)",
+    description: "Clean one sofa or upholstered seat",
     priceZar: 250,
   },
-  { id: "stain-treatment", label: "Stain treatment", description: "Professional stain removal", priceZar: 200 },
   { id: "pet-odour-treatment", label: "Pet odour treatment", description: "Enzyme-based odour neutraliser", priceZar: 220 },
   { id: "fabric-protector", label: "Fabric protector", description: "Scotchgard-style protection spray", priceZar: 180 },
   { id: "mattress-cleaning", label: "Mattress cleaning", description: "Clean and sanitise one mattress", priceZar: 250 },
@@ -617,7 +604,7 @@ export const SERVICE_CONFIG: Record<ServiceSlug, ServiceConfig> = {
     icon: Layers,
     cleanerMode: "individual_cleaners",
     basePrice: 500,
-    pricePerExtraCleaner: 200,
+    pricePerExtraCleaner: 0,
     estimatedDurationHours: 4,
     step1Questions: CARPET_QUESTIONS,
     extras: CARPET_EXTRAS,
