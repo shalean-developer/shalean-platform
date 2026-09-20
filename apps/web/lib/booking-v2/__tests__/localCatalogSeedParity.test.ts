@@ -17,6 +17,12 @@ describe("local ENV-03 booking catalog parity", () => {
     expect(seed).toContain("'carpet', 'TEST Carpet Cleaning', 500");
   });
 
+  it("uses the production booking service fees for the three tested services", () => {
+    expect(seed).toContain("'standard', 'TEST Regular Cleaning', 250, 80, 60, 30, 30");
+    expect(seed).toContain("'deep', 'TEST Deep Cleaning', 1200, 100, 80, 40, 60");
+    expect(seed).toContain("'move', 'TEST Moving Cleaning', 1200, 120, 90, 45, 60");
+  });
+
   it("seeds the approved Regular, Deep and Moving extras with service assignments", () => {
     expect(seed).toContain(
       "ARRAY['regular-cleaning']::text[], true, true, 10",
