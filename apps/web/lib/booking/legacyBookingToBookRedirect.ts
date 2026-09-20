@@ -34,23 +34,27 @@ const LEGACY_SERVICE_TO_BOOK_SLUG: Record<string, ServiceSlug> = {
 export function explicitBookServiceSlugFromParam(
   service: string | null | undefined,
 ): ServiceSlug | null {
-  const normalized = serviceFromUrlParam(service ?? undefined);
-  if (normalized && LEGACY_SERVICE_TO_BOOK_SLUG[normalized]) {
-    return LEGACY_SERVICE_TO_BOOK_SLUG[normalized];
-  }
-
   const raw = String(service ?? "")
     .trim()
     .toLowerCase()
     .replace(/_/g, "-");
 
   if (!raw) return null;
+
+  // Booking V2 canonical slugs must win before the retired-funnel parser.
+  // The legacy parser intentionally maps office-cleaning -> standard, which is
+  // correct for the old funnel but wrong for /book/[serviceSlug].
+  for (const slug of SERVICE_SLUGS) {
+    if (slug === raw || slug.replace(/-cleaning$/, "") === raw) return slug;
+  }
+
   if (LEGACY_SERVICE_TO_BOOK_SLUG[raw]) {
     return LEGACY_SERVICE_TO_BOOK_SLUG[raw];
   }
 
-  for (const slug of SERVICE_SLUGS) {
-    if (slug === raw || slug.replace(/-cleaning$/, "") === raw) return slug;
+  const normalized = serviceFromUrlParam(service ?? undefined);
+  if (normalized && LEGACY_SERVICE_TO_BOOK_SLUG[normalized]) {
+    return LEGACY_SERVICE_TO_BOOK_SLUG[normalized];
   }
 
   return null;
