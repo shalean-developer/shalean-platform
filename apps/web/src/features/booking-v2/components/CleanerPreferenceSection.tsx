@@ -95,6 +95,8 @@ type Props = {
   /** Current stored cleaner details — used to detect when a resync is needed. */
   selectedDetails: AvailableCleanerV2[];
   maxSelect: number;
+  heading?: string;
+  personLabel?: "cleaner" | "specialist";
   /** Called when a cleaner card is clicked (select or deselect). Full object provided so parent can persist details. */
   onToggle: (cleaner: AvailableCleanerV2) => void;
   /** Called when automatic Shalean matching is chosen — clears all selections. */
@@ -115,6 +117,8 @@ export function CleanerPreferenceSection({
   selectedIds,
   selectedDetails,
   maxSelect,
+  heading = "Choose your cleaner",
+  personLabel = "cleaner",
   onToggle,
   onClearAll,
   onResync,
@@ -145,12 +149,13 @@ export function CleanerPreferenceSection({
   const visibleCleaners = showAll ? cleaners : cleaners.slice(0, INITIAL_VISIBLE);
   const hasMore = cleaners.length > INITIAL_VISIBLE;
   const bestAvailableSelected = selectedIds.length === 0;
+  const pluralPersonLabel = personLabel === "specialist" ? "specialists" : "cleaners";
 
   return (
     <div className="space-y-4">
       {/* Heading */}
       <div className="text-center">
-        <h3 className="text-sm font-semibold text-slate-900">Choose your cleaner</h3>
+        <h3 className="text-sm font-semibold text-slate-900">{heading}</h3>
       </div>
 
       {/* Automatic matching option */}
@@ -211,9 +216,11 @@ export function CleanerPreferenceSection({
           </p>
         ) : (
           <div className="rounded-xl border border-blue-100 bg-blue-50/70 px-4 py-3 text-center">
-            <p className="text-sm font-semibold text-blue-950">No cleaner confirmed yet</p>
+            <p className="text-sm font-semibold text-blue-950">
+              No {personLabel} confirmed yet
+            </p>
             <p className="mt-0.5 text-xs text-blue-800">
-              We&apos;ll assign a suitable cleaner and confirm their details before your booking.
+              We&apos;ll assign a suitable {personLabel} and confirm their details before your booking.
             </p>
           </div>
         )
@@ -221,15 +228,15 @@ export function CleanerPreferenceSection({
         <>
           {/* Helper text above the grid */}
           <p className="text-center text-xs text-slate-500">
-            Select up to {maxSelect} cleaner{maxSelect > 1 ? "s" : ""}, or let Shalean choose.
+            Select up to {maxSelect} {maxSelect > 1 ? pluralPersonLabel : personLabel}, or let Shalean choose.
           </p>
 
           {/* At-limit notice */}
           {selectedIds.length >= maxSelect && (
             <p className="text-center text-xs font-medium text-blue-600">
               {maxSelect === 1
-                ? "Select another cleaner to replace your current choice, or click the selected cleaner to remove it."
-                : `You can select up to ${maxSelect} preferred cleaners. Click a selected cleaner to remove it.`}
+                ? `Select another ${personLabel} to replace your current choice, or click the selected ${personLabel} to remove it.`
+                : `You can select up to ${maxSelect} preferred ${pluralPersonLabel}. Click a selected ${personLabel} to remove it.`}
             </p>
           )}
 
