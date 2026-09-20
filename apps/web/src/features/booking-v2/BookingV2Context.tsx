@@ -267,7 +267,12 @@ export function BookingV2Provider({
           serviceAreaLocationId: merged.serviceAreaLocationId,
         };
         setDetailsSectionOverride(
-          bookingDetailsStage(serviceSlug, details, address),
+          bookingDetailsStage(
+            serviceSlug,
+            details,
+            address,
+            config.step1Questions,
+          ),
         );
       }
     }
@@ -312,12 +317,17 @@ export function BookingV2Provider({
       form.reset(patch, { keepDefaultValues: false });
       if (isProgressiveBookingDetailsService(serviceSlug)) {
         setDetailsSectionOverride(
-          bookingDetailsStage(serviceSlug, patch.serviceDetails, {
-            address: patch.address,
-            suburb: patch.suburb,
-            contactPhone: patch.contactPhone,
-            serviceAreaLocationId: patch.serviceAreaLocationId,
-          }),
+          bookingDetailsStage(
+            serviceSlug,
+            patch.serviceDetails,
+            {
+              address: patch.address,
+              suburb: patch.suburb,
+              contactPhone: patch.contactPhone,
+              serviceAreaLocationId: patch.serviceAreaLocationId,
+            },
+            config.step1Questions,
+          ),
         );
       }
       writeToStorage(patch);
@@ -549,6 +559,7 @@ export function BookingV2Provider({
       window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
     }
   }, [
+    config.step1Questions,
     currentStep,
     form,
     liveConfig,
@@ -581,7 +592,14 @@ export function BookingV2Provider({
         liveConfig?.step1Questions ?? config.step1Questions,
       ),
     );
-  }, [currentStep, detailsSectionOverride, form, liveConfig, serviceSlug]);
+  }, [
+    config.step1Questions,
+    currentStep,
+    detailsSectionOverride,
+    form,
+    liveConfig,
+    serviceSlug,
+  ]);
 
   const value = useMemo<BookingV2ContextValue>(
     () => ({
