@@ -3,7 +3,12 @@ import "server-only";
 import { unstable_cache } from "next/cache";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { assertAuthoritativePricingClientAvailable } from "@/lib/booking-v2/authoritativePricingClientAvailability";
-import { SERVICE_CONFIG, SERVICE_SLUGS, type ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
+import {
+  SERVICE_CONFIG,
+  SERVICE_SLUGS,
+  type FormQuestion,
+  type ServiceSlug,
+} from "@/src/features/booking-v2/config/serviceConfig";
 import {
   defaultBookingV2FeesConfig,
   parseBookingV2FeesConfig,
@@ -147,6 +152,17 @@ const DEFAULT_SCHEDULING: BookingV2SchedulingConfig = {
   timezone: "Africa/Johannesburg",
 };
 
+export function normalizeBookingV2QuestionLabels(
+  serviceSlug: ServiceSlug,
+  questions: readonly FormQuestion[],
+): FormQuestion[] {
+  return questions.map((question) =>
+    serviceSlug === "carpet-cleaning" && question.key === "carpetRooms"
+      ? { ...question, label: "Carpeted rooms" }
+      : { ...question },
+  );
+}
+
 export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
   const admin = getSupabaseAdmin();
   assertAuthoritativePricingClientAvailable({ adminAvailable: Boolean(admin) });
@@ -277,7 +293,10 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       showEquipmentQuestion: serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
       showCleaningProductsQuestion: serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
       allowsExtraCleaner: serviceDef.allowsExtraCleaner,
-      step1Questions: serviceDef.step1Questions,
+      step1Questions: normalizeBookingV2QuestionLabels(
+        slug,
+        serviceDef.step1Questions,
+      ),
       ...rates,
       pricePerExtraCleaner: feesConfig.extraCleanerFeeZar || staticFallback.pricePerExtraCleaner,
       estimatedDurationHours: dbSvc?.duration_base
@@ -310,7 +329,10 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         showEquipmentQuestion,
         showCleaningProductsQuestion: showEquipmentQuestion,
         allowsExtraCleaner: slug === "regular-cleaning" || slug === "airbnb-cleaning" || slug === "office-cleaning" || slug === "carpet-cleaning",
-        step1Questions: staticFallback.step1Questions,
+        step1Questions: normalizeBookingV2QuestionLabels(
+          slug,
+          staticFallback.step1Questions,
+        ),
         basePrice: dbSvc?.base_price && dbSvc.base_price > 0 ? dbSvc.base_price : staticFallback.basePrice,
         pricePerBedroom: dbSvc?.price_per_bedroom && dbSvc.price_per_bedroom > 0 ? dbSvc.price_per_bedroom : 0,
         pricePerBathroom: dbSvc?.price_per_bathroom && dbSvc.price_per_bathroom > 0 ? dbSvc.price_per_bathroom : 0,
