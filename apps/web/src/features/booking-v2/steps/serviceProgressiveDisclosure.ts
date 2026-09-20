@@ -115,11 +115,30 @@ export function bookingDetailsStage(
   }
 }
 
+function requiredQuestionsReady(
+  serviceSlug: ServiceSlug,
+  stage: BookingDetailsStage,
+  details: Details,
+  questions: readonly FormQuestion[] | undefined,
+): boolean | null {
+  if (!questions) return null;
+  const required = questions.filter((question) => {
+    if (!question.required) return false;
+    if (bookingDetailsQuestionStage(serviceSlug, question) !== stage) return false;
+    if (!question.showWhen) return true;
+    return question.showWhen.values.includes(
+      String(details[question.showWhen.key] ?? ""),
+    );
+  });
+  return required.every((question) => has(details, question.key));
+}
+
 export function bookingDetailsStageReady(
   serviceSlug: ServiceSlug,
   stage: BookingDetailsStage,
   details: Details,
   address: BookingDetailsAddress,
+  questions?: readonly FormQuestion[],
 ): boolean {
   if (stage === "address") return bookingDetailsAddressReady(address);
 
@@ -148,25 +167,49 @@ export function bookingDetailsStageReady(
       }
       return false;
 
-    case "office-cleaning":
+    case "office-cleaning": {
+      const dynamicReady = requiredQuestionsReady(
+        serviceSlug,
+        stage,
+        details,
+        questions,
+      );
+      if (dynamicReady != null) return dynamicReady;
       if (stage === "property") return has(details, "officeType");
       if (stage === "rooms") return all(details, ["officeSize", "bathrooms"]);
       if (stage === "preferences") return has(details, "afterHours");
       return false;
+    }
 
-    case "carpet-cleaning":
+    case "carpet-cleaning": {
+      const dynamicReady = requiredQuestionsReady(
+        serviceSlug,
+        stage,
+        details,
+        questions,
+      );
+      if (dynamicReady != null) return dynamicReady;
       if (stage === "property") return has(details, "propertyType");
-      if (stage === "rooms") return all(details, ["carpetRooms", "rugCount", "carpetType"]);
+      if (stage === "rooms") return all(details, ["carpetRooms", "carpetType"]);
       if (stage === "condition") return all(details, ["stains", "hasPets"]);
       return false;
+    }
 
-    case "airbnb-cleaning":
+    case "airbnb-cleaning": {
+      const dynamicReady = requiredQuestionsReady(
+        serviceSlug,
+        stage,
+        details,
+        questions,
+      );
+      if (dynamicReady != null) return dynamicReady;
       if (stage === "property") return has(details, "propertyType");
       if (stage === "rooms") return all(details, ["bedrooms", "bathrooms", "extraRooms"]);
       if (stage === "turnover") {
         return all(details, ["linens", "guestCheckout", "keyAccess", "welcomeBasket"]);
       }
       return false;
+    }
   }
 }
 
@@ -233,41 +276,36 @@ export function bookingDetailsQuestionStage(
       if (question.key === "propertyType") return "property";
       if (question.group === "rooms") return "rooms";
       if (question.key === "hasPets") return "pets";
-      return null;
+      return "equipment";
 
     case "deep-cleaning":
       if (question.key === "propertyType") return "property";
       if (question.group === "rooms") return "rooms";
-      if (question.key === "lastCleaned" || question.key === "hasPets") return "pets";
-      return null;
+      return "pets";
 
     case "moving-cleaning":
       if (question.key === "propertyType") return "property";
       if (question.key === "moveType") return "move";
       if (question.group === "rooms") return "rooms";
-      if (question.group === "condition") return "condition";
-      return null;
+      return "condition";
 
     case "office-cleaning":
       if (question.key === "frequency") return null;
       if (question.key === "officeType") return "property";
-      if (question.key === "officeSize" || question.key === "bathrooms") return "rooms";
-      if (question.key === "afterHours") return "preferences";
-      return null;
+      if (question.group === "rooms" || question.key === "officeSize" || question.key === "bathrooms") {
+        return "rooms";
+      }
+      return "preferences";
 
     case "carpet-cleaning":
       if (question.key === "propertyType") return "property";
-      if (["carpetRooms", "rugCount", "carpetType"].includes(question.key)) return "rooms";
-      if (question.key === "stains" || question.key === "hasPets") return "condition";
-      return null;
+      if (question.group === "rooms") return "rooms";
+      return "condition";
 
     case "airbnb-cleaning":
       if (question.key === "propertyType") return "property";
       if (question.group === "rooms") return "rooms";
-      if (["linens", "guestCheckout", "keyAccess", "welcomeBasket"].includes(question.key)) {
-        return "turnover";
-      }
-      return null;
+      return "turnover";
   }
 }
 
