@@ -28,27 +28,23 @@ describe("booking details presentation", () => {
     expect(source).not.toMatch(/About the clean/i);
   });
 
-  it("keeps property type visible with rooms and auto-advances optional choice stages", () => {
-    expect(source).toContain(
-      'activeDetailsStage === "property" || activeDetailsStage === "rooms"',
-    );
-    expect(source).toContain('activeDetailsStage === "pets";');
+  it("uses the shared progressive framework for service-specific stage visibility", () => {
+    expect(source).toContain("bookingDetailsQuestionVisibleAtStage");
+    expect(source).toContain("bookingDetailsStageAutoAdvances");
     expect(source).toContain("{!autoAdvanceStage ? (");
   });
 
-  it("uses Continue as the only way to leave the rooms and pets stages", () => {
-    expect(source).toContain('const autoAdvanceStage = activeDetailsStage === "property";');
-    expect(source).toContain('disabled={!regularStageReady}');
-    expect(source).toContain('onClick={() => moveRegularStage("next")}');
+  it("uses Continue as the only way to leave button-controlled detail stages", () => {
+    expect(source).toContain("bookingDetailsStageAutoAdvances(serviceSlug, activeDetailsStage)");
+    expect(source).toContain("disabled={!detailsStageReady}");
+    expect(source).toContain('onClick={() => moveProgressiveStage("next")}');
   });
 
-  it("places the equipment delivery question with pets and keeps extras separate", () => {
+  it("keeps Regular equipment with pets while extras use the service final stage", () => {
     expect(source).toContain(
-      'const showEquipmentQuestion = !isRegularCleaning || activeDetailsStage === "pets";',
+      'const showEquipmentQuestion = isRegularCleaning && activeDetailsStage === "pets";',
     );
-    expect(source).toContain(
-      'const showExtras = !isRegularCleaning || activeDetailsStage === "equipment";',
-    );
+    expect(source).toContain("bookingDetailsShowsExtras(serviceSlug, activeDetailsStage)");
     expect(source).toContain('<div className={cn(!showEquipmentQuestion && "hidden")}>');
     expect(source).toContain('{showExtras && extras.length > 0 && (');
   });
