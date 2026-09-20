@@ -406,6 +406,9 @@ export function Step2Schedule() {
     ? scheduleSectionOverride ?? "booking_type"
     : null;
   const isBookingTypeStage = isRegularCleaning && activeScheduleStage === "booking_type";
+  const showBookingTypeSelection = isRegularCleaning
+    ? activeScheduleStage === "booking_type"
+    : allowsRecurringBookings;
 
   const durationMinutes = Math.round(
     (watch("pricingSummary")?.estimated_duration_minutes ??
@@ -599,10 +602,10 @@ export function Step2Schedule() {
         </div>
       ) : null}
 
-      {!isRegularCleaning || activeScheduleStage === "booking_type" ? <hr className="border-slate-200" /> : null}
+      {showBookingTypeSelection ? <hr className="border-slate-200" /> : null}
 
       {/* ── Booking type ── */}
-      {(!isRegularCleaning || activeScheduleStage === "booking_type") && (
+      {showBookingTypeSelection && (
         <section
           className="space-y-4"
           data-booking-type-options={isRegularCleaning ? "true" : undefined}
