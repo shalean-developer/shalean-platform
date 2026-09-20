@@ -54,6 +54,7 @@ import {
   adjacentRegularCleaningScheduleStage,
   type RegularCleaningScheduleStage,
 } from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
+import { usesProgressiveIndividualSchedule } from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 
 // ─── Constants ─────────────────────────────────────────────────────────────────
 
@@ -398,16 +399,18 @@ export function Step2Schedule() {
   const isRegularCleaning = serviceSlug === "regular-cleaning";
   const isDeepCleaning = serviceSlug === "deep-cleaning";
   const isMovingCleaning = serviceSlug === "moving-cleaning";
+  const progressiveIndividualSchedule = usesProgressiveIndividualSchedule(serviceSlug);
   const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
   const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
   const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
     serviceRecurringFrequencies.includes(option.value),
   );
-  const activeScheduleStage = isRegularCleaning
+  const activeScheduleStage = progressiveIndividualSchedule
     ? scheduleSectionOverride ?? "booking_type"
     : null;
-  const isBookingTypeStage = isRegularCleaning && activeScheduleStage === "booking_type";
-  const showBookingTypeSelection = isRegularCleaning
+  const isBookingTypeStage =
+    progressiveIndividualSchedule && activeScheduleStage === "booking_type";
+  const showBookingTypeSelection = progressiveIndividualSchedule
     ? activeScheduleStage === "booking_type"
     : allowsRecurringBookings;
 
@@ -609,9 +612,9 @@ export function Step2Schedule() {
       {showBookingTypeSelection && (
         <section
           className="space-y-4"
-          data-booking-type-options={isRegularCleaning ? "true" : undefined}
+          data-booking-type-options={progressiveIndividualSchedule ? "true" : undefined}
         >
-        {!isRegularCleaning ? (
+        {!progressiveIndividualSchedule ? (
           <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
             Booking type
           </h3>
@@ -622,20 +625,20 @@ export function Step2Schedule() {
           render={({ field }) => (
             <div className={cn(
               "w-full",
-              isRegularCleaning
+              progressiveIndividualSchedule
                 ? "mx-auto grid max-w-[500px] grid-cols-1 gap-4 pt-2 sm:grid-cols-2 sm:gap-5"
                 : "flex flex-col gap-3 sm:flex-row sm:justify-center",
             )}>
               {[
                 {
                   value: "once_off",
-                  label: isRegularCleaning ? "One Time" : "Once-off",
+                  label: progressiveIndividualSchedule ? "One Time" : "Once-off",
                   description: "For a once-off service that will not repeat.",
                   icon: CalendarPlus,
                 },
                 {
                   value: "recurring",
-                  label: isRegularCleaning ? "Repeat" : isDeepCleaning ? "Monthly" : "Recurring",
+                  label: progressiveIndividualSchedule ? "Repeat" : isDeepCleaning ? "Monthly" : "Recurring",
                   description: isDeepCleaning
                     ? "One deep clean every month, charged monthly."
                     : "For repeat services every few days or weeks.",
@@ -663,7 +666,7 @@ export function Step2Schedule() {
                     }}
                     disabled={!areaResolved}
                     className={cn(
-                      isRegularCleaning
+                      progressiveIndividualSchedule
                         ? "relative min-h-[120px] overflow-hidden rounded-xl border bg-white p-3 pl-2 text-left shadow-md transition hover:-translate-y-0.5 hover:border-blue-300 hover:shadow-lg focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
                         : "min-h-11 w-full rounded-xl border px-6 py-3 text-sm font-semibold transition sm:w-auto sm:min-w-[120px]",
                       selected
@@ -672,7 +675,7 @@ export function Step2Schedule() {
                       !areaResolved && "cursor-not-allowed opacity-50",
                     )}
                   >
-                    {isRegularCleaning ? (
+                    {progressiveIndividualSchedule ? (
                       <>
                         <span className="flex items-center gap-3">
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-700">
@@ -694,10 +697,10 @@ export function Step2Schedule() {
         </section>
       )}
 
-      {!isRegularCleaning || activeScheduleStage === "date_time" ? <hr className="border-slate-200" /> : null}
+      {!progressiveIndividualSchedule || activeScheduleStage === "date_time" ? <hr className="border-slate-200" /> : null}
 
       {/* ── Date & time ── */}
-      {(!isRegularCleaning || activeScheduleStage === "date_time") && <section className="space-y-4">
+      {(!progressiveIndividualSchedule || activeScheduleStage === "date_time") && <section className="space-y-4">
         <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
           Date &amp; time
         </h3>
@@ -774,7 +777,7 @@ export function Step2Schedule() {
       </section>}
 
       {/* ── Recurring schedule ── */}
-      {allowsRecurringBookings && bookingType === "recurring" && !isDeepCleaning && (!isRegularCleaning || activeScheduleStage === "booking_type") && (
+      {allowsRecurringBookings && bookingType === "recurring" && !isDeepCleaning && (!progressiveIndividualSchedule || activeScheduleStage === "booking_type") && (
         <>
           <hr className="border-slate-200" />
           <section className="space-y-5">
@@ -883,10 +886,10 @@ export function Step2Schedule() {
         </>
       )}
 
-      {!isRegularCleaning || activeScheduleStage === "cleaner" ? <hr className="border-slate-200" /> : null}
+      {!progressiveIndividualSchedule || activeScheduleStage === "cleaner" ? <hr className="border-slate-200" /> : null}
 
       {/* ── Team availability (deep / moving cleaning) ── */}
-      {isTeamMode && (!isRegularCleaning || activeScheduleStage === "cleaner") && (
+      {isTeamMode && (!progressiveIndividualSchedule || activeScheduleStage === "cleaner") && (
         <section>
           <TeamAvailabilitySection
             date={date}
@@ -910,7 +913,7 @@ export function Step2Schedule() {
       )}
 
       {/* ── Cleaner count + preference (individual mode) ── */}
-      {!isTeamMode && (!isRegularCleaning || activeScheduleStage === "cleaner") && (
+      {!isTeamMode && (!progressiveIndividualSchedule || activeScheduleStage === "cleaner") && (
         <section className="space-y-6">
           <CleanerCountSelector
             value={cleanerCount}
@@ -965,7 +968,7 @@ export function Step2Schedule() {
         </div>
       ) : null}
 
-      {isRegularCleaning && activeScheduleStage ? (
+      {progressiveIndividualSchedule && activeScheduleStage ? (
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"
