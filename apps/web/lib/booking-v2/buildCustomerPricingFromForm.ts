@@ -117,7 +117,8 @@ export function buildCustomerTotalInputFromForm(
     serviceDetails: values.serviceDetails ?? {},
     selectedExtras: values.selectedExtras ?? [],
     cleanerMode: values.cleanerMode,
-    cleanerCount: values.cleanerCount ?? 1,
+    cleanerCount:
+      serviceSlug === "carpet-cleaning" ? 1 : (values.cleanerCount ?? 1),
     bookingType: values.bookingType,
     recurringFrequency: values.recurringFrequency ?? "",
     equipmentRequired,
