@@ -160,7 +160,7 @@ async function main() {
         full_name: def.name,
         email: def.email,
         phone: def.phone,
-        status: "active",
+        status: "available",
         is_active: true,
         is_available: true,
         can_do_deep_cleaning: true,
