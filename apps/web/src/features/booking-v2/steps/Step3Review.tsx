@@ -443,6 +443,7 @@ function PropertyEditPanel() {
 function ScheduleEditPanel() {
   const { scheduling, serviceSlug } = useBookingV2();
   const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const isCarpetCleaning = serviceSlug === "carpet-cleaning";
   const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
   const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
   const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
@@ -481,41 +482,45 @@ function ScheduleEditPanel() {
 
   return (
     <div className="space-y-5">
-      {/* Booking type */}
-      <div>
-        <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
-          Booking type
-        </p>
-        <Controller name="bookingType" control={control}
-          render={({ field }) => (
-            <div className="flex gap-3">
-              {[{ value: "once_off", label: "Once-off" }, { value: "recurring", label: isDeepCleaning ? "Monthly" : "Recurring" }].map((opt) => (
-                <button key={opt.value} type="button" onClick={() => {
-                  field.onChange(opt.value);
-                  if (isDeepCleaning) {
-                    setValue(
-                      "recurringFrequency",
-                      opt.value === "recurring" ? DEEP_CLEANING_RECURRING_FREQUENCY : "",
-                      { shouldDirty: true, shouldValidate: true },
-                    );
-                    setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
-                  }
-                }}
-                  className={cn(
-                    "flex-1 rounded-xl border py-2.5 text-sm font-semibold transition",
-                    field.value === opt.value
-                      ? "border-blue-600 bg-blue-50 text-blue-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
-                  )}>
-                  {opt.label}
-                </button>
-              ))}
-            </div>
-          )}
-        />
-      </div>
+      {!isCarpetCleaning ? (
+        <>
+          {/* Booking type */}
+          <div>
+            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-400">
+              Booking type
+            </p>
+            <Controller name="bookingType" control={control}
+              render={({ field }) => (
+                <div className="flex gap-3">
+                  {[{ value: "once_off", label: "Once-off" }, { value: "recurring", label: isDeepCleaning ? "Monthly" : "Recurring" }].map((opt) => (
+                    <button key={opt.value} type="button" onClick={() => {
+                      field.onChange(opt.value);
+                      if (isDeepCleaning) {
+                        setValue(
+                          "recurringFrequency",
+                          opt.value === "recurring" ? DEEP_CLEANING_RECURRING_FREQUENCY : "",
+                          { shouldDirty: true, shouldValidate: true },
+                        );
+                        setValue("recurringDays", [], { shouldDirty: true, shouldValidate: true });
+                      }
+                    }}
+                      className={cn(
+                        "flex-1 rounded-xl border py-2.5 text-sm font-semibold transition",
+                        field.value === opt.value
+                          ? "border-blue-600 bg-blue-50 text-blue-700"
+                          : "border-slate-200 bg-white text-slate-600 hover:border-slate-300",
+                      )}>
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            />
+          </div>
 
-      <hr className="border-slate-100" />
+          <hr className="border-slate-100" />
+        </>
+      ) : null}
 
       {/* Date */}
       <div>
@@ -650,11 +655,12 @@ function CleanerEditPanel() {
   const { serviceSlug, liveConfig } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
   const isTeamMode = (liveConfig?.cleanerMode ?? config.cleanerMode) === "team";
+  const isCarpetCleaning = serviceSlug === "carpet-cleaning";
 
   const { watch, setValue } = useFormContext<BookingV2FormData>();
   const date = watch("date");
   const time = watch("time");
-  const cleanerCount = watch("cleanerCount") ?? 1;
+  const cleanerCount = isCarpetCleaning ? 1 : (watch("cleanerCount") ?? 1);
   const selectedCleanerIds = watch("selectedCleanerIds") ?? [];
   const selectedCleanerDetails = watch("selectedCleanerDetails") ?? [];
   const assignedTeamId = watch("assignedTeamId") ?? "";
@@ -698,16 +704,18 @@ function CleanerEditPanel() {
         />
       ) : (
         <>
-          <CleanerCountSelector
-            value={cleanerCount}
-            onChange={(n) => {
-              setValue("cleanerCount", n);
-              if (selectedCleanerIds.length > n) {
-                setValue("selectedCleanerIds", selectedCleanerIds.slice(0, n));
-                setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, n));
-              }
-            }}
-          />
+          {!isCarpetCleaning ? (
+            <CleanerCountSelector
+              value={cleanerCount}
+              onChange={(n) => {
+                setValue("cleanerCount", n);
+                if (selectedCleanerIds.length > n) {
+                  setValue("selectedCleanerIds", selectedCleanerIds.slice(0, n));
+                  setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, n));
+                }
+              }}
+            />
+          ) : null}
 
           <CleanerPreferenceSection
             serviceSlug={serviceSlug}
@@ -717,7 +725,9 @@ function CleanerEditPanel() {
             locationId={serviceAreaLocationId.trim()}
             selectedIds={selectedCleanerIds}
             selectedDetails={selectedCleanerDetails}
-            maxSelect={cleanerCount}
+            maxSelect={isCarpetCleaning ? 1 : cleanerCount}
+            heading={isCarpetCleaning ? "Choose your specialist" : undefined}
+            personLabel={isCarpetCleaning ? "specialist" : undefined}
             onToggle={toggleCleaner}
             onClearAll={clearCleanerSelection}
             onResync={(matched) =>
