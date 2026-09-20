@@ -95,7 +95,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "officeType", effect: "informational", consumedBy: "persisted for ops" },
       { key: "officeSize", effect: "price_and_duration", consumedBy: "propertyFactorRates.officeSize + duration proxy rooms" },
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog.pricePerBathroom + duration" },
-      { key: "afterHours", effect: "informational", consumedBy: "persisted scheduling preference" },
     ],
   },
   "carpet-cleaning": {
