@@ -77,6 +77,7 @@ export function bookingDetailsStage(
   serviceSlug: ServiceSlug,
   details: Details,
   address: BookingDetailsAddress = {},
+  questions?: readonly FormQuestion[],
 ): BookingDetailsStage {
   if (!bookingDetailsAddressReady(address)) return "address";
 
@@ -98,42 +99,90 @@ export function bookingDetailsStage(
       if (!all(details, ["bedrooms", "bathrooms", "extraRooms"])) return "rooms";
       return "condition";
 
-    case "office-cleaning":
-      if (!has(details, "officeType")) return "property";
-      if (!all(details, ["officeSize", "bathrooms"])) return "rooms";
+    case "office-cleaning": {
+      const propertyReady = catalogStageQuestionsReady(
+        serviceSlug,
+        "property",
+        details,
+        questions,
+      );
+      if (!(propertyReady ?? has(details, "officeType"))) return "property";
+
+      const roomsReady = catalogStageQuestionsReady(
+        serviceSlug,
+        "rooms",
+        details,
+        questions,
+      );
+      if (!(roomsReady ?? all(details, ["officeSize", "bathrooms"]))) return "rooms";
       return "preferences";
+    }
 
-    case "carpet-cleaning":
-      if (!has(details, "propertyType")) return "property";
-      // rugCount is part of the current static flow, but older live catalog
-      // definitions used sofaCount instead. The active stage readiness check
-      // validates whichever required room questions the catalog actually exposes.
-      if (!all(details, ["carpetRooms", "carpetType"])) return "rooms";
+    case "carpet-cleaning": {
+      const propertyReady = catalogStageQuestionsReady(
+        serviceSlug,
+        "property",
+        details,
+        questions,
+      );
+      if (!(propertyReady ?? has(details, "propertyType"))) return "property";
+
+      const roomsReady = catalogStageQuestionsReady(
+        serviceSlug,
+        "rooms",
+        details,
+        questions,
+      );
+      if (!(roomsReady ?? all(details, ["carpetRooms", "rugCount", "carpetType"]))) {
+        return "rooms";
+      }
       return "condition";
+    }
 
-    case "airbnb-cleaning":
-      if (!has(details, "propertyType")) return "property";
-      if (!all(details, ["bedrooms", "bathrooms", "extraRooms"])) return "rooms";
+    case "airbnb-cleaning": {
+      const propertyReady = catalogStageQuestionsReady(
+        serviceSlug,
+        "property",
+        details,
+        questions,
+      );
+      if (!(propertyReady ?? has(details, "propertyType"))) return "property";
+
+      const roomsReady = catalogStageQuestionsReady(
+        serviceSlug,
+        "rooms",
+        details,
+        questions,
+      );
+      if (!(roomsReady ?? all(details, ["bedrooms", "bathrooms", "extraRooms"]))) {
+        return "rooms";
+      }
       return "turnover";
+    }
   }
 }
 
-function requiredQuestionsReady(
+function catalogStageQuestionsReady(
   serviceSlug: ServiceSlug,
   stage: BookingDetailsStage,
   details: Details,
   questions: readonly FormQuestion[] | undefined,
 ): boolean | null {
   if (!questions) return null;
-  const required = questions.filter((question) => {
-    if (!question.required) return false;
+
+  const visibleStageQuestions = questions.filter((question) => {
     if (bookingDetailsQuestionStage(serviceSlug, question) !== stage) return false;
     if (!question.showWhen) return true;
     return question.showWhen.values.includes(
       String(details[question.showWhen.key] ?? ""),
     );
   });
-  return required.every((question) => has(details, question.key));
+
+  const blockingQuestions = visibleStageQuestions.filter(
+    (question) => question.required || (stage === "rooms" && question.group === "rooms"),
+  );
+
+  return blockingQuestions.every((question) => has(details, question.key));
 }
 
 export function bookingDetailsStageReady(
@@ -171,7 +220,7 @@ export function bookingDetailsStageReady(
       return false;
 
     case "office-cleaning": {
-      const dynamicReady = requiredQuestionsReady(
+      const dynamicReady = catalogStageQuestionsReady(
         serviceSlug,
         stage,
         details,
@@ -185,7 +234,7 @@ export function bookingDetailsStageReady(
     }
 
     case "carpet-cleaning": {
-      const dynamicReady = requiredQuestionsReady(
+      const dynamicReady = catalogStageQuestionsReady(
         serviceSlug,
         stage,
         details,
@@ -199,7 +248,7 @@ export function bookingDetailsStageReady(
     }
 
     case "airbnb-cleaning": {
-      const dynamicReady = requiredQuestionsReady(
+      const dynamicReady = catalogStageQuestionsReady(
         serviceSlug,
         stage,
         details,
