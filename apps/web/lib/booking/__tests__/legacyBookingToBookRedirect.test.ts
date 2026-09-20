@@ -47,6 +47,19 @@ describe("legacyBookingToBookRedirect", () => {
     );
   });
 
+  it("builds the canonical Office booking path from the service picker", () => {
+    const href = buildBookServiceSelectionHref(
+      new URLSearchParams(),
+      "office-cleaning",
+    );
+
+    expect(href).toBe(
+      "/book/office-cleaning?service=office-cleaning&step=details&section=address",
+    );
+  });
+
+
+
   it("hands widget selections directly to the matching canonical funnel", () => {
     const href = buildBookHrefFromWidgetSelection({
       service: "deep",
