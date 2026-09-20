@@ -628,31 +628,6 @@
           ]
         },
         {
-          "key": "frequency",
-          "label": "Cleaning frequency",
-          "type": "select",
-          "required": true,
-          "group": "rooms",
-          "options": [
-            {
-              "value": "daily",
-              "label": "Daily (Mon–Fri)"
-            },
-            {
-              "value": "twice_week",
-              "label": "Twice a week"
-            },
-            {
-              "value": "weekly",
-              "label": "Weekly"
-            },
-            {
-              "value": "once_off",
-              "label": "Once-off"
-            }
-          ]
-        },
-        {
           "key": "afterHours",
           "label": "Preferred cleaning time",
           "type": "radio",
