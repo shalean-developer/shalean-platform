@@ -19,7 +19,6 @@ export const EXTRA_CLEANER_SERVICE_SLUGS = new Set<ServiceSlug>([
   "regular-cleaning",
   "airbnb-cleaning",
   "office-cleaning",
-  "carpet-cleaning",
 ]);
 
 const ROOM_BASED = new Set<ServiceSlug>([
