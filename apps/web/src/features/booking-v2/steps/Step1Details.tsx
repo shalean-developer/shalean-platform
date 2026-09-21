@@ -421,6 +421,24 @@ export function Step1Details() {
     setValue,
   ]);
 
+  useEffect(() => {
+    if (serviceSlug !== "airbnb-cleaning") return;
+
+    for (const key of ["guestCheckout", "welcomeBasket", "specialInstructions"] as const) {
+      if (serviceDetails[key] === undefined || serviceDetails[key] === "") continue;
+      setValue(`serviceDetails.${key}` as "serviceDetails.bedrooms", "" as never, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [
+    serviceDetails.guestCheckout,
+    serviceDetails.specialInstructions,
+    serviceDetails.welcomeBasket,
+    serviceSlug,
+    setValue,
+  ]);
+
   // Clear answers for questions hidden by move-type (and similar) gates.
   useEffect(() => {
     for (const q of step1Questions) {
