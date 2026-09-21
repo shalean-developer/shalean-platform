@@ -119,9 +119,7 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "linens", effect: "informational", consumedBy: "ops; laundry Extra remains distinct" },
-      { key: "guestCheckout", effect: "informational", consumedBy: "scheduling logistics" },
       { key: "keyAccess", effect: "informational", consumedBy: "access logistics" },
-      { key: "welcomeBasket", effect: "informational", consumedBy: "ops; welcome-setup Extra distinct" },
     ],
   },
 };
