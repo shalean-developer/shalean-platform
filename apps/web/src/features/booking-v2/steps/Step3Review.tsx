@@ -17,7 +17,6 @@ import {
   RefreshCw,
   Package,
 } from "lucide-react";
-import { CleanerCountSelector } from "@/src/features/booking-v2/components/CleanerCountSelector";
 import { CleanerPreferenceSection } from "@/src/features/booking-v2/components/CleanerPreferenceSection";
 import { formatAreasServedPreview } from "@/src/features/booking-v2/components/CleanerCard";
 import { EquipmentSection } from "@/src/features/booking-v2/components/EquipmentSection";
@@ -483,7 +482,7 @@ function ScheduleEditPanel() {
 
   return (
     <div className="space-y-5">
-      {!isCarpetCleaning && !isAirbnbCleaning ? (
+      {allowsRecurringBookings ? (
         <>
           {/* Booking type */}
           <div>
@@ -619,32 +618,6 @@ function ScheduleEditPanel() {
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label htmlFor="edit-start" className="mb-1.5 block text-sm font-medium text-slate-700">
-                  Start date
-                </label>
-                <Controller name="recurringStartDate" control={control}
-                  render={({ field }) => (
-                    <input id="edit-start" type="date" min={today}
-                      value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                  )}
-                />
-              </div>
-              <div>
-                <label htmlFor="edit-end" className="mb-1.5 block text-sm font-medium text-slate-700">
-                  End date (optional)
-                </label>
-                <Controller name="recurringEndDate" control={control}
-                  render={({ field }) => (
-                    <input id="edit-end" type="date" min={today}
-                      value={field.value ?? ""} onChange={(e) => field.onChange(e.target.value)}
-                      className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20" />
-                  )}
-                />
-              </div>
-            </div>
           </div>
         </>
       )}
@@ -702,20 +675,34 @@ function CleanerEditPanel() {
             setValue("assignedTeamId", id);
             setValue("assignedTeamName", name);
           }}
+          autoAssign
         />
       ) : (
         <>
           {!isCarpetCleaning ? (
-            <CleanerCountSelector
-              value={cleanerCount}
-              onChange={(n) => {
-                setValue("cleanerCount", n);
-                if (selectedCleanerIds.length > n) {
-                  setValue("selectedCleanerIds", selectedCleanerIds.slice(0, n));
-                  setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, n));
-                }
-              }}
-            />
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span className="text-sm font-medium text-slate-700">
+                {cleanerCount === 1 ? "1 cleaner included" : `${cleanerCount} cleaners selected`}
+              </span>
+              {cleanerCount < 3 ? (
+                <button type="button" onClick={() => setValue("cleanerCount", cleanerCount + 1, { shouldDirty: true })}
+                  className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+                  Add another cleaner
+                </button>
+              ) : null}
+              {cleanerCount > 1 ? (
+                <button type="button" onClick={() => {
+                  const next = cleanerCount - 1;
+                  setValue("cleanerCount", next, { shouldDirty: true });
+                  if (selectedCleanerIds.length > next) {
+                    setValue("selectedCleanerIds", selectedCleanerIds.slice(0, next));
+                    setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, next));
+                  }
+                }} className="rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600">
+                  Remove extra cleaner
+                </button>
+              ) : null}
+            </div>
           ) : null}
 
           <CleanerPreferenceSection
@@ -1027,11 +1014,7 @@ export function Step3Review() {
     ? serviceDetails.filter(([key]) => key === "linens" || key === "keyAccess")
     : [];
   const hasServiceDetails = serviceDetails.length > 0;
-  const detailSectionCount = isCarpetCleaning
-    ? Number(carpetScopeDetails.length > 0) + Number(carpetConditionDetails.length > 0)
-    : isAirbnbCleaning
-      ? Number(airbnbPropertyDetails.length > 0) + Number(airbnbTurnoverDetails.length > 0)
-      : Number(hasServiceDetails);
+  const detailSectionCount = Number(hasServiceDetails);
   const cleanDetailsNumber = 2 + Number(showEquipment);
   const conditionNumber = cleanDetailsNumber + 1;
   const turnoverNumber = cleanDetailsNumber + 1;
@@ -1165,138 +1148,60 @@ export function Step3Review() {
 
         {/* ② Service details / Carpet scope + condition */}
         {isCarpetCleaning ? (
-          <>
-            {carpetScopeDetails.length > 0 ? (
-              <ReviewSection
-                number={cleanDetailsNumber}
-                title="Carpet scope"
-                onEdit={() => openEdit("property")}
-                className="sm:col-span-2"
-              >
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                  {carpetScopeDetails.map(([key, val]) => {
-                    const question = step1Questions.find((q) => q.key === key);
-                    const displayVal =
-                      question?.options?.find((o) => o.value === String(val))?.label ??
-                      String(val);
-                    return (
-                      <div key={key}>
-                        <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                        <p className="mt-0.5 text-sm font-medium capitalize text-slate-800">
-                          {displayVal}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ReviewSection>
-            ) : null}
-
-            {carpetConditionDetails.length > 0 ? (
-              <ReviewSection
-                number={conditionNumber}
-                title="Condition"
-                onEdit={() => openEdit("property")}
-                className="sm:col-span-2"
-              >
-                {carpetConditionDetails.map(([key, val]) => {
-                  const question = step1Questions.find((q) => q.key === key);
-                  const displayVal =
-                    question?.options?.find((o) => o.value === String(val))?.label ??
-                    String(val);
-                  return (
-                    <div key={key}>
-                      <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                      <p className="mt-0.5 text-sm font-medium text-slate-800">
-                        {displayVal}
-                      </p>
-                    </div>
-                  );
-                })}
-              </ReviewSection>
-            ) : null}
-          </>
-        ) : isAirbnbCleaning ? (
-          <>
-            {airbnbPropertyDetails.length > 0 ? (
-              <ReviewSection
-                number={cleanDetailsNumber}
-                title="Property"
-                onEdit={() => openEdit("property")}
-                className="sm:col-span-2"
-              >
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                  {airbnbPropertyDetails.map(([key, val]) => {
-                    const question = step1Questions.find((q) => q.key === key);
-                    const displayVal =
-                      question?.options?.find((o) => o.value === String(val))?.label ??
-                      String(val);
-                    return (
-                      <div key={key}>
-                        <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                        <p className="mt-0.5 text-sm font-medium capitalize text-slate-800">
-                          {displayVal}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ReviewSection>
-            ) : null}
-
-            {airbnbTurnoverDetails.length > 0 ? (
-              <ReviewSection
-                number={turnoverNumber}
-                title="Turnover setup"
-                onEdit={() => openEdit("property")}
-                className="sm:col-span-2"
-              >
-                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
-                  {airbnbTurnoverDetails.map(([key, val]) => {
-                    const question = step1Questions.find((q) => q.key === key);
-                    const displayVal =
-                      question?.options?.find((o) => o.value === String(val))?.label ??
-                      String(val);
-                    return (
-                      <div key={key}>
-                        <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                        <p className="mt-0.5 text-sm font-medium text-slate-800">
-                          {displayVal}
-                        </p>
-                      </div>
-                    );
-                  })}
-                </div>
-              </ReviewSection>
-            ) : null}
-          </>
-        ) : serviceDetails.length > 0 ? (
           <ReviewSection
             number={cleanDetailsNumber}
-            title={isOfficeCleaning ? "Office scope" : "Clean details"}
+            title="Carpet details"
             onEdit={() => openEdit("property")}
             className="sm:col-span-2"
           >
             <div className="grid grid-cols-2 gap-x-6 gap-y-3">
               {serviceDetails.map(([key, val]) => {
                 const question = step1Questions.find((q) => q.key === key);
-                if (question?.type === "textarea") {
-                  return (
-                    <div key={key} className="col-span-2">
-                      <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                      <p className="mt-0.5 text-sm text-slate-700">{String(val)}</p>
-                    </div>
-                  );
-                }
-                const displayVal =
-                  question?.options?.find((o) => o.value === String(val))?.label ??
-                  String(val);
+                const displayVal = question?.options?.find((o) => o.value === String(val))?.label ?? String(val);
                 return (
                   <div key={key}>
                     <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                    <p className="mt-0.5 text-sm font-medium capitalize text-slate-800">
-                      {displayVal}
-                    </p>
+                    <p className="mt-0.5 text-sm font-medium text-slate-800">{displayVal}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </ReviewSection>
+        ) : isAirbnbCleaning ? (
+          <ReviewSection
+            number={cleanDetailsNumber}
+            title="Airbnb details"
+            onEdit={() => openEdit("property")}
+            className="sm:col-span-2"
+          >
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              {serviceDetails.map(([key, val]) => {
+                const question = step1Questions.find((q) => q.key === key);
+                const displayVal = question?.options?.find((o) => o.value === String(val))?.label ?? String(val);
+                return (
+                  <div key={key}>
+                    <p className="text-xs text-slate-400">{question?.label ?? key}</p>
+                    <p className="mt-0.5 text-sm font-medium text-slate-800">{displayVal}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </ReviewSection>
+        ) : serviceDetails.length > 0 ? (
+          <ReviewSection
+            number={cleanDetailsNumber}
+            title={isOfficeCleaning ? "Office details" : "Clean details"}
+            onEdit={() => openEdit("property")}
+            className="sm:col-span-2"
+          >
+            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+              {serviceDetails.map(([key, val]) => {
+                const question = step1Questions.find((q) => q.key === key);
+                const displayVal = question?.options?.find((o) => o.value === String(val))?.label ?? String(val);
+                return (
+                  <div key={key}>
+                    <p className="text-xs text-slate-400">{question?.label ?? key}</p>
+                    <p className="mt-0.5 text-sm font-medium text-slate-800">{displayVal}</p>
                   </div>
                 );
               })}
@@ -1369,13 +1274,6 @@ export function Step3Review() {
                 </span>
               );
             })()}
-
-            {values.cleanerMode === "team" && values.assignedTeamId && (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                <Users className="h-3 w-3 text-blue-500" />
-                {values.assignedTeamName?.trim() || "Selected team"}
-              </span>
-            )}
 
             <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
               <Clock className="h-3 w-3 text-blue-500" />
@@ -1549,22 +1447,6 @@ export function Step3Review() {
           </div>
         </div>
 
-        {/* Trust strip */}
-        <div className="grid grid-cols-1 gap-2 sm:col-span-2 sm:grid-cols-3 sm:gap-3">
-          {[
-            { Icon: ShieldCheck, label: "Vetted cleaners" },
-            { Icon: CreditCard, label: "Secure payment" },
-            { Icon: Star, label: "Satisfaction guarantee" },
-          ].map(({ Icon, label }) => (
-            <div
-              key={label}
-              className="flex flex-row items-center gap-2.5 rounded-xl border border-slate-100 bg-white p-2.5 sm:justify-center sm:text-center"
-            >
-              <Icon className="h-5 w-5 shrink-0 text-blue-600" aria-hidden />
-              <p className="text-xs font-medium text-slate-600">{label}</p>
-            </div>
-          ))}
-        </div>
       </div>
     </>
   );
