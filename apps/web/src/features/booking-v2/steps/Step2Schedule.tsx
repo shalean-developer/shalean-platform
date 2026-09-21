@@ -400,6 +400,8 @@ export function Step2Schedule() {
   const isDeepCleaning = serviceSlug === "deep-cleaning";
   const isMovingCleaning = serviceSlug === "moving-cleaning";
   const isCarpetCleaning = serviceSlug === "carpet-cleaning";
+  const isAirbnbCleaning = serviceSlug === "airbnb-cleaning";
+  const skipsBookingTypeStage = isCarpetCleaning || isAirbnbCleaning;
   const progressiveIndividualSchedule = usesProgressiveIndividualSchedule(serviceSlug);
   const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
   const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
@@ -407,7 +409,7 @@ export function Step2Schedule() {
     serviceRecurringFrequencies.includes(option.value),
   );
   const activeScheduleStage = progressiveIndividualSchedule
-    ? scheduleSectionOverride ?? (isCarpetCleaning ? "date_time" : "booking_type")
+    ? scheduleSectionOverride ?? (skipsBookingTypeStage ? "date_time" : "booking_type")
     : null;
   const isBookingTypeStage =
     progressiveIndividualSchedule && activeScheduleStage === "booking_type";
@@ -578,7 +580,7 @@ export function Step2Schedule() {
   function moveScheduleStage(direction: "back" | "next") {
     if (!activeScheduleStage) return;
 
-    if (isCarpetCleaning) {
+    if (skipsBookingTypeStage) {
       if (activeScheduleStage === "date_time") {
         if (direction === "back") goBack();
         else editScheduleSection("cleaner");
