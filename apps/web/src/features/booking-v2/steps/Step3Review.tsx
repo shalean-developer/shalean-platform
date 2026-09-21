@@ -973,7 +973,11 @@ export function Step3Review() {
     setSnapshot(null);
   }
 
-  const visibleServiceDetailKeys = new Set(step1Questions.map((question) => question.key));
+  const visibleServiceDetailKeys = new Set(
+    step1Questions
+      .filter((question) => bookingDetailsQuestionStage(serviceSlug, question) != null)
+      .map((question) => question.key),
+  );
   const serviceDetails = Object.entries(values.serviceDetails ?? {}).filter(
     ([key, val]) =>
       visibleServiceDetailKeys.has(key) &&
@@ -989,35 +993,9 @@ export function Step3Review() {
   const showEquipment =
     serviceShowsEquipmentQuestion(serviceSlug) &&
     (values.equipmentRequired === "yes" || values.equipmentRequired === "no");
-  const carpetScopeKeys = new Set([
-    "propertyType",
-    "carpetRooms",
-    "rugCount",
-    "carpetType",
-  ]);
-  const carpetScopeDetails = isCarpetCleaning
-    ? serviceDetails.filter(([key]) => carpetScopeKeys.has(key))
-    : [];
-  const carpetConditionDetails = isCarpetCleaning
-    ? serviceDetails.filter(([key]) => key === "stains")
-    : [];
-  const airbnbPropertyKeys = new Set([
-    "propertyType",
-    "bedrooms",
-    "bathrooms",
-    "extraRooms",
-  ]);
-  const airbnbPropertyDetails = isAirbnbCleaning
-    ? serviceDetails.filter(([key]) => airbnbPropertyKeys.has(key))
-    : [];
-  const airbnbTurnoverDetails = isAirbnbCleaning
-    ? serviceDetails.filter(([key]) => key === "linens" || key === "keyAccess")
-    : [];
   const hasServiceDetails = serviceDetails.length > 0;
   const detailSectionCount = Number(hasServiceDetails);
   const cleanDetailsNumber = 2 + Number(showEquipment);
-  const conditionNumber = cleanDetailsNumber + 1;
-  const turnoverNumber = cleanDetailsNumber + 1;
   const scheduleNumber = 2 + Number(showEquipment) + detailSectionCount;
   const cleanerNumber = scheduleNumber + 1;
   const extrasNumber =
