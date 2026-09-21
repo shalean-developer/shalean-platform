@@ -242,7 +242,7 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
       // A reload proves the local Booking V2 draft is resumable on the same route.
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible({ timeout: 10_000 });
-      await expect(page.getByText(/1 Closure Test Street/).first()).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Location", exact: true }).locator("xpath=../../..").getByText(/1 Closure Test Street/)).toBeVisible();
       await expectRetainedBookingParams(page, "review");
 
       const persisted = await readDraft(page);
