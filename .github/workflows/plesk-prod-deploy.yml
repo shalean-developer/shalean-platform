@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       release_sha:
-        description: Exact integration/shalean-release SHA to deploy
+        description: Exact integration/shalean-release SHA to prepare for Plesk pull
         required: true
         type: string
       confirmation:
-        description: Type DEPLOY to confirm
+        description: Type PREPARE to confirm
         required: true
         type: string
 
@@ -37,7 +37,7 @@ jobs:
           CONFIRMATION: ${{ inputs.confirmation }}
         run: |
           set -euo pipefail
-          test "$CONFIRMATION" = DEPLOY || { echo "::error::Type DEPLOY to continue."; exit 1; }
+          test "$CONFIRMATION" = PREPARE || { echo "::error::Type PREPARE to continue."; exit 1; }
           FULL="$(gh api "repos/$REPO/commits/$REQUESTED" --jq .sha)"
           HEAD="$(gh api "repos/$REPO/git/ref/heads/integration/shalean-release" --jq .object.sha)"
           test "$FULL" = "$HEAD" || { echo "::error::Release is not current integration head."; exit 1; }
@@ -53,18 +53,19 @@ jobs:
         run: |
           set -euo pipefail
           NAME="plesk-prod-$SHA"
-          ID="$(gh api "repos/$REPO/actions/artifacts?name=$NAME&per_page=100" --jq             '.artifacts | map(select(.expired == false and .workflow_run.head_sha == env.SHA)) | sort_by(.created_at) | last | .id // empty')"
+          ID="$(gh api "repos/$REPO/actions/artifacts?name=$NAME&per_page=100" --jq \
+            '.artifacts | map(select(.expired == false and .workflow_run.head_sha == env.SHA)) | sort_by(.created_at) | last | .id // empty')"
           test -n "$ID" || { echo "::error::No unexpired artifact for exact SHA $SHA"; exit 1; }
           echo "id=$ID" >> "$GITHUB_OUTPUT"
 
-  deploy:
+  stage:
     needs: validate
     runs-on: ubuntu-latest
     environment:
       name: production
       url: https://shalean.co.za
     steps:
-      - name: Download and verify artifact
+      - name: Download and verify exact artifact
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -78,101 +79,83 @@ jobs:
           tar -tzf release.tar.gz | grep -q 'build-meta.json'
           tar -tzf release.tar.gz | grep -q 'runtime/apps/web/server.js'
           tar -tzf release.tar.gz | grep -q 'runtime/apps/web/public/'
+          tar -xOf release.tar.gz ./build-meta.json > build-meta.json
+          META_SHA="$(jq -r .artifact_sha build-meta.json)"
+          test "$META_SHA" = "$SHA"
+          sha256sum release.tar.gz | tee release.tar.gz.sha256
 
-      - name: Configure SSH
+      - name: Upload immutable artifact to private Supabase Storage
         env:
-          KEY: ${{ secrets.PLESK_SSH_PRIVATE_KEY }}
-          HOST: ${{ secrets.PLESK_SSH_HOST }}
-          PORT: ${{ secrets.PLESK_SSH_PORT }}
-          USER: ${{ secrets.PLESK_SSH_USER }}
-        run: |
-          set -euo pipefail
-          test -n "$KEY" && test -n "$HOST" && test -n "$USER"
-          PORT="${PORT:-22}"
-          mkdir -p ~/.ssh && chmod 700 ~/.ssh
-          printf '%s\n' "$KEY" > ~/.ssh/plesk && chmod 600 ~/.ssh/plesk
-          ssh-keyscan -p "$PORT" -H "$HOST" >> ~/.ssh/known_hosts
-
-      - name: Upload release
-        env:
-          HOST: ${{ secrets.PLESK_SSH_HOST }}
-          PORT: ${{ secrets.PLESK_SSH_PORT }}
-          USER: ${{ secrets.PLESK_SSH_USER }}
           SHA: ${{ needs.validate.outputs.sha }}
+          SUPABASE_URL: ${{ secrets.PLESK_RELEASE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PLESK_RELEASE_SUPABASE_SERVICE_ROLE_KEY }}
+          BUCKET: ${{ vars.PLESK_RELEASE_BUCKET }}
         run: |
           set -euo pipefail
-          PORT="${PORT:-22}"
-          scp -P "$PORT" -i ~/.ssh/plesk release.tar.gz "$USER@$HOST:.deploy-$SHA.tar.gz"
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$BUCKET"
+          OBJECT="plesk-prod-$SHA.tar.gz"
+          HTTP="$(curl -sS -o upload-response.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/storage/v1/object/$BUCKET/$OBJECT" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/gzip" \
+            -H "x-upsert: false" \
+            --data-binary @release.tar.gz)"
+          test "$HTTP" = 200 || test "$HTTP" = 201 || {
+            cat upload-response.json
+            echo "::error::Private release upload failed with HTTP $HTTP"
+            exit 1
+          }
 
-      - name: Extract and activate immutable release
+      - name: Create short-lived signed pull URL
+        id: signed
         env:
-          HOST: ${{ secrets.PLESK_SSH_HOST }}
-          PORT: ${{ secrets.PLESK_SSH_PORT }}
-          USER: ${{ secrets.PLESK_SSH_USER }}
+          SHA: ${{ needs.validate.outputs.sha }}
+          SUPABASE_URL: ${{ secrets.PLESK_RELEASE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PLESK_RELEASE_SUPABASE_SERVICE_ROLE_KEY }}
+          BUCKET: ${{ vars.PLESK_RELEASE_BUCKET }}
+        run: |
+          set -euo pipefail
+          OBJECT="plesk-prod-$SHA.tar.gz"
+          RESPONSE="$(curl -fsS \
+            -X POST "$SUPABASE_URL/storage/v1/object/sign/$BUCKET/$OBJECT" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{"expiresIn":3600}')"
+          SIGNED="$(jq -r '.signedURL // .signedUrl // empty' <<<"$RESPONSE")"
+          test -n "$SIGNED"
+          case "$SIGNED" in
+            http://*|https://*) URL="$SIGNED" ;;
+            *) URL="${SUPABASE_URL%/}/storage/v1$SIGNED" ;;
+          esac
+          echo "::add-mask::$URL"
+          printf '%s' "$URL" > plesk-pull-url.txt
+
+      - name: Publish guarded pull bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: plesk-pull-${{ needs.validate.outputs.sha }}
+          path: |
+            plesk-pull-url.txt
+            release.tar.gz.sha256
+            build-meta.json
+          if-no-files-found: error
+          retention-days: 1
+
+      - name: Summary
+        env:
           SHA: ${{ needs.validate.outputs.sha }}
           SHORT: ${{ needs.validate.outputs.short }}
         run: |
-          set -euo pipefail
-          PORT="${PORT:-22}"
-          ssh -p "$PORT" -i ~/.ssh/plesk "$USER@$HOST"             "SHA='$SHA' SHORT='$SHORT' bash -s" <<'REMOTE'
-          set -euo pipefail
-          RELEASE="plesk-prod-$SHORT"
-          ARCHIVE=".deploy-$SHA.tar.gz"
-          PREVIOUS=""
-          [ ! -L current ] || PREVIOUS="$(readlink current)"
-
-          if [ ! -d "$RELEASE" ]; then
-            mkdir "$RELEASE"
-            tar -xzf "$ARCHIVE" -C "$RELEASE"
-          fi
-          rm -f "$ARCHIVE"
-
-          test -f "$RELEASE/build-meta.json"
-          test -f "$RELEASE/runtime/apps/web/server.js"
-          test -d "$RELEASE/runtime/apps/web/.next"
-          test -d "$RELEASE/runtime/apps/web/public"
-          META="$(node -e "console.log(require('./$RELEASE/build-meta.json').artifact_sha)")"
-          test "$META" = "$SHA"
-
-          ln -sfn "$RELEASE" current.next
-          mv -Tf current.next current
-          printf '%s\n' "$PREVIOUS" > .shalean-previous-release
-          printf '%s\n' "$RELEASE" > .shalean-current-release
-          touch tmp/restart.txt
-          echo "Activated $RELEASE; previous=${PREVIOUS:-none}"
-          REMOTE
-
-      - name: Verify production health
-        id: health
-        run: |
-          set -euo pipefail
-          for i in $(seq 1 30); do
-            BODY="$(curl -fsS --max-time 10 https://shalean.co.za/api/health || true)"
-            if jq -e '.status == "ok" and .service == "shalean-api"' >/dev/null 2>&1 <<<"$BODY"; then
-              echo "$BODY"
-              exit 0
-            fi
-            sleep 5
-          done
-          exit 1
-
-      - name: Roll back on failed health
-        if: failure() && steps.health.outcome == 'failure'
-        env:
-          HOST: ${{ secrets.PLESK_SSH_HOST }}
-          PORT: ${{ secrets.PLESK_SSH_PORT }}
-          USER: ${{ secrets.PLESK_SSH_USER }}
-        run: |
-          set -euo pipefail
-          PORT="${PORT:-22}"
-          ssh -p "$PORT" -i ~/.ssh/plesk "$USER@$HOST" 'bash -s' <<'REMOTE'
-          set -euo pipefail
-          PREVIOUS="$(cat .shalean-previous-release 2>/dev/null || true)"
-          test -n "$PREVIOUS"
-          test -d "$PREVIOUS/runtime/apps/web"
-          ln -sfn "$PREVIOUS" current.next
-          mv -Tf current.next current
-          printf '%s\n' "$PREVIOUS" > .shalean-current-release
-          touch tmp/restart.txt
-          echo "Rolled back to $PREVIOUS"
-          REMOTE
+          {
+            echo "## PLESK-PULL-01 staged"
+            echo
+            echo "- Exact release SHA: `$SHA`"
+            echo "- Immutable target: `plesk-prod-$SHORT`"
+            echo "- Artifact uploaded to private release storage."
+            echo "- Signed pull URL expires after one hour."
+            echo "- Production activation is intentionally not performed by this stage."
+          } >> "$GITHUB_STEP_SUMMARY"
