@@ -106,6 +106,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
 
   const addressLabel = [values.address, values.suburb, values.city].filter(Boolean).join(", ");
   const isCarpetCleaning = values.serviceSlug === "carpet-cleaning";
+  const isAirbnbCleaning = values.serviceSlug === "airbnb-cleaning";
   const cleanerLabel = values.cleanerMode === "team"
     ? values.assignedTeamName?.trim() || "Best available team"
     : values.selectedCleanerDetails.length > 0
@@ -223,14 +224,13 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
                 ]
               : [
                   optionLabel("linens", values.serviceDetails.linens),
-                  optionLabel("guestCheckout", values.serviceDetails.guestCheckout),
                   optionLabel("keyAccess", values.serviceDetails.keyAccess),
-                  optionLabel("welcomeBasket", values.serviceDetails.welcomeBasket),
                 ];
   const moreDetailsLabel = finalDetailValues.filter(Boolean).join(" · ");
 
   const displayedScheduleStage =
-    scheduleSectionOverride ?? (isCarpetCleaning ? "date_time" : "booking_type");
+    scheduleSectionOverride ??
+    (isCarpetCleaning || isAirbnbCleaning ? "date_time" : "booking_type");
   const cleanerIsVisible =
     hasCleaner &&
     !(isDeepCleaning && currentStep === 1) &&
@@ -238,7 +238,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const bookingTypeLabel = values.bookingType === "recurring" ? "Recurring" : "Once-off";
   const scheduleIsVisible =
     !(isDeepCleaning && currentStep === 1) &&
-    (isCarpetCleaning
+    (isCarpetCleaning || isAirbnbCleaning
       ? currentStep > 2 || displayedScheduleStage === "cleaner"
       : !progressiveSchedule ||
         currentStep > 2 ||
@@ -258,7 +258,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         values.bookingType,
       ));
   const scheduleLabel = [
-    !isCarpetCleaning
+    !isCarpetCleaning && !isAirbnbCleaning
       ? values.bookingType === "recurring" && values.recurringFrequency
         ? recurringFrequencyLabel(values.recurringFrequency)
         : bookingTypeLabel
@@ -317,7 +317,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
               onEdit={
                 progressiveSchedule
                   ? editSchedule(
-                      isCarpetCleaning
+                      isCarpetCleaning || isAirbnbCleaning
                         ? "date_time"
                         : dateIsVisible
                           ? "date_time"
@@ -344,7 +344,9 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
                   ? "Carpet scope"
                   : values.serviceSlug === "office-cleaning"
                     ? "Office scope"
-                    : "Home"
+                    : isAirbnbCleaning
+                      ? "Property"
+                      : "Home"
               }
               value={homeLabel}
               onEdit={editDetail("property")}
@@ -367,7 +369,13 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
               {moreDetailsOpen ? (
                 <div className="rounded-xl bg-slate-50 p-2">
                   <SummaryRow
-                    label={isCarpetCleaning ? "Condition" : "Details"}
+                    label={
+                      isCarpetCleaning
+                        ? "Condition"
+                        : isAirbnbCleaning
+                          ? "Turnover setup"
+                          : "Details"
+                    }
                     value={moreDetailsLabel}
                     onEdit={editDetail(finalDetailsStage)}
                   />
