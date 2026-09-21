@@ -148,7 +148,7 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
     expect(contextSource).toContain('extraId !== "stain-treatment"');
 
     expect(contextSource).toContain(
-      'serviceSlug === "carpet-cleaning"\n          ? "date_time"',
+      'serviceSlug === "carpet-cleaning" || serviceSlug === "airbnb-cleaning"',
     );
     expect(step2Source).toContain(
       'const isCarpetCleaning = serviceSlug === "carpet-cleaning";',
@@ -198,9 +198,11 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
     expect(reviewSource).toContain(
       'values.cleanerMode === "individual_cleaners" && !isCarpetCleaning',
     );
-    expect(reviewSource).toContain("{!isCarpetCleaning ? (");
+    expect(reviewSource).toContain(
+      "{!isCarpetCleaning && !isAirbnbCleaning ? (",
+    );
     expect(summarySource).toContain(
-      'isCarpetCleaning\n      ? currentStep > 2 || displayedScheduleStage === "cleaner"',
+      "isCarpetCleaning || isAirbnbCleaning",
     );
     expect(summarySource).toContain('"Carpet scope"');
     expect(summarySource).toContain('"Home"');
