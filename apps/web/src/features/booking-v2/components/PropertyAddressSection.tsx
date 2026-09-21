@@ -300,6 +300,7 @@ export function PropertyAddressSection() {
 
   const [addressMode, setAddressMode] = useState<AddressMode>("custom");
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [changingSavedProperty, setChangingSavedProperty] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
   const [unsupportedOpen, setUnsupportedOpen] = useState(false);
   const [locationOptions, setLocationOptions] = useState<ServiceLocationRow[]>([]);
@@ -337,6 +338,7 @@ export function PropertyAddressSection() {
         shouldValidate: true,
       });
       setSelectedAddressId(addr.id);
+      setChangingSavedProperty(false);
     },
     [locationOptions, setValue],
   );
@@ -599,9 +601,9 @@ export function PropertyAddressSection() {
             </div>
           </div>
 
-          {savedAddresses.length > 1 ? (
+          {savedAddresses.length > 1 && changingSavedProperty ? (
             <div>
-              <FieldLabel htmlFor="saved-property">Saved property</FieldLabel>
+              <FieldLabel htmlFor="saved-property">Choose saved property</FieldLabel>
               <SavedPropertySelect
                 addresses={savedAddresses}
                 selectedId={selectedAddress.id}
@@ -633,6 +635,16 @@ export function PropertyAddressSection() {
           </div>
 
           <div className="flex flex-wrap gap-2 pt-1">
+            {savedAddresses.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => setChangingSavedProperty((current) => !current)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <Home className="h-3.5 w-3.5 text-blue-500" />
+                {changingSavedProperty ? "Keep current property" : "Change property"}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={switchToCustom}
