@@ -3,7 +3,11 @@ import type { RecurringFrequency, ServiceSlug } from "@/src/features/booking-v2/
 export const DEEP_CLEANING_RECURRING_FREQUENCY: RecurringFrequency = "monthly";
 
 export function serviceAllowsRecurringBookings(serviceSlug: ServiceSlug): boolean {
-  return serviceSlug !== "moving-cleaning" && serviceSlug !== "carpet-cleaning";
+  return (
+    serviceSlug !== "moving-cleaning" &&
+    serviceSlug !== "carpet-cleaning" &&
+    serviceSlug !== "airbnb-cleaning"
+  );
 }
 
 export function recurringFrequenciesForService(
