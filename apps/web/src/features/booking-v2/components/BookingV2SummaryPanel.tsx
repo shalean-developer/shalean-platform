@@ -427,14 +427,14 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
           ) : null}
         </div>
 
-        <div className="grid grid-cols-2 bg-slate-950 px-3 py-3 text-white">
-          <div className="flex flex-col items-center justify-center border-r border-blue-500/50 px-2 text-center">
+        <div className="grid grid-cols-2 bg-primary px-3 py-3 text-primary-foreground">
+          <div className="flex flex-col items-center justify-center border-r border-primary-foreground/35 px-2 text-center">
             <span className="text-2xl font-semibold tabular-nums">{durationHours}</span>
-            <span className="text-[11px] font-medium text-slate-300">Est. hours</span>
+            <span className="text-[11px] font-medium text-primary-foreground/80">Est. hours</span>
           </div>
           <div className="flex flex-col items-center justify-center px-2 text-center">
             <span className="text-2xl font-semibold tabular-nums">{checkoutPriceLabel}</span>
-            <span className="text-[11px] font-medium text-slate-300">
+            <span className="text-[11px] font-medium text-primary-foreground/80">
               {recurringPrepayment ? "Due today" : "Est. price"}
             </span>
           </div>
