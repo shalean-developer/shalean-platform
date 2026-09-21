@@ -100,12 +100,21 @@ export function TeamAvailabilitySection({
 
   useEffect(() => {
     if (!autoAssign || !teamAvail?.available) return;
+    const firstAvailable = teamAvail.teams.find((team) => team.available);
+    if (!firstAvailable) return;
+
     const selectedStillAvailable = teamAvail.teams.some(
       (team) => team.id === selectedTeamId && team.available,
     );
-    if (selectedStillAvailable) return;
-    const firstAvailable = teamAvail.teams.find((team) => team.available);
-    if (firstAvailable) onSelect(firstAvailable.id, firstAvailable.name);
+    if (!selectedStillAvailable) {
+      onSelect(firstAvailable.id, firstAvailable.name);
+      return;
+    }
+
+    // Deep/Moving no longer expose customer-facing team cards. Re-emit the
+    // confirmed selection after a date/time refresh so the parent can complete
+    // its service-specific navigation without requiring a hidden team click.
+    onSelect(selectedTeamId, teamAvail.teams.find((team) => team.id === selectedTeamId)?.name ?? firstAvailable.name);
   }, [autoAssign, onSelect, selectedTeamId, teamAvail]);
 
   return (
