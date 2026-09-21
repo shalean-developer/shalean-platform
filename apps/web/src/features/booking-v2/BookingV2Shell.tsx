@@ -114,7 +114,8 @@ function BookingV2Inner() {
           4: <Step4Payment />,
         }[currentStep]);
 
-  const showSidebarSummary = currentStep <= 2;
+  // Keep the booking summary available throughout the full four-step journey.
+  const showSidebarSummary = true;
   /** Steps 2–4 already use their own section cards — avoid duplicate outer card chrome. */
   const useOuterStepCard = currentStep === 1;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
@@ -143,7 +144,7 @@ function BookingV2Inner() {
               showSidebarSummary ? "lg:translate-x-6 xl:translate-x-20" : "mx-auto",
               currentStep === 2
                 ? "max-w-[720px]"
-                : currentStep === 3
+                : currentStep === 3 || currentStep === 4
                   ? "max-w-[760px]"
                   : "max-w-[560px]",
             )}
