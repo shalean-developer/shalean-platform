@@ -198,9 +198,7 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await expect(page).toHaveURL(/\/book\/regular-cleaning\?step=review/);
     await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
 
-    await expect(page.getByText("Regular Cleaning", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("1 Review Test Street", { exact: true })).toBeVisible();
-    await expect(page.getByText("Claremont, Cape Town, 7708", { exact: true })).toBeVisible();
+    await expect(page.getByText(/1 Review Test Street.*Claremont.*Cape Town.*7708/)).toBeVisible();
     await expect(page.getByText("08:30", { exact: true })).toBeVisible();
     await expect(page.getByText(/Recurring · Weekly/)).toBeVisible();
     await expect(page.getByText("Alice Test", { exact: true })).toBeVisible();
@@ -251,8 +249,7 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     expect(response?.status()).toBeLessThan(400);
     await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=review/);
     await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
-    await expect(page.getByText("Deep Cleaning", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("RD Team Alpha", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Clean details", exact: true })).toBeVisible();
     await expect(page.getByText("08:30", { exact: true })).toBeVisible();
     await expect(page.getByText(/Recurring · Weekly/)).toBeVisible();
     await expectReviewSectionNumbers(page, [

@@ -145,7 +145,7 @@ test.describe("RD-P05F — Booking V2 Step 4 payment presentation smoke", () => 
     await page.getByRole("button", { name: "Create account", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Create your account", exact: true })).toBeVisible();
     await expect(page.getByLabel(/Full name/)).toBeVisible();
-    await expect(page.getByLabel(/Phone number/)).toBeVisible();
+    await expect(page.getByLabel(/Phone number/)).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Create account & continue", exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Sign in", exact: true }).first().click();

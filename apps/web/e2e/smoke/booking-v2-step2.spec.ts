@@ -242,7 +242,7 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await page.getByRole("button", { name: "Continue →", exact: true }).click();
 
     const totalBeforeExtraCleaner = Number((await readDraft(page)).pricingSummary?.total ?? 0);
-    await page.getByRole("button", { name: "Add a cleaner" }).click();
+    await page.getByRole("button", { name: "Add another cleaner" }).click();
     await expectDraft(page, { cleanerCount: 2 });
     await expect
       .poll(async () => Number((await readDraft(page)).pricingSummary?.total ?? 0))
@@ -292,14 +292,14 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await expect(page.getByText("Confirming which times are free in your area…")).toHaveCount(0);
     await page.locator("#booking-time").click();
     await page.getByRole("button", { name: "9:00 AM", exact: true }).click();
-    await expect(page.getByRole("button", { name: /RD Team Alpha/ })).toBeVisible();
-    await page.getByRole("button", { name: /RD Team Alpha/ }).click();
-    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=review/);
+    await expect(page.getByText("Cleaning team available", { exact: true })).toBeVisible();
     await expectDraft(page, {
       date: chosenDate,
       time: "09:00",
       assignedTeamId: "team-alpha",
     });
+    await page.getByRole("button", { name: "Continue to Review →", exact: true }).click();
+    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=review/);
 
     expect(forbiddenMutations, "Team-mode smoke must never submit a booking or payment mutation").toEqual([]);
   });

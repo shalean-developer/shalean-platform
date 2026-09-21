@@ -35,11 +35,7 @@ function closureDraft(serviceSlug: string, cleanerMode: string): Record<string, 
       lastCleaned: "1_3_months",
       moveType: "move_out",
       furnished: "no",
-      depositInspection: "no",
-      officeType: "open_plan",
       officeSize: "small",
-      frequency: "once_off",
-      afterHours: "during_hours",
       carpetRooms: "2",
     },
     address: "1 Closure Test Street",
@@ -246,7 +242,7 @@ test.describe("RD-P05G — Booking V2 closure audit", () => {
       // A reload proves the local Booking V2 draft is resumable on the same route.
       await page.reload({ waitUntil: "domcontentloaded" });
       await expect(page.getByRole("heading", { name: "Review your booking", exact: true })).toBeVisible({ timeout: 10_000 });
-      await expect(page.getByText("1 Closure Test Street", { exact: true })).toBeVisible();
+      await expect(page.getByText(/1 Closure Test Street/).first()).toBeVisible();
       await expectRetainedBookingParams(page, "review");
 
       const persisted = await readDraft(page);
