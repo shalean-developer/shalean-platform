@@ -27,7 +27,7 @@ const STAGES: Record<ServiceSlug, readonly BookingDetailsStage[]> = {
   "regular-cleaning": ["address", "property", "rooms", "pets", "equipment"],
   "deep-cleaning": ["address", "property", "rooms", "pets"],
   "moving-cleaning": ["address", "property", "move", "rooms", "condition"],
-  "office-cleaning": ["address", "property", "rooms", "preferences"],
+  "office-cleaning": ["address", "rooms", "preferences"],
   "carpet-cleaning": ["address", "property", "rooms", "condition"],
   "airbnb-cleaning": ["address", "property", "rooms", "turnover"],
 };
@@ -100,14 +100,6 @@ export function bookingDetailsStage(
       return "condition";
 
     case "office-cleaning": {
-      const propertyReady = catalogStageQuestionsReady(
-        serviceSlug,
-        "property",
-        details,
-        questions,
-      );
-      if (!(propertyReady ?? has(details, "officeType"))) return "property";
-
       const roomsReady = catalogStageQuestionsReady(
         serviceSlug,
         "rooms",
@@ -228,7 +220,6 @@ export function bookingDetailsStageReady(
         questions,
       );
       if (dynamicReady != null) return dynamicReady;
-      if (stage === "property") return has(details, "officeType");
       if (stage === "rooms") return all(details, ["officeSize", "bathrooms"]);
       // The final Office stage now contains optional add-ons only.
       if (stage === "preferences") return true;
@@ -285,11 +276,7 @@ export function bookingDetailsAutoAdvanceTarget(
   details: Details,
 ): BookingDetailsStage | null {
   if (stage === "property") {
-    const propertyReady =
-      serviceSlug === "office-cleaning"
-        ? has(details, "officeType")
-        : has(details, "propertyType");
-    if (!propertyReady) return null;
+    if (!has(details, "propertyType")) return null;
     return serviceSlug === "moving-cleaning" ? "move" : "rooms";
   }
 
@@ -345,7 +332,6 @@ export function bookingDetailsQuestionStage(
 
     case "office-cleaning":
       if (question.key === "frequency") return null;
-      if (question.key === "officeType") return "property";
       if (question.group === "rooms" || question.key === "officeSize" || question.key === "bathrooms") {
         return "rooms";
       }
@@ -372,19 +358,10 @@ export function bookingDetailsQuestionVisibleAtStage(
   const questionStage = bookingDetailsQuestionStage(serviceSlug, question);
   if (!questionStage) return false;
 
-  // Match the approved Regular/Deep presentation: keep the immediately
-  // preceding choice visible while the customer completes the room/size stage.
-  // Moving is deliberately different only to preserve the approved fix that
-  // prevents Property type from repeating on the Rooms stage.
+  // Once a property type is chosen, progressive disclosure advances and does not
+  // repeat that choice on the next customer-input stage.
   if (question.key === "propertyType") {
-    if (serviceSlug === "moving-cleaning") {
-      return stage === "property" || stage === "move";
-    }
-    return stage === "property" || stage === "rooms";
-  }
-
-  if (serviceSlug === "office-cleaning" && question.key === "officeType") {
-    return stage === "property" || stage === "rooms";
+    return stage === "property";
   }
 
   if (serviceSlug === "moving-cleaning" && question.key === "moveType") {
