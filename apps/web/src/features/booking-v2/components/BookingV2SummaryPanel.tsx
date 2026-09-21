@@ -159,7 +159,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
 
   const propertyLabel =
     values.serviceSlug === "office-cleaning"
-      ? optionLabel("officeType", values.serviceDetails.officeType)
+      ? ""
       : optionLabel("propertyType", values.serviceDetails.propertyType);
 
   const bedrooms = String(values.serviceDetails.bedrooms ?? "");
@@ -210,9 +210,6 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
           ? [
               optionLabel("furnished", values.serviceDetails.furnished),
               petsLabel,
-              values.serviceDetails.depositInspection
-                ? `Deposit inspection: ${optionLabel("depositInspection", values.serviceDetails.depositInspection)}`
-                : "",
             ]
           : values.serviceSlug === "office-cleaning"
             ? []
@@ -309,7 +306,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
           {hasAddress && (!progressiveDetails || currentStep > 1 || detailsStageIndex >= finalDetailsStageIndex) ? (
             <SummaryRow label="Address" value={addressLabel} onEdit={progressiveDetails ? editDetail("address") : edit(1)} />
           ) : null}
-          <SummaryRow label="Service" value={config.label} onEdit={progressiveDetails ? editDetail("property") : edit(1)} />
+          <SummaryRow label="Service" value={config.label} onEdit={progressiveDetails ? editDetail(values.serviceSlug === "office-cleaning" ? "rooms" : "property") : edit(1)} />
           {scheduleIsVisible ? (
             <SummaryRow
               label="Schedule"
@@ -349,7 +346,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
                       : "Home"
               }
               value={homeLabel}
-              onEdit={editDetail("property")}
+              onEdit={editDetail(values.serviceSlug === "office-cleaning" ? "rooms" : "property")}
             />
           ) : null}
 
