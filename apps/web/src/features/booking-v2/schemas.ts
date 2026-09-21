@@ -278,9 +278,11 @@ export const bookingV2ConfirmSchema = z.object({
           ? "Moving Cleaning is available as a once-off booking only."
           : data.serviceSlug === "carpet-cleaning"
             ? "Carpet Cleaning is available as a once-off booking only."
-            : data.serviceSlug === "deep-cleaning"
-              ? "Deep Cleaning recurring bookings must be monthly with one visit per cycle."
-              : "Select a valid recurring schedule.",
+            : data.serviceSlug === "airbnb-cleaning"
+              ? "Airbnb Cleaning is available as a once-off turnover booking only."
+              : data.serviceSlug === "deep-cleaning"
+                ? "Deep Cleaning recurring bookings must be monthly with one visit per cycle."
+                : "Select a valid recurring schedule.",
       path: ["recurringFrequency"],
     });
   }
