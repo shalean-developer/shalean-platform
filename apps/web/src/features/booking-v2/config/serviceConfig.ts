@@ -473,26 +473,13 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
   },
   {
     key: "linens",
-    label: "Linen service",
+    label: "Fresh linen for the beds?",
     type: "radio",
     required: true,
     centered: true,
     options: [
-      { value: "change", label: "Change and make beds" },
-      { value: "no_change", label: "No linen change needed" },
-    ],
-  },
-  {
-    key: "guestCheckout",
-    label: "Guest checkout time",
-    type: "select",
-    required: true,
-    group: "logistics",
-    options: [
-      { value: "10am", label: "By 10:00 AM" },
-      { value: "11am", label: "By 11:00 AM" },
-      { value: "12pm", label: "By 12:00 PM" },
-      { value: "flexible", label: "Flexible" },
+      { value: "change", label: "Yes — fresh linen will be available" },
+      { value: "no_change", label: "No linen change" },
     ],
   },
   {
@@ -506,17 +493,6 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
       { value: "smart_lock", label: "Smart lock / code" },
       { value: "in_person", label: "Meet in person" },
       { value: "managed", label: "Managed by agent" },
-    ],
-  },
-  {
-    key: "welcomeBasket",
-    label: "Restock welcome essentials?",
-    type: "radio",
-    required: true,
-    centered: true,
-    options: [
-      { value: "yes", label: "Yes — I'll leave supplies" },
-      { value: "no", label: "No" },
     ],
   },
 ];
