@@ -298,7 +298,6 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
       time: "09:00",
       assignedTeamId: "team-alpha",
     });
-    await page.getByRole("button", { name: "Continue to Review →", exact: true }).click();
     await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=review/);
 
     expect(forbiddenMutations, "Team-mode smoke must never submit a booking or payment mutation").toEqual([]);
