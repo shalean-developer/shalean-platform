@@ -356,10 +356,10 @@ export function bookingDetailsQuestionVisibleAtStage(
   const questionStage = bookingDetailsQuestionStage(serviceSlug, question);
   if (!questionStage) return false;
 
-  // Once a property type is chosen, progressive disclosure advances and does not
-  // repeat that choice on the next customer-input stage.
+  // Keep the selected property card visible while the room questions open
+  // directly underneath it. The property choice is not repeated as a second input.
   if (question.key === "propertyType") {
-    return stage === "property";
+    return stage === "property" || stage === "rooms";
   }
 
   if (serviceSlug === "moving-cleaning" && question.key === "moveType") {
