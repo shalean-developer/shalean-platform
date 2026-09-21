@@ -936,6 +936,9 @@ export function Step2Schedule() {
               setValue("assignedTeamName", name, {
                 shouldDirty: true,
               });
+              if (isDeepCleaning) {
+                void goNext();
+              }
             }}
             autoAssign
           />

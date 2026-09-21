@@ -189,14 +189,10 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
     expect(input.catalog.allowsExtraCleaner).toBe(false);
   });
 
-  it("Step 3 separates Carpet scope and Condition and uses Specialist presentation", () => {
-    expect(reviewSource).toContain('title="Carpet scope"');
-    expect(reviewSource).toContain('title="Condition"');
+  it("Step 3 consolidates Carpet details and uses Specialist presentation", () => {
+    expect(reviewSource).toContain('title="Carpet details"');
     expect(reviewSource).toContain(
       'title={isCarpetCleaning ? "Specialist" : "Cleaner preference"}',
-    );
-    expect(reviewSource).toContain(
-      'values.cleanerMode === "individual_cleaners" && !isCarpetCleaning',
     );
     expect(reviewSource).toContain(
       "{!isCarpetCleaning && !isAirbnbCleaning ? (",

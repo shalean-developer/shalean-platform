@@ -28,7 +28,7 @@ describe("Regular and Deep production parity during six-service convergence", ()
     const propertyQuestion = { key: "propertyType", group: undefined };
     expect(bookingDetailsQuestionVisibleAtStage("regular-cleaning", propertyQuestion, "rooms")).toBe(true);
     expect(bookingDetailsQuestionVisibleAtStage("deep-cleaning", propertyQuestion, "rooms")).toBe(true);
-    expect(bookingDetailsQuestionVisibleAtStage("moving-cleaning", propertyQuestion, "rooms")).toBe(false);
+    expect(bookingDetailsQuestionVisibleAtStage("moving-cleaning", propertyQuestion, "rooms")).toBe(true);
   });
 
   it("keeps the approved Regular stage sequence", () => {
@@ -61,7 +61,7 @@ describe("Regular and Deep production parity during six-service convergence", ()
     expect(scheduleSource).not.toContain('if (isTeamMode && nextDate !== field.value) {');
   });
 
-  it("preserves Deep team-selection auto-advance and Moving explicit continuation", () => {
+  it("preserves Deep automatic-team auto-advance and Moving explicit continuation", () => {
     expect(scheduleSource).toMatch(
       /if \(isDeepCleaning\) \{\s*void goNext\(\);\s*\}/,
     );

@@ -161,30 +161,24 @@ async function expectReviewPrice(page: Page) {
 
   const draft = await readDraft(page);
   const amount = Number(draft.pricingSummary?.estimated_total ?? draft.pricingSummary?.total ?? 0);
-  await expect(page.getByText(`R${amount.toLocaleString("en-ZA")}`, { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Price breakdown", exact: true }).locator("xpath=../..").getByText(`R${amount.toLocaleString("en-ZA")}`, { exact: true }).first()).toBeVisible();
 }
 
 async function expectReviewSectionNumbers(page: Page, titles: string[]) {
   const headingOrder = (await page.locator("h3").allTextContents()).map((text) => text.trim());
   let previousIndex = -1;
 
-  for (const title of titles) {
+  for (let index = 0; index < titles.length; index += 1) {
+    const title = titles[index];
     const nextIndex = headingOrder.indexOf(title, previousIndex + 1);
     expect(nextIndex, `${title} should follow the previous review section`).toBeGreaterThan(previousIndex);
     previousIndex = nextIndex;
 
     const heading = page.getByRole("heading", { name: title, exact: true });
     await expect(heading).toBeVisible();
-    const labelRow = heading.locator("xpath=..");
-    const legacyNumber = labelRow.locator("span").first();
-    await expect(legacyNumber).toHaveCSS("display", "none");
-
-    // Chromium exposes the authored counter token here rather than the rendered digit.
-    // DOM order + one counter increment per ReviewSection makes the visual sequence deterministic.
-    const counterRule = await labelRow.evaluate((element) =>
-      window.getComputedStyle(element, "::before").content,
-    );
-    expect(counterRule.replace(/[\"']/g, "")).toBe("counter(review-section)");
+    const number = heading.locator("xpath=..").locator("span").first();
+    await expect(number).toBeVisible();
+    await expect(number).toHaveText(String(index + 1));
   }
 }
 
@@ -201,7 +195,7 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await expect(page.getByText(/1 Review Test Street.*Claremont.*Cape Town.*7708/)).toBeVisible();
     await expect(page.getByText("08:30", { exact: true })).toBeVisible();
     await expect(page.getByText(/Recurring · Weekly/)).toBeVisible();
-    await expect(page.getByText("Alice Test", { exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Cleaner preference", exact: true }).locator("xpath=../../..").getByText("Alice Test", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("inside-oven", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Price breakdown" })).toBeVisible();
     await expectReviewSectionNumbers(page, [

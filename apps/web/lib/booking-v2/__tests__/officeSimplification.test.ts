@@ -49,7 +49,6 @@ describe("Office Booking V2 simplification", () => {
   it("keeps only canonical Office details questions", () => {
     const questions = SERVICE_CONFIG["office-cleaning"].step1Questions;
     expect(questions.map((question) => question.key)).toEqual([
-      "officeType",
       "officeSize",
       "bathrooms",
     ]);
@@ -88,7 +87,7 @@ describe("Office Booking V2 simplification", () => {
       "officeSize",
       "bathrooms",
     ]);
-    expect(informationalFieldKeys("office-cleaning")).toEqual(["officeType"]);
+    expect(informationalFieldKeys("office-cleaning")).toEqual([]);
     expect(serviceAllowsRecurringBookings("office-cleaning")).toBe(true);
   });
 
@@ -105,7 +104,7 @@ describe("Office Booking V2 simplification", () => {
     expect(contextSource).toContain('delete serviceDetails.afterHours;');
     expect(contextSource).toContain('delete serviceDetails.specialInstructions;');
     expect(step1Source).toContain(
-      '["frequency", "afterHours", "specialInstructions"] as const',
+      '["officeType", "frequency", "afterHours", "specialInstructions"]',
     );
   });
 
@@ -115,6 +114,8 @@ describe("Office Booking V2 simplification", () => {
     expect(office?.pricingSlug).toBe("office");
     expect(office?.showCleaningProductsQuestion).toBe(false);
     expect(office?.showEquipmentQuestion).toBe(false);
+    // The seed may retain legacy officeType; runtime canonicalization replaces it
+    // with SERVICE_CONFIG before the customer sees the flow.
     expect(office?.step1Questions.map((question) => question.key)).toEqual([
       "officeType",
       "officeSize",
@@ -127,9 +128,8 @@ describe("Office Booking V2 simplification", () => {
     ]);
   });
 
-  it("presents Office details as Office scope in Review and Summary", () => {
-    expect(reviewSource).toContain('"Office scope"');
-    expect(reviewSource).toContain('"Edit office scope"');
+  it("presents consolidated Office details in Review and Summary", () => {
+    expect(reviewSource).toContain('"Office details"');
     expect(summarySource).toContain('"Office scope"');
     expect(summarySource).not.toContain(
       'optionLabel("afterHours", values.serviceDetails.afterHours)',

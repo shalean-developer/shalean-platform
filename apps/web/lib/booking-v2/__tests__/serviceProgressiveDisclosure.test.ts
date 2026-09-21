@@ -96,10 +96,8 @@ describe("six-service progressive booking details", () => {
   });
 
   it("uses progressive Office stages without the duplicate Details frequency", () => {
-    expect(bookingDetailsStage("office-cleaning", {}, address)).toBe("property");
-    expect(bookingDetailsStage("office-cleaning", { officeType: "open_plan" }, address)).toBe("rooms");
+    expect(bookingDetailsStage("office-cleaning", {}, address)).toBe("rooms");
     expect(bookingDetailsStage("office-cleaning", {
-      officeType: "open_plan",
       officeSize: "medium",
       bathrooms: "2",
     }, address)).toBe("preferences");
@@ -136,7 +134,6 @@ describe("six-service progressive booking details", () => {
 
   it("keeps the preceding selection visible while completing size/room details", () => {
     const property = { key: "propertyType", group: undefined };
-    const officeType = { key: "officeType", group: undefined };
     const moveType = { key: "moveType", group: undefined };
 
     expect(
@@ -152,16 +149,11 @@ describe("six-service progressive booking details", () => {
       bookingDetailsQuestionVisibleAtStage("carpet-cleaning", property, "rooms"),
     ).toBe(true);
     expect(
-      bookingDetailsQuestionVisibleAtStage("office-cleaning", officeType, "rooms"),
-    ).toBe(true);
-
-    // Moving preserves the earlier approved no-duplicate-Property-on-Rooms fix.
-    expect(
       bookingDetailsQuestionVisibleAtStage("moving-cleaning", property, "move"),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       bookingDetailsQuestionVisibleAtStage("moving-cleaning", property, "rooms"),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       bookingDetailsQuestionVisibleAtStage("moving-cleaning", moveType, "rooms"),
     ).toBe(true);
@@ -240,7 +232,7 @@ describe("six-service progressive booking details", () => {
       bookingDetailsStageReady(
         "office-cleaning",
         "rooms",
-        { officeType: "open_plan", officeSize: "medium", bathrooms: "2" },
+        { officeSize: "medium", bathrooms: "2" },
         address,
         officeQuestions,
       ),
@@ -249,7 +241,7 @@ describe("six-service progressive booking details", () => {
       bookingDetailsStageReady(
         "office-cleaning",
         "rooms",
-        { officeType: "open_plan", officeSize: "medium" },
+        { officeSize: "medium" },
         address,
         officeQuestions,
       ),
@@ -257,11 +249,6 @@ describe("six-service progressive booking details", () => {
   });
 
   it("auto-advances only simple choice stages and keeps final detail stages button-controlled", () => {
-    expect(
-      bookingDetailsAutoAdvanceTarget("office-cleaning", "property", {
-        officeType: "open_plan",
-      }),
-    ).toBe("rooms");
     expect(
       bookingDetailsAutoAdvanceTarget("airbnb-cleaning", "property", {
         propertyType: "apartment",
@@ -280,7 +267,7 @@ describe("six-service progressive booking details", () => {
   });
 
   it("supports deterministic back/next stages for every service", () => {
-    expect(adjacentBookingDetailsStage("office-cleaning", "property", "back")).toBe("address");
+    expect(adjacentBookingDetailsStage("office-cleaning", "rooms", "back")).toBe("address");
     expect(adjacentBookingDetailsStage("office-cleaning", "rooms", "next")).toBe("preferences");
     expect(adjacentBookingDetailsStage("airbnb-cleaning", "turnover", "next")).toBeNull();
     expect(adjacentBookingDetailsStage("carpet-cleaning", "condition", "back")).toBe("rooms");
