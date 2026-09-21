@@ -161,7 +161,7 @@ async function expectReviewPrice(page: Page) {
 
   const draft = await readDraft(page);
   const amount = Number(draft.pricingSummary?.estimated_total ?? draft.pricingSummary?.total ?? 0);
-  await expect(page.getByText(`R${amount.toLocaleString("en-ZA")}`, { exact: true }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Price breakdown", exact: true }).locator("xpath=../..").getByText(`R${amount.toLocaleString("en-ZA")}`, { exact: true }).first()).toBeVisible();
 }
 
 async function expectReviewSectionNumbers(page: Page, titles: string[]) {
