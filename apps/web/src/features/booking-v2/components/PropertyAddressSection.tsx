@@ -372,7 +372,9 @@ export function PropertyAddressSection() {
     void (async () => {
       const authUser = await getUser();
       if (cancelled || !authUser) return;
-      if (getValues("contactPhone")?.trim()) return;
+
+      const existingPhone = getValues("contactPhone")?.trim() ?? "";
+      if (existingPhone && isValidContactPhone(existingPhone)) return;
 
       const session = await getSession();
       const token = session?.access_token;
@@ -386,7 +388,7 @@ export function PropertyAddressSection() {
             const fromProfile =
               json.profile?.phone?.trim() || json.profile?.whatsapp?.trim() || "";
             if (!cancelled && isValidContactPhone(fromProfile)) {
-              setValue("contactPhone", fromProfile, { shouldDirty: false });
+              setValue("contactPhone", fromProfile, { shouldDirty: false, shouldValidate: true });
               return;
             }
           }
@@ -398,7 +400,7 @@ export function PropertyAddressSection() {
       const meta = authUser.user_metadata as { phone?: string; whatsapp?: string } | undefined;
       const fromMeta = meta?.phone?.trim() || meta?.whatsapp?.trim() || "";
       if (!cancelled && isValidContactPhone(fromMeta)) {
-        setValue("contactPhone", fromMeta, { shouldDirty: false });
+        setValue("contactPhone", fromMeta, { shouldDirty: false, shouldValidate: true });
       }
     })();
     return () => {
