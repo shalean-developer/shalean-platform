@@ -873,7 +873,7 @@ function ReviewSection({
   return (
     <div className={cn("rounded-2xl border border-slate-100 bg-white", className)}>
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-4 py-2.5 sm:px-5">
+      <div className="flex items-center justify-between gap-2 border-b border-slate-100 bg-slate-50/60 px-3.5 py-2 sm:px-4">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-blue-600 text-[11px] font-bold text-white">
             {number}
@@ -890,7 +890,7 @@ function ReviewSection({
         </button>
       </div>
       {/* Body */}
-      <div className="min-w-0 px-4 py-3 sm:px-5">{children}</div>
+      <div className="min-w-0 px-3.5 py-2.5 sm:px-4">{children}</div>
     </div>
   );
 }
@@ -907,7 +907,6 @@ export function Step3Review() {
   const isAirbnbCleaning = serviceSlug === "airbnb-cleaning";
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
   const serviceLabel = liveConfig?.label ?? config.label;
-  const serviceDescription = liveConfig?.description ?? config.description;
   const estimatedDurationHours = liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours;
   const { watch, getValues, reset, setValue } = useFormContext<BookingV2FormData>();
   const values = watch();
@@ -1052,25 +1051,14 @@ export function Step3Review() {
       )}
 
       {/* ── Page ── */}
-      <div className="grid grid-cols-1 gap-3 space-y-5 sm:grid-cols-2 [&>*+*]:!mt-0">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 
         {/* Header */}
-        <div className="text-center sm:col-span-2">
+        <div className="mb-1 text-center sm:col-span-2">
           <h2 className="text-xl font-bold text-slate-900">Review your booking</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Everything look right? Make any changes before you pay.
+          <p className="mt-0.5 text-sm text-slate-500">
+            Check the details below before payment.
           </p>
-        </div>
-
-        {/* Service badge */}
-        <div className="flex items-center gap-3 rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 sm:col-span-2 sm:px-5">
-          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-600">
-            <config.icon className="h-5 w-5 text-white" aria-hidden />
-          </div>
-          <div className="min-w-0">
-            <p className="text-base font-bold text-blue-900">{serviceLabel}</p>
-            <p className="mt-0.5 text-xs text-blue-700/80 sm:truncate">{serviceDescription}</p>
-          </div>
         </div>
 
         {/* ① Location */}
@@ -1080,17 +1068,11 @@ export function Step3Review() {
           onEdit={() => openEdit("location")}
           className={showEquipment ? undefined : "sm:col-span-2"}
         >
-          <div className="flex items-start gap-2.5">
-            <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-blue-500" aria-hidden />
-            <div>
-              <p className="text-sm font-semibold text-slate-900">
-                {values.address || "—"}
-              </p>
-              <p className="mt-0.5 text-sm text-slate-500">
-                {[values.suburb, values.city].filter(Boolean).join(", ")}
-                {values.postalCode && `, ${values.postalCode}`}
-              </p>
-            </div>
+          <div className="flex items-center gap-2.5">
+            <MapPin className="h-4 w-4 shrink-0 text-blue-500" aria-hidden />
+            <p className="min-w-0 text-sm font-medium text-slate-800">
+              {[values.address, values.suburb, values.city, values.postalCode].filter(Boolean).join(" · ")}
+            </p>
           </div>
 
         </ReviewSection>
@@ -1132,15 +1114,17 @@ export function Step3Review() {
             onEdit={() => openEdit("property")}
             className="sm:col-span-2"
           >
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
               {serviceDetails.map(([key, val]) => {
                 const question = step1Questions.find((q) => q.key === key);
                 const displayVal = question?.options?.find((o) => o.value === String(val))?.label ?? String(val);
                 return (
-                  <div key={key}>
-                    <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                    <p className="mt-0.5 text-sm font-medium text-slate-800">{displayVal}</p>
-                  </div>
+                  <span key={key} className="text-sm text-slate-700">
+                    <span className="text-slate-400">{question?.label ?? key}: </span>
+                    <span className="font-medium text-slate-800">
+                      {key === "bedrooms" && String(val) === "0" ? "Studio / no bedrooms" : displayVal}
+                    </span>
+                  </span>
                 );
               })}
             </div>
@@ -1152,15 +1136,17 @@ export function Step3Review() {
             onEdit={() => openEdit("property")}
             className="sm:col-span-2"
           >
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
               {serviceDetails.map(([key, val]) => {
                 const question = step1Questions.find((q) => q.key === key);
                 const displayVal = question?.options?.find((o) => o.value === String(val))?.label ?? String(val);
                 return (
-                  <div key={key}>
-                    <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                    <p className="mt-0.5 text-sm font-medium text-slate-800">{displayVal}</p>
-                  </div>
+                  <span key={key} className="text-sm text-slate-700">
+                    <span className="text-slate-400">{question?.label ?? key}: </span>
+                    <span className="font-medium text-slate-800">
+                      {key === "bedrooms" && String(val) === "0" ? "Studio / no bedrooms" : displayVal}
+                    </span>
+                  </span>
                 );
               })}
             </div>
@@ -1172,15 +1158,17 @@ export function Step3Review() {
             onEdit={() => openEdit("property")}
             className="sm:col-span-2"
           >
-            <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+            <div className="flex flex-wrap gap-x-4 gap-y-1.5">
               {serviceDetails.map(([key, val]) => {
                 const question = step1Questions.find((q) => q.key === key);
                 const displayVal = question?.options?.find((o) => o.value === String(val))?.label ?? String(val);
                 return (
-                  <div key={key}>
-                    <p className="text-xs text-slate-400">{question?.label ?? key}</p>
-                    <p className="mt-0.5 text-sm font-medium text-slate-800">{displayVal}</p>
-                  </div>
+                  <span key={key} className="text-sm text-slate-700">
+                    <span className="text-slate-400">{question?.label ?? key}: </span>
+                    <span className="font-medium text-slate-800">
+                      {key === "bedrooms" && String(val) === "0" ? "Studio / no bedrooms" : displayVal}
+                    </span>
+                  </span>
                 );
               })}
             </div>
@@ -1194,67 +1182,23 @@ export function Step3Review() {
           onEdit={() => openEdit("schedule")}
           className="sm:col-span-2"
         >
-          {/* Date + time cards */}
-          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
-            <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5">
-              <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                <Calendar className="h-3.5 w-3.5" aria-hidden />
-                Date
-              </p>
-              <p className="text-sm font-bold text-slate-900">
-                {values.date ? formatDate(values.date) : "—"}
-              </p>
-            </div>
-            <div className="flex items-center justify-between rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 sm:flex-col sm:justify-center sm:text-center">
-              <p className="mb-1 flex items-center gap-1.5 text-xs font-medium text-slate-400">
-                <Clock className="h-3.5 w-3.5" aria-hidden />
-                Time
-              </p>
-              <p className="text-xl font-bold text-blue-600">{values.time || "—"}</p>
-            </div>
-          </div>
-
-          {/* Booking meta chips */}
-          <div className="mt-2.5 flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
+            <span className="inline-flex items-center gap-1.5 font-medium text-slate-800">
+              <Calendar className="h-4 w-4 text-blue-500" aria-hidden />
+              {values.date ? formatDate(values.date) : "—"}
+            </span>
+            <span className="inline-flex items-center gap-1.5 font-bold text-blue-600">
+              <Clock className="h-4 w-4" aria-hidden />
+              {values.time || "—"}
+            </span>
             {!isCarpetCleaning && !isAirbnbCleaning ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                {values.bookingType === "recurring" ? (
-                  <>
-                    <RefreshCw className="h-3 w-3 text-blue-500" />
-                    Recurring
-                    {values.recurringFrequency
-                      ? ` · ${recurringFrequencyLabel(values.recurringFrequency)}`
-                      : ""}
-                  </>
-                ) : (
-                  "Once-off"
-                )}
+              <span className="text-slate-500">
+                {values.bookingType === "recurring"
+                  ? `Recurring${values.recurringFrequency ? ` · ${recurringFrequencyLabel(values.recurringFrequency)}` : ""}`
+                  : "Once-off"}
               </span>
             ) : null}
-
-            {values.cleanerMode === "individual_cleaners" && !isCarpetCleaning ? (
-              <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                <Users className="h-3 w-3 text-blue-500" />
-                {values.cleanerCount} cleaner{values.cleanerCount > 1 ? "s" : ""}
-              </span>
-            ) : null}
-            {values.cleanerMode === "individual_cleaners" && (() => {
-              const n = (values.selectedCleanerDetails ?? []).length;
-              return (
-                <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-                  {isCarpetCleaning
-                    ? n > 0
-                      ? "Preferred specialist selected"
-                      : "Shalean chooses specialist"
-                    : n > 0
-                      ? `${n} preferred cleaner${n > 1 ? "s" : ""} selected`
-                      : "Best available cleaner"}
-                </span>
-              );
-            })()}
-
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
-              <Clock className="h-3 w-3 text-blue-500" />
+            <span className="text-slate-500">
               {values.pricingSummary?.estimated_duration_minutes > 0
                 ? formatEstimatedCleaningTimeLabel(values.pricingSummary.estimated_duration_minutes)
                 : `Estimated cleaning time: ${estimatedDurationHours} hours`}
@@ -1286,20 +1230,11 @@ export function Step3Review() {
               onEdit={() => openEdit("cleaner")}
             >
               {!hasDetails && !hasIds ? (
-                <div className="flex items-center gap-3">
-                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-blue-50">
-                    <Users className="h-5 w-5 text-blue-500" aria-hidden />
-                  </div>
-                  <div>
-                    <p className="text-sm font-semibold text-slate-800">
-                      {isCarpetCleaning ? "Shalean chooses specialist" : "Best available cleaner"}
-                    </p>
-                    <p className="mt-0.5 text-xs text-slate-500">
-                      {isCarpetCleaning
-                        ? "We’ll assign a suitable carpet-cleaning specialist for your booking."
-                        : "We’ll assign the best available cleaner for your booking."}
-                    </p>
-                  </div>
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 shrink-0 text-blue-500" aria-hidden />
+                  <p className="text-sm font-medium text-slate-800">
+                    {isCarpetCleaning ? "Shalean chooses specialist" : "Best available cleaner"}
+                  </p>
                 </div>
               ) : hasDetails ? (
                 <div className="grid grid-cols-1 gap-2.5">
