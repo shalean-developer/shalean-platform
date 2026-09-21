@@ -375,7 +375,6 @@ function PaymentSection({
   const [applyCredit, setApplyCredit] = useState(false);
   const [promoCode, setPromoCode] = useState("");
   const [promoDiscountZar, setPromoDiscountZar] = useState(0);
-  const [promoLabel, setPromoLabel] = useState<string | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
   const baseTotal = values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? config.basePrice;
@@ -475,11 +474,9 @@ function PaymentSection({
         const total = autoOnly.reduce((sum, a) => sum + Math.round(Number(a.discountZar ?? 0)), 0);
         if (total > 0 && autoOnly.length) {
           setPromoDiscountZar(total);
-          setPromoLabel(autoOnly.map((a) => a.name).join(", "));
           setPromoError(null);
         } else {
           setPromoDiscountZar(0);
-          setPromoLabel(null);
         }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -523,18 +520,15 @@ function PaymentSection({
       if (!res.ok) {
         setPromoError(j.error ?? "Could not validate code.");
         setPromoDiscountZar(0);
-        setPromoLabel(null);
         return;
       }
       const total = Math.round(Number(j.totalDiscountZar ?? 0));
       if (total <= 0) {
         setPromoError(j.rejected?.[0]?.reason ?? "This code is not valid for your booking.");
         setPromoDiscountZar(0);
-        setPromoLabel(null);
         return;
       }
       setPromoDiscountZar(total);
-      setPromoLabel((j.applied ?? []).map((a) => a.name).join(", ") || "Promotion applied");
     } finally {
       setPromoChecking(false);
     }
