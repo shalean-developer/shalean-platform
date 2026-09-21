@@ -27,7 +27,6 @@ import type {
   ServiceSlug,
 } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
-import { CleanerCountSelector } from "@/src/features/booking-v2/components/CleanerCountSelector";
 import {
   CleanerPreferenceSection,
   prefetchAvailableCleaners,
@@ -937,10 +936,8 @@ export function Step2Schedule() {
               setValue("assignedTeamName", name, {
                 shouldDirty: true,
               });
-              if (isDeepCleaning) {
-                void goNext();
-              }
             }}
+            autoAssign
           />
           <FieldError message={errors.assignedTeamId?.message} />
         </section>
@@ -950,17 +947,38 @@ export function Step2Schedule() {
       {!isTeamMode && (!progressiveIndividualSchedule || activeScheduleStage === "cleaner") && (
         <section className="space-y-6">
           {!isCarpetCleaning ? (
-            <CleanerCountSelector
-              value={cleanerCount}
-              onChange={(n) => {
-                setValue("cleanerCount", n);
-                // Trim excess selections when reducing count
-                if (selectedCleanerIds.length > n) {
-                  setValue("selectedCleanerIds", selectedCleanerIds.slice(0, n));
-                  setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, n));
-                }
-              }}
-            />
+            <div className="flex flex-col items-center gap-2">
+              <p className="text-sm font-medium text-slate-700">
+                {cleanerCount === 1 ? "1 cleaner included" : `${cleanerCount} cleaners selected`}
+              </p>
+              <div className="flex flex-wrap justify-center gap-2">
+                {cleanerCount < 3 ? (
+                  <button
+                    type="button"
+                    onClick={() => setValue("cleanerCount", cleanerCount + 1, { shouldDirty: true })}
+                    className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
+                  >
+                    Add another cleaner
+                  </button>
+                ) : null}
+                {cleanerCount > 1 ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const next = cleanerCount - 1;
+                      setValue("cleanerCount", next, { shouldDirty: true });
+                      if (selectedCleanerIds.length > next) {
+                        setValue("selectedCleanerIds", selectedCleanerIds.slice(0, next));
+                        setValue("selectedCleanerDetails", selectedCleanerDetails.slice(0, next));
+                      }
+                    }}
+                    className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50"
+                  >
+                    Remove extra cleaner
+                  </button>
+                ) : null}
+              </div>
+            </div>
           ) : null}
 
           <CleanerPreferenceSection
