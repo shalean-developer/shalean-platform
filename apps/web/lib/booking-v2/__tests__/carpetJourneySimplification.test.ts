@@ -206,9 +206,9 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
     );
     expect(summarySource).toContain('"Carpet scope"');
     expect(summarySource).toContain('"Home"');
-    expect(summarySource).toContain(
-      'label={isCarpetCleaning ? "Condition" : "Details"}',
-    );
+    expect(summarySource).toContain('"Condition"');
+    expect(summarySource).toContain('"Turnover setup"');
+    expect(summarySource).toContain('"Details"');
   });
 
   it("Step 4 enforces the Carpet once-off and one-specialist contract", () => {
