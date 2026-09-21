@@ -444,6 +444,7 @@ function ScheduleEditPanel() {
   const { scheduling, serviceSlug } = useBookingV2();
   const isDeepCleaning = serviceSlug === "deep-cleaning";
   const isCarpetCleaning = serviceSlug === "carpet-cleaning";
+  const isAirbnbCleaning = serviceSlug === "airbnb-cleaning";
   const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
   const serviceRecurringFrequencies = recurringFrequenciesForService(serviceSlug);
   const recurringFrequencyOptions = RECURRING_FREQUENCIES.filter((option) =>
@@ -482,7 +483,7 @@ function ScheduleEditPanel() {
 
   return (
     <div className="space-y-5">
-      {!isCarpetCleaning ? (
+      {!isCarpetCleaning && !isAirbnbCleaning ? (
         <>
           {/* Booking type */}
           <div>
@@ -916,6 +917,7 @@ export function Step3Review() {
   const config = SERVICE_CONFIG[serviceSlug];
   const isCarpetCleaning = serviceSlug === "carpet-cleaning";
   const isOfficeCleaning = serviceSlug === "office-cleaning";
+  const isAirbnbCleaning = serviceSlug === "airbnb-cleaning";
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
   const serviceLabel = liveConfig?.label ?? config.label;
   const serviceDescription = liveConfig?.description ?? config.description;
@@ -1012,12 +1014,27 @@ export function Step3Review() {
   const carpetConditionDetails = isCarpetCleaning
     ? serviceDetails.filter(([key]) => key === "stains")
     : [];
+  const airbnbPropertyKeys = new Set([
+    "propertyType",
+    "bedrooms",
+    "bathrooms",
+    "extraRooms",
+  ]);
+  const airbnbPropertyDetails = isAirbnbCleaning
+    ? serviceDetails.filter(([key]) => airbnbPropertyKeys.has(key))
+    : [];
+  const airbnbTurnoverDetails = isAirbnbCleaning
+    ? serviceDetails.filter(([key]) => key === "linens" || key === "keyAccess")
+    : [];
   const hasServiceDetails = serviceDetails.length > 0;
   const detailSectionCount = isCarpetCleaning
     ? Number(carpetScopeDetails.length > 0) + Number(carpetConditionDetails.length > 0)
-    : Number(hasServiceDetails);
+    : isAirbnbCleaning
+      ? Number(airbnbPropertyDetails.length > 0) + Number(airbnbTurnoverDetails.length > 0)
+      : Number(hasServiceDetails);
   const cleanDetailsNumber = 2 + Number(showEquipment);
   const conditionNumber = cleanDetailsNumber + 1;
+  const turnoverNumber = cleanDetailsNumber + 1;
   const scheduleNumber = 2 + Number(showEquipment) + detailSectionCount;
   const cleanerNumber = scheduleNumber + 1;
   const extrasNumber =
@@ -1043,7 +1060,9 @@ export function Step3Review() {
               ? "Edit carpet scope"
               : isOfficeCleaning
                 ? "Edit office scope"
-                : "Edit clean details"
+                : isAirbnbCleaning
+                  ? "Edit Airbnb details"
+                  : "Edit clean details"
           }
           onSave={saveEdit}
           onCancel={cancelEdit}
@@ -1197,6 +1216,60 @@ export function Step3Review() {
               </ReviewSection>
             ) : null}
           </>
+        ) : isAirbnbCleaning ? (
+          <>
+            {airbnbPropertyDetails.length > 0 ? (
+              <ReviewSection
+                number={cleanDetailsNumber}
+                title="Property"
+                onEdit={() => openEdit("property")}
+                className="sm:col-span-2"
+              >
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                  {airbnbPropertyDetails.map(([key, val]) => {
+                    const question = step1Questions.find((q) => q.key === key);
+                    const displayVal =
+                      question?.options?.find((o) => o.value === String(val))?.label ??
+                      String(val);
+                    return (
+                      <div key={key}>
+                        <p className="text-xs text-slate-400">{question?.label ?? key}</p>
+                        <p className="mt-0.5 text-sm font-medium capitalize text-slate-800">
+                          {displayVal}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ReviewSection>
+            ) : null}
+
+            {airbnbTurnoverDetails.length > 0 ? (
+              <ReviewSection
+                number={turnoverNumber}
+                title="Turnover setup"
+                onEdit={() => openEdit("property")}
+                className="sm:col-span-2"
+              >
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                  {airbnbTurnoverDetails.map(([key, val]) => {
+                    const question = step1Questions.find((q) => q.key === key);
+                    const displayVal =
+                      question?.options?.find((o) => o.value === String(val))?.label ??
+                      String(val);
+                    return (
+                      <div key={key}>
+                        <p className="text-xs text-slate-400">{question?.label ?? key}</p>
+                        <p className="mt-0.5 text-sm font-medium text-slate-800">
+                          {displayVal}
+                        </p>
+                      </div>
+                    );
+                  })}
+                </div>
+              </ReviewSection>
+            ) : null}
+          </>
         ) : serviceDetails.length > 0 ? (
           <ReviewSection
             number={cleanDetailsNumber}
@@ -1260,7 +1333,7 @@ export function Step3Review() {
 
           {/* Booking meta chips */}
           <div className="mt-2.5 flex flex-wrap gap-1.5">
-            {!isCarpetCleaning ? (
+            {!isCarpetCleaning && !isAirbnbCleaning ? (
               <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs font-medium text-slate-600">
                 {values.bookingType === "recurring" ? (
                   <>
