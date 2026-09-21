@@ -84,7 +84,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "furnished", effect: "price_and_duration", consumedBy: "propertyFactorRates.furnished" },
-      { key: "depositInspection", effect: "informational", consumedBy: "ops hint; deposit-preparation is an Extra" },
     ],
   },
   "office-cleaning": {
@@ -92,7 +91,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
     canonicalPricingKey: "office",
     aliases: ["office", "office-cleaning", "quick"],
     fields: [
-      { key: "officeType", effect: "informational", consumedBy: "persisted for ops" },
       { key: "officeSize", effect: "price_and_duration", consumedBy: "propertyFactorRates.officeSize + duration proxy rooms" },
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog.pricePerBathroom + duration" },
     ],
