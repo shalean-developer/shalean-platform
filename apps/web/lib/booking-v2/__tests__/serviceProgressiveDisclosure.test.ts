@@ -124,6 +124,13 @@ describe("six-service progressive booking details", () => {
       bathrooms: "1",
       extraRooms: "0",
     }, address)).toBe("turnover");
+    expect(bookingDetailsStageReady(
+      "airbnb-cleaning",
+      "turnover",
+      { linens: "change", keyAccess: "lockbox" },
+      address,
+      SERVICE_CONFIG["airbnb-cleaning"].step1Questions,
+    )).toBe(true);
     expect(bookingDetailsShowsExtras("airbnb-cleaning", "turnover")).toBe(true);
   });
 
