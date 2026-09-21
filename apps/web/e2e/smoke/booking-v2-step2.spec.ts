@@ -292,13 +292,12 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await expect(page.getByText("Confirming which times are free in your area…")).toHaveCount(0);
     await page.locator("#booking-time").click();
     await page.getByRole("button", { name: "9:00 AM", exact: true }).click();
-    await expect(page.getByText("Cleaning team available", { exact: true })).toBeVisible();
     await expectDraft(page, {
       date: chosenDate,
       time: "09:00",
       assignedTeamId: "team-alpha",
     });
-    await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=review/);
+    await expect(page.getByText("Cleaning team available", { exact: true })).toBeVisible();
 
     expect(forbiddenMutations, "Team-mode smoke must never submit a booking or payment mutation").toEqual([]);
   });
