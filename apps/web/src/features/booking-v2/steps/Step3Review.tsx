@@ -9,12 +9,9 @@ import {
   Users,
   Clock,
   Star,
-  ShieldCheck,
-  CreditCard,
   X,
   ChevronLeft,
   ChevronRight,
-  RefreshCw,
   Package,
 } from "lucide-react";
 import { CleanerPreferenceSection } from "@/src/features/booking-v2/components/CleanerPreferenceSection";
@@ -906,7 +903,6 @@ export function Step3Review() {
   const isOfficeCleaning = serviceSlug === "office-cleaning";
   const isAirbnbCleaning = serviceSlug === "airbnb-cleaning";
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
-  const serviceLabel = liveConfig?.label ?? config.label;
   const estimatedDurationHours = liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours;
   const { watch, getValues, reset, setValue } = useFormContext<BookingV2FormData>();
   const values = watch();
