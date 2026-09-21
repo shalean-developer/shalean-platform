@@ -93,11 +93,10 @@ describe("Office Booking V2 simplification", () => {
   });
 
   it("normalizes old Office catalog questions and hidden equipment state at runtime", () => {
+    expect(catalogSource).toContain('serviceSlug === "office-cleaning"');
+    expect(catalogSource).toContain("SERVICE_CONFIG[serviceSlug].step1Questions");
     expect(catalogSource).toContain(
-      'serviceSlug === "carpet-cleaning" || serviceSlug === "office-cleaning"',
-    );
-    expect(catalogSource).toContain(
-      'slug === "office-cleaning"\n          ? false',
+      'slug === "office-cleaning" || slug === "airbnb-cleaning"',
     );
   });
 
