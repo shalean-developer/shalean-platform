@@ -404,6 +404,25 @@ export function Step1Details() {
   const moveTypeValue = String(serviceDetails.moveType ?? "");
 
   useEffect(() => {
+    const retiredKeys =
+      serviceSlug === "office-cleaning"
+        ? ["officeType", "frequency", "afterHours", "specialInstructions"]
+        : serviceSlug === "moving-cleaning"
+          ? ["depositInspection", "specialInstructions"]
+          : serviceSlug === "regular-cleaning" || serviceSlug === "deep-cleaning"
+            ? ["specialInstructions"]
+            : [];
+
+    for (const key of retiredKeys) {
+      if (serviceDetails[key] === undefined || serviceDetails[key] === "") continue;
+      setValue(`serviceDetails.${key}` as "serviceDetails.bedrooms", "" as never, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [serviceDetails, serviceSlug, setValue]);
+
+  useEffect(() => {
     if (serviceSlug !== "office-cleaning") return;
 
     for (const key of ["frequency", "afterHours", "specialInstructions"] as const) {
