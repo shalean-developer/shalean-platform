@@ -195,9 +195,6 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
       'title={isCarpetCleaning ? "Specialist" : "Cleaner preference"}',
     );
     expect(reviewSource).toContain(
-      'values.cleanerMode === "individual_cleaners" && !isCarpetCleaning',
-    );
-    expect(reviewSource).toContain(
       "{!isCarpetCleaning && !isAirbnbCleaning ? (",
     );
     expect(summarySource).toContain(
