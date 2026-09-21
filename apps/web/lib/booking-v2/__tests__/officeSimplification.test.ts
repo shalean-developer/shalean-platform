@@ -114,7 +114,10 @@ describe("Office Booking V2 simplification", () => {
     expect(office?.pricingSlug).toBe("office");
     expect(office?.showCleaningProductsQuestion).toBe(false);
     expect(office?.showEquipmentQuestion).toBe(false);
+    // The seed may retain legacy officeType; runtime canonicalization replaces it
+    // with SERVICE_CONFIG before the customer sees the flow.
     expect(office?.step1Questions.map((question) => question.key)).toEqual([
+      "officeType",
       "officeSize",
       "bathrooms",
     ]);
