@@ -9,15 +9,19 @@ export type ServiceSuppliesPolicy =
  * Customer-facing supplies/equipment responsibility for each canonical service.
  *
  * SR-04 policy:
- * - Regular + Airbnb: customer provides products/equipment, or Shalean can bring them for a logistics charge.
- * - Deep + Moving: Shalean supplies are included in the service.
+ * - Regular: customer provides products/equipment, or Shalean can bring them for a logistics charge.
+ * - Deep + Moving + Airbnb: Shalean supplies are included in the service.
  * - Office + Carpet: intentionally unresolved until their operating policy is explicitly approved.
  */
 export function serviceSuppliesPolicy(slug: ServiceSlug): ServiceSuppliesPolicy {
-  if (slug === "regular-cleaning" || slug === "airbnb-cleaning") {
+  if (slug === "regular-cleaning") {
     return "customer_or_shalean_logistics";
   }
-  if (slug === "deep-cleaning" || slug === "moving-cleaning") {
+  if (
+    slug === "deep-cleaning" ||
+    slug === "moving-cleaning" ||
+    slug === "airbnb-cleaning"
+  ) {
     return "shalean_included";
   }
   return "unresolved";
