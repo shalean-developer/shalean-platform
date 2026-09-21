@@ -157,10 +157,14 @@ export function normalizeBookingV2Questions(
   serviceSlug: ServiceSlug,
   questions: readonly FormQuestion[],
 ): FormQuestion[] {
-  if (serviceSlug === "carpet-cleaning" || serviceSlug === "office-cleaning") {
-    // Carpet and Office use deliberately small canonical intakes. Ignore
-    // retired database-backed questions so legacy catalog drift cannot
-    // re-introduce duplicate scheduling or notes fields.
+  if (
+    serviceSlug === "carpet-cleaning" ||
+    serviceSlug === "office-cleaning" ||
+    serviceSlug === "airbnb-cleaning"
+  ) {
+    // Carpet, Office and Airbnb use deliberately small canonical intakes.
+    // Ignore retired database-backed questions so catalog drift cannot
+    // re-introduce duplicate scheduling, equipment or notes fields.
     return SERVICE_CONFIG[serviceSlug].step1Questions.map((question) => ({
       ...question,
       options: question.options?.map((option) => ({ ...option })),
@@ -301,11 +305,11 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       description: serviceDef.description,
       cleanerMode: serviceDef.cleanerMode,
       showEquipmentQuestion:
-        slug === "office-cleaning"
+        slug === "office-cleaning" || slug === "airbnb-cleaning"
           ? false
           : serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
       showCleaningProductsQuestion:
-        slug === "office-cleaning"
+        slug === "office-cleaning" || slug === "airbnb-cleaning"
           ? false
           : serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
       allowsExtraCleaner:
