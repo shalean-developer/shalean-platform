@@ -166,9 +166,8 @@ describe("Airbnb Booking V2 simplified journey", () => {
     ]);
   });
 
-  it("presents Property and Turnover setup in Review and Summary", () => {
-    expect(reviewSource).toContain('title="Property"');
-    expect(reviewSource).toContain('title="Turnover setup"');
+  it("presents consolidated Airbnb details in Review and Summary", () => {
+    expect(reviewSource).toContain('title="Airbnb details"');
     expect(summarySource).toContain('"Property"');
     expect(summarySource).toContain('"Turnover setup"');
     expect(summarySource).not.toContain(
@@ -179,9 +178,9 @@ describe("Airbnb Booking V2 simplified journey", () => {
     );
   });
 
-  it("preserves the existing cleaner-count pricing control until automatic staffing is defined", () => {
+  it("preserves extra-cleaner pricing with the compact cleaner-count control", () => {
     expect(SERVICE_CONFIG["airbnb-cleaning"].pricePerExtraCleaner).toBeGreaterThan(0);
-    expect(step2Source).toContain("<CleanerCountSelector");
+    expect(step2Source).toContain("Add another cleaner");
     const airbnb = seed.services.find((service) => service.slug === "airbnb-cleaning");
     expect(airbnb?.allowsExtraCleaner).toBe(true);
   });
