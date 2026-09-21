@@ -204,12 +204,7 @@ export function bookingDetailsStageReady(
       if (stage === "property") return has(details, "propertyType");
       if (stage === "move") return has(details, "moveType");
       if (stage === "rooms") return all(details, ["bedrooms", "bathrooms", "extraRooms"]);
-      if (stage === "condition") {
-        const baseReady = all(details, ["furnished", "hasPets"]);
-        return String(details.moveType ?? "") === "move_out"
-          ? baseReady && has(details, "depositInspection")
-          : baseReady;
-      }
+      if (stage === "condition") return all(details, ["furnished", "hasPets"]);
       return false;
 
     case "office-cleaning": {
@@ -314,24 +309,27 @@ export function bookingDetailsQuestionStage(
 ): BookingDetailsStage | null {
   switch (serviceSlug) {
     case "regular-cleaning":
+      if (question.key === "specialInstructions") return null;
       if (question.key === "propertyType") return "property";
       if (question.group === "rooms") return "rooms";
       if (question.key === "hasPets") return "pets";
       return "equipment";
 
     case "deep-cleaning":
+      if (question.key === "specialInstructions") return null;
       if (question.key === "propertyType") return "property";
       if (question.group === "rooms") return "rooms";
       return "pets";
 
     case "moving-cleaning":
+      if (question.key === "depositInspection" || question.key === "specialInstructions") return null;
       if (question.key === "propertyType") return "property";
       if (question.key === "moveType") return "move";
       if (question.group === "rooms") return "rooms";
       return "condition";
 
     case "office-cleaning":
-      if (question.key === "frequency") return null;
+      if (question.key === "frequency" || question.key === "officeType" || question.key === "specialInstructions") return null;
       if (question.group === "rooms" || question.key === "officeSize" || question.key === "bathrooms") {
         return "rooms";
       }
