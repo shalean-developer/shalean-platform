@@ -947,10 +947,10 @@ export function Step2Schedule() {
       {!isTeamMode && (!progressiveIndividualSchedule || activeScheduleStage === "cleaner") && (
         <section className="space-y-6">
           {!isCarpetCleaning ? (
-            <div className="flex flex-col items-center gap-2">
-              <p className="text-sm font-medium text-slate-700">
-                {cleanerCount === 1 ? "1 cleaner included" : `${cleanerCount} cleaners selected`}
-              </p>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <span className="text-sm font-medium text-slate-600">
+                {cleanerCount === 1 ? "1 cleaner" : `${cleanerCount} cleaners`}
+              </span>
               <div className="flex flex-wrap justify-center gap-2">
                 {cleanerCount < 3 ? (
                   <button
