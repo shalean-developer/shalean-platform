@@ -76,9 +76,10 @@ jobs:
           gh api "repos/$REPO/actions/artifacts/$ARTIFACT_ID/zip" > artifact.zip
           unzip -q artifact.zip -d downloaded
           mv "downloaded/plesk-prod-$SHA.tar.gz" release.tar.gz
-          tar -tzf release.tar.gz | grep -q 'build-meta.json'
-          tar -tzf release.tar.gz | grep -q 'runtime/apps/web/server.js'
-          tar -tzf release.tar.gz | grep -q 'runtime/apps/web/public/'
+          tar -tzf release.tar.gz > archive-contents.txt
+          grep -q 'build-meta.json' archive-contents.txt
+          grep -q 'runtime/apps/web/server.js' archive-contents.txt
+          grep -q 'runtime/apps/web/public/' archive-contents.txt
           tar -xOf release.tar.gz ./build-meta.json > build-meta.json
           META_SHA="$(jq -r .artifact_sha build-meta.json)"
           test "$META_SHA" = "$SHA"
