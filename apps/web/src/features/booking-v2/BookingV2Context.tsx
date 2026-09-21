@@ -136,6 +136,12 @@ function sanitizeStoredForm(
     delete serviceDetails.specialInstructions;
   }
 
+  if (serviceSlug === "airbnb-cleaning") {
+    delete serviceDetails.guestCheckout;
+    delete serviceDetails.welcomeBasket;
+    delete serviceDetails.specialInstructions;
+  }
+
   return {
     ...data,
     serviceDetails,
@@ -156,7 +162,17 @@ function sanitizeStoredForm(
             (extraId) => extraId !== "stain-treatment",
           ),
         }
-      : {}),
+      : serviceSlug === "airbnb-cleaning"
+        ? {
+            bookingType: "once_off" as const,
+            recurringFrequency: "" as const,
+            recurringDays: [],
+            recurringStartDate: "",
+            recurringEndDate: "",
+            equipmentRequired: "no" as const,
+            equipmentQuote: null,
+          }
+        : {}),
   };
 }
 
@@ -231,7 +247,7 @@ export function BookingV2Provider({
   const [scheduleSectionOverride, setScheduleSectionOverride] =
     useState<RegularCleaningScheduleStage | null>(
       usesProgressiveIndividualSchedule(serviceSlug)
-        ? serviceSlug === "carpet-cleaning"
+        ? serviceSlug === "carpet-cleaning" || serviceSlug === "airbnb-cleaning"
           ? "date_time"
           : "booking_type"
         : null,
@@ -544,7 +560,7 @@ export function BookingV2Provider({
     );
     setScheduleSectionOverride(
       usesProgressiveIndividualSchedule(serviceSlug)
-        ? serviceSlug === "carpet-cleaning"
+        ? serviceSlug === "carpet-cleaning" || serviceSlug === "airbnb-cleaning"
           ? "date_time"
           : "booking_type"
         : null,
