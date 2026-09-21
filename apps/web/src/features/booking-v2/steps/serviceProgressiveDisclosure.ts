@@ -260,7 +260,7 @@ export function bookingDetailsStageReady(
       if (stage === "property") return has(details, "propertyType");
       if (stage === "rooms") return all(details, ["bedrooms", "bathrooms", "extraRooms"]);
       if (stage === "turnover") {
-        return all(details, ["linens", "guestCheckout", "keyAccess", "welcomeBasket"]);
+        return all(details, ["linens", "keyAccess"]);
       }
       return false;
     }
