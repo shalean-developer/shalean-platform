@@ -44,7 +44,7 @@ ARTIFACT_NAME="plesk-pull-$RELEASE_SHA"
 printf 'PLESK-PULL-02: resolving guarded bundle %s\n' "$ARTIFACT_NAME"
 ARTIFACTS_JSON="$(curl --fail --silent --show-error --location   -H "$AUTH" -H "$ACCEPT" -H "$VERSION"   "$API/actions/artifacts?name=$ARTIFACT_NAME&per_page=100")"
 
-read -r ARTIFACT_ID EXPIRED < <(printf '%s' "$ARTIFACTS_JSON" | python3 -c '
+ARTIFACT_INFO="$(printf '%s' "$ARTIFACTS_JSON" | python3 -c '
 import json,sys
 items=json.load(sys.stdin).get("artifacts", [])
 items=[x for x in items if x.get("name")==sys.argv[1]]
@@ -52,9 +52,12 @@ items.sort(key=lambda x:x.get("created_at",""))
 if not items:
     raise SystemExit(2)
 x=items[-1]
-print(x["id"], str(bool(x.get("expired"))).lower())
-' "$ARTIFACT_NAME") || fail "guarded pull bundle not found"
+print(str(x["id"]) + " " + str(bool(x.get("expired"))).lower())
+' "$ARTIFACT_NAME")" || fail "guarded pull bundle not found"
 
+ARTIFACT_ID="${ARTIFACT_INFO%% *}"
+EXPIRED="${ARTIFACT_INFO#* }"
+[ -n "$ARTIFACT_ID" ] || fail "guarded pull bundle id missing"
 [ "$EXPIRED" = "false" ] || fail "guarded pull bundle is expired"
 
 curl --fail --silent --show-error --location   -H "$AUTH" -H "$ACCEPT" -H "$VERSION"   "$API/actions/artifacts/$ARTIFACT_ID/zip"   --output "$WORK_DIR/bundle.zip"
