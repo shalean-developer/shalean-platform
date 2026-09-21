@@ -281,20 +281,6 @@ const MOVING_QUESTIONS: FormQuestion[] = [
     ],
     hint: "This helps the team plan safe access on moving day.",
   },
-  {
-    key: "depositInspection",
-    label: "Is this for a final rental / deposit inspection?",
-    type: "radio",
-    required: true,
-    group: "condition",
-    centered: true,
-    showWhen: { key: "moveType", values: ["move_out"] },
-    options: [
-      { value: "yes", label: "Yes — landlord or agency inspection" },
-      { value: "no", label: "No — general move-out clean" },
-    ],
-    hint: "We’ll prioritise skirting, cupboards, and other inspection hotspots when yes.",
-  },
 ];
 
 const MOVING_EXTRAS: ServiceExtra[] = [
@@ -306,18 +292,6 @@ const MOVING_EXTRAS: ServiceExtra[] = [
 // ─── Office Cleaning ───────────────────────────────────────────────────────────
 
 const OFFICE_QUESTIONS: FormQuestion[] = [
-  {
-    key: "officeType",
-    label: "Office type",
-    type: "radio",
-    required: true,
-    centered: true,
-    options: [
-      { value: "open_plan", label: "Open plan" },
-      { value: "private_offices", label: "Private offices" },
-      { value: "coworking", label: "Co-working space" },
-    ],
-  },
   {
     key: "officeSize",
     label: "Office size",

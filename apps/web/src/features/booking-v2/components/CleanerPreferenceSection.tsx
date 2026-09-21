@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { AlertCircle, Users, ChevronDown, ChevronUp, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { PREFERRED_CLEANER_CUSTOMER_DISCLAIMER } from "@/lib/dispatch/preferredCleanerDispatchPolicy";
 import { CleanerCard } from "@/src/features/booking-v2/components/CleanerCard";
 import type { AvailableCleanerV2 } from "@/src/features/booking-v2/types";
 import { cachedClientRequest } from "@/lib/booking-v2/clientRequestCache";
@@ -188,9 +187,7 @@ export function CleanerPreferenceSection({
           >
             Shalean chooses for me
           </p>
-          <p className="mt-0.5 text-xs text-slate-500">
-            We&apos;ll match your booking with a suitable available {personLabel}.
-          </p>
+
         </div>
         {bestAvailableSelected && (
           <CheckCircle2 className="h-5 w-5 shrink-0 text-blue-600" aria-label="Selected" />
@@ -226,28 +223,7 @@ export function CleanerPreferenceSection({
         )
       ) : (
         <>
-          {/* Helper text above the grid */}
-          <p className="text-center text-xs text-slate-500">
-            Select up to {maxSelect} {maxSelect > 1 ? pluralPersonLabel : personLabel}, or let Shalean choose.
-          </p>
-
           {/* At-limit notice */}
-          {selectedIds.length >= maxSelect && (
-            <p className="text-center text-xs font-medium text-blue-600">
-              {maxSelect === 1
-                ? `Select another ${personLabel} to replace your current choice, or click the selected ${personLabel} to remove it.`
-                : `You can select up to ${maxSelect} preferred ${pluralPersonLabel}. Click a selected ${personLabel} to remove it.`}
-            </p>
-          )}
-
-          {selectedIds.length > 0 ? (
-            <p className="rounded-xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-center text-xs leading-relaxed text-blue-900">
-              {personLabel === "specialist"
-                ? "We'll offer this booking to your preferred specialist first. If they're unavailable or don't accept in time, we'll assign the best available specialist to keep your booking on schedule."
-                : PREFERRED_CLEANER_CUSTOMER_DISCLAIMER}
-            </p>
-          ) : null}
-
           <div className="grid gap-2.5 sm:grid-cols-2 sm:gap-3">
             {visibleCleaners.map((cleaner) => {
               const isSelected = selectedIds.includes(cleaner.id);

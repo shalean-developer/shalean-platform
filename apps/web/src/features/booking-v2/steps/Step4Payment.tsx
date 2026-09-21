@@ -64,13 +64,22 @@ function friendlySignUpError(message?: string): string {
   return message ?? "Account creation failed. Please try again.";
 }
 
-function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }) {
+function AuthGate({
+  onAuthenticated,
+  contactPhone,
+}: {
+  onAuthenticated: (user: User) => void;
+  contactPhone: string;
+}) {
   const [mode, setMode] = useState<AuthMode>("sign_in");
   const [authMessage, setAuthMessage] = useState<AuthMessage | null>(null);
   const [loading, setLoading] = useState(false);
 
   const signInForm = useForm<SignInData>({ resolver: zodResolver(signInSchema) });
-  const signUpForm = useForm<SignUpData>({ resolver: zodResolver(signUpSchema) });
+  const signUpForm = useForm<SignUpData>({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: { phone: contactPhone },
+  });
 
   async function handleSignIn(data: SignInData) {
     setLoading(true);
@@ -216,22 +225,6 @@ function AuthGate({ onAuthenticated }: { onAuthenticated: (user: User) => void }
             />
             {signUpForm.formState.errors.fullName && (
               <p className="mt-1 text-xs text-red-500">{signUpForm.formState.errors.fullName.message}</p>
-            )}
-          </div>
-          <div>
-            <label htmlFor="su-phone" className="mb-1.5 block text-sm font-medium text-slate-700">
-              Phone number <span className="text-red-500">*</span>
-            </label>
-            <input
-              id="su-phone"
-              type="tel"
-              autoComplete="section-booking-signup tel"
-              placeholder="082 123 4567"
-              {...signUpForm.register("phone")}
-              className="block w-full rounded-xl border border-slate-200 px-4 py-3 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-            {signUpForm.formState.errors.phone && (
-              <p className="mt-1 text-xs text-red-500">{signUpForm.formState.errors.phone.message}</p>
             )}
           </div>
           <div>
@@ -382,7 +375,6 @@ function PaymentSection({
   const [applyCredit, setApplyCredit] = useState(false);
   const [promoCode, setPromoCode] = useState("");
   const [promoDiscountZar, setPromoDiscountZar] = useState(0);
-  const [promoLabel, setPromoLabel] = useState<string | null>(null);
   const [promoError, setPromoError] = useState<string | null>(null);
   const [promoChecking, setPromoChecking] = useState(false);
   const baseTotal = values.pricingSummary?.estimated_total ?? values.pricingSummary?.total ?? config.basePrice;
@@ -482,11 +474,9 @@ function PaymentSection({
         const total = autoOnly.reduce((sum, a) => sum + Math.round(Number(a.discountZar ?? 0)), 0);
         if (total > 0 && autoOnly.length) {
           setPromoDiscountZar(total);
-          setPromoLabel(autoOnly.map((a) => a.name).join(", "));
           setPromoError(null);
         } else {
           setPromoDiscountZar(0);
-          setPromoLabel(null);
         }
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
@@ -530,18 +520,15 @@ function PaymentSection({
       if (!res.ok) {
         setPromoError(j.error ?? "Could not validate code.");
         setPromoDiscountZar(0);
-        setPromoLabel(null);
         return;
       }
       const total = Math.round(Number(j.totalDiscountZar ?? 0));
       if (total <= 0) {
         setPromoError(j.rejected?.[0]?.reason ?? "This code is not valid for your booking.");
         setPromoDiscountZar(0);
-        setPromoLabel(null);
         return;
       }
       setPromoDiscountZar(total);
-      setPromoLabel((j.applied ?? []).map((a) => a.name).join(", ") || "Promotion applied");
     } finally {
       setPromoChecking(false);
     }
@@ -986,46 +973,37 @@ function PaymentSection({
           ) : displayedPricing ? (
             <CustomerPriceBreakdown pricing={displayedPricing} compact />
           ) : null}
-          {!pendingBookingId ? <div className="flex gap-2">
-            <input
-              type="text"
-              value={promoCode}
-              onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
-              placeholder="Promo code"
-              className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm uppercase tracking-wide"
-            />
-            <button
-              type="button"
-              onClick={() => void applyPromoCode()}
-              disabled={promoChecking || !promoCode.trim()}
-              className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-            >
-              {promoChecking ? "Checking…" : "Apply"}
-            </button>
-          </div> : null}
+          {!pendingBookingId ? (
+            <details className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <summary className="cursor-pointer text-sm font-semibold text-blue-700">
+                Have a promo code?
+              </summary>
+              <div className="mt-3 flex gap-2">
+                <input
+                  type="text"
+                  value={promoCode}
+                  onChange={(e) => setPromoCode(e.target.value.toUpperCase())}
+                  placeholder="Promo code"
+                  className="flex-1 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm uppercase tracking-wide"
+                />
+                <button
+                  type="button"
+                  onClick={() => void applyPromoCode()}
+                  disabled={promoChecking || !promoCode.trim()}
+                  className="rounded-xl bg-slate-900 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                >
+                  {promoChecking ? "Checking…" : "Apply"}
+                </button>
+              </div>
+            </details>
+          ) : null}
           {!pendingBookingId && promoError ? (
             <p className="text-xs text-amber-700">{promoError}</p>
-          ) : null}
-          {!pendingBookingId && promoDiscountZar > 0 ? (
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              <p className="font-semibold">{promoLabel ?? "Promotion applied"}</p>
-              <p className="mt-1 text-emerald-800">
-                You save R {promoDiscountZar.toLocaleString("en-ZA")}
-              </p>
-            </div>
           ) : null}
           {!pendingBookingId && referralValidationPending ? (
             <div className="flex items-center gap-2 rounded-xl border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-900" role="status">
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               Checking your referral discount…
-            </div>
-          ) : null}
-          {!pendingBookingId && !referralLoading && referralDiscount ? (
-            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
-              <p className="font-semibold">Referral discount applied</p>
-              <p className="mt-1 text-emerald-800">
-                R {referralDiscount.discountZar.toLocaleString("en-ZA")} off your first booking — no code needed.
-              </p>
             </div>
           ) : null}
           {!pendingBookingId && !referralLoading && !referralDiscount && invalidMessage ? (
@@ -1166,6 +1144,8 @@ function PaymentSection({
 // ??? Step 4 ?????????????????????????????????????????????????????????????????????
 
 export function Step4Payment() {
+  const { watch } = useFormContext<BookingV2FormData>();
+  const contactPhone = watch("contactPhone") ?? "";
   const [user, setUser] = useState<User | null>(null);
   const [checkingAuth, setCheckingAuth] = useState(true);
   const [authNotice, setAuthNotice] = useState<string | null>(null);
@@ -1201,6 +1181,7 @@ export function Step4Payment() {
 
       {!user ? (
         <AuthGate
+          contactPhone={contactPhone}
           onAuthenticated={(u) => {
             setAuthNotice(null);
             setUser(u);

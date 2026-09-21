@@ -114,7 +114,8 @@ function BookingV2Inner() {
           4: <Step4Payment />,
         }[currentStep]);
 
-  const showSidebarSummary = currentStep <= 2;
+  // Keep the booking summary available throughout the full four-step journey.
+  const showSidebarSummary = true;
   /** Steps 2–4 already use their own section cards — avoid duplicate outer card chrome. */
   const useOuterStepCard = currentStep === 1;
   const reviewTimeMissing = currentStep === 3 && !reviewTime;
@@ -143,7 +144,7 @@ function BookingV2Inner() {
               showSidebarSummary ? "lg:translate-x-6 xl:translate-x-20" : "mx-auto",
               currentStep === 2
                 ? "max-w-[720px]"
-                : currentStep === 3
+                : currentStep === 3 || currentStep === 4
                   ? "max-w-[760px]"
                   : "max-w-[560px]",
             )}
@@ -209,11 +210,17 @@ function BookingV2Inner() {
           </div>
 
           {showSidebarSummary && (
-            <div className="hidden w-full max-w-[360px] justify-self-start lg:block">
-              <div className="sticky top-24">
+            <aside className="hidden w-full max-w-[360px] self-start justify-self-start lg:block">
+              <div
+                className="fixed z-20 w-[360px] max-w-[calc(100vw-var(--ui-page-gutter))] overflow-y-auto overscroll-contain [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+                style={{
+                  top: "calc(7.5rem + env(safe-area-inset-top))",
+                  maxHeight: "calc(100dvh - 8.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+                }}
+              >
                 <BookingV2SummaryPanel />
               </div>
-            </div>
+            </aside>
           )}
         </div>
       </div>

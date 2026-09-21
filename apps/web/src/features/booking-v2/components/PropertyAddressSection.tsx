@@ -300,6 +300,7 @@ export function PropertyAddressSection() {
 
   const [addressMode, setAddressMode] = useState<AddressMode>("custom");
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(null);
+  const [changingSavedProperty, setChangingSavedProperty] = useState(false);
   const [prefilled, setPrefilled] = useState(false);
   const [unsupportedOpen, setUnsupportedOpen] = useState(false);
   const [locationOptions, setLocationOptions] = useState<ServiceLocationRow[]>([]);
@@ -337,6 +338,7 @@ export function PropertyAddressSection() {
         shouldValidate: true,
       });
       setSelectedAddressId(addr.id);
+      setChangingSavedProperty(false);
     },
     [locationOptions, setValue],
   );
@@ -372,7 +374,9 @@ export function PropertyAddressSection() {
     void (async () => {
       const authUser = await getUser();
       if (cancelled || !authUser) return;
-      if (getValues("contactPhone")?.trim()) return;
+
+      const existingPhone = getValues("contactPhone")?.trim() ?? "";
+      if (existingPhone && isValidContactPhone(existingPhone)) return;
 
       const session = await getSession();
       const token = session?.access_token;
@@ -386,7 +390,7 @@ export function PropertyAddressSection() {
             const fromProfile =
               json.profile?.phone?.trim() || json.profile?.whatsapp?.trim() || "";
             if (!cancelled && isValidContactPhone(fromProfile)) {
-              setValue("contactPhone", fromProfile, { shouldDirty: false });
+              setValue("contactPhone", fromProfile, { shouldDirty: false, shouldValidate: true });
               return;
             }
           }
@@ -398,7 +402,7 @@ export function PropertyAddressSection() {
       const meta = authUser.user_metadata as { phone?: string; whatsapp?: string } | undefined;
       const fromMeta = meta?.phone?.trim() || meta?.whatsapp?.trim() || "";
       if (!cancelled && isValidContactPhone(fromMeta)) {
-        setValue("contactPhone", fromMeta, { shouldDirty: false });
+        setValue("contactPhone", fromMeta, { shouldDirty: false, shouldValidate: true });
       }
     })();
     return () => {
@@ -597,9 +601,9 @@ export function PropertyAddressSection() {
             </div>
           </div>
 
-          {savedAddresses.length > 1 ? (
+          {savedAddresses.length > 1 && changingSavedProperty ? (
             <div>
-              <FieldLabel htmlFor="saved-property">Saved property</FieldLabel>
+              <FieldLabel htmlFor="saved-property">Choose saved property</FieldLabel>
               <SavedPropertySelect
                 addresses={savedAddresses}
                 selectedId={selectedAddress.id}
@@ -631,6 +635,16 @@ export function PropertyAddressSection() {
           </div>
 
           <div className="flex flex-wrap gap-2 pt-1">
+            {savedAddresses.length > 1 ? (
+              <button
+                type="button"
+                onClick={() => setChangingSavedProperty((current) => !current)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <Home className="h-3.5 w-3.5 text-blue-500" />
+                {changingSavedProperty ? "Keep current property" : "Change property"}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={switchToCustom}

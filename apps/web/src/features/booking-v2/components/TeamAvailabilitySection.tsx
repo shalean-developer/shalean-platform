@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamCard } from "@/src/features/booking-v2/components/TeamCard";
 
@@ -86,6 +86,7 @@ type Props = {
   serviceSlug: string;
   selectedTeamId: string;
   onSelect: (teamId: string, teamName: string) => void;
+  autoAssign?: boolean;
 };
 
 export function TeamAvailabilitySection({
@@ -93,8 +94,19 @@ export function TeamAvailabilitySection({
   serviceSlug,
   selectedTeamId,
   onSelect,
+  autoAssign = false,
 }: Props) {
   const { data: teamAvail, loading, error } = useTeamAvailability(date, serviceSlug);
+
+  useEffect(() => {
+    if (!autoAssign || !teamAvail?.available) return;
+    const selectedStillAvailable = teamAvail.teams.some(
+      (team) => team.id === selectedTeamId && team.available,
+    );
+    if (selectedStillAvailable) return;
+    const firstAvailable = teamAvail.teams.find((team) => team.available);
+    if (firstAvailable) onSelect(firstAvailable.id, firstAvailable.name);
+  }, [autoAssign, onSelect, selectedTeamId, teamAvail]);
 
   return (
     <div className="space-y-4">
@@ -154,6 +166,16 @@ export function TeamAvailabilitySection({
                 <p className="text-sm font-semibold text-amber-800">No teams are ready for this service yet</p>
                 <p className="mt-1 text-xs text-amber-700">
                   Ask ops to activate a deep/move team with at least two roster members, then try again.
+                </p>
+              </div>
+            </div>
+          ) : autoAssign ? (
+            <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
+              <div>
+                <p className="text-sm font-semibold text-emerald-900">Cleaning team available</p>
+                <p className="mt-1 text-xs text-emerald-700">
+                  Shalean will assign the available team for your booking.
                 </p>
               </div>
             </div>
