@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           npm ci
-          npm install --no-save --package-lock=false @tailwindcss/postcss@^4
+          npm install --no-save --package-lock=false --package-lock-only=false --ignore-scripts @tailwindcss/postcss@4.1.14
 
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
