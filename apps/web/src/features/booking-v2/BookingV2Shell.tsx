@@ -212,8 +212,10 @@ function BookingV2Inner() {
           {showSidebarSummary && (
             <aside className="hidden w-full max-w-[360px] self-start justify-self-start lg:block">
               <div
-                className="sticky z-20"
-                style={{ top: "calc(7.5rem + env(safe-area-inset-top))" }}
+                className="fixed z-20 w-[360px] max-w-[calc(100vw-var(--ui-page-gutter))]"
+                style={{
+                  top: "calc(7.5rem + env(safe-area-inset-top))",
+                }}
               >
                 <BookingV2SummaryPanel />
               </div>
