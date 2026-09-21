@@ -212,9 +212,11 @@ function BookingV2Inner() {
           {showSidebarSummary && (
             <aside className="hidden w-full max-w-[360px] self-start justify-self-start lg:block">
               <div
-                className="fixed z-20 w-[360px] max-w-[calc(100vw-var(--ui-page-gutter))]"
+                className="fixed z-20 w-[360px] max-w-[calc(100vw-var(--ui-page-gutter))] overflow-y-auto overscroll-contain pr-1"
                 style={{
                   top: "calc(7.5rem + env(safe-area-inset-top))",
+                  maxHeight: "calc(100dvh - 8.5rem - env(safe-area-inset-top) - env(safe-area-inset-bottom))",
+                  scrollbarGutter: "stable",
                 }}
               >
                 <BookingV2SummaryPanel />
