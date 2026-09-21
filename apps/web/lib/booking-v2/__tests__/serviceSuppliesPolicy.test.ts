@@ -7,20 +7,21 @@ import {
 import { buildDefaultBookingV2CatalogConfig } from "@/lib/booking-v2/bookingV2ServiceDefinitions";
 
 describe("serviceSuppliesPolicy", () => {
-  it("requires a customer equipment choice for Regular and Airbnb", () => {
+  it("requires a customer equipment choice only for Regular", () => {
     expect(serviceSuppliesPolicy("regular-cleaning")).toBe("customer_or_shalean_logistics");
-    expect(serviceSuppliesPolicy("airbnb-cleaning")).toBe("customer_or_shalean_logistics");
     expect(serviceRequiresCustomerEquipmentChoice("regular-cleaning")).toBe(true);
-    expect(serviceRequiresCustomerEquipmentChoice("airbnb-cleaning")).toBe(true);
   });
 
-  it("includes Shalean supplies for Deep and Moving", () => {
+  it("includes Shalean supplies for Deep, Moving and Airbnb", () => {
     expect(serviceSuppliesPolicy("deep-cleaning")).toBe("shalean_included");
     expect(serviceSuppliesPolicy("moving-cleaning")).toBe("shalean_included");
+    expect(serviceSuppliesPolicy("airbnb-cleaning")).toBe("shalean_included");
     expect(serviceIncludesShaleanSupplies("deep-cleaning")).toBe(true);
     expect(serviceIncludesShaleanSupplies("moving-cleaning")).toBe(true);
+    expect(serviceIncludesShaleanSupplies("airbnb-cleaning")).toBe(true);
     expect(serviceRequiresCustomerEquipmentChoice("deep-cleaning")).toBe(false);
     expect(serviceRequiresCustomerEquipmentChoice("moving-cleaning")).toBe(false);
+    expect(serviceRequiresCustomerEquipmentChoice("airbnb-cleaning")).toBe(false);
   });
 
   it("keeps Office and Carpet unresolved instead of inventing a policy", () => {
@@ -35,7 +36,7 @@ describe("serviceSuppliesPolicy", () => {
     const bySlug = Object.fromEntries(config.services.map((service) => [service.slug, service]));
 
     expect(bySlug["regular-cleaning"]?.showEquipmentQuestion).toBe(true);
-    expect(bySlug["airbnb-cleaning"]?.showEquipmentQuestion).toBe(true);
+    expect(bySlug["airbnb-cleaning"]?.showEquipmentQuestion).toBe(false);
     expect(bySlug["deep-cleaning"]?.showEquipmentQuestion).toBe(false);
     expect(bySlug["moving-cleaning"]?.showEquipmentQuestion).toBe(false);
     expect(bySlug["office-cleaning"]?.showEquipmentQuestion).toBe(false);
