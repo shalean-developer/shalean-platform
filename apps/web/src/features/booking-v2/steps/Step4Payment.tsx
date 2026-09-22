@@ -690,10 +690,32 @@ function PaymentSection({
         code?: string;
         fulfillmentMode?: string;
         customerMessage?: string;
+        previousTotalZar?: number;
+        updatedTotalZar?: number;
       };
 
       if (confirmRes.status === 401) {
         onSessionLost("Your sign-in session expired. Please sign in again to complete payment.");
+        setConfirming(false);
+        return;
+      }
+
+      if (confirmRes.status === 409 && confirmJson.code === "REQUOTE_REQUIRED" && confirmJson.pricingSummary) {
+        setValue("pricingSummary", confirmJson.pricingSummary, {
+          shouldDirty: false,
+          shouldValidate: false,
+        });
+        const previous =
+          typeof confirmJson.previousTotalZar === "number"
+            ? `R${confirmJson.previousTotalZar.toLocaleString("en-ZA")}`
+            : "your previous total";
+        const updated =
+          typeof confirmJson.updatedTotalZar === "number"
+            ? `R${confirmJson.updatedTotalZar.toLocaleString("en-ZA")}`
+            : "the updated total";
+        setError(
+          `Your price changed from ${previous} to ${updated}. Please review the updated total, then press Pay again to confirm it.`,
+        );
         setConfirming(false);
         return;
       }
