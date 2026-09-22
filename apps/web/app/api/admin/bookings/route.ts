@@ -70,6 +70,7 @@ import {
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import type { AdminMarkPaidMethod } from "@/lib/booking/adminMarkBookingPaid";
 import { settleAdminBookingPaymentAlreadyReceived } from "@/lib/admin/settleAdminBookingPaymentAlreadyReceived";
+import { resolveLegacyJobDurationWorkload } from "@/lib/booking/quote/resolveBookingDurationWorkload";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -936,6 +937,13 @@ export async function POST(request: Request) {
   const extrasPersist = sanitizeBookingExtrasForPersist(extrasAllowed, {
     where: "POST /api/admin/bookings",
   });
+  const adminSlotDurationMinutes = resolveLegacyJobDurationWorkload({
+    service: parseBookingServiceId(serviceRaw),
+    rooms,
+    bathrooms,
+    extraRooms: 0,
+    extras: extrasPersist.map((extra) => extra.slug),
+  }).duration_minutes;
 
   const adminSlotOverride =
     body.admin_slot_override === true ||
@@ -975,6 +983,7 @@ export async function POST(request: Request) {
         cleanerId,
         dateYmd: date,
         timeHm,
+        durationMinutes: adminSlotDurationMinutes,
       });
       if (conflictBookingId) {
         return NextResponse.json(
@@ -1451,6 +1460,7 @@ export async function POST(request: Request) {
         cleanerId: selectedCleanerId,
         dateYmd: date,
         timeHm,
+        durationMinutes: adminSlotDurationMinutes,
       });
       if (lateConflictMonthly) {
         return bail(
@@ -1961,6 +1971,7 @@ export async function POST(request: Request) {
         cleanerId,
         dateYmd: date,
         timeHm,
+        durationMinutes: adminSlotDurationMinutes,
       });
       if (lateConflictPaystack) {
         return bail(
