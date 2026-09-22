@@ -2,7 +2,7 @@ import type { CustomerPricingBreakdown } from "@/lib/booking-v2/types";
 
 export type BookingQuoteReadiness = {
   ready: boolean;
-  reason?: "catalog_loading" | "missing_quote" | "zero_quote" | "missing_duration";
+  reason?: "catalog_loading" | "missing_quote" | "missing_price_lock" | "zero_quote" | "missing_duration";
   message?: string;
 };
 
@@ -13,6 +13,8 @@ export type BookingQuoteReadiness = {
 export function assessBookingQuoteReadiness(params: {
   catalogLoading: boolean;
   pricingSummary: CustomerPricingBreakdown | null | undefined;
+  quoteLock?: { pricingVersionId?: string; quoteSignature?: string; lockedAt?: string; expiresAt?: string } | null;
+  requirePriceLock?: boolean;
 }): BookingQuoteReadiness {
   if (params.catalogLoading) {
     return {
@@ -20,6 +22,21 @@ export function assessBookingQuoteReadiness(params: {
       reason: "catalog_loading",
       message: "Loading live pricing…",
     };
+  }
+  if (params.requirePriceLock) {
+    const lock = params.quoteLock;
+    if (
+      !lock?.pricingVersionId?.trim() ||
+      !lock.quoteSignature?.trim() ||
+      !lock.lockedAt?.trim() ||
+      !lock.expiresAt?.trim()
+    ) {
+      return {
+        ready: false,
+        reason: "missing_price_lock",
+        message: "Refreshing your secured price…",
+      };
+    }
   }
   const p = params.pricingSummary;
   if (!p) {
