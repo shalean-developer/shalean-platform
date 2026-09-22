@@ -51,6 +51,20 @@ function stableStringify(value: unknown): string {
 
 export { stableStringify };
 
+export function pricingSnapshotServiceKeyForBookingV2Slug(
+  slug: string,
+): PricingSnapshotServiceId | null {
+  switch (slug) {
+    case "regular-cleaning": return "standard";
+    case "airbnb-cleaning": return "airbnb";
+    case "deep-cleaning": return "deep";
+    case "moving-cleaning": return "move";
+    case "carpet-cleaning": return "carpet";
+    case "office-cleaning": return "office";
+    default: return null;
+  }
+}
+
 function isServiceTariff(v: unknown): v is ServiceTariff {
   if (!v || typeof v !== "object") return false;
   const o = v as Record<string, unknown>;
