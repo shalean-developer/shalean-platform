@@ -112,32 +112,32 @@ ON CONFLICT (id) DO UPDATE SET
 
 -- ---------------------------------------------------------------------------
 -- pricing_booking_config — fees, recurring discounts, property factors
--- Matches defaultBookingV2FeesConfig() in apps/web/lib/booking-v2/bookingV2FeesConfig.ts
+-- Uses the runtime JSON keys consumed by parseBookingV2FeesConfig().
 -- ---------------------------------------------------------------------------
 INSERT INTO public.pricing_booking_config (id, config, updated_at)
 VALUES (
   'default',
   '{
-    "serviceFeeRule": "flat",
-    "serviceFeeFlatCents": 3000,
-    "serviceFeePercent": 5,
-    "extraCleanerFeeZar": 299,
-    "suppliesEquipmentFeeZar": 0,
-    "suppliesEquipmentCostZar": 150,
-    "recurringDiscounts": {
+    "service_fee_rule": "flat",
+    "service_fee_flat_cents": 3000,
+    "service_fee_percent": 5,
+    "extra_cleaner_fee_zar": 299,
+    "supplies_equipment_fee_zar": 0,
+    "supplies_equipment_cost_zar": 150,
+    "recurring_discounts": {
       "weekly":      {"type": "percent", "value": 10},
       "fortnightly": {"type": "percent", "value": 5},
       "monthly":     {"type": "percent", "value": 0},
       "custom":      {"type": "percent", "value": 0}
     },
-    "propertyFactorRates": {
+    "property_factor_rates": {
       "propertyType":  {"house": 0, "apartment": 0, "townhouse": 0},
       "officeSize":    {"small": 0, "medium": 50, "large": 120, "enterprise": 250},
       "lastCleaned":   {"never": 100, "6_months_plus": 80, "3_6_months": 40, "1_3_months": 0},
       "furnished":     {"yes": 50, "no": 0},
       "carpetType":    {"standard": 0, "thick_pile": 50, "berber": 30, "persian_rug": 80},
       "stains":        {"yes": 80, "no": 0},
-      "carpetRooms_per_room_zar": 150,
+      "carpetRooms_per_room_zar": 0,
       "rugs_per_unit_zar": 180,
       "sofa_per_unit_zar": 250
     }
