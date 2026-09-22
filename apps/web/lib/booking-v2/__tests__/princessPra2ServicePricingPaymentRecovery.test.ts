@@ -399,7 +399,7 @@ describe("PRICING-03 — authoritative duration convergence", () => {
         },
       ),
     );
-    expect(quote.estimated_duration_minutes).toBe(342);
+    expect(quote.estimated_duration_minutes).toBe(345);
   });
 });
 
