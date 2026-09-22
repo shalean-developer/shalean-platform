@@ -3,7 +3,6 @@ import { normalizePricingSummary } from "@/lib/booking-v2/types";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearerAuth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { getCleaningCreditReservationForBooking } from "@/lib/referrals/cleaningCreditReservations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -99,11 +98,15 @@ export async function GET(
         total: Number.isFinite(grossAmountZar) ? grossAmountZar : amountZar,
       }
     : null;
-  const creditReservation = await getCleaningCreditReservationForBooking(admin, bookingId);
-  const cleaningCreditZar =
-    creditReservation?.status === "reserved" || creditReservation?.status === "settled"
-      ? Math.max(0, Math.round(Number(creditReservation.amount_zar) || 0))
-      : 0;
+  const { data: creditReservation } = await admin
+    .from("cleaning_credit_reservations")
+    .select("amount_zar, status")
+    .eq("booking_id", bookingId)
+    .in("status", ["reserved", "settled"])
+    .maybeSingle();
+  const cleaningCreditZar = creditReservation
+    ? Math.max(0, Math.round(Number(creditReservation.amount_zar) || 0))
+    : 0;
 
   const normalizedPaymentStatus = String(data.payment_status ?? "").trim().toLowerCase();
   const paid =
