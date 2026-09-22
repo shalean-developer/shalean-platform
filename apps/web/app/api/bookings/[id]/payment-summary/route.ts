@@ -3,6 +3,7 @@ import { normalizePricingSummary } from "@/lib/booking-v2/types";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearerAuth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { getCleaningCreditReservationForBooking } from "@/lib/referrals/cleaningCreditReservations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -85,9 +86,24 @@ export async function GET(
   }
 
   const normalized = normalizePricingSummary(data.pricing_summary);
+  // total_price is the remaining cash payable after discounts/credit. Preserve
+  // the locked gross quote separately so pending-payment recovery never
+  // rewrites the booking summary to the cash remainder.
+  const grossAmountZar = normalized
+    ? Math.round(Number(normalized.estimated_total ?? normalized.total))
+    : amountZar;
   const pricingSummary = normalized
-    ? { ...normalized, estimated_total: amountZar, total: amountZar }
+    ? {
+        ...normalized,
+        estimated_total: Number.isFinite(grossAmountZar) ? grossAmountZar : amountZar,
+        total: Number.isFinite(grossAmountZar) ? grossAmountZar : amountZar,
+      }
     : null;
+  const creditReservation = await getCleaningCreditReservationForBooking(admin, bookingId);
+  const cleaningCreditZar =
+    creditReservation?.status === "reserved" || creditReservation?.status === "settled"
+      ? Math.max(0, Math.round(Number(creditReservation.amount_zar) || 0))
+      : 0;
 
   const normalizedPaymentStatus = String(data.payment_status ?? "").trim().toLowerCase();
   const paid =
@@ -119,6 +135,8 @@ export async function GET(
       ),
       address: String(data.location ?? data.suburb ?? ""),
       amountZar,
+      grossAmountZar: Number.isFinite(grossAmountZar) ? grossAmountZar : amountZar,
+      cleaningCreditZar,
       pricingSummary,
     },
     { headers: NO_STORE_HEADERS },
