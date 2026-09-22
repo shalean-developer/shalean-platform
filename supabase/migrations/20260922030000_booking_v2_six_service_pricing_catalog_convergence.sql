@@ -128,6 +128,16 @@ BEGIN
   SELECT count(*)
   INTO bad_count
   FROM public.pricing_extras p
+  WHERE p.slug IN ('inside-wardrobes','blinds-cleaning','appliances-cleaning','waste-removal','sofa-upholstery')
+    AND (p.is_active IS TRUE OR cardinality(p.service_slugs) <> 0);
+
+  IF bad_count <> 0 THEN
+    RAISE EXCEPTION 'Unapproved new extras must remain inactive and unassigned: % row(s)', bad_count;
+  END IF;
+
+  SELECT count(*)
+  INTO bad_count
+  FROM public.pricing_extras p
   WHERE p.service_slugs && ARRAY[
     'regular-cleaning',
     'deep-cleaning',
