@@ -463,6 +463,13 @@ describe("PRICING-07A — recurring locked rate and explicit payable", () => {
     const src = readFileSync(join(process.cwd(), "app/api/cron/charge-recurring-bookings/route.ts"), "utf8");
     expect(src).toContain("const payableRaw = row.total_price ?? row.total_paid_zar");
   });
+
+  it("hands the originating pricing version and summary into recurring provisioning", () => {
+    const src = readFileSync(join(process.cwd(), "lib/booking/syncPaidBookingSideEffects.ts"), "utf8");
+    expect(src).toContain('"pricing_version_id"');
+    expect(src).toContain("pricingVersionId: row.pricing_version_id ?? null");
+    expect(src).toContain("pricingSummary: row.pricing_summary ?? null");
+  });
 });
 
 describe("PRICING-06B.4 — frozen snapshot is the confirm pricing source", () => {
