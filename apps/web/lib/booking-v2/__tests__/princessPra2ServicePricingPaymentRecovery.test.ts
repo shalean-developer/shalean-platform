@@ -444,6 +444,26 @@ describe("PRINCESS PRA2 — duration label + quote consumption", () => {
   });
 });
 
+describe("PRICING-06 — explicit higher-price requote", () => {
+  it("confirm route blocks a stale quote when the authoritative price increased", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
+    expect(src).toContain('"REQUOTE_REQUIRED"');
+    expect(src).toContain("priceIncreased");
+    expect(src).toContain("previousTotalZar");
+    expect(src).toContain("updatedTotalZar");
+  });
+
+  it("Step4 replaces the quote and requires another Pay click", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/features/booking-v2/steps/Step4Payment.tsx"),
+      "utf8",
+    );
+    expect(src).toContain('confirmJson.code === "REQUOTE_REQUIRED"');
+    expect(src).toContain('setValue("pricingSummary", confirmJson.pricingSummary');
+    expect(src).toContain("Please review the updated total, then press Pay again to confirm it.");
+  });
+});
+
 describe("PRINCESS PRA2 — Paystack cancel recovery contracts", () => {
   it("Step4Payment persists pendingBookingId in form draft (static contract)", () => {
     const src = readFileSync(
