@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 
-import { SERVICE_EXTRA_SLUGS } from "@/lib/booking-v2/serviceExtraSlugs";
+import {
+  SERVICE_EXTRA_SLUGS,
+  isExtraSlugAllowedForService,
+} from "@/lib/booking-v2/serviceExtraSlugs";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 
 describe("SERVICE_EXTRA_SLUGS", () => {
@@ -32,7 +35,7 @@ describe("SERVICE_EXTRA_SLUGS", () => {
     expect(carpet).not.toBe(moving);
   });
 
-  it("matches Farai UAT Batch 2 product extras per service", () => {
+  it("matches the approved six-service customer add-on contract", () => {
     expect(SERVICE_EXTRA_SLUGS["regular-cleaning"]).toEqual([
       "inside-fridge",
       "inside-oven",
@@ -47,7 +50,6 @@ describe("SERVICE_EXTRA_SLUGS", () => {
       "interior-walls",
     ]);
     expect(SERVICE_EXTRA_SLUGS["moving-cleaning"]).toEqual([
-      "deposit-preparation",
       "appliances-cleaning",
       "inside-cabinets",
       "garage-cleaning",
@@ -57,5 +59,25 @@ describe("SERVICE_EXTRA_SLUGS", () => {
       "office-sanitisation",
       "waste-removal",
     ]);
+    expect(SERVICE_EXTRA_SLUGS["carpet-cleaning"]).toEqual([
+      "sofa-upholstery",
+      "pet-odour-treatment",
+      "fabric-protector",
+      "mattress-cleaning",
+    ]);
+    expect(SERVICE_EXTRA_SLUGS["airbnb-cleaning"]).toEqual([
+      "laundry",
+      "inside-oven",
+      "welcome-setup",
+      "interior-windows",
+      "inspection-photos",
+    ]);
+  });
+
+  it("rejects cross-service and self-referential extras", () => {
+    expect(isExtraSlugAllowedForService("carpet-cleaning", "carpet-cleaning")).toBe(false);
+    expect(isExtraSlugAllowedForService("office-cleaning", "inside-fridge")).toBe(false);
+    expect(isExtraSlugAllowedForService("deep-cleaning", "inside-cabinets")).toBe(true);
+    expect(isExtraSlugAllowedForService("airbnb-cleaning", "welcome-setup")).toBe(true);
   });
 });
