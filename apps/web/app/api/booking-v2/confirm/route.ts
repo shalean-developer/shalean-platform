@@ -61,6 +61,8 @@ import { createFreshPaymentPreparationToken } from "@/lib/booking/freshPaymentPr
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import { upsertPendingRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
 import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
+import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
+import { getOrCreatePricingVersionId } from "@/lib/booking/pricingVersionDb";
 
 export const runtime = "nodejs";
 
@@ -455,6 +457,24 @@ export async function POST(request: Request) {
     time: timeHm,
   });
 
+  // Freeze the exact six-service pricing catalog used for this checkout.
+  // New Booking V2 bookings must be reproducible even after future catalog changes.
+  const pricingRatesSnapshot = await buildPricingRatesSnapshotFromDb(supabase);
+  if (!pricingRatesSnapshot) {
+    return NextResponse.json(
+      { error: "Could not freeze the current pricing catalog. Please try again.", code: "PRICING_VERSION_UNAVAILABLE" },
+      { status: 503 },
+    );
+  }
+  const pricingVersion = await getOrCreatePricingVersionId(supabase, pricingRatesSnapshot);
+  if (!pricingVersion) {
+    return NextResponse.json(
+      { error: "Could not preserve the current pricing version. Please try again.", code: "PRICING_VERSION_UNAVAILABLE" },
+      { status: 503 },
+    );
+  }
+  const pricingVersionId = pricingVersion.id;
+
   const locationCtx = await resolveConfirmLocationContext(supabase, {
     suburb: data.suburb,
     serviceAreaLocationId: data.serviceAreaLocationId,
@@ -763,6 +783,7 @@ export async function POST(request: Request) {
         paystack_reference: paystackReference,
         customer_phone: customerPhone,
         ...persistPricing,
+        pricing_version_id: pricingVersionId,
         ...equipmentPersist,
         ...locationFields,
         price_snapshot: priceSnapshot,
@@ -1069,6 +1090,7 @@ export async function POST(request: Request) {
 
       // Pricing
       ...persistPricing,
+      pricing_version_id: pricingVersionId,
       ...equipmentPersist,
       price_snapshot: priceSnapshot,
       currency: "ZAR",
