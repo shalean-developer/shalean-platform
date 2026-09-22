@@ -63,6 +63,7 @@ import { upsertPendingRecurringPrepayment } from "@/lib/recurring/recurringPrepa
 import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
 import { fetchPricingRatesSnapshotByVersionId } from "@/lib/booking/pricingVersionDb";
 import { pricingSnapshotServiceKeyForBookingV2Slug } from "@/lib/pricing/pricingRatesSnapshot";
+import { liveServiceConfigFromPricingSnapshot } from "@/lib/booking-v2/liveServiceConfigFromPricingSnapshot";
 
 export const runtime = "nodejs";
 
@@ -356,15 +357,35 @@ export async function POST(request: Request) {
 
   const customerPhone = trimCustomerPhone(data.contactPhone) ?? customerPhoneFromAuth;
 
-  // ── 6. Server-side price verification ────────────────────────────────────────
+  // ── 6. Frozen-lock server-side price verification ──────────────────────────
   const equipmentRequiredFlag = data.equipmentRequired === "yes";
-  let liveConfig: LiveServiceConfig | null = null;
-  let feesConfig: Awaited<ReturnType<typeof loadBookingV2Catalog>>["feesConfig"] | null = null;
-  let serverEquipmentQuote: EquipmentQuoteResult | null = null;
-  let equipmentPricingSnapshot: ReturnType<typeof buildEquipmentPricingSnapshot> | null = null;
+  const feesConfig = defaultBookingV2FeesConfig();
+  const liveConfig = liveServiceConfigFromPricingSnapshot({
+    serviceSlug: data.serviceSlug,
+    snapshot: lockedPricingSnapshot,
+    feesConfig,
+  });
+  if (!liveConfig) {
+    return NextResponse.json(
+      { error: "Your locked service pricing is unavailable. Refresh pricing and try again.", code: "QUOTE_LOCK_SERVICE_MISSING" },
+      { status: 409 },
+    );
+  }
 
-  let catalogLoaded = false;
-  let serverBreakdown = buildSignedCustomerPricingFromForm({
+  // Equipment logistics is already part of the signed locked quote. Do not
+  // re-price it from today's logistics configuration during confirmation.
+  const serverEquipmentQuote =
+    equipmentRequiredFlag
+      ? ((data.equipmentQuote as EquipmentQuoteResult | null) ?? null)
+      : null;
+  const equipmentPricingSnapshot = serverEquipmentQuote
+    ? buildEquipmentPricingSnapshot({
+        config: await loadEquipmentPricingConfig(),
+        quote: serverEquipmentQuote,
+      })
+    : null;
+
+  const serverBreakdown = buildSignedCustomerPricingFromForm({
     serviceSlug: data.serviceSlug,
     values: {
       serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
@@ -373,64 +394,18 @@ export async function POST(request: Request) {
       cleanerCount: data.cleanerCount ?? 1,
       bookingType: data.bookingType,
       recurringFrequency: data.recurringFrequency ?? "",
-      equipmentRequired: data.equipmentRequired ?? "",
-      equipmentQuote: (data.equipmentQuote as EquipmentQuoteResult | null) ?? null,
+      equipmentRequired: equipmentRequiredFlag ? "yes" : "no",
+      equipmentQuote: serverEquipmentQuote,
     },
-    liveConfig: null,
-    feesConfig: null,
+    liveConfig,
+    feesConfig,
     vipTier,
   });
-
-  try {
-    const catalogPayload = await loadBookingV2Catalog();
-    feesConfig = catalogPayload.feesConfig;
-    liveConfig = catalogPayload.catalog[data.serviceSlug] ?? null;
-
-    const showEquipment =
-      liveConfig?.showEquipmentQuestion ??
-      liveConfig?.showCleaningProductsQuestion ??
-      serviceShowsEquipmentQuestion(data.serviceSlug);
-
-    if (showEquipment && equipmentRequiredFlag) {
-      const equipConfig = await loadEquipmentPricingConfig();
-      serverEquipmentQuote = await quoteEquipmentForAddress({
-        config: equipConfig,
-        address: data.address,
-        suburb: data.suburb,
-        city: data.city,
-        postalCode: data.postalCode,
-        equipmentRequired: true,
-      });
-      equipmentPricingSnapshot = buildEquipmentPricingSnapshot({
-        config: equipConfig,
-        quote: serverEquipmentQuote,
-      });
-    }
-
-    serverBreakdown = buildSignedCustomerPricingFromForm({
-      serviceSlug: data.serviceSlug,
-      values: {
-        serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
-        selectedExtras: data.selectedExtras ?? [],
-        cleanerMode: data.cleanerMode,
-        cleanerCount: data.cleanerCount ?? 1,
-        bookingType: data.bookingType,
-        recurringFrequency: data.recurringFrequency ?? "",
-        equipmentRequired: equipmentRequiredFlag ? "yes" : data.equipmentRequired === "no" ? "no" : "",
-        equipmentQuote: serverEquipmentQuote,
-      },
-      liveConfig,
-      feesConfig,
-      vipTier,
-    });
-    catalogLoaded = true;
-  } catch (e) {
-    console.warn("[booking-v2/confirm] server price check failed:", e);
-  }
+  const catalogLoaded = true;
 
   const quoteInput: CustomerTotalInput & { serviceSlug: ServiceSlug } = {
     serviceSlug: data.serviceSlug,
-    serviceLabel: liveConfig?.label ?? data.serviceSlug,
+    serviceLabel: liveConfig.label,
     serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
     selectedExtras: data.selectedExtras ?? [],
     cleanerMode: data.cleanerMode,
@@ -438,19 +413,24 @@ export async function POST(request: Request) {
     bookingType: data.bookingType,
     recurringFrequency: data.recurringFrequency ?? "",
     catalog: {
-      basePrice: liveConfig?.basePrice ?? 0,
-      pricePerBedroom: liveConfig?.pricePerBedroom ?? 0,
-      pricePerBathroom: liveConfig?.pricePerBathroom ?? 0,
-      pricePerExtraRoom: liveConfig?.pricePerExtraRoom ?? 0,
-      pricePerExtraCleaner: liveConfig?.pricePerExtraCleaner ?? 0,
-      estimatedDurationHours: liveConfig?.estimatedDurationHours ?? 3,
-      minDurationHours: liveConfig?.minDurationHours ?? 3.5,
-      maxDurationHours: liveConfig?.maxDurationHours ?? 8,
-      extras: liveConfig?.extras ?? [],
-      allowsExtraCleaner: liveConfig?.allowsExtraCleaner,
-      showEquipmentQuestion: liveConfig?.showEquipmentQuestion,
+      basePrice: liveConfig.basePrice,
+      pricePerBedroom: liveConfig.pricePerBedroom,
+      pricePerBathroom: liveConfig.pricePerBathroom,
+      pricePerExtraRoom: liveConfig.pricePerExtraRoom,
+      pricePerExtraCleaner: liveConfig.pricePerExtraCleaner,
+      serviceFeeZar: liveConfig.serviceFeeZar,
+      estimatedDurationHours: liveConfig.estimatedDurationHours,
+      durationBaseHours: liveConfig.durationBaseHours,
+      durationPerBedroomHours: liveConfig.durationPerBedroomHours,
+      durationPerBathroomHours: liveConfig.durationPerBathroomHours,
+      durationPerExtraRoomHours: liveConfig.durationPerExtraRoomHours,
+      minDurationHours: liveConfig.minDurationHours,
+      maxDurationHours: liveConfig.maxDurationHours,
+      extras: liveConfig.extras,
+      allowsExtraCleaner: liveConfig.allowsExtraCleaner,
+      showEquipmentQuestion: liveConfig.showEquipmentQuestion,
     },
-    feesConfig: feesConfig ?? defaultBookingV2FeesConfig(),
+    feesConfig,
     equipmentRequired: equipmentRequiredFlag,
     equipmentQuote: serverEquipmentQuote,
     vipTier,
@@ -472,7 +452,7 @@ export async function POST(request: Request) {
       typeof clientPricingSummary.estimated_total === "number"
         ? clientPricingSummary.estimated_total
         : clientPricingSummary.total;
-    const serverTotal = serverBreakdown!.estimated_total;
+    const serverTotal = serverBreakdown.estimated_total;
     const priceIncreased =
       typeof clientReviewedTotal === "number" &&
       Number.isFinite(clientReviewedTotal) &&
