@@ -355,12 +355,12 @@ async function seedCitiesAndLocations(admin) {
 async function seedCatalog(admin) {
   // pricing_services
   const pricingServices = [
-    { slug: "standard", name: "Regular Cleaning",  base_price: 350, price_per_bedroom: 80,  price_per_bathroom: 60, price_per_extra_room: 30, min_hours: 2, max_hours: 8,  duration_base: 3.5, duration_per_bedroom: 0.75, duration_per_bathroom: 0.5, duration_per_extra_room: 0.3, is_active: true, sort_order: 10 },
-    { slug: "deep",     name: "Deep Cleaning",     base_price: 950, price_per_bedroom: 100, price_per_bathroom: 80, price_per_extra_room: 40, min_hours: 3, max_hours: 10, duration_base: 5.0, duration_per_bedroom: 1.0,  duration_per_bathroom: 0.75, duration_per_extra_room: 0.5, is_active: true, sort_order: 20 },
-    { slug: "move",     name: "Moving Cleaning",  base_price:1100, price_per_bedroom: 120, price_per_bathroom: 90, price_per_extra_room: 45, min_hours: 4, max_hours: 12, duration_base: 6.0, duration_per_bedroom: 1.0,  duration_per_bathroom: 0.75, duration_per_extra_room: 0.5, is_active: true, sort_order: 30 },
-    { slug: "office",   name: "Office Cleaning",  base_price: 450, price_per_bedroom: 60,  price_per_bathroom: 50, price_per_extra_room: 30, min_hours: 2, max_hours: 8,  duration_base: 3.5, duration_per_bedroom: 0.5,  duration_per_bathroom: 0.5, duration_per_extra_room: 0.3, is_active: true, sort_order: 40 },
-    { slug: "carpet",   name: "Carpet Cleaning",  base_price: 500, price_per_bedroom: 120, price_per_bathroom: 0,  price_per_extra_room: 0,  min_hours: 2, max_hours: 8,  duration_base: 2.0, duration_per_bedroom: 0.75, duration_per_bathroom: 0.0, duration_per_extra_room: 0.0, is_active: true, sort_order: 50 },
-    { slug: "airbnb",   name: "Airbnb Cleaning",  base_price: 400, price_per_bedroom: 80,  price_per_bathroom: 60, price_per_extra_room: 30, min_hours: 2, max_hours: 8,  duration_base: 3.0, duration_per_bedroom: 0.75, duration_per_bathroom: 0.5, duration_per_extra_room: 0.3, is_active: true, sort_order: 60 },
+    { slug: "office",   name: "Office Cleaning",   base_price: 300,  price_per_bedroom: 35,  price_per_bathroom: 45,  price_per_extra_room: 25,  service_fee_zar: null, min_hours: 3.5, max_hours: 8, duration_base: 3.5, duration_per_bedroom: 0.5,  duration_per_bathroom: 0.5,  duration_per_extra_room: 0.3,  is_active: true, sort_order: 10 },
+    { slug: "standard", name: "Standard Cleaning", base_price: 250,  price_per_bedroom: 30,  price_per_bathroom: 35,  price_per_extra_room: 35,  service_fee_zar: 30,   min_hours: 3.5, max_hours: 8, duration_base: 3.5, duration_per_bedroom: 0.5,  duration_per_bathroom: 0.5,  duration_per_extra_room: 0.3,  is_active: true, sort_order: 20 },
+    { slug: "airbnb",   name: "Airbnb Cleaning",   base_price: 250,  price_per_bedroom: 30,  price_per_bathroom: 35,  price_per_extra_room: 40,  service_fee_zar: 30,   min_hours: 3.5, max_hours: 8, duration_base: 3.5, duration_per_bedroom: 0.5,  duration_per_bathroom: 0.5,  duration_per_extra_room: 0.3,  is_active: true, sort_order: 30 },
+    { slug: "deep",     name: "Deep Cleaning",     base_price: 1200, price_per_bedroom: 150, price_per_bathroom: 200, price_per_extra_room: 120, service_fee_zar: 60,   min_hours: 5,   max_hours: 8, duration_base: 4.0, duration_per_bedroom: 0.75, duration_per_bathroom: 0.75, duration_per_extra_room: 0.5, is_active: true, sort_order: 40 },
+    { slug: "move",     name: "Move in / out",     base_price: 1200, price_per_bedroom: 150, price_per_bathroom: 200, price_per_extra_room: 100, service_fee_zar: 60,   min_hours: 5,   max_hours: 8, duration_base: 4.0, duration_per_bedroom: 0.75, duration_per_bathroom: 0.75, duration_per_extra_room: 0.5, is_active: true, sort_order: 50 },
+    { slug: "carpet",   name: "Carpet Cleaning",   base_price: 500,  price_per_bedroom: 350, price_per_bathroom: 0,   price_per_extra_room: 70,  service_fee_zar: 50,   min_hours: 3.5, max_hours: 8, duration_base: 4.0, duration_per_bedroom: 0.65, duration_per_bathroom: 0.65, duration_per_extra_room: 0.45,is_active: true, sort_order: 60 },
   ];
 
   for (const row of pricingServices) {
@@ -369,32 +369,26 @@ async function seedCatalog(admin) {
 
   // pricing_extras
   const extras = [
-    { slug: "inside-fridge",      name: "Inside Fridge",      description: "Interior fridge clean",                        price: 150, service_type: "light", is_popular: true,  is_active: true, sort_order: 10 },
-    { slug: "inside-oven",        name: "Inside Oven",        description: "Deep clean inside the oven",                   price: 200, service_type: "light", is_popular: true,  is_active: true, sort_order: 20 },
-    { slug: "laundry",            name: "Laundry",            description: "Wash and hang up to 1 load",                   price: 150, service_type: "light", is_popular: false, is_active: true, sort_order: 30 },
-    { slug: "ironing",            name: "Ironing",            description: "Ironing up to 1 load",                         price: 150, service_type: "light", is_popular: false, is_active: true, sort_order: 40 },
-    { slug: "interior-windows",   name: "Interior Windows",   description: "Clean all interior windows",                   price: 180, service_type: "light", is_popular: false, is_active: true, sort_order: 50 },
-    { slug: "inside-cabinets",    name: "Cupboards",          description: "Clean inside kitchen and bathroom cupboards",   price: 180, service_type: "light", is_popular: false, is_active: true, sort_order: 60 },
-    { slug: "water-plants",       name: "Water Plants",       description: "Water indoor plants",                           price: 80,  service_type: "light", is_popular: false, is_active: true, sort_order: 70 },
-    { slug: "interior-walls",     name: "Walls",              description: "Wipe down interior walls",                     price: 150, service_type: "light", is_popular: false, is_active: true, sort_order: 80 },
-    { slug: "balcony-cleaning",   name: "Balcony",            description: "Sweep and clean balcony or patio",             price: 200, service_type: "heavy", is_popular: false, is_active: true, sort_order: 110 },
-    { slug: "carpet-cleaning",    name: "Carpet clean",       description: "Steam clean carpeted rooms",                   price: 350, service_type: "heavy", is_popular: false, is_active: true, sort_order: 120 },
-    { slug: "ceiling-cleaning",   name: "Ceilings",           description: "Dust and wipe ceilings",                       price: 300, service_type: "heavy", is_popular: false, is_active: true, sort_order: 130 },
-    { slug: "garage-cleaning",    name: "Garage",             description: "Sweep and clean the garage",                   price: 200, service_type: "heavy", is_popular: false, is_active: true, sort_order: 140 },
-    { slug: "mattress-cleaning",  name: "Mattress",           description: "Clean and sanitise one mattress",              price: 250, service_type: "heavy", is_popular: false, is_active: true, sort_order: 150 },
-    { slug: "outside-windows",    name: "Outside Windows",    description: "Clean accessible exterior windows",            price: 250, service_type: "heavy", is_popular: false, is_active: true, sort_order: 160 },
-    { slug: "inside-wardrobes",   name: "Wardrobes",          description: "Clean inside wardrobes and shelving",          price: 180, service_type: "heavy", is_popular: false, is_active: true, sort_order: 170 },
-    { slug: "blinds-cleaning",    name: "Blinds",             description: "Dust and wipe blinds",                         price: 200, service_type: "heavy", is_popular: false, is_active: true, sort_order: 180 },
-    { slug: "stain-treatment",    name: "Stain Treatment",    description: "Professional stain removal",                   price: 200, service_type: "heavy", is_popular: true,  is_active: true, sort_order: 210 },
-    { slug: "pet-odour-treatment",name: "Pet Odour",          description: "Enzyme-based odour neutraliser",               price: 220, service_type: "heavy", is_popular: false, is_active: true, sort_order: 220 },
-    { slug: "fabric-protector",   name: "Fabric Protector",   description: "Scotchgard-style protection spray",            price: 180, service_type: "heavy", is_popular: false, is_active: true, sort_order: 230 },
-    { slug: "sofa-upholstery",    name: "Sofa / Upholstery",  description: "Clean one sofa or upholstered seat",           price: 250, service_type: "heavy", is_popular: false, is_active: true, sort_order: 240 },
-    { slug: "welcome-setup",      name: "Welcome Setup",      description: "Arrange towels, toiletries, staging",          price: 150, service_type: "light", is_popular: false, is_active: true, sort_order: 310 },
-    { slug: "inspection-photos",  name: "Post-clean Photos",  description: "Timestamped photos for your records",          price: 100, service_type: "light", is_popular: false, is_active: true, sort_order: 320 },
-    { slug: "office-kitchen",     name: "Office Kitchen",     description: "Clean shared office kitchenette",              price: 200, service_type: "light", is_popular: false, is_active: true, sort_order: 410 },
-    { slug: "office-sanitisation",name: "Sanitisation",       description: "High-touch sanitisation of desks and areas",   price: 250, service_type: "light", is_popular: false, is_active: true, sort_order: 420 },
-    { slug: "deposit-preparation",name: "Deposit Prep",       description: "Extra detail for rental deposit inspection",   price: 250, service_type: "heavy", is_popular: false, is_active: true, sort_order: 510 },
-    { slug: "appliances-cleaning",name: "Appliances",         description: "Clean major kitchen appliances inside and out",price: 220, service_type: "heavy", is_popular: false, is_active: true, sort_order: 520 },
+    { slug: "inside-fridge",       name: "Inside Fridge",      description: "Interior fridge clean",                         price: 150, service_type: "light", is_popular: true,  is_active: true, sort_order: 10,  service_slugs: ["regular-cleaning"] },
+    { slug: "inside-oven",         name: "Inside Oven",        description: "Deep clean inside the oven",                    price: 200, service_type: "light", is_popular: true,  is_active: true, sort_order: 20,  service_slugs: ["regular-cleaning", "airbnb-cleaning"] },
+    { slug: "laundry",             name: "Laundry",            description: "Wash and hang up to 1 load",                    price: 150, service_type: "light", is_popular: false, is_active: true, sort_order: 30,  service_slugs: ["regular-cleaning", "airbnb-cleaning"] },
+    { slug: "ironing",             name: "Ironing",            description: "Ironing up to 1 load",                          price: 150, service_type: "light", is_popular: false, is_active: true, sort_order: 40,  service_slugs: ["regular-cleaning"] },
+    { slug: "interior-windows",    name: "Interior Windows",   description: "Clean all interior windows",                    price: 180, service_type: "light", is_popular: false, is_active: true, sort_order: 50,  service_slugs: ["regular-cleaning", "airbnb-cleaning"] },
+    { slug: "inside-cabinets",     name: "Cupboards",          description: "Clean inside kitchen and bathroom cupboards",   price: 180, service_type: "heavy", is_popular: false, is_active: true, sort_order: 60,  service_slugs: ["deep-cleaning", "moving-cleaning"] },
+    { slug: "interior-walls",      name: "Walls",              description: "Wipe down interior walls",                      price: 150, service_type: "heavy", is_popular: false, is_active: true, sort_order: 80,  service_slugs: ["deep-cleaning"] },
+    { slug: "garage-cleaning",     name: "Garage",             description: "Sweep and clean the garage",                    price: 200, service_type: "heavy", is_popular: false, is_active: true, sort_order: 140, service_slugs: ["moving-cleaning"] },
+    { slug: "mattress-cleaning",   name: "Mattress",           description: "Clean and sanitise one mattress",               price: 250, service_type: "heavy", is_popular: false, is_active: true, sort_order: 150, service_slugs: ["carpet-cleaning"] },
+    { slug: "inside-wardrobes",    name: "Wardrobes",          description: "Clean inside wardrobes and shelving",           price: 180, service_type: "heavy", is_popular: false, is_active: true, sort_order: 170, service_slugs: ["deep-cleaning"] },
+    { slug: "blinds-cleaning",     name: "Blinds",             description: "Dust and wipe blinds",                          price: 200, service_type: "heavy", is_popular: false, is_active: true, sort_order: 180, service_slugs: ["deep-cleaning"] },
+    { slug: "pet-odour-treatment", name: "Pet Odour",          description: "Enzyme-based odour neutraliser",                price: 220, service_type: "heavy", is_popular: false, is_active: true, sort_order: 220, service_slugs: ["carpet-cleaning"] },
+    { slug: "fabric-protector",    name: "Fabric Protector",   description: "Scotchgard-style protection spray",             price: 180, service_type: "heavy", is_popular: false, is_active: true, sort_order: 230, service_slugs: ["carpet-cleaning"] },
+    { slug: "sofa-upholstery",     name: "Sofa / Upholstery",  description: "Clean one sofa or upholstered seat",            price: 250, service_type: "heavy", is_popular: false, is_active: true, sort_order: 240, service_slugs: ["carpet-cleaning"] },
+    { slug: "welcome-setup",       name: "Welcome Setup",      description: "Arrange towels, toiletries, staging",           price: 150, service_type: "light", is_popular: false, is_active: true, sort_order: 310, service_slugs: ["airbnb-cleaning"] },
+    { slug: "inspection-photos",   name: "Post-clean Photos",  description: "Timestamped photos for your records",           price: 100, service_type: "light", is_popular: false, is_active: true, sort_order: 320, service_slugs: ["airbnb-cleaning"] },
+    { slug: "office-kitchen",      name: "Kitchen",            description: "Clean shared office kitchenette",               price: 200, service_type: "light", is_popular: false, is_active: true, sort_order: 410, service_slugs: ["office-cleaning"] },
+    { slug: "office-sanitisation", name: "Sanitisation",       description: "High-touch sanitisation of desks and common areas", price: 250, service_type: "light", is_popular: false, is_active: true, sort_order: 420, service_slugs: ["office-cleaning"] },
+    { slug: "waste-removal",       name: "Waste Removal",      description: "Remove bagged office waste",                    price: 180, service_type: "light", is_popular: false, is_active: true, sort_order: 430, service_slugs: ["office-cleaning"] },
+    { slug: "appliances-cleaning", name: "Appliances",         description: "Clean major kitchen appliances inside and out", price: 220, service_type: "heavy", is_popular: false, is_active: true, sort_order: 520, service_slugs: ["moving-cleaning"] },
   ];
   for (const row of extras) {
     await admin.from("pricing_extras").upsert(row, { onConflict: "slug" });
@@ -402,22 +396,28 @@ async function seedCatalog(admin) {
 
   // pricing_booking_config
   const feesConfig = {
-    serviceFeeRule: "flat", serviceFeeFlatCents: 3000, serviceFeePercent: 5,
-    extraCleanerFeeZar: 299, suppliesEquipmentFeeZar: 0, suppliesEquipmentCostZar: 150,
-    recurringDiscounts: {
+    service_fee_rule: "flat",
+    service_fee_flat_cents: 3000,
+    service_fee_percent: 5,
+    extra_cleaner_fee_zar: 299,
+    supplies_equipment_fee_zar: 0,
+    supplies_equipment_cost_zar: 150,
+    recurring_discounts: {
       weekly:      { type: "percent", value: 10 },
       fortnightly: { type: "percent", value: 5 },
       monthly:     { type: "percent", value: 0 },
       custom:      { type: "percent", value: 0 },
     },
-    propertyFactorRates: {
-      propertyType:  { house: 0, apartment: 0, townhouse: 0 },
-      officeSize:    { small: 0, medium: 50, large: 120, enterprise: 250 },
-      lastCleaned:   { never: 100, "6_months_plus": 80, "3_6_months": 40, "1_3_months": 0 },
-      furnished:     { yes: 50, no: 0 },
-      carpetType:    { standard: 0, thick_pile: 50, berber: 30, persian_rug: 80 },
-      stains:        { yes: 80, no: 0 },
-      carpetRooms_per_room_zar: 150, rugs_per_unit_zar: 180, sofa_per_unit_zar: 250,
+    property_factor_rates: {
+      propertyType: { house: 0, apartment: 0, townhouse: 0 },
+      officeSize: { small: 0, medium: 50, large: 120, enterprise: 250 },
+      lastCleaned: { never: 100, "6_months_plus": 80, "3_6_months": 40, "1_3_months": 0 },
+      furnished: { yes: 50, no: 0 },
+      carpetType: { standard: 0, thick_pile: 50, berber: 30, persian_rug: 80 },
+      stains: { yes: 80, no: 0 },
+      carpetRooms_per_room_zar: 0,
+      rugs_per_unit_zar: 180,
+      sofa_per_unit_zar: 250,
     },
   };
   await admin.from("pricing_booking_config").upsert(
@@ -427,12 +427,12 @@ async function seedCatalog(admin) {
 
   // services (marketing)
   const marketingServices = [
-    { id: "22222222-aaaa-4000-8000-000000000001", slug: "regular-cleaning", title: "Regular Cleaning", description: "Keep your home fresh and comfortable with a reliable weekly or once-off clean.", starting_price: 350, features: ["Bedrooms & bathrooms","Kitchen & living areas","Vacuuming & mopping"], sort_order: 10, is_active: true },
-    { id: "22222222-aaaa-4000-8000-000000000002", slug: "deep-cleaning",    title: "Deep Cleaning",    description: "A thorough top-to-bottom clean of every surface, corner, and room.",              starting_price: 950, features: ["All regular areas","Walls, skirting, blinds","Oven & fridge interior"], sort_order: 20, is_active: true },
-    { id: "22222222-aaaa-4000-8000-000000000003", slug: "moving-cleaning",  title: "Moving Cleaning",  description: "Move-in or move-out clean for a smooth handover and full deposit return.",          starting_price: 1100,features: ["Full property deep clean","Deposit-ready standard","Furnished or empty"],   sort_order: 30, is_active: true },
-    { id: "22222222-aaaa-4000-8000-000000000004", slug: "office-cleaning",  title: "Office Cleaning",  description: "Professional cleaning for offices and workspaces.",                                 starting_price: 450, features: ["Desks & workstations","Kitchenette & bathrooms","Vacuuming & bins"],      sort_order: 40, is_active: true },
+    { id: "22222222-aaaa-4000-8000-000000000001", slug: "regular-cleaning", title: "Regular Cleaning", description: "Keep your home fresh and comfortable with a reliable weekly or once-off clean.", starting_price: 250, features: ["Bedrooms & bathrooms","Kitchen & living areas","Vacuuming & mopping"], sort_order: 10, is_active: true },
+    { id: "22222222-aaaa-4000-8000-000000000002", slug: "deep-cleaning",    title: "Deep Cleaning",    description: "A thorough top-to-bottom clean of every surface, corner, and room.",              starting_price: 1200, features: ["All regular areas","Walls, skirting, blinds","Oven & fridge interior"], sort_order: 20, is_active: true },
+    { id: "22222222-aaaa-4000-8000-000000000003", slug: "moving-cleaning",  title: "Moving Cleaning",  description: "Move-in or move-out clean for a smooth handover and full deposit return.",          starting_price: 1200,features: ["Full property deep clean","Deposit-ready standard","Furnished or empty"],   sort_order: 30, is_active: true },
+    { id: "22222222-aaaa-4000-8000-000000000004", slug: "office-cleaning",  title: "Office Cleaning",  description: "Professional cleaning for offices and workspaces.",                                 starting_price: 300, features: ["Desks & workstations","Kitchenette & bathrooms","Vacuuming & bins"],      sort_order: 40, is_active: true },
     { id: "22222222-aaaa-4000-8000-000000000005", slug: "carpet-cleaning",  title: "Carpet Cleaning",  description: "Steam and shampoo carpets, rugs and upholstery.",                                   starting_price: 500, features: ["Hot-water extraction","Stain pre-treatment","Rugs & upholstery"],         sort_order: 50, is_active: true },
-    { id: "22222222-aaaa-4000-8000-000000000006", slug: "airbnb-cleaning",  title: "Airbnb Cleaning",  description: "Fast, reliable turnovers that keep your listing sparkling.",                         starting_price: 400, features: ["Linen changeover","Restocking & welcome setup","Photo-ready result"],    sort_order: 60, is_active: true },
+    { id: "22222222-aaaa-4000-8000-000000000006", slug: "airbnb-cleaning",  title: "Airbnb Cleaning",  description: "Fast, reliable turnovers that keep your listing sparkling.",                         starting_price: 250, features: ["Linen changeover","Restocking & welcome setup","Photo-ready result"],    sort_order: 60, is_active: true },
   ];
   for (const row of marketingServices) {
     await admin.from("services").upsert(row, { onConflict: "id" });
