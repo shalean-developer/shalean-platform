@@ -423,15 +423,36 @@ export async function POST(request: Request) {
     clientPricingSummary,
     quoteInput,
   });
-  // Soft failures = client's cached quote is stale. Proceed with server-authoritative
-  // pricing so customers are not blocked; Paystack charges the recomputed amount.
   if (!quoteValidation.ok && !quoteValidation.soft) {
     console.error("[booking-v2/confirm] quote validation failed:", quoteValidation.code);
     return NextResponse.json({ error: quoteValidation.error }, { status: quoteValidation.status });
   }
   if (!quoteValidation.ok && quoteValidation.soft) {
+    const clientReviewedTotal =
+      typeof clientPricingSummary.estimated_total === "number"
+        ? clientPricingSummary.estimated_total
+        : clientPricingSummary.total;
+    const serverTotal = serverBreakdown!.estimated_total;
+    const priceIncreased =
+      typeof clientReviewedTotal === "number" &&
+      Number.isFinite(clientReviewedTotal) &&
+      serverTotal > clientReviewedTotal + 0.005;
+
+    if (priceIncreased) {
+      return NextResponse.json(
+        {
+          error: "Your booking price has changed. Review the updated total before continuing to payment.",
+          code: "REQUOTE_REQUIRED",
+          pricingSummary: serverBreakdown,
+          previousTotalZar: clientReviewedTotal,
+          updatedTotalZar: serverTotal,
+        },
+        { status: 409 },
+      );
+    }
+
     console.warn(
-      "[booking-v2/confirm] stale client quote accepted; using server pricing:",
+      "[booking-v2/confirm] stale client quote accepted without price increase:",
       quoteValidation.code,
     );
   }
