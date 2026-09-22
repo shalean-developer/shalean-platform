@@ -18,6 +18,7 @@ import { resolveZohoCustomerContactForBooking } from "@/lib/zoho/resolveZohoCust
 import { provisionV2RecurringPlan } from "@/lib/recurring/provisionV2RecurringPlan";
 import { preferredCleanerIdsFromSnapshot } from "@/lib/booking/persistPreferredCleaners";
 import { activateRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
+import { resolvePersistedBookingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
 
 export type SyncPaidBookingInvoiceResult =
   | {
@@ -69,6 +70,9 @@ type PaidBookingRow = {
   bathrooms?: number | null;
   total_paid_zar?: number | null;
   duration_minutes?: number | null;
+  estimated_duration_minutes?: number | null;
+  pricing_summary?: unknown;
+  duration_hours?: number | null;
   zoho_invoice_id?: string | null;
   is_monthly_billing_booking?: boolean | null;
   sales_document_id?: string | null;
@@ -212,6 +216,9 @@ async function loadPaidBookingRow(
     "bathrooms",
     "total_paid_zar",
     "duration_minutes",
+    "estimated_duration_minutes",
+    "pricing_summary",
+    "duration_hours",
     "zoho_invoice_id",
     "is_monthly_billing_booking",
     "sales_document_id",
@@ -535,6 +542,16 @@ export async function syncPaidBookingSideEffects(
 
   if (isRecurring) {
     try {
+      const authoritativeDurationMinutes = resolvePersistedBookingDurationMinutes(row);
+      if (authoritativeDurationMinutes == null) {
+        await logSystemEvent({
+          level: "warn",
+          source: "recurring/provision",
+          message: "recurring_plan_duration_missing",
+          context: { bookingId },
+        });
+        return { kind: "failed", error: "recurring_plan_duration_missing" };
+      }
       const prepaid = recurringPrepaymentFromSnapshot(row.booking_snapshot);
       const planResult = await provisionV2RecurringPlan(admin, {
         bookingId,
@@ -545,7 +562,7 @@ export async function syncPaidBookingSideEffects(
         endDate: row.recurring_end_date ?? null,
         totalPaidZar: totalZar,
         perVisitPriceZar: prepaid?.perVisitZar ?? totalZar,
-        durationMinutes: row.duration_minutes ?? 120,
+        durationMinutes: authoritativeDurationMinutes,
         service: row.service ?? "regular-cleaning",
         time: row.time ?? "09:00",
         location: row.location ?? "",
