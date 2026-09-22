@@ -62,7 +62,8 @@ import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayme
 import { upsertPendingRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
 import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
 import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
-import { getOrCreatePricingVersionId } from "@/lib/booking/pricingVersionDb";
+import { fetchPricingRatesSnapshotByVersionId, getOrCreatePricingVersionId } from "@/lib/booking/pricingVersionDb";
+import { pricingSnapshotServiceKeyForBookingV2Slug } from "@/lib/pricing/pricingRatesSnapshot";
 
 export const runtime = "nodejs";
 
@@ -230,6 +231,46 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   if (!supabase) {
     return NextResponse.json({ error: "Service temporarily unavailable." }, { status: 503 });
+  }
+
+  // A valid quote lock freezes the catalog used when the customer last changed
+  // a price-affecting input. Confirm must not silently move that customer to newer rates.
+  const suppliedQuoteLock = data.quoteLock ?? null;
+  if (!suppliedQuoteLock) {
+    return NextResponse.json(
+      { error: "Your price lock is missing. Please wait for pricing to refresh and try again.", code: "QUOTE_LOCK_REQUIRED" },
+      { status: 409 },
+    );
+  }
+  const lockExpiryMs = Date.parse(suppliedQuoteLock.expiresAt);
+  if (!Number.isFinite(lockExpiryMs) || lockExpiryMs <= Date.now()) {
+    return NextResponse.json(
+      { error: "Your price lock expired. Refresh the quote before continuing.", code: "QUOTE_LOCK_EXPIRED" },
+      { status: 409 },
+    );
+  }
+  if (suppliedQuoteLock.quoteSignature !== data.pricingSummary.quote_signature) {
+    return NextResponse.json(
+      { error: "Your price lock no longer matches this booking. Refresh pricing and try again.", code: "QUOTE_LOCK_MISMATCH" },
+      { status: 409 },
+    );
+  }
+  const lockedPricingSnapshot = await fetchPricingRatesSnapshotByVersionId(
+    supabase,
+    suppliedQuoteLock.pricingVersionId,
+  );
+  if (!lockedPricingSnapshot) {
+    return NextResponse.json(
+      { error: "Your locked pricing version is unavailable. Refresh pricing and try again.", code: "QUOTE_LOCK_VERSION_MISSING" },
+      { status: 409 },
+    );
+  }
+  const lockedServiceKey = pricingSnapshotServiceKeyForBookingV2Slug(data.serviceSlug);
+  if (!lockedServiceKey || !lockedPricingSnapshot.services[lockedServiceKey]) {
+    return NextResponse.json(
+      { error: "Your locked service pricing is unavailable. Refresh pricing and try again.", code: "QUOTE_LOCK_SERVICE_MISSING" },
+      { status: 409 },
+    );
   }
 
   const ownershipColumnPromise = resolveBookingOwnershipColumn(supabase);
@@ -494,7 +535,7 @@ export async function POST(request: Request) {
       { status: 503 },
     );
   }
-  const pricingVersionId = pricingVersion.id;
+  const pricingVersionId = suppliedQuoteLock.pricingVersionId;
 
   const locationCtx = await resolveConfirmLocationContext(supabase, {
     suburb: data.suburb,
