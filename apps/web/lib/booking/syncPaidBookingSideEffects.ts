@@ -19,6 +19,7 @@ import { provisionV2RecurringPlan } from "@/lib/recurring/provisionV2RecurringPl
 import { preferredCleanerIdsFromSnapshot } from "@/lib/booking/persistPreferredCleaners";
 import { activateRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
 import { resolvePersistedBookingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
+import { settleCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
 
 export type SyncPaidBookingInvoiceResult =
   | {
@@ -533,6 +534,18 @@ export async function syncPaidBookingSideEffects(
       });
       invoiceResult = { kind: "failed", error: String(err) };
     }
+  }
+
+  // Settle any Cleaning Credit reservation only after the booking is durably paid.
+  // The RPC is idempotent, so webhook/verify replays cannot create a second spend.
+  const creditSettlement = await settleCleaningCreditForBooking(admin, bookingId);
+  if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
+    await logSystemEvent({
+      level: "warn",
+      source: "booking/side_effects",
+      message: "cleaning_credit_reservation_settle_failed",
+      context: { bookingId, error: creditSettlement.error },
+    });
   }
 
   // ── 2. Recurring plan provisioning (idempotent inside provisionV2RecurringPlan) ──
