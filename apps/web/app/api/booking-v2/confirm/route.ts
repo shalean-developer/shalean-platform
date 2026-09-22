@@ -37,7 +37,7 @@ import { logBookingDemandEvent } from "@/lib/booking/logBookingDemandEvent";
 import { SOFT_FULFILLMENT_CUSTOMER_COPY } from "@/lib/booking/bookingFulfillmentMode";
 import type { BookingFulfillmentMode } from "@/lib/booking/bookingFulfillmentMode";
 import { canonicalServiceSlugFromBookingV2 } from "@/lib/booking-v2/bookingV2ServiceSlug";
-import { spendCleaningCredit } from "@/lib/referrals/credits";
+import { reserveCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
 import { buildReferralCheckoutSnapshot } from "@/lib/referrals/referralCheckoutMetadata";
 import { buildReferralCheckoutFingerprint } from "@/lib/referrals/checkoutFingerprint";
 import { resolveReferralClientIp } from "@/lib/referrals/clientIp";
@@ -927,15 +927,14 @@ export async function POST(request: Request) {
 
     let creditAppliedZar = 0;
     if (creditToApplyCap > 0) {
-      const spendResult = await spendCleaningCredit({
+      const spendResult = await reserveCleaningCreditForBooking({
         admin: supabase,
         userId,
         amountZar: creditToApplyCap,
         bookingId: existingBooking.id,
-        note: "Applied at booking-v2 checkout",
       });
       if (spendResult.ok) {
-        creditAppliedZar = spendResult.spent;
+        creditAppliedZar = spendResult.amountZar;
         // If spend differed from cap, adjust payable for the client charge.
         if (creditAppliedZar !== creditToApplyCap) {
           payAmountZar = Math.max(0, payAmountZar + creditToApplyCap - creditAppliedZar);
@@ -1243,7 +1242,7 @@ export async function POST(request: Request) {
 
   let creditAppliedZar = 0;
   if (creditToApplyCap > 0) {
-    const spendResult = await spendCleaningCredit({
+    const spendResult = await reserveCleaningCreditForBooking({
       admin: supabase,
       userId,
       amountZar: creditToApplyCap,
