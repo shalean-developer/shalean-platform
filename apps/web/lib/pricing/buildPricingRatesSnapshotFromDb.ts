@@ -1,17 +1,18 @@
 import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { PRICING_ENGINE_ALGORITHM_VERSION } from "@/lib/pricing/engineVersion";
-import type { PricingRatesSnapshot, SnapshotBundleRow } from "@/lib/pricing/pricingRatesSnapshot";
+import type { PricingRatesSnapshot, PricingSnapshotServiceId, SnapshotBundleRow } from "@/lib/pricing/pricingRatesSnapshot";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 import { resolvePricingServiceRow } from "@/lib/booking-v2/resolvePricingServiceSlug";
 
-const SERVICE_KEYS: readonly BookingServiceId[] = [
+const SERVICE_KEYS: readonly PricingSnapshotServiceId[] = [
   "standard",
   "airbnb",
   "deep",
   "move",
   "carpet",
+  "office",
 ];
 
 function serviceTypeToServiceIds(st: string): BookingServiceId[] {
@@ -82,7 +83,7 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     return null;
   }
 
-  const services = {} as Record<BookingServiceId, ServiceTariff>;
+  const services = {} as Record<PricingSnapshotServiceId, ServiceTariff>;
   const bySlug: Record<string, ServiceTariff> = {};
   for (const raw of svcRows ?? []) {
     const row = raw as Record<string, unknown>;
@@ -124,7 +125,7 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
 
   const { data: extRows, error: extErr } = await supabase
     .from("pricing_extras")
-    .select("slug, price, service_type, name, description, is_popular")
+    .select("slug, price, service_type, service_slugs, name, description, is_popular")
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
 
@@ -140,11 +141,24 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     if (!slug) continue;
     const price = Math.round(Number(row.price) || 0);
     const st = typeof row.service_type === "string" ? row.service_type : "all";
+    const assigned = Array.isArray(row.service_slugs)
+      ? row.service_slugs.flatMap((value): PricingSnapshotServiceId[] => {
+          switch (String(value)) {
+            case "regular-cleaning": return ["standard"];
+            case "airbnb-cleaning": return ["airbnb"];
+            case "deep-cleaning": return ["deep"];
+            case "moving-cleaning": return ["move"];
+            case "carpet-cleaning": return ["carpet"];
+            case "office-cleaning": return ["office"];
+            default: return [];
+          }
+        })
+      : [];
     const name = typeof row.name === "string" ? row.name : undefined;
     const description = typeof row.description === "string" ? row.description : undefined;
     extras[slug] = {
       price,
-      services: serviceTypeToServiceIds(st),
+      services: assigned.length ? [...new Set(assigned)] : serviceTypeToServiceIds(st),
       ...(name ? { name } : {}),
       ...(description ? { description } : {}),
       ...(row.is_popular === true ? { isPopular: true as const } : {}),
