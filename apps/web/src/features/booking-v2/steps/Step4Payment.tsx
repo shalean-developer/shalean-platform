@@ -33,6 +33,7 @@ import {
 } from "@/lib/booking-v2/bookingV2PaymentRedirect";
 import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
+import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 
 // ??? Auth Form ?????????????????????????????????????????????????????????????????
 
@@ -296,8 +297,9 @@ function PaymentSection({
   const { serviceSlug, clearBooking, catalogLoading } = useBookingV2();
   const searchParams = useSearchParams();
   const referralCodeFromUrl = searchParams.get("ref");
-  const { watch, setValue } = useFormContext<BookingV2FormData>();
+  const { watch, setValue, getValues } = useFormContext<BookingV2FormData>();
   const values = watch();
+  const { tier: vipTier } = useBookingVipTier();
   const config = SERVICE_CONFIG[serviceSlug];
   const quoteReadiness = assessBookingQuoteReadiness({
     catalogLoading,
@@ -663,6 +665,60 @@ function PaymentSection({
         }
       }
 
+      // Re-read the form at click time. React Hook Form's render snapshot can lag
+      // an async quote response by one render, so never send `values` as the
+      // authoritative confirm payload.
+      let confirmValues = getValues();
+      const currentLock = confirmValues.quoteLock;
+      const currentSignature = confirmValues.pricingSummary?.quote_signature;
+      const lockExpiresAtMs = currentLock?.expiresAt ? Date.parse(currentLock.expiresAt) : NaN;
+      const lockUsable =
+        Boolean(currentLock?.pricingVersionId?.trim()) &&
+        Boolean(currentLock?.quoteSignature?.trim()) &&
+        Boolean(currentSignature) &&
+        currentLock?.quoteSignature === currentSignature &&
+        Number.isFinite(lockExpiresAtMs) &&
+        lockExpiresAtMs > Date.now() + 5_000;
+
+      // If the form does not contain the exact current lock, obtain one now and
+      // submit that returned pair directly. This closes the async render race
+      // without weakening the server's QUOTE_LOCK_REQUIRED boundary.
+      if (!lockUsable) {
+        const quoteRes = await fetchPaymentPreparation("/api/booking-v2/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            serviceSlug,
+            serviceDetails: confirmValues.serviceDetails ?? {},
+            selectedExtras: confirmValues.selectedExtras ?? [],
+            cleanerMode: confirmValues.cleanerMode,
+            cleanerCount: confirmValues.cleanerCount ?? 1,
+            bookingType: confirmValues.bookingType,
+            recurringFrequency: confirmValues.recurringFrequency ?? "",
+            equipmentRequired: confirmValues.equipmentRequired ?? "no",
+            equipmentQuote: confirmValues.equipmentQuote ?? null,
+            vipTier,
+          }),
+        }, BOOKING_CONFIRM_TIMEOUT_MS);
+        const freshQuote = (await quoteRes.json()) as {
+          pricingSummary?: BookingV2FormData["pricingSummary"];
+          quoteLock?: NonNullable<BookingV2FormData["quoteLock"]>;
+          error?: string;
+        };
+        if (!quoteRes.ok || !freshQuote.pricingSummary || !freshQuote.quoteLock) {
+          setError(freshQuote.error ?? "Could not refresh your secured price. Please try again.");
+          setConfirming(false);
+          return;
+        }
+        setValue("pricingSummary", freshQuote.pricingSummary, { shouldDirty: false, shouldValidate: false });
+        setValue("quoteLock", freshQuote.quoteLock, { shouldDirty: false, shouldValidate: false });
+        confirmValues = {
+          ...confirmValues,
+          pricingSummary: freshQuote.pricingSummary,
+          quoteLock: freshQuote.quoteLock,
+        };
+      }
+
       const confirmRes = await fetchPaymentPreparation("/api/booking-v2/confirm", {
         method: "POST",
         headers: {
@@ -670,7 +726,7 @@ function PaymentSection({
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          ...values,
+          ...confirmValues,
           applyCleaningCreditZar: creditToApply,
           // Omit when unset ? Zod optional strings reject JSON `null` from getStoredReferral.
           referralCode:
