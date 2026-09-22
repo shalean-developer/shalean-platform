@@ -77,6 +77,8 @@ type OwnedPaymentSummary = {
   paystackReference?: string | null;
   bookingSnapshot?: unknown;
   serviceLabel?: string;
+  grossAmountZar?: number;
+  cleaningCreditZar?: number;
 };
 
 function isSnapshot(v: unknown): v is Record<string, unknown> {
@@ -804,6 +806,14 @@ function SuccessContent() {
     ? (statusData.bookingSnapshot as BookingSnapshotV1)
     : null;
   const persistedBookingId = statusData.bookingId?.trim() ?? "";
+  const grossAmountZar =
+    typeof (statusData as StatusPayload & { grossAmountZar?: number }).grossAmountZar === "number"
+      ? (statusData as StatusPayload & { grossAmountZar?: number }).grossAmountZar ?? null
+      : null;
+  const cleaningCreditZar =
+    typeof (statusData as StatusPayload & { cleaningCreditZar?: number }).cleaningCreditZar === "number"
+      ? (statusData as StatusPayload & { cleaningCreditZar?: number }).cleaningCreditZar ?? null
+      : null;
   const totalPaidZar = resolveCustomerTotalPaidZar({
     amountCents: statusData.amountCents,
     snapshotTotalZar: typeof snap?.total_zar === "number" ? snap.total_zar : null,
@@ -837,6 +847,8 @@ function SuccessContent() {
       <BookingConfirmationHero
         bookingReference={statusData.bookingReference ?? null}
         totalPaidZar={totalPaidZar}
+        grossAmountZar={grossAmountZar}
+        cleaningCreditZar={cleaningCreditZar}
         bookingId={persistedBookingId}
         hasSession={hasSession}
       />
