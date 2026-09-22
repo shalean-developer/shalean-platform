@@ -61,8 +61,7 @@ import { createFreshPaymentPreparationToken } from "@/lib/booking/freshPaymentPr
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import { upsertPendingRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
 import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
-import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
-import { fetchPricingRatesSnapshotByVersionId, getOrCreatePricingVersionId } from "@/lib/booking/pricingVersionDb";
+import { fetchPricingRatesSnapshotByVersionId } from "@/lib/booking/pricingVersionDb";
 import { pricingSnapshotServiceKeyForBookingV2Slug } from "@/lib/pricing/pricingRatesSnapshot";
 
 export const runtime = "nodejs";
@@ -519,22 +518,7 @@ export async function POST(request: Request) {
     time: timeHm,
   });
 
-  // Freeze the exact six-service pricing catalog used for this checkout.
-  // New Booking V2 bookings must be reproducible even after future catalog changes.
-  const pricingRatesSnapshot = await buildPricingRatesSnapshotFromDb(supabase);
-  if (!pricingRatesSnapshot) {
-    return NextResponse.json(
-      { error: "Could not freeze the current pricing catalog. Please try again.", code: "PRICING_VERSION_UNAVAILABLE" },
-      { status: 503 },
-    );
-  }
-  const pricingVersion = await getOrCreatePricingVersionId(supabase, pricingRatesSnapshot);
-  if (!pricingVersion) {
-    return NextResponse.json(
-      { error: "Could not preserve the current pricing version. Please try again.", code: "PRICING_VERSION_UNAVAILABLE" },
-      { status: 503 },
-    );
-  }
+  // Preserve the exact pricing version attached to the customer's valid quote lock.
   const pricingVersionId = suppliedQuoteLock.pricingVersionId;
 
   const locationCtx = await resolveConfirmLocationContext(supabase, {
