@@ -79,6 +79,11 @@ export type LiveServiceConfig = {
   /** Service-specific customer fee from pricing_services; global fee config is the fallback. */
   serviceFeeZar?: number;
   estimatedDurationHours: number;
+  /** Authoritative duration coefficients from pricing_services (hours). */
+  durationBaseHours: number;
+  durationPerBedroomHours: number;
+  durationPerBathroomHours: number;
+  durationPerExtraRoomHours: number;
   /** Admin-configured duration clamp from `pricing_services`. */
   minDurationHours: number;
   maxDurationHours: number;
