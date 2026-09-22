@@ -257,7 +257,7 @@ describe("PRINCESS PRA2 — Carpet rooms / rugs / sofa Extra", () => {
     expect(many.estimated_duration_minutes).toBeGreaterThan(one.estimated_duration_minutes);
   });
 
-  it("sofa-upholstery Extra prices; legacy sofaCount still prices", () => {
+  it("unapproved sofa-upholstery Extra does not price; legacy sofaCount still prices", () => {
     const withExtra = calculateCustomerTotal(
       input(
         "carpet-cleaning",
@@ -265,7 +265,7 @@ describe("PRINCESS PRA2 — Carpet rooms / rugs / sofa Extra", () => {
         { selectedExtras: ["sofa-upholstery"] },
       ),
     );
-    expect(withExtra.selected_extras_total).toBe(250);
+    expect(withExtra.selected_extras_total).toBe(0);
 
     const legacy = calculateCustomerTotal(
       input("carpet-cleaning", {
