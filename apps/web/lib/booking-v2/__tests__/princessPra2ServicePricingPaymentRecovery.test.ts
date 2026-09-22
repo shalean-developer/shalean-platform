@@ -606,3 +606,20 @@ describe("PRINCESS PRA2 — Paystack cancel recovery contracts", () => {
     expect(src).toContain("ensureBookingPaymentSession");
   });
 });
+
+
+describe("PRICING-06B.5 — atomic quote-lock payment handoff", () => {
+  it("Step4 re-reads form state and refreshes a missing/stale lock before confirm", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/features/booking-v2/steps/Step4Payment.tsx"),
+      "utf8",
+    );
+    expect(src).toContain("let confirmValues = getValues()");
+    expect(src).toContain('fetchPaymentPreparation("/api/booking-v2/quote"');
+    expect(src).toContain('setValue("quoteLock", freshQuote.quoteLock');
+    expect(src).toContain("pricingSummary: freshQuote.pricingSummary");
+    expect(src).toContain("quoteLock: freshQuote.quoteLock");
+    expect(src).toContain("...confirmValues");
+    expect(src).not.toContain("...values,\n          applyCleaningCreditZar");
+  });
+});
