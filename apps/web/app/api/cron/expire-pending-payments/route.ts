@@ -3,6 +3,7 @@ import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { releaseCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -59,7 +60,11 @@ export async function POST(request: Request) {
           .update({ status: "payment_expired", dispatch_status: "unassigned", payment_needs_follow_up: true })
           .eq("id", id)
           .eq("status", "pending_payment");
-        if (!upErr) updated++;
+        if (!upErr) {
+          updated++;
+          // Idempotent: no reservation is a harmless no-op at the lifecycle boundary.
+          await releaseCleaningCreditForBooking(admin, id);
+        }
       }
 
       await logSystemEvent({
