@@ -31,6 +31,7 @@ import {
   resolvePricingServiceRow,
 } from "@/lib/booking-v2/resolvePricingServiceSlug";
 import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
+import { isExtraSlugAllowedForService } from "@/lib/booking-v2/serviceExtraSlugs";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
 export type {
@@ -132,7 +133,7 @@ function buildExtrasForService(
 ): LiveExtra[] {
   return Object.entries(dbExtras)
     .filter(([slug]) => !BOOKING_V2_INTERNAL_EXTRA_SLUGS.has(slug))
-    .filter(([slug]) => !(serviceSlug === "carpet-cleaning" && slug === "stain-treatment"))
+    .filter(([slug]) => isExtraSlugAllowedForService(serviceSlug, slug))
     .filter(([, row]) => row.service_slugs.includes(serviceSlug))
     .filter(([, row]) => Number.isFinite(row.price) && row.price > 0)
     .sort((a, b) => a[1].sort_order - b[1].sort_order || a[0].localeCompare(b[0]))
