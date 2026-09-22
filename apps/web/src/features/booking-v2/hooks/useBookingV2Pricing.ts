@@ -30,11 +30,17 @@ export function useBookingV2Pricing(): void {
   const recurringFrequency = useWatch({ control, name: "recurringFrequency" });
   const equipmentRequired = useWatch({ control, name: "equipmentRequired" });
   const equipmentQuote = useWatch({ control, name: "equipmentQuote" });
+  const pendingBookingId = useWatch({ control, name: "pendingBookingId" });
   const serviceDetailsSnapshot = JSON.stringify(serviceDetails ?? {});
   const selectedExtrasSnapshot = JSON.stringify(selectedExtras ?? []);
   const equipmentQuoteSnapshot = JSON.stringify(equipmentQuote ?? null);
 
   useEffect(() => {
+    // Once confirm has created a pending booking, its persisted pricing snapshot
+    // is canonical. Do not let the live/draft pricing hook overwrite the recovery
+    // summary while the customer retries the same payment.
+    if (pendingBookingId?.trim()) return;
+
     const revision = ++quoteRevision.current;
     // Any price-affecting customer change invalidates the previous lock immediately.
     setValue("quoteLock", null, { shouldDirty: false, shouldValidate: false });
@@ -118,6 +124,7 @@ export function useBookingV2Pricing(): void {
       window.clearTimeout(timer);
     };
   }, [
+    pendingBookingId,
     serviceSlug,
     liveConfig,
     feesConfig,
