@@ -4,7 +4,10 @@ import {
   SERVICE_EXTRA_SLUGS,
   isExtraSlugAllowedForService,
 } from "@/lib/booking-v2/serviceExtraSlugs";
-import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
+import {
+  SERVICE_CONFIG,
+  SERVICE_SLUGS,
+} from "@/src/features/booking-v2/config/serviceConfig";
 
 describe("SERVICE_EXTRA_SLUGS", () => {
   it("defines a unique non-empty allowlist for every service", () => {
@@ -72,6 +75,14 @@ describe("SERVICE_EXTRA_SLUGS", () => {
       "interior-windows",
       "inspection-photos",
     ]);
+  });
+
+  it("stays aligned with the customer-facing SERVICE_CONFIG cards", () => {
+    for (const slug of SERVICE_SLUGS) {
+      expect(SERVICE_CONFIG[slug].extras.map((extra) => extra.id)).toEqual(
+        SERVICE_EXTRA_SLUGS[slug],
+      );
+    }
   });
 
   it("rejects cross-service and self-referential extras", () => {
