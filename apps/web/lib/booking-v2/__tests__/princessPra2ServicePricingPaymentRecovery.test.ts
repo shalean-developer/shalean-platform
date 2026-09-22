@@ -37,9 +37,8 @@ function baseCatalog(overrides: Partial<CustomerTotalInput["catalog"]> = {}) {
     minDurationHours: 2,
     maxDurationHours: 10,
     extras: [
-      { id: "sofa-upholstery", label: "Sofa / upholstery", priceZar: 250 },
-      { id: "laundry", label: "Laundry", priceZar: 150 },
-      { id: "inside-oven", label: "Inside Oven", priceZar: 200 },
+      { id: "laundry", label: "Laundry", priceZar: 35 },
+      { id: "inside-oven", label: "Inside Oven", priceZar: 20 },
     ],
     allowsExtraCleaner: true,
     ...overrides,
@@ -337,7 +336,7 @@ describe("PRINCESS PRA2 — Airbnb room pricing", () => {
         },
       ),
     );
-    expect(withLaundry.estimated_total).toBe(b.estimated_total + 150);
+    expect(withLaundry.estimated_total).toBe(b.estimated_total + 35);
   });
 });
 
