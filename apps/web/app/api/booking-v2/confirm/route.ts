@@ -1247,10 +1247,9 @@ export async function POST(request: Request) {
       userId,
       amountZar: creditToApplyCap,
       bookingId: inserted.id,
-      note: "Applied at booking-v2 checkout",
     });
     if (spendResult.ok) {
-      creditAppliedZar = spendResult.spent;
+      creditAppliedZar = spendResult.amountZar;
       if (creditAppliedZar !== creditToApplyCap) {
         payAmountZar = Math.max(0, payAmountZar + creditToApplyCap - creditAppliedZar);
         await supabase
