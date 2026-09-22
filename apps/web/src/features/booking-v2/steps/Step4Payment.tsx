@@ -302,6 +302,8 @@ function PaymentSection({
   const quoteReadiness = assessBookingQuoteReadiness({
     catalogLoading,
     pricingSummary: values.pricingSummary,
+    quoteLock: values.quoteLock,
+    requirePriceLock: true,
   });
 
   // Recover if Paystack onSuccess cleared mid-navigation (HMR / Fast Refresh remount).
