@@ -444,6 +444,16 @@ describe("PRINCESS PRA2 — duration label + quote consumption", () => {
   });
 });
 
+describe("PRICING-06B.4 — frozen snapshot is the confirm pricing source", () => {
+  it("rebuilds serverBreakdown from the locked pricing version, not the live catalog", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
+    expect(src).toContain("liveServiceConfigFromPricingSnapshot");
+    expect(src).toContain("snapshot: lockedPricingSnapshot");
+    expect(src).toContain("const serverBreakdown = buildSignedCustomerPricingFromForm");
+    expect(src).not.toContain("const catalogPayload = await loadBookingV2Catalog()");
+  });
+});
+
 describe("PRICING-06B.3 — frozen-lock confirm enforcement", () => {
   it("confirm requires an unexpired matching quote lock and reuses its pricing version", () => {
     const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
