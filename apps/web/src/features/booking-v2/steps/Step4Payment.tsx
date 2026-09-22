@@ -48,6 +48,8 @@ type PendingPaymentSummary = {
   serviceLabel: string;
   address: string;
   amountZar: number;
+  grossAmountZar: number;
+  cleaningCreditZar: number;
   pricingSummary: CustomerPricingBreakdown | null;
 };
 
@@ -366,6 +368,12 @@ function PaymentSection({
           return;
         }
         setPendingSummary(json);
+        // Synchronize the shared Booking V2 summary with the server-owned
+        // locked gross quote. Retry mode must not show a freshly recalculated
+        // draft total beside the canonical pending payment.
+        if (json.pricingSummary) {
+          setValue("pricingSummary", json.pricingSummary, { shouldDirty: false, shouldValidate: false });
+        }
       } catch {
         if (active) setPendingSummaryError("Could not load the saved booking total. Please refresh this page and try again.");
       }
