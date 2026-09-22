@@ -65,6 +65,8 @@ type StatusPayload = {
   selectedCleanerId?: string | null;
   /** Credit-covered / zero-balance success — no Paystack charge. */
   coveredSettlement?: boolean;
+  grossAmountZar?: number;
+  cleaningCreditZar?: number;
 };
 
 type OwnedPaymentSummary = {
