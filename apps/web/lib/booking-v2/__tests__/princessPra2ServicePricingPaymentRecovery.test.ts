@@ -444,6 +444,28 @@ describe("PRINCESS PRA2 — duration label + quote consumption", () => {
   });
 });
 
+describe("PRICING-06B.2 — client quote-lock lifecycle", () => {
+  it("stores the server lock in Booking V2 state", () => {
+    const src = readFileSync(join(process.cwd(), "src/features/booking-v2/types.ts"), "utf8");
+    expect(src).toContain("pricingVersionId: string");
+    expect(src).toContain("quoteSignature: string");
+    expect(src).toContain("quoteLock: null");
+  });
+
+  it("invalidates and replaces the lock only from the pricing-input watcher", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/features/booking-v2/hooks/useBookingV2Pricing.ts"),
+      "utf8",
+    );
+    expect(src).toContain('setValue("quoteLock", null');
+    expect(src).toContain('setValue("quoteLock", quoteLock');
+    expect(src).toContain("serviceDetailsSnapshot");
+    expect(src).toContain("selectedExtrasSnapshot");
+    expect(src).toContain("recurringFrequency");
+    expect(src).toContain("equipmentQuoteSnapshot");
+  });
+});
+
 describe("PRICING-06 — explicit higher-price requote", () => {
   it("confirm route blocks a stale quote when the authoritative price increased", () => {
     const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
