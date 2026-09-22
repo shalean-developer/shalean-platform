@@ -84,6 +84,7 @@ type PaidBookingRow = {
   recurring_start_date?: string | null;
   recurring_end_date?: string | null;
   selected_cleaner_id?: string | null;
+  pricing_version_id?: string | null;
 };
 
 function zohoConfigured(): boolean {
@@ -230,6 +231,7 @@ async function loadPaidBookingRow(
     "recurring_start_date",
     "recurring_end_date",
     "selected_cleaner_id",
+    "pricing_version_id",
   ].join(", ");
 
   const { data } = await admin.from("bookings").select(select).eq("id", bookingId).maybeSingle();
@@ -570,6 +572,8 @@ export async function syncPaidBookingSideEffects(
         rooms: row.rooms ?? 0,
         bathrooms: row.bathrooms ?? 0,
         preferredCleanerIds: preferredCleanerIdsFromSnapshot(row.booking_snapshot, row.selected_cleaner_id),
+        pricingVersionId: row.pricing_version_id ?? null,
+        pricingSummary: row.pricing_summary ?? null,
       });
 
       if (!planResult.ok) {
