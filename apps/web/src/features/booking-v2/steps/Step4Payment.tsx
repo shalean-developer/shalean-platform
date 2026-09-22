@@ -852,6 +852,11 @@ function PaymentSection({
         serviceLabel: config.label,
         address: [values.address, values.suburb].filter(Boolean).join(", "),
         amountZar: chargeAmount,
+        grossAmountZar:
+          confirmJson.pricingSummary?.estimated_total ??
+          confirmJson.pricingSummary?.total ??
+          chargeAmount + creditToApply,
+        cleaningCreditZar: creditToApply,
         pricingSummary: confirmJson.pricingSummary ?? null,
       });
 
