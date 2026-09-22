@@ -56,6 +56,13 @@ export type DurationWorkloadInput = {
   extras?: readonly string[] | null;
   teamMemberCount?: number | null;
   recurringSnapshotDurationMinutes?: number | null;
+  /** Admin snapshot / catalog coefficients override hardcoded service duration rates. */
+  durationRateMinutes?: {
+    baseMinutes: number;
+    bedroomMinutes: number;
+    bathroomMinutes: number;
+    extraRoomMinutes: number;
+  } | null;
   /** Admin snapshot / catalog limits override hardcoded service policy min/max. */
   durationMinuteLimits?: { minMinutes: number; maxMinutes: number } | null;
 };
@@ -345,11 +352,12 @@ export function resolveCanonicalDurationWorkload(input: DurationWorkloadInput): 
     extraEffects.push({ ...policy, count: 1 });
   }
 
+  const durationRates = input.durationRateMinutes ?? servicePolicy;
   let rawDuration =
-    servicePolicy.baseMinutes +
-    rooms * servicePolicy.bedroomMinutes +
-    bathrooms * servicePolicy.bathroomMinutes +
-    extraRooms * servicePolicy.extraRoomMinutes +
+    durationRates.baseMinutes +
+    rooms * durationRates.bedroomMinutes +
+    bathrooms * durationRates.bathroomMinutes +
+    extraRooms * durationRates.extraRoomMinutes +
     extraMinutes;
 
   if (rooms >= 10 || bathrooms >= 6 || extraRooms >= 8) {
