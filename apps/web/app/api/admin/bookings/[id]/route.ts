@@ -41,6 +41,7 @@ import { fetchServiceQaForAdminBooking } from "@/lib/booking/bookingServiceQaSer
 import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { ensureBookingLineItemsForEarningsIfMissing } from "@/lib/booking/ensureBookingLineItemsForEarnings";
 import { buildDashboardLifecycleAlignmentWire } from "@/lib/booking/readModels/bookingReadModel";
+import { resolveSchedulingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
 import { assertAdminBookingDeleteSafe } from "@/lib/admin/adminBookingDeleteSafety";
 import { maybeProcessReferralClawbackOnBookingChange } from "@/lib/referrals/clawback";
 import { assertAdminBookingPatchDoesNotMutateAssignmentFields } from "@/lib/admin/adminBookingPatchAssignmentGuard";
@@ -438,7 +439,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
   if (wantsPreferredCleaner) {
     const { data: prefRow, error: prefErr } = await admin
       .from("bookings")
-      .select("date, time, status")
+      .select("date, time, status, duration_minutes, estimated_duration_minutes, duration_hours, pricing_summary, booking_snapshot")
       .eq("id", id)
       .maybeSingle();
     if (prefErr || !prefRow) {
@@ -456,6 +457,17 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
     const timeHm = normalizeTimeHm(timeRaw);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(dateYmd) || !/^\d{2}:\d{2}$/.test(timeHm)) {
       return NextResponse.json({ error: "Booking must have a valid date and time before assigning a preferred cleaner." }, { status: 400 });
+    }
+
+    const preferredCleanerDurationMinutes = resolveSchedulingDurationMinutes(
+      prefRow as Record<string, unknown>,
+      "adminPreferredCleanerAssignment",
+    );
+    if (preferredCleanerDurationMinutes == null) {
+      return NextResponse.json(
+        { error: "Booking duration is missing; cannot verify cleaner overlap safely." },
+        { status: 409 },
+      );
     }
 
     const ignoreConflict = body.ignore_cleaner_slot_conflict === true;
@@ -479,6 +491,7 @@ export async function PATCH(request: Request, ctx: { params: Promise<{ id: strin
             cleanerId: sid,
             dateYmd,
             timeHm,
+            durationMinutes: preferredCleanerDurationMinutes,
             excludeBookingId: id,
           });
           if (conflictId) {
