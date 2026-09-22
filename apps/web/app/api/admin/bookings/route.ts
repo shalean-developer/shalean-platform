@@ -1162,6 +1162,7 @@ export async function POST(request: Request) {
           cleanerId,
           dateYmd: date,
           timeHm,
+          durationMinutes: adminSlotDurationMinutes,
         });
         if (lateConflictPaid) {
           return bail(
