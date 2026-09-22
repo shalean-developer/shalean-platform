@@ -377,6 +377,10 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         estimatedDurationHours: dbSvc?.duration_base
           ? Math.max(1, Math.round(dbSvc.duration_base))
           : staticFallback.estimatedDurationHours,
+        durationBaseHours: dbSvc?.duration_base || staticFallback.estimatedDurationHours,
+        durationPerBedroomHours: dbSvc?.duration_per_bedroom ?? 0,
+        durationPerBathroomHours: dbSvc?.duration_per_bathroom ?? 0,
+        durationPerExtraRoomHours: dbSvc?.duration_per_extra_room ?? 0,
         minDurationHours: dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
         maxDurationHours: Math.max(
           dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
