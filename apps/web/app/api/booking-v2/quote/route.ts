@@ -85,18 +85,6 @@ export async function POST(request: Request) {
     );
   } catch (error) {
     console.error("[booking-v2/quote] live pricing failed", error);
-    const diagnostic =
-      process.env.SHALEAN_APP_ENV === "staging"
-        ? error instanceof Error
-          ? error.message
-          : String(error)
-        : undefined;
-    return NextResponse.json(
-      {
-        error: "Live pricing is unavailable.",
-        ...(diagnostic ? { diagnostic } : {}),
-      },
-      { status: 503 },
-    );
+    return NextResponse.json({ error: "Live pricing is unavailable." }, { status: 503 });
   }
 }
