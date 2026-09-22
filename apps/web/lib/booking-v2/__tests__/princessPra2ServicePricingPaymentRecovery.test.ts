@@ -444,6 +444,27 @@ describe("PRINCESS PRA2 — duration label + quote consumption", () => {
   });
 });
 
+describe("PRICING-07A — recurring locked rate and explicit payable", () => {
+  it("provisions the recurring plan from a locked per-visit price, not future catalog pricing", () => {
+    const src = readFileSync(join(process.cwd(), "lib/recurring/provisionV2RecurringPlan.ts"), "utf8");
+    expect(src).toContain("perVisitPriceZar");
+    expect(src).toContain("price: perVisitPriceZar");
+    expect(src).toContain("finalPrice: perVisitPriceZar");
+    expect(src).not.toContain("pricing_services");
+  });
+
+  it("generated renewals persist amount due separately from cash received", () => {
+    const src = readFileSync(join(process.cwd(), "lib/recurring/insertRecurringOccurrenceBooking.ts"), "utf8");
+    expect(src).toContain("total_paid_zar: occurrencePaidZar");
+    expect(src).toContain("total_price: prepaidAllocation ? occurrencePaidZar : renewalQuote?.grossPackageZar ?? priceZar");
+  });
+
+  it("auto-charge prefers explicit payable and retains a legacy fallback only", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/cron/charge-recurring-bookings/route.ts"), "utf8");
+    expect(src).toContain("const payableRaw = row.total_price ?? row.total_paid_zar");
+  });
+});
+
 describe("PRICING-06B.4 — frozen snapshot is the confirm pricing source", () => {
   it("rebuilds serverBreakdown from the locked pricing version, not the live catalog", () => {
     const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
