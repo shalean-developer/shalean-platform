@@ -444,6 +444,41 @@ describe("PRINCESS PRA2 — duration label + quote consumption", () => {
   });
 });
 
+describe("PRICING-08A — exactly-once Cleaning Credit reservation lifecycle", () => {
+  it("database contract has one reservation identity per booking and idempotent transitions", () => {
+    const sql = readFileSync(
+      join(process.cwd(), "../../supabase/migrations/20260922103000_pricing_08a_cleaning_credit_reservations.sql"),
+      "utf8",
+    );
+    expect(sql).toContain("unique (booking_id)");
+    expect(sql).toContain("reserve_cleaning_credit_for_booking");
+    expect(sql).toContain("settle_cleaning_credit_for_booking");
+    expect(sql).toContain("release_cleaning_credit_for_booking");
+    expect(sql).toContain("for update");
+    expect(sql).toContain("if v.status='settled'");
+    expect(sql).toContain("if v.status='released'");
+  });
+
+  it("confirm reserves rather than permanently spending Cleaning Credit", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
+    expect(src).toContain("reserveCleaningCreditForBooking");
+    expect(src).not.toContain("spendCleaningCredit({");
+  });
+
+  it("payment side effects settle and expiry releases the same booking reservation", () => {
+    const paid = readFileSync(join(process.cwd(), "lib/booking/syncPaidBookingSideEffects.ts"), "utf8");
+    const expired = readFileSync(join(process.cwd(), "app/api/cron/expire-pending-payments/route.ts"), "utf8");
+    expect(paid).toContain("settleCleaningCreditForBooking(admin, bookingId)");
+    expect(expired).toContain("releaseCleaningCreditForBooking(admin, id)");
+  });
+
+  it("recurring base-rate provisioning never reads Cleaning Credit reservation state", () => {
+    const recurring = readFileSync(join(process.cwd(), "lib/recurring/provisionV2RecurringPlan.ts"), "utf8");
+    expect(recurring).not.toContain("cleaning_credit_reservations");
+    expect(recurring).toContain("price: perVisitPriceZar");
+  });
+});
+
 describe("PRICING-07A — recurring locked rate and explicit payable", () => {
   it("provisions the recurring plan from a locked per-visit price, not future catalog pricing", () => {
     const src = readFileSync(join(process.cwd(), "lib/recurring/provisionV2RecurringPlan.ts"), "utf8");
