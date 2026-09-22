@@ -444,6 +444,18 @@ describe("PRINCESS PRA2 — duration label + quote consumption", () => {
   });
 });
 
+describe("PRICING-06B.3 — frozen-lock confirm enforcement", () => {
+  it("confirm requires an unexpired matching quote lock and reuses its pricing version", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
+    expect(src).toContain('"QUOTE_LOCK_REQUIRED"');
+    expect(src).toContain('"QUOTE_LOCK_EXPIRED"');
+    expect(src).toContain('"QUOTE_LOCK_MISMATCH"');
+    expect(src).toContain("fetchPricingRatesSnapshotByVersionId");
+    expect(src).toContain("const pricingVersionId = suppliedQuoteLock.pricingVersionId");
+    expect(src).not.toContain("const pricingRatesSnapshot = await buildPricingRatesSnapshotFromDb");
+  });
+});
+
 describe("PRICING-06B.2 — client quote-lock lifecycle", () => {
   it("stores the server lock in Booking V2 state", () => {
     const src = readFileSync(join(process.cwd(), "src/features/booking-v2/types.ts"), "utf8");
