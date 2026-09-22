@@ -235,6 +235,12 @@ export const bookingV2ConfirmSchema = z.object({
   assignedTeamName: z.string().optional().default(""),
   cleanerCount: z.number().min(1).max(3).default(1),
   selectedCleanerIds: z.array(z.string()).optional().default([]),
+  quoteLock: z.object({
+    pricingVersionId: z.string().uuid(),
+    quoteSignature: z.string().min(1),
+    lockedAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+  }).nullable().optional(),
   pricingSummary: z
     .object({
       basePrice: z.number().optional(),
