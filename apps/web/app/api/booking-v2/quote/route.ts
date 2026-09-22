@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { buildCustomerPricingFromForm } from "@/lib/booking-v2/buildCustomerPricingFromForm";
+import { buildSignedCustomerPricingFromForm } from "@/lib/booking-v2/buildSignedCustomerPricingFromForm";
+import { buildPricingRatesSnapshotFromDb } from "@/lib/pricing/buildPricingRatesSnapshotFromDb";
+import { getOrCreatePricingVersionId } from "@/lib/booking/pricingVersionDb";
+import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { loadCachedBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
@@ -36,7 +39,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Live pricing is unavailable." }, { status: 503 });
     }
 
-    const pricingSummary = buildCustomerPricingFromForm({
+    const pricingSummary = buildSignedCustomerPricingFromForm({
       serviceSlug: parsed.data.serviceSlug,
       values: {
         serviceDetails: parsed.data.serviceDetails,
@@ -53,8 +56,26 @@ export async function POST(request: Request) {
       vipTier: parsed.data.vipTier,
     });
 
+    const admin = getSupabaseAdmin();
+    if (!admin) {
+      return NextResponse.json({ error: "Live pricing is unavailable." }, { status: 503 });
+    }
+    const snapshot = await buildPricingRatesSnapshotFromDb(admin);
+    const pricingVersion = snapshot ? await getOrCreatePricingVersionId(admin, snapshot) : null;
+    if (!pricingVersion || !pricingSummary.quote_signature) {
+      return NextResponse.json({ error: "Could not lock the current price." }, { status: 503 });
+    }
+    const lockedAt = new Date();
     return NextResponse.json(
-      { pricingSummary },
+      {
+        pricingSummary,
+        quoteLock: {
+          pricingVersionId: pricingVersion.id,
+          quoteSignature: pricingSummary.quote_signature,
+          lockedAt: lockedAt.toISOString(),
+          expiresAt: new Date(lockedAt.getTime() + 30 * 60 * 1000).toISOString(),
+        },
+      },
       {
         headers: {
           "Cache-Control": "no-store",
