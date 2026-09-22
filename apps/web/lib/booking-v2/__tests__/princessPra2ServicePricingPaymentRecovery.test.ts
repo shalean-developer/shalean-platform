@@ -341,6 +341,68 @@ describe("PRINCESS PRA2 — Airbnb room pricing", () => {
   });
 });
 
+describe("PRICING-03 — authoritative duration convergence", () => {
+  it("uses catalog duration coefficients instead of hardcoded Regular defaults", () => {
+    const quote = calculateCustomerTotal(
+      input(
+        "regular-cleaning",
+        { bedrooms: "2", bathrooms: "1", extraRooms: "1", propertyType: "house" },
+        {
+          catalog: baseCatalog({
+            durationBaseHours: 3.5,
+            durationPerBedroomHours: 0.5,
+            durationPerBathroomHours: 0.5,
+            durationPerExtraRoomHours: 0.3,
+            minDurationHours: 3.5,
+            maxDurationHours: 8,
+          }),
+        },
+      ),
+    );
+    expect(quote.estimated_duration_minutes).toBe(318);
+  });
+
+  it("uses Office catalog duration coefficients with office-size room proxy", () => {
+    const quote = calculateCustomerTotal(
+      input(
+        "office-cleaning",
+        { officeSize: "large", bathrooms: "2", frequency: "once_off" },
+        {
+          catalog: baseCatalog({
+            durationBaseHours: 3.5,
+            durationPerBedroomHours: 0.5,
+            durationPerBathroomHours: 0.5,
+            durationPerExtraRoomHours: 0.3,
+            minDurationHours: 3.5,
+            maxDurationHours: 8,
+          }),
+        },
+      ),
+    );
+    expect(quote.estimated_duration_minutes).toBe(390);
+  });
+
+  it("uses Carpet DB coefficients for carpet rooms and rugs", () => {
+    const quote = calculateCustomerTotal(
+      input(
+        "carpet-cleaning",
+        { carpetRooms: "2", rugCount: "1", carpetType: "standard", stains: "no" },
+        {
+          catalog: baseCatalog({
+            durationBaseHours: 4,
+            durationPerBedroomHours: 0.65,
+            durationPerBathroomHours: 0.65,
+            durationPerExtraRoomHours: 0.45,
+            minDurationHours: 3.5,
+            maxDurationHours: 8,
+          }),
+        },
+      ),
+    );
+    expect(quote.estimated_duration_minutes).toBe(342);
+  });
+});
+
 describe("PRINCESS PRA2 — duration label + quote consumption", () => {
   it("formats Estimated cleaning time label from server minutes", () => {
     expect(formatEstimatedCleaningTimeLabel(240)).toBe("Estimated cleaning time: 4 hours");
