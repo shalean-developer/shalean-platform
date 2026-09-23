@@ -37,7 +37,24 @@ export type V2QuoteValidationSuccess = { ok: true };
 
 export type V2QuoteValidationResult = V2QuoteValidationSuccess | V2QuoteValidationFailure;
 
-/** Client-stale codes: safe to continue with server-authoritative pricing. */
+/**
+ * Checkout may never silently move from the amount the customer reviewed to a
+ * different server amount. Booking V2 prices are integer ZAR, but keep a small
+ * floating tolerance for legacy serialized values.
+ */
+export function bookingQuoteTotalsDiffer(
+  clientReviewedTotal: number | null | undefined,
+  serverTotal: number,
+): boolean {
+  return (
+    typeof clientReviewedTotal === "number" &&
+    Number.isFinite(clientReviewedTotal) &&
+    Number.isFinite(serverTotal) &&
+    Math.abs(serverTotal - clientReviewedTotal) > 0.005
+  );
+}
+
+/** Client-stale codes: safe to continue only when the payable total is unchanged. */
 export const V2_QUOTE_SOFT_FAILURE_CODES: ReadonlySet<V2QuoteValidationFailureCode> = new Set([
   "quote_client_signature_mismatch",
   "quote_price_drift",

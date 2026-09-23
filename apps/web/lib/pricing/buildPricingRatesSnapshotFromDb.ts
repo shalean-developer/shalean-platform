@@ -29,11 +29,12 @@ function scopeToBundleServices(scope: string): BookingServiceId[] | undefined {
   return undefined;
 }
 
-function rowToTariff(row: {
+export function pricingServiceRowToTariff(row: {
   base_price: number;
   price_per_bedroom: number;
   price_per_bathroom: number;
   price_per_extra_room: number;
+  service_fee_zar?: number | null;
   duration_base: number;
   duration_per_bedroom: number;
   duration_per_bathroom: number;
@@ -47,12 +48,18 @@ function rowToTariff(row: {
     Number.isFinite(minHoursRaw) && minHoursRaw > 0 ? minHoursRaw : DEFAULT_SERVICE_DURATION_LIMITS.minHours;
   const maxHours =
     Number.isFinite(maxHoursRaw) && maxHoursRaw > 0 ? maxHoursRaw : DEFAULT_SERVICE_DURATION_LIMITS.maxHours;
+  const serviceFeeRaw = row.service_fee_zar == null ? null : Number(row.service_fee_zar);
+  const serviceFeeZar =
+    serviceFeeRaw != null && Number.isFinite(serviceFeeRaw) && serviceFeeRaw >= 0
+      ? Math.round(serviceFeeRaw)
+      : null;
 
   return {
     base: Math.round(Number(row.base_price) || 0),
     bedroom: Math.round(Number(row.price_per_bedroom) || 0),
     bathroom: Math.round(Number(row.price_per_bathroom) || 0),
     extraRoom: Math.round(Number(row.price_per_extra_room) || 0),
+    ...(serviceFeeZar != null ? { serviceFeeZar } : {}),
     duration: {
       base: Number(row.duration_base) || 0,
       bedroom: Number(row.duration_per_bedroom) || 0,
@@ -73,7 +80,7 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
   const { data: svcRows, error: svcErr } = await supabase
     .from("pricing_services")
     .select(
-      "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, duration_base, duration_per_bedroom, duration_per_bathroom, duration_per_extra_room, min_hours, max_hours",
+      "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, service_fee_zar, duration_base, duration_per_bedroom, duration_per_bathroom, duration_per_extra_room, min_hours, max_hours",
     )
     .eq("is_active", true)
     .order("sort_order", { ascending: true });
@@ -89,11 +96,12 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     const row = raw as Record<string, unknown>;
     const slug = typeof row.slug === "string" ? row.slug.trim() : "";
     if (!slug) continue;
-    bySlug[slug] = rowToTariff({
+    bySlug[slug] = pricingServiceRowToTariff({
       base_price: Number(row.base_price),
       price_per_bedroom: Number(row.price_per_bedroom),
       price_per_bathroom: Number(row.price_per_bathroom),
       price_per_extra_room: Number(row.price_per_extra_room),
+      service_fee_zar: row.service_fee_zar == null ? null : Number(row.service_fee_zar),
       duration_base: Number(row.duration_base),
       duration_per_bedroom: Number(row.duration_per_bedroom),
       duration_per_bathroom: Number(row.duration_per_bathroom),
@@ -103,7 +111,7 @@ export async function buildPricingRatesSnapshotFromDb(supabase: SupabaseClient):
     });
   }
 
-  const fallback = rowToTariff({
+  const fallback = pricingServiceRowToTariff({
     base_price: 0,
     price_per_bedroom: 0,
     price_per_bathroom: 0,

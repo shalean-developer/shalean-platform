@@ -71,7 +71,11 @@ function isServiceTariff(v: unknown): v is ServiceTariff {
   const dur = o.duration;
   if (!dur || typeof dur !== "object") return false;
   const d = dur as Record<string, unknown>;
+  const fee = o.serviceFeeZar;
+  const serviceFeeValid =
+    fee == null || (typeof fee === "number" && Number.isFinite(fee) && fee >= 0);
   return (
+    serviceFeeValid &&
     typeof o.base === "number" &&
     typeof o.bedroom === "number" &&
     typeof o.bathroom === "number" &&

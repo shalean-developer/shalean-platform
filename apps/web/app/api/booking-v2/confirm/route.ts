@@ -44,7 +44,10 @@ import { resolveReferralClientIp } from "@/lib/referrals/clientIp";
 import { validateReferralForCheckout } from "@/lib/referrals/validateReferral";
 import { getPaystackPublicKey } from "@/lib/payments/paystackPublicKey";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
-import { assertV2ConfirmQuoteIntegrity } from "@/lib/booking/quote/validateBookingV2Quote";
+import {
+  assertV2ConfirmQuoteIntegrity,
+  bookingQuoteTotalsDiffer,
+} from "@/lib/booking/quote/validateBookingV2Quote";
 import type { CustomerPricingBreakdown, CustomerTotalInput } from "@/lib/booking-v2/types";
 import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig";
 import {
@@ -469,12 +472,9 @@ export async function POST(request: Request) {
         ? clientPricingSummary.estimated_total
         : clientPricingSummary.total;
     const serverTotal = serverBreakdown.estimated_total;
-    const priceIncreased =
-      typeof clientReviewedTotal === "number" &&
-      Number.isFinite(clientReviewedTotal) &&
-      serverTotal > clientReviewedTotal + 0.005;
+    const priceChanged = bookingQuoteTotalsDiffer(clientReviewedTotal, serverTotal);
 
-    if (priceIncreased) {
+    if (priceChanged) {
       return NextResponse.json(
         {
           error: "Your booking price has changed. Review the updated total before continuing to payment.",
@@ -488,7 +488,7 @@ export async function POST(request: Request) {
     }
 
     console.warn(
-      "[booking-v2/confirm] stale client quote accepted without price increase:",
+      "[booking-v2/confirm] stale client quote accepted with unchanged payable total:",
       quoteValidation.code,
     );
   }

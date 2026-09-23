@@ -20,6 +20,8 @@ export type ServiceTariff = {
   bedroom: number;
   bathroom: number;
   extraRoom: number;
+  /** Service-specific customer fee frozen from pricing_services.service_fee_zar. */
+  serviceFeeZar?: number;
   duration: {
     base: number;
     bedroom: number;

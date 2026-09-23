@@ -9,7 +9,10 @@ import {
   resolvePricingServiceRow,
 } from "@/lib/booking-v2/resolvePricingServiceSlug";
 import { resolveBookingV2Quote } from "@/lib/booking/quote/resolveBookingQuote";
-import { assertV2ConfirmQuoteIntegrity } from "@/lib/booking/quote/validateBookingV2Quote";
+import {
+  assertV2ConfirmQuoteIntegrity,
+  bookingQuoteTotalsDiffer,
+} from "@/lib/booking/quote/validateBookingV2Quote";
 
 function baseInput(overrides: Partial<CustomerTotalInput> = {}): CustomerTotalInput {
   const feesConfig = defaultBookingV2FeesConfig({ extraCleanerZar: 299 });
@@ -135,6 +138,12 @@ describe("PRINCESS PR-A — quote integrity / readiness", () => {
       expect(result.soft).toBe(true);
       expect(result.code).toBe("quote_price_drift");
     }
+  });
+
+  it("requires re-review for either a server price increase or decrease", () => {
+    expect(bookingQuoteTotalsDiffer(1740, 1770)).toBe(true);
+    expect(bookingQuoteTotalsDiffer(1770, 1740)).toBe(true);
+    expect(bookingQuoteTotalsDiffer(1770, 1770)).toBe(false);
   });
 
   it("missing / empty quote is not ready for payment", () => {
