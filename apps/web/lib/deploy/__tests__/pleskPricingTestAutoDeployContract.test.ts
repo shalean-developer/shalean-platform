@@ -12,6 +12,7 @@ const healthRoute = readFileSync(
   join(process.cwd(), "app/api/health/environment/route.ts"),
   "utf8",
 );
+const pricingWorkflow = repoSource(".github/workflows/plesk-pricing-test.yml");
 
 describe("PLESK-AUTO-03 pricing-test deployment contract", () => {
   it("waits for and activates only the exact release SHA", () => {
@@ -24,6 +25,22 @@ describe("PLESK-AUTO-03 pricing-test deployment contract", () => {
     expect(autoDeploy).toContain(
       '/bin/bash "$SCRIPT_DIR/plesk-pricing-test-git-prepare.sh" "$TARGET_SHA"',
     );
+  });
+
+  it("serializes deployments and bounds GitHub requests", () => {
+    expect(autoDeploy).toContain('/usr/bin/flock -w "$LOCK_WAIT_SECONDS" 9');
+    expect(autoDeploy).toContain("--connect-timeout 10");
+    expect(autoDeploy).toContain("--max-time 30");
+    expect(autoDeploy).toContain(
+      "could not re-check release branch after preparation; activation skipped",
+    );
+    expect(prepare).toContain("--connect-timeout 10");
+    expect(prepare).toContain("--max-time 30");
+  });
+
+  it("creates an exact-SHA pricing-test workflow for every integration push", () => {
+    expect(pricingWorkflow).toContain("- integration/shalean-release");
+    expect(pricingWorkflow).not.toMatch(/\n\s+paths:/);
   });
 
   it("restarts through Passenger and rolls back failed public activation", () => {
