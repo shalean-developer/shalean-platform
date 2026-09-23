@@ -45,6 +45,59 @@ function snapshotWithMove(move: ServiceTariff): PricingRatesSnapshot {
 }
 
 describe("Booking V2 service-fee snapshot parity", () => {
+  it.each([
+    ["regular-cleaning", "standard", 30],
+    ["deep-cleaning", "deep", 60],
+    ["moving-cleaning", "move", 60],
+    ["airbnb-cleaning", "airbnb", 30],
+    ["carpet-cleaning", "carpet", 50],
+    ["office-cleaning", "office", 40],
+  ] as const)(
+    "restores the frozen %s service fee",
+    (serviceSlug, pricingKey, expectedFee) => {
+      const services = {} as Record<PricingSnapshotServiceId, ServiceTariff>;
+      for (const key of ["standard", "airbnb", "deep", "move", "carpet", "office"] as const) {
+        const feeByKey = {
+          standard: 30,
+          deep: 60,
+          move: 60,
+          airbnb: 30,
+          carpet: 50,
+          office: 40,
+        } as const;
+        services[key] = {
+          base: key === "deep" || key === "move" ? 1200 : key === "carpet" ? 500 : key === "office" ? 300 : 250,
+          bedroom: key === "move" || key === "carpet" ? 120 : key === "deep" ? 100 : key === "office" ? 60 : 80,
+          bathroom: key === "move" ? 90 : key === "deep" ? 80 : key === "carpet" ? 0 : key === "office" ? 50 : 60,
+          extraRoom: 30,
+          serviceFeeZar: feeByKey[key],
+          duration: { base: 3.5, bedroom: 0.5, bathroom: 0.5, extraRoom: 0.3 },
+          durationLimits: { minHours: 2, maxHours: 12 },
+        };
+      }
+      const snapshot: PricingRatesSnapshot = {
+        codeVersion: 7,
+        services,
+        extras: {},
+        bundles: [],
+      };
+      const parsed = parsePricingRatesSnapshotFromDbRow({
+        code_version: snapshot.codeVersion,
+        services: snapshot.services,
+        extras: snapshot.extras,
+        rules: { bundles: snapshot.bundles },
+      });
+      expect(parsed?.services[pricingKey].serviceFeeZar).toBe(expectedFee);
+
+      const live = liveServiceConfigFromPricingSnapshot({
+        serviceSlug,
+        snapshot: parsed!,
+        feesConfig: defaultBookingV2FeesConfig(),
+      });
+      expect(live?.serviceFeeZar).toBe(expectedFee);
+    },
+  );
+
   it("freezes and restores Moving Cleaning's R60 service fee", () => {
     const move = movingTariff(60);
     expect(move.serviceFeeZar).toBe(60);
