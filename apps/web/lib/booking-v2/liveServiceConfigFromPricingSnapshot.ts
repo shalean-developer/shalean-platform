@@ -41,7 +41,9 @@ export function liveServiceConfigFromPricingSnapshot(params: {
     shortLabel: staticConfig.shortLabel,
     description: staticConfig.description,
     cleanerMode: staticConfig.cleanerMode,
-    showEquipmentQuestion: false,
+    // Equipment eligibility is product behavior, not a monetary tariff. Preserve
+    // the service policy while all rates/durations still come from the frozen snapshot.
+    showEquipmentQuestion: staticConfig.showEquipmentQuestion ?? false,
     allowsExtraCleaner:
       serviceSlug === "regular-cleaning" ||
       serviceSlug === "airbnb-cleaning" ||
