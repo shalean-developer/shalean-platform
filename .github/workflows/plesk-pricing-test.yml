@@ -1,6 +1,15 @@
 name: Plesk pricing-test standalone artifact
 
 on:
+  push:
+    branches:
+      - integration/shalean-release
+    paths:
+      - ".github/workflows/plesk-pricing-test.yml"
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "supabase/migrations/**"
   workflow_dispatch:
 
 permissions:
@@ -30,7 +39,10 @@ jobs:
       - name: Guard exact test branch and public configuration
         run: |
           set -euo pipefail
-          test "${GITHUB_REF_NAME}" = "fix/booking-v2-six-service-pricing-convergence"
+          case "${GITHUB_REF_NAME}" in
+            integration/shalean-release|feat/plesk-pricing-test-auto-deploy|fix/booking-v2-six-service-pricing-convergence) ;;
+            *) echo "::error::Unexpected pricing-test artifact branch: ${GITHUB_REF_NAME}"; exit 1 ;;
+          esac
           test "${NEXT_PUBLIC_SUPABASE_URL}" = "https://jhubpsbwmjgydkzztxeu.supabase.co"
           test -n "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
           case "${NEXT_PUBLIC_SUPABASE_ANON_KEY}" in sb_publishable_*|eyJ*) ;; *) exit 1;; esac
