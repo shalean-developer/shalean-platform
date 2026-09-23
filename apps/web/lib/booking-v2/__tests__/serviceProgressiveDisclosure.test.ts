@@ -150,7 +150,7 @@ describe("six-service progressive booking details", () => {
     ).toBe(true);
     expect(
       bookingDetailsQuestionVisibleAtStage("moving-cleaning", property, "move"),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       bookingDetailsQuestionVisibleAtStage("moving-cleaning", property, "rooms"),
     ).toBe(true);
