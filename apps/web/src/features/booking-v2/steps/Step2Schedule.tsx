@@ -99,7 +99,7 @@ const STEP2_COPY: Record<
   },
   "deep-cleaning": {
     title: "Book your deep clean",
-    subtitle: "Select a date — our full team will handle the rest.",
+    subtitle: "Select a date and time — our full team will handle the rest.",
     cleanerTitle: "Available team slots",
     cleanerSubtitle: "We assign a dedicated team of 3 for all deep cleans.",
   },
