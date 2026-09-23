@@ -30,7 +30,7 @@ for x in /usr/bin/curl /usr/bin/python3 /usr/bin/unzip /usr/bin/tar /usr/bin/sha
 rm -rf "$WORK"; mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 
-ghget(){ /usr/bin/curl -fsSL -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"; }
+ghget(){ /usr/bin/curl -fsSL --connect-timeout 10 --max-time 30 -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"; }
 
 # Resolve the current release head first. Automatic deployment passes this same
 # SHA explicitly so a later branch movement can never activate the wrong build.
