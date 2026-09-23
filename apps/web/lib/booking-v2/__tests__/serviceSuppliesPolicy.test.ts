@@ -86,7 +86,7 @@ describe("serviceSuppliesPolicy", () => {
       selectedExtras: ["laundry", "inside-oven"],
       cleanerMode: "individual_cleaners",
       cleanerCount: 1,
-      bookingType: "once-off",
+      bookingType: "once_off",
       recurringFrequency: "",
       equipmentRequired: true,
       equipmentQuote: {
