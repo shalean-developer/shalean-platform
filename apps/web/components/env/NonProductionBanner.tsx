@@ -1,4 +1,4 @@
-import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
+import { resolveDeploymentDisplayEnvironment } from "@/lib/env/deploymentEnvironment";
 
 /**
  * Visible STAGING / DEVELOPMENT banner. Invisible in production.
@@ -8,7 +8,7 @@ import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
  * a visible banner on hydration.
  */
 export function NonProductionBanner() {
-  const env = resolveDeploymentEnvironment();
+  const env = resolveDeploymentDisplayEnvironment();
   if (env === "production") return null;
 
   const label =

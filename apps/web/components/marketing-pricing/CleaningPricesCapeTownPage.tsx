@@ -54,7 +54,7 @@ export const CLEANING_PRICES_CAPE_TOWN_FAQS = [
     idSlug: "custom-quote",
     question: "Can I get a custom quote?",
     answer:
-      "Office cleans, unusual layouts, and multi-day commercial schedules usually need a short custom quote—start from our office cleaning page or contact us with square metres and frequency. Homes and apartments get instant quotes via the booking flow.",
+      "Office Cleaning has an online starting price from Shalean’s active booking catalogue. Larger offices, unusual layouts, and multi-day commercial schedules can still need a scoped custom quote based on square metres, facilities, and frequency.",
   },
   {
     idSlug: "extras-live-price",
@@ -298,7 +298,7 @@ export function CleaningPricesCapeTownPage({
             <p className="mt-3 text-slate-600">
               Starting amounts come from the same active service catalogue used by booking. Your exact total can also include room,
               scope, frequency, and extras adjustments, plus a separately itemised R{pricingDisplay.serviceFeeZar} service fee. Office
-              work routes through a scoped quote based on footprint and frequency.
+              Cleaning also uses its active catalogue starting price; larger or unusual commercial scopes can still require a custom quote.
             </p>
             <p className="mx-auto mt-5 max-w-2xl text-center text-slate-600">
               In the booking flow, switch <strong className="font-semibold text-slate-800">once-off vs recurring</strong> before you

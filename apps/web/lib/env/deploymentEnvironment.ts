@@ -49,6 +49,32 @@ export function resolveDeploymentEnvironment(env: EnvLike = process.env): Shalea
   return "local";
 }
 
+/**
+ * Display-only environment identity for banners and other non-security UI.
+ * Keep the core resolver authoritative for safety decisions; this only avoids
+ * labelling the known pricing-test host as LOCAL when platform metadata is absent.
+ */
+export function resolveDeploymentDisplayEnvironment(
+  env: EnvLike = process.env,
+): ShaleanDeploymentEnv {
+  const resolved = resolveDeploymentEnvironment(env);
+  if (resolved !== "local") return resolved;
+
+  for (const raw of [env.NEXT_PUBLIC_SITE_URL, env.NEXT_PUBLIC_APP_URL]) {
+    const value = raw?.trim();
+    if (!value) continue;
+    try {
+      if (new URL(value).hostname.toLowerCase() === "pricing-test.shalean.co.za") {
+        return "staging";
+      }
+    } catch {
+      // Ignore malformed display-only origins and preserve the core resolution.
+    }
+  }
+
+  return resolved;
+}
+
 export function isCustomerFacingProduction(env: EnvLike = process.env): boolean {
   return resolveDeploymentEnvironment(env) === "production";
 }
