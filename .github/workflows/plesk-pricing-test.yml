@@ -135,6 +135,15 @@ jobs:
               -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
               -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
               "$SUPABASE_URL/storage/v1/object/info/$BUCKET/$OBJECT" >/dev/null
+
+            # A rerun may rebuild different tar.gz bytes for the same commit.
+            # Restore the canonical immutable object so downstream metadata
+            # and checksums describe exactly what Plesk will download.
+            curl -fsS \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              "$SUPABASE_URL/storage/v1/object/authenticated/$BUCKET/$OBJECT" \
+              -o "plesk-pricing-test-$SHA.tar.gz"
           fi
 
       - name: Create guarded pricing-test pull bundle
