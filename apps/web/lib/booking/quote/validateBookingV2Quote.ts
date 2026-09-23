@@ -5,7 +5,6 @@ import { assertQuotePricingInputsConsumed } from "@/lib/booking-v2/assertQuotePr
 import { DB_SLUG_MAP } from "@/lib/booking-v2/loadBookingV2CatalogMaps";
 import { resolveMovingPricingSlug } from "@/lib/booking-v2/resolvePricingServiceSlug";
 
-const MAX_PRICE_DRIFT_RATIO = 0.01;
 const MAX_DURATION_DRIFT_RATIO = 0.01;
 
 export type V2QuoteValidationFailureCode =
@@ -170,17 +169,19 @@ export function assertV2ConfirmQuoteIntegrity(params: {
       : clientPricingSummary.total;
   const serverTotal = serverBreakdown.estimated_total;
 
-  if (typeof clientTotal === "number" && clientTotal > 0 && serverTotal > 0) {
-    const priceDrift = Math.abs(serverTotal - clientTotal) / serverTotal;
-    if (priceDrift > MAX_PRICE_DRIFT_RATIO) {
-      return {
-        ok: false,
-        status: 422,
-        error: "The price for your booking changed. Please refresh and try again.",
-        code: "quote_price_drift",
-        soft: true,
-      };
-    }
+  if (
+    typeof clientTotal === "number" &&
+    clientTotal > 0 &&
+    serverTotal > 0 &&
+    bookingQuoteTotalsDiffer(clientTotal, serverTotal)
+  ) {
+    return {
+      ok: false,
+      status: 422,
+      error: "The price for your booking changed. Please refresh and try again.",
+      code: "quote_price_drift",
+      soft: true,
+    };
   }
 
   const clientDuration = clientPricingSummary.estimated_duration_minutes;
