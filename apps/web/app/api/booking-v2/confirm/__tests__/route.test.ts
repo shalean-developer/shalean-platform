@@ -61,6 +61,19 @@ vi.mock("@/lib/booking/assignTeamAndSyncRoster", () => ({
 vi.mock("@/lib/referrals/validateReferral", () => ({
   validateReferralForCheckout: vi.fn().mockResolvedValue({ valid: false }),
 }));
+vi.mock("@/lib/referrals/creditReservations", () => ({
+  reserveCleaningCreditForBooking: vi.fn().mockResolvedValue({
+    ok: true,
+    reservationId: "credit-reservation-1",
+    amountZar: 0,
+    balanceAfter: 0,
+    status: "reserved",
+  }),
+  settleCleaningCreditForBooking: vi.fn().mockResolvedValue({
+    ok: false,
+    error: "reservation_not_found",
+  }),
+}));
 vi.mock("@/lib/promotions/server", () => ({
   evaluateCheckoutPromotions: vi.fn().mockResolvedValue({ applied: [], totalDiscountZar: 0 }),
   applyPromotionRedemptions: vi.fn().mockResolvedValue(undefined),
