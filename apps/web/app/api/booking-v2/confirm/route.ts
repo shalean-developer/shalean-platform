@@ -37,7 +37,7 @@ import { logBookingDemandEvent } from "@/lib/booking/logBookingDemandEvent";
 import { SOFT_FULFILLMENT_CUSTOMER_COPY } from "@/lib/booking/bookingFulfillmentMode";
 import type { BookingFulfillmentMode } from "@/lib/booking/bookingFulfillmentMode";
 import { canonicalServiceSlugFromBookingV2 } from "@/lib/booking-v2/bookingV2ServiceSlug";
-import { reserveCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
+import { reserveCleaningCreditForBooking, settleCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
 import { buildReferralCheckoutSnapshot } from "@/lib/referrals/referralCheckoutMetadata";
 import { buildReferralCheckoutFingerprint } from "@/lib/referrals/checkoutFingerprint";
 import { resolveReferralClientIp } from "@/lib/referrals/clientIp";
@@ -78,6 +78,22 @@ async function trySettleFullyCoveredOrError(
   payAmountZar: number,
 ): Promise<{ requiresPayment: true } | { requiresPayment: false } | { errorResponse: NextResponse }> {
   if (payAmountZar > 0) return { requiresPayment: true };
+
+  // A zero-cash booking can be covered by promotions/referrals alone or by a
+  // Cleaning Credit reservation. Settle the reservation first when present so
+  // the booking can never become payment-success while its spent credit remains
+  // releasable. reservation_not_found is expected for non-credit R0 bookings.
+  const creditSettlement = await settleCleaningCreditForBooking(supabase, bookingId);
+  if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
+    console.error("[booking-v2/confirm] R0 Cleaning Credit settlement failed:", creditSettlement.error);
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Could not settle Cleaning Credit. Please try again or contact support." },
+        { status: 503 },
+      ),
+    };
+  }
+
   const settled = await settleFullyCoveredBooking(supabase, { bookingId, payAmountZar });
   if (!settled.ok) {
     console.error("[booking-v2/confirm] R0 settlement failed:", settled.error, settled.code);
