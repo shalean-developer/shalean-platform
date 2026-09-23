@@ -95,7 +95,10 @@ describe("Office Booking V2 simplification", () => {
     expect(catalogSource).toContain('serviceSlug === "office-cleaning"');
     expect(catalogSource).toContain("SERVICE_CONFIG[serviceSlug].step1Questions");
     expect(catalogSource).toContain(
-      'slug === "office-cleaning" || slug === "airbnb-cleaning"',
+      "showEquipmentQuestion: serviceRequiresCustomerEquipmentChoice(slug)",
+    );
+    expect(catalogSource).toContain(
+      "showCleaningProductsQuestion: serviceRequiresCustomerEquipmentChoice(slug)",
     );
   });
 
