@@ -759,7 +759,7 @@ export function Step2Schedule() {
                   minDate={today}
                   value={field.value ?? ""}
                   onChange={(nextDate) => {
-                    if (isMovingCleaning && nextDate !== field.value) {
+                    if (isTeamMode && nextDate !== field.value) {
                       setValue("assignedTeamId", "", {
                         shouldDirty: true,
                         shouldValidate: true,
