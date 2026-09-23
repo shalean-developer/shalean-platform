@@ -12,14 +12,11 @@
         "all"
       ],
       "extraSlugs": [
-        "inside-cabinets",
-        "inside-oven",
         "inside-fridge",
-        "interior-walls",
-        "ironing",
+        "inside-oven",
         "laundry",
-        "interior-windows",
-        "water-plants"
+        "ironing",
+        "interior-windows"
       ],
       "showCleaningProductsQuestion": true,
       "allowsExtraCleaner": true,
@@ -182,12 +179,10 @@
         "all"
       ],
       "extraSlugs": [
-        "balcony-cleaning",
-        "carpet-cleaning",
-        "ceiling-cleaning",
-        "garage-cleaning",
-        "mattress-cleaning",
-        "outside-windows"
+        "inside-cabinets",
+        "inside-wardrobes",
+        "blinds-cleaning",
+        "interior-walls"
       ],
       "showCleaningProductsQuestion": false,
       "allowsExtraCleaner": false,
@@ -357,13 +352,9 @@
         "all"
       ],
       "extraSlugs": [
-        "inside-oven",
+        "appliances-cleaning",
         "inside-cabinets",
-        "interior-walls",
-        "inside-fridge",
-        "balcony-cleaning",
-        "garage-cleaning",
-        "outside-windows"
+        "garage-cleaning"
       ],
       "showCleaningProductsQuestion": false,
       "allowsExtraCleaner": false,

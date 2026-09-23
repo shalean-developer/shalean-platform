@@ -83,7 +83,7 @@ describe("Carpet Cleaning simplified Step 1 to Step 4 journey", () => {
       "stain-treatment",
     );
     expect(catalogSource).toContain(
-      'serviceSlug === "carpet-cleaning" && slug === "stain-treatment"',
+      "isExtraSlugAllowedForService(serviceSlug, slug)",
     );
   });
 

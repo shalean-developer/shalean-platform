@@ -73,6 +73,15 @@ function resolveDurationWorkloadForInput(input: CustomerTotalInput) {
     selectedExtras: input.selectedExtras,
     cleanerMode: input.cleanerMode,
     cleanerCount: input.cleanerCount,
+    durationRates:
+      input.catalog.durationBaseHours != null
+        ? {
+            baseHours: input.catalog.durationBaseHours,
+            bedroomHours: input.catalog.durationPerBedroomHours ?? 0,
+            bathroomHours: input.catalog.durationPerBathroomHours ?? 0,
+            extraRoomHours: input.catalog.durationPerExtraRoomHours ?? 0,
+          }
+        : undefined,
     durationLimits: {
       minHours: input.catalog.minDurationHours,
       maxHours: input.catalog.maxDurationHours,

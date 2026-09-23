@@ -13,8 +13,8 @@ export async function findCleanerSlotConflict(
     cleanerId: string;
     dateYmd: string;
     timeHm: string;
-    /** Job length for the proposed slot (defaults to 120m). */
-    durationMinutes?: number;
+    /** Authoritative job length for the proposed slot. */
+    durationMinutes: number;
     /** When re-submitting the same create, ignore self (unused on create). */
     excludeBookingId?: string | null;
   },

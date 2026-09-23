@@ -58,6 +58,9 @@ export type ProvisionV2RecurringPlanParams = {
   rooms: number;
   bathrooms: number;
   preferredCleanerIds?: readonly string[];
+  /** Frozen Booking V2 catalog evidence from the originating quote lock. */
+  pricingVersionId?: string | null;
+  pricingSummary?: unknown;
 };
 
 export type ProvisionV2RecurringPlanResult =
@@ -184,7 +187,10 @@ export async function provisionV2RecurringPlan(
       surge: 1,
       price: perVisitPriceZar,
       duration: durationHours,
+      ...(params.pricingVersionId ? { pricing_version_id: params.pricingVersionId } : {}),
     },
+    ...(params.pricingVersionId ? { pricing_version_id: params.pricingVersionId } : {}),
+    ...(params.pricingSummary ? { pricingSummary: params.pricingSummary } : {}),
     customer: {
       email: "",
     },

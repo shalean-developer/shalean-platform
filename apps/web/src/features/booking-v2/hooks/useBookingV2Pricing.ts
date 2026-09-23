@@ -30,12 +30,20 @@ export function useBookingV2Pricing(): void {
   const recurringFrequency = useWatch({ control, name: "recurringFrequency" });
   const equipmentRequired = useWatch({ control, name: "equipmentRequired" });
   const equipmentQuote = useWatch({ control, name: "equipmentQuote" });
+  const pendingBookingId = useWatch({ control, name: "pendingBookingId" });
   const serviceDetailsSnapshot = JSON.stringify(serviceDetails ?? {});
   const selectedExtrasSnapshot = JSON.stringify(selectedExtras ?? []);
   const equipmentQuoteSnapshot = JSON.stringify(equipmentQuote ?? null);
 
   useEffect(() => {
+    // Once confirm has created a pending booking, its persisted pricing snapshot
+    // is canonical. Do not let the live/draft pricing hook overwrite the recovery
+    // summary while the customer retries the same payment.
+    if (pendingBookingId?.trim()) return;
+
     const revision = ++quoteRevision.current;
+    // Any price-affecting customer change invalidates the previous lock immediately.
+    setValue("quoteLock", null, { shouldDirty: false, shouldValidate: false });
     const currentServiceDetails = JSON.parse(serviceDetailsSnapshot) as NonNullable<
       BookingV2FormData["serviceDetails"]
     >;
@@ -85,15 +93,22 @@ export function useBookingV2Pricing(): void {
             body: requestBody,
           });
           if (!response.ok) throw new Error(`quote_http_${response.status}`);
-          return response.json() as Promise<{ pricingSummary?: BookingV2FormData["pricingSummary"] }>;
+          return response.json() as Promise<{
+            pricingSummary?: BookingV2FormData["pricingSummary"];
+            quoteLock?: NonNullable<BookingV2FormData["quoteLock"]>;
+          }>;
         },
         30_000,
       )
-        .then(({ pricingSummary }) => {
+        .then(({ pricingSummary, quoteLock }) => {
           // A slower response for a previous room selection must never replace
           // the immediately calculated total for the customer's latest choice.
-          if (pricingSummary && revision === quoteRevision.current) {
+          if (pricingSummary && quoteLock && revision === quoteRevision.current) {
             setValue("pricingSummary", pricingSummary, {
+              shouldDirty: false,
+              shouldValidate: false,
+            });
+            setValue("quoteLock", quoteLock, {
               shouldDirty: false,
               shouldValidate: false,
             });
@@ -109,6 +124,7 @@ export function useBookingV2Pricing(): void {
       window.clearTimeout(timer);
     };
   }, [
+    pendingBookingId,
     serviceSlug,
     liveConfig,
     feesConfig,

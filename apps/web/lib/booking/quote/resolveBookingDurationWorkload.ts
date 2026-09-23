@@ -81,6 +81,12 @@ export function resolveBookingV2DurationWorkload(input: {
   selectedExtras: readonly string[];
   cleanerMode: "team" | "individual_cleaners";
   cleanerCount: number;
+  durationRates?: {
+    baseHours: number;
+    bedroomHours: number;
+    bathroomHours: number;
+    extraRoomHours: number;
+  } | null;
   durationLimits?: ServiceDurationLimits | null;
 }): DurationWorkloadResult {
   const canonical = V2_TO_CANONICAL[input.serviceSlug];
@@ -119,6 +125,14 @@ export function resolveBookingV2DurationWorkload(input: {
     extraRooms,
     extras: input.selectedExtras,
     teamMemberCount: input.cleanerMode === "team" ? 3 : input.cleanerCount,
+    durationRateMinutes: input.durationRates
+      ? {
+          baseMinutes: Math.round(input.durationRates.baseHours * 60),
+          bedroomMinutes: Math.round(input.durationRates.bedroomHours * 60),
+          bathroomMinutes: Math.round(input.durationRates.bathroomHours * 60),
+          extraRoomMinutes: Math.round(input.durationRates.extraRoomHours * 60),
+        }
+      : undefined,
     durationMinuteLimits: durationMinuteLimitsFromHours(input.durationLimits),
   });
 }

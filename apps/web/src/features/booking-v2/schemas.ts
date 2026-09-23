@@ -174,6 +174,27 @@ export const signUpSchema = z.object({
 export type SignInData = z.infer<typeof signInSchema>;
 export type SignUpData = z.infer<typeof signUpSchema>;
 
+// ─── Server quote lock ────────────────────────────────────────────────────────
+
+export const bookingV2QuoteSchema = z.object({
+  serviceSlug: z.enum(SERVICE_SLUGS),
+  serviceDetails: z.preprocess(normalizeServiceDetails, z.record(serviceDetailValueSchema)),
+  selectedExtras: z.array(z.string()).default([]),
+  equipmentRequired: z.preprocess(
+    (value) => {
+      if (value === true || value === "yes") return "yes";
+      if (value === false || value === "no" || value === "" || value == null) return "no";
+      return value;
+    },
+    z.enum(["yes", "no"]),
+  ).optional().default("no"),
+  equipmentQuote: equipmentQuoteSchema.nullable().optional().default(null),
+  bookingType: z.enum(["once_off", "recurring"]),
+  recurringFrequency: z.enum(["weekly", "fortnightly", "monthly", "custom", ""]).optional().default(""),
+  cleanerMode: z.enum(["team", "individual_cleaners"]),
+  cleanerCount: z.number().min(1).max(3).default(1),
+});
+
 // ─── Full booking schema (for confirm API) ────────────────────────────────────
 
 export const bookingV2ConfirmSchema = z.object({
@@ -214,6 +235,12 @@ export const bookingV2ConfirmSchema = z.object({
   assignedTeamName: z.string().optional().default(""),
   cleanerCount: z.number().min(1).max(3).default(1),
   selectedCleanerIds: z.array(z.string()).optional().default([]),
+  quoteLock: z.object({
+    pricingVersionId: z.string().uuid(),
+    quoteSignature: z.string().min(1),
+    lockedAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+  }).nullable().optional(),
   pricingSummary: z
     .object({
       basePrice: z.number().optional(),

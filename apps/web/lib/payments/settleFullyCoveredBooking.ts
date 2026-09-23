@@ -16,6 +16,8 @@ type BookingSettleRow = {
   total_price: number | string | null;
   payment_transaction_id: string | null;
   payment_completed_at: string | null;
+  cleaner_id?: string | null;
+  selected_cleaner_id?: string | null;
 };
 
 type RpcSettleRow = {
@@ -117,7 +119,7 @@ async function settleFullyCoveredBookingAppFallback(
 ): Promise<SettleFullyCoveredBookingResult> {
   const { data: row, error: readErr } = await admin
     .from("bookings")
-    .select("id, status, payment_status, total_price, payment_transaction_id, payment_completed_at")
+    .select("id, status, payment_status, total_price, payment_transaction_id, payment_completed_at, cleaner_id, selected_cleaner_id")
     .eq("id", bookingId)
     .maybeSingle();
 
@@ -186,7 +188,10 @@ async function settleFullyCoveredBookingAppFallback(
   const { data: updated, error: updateErr } = await admin
     .from("bookings")
     .update({
-      status: "pending",
+      status:
+        existing.cleaner_id || existing.selected_cleaner_id
+          ? "pending_assignment"
+          : "pending",
       payment_status: "success",
       payment_completed_at: existing.payment_completed_at ?? now,
       billing_type: "prepaid",

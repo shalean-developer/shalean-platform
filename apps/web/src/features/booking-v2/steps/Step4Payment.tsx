@@ -33,6 +33,7 @@ import {
 } from "@/lib/booking-v2/bookingV2PaymentRedirect";
 import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
+import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 
 // ??? Auth Form ?????????????????????????????????????????????????????????????????
 
@@ -47,6 +48,8 @@ type PendingPaymentSummary = {
   serviceLabel: string;
   address: string;
   amountZar: number;
+  grossAmountZar: number;
+  cleaningCreditZar: number;
   pricingSummary: CustomerPricingBreakdown | null;
 };
 
@@ -296,12 +299,15 @@ function PaymentSection({
   const { serviceSlug, clearBooking, catalogLoading } = useBookingV2();
   const searchParams = useSearchParams();
   const referralCodeFromUrl = searchParams.get("ref");
-  const { watch, setValue } = useFormContext<BookingV2FormData>();
+  const { watch, setValue, getValues } = useFormContext<BookingV2FormData>();
   const values = watch();
+  const { tier: vipTier } = useBookingVipTier();
   const config = SERVICE_CONFIG[serviceSlug];
   const quoteReadiness = assessBookingQuoteReadiness({
     catalogLoading,
     pricingSummary: values.pricingSummary,
+    quoteLock: values.quoteLock,
+    requirePriceLock: true,
   });
 
   // Recover if Paystack onSuccess cleared mid-navigation (HMR / Fast Refresh remount).
@@ -362,6 +368,12 @@ function PaymentSection({
           return;
         }
         setPendingSummary(json);
+        // Synchronize the shared Booking V2 summary with the server-owned
+        // locked gross quote. Retry mode must not show a freshly recalculated
+        // draft total beside the canonical pending payment.
+        if (json.pricingSummary) {
+          setValue("pricingSummary", json.pricingSummary, { shouldDirty: false, shouldValidate: false });
+        }
       } catch {
         if (active) setPendingSummaryError("Could not load the saved booking total. Please refresh this page and try again.");
       }
@@ -661,6 +673,60 @@ function PaymentSection({
         }
       }
 
+      // Re-read the form at click time. React Hook Form's render snapshot can lag
+      // an async quote response by one render, so never send `values` as the
+      // authoritative confirm payload.
+      let confirmValues = getValues();
+      const currentLock = confirmValues.quoteLock;
+      const currentSignature = confirmValues.pricingSummary?.quote_signature;
+      const lockExpiresAtMs = currentLock?.expiresAt ? Date.parse(currentLock.expiresAt) : NaN;
+      const lockUsable =
+        Boolean(currentLock?.pricingVersionId?.trim()) &&
+        Boolean(currentLock?.quoteSignature?.trim()) &&
+        Boolean(currentSignature) &&
+        currentLock?.quoteSignature === currentSignature &&
+        Number.isFinite(lockExpiresAtMs) &&
+        lockExpiresAtMs > Date.now() + 5_000;
+
+      // If the form does not contain the exact current lock, obtain one now and
+      // submit that returned pair directly. This closes the async render race
+      // without weakening the server's QUOTE_LOCK_REQUIRED boundary.
+      if (!lockUsable) {
+        const quoteRes = await fetchPaymentPreparation("/api/booking-v2/quote", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            serviceSlug,
+            serviceDetails: confirmValues.serviceDetails ?? {},
+            selectedExtras: confirmValues.selectedExtras ?? [],
+            cleanerMode: confirmValues.cleanerMode,
+            cleanerCount: confirmValues.cleanerCount ?? 1,
+            bookingType: confirmValues.bookingType,
+            recurringFrequency: confirmValues.recurringFrequency ?? "",
+            equipmentRequired: confirmValues.equipmentRequired ?? "no",
+            equipmentQuote: confirmValues.equipmentQuote ?? null,
+            vipTier,
+          }),
+        }, BOOKING_CONFIRM_TIMEOUT_MS);
+        const freshQuote = (await quoteRes.json()) as {
+          pricingSummary?: BookingV2FormData["pricingSummary"];
+          quoteLock?: NonNullable<BookingV2FormData["quoteLock"]>;
+          error?: string;
+        };
+        if (!quoteRes.ok || !freshQuote.pricingSummary || !freshQuote.quoteLock) {
+          setError(freshQuote.error ?? "Could not refresh your secured price. Please try again.");
+          setConfirming(false);
+          return;
+        }
+        setValue("pricingSummary", freshQuote.pricingSummary, { shouldDirty: false, shouldValidate: false });
+        setValue("quoteLock", freshQuote.quoteLock, { shouldDirty: false, shouldValidate: false });
+        confirmValues = {
+          ...confirmValues,
+          pricingSummary: freshQuote.pricingSummary,
+          quoteLock: freshQuote.quoteLock,
+        };
+      }
+
       const confirmRes = await fetchPaymentPreparation("/api/booking-v2/confirm", {
         method: "POST",
         headers: {
@@ -668,7 +734,7 @@ function PaymentSection({
           Authorization: `Bearer ${session.access_token}`,
         },
         body: JSON.stringify({
-          ...values,
+          ...confirmValues,
           applyCleaningCreditZar: creditToApply,
           // Omit when unset ? Zod optional strings reject JSON `null` from getStoredReferral.
           referralCode:
@@ -690,10 +756,32 @@ function PaymentSection({
         code?: string;
         fulfillmentMode?: string;
         customerMessage?: string;
+        previousTotalZar?: number;
+        updatedTotalZar?: number;
       };
 
       if (confirmRes.status === 401) {
         onSessionLost("Your sign-in session expired. Please sign in again to complete payment.");
+        setConfirming(false);
+        return;
+      }
+
+      if (confirmRes.status === 409 && confirmJson.code === "REQUOTE_REQUIRED" && confirmJson.pricingSummary) {
+        setValue("pricingSummary", confirmJson.pricingSummary, {
+          shouldDirty: false,
+          shouldValidate: false,
+        });
+        const previous =
+          typeof confirmJson.previousTotalZar === "number"
+            ? `R${confirmJson.previousTotalZar.toLocaleString("en-ZA")}`
+            : "your previous total";
+        const updated =
+          typeof confirmJson.updatedTotalZar === "number"
+            ? `R${confirmJson.updatedTotalZar.toLocaleString("en-ZA")}`
+            : "the updated total";
+        setError(
+          `Your price changed from ${previous} to ${updated}. Please review the updated total, then press Pay again to confirm it.`,
+        );
         setConfirming(false);
         return;
       }
@@ -764,6 +852,11 @@ function PaymentSection({
         serviceLabel: config.label,
         address: [values.address, values.suburb].filter(Boolean).join(", "),
         amountZar: chargeAmount,
+        grossAmountZar:
+          confirmJson.pricingSummary?.estimated_total ??
+          confirmJson.pricingSummary?.total ??
+          chargeAmount + creditToApply,
+        cleaningCreditZar: creditToApply,
         pricingSummary: confirmJson.pricingSummary ?? null,
       });
 

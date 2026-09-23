@@ -178,13 +178,15 @@ export async function findCleanerSlotOccupancyConflict(
     cleanerId: string;
     dateYmd: string;
     timeHm: string;
-    durationMinutes?: number;
+    durationMinutes: number;
     excludeBookingId?: string | null;
   },
 ): Promise<string | null> {
   const { cleanerId, dateYmd, timeHm, excludeBookingId } = params;
   const t = timeHm.trim().slice(0, 5);
-  const duration = Math.max(30, Math.round(params.durationMinutes ?? 120));
+  const durationRaw = Number(params.durationMinutes);
+  if (!Number.isFinite(durationRaw) || durationRaw < 30) return null;
+  const duration = Math.round(durationRaw);
   if (!/^[0-9a-f-]{36}$/i.test(cleanerId) || !/^\d{4}-\d{2}-\d{2}$/.test(dateYmd) || !/^\d{2}:\d{2}$/.test(t)) {
     return null;
   }

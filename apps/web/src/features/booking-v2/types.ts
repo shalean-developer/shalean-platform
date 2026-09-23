@@ -104,6 +104,13 @@ export type BookingV2FormData = {
 
   // Derived pricing (computed, not user-entered)
   pricingSummary: CustomerPricingBreakdown;
+  /** Server-authoritative price lock. Replaced only when a price-affecting input changes. */
+  quoteLock?: {
+    pricingVersionId: string;
+    quoteSignature: string;
+    lockedAt: string;
+    expiresAt: string;
+  } | null;
   /**
    * Persisted across Paystack redirect cancel so Step 4 can retry payment
    * without creating a duplicate booking.
@@ -144,6 +151,7 @@ export function defaultBookingFormData(serviceSlug: ServiceSlug, cleanerMode: Cl
     selectedCleanerIds: [],
     selectedCleanerDetails: [],
     pricingSummary: emptyCustomerPricingBreakdown(),
+    quoteLock: null,
     pendingBookingId: null,
   };
 }

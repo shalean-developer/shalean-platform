@@ -1,14 +1,15 @@
 import type { BookingServiceId } from "@/components/booking/serviceCategories";
 import { PRICING_ENGINE_ALGORITHM_VERSION } from "@/lib/pricing/engineVersion";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
-import type { PricingRatesSnapshot } from "@/lib/pricing/pricingRatesSnapshot";
+import type { PricingRatesSnapshot, PricingSnapshotServiceId } from "@/lib/pricing/pricingRatesSnapshot";
 
-const SERVICE_KEYS: readonly BookingServiceId[] = [
+const SERVICE_KEYS: readonly PricingSnapshotServiceId[] = [
   "standard",
   "airbnb",
   "deep",
   "move",
   "carpet",
+  "office",
 ];
 
 const TARIFF: ServiceTariff = {
@@ -22,7 +23,7 @@ const TARIFF: ServiceTariff = {
 
 /** Deterministic catalog for Vitest — mirrors shape from Supabase-backed snapshots. */
 export function vitestTestPricingRatesSnapshot(): PricingRatesSnapshot {
-  const services = {} as Record<BookingServiceId, ServiceTariff>;
+  const services = {} as Record<PricingSnapshotServiceId, ServiceTariff>;
   for (const k of SERVICE_KEYS) services[k] = { ...TARIFF };
   return {
     codeVersion: PRICING_ENGINE_ALGORITHM_VERSION,

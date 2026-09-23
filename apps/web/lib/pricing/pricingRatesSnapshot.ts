@@ -1,17 +1,20 @@
 import type { BookingServiceId } from "@/components/booking/serviceCategories";
+
+export type PricingSnapshotServiceId = BookingServiceId | "office";
 import type { ServiceTariff } from "@/lib/pricing/pricingConfig";
 
-const SERVICE_KEYS: readonly BookingServiceId[] = [
+const SERVICE_KEYS: readonly PricingSnapshotServiceId[] = [
   "standard",
   "airbnb",
   "deep",
   "move",
   "carpet",
+  "office",
 ];
 
 export type SnapshotExtraRow = {
   price: number;
-  services: BookingServiceId[];
+  services: PricingSnapshotServiceId[];
   name?: string;
   description?: string;
   isPopular?: boolean;
@@ -21,7 +24,7 @@ export type SnapshotBundleRow = {
   id: string;
   items: string[];
   price: number;
-  services?: BookingServiceId[];
+  services?: PricingSnapshotServiceId[];
   label?: string;
   blurb?: string;
 };
@@ -29,7 +32,7 @@ export type SnapshotBundleRow = {
 export type PricingRatesSnapshot = {
   /** Tariff marker stored in signed quotes (`CheckoutQuoteResult.pricingVersion`). */
   codeVersion: number;
-  services: Record<BookingServiceId, ServiceTariff>;
+  services: Record<PricingSnapshotServiceId, ServiceTariff>;
   extras: Record<string, SnapshotExtraRow>;
   bundles: SnapshotBundleRow[];
 };
@@ -47,6 +50,20 @@ function stableStringify(value: unknown): string {
 }
 
 export { stableStringify };
+
+export function pricingSnapshotServiceKeyForBookingV2Slug(
+  slug: string,
+): PricingSnapshotServiceId | null {
+  switch (slug) {
+    case "regular-cleaning": return "standard";
+    case "airbnb-cleaning": return "airbnb";
+    case "deep-cleaning": return "deep";
+    case "moving-cleaning": return "move";
+    case "carpet-cleaning": return "carpet";
+    case "office-cleaning": return "office";
+    default: return null;
+  }
+}
 
 function isServiceTariff(v: unknown): v is ServiceTariff {
   if (!v || typeof v !== "object") return false;
@@ -84,11 +101,11 @@ function parseBundles(raw: unknown): SnapshotBundleRow[] {
     const label = typeof o.label === "string" && o.label.trim() ? o.label.trim() : undefined;
     const blurb = typeof o.blurb === "string" && o.blurb.trim() ? o.blurb.trim() : undefined;
     const servicesRaw = o.services;
-    let services: BookingServiceId[] | undefined;
+    let services: PricingSnapshotServiceId[] | undefined;
     if (Array.isArray(servicesRaw)) {
       const s = servicesRaw.filter(
-        (x): x is BookingServiceId =>
-          typeof x === "string" && (SERVICE_KEYS as readonly string[]).includes(x as BookingServiceId),
+        (x): x is PricingSnapshotServiceId =>
+          typeof x === "string" && (SERVICE_KEYS as readonly string[]).includes(x as PricingSnapshotServiceId),
       );
       services = s.length ? s : undefined;
     }
@@ -106,7 +123,7 @@ export function parsePricingRatesSnapshotFromDbRow(row: {
 }): PricingRatesSnapshot | null {
   if (typeof row.code_version !== "number" || !Number.isFinite(row.code_version)) return null;
   if (!row.services || typeof row.services !== "object" || Array.isArray(row.services)) return null;
-  const services: Partial<Record<BookingServiceId, ServiceTariff>> = {};
+  const services: Partial<Record<PricingSnapshotServiceId, ServiceTariff>> = {};
   const svcObj = row.services as Record<string, unknown>;
   for (const k of SERVICE_KEYS) {
     const v = svcObj[k];
@@ -122,8 +139,8 @@ export function parsePricingRatesSnapshotFromDbRow(row: {
     const price = typeof o.price === "number" && Number.isFinite(o.price) ? Math.round(o.price) : NaN;
     const serv = Array.isArray(o.services)
       ? o.services.filter(
-          (x): x is BookingServiceId =>
-            typeof x === "string" && (SERVICE_KEYS as readonly string[]).includes(x as BookingServiceId),
+          (x): x is PricingSnapshotServiceId =>
+            typeof x === "string" && (SERVICE_KEYS as readonly string[]).includes(x as PricingSnapshotServiceId),
         )
       : [];
     if (!Number.isFinite(price)) continue;
@@ -144,7 +161,7 @@ export function parsePricingRatesSnapshotFromDbRow(row: {
 
   return {
     codeVersion: Math.round(row.code_version),
-    services: services as Record<BookingServiceId, ServiceTariff>,
+    services: services as Record<PricingSnapshotServiceId, ServiceTariff>,
     extras,
     bundles,
   };

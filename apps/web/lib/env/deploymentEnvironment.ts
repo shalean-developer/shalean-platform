@@ -95,7 +95,13 @@ export function supabaseRefFromUrl(url: string | undefined | null): string | nul
  */
 export function expectedSupabaseRefForDeployment(
   deployment: ShaleanDeploymentEnv = resolveDeploymentEnvironment(),
+  env: EnvLike = process.env,
 ): string | null {
+  // An explicitly configured non-production project ref lets isolated UAT
+  // environments identify their intended Supabase project without redefining
+  // the canonical shared staging project.
+  const explicit = env.SHALEAN_EXPECTED_SUPABASE_REF?.trim();
+  if (deployment !== "production" && explicit) return explicit;
   if (deployment === "production") return SHALEAN_SUPABASE_REFS.production;
   if (deployment === "staging") return SHALEAN_SUPABASE_REFS.staging;
   return null;

@@ -12,6 +12,8 @@ import { CUSTOMER_SUPPORT_WHATSAPP_E164 } from "@/lib/site/customerSupport";
 export type BookingConfirmationHeroProps = {
   bookingReference: string | null;
   totalPaidZar: number | null;
+  grossAmountZar?: number | null;
+  cleaningCreditZar?: number | null;
   bookingId: string;
   hasSession: boolean;
 };
@@ -32,6 +34,8 @@ function whatsAppSupportHref(bookingReference: string | null): string {
 export function BookingConfirmationHero({
   bookingReference,
   totalPaidZar,
+  grossAmountZar,
+  cleaningCreditZar,
   bookingId,
   hasSession,
 }: BookingConfirmationHeroProps) {
@@ -67,12 +71,29 @@ export function BookingConfirmationHero({
           </dd>
         </div>
         <div className="pl-4">
-          <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Total paid
-          </dt>
-          <dd className="mt-1 text-base font-bold tabular-nums text-primary">
-            {totalPaidZar != null ? formatCustomerBookingTotalPaid(totalPaidZar) : "—"}
-          </dd>
+          {grossAmountZar != null && cleaningCreditZar != null && cleaningCreditZar > 0 ? (
+            <>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Booking total
+              </dt>
+              <dd className="mt-1 text-base font-bold tabular-nums text-primary">
+                {formatCustomerBookingTotalPaid(grossAmountZar)}
+              </dd>
+              <div className="mt-2 space-y-0.5 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
+                <p>Cleaning Credit −{formatCustomerBookingTotalPaid(cleaningCreditZar)}</p>
+                <p>Paid by Paystack {totalPaidZar != null ? formatCustomerBookingTotalPaid(totalPaidZar) : "—"}</p>
+              </div>
+            </>
+          ) : (
+            <>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Total paid
+              </dt>
+              <dd className="mt-1 text-base font-bold tabular-nums text-primary">
+                {totalPaidZar != null ? formatCustomerBookingTotalPaid(totalPaidZar) : "—"}
+              </dd>
+            </>
+          )}
         </div>
       </dl>
 

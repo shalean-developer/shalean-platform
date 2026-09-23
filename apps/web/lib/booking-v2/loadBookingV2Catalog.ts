@@ -31,6 +31,7 @@ import {
   resolvePricingServiceRow,
 } from "@/lib/booking-v2/resolvePricingServiceSlug";
 import { serviceRequiresCustomerEquipmentChoice } from "@/lib/booking-v2/serviceSuppliesPolicy";
+import { isExtraSlugAllowedForService } from "@/lib/booking-v2/serviceExtraSlugs";
 import { DEFAULT_SERVICE_DURATION_LIMITS } from "@/lib/pricing/pricingConfig";
 
 export type {
@@ -49,6 +50,9 @@ type DbServiceRow = {
   price_per_extra_room: number;
   service_fee_zar: number | null;
   duration_base: number;
+  duration_per_bedroom: number;
+  duration_per_bathroom: number;
+  duration_per_extra_room: number;
   min_hours: number;
   max_hours: number;
 };
@@ -132,7 +136,7 @@ function buildExtrasForService(
 ): LiveExtra[] {
   return Object.entries(dbExtras)
     .filter(([slug]) => !BOOKING_V2_INTERNAL_EXTRA_SLUGS.has(slug))
-    .filter(([slug]) => !(serviceSlug === "carpet-cleaning" && slug === "stain-treatment"))
+    .filter(([slug]) => isExtraSlugAllowedForService(serviceSlug, slug))
     .filter(([, row]) => row.service_slugs.includes(serviceSlug))
     .filter(([, row]) => Number.isFinite(row.price) && row.price > 0)
     .sort((a, b) => a[1].sort_order - b[1].sort_order || a[0].localeCompare(b[0]))
@@ -191,7 +195,7 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       admin
         .from("pricing_services")
         .select(
-          "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, service_fee_zar, duration_base, min_hours, max_hours",
+          "slug, base_price, price_per_bedroom, price_per_bathroom, price_per_extra_room, service_fee_zar, duration_base, duration_per_bedroom, duration_per_bathroom, duration_per_extra_room, min_hours, max_hours",
         )
         .eq("is_active", true)
         .order("sort_order", { ascending: true }),
@@ -227,6 +231,9 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
           service_fee_zar:
             row.service_fee_zar == null ? null : Math.max(0, Math.round(Number(row.service_fee_zar) || 0)),
           duration_base: Number(row.duration_base) || 0,
+          duration_per_bedroom: Number(row.duration_per_bedroom) || 0,
+          duration_per_bathroom: Number(row.duration_per_bathroom) || 0,
+          duration_per_extra_room: Number(row.duration_per_extra_room) || 0,
           min_hours:
             Number.isFinite(Number(row.min_hours)) && Number(row.min_hours) > 0
               ? Number(row.min_hours)
@@ -304,14 +311,11 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       shortLabel: serviceDef.shortLabel,
       description: serviceDef.description,
       cleanerMode: serviceDef.cleanerMode,
-      showEquipmentQuestion:
-        slug === "office-cleaning" || slug === "airbnb-cleaning"
-          ? false
-          : serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
-      showCleaningProductsQuestion:
-        slug === "office-cleaning" || slug === "airbnb-cleaning"
-          ? false
-          : serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
+      // Supplies/equipment eligibility is a service policy, not mutable pricing
+      // configuration. This keeps UI, quote, frozen-lock confirm and Paystack aligned
+      // even when an older booking_v2 config explicitly stored a stale false value.
+      showEquipmentQuestion: serviceRequiresCustomerEquipmentChoice(slug),
+      showCleaningProductsQuestion: serviceRequiresCustomerEquipmentChoice(slug),
       allowsExtraCleaner:
         slug === "carpet-cleaning" ? false : serviceDef.allowsExtraCleaner,
       step1Questions: normalizeBookingV2Questions(
@@ -323,6 +327,10 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       estimatedDurationHours: dbSvc?.duration_base
         ? Math.max(1, Math.round(dbSvc.duration_base))
         : staticFallback.estimatedDurationHours,
+      durationBaseHours: dbSvc?.duration_base || staticFallback.estimatedDurationHours,
+      durationPerBedroomHours: dbSvc?.duration_per_bedroom ?? 0,
+      durationPerBathroomHours: dbSvc?.duration_per_bathroom ?? 0,
+      durationPerExtraRoomHours: dbSvc?.duration_per_extra_room ?? 0,
       minDurationHours: dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
       maxDurationHours: Math.max(
         dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
@@ -366,6 +374,10 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
         estimatedDurationHours: dbSvc?.duration_base
           ? Math.max(1, Math.round(dbSvc.duration_base))
           : staticFallback.estimatedDurationHours,
+        durationBaseHours: dbSvc?.duration_base || staticFallback.estimatedDurationHours,
+        durationPerBedroomHours: dbSvc?.duration_per_bedroom ?? 0,
+        durationPerBathroomHours: dbSvc?.duration_per_bathroom ?? 0,
+        durationPerExtraRoomHours: dbSvc?.duration_per_extra_room ?? 0,
         minDurationHours: dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,
         maxDurationHours: Math.max(
           dbSvc?.min_hours ?? DEFAULT_SERVICE_DURATION_LIMITS.minHours,

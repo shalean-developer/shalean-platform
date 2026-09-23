@@ -85,9 +85,28 @@ export async function GET(
   }
 
   const normalized = normalizePricingSummary(data.pricing_summary);
+  // total_price is the remaining cash payable after discounts/credit. Preserve
+  // the locked gross quote separately so pending-payment recovery never
+  // rewrites the booking summary to the cash remainder.
+  const grossAmountZar = normalized
+    ? Math.round(Number(normalized.estimated_total ?? normalized.total))
+    : amountZar;
   const pricingSummary = normalized
-    ? { ...normalized, estimated_total: amountZar, total: amountZar }
+    ? {
+        ...normalized,
+        estimated_total: Number.isFinite(grossAmountZar) ? grossAmountZar : amountZar,
+        total: Number.isFinite(grossAmountZar) ? grossAmountZar : amountZar,
+      }
     : null;
+  const { data: creditReservation } = await admin
+    .from("cleaning_credit_reservations")
+    .select("amount_zar, status")
+    .eq("booking_id", bookingId)
+    .in("status", ["reserved", "settled"])
+    .maybeSingle();
+  const cleaningCreditZar = creditReservation
+    ? Math.max(0, Math.round(Number(creditReservation.amount_zar) || 0))
+    : 0;
 
   const normalizedPaymentStatus = String(data.payment_status ?? "").trim().toLowerCase();
   const paid =
@@ -119,6 +138,8 @@ export async function GET(
       ),
       address: String(data.location ?? data.suburb ?? ""),
       amountZar,
+      grossAmountZar: Number.isFinite(grossAmountZar) ? grossAmountZar : amountZar,
+      cleaningCreditZar,
       pricingSummary,
     },
     { headers: NO_STORE_HEADERS },

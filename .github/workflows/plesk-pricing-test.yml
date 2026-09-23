@@ -1,0 +1,94 @@
+name: Plesk pricing-test standalone artifact
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plesk-pricing-test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build isolated pricing-test runtime
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SHALEAN_APP_ENV: "test"
+      SHALEAN_ENFORCE_ENV_SAFETY: "true"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_SITE_URL: "https://pricing-test.shalean.co.za"
+      NEXT_PUBLIC_APP_URL: "https://pricing-test.shalean.co.za"
+      NEXT_PUBLIC_SUPABASE_URL: "https://jhubpsbwmjgydkzztxeu.supabase.co"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ secrets.PLESK_TEST_SUPABASE_PUBLISHABLE_KEY }}"
+      NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY: "${{ secrets.PLESK_TEST_PAYSTACK_PUBLIC_KEY }}"
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Guard exact test branch and public configuration
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "fix/booking-v2-six-service-pricing-convergence"
+          test "${NEXT_PUBLIC_SUPABASE_URL}" = "https://jhubpsbwmjgydkzztxeu.supabase.co"
+          test -n "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+          case "${NEXT_PUBLIC_SUPABASE_ANON_KEY}" in sb_publishable_*|eyJ*) ;; *) exit 1;; esac
+          case "${NEXT_PUBLIC_PAYSTACK_PUBLIC_KEY}" in pk_test_*) ;; *) echo "::error::Test Paystack key must start pk_test_"; exit 1;; esac
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - name: Install web dependencies
+        working-directory: apps/web
+        run: |
+          npm ci
+          npm install --no-save --package-lock=false --package-lock-only=false --ignore-scripts @tailwindcss/postcss@4.1.14
+      - name: Build standalone
+        working-directory: apps/web
+        env:
+          FACEBOOK_APP_ID: "build-only-placeholder"
+          FACEBOOK_APP_SECRET: "build-only-placeholder"
+        run: |
+          node --max-old-space-size=8192 ./node_modules/next/dist/bin/next build --webpack
+          test -f .next/standalone/apps/web/server.js
+      - name: Add public and static assets
+        working-directory: apps/web
+        run: |
+          RUNTIME=".next/standalone/apps/web"
+          rm -rf "$RUNTIME/public" "$RUNTIME/.next/static"
+          mkdir -p "$RUNTIME/.next"
+          cp -a public "$RUNTIME/public"
+          cp -a .next/static "$RUNTIME/.next/static"
+      - name: Smoke standalone runtime
+        working-directory: apps/web/.next/standalone/apps/web
+        env:
+          HOSTNAME: "127.0.0.1"
+          PORT: "3000"
+          FACEBOOK_APP_ID: "build-only-placeholder"
+          FACEBOOK_APP_SECRET: "build-only-placeholder"
+        run: |
+          set -euo pipefail
+          nohup node server.js >/tmp/pricing-test.log 2>&1 &
+          pid=$!
+          trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:3000/api/health; then exit 0; fi
+            sleep 2
+          done
+          cat /tmp/pricing-test.log || true
+          exit 1
+      - name: Package artifact
+        run: |
+          mkdir -p artifact-stage
+          cp -a apps/web/.next/standalone artifact-stage/runtime
+          cat > artifact-stage/build-meta.json <<META
+          {"artifact_sha":"${GITHUB_SHA}","target_host":"pricing-test.shalean.co.za","deployment_environment":"test","supabase_ref":"jhubpsbwmjgydkzztxeu","runtime_entry":"runtime/apps/web/server.js","document_root":"runtime/apps/web/public","deployment_performed":false}
+          META
+          tar -czf "plesk-pricing-test-${GITHUB_SHA}.tar.gz" -C artifact-stage .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plesk-pricing-test-${{ github.sha }}
+          path: plesk-pricing-test-${{ github.sha }}.tar.gz
+          retention-days: 7

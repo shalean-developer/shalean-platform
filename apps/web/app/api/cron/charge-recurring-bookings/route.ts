@@ -29,7 +29,7 @@ export const dynamic = "force-dynamic";
 const MAX_CHARGE = 100;
 
 const RECURRING_CHARGE_BOOKING_SELECT_BASE =
-  "id, date, recurring_id, customer_email, paystack_reference, booking_snapshot, total_paid_zar, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking";
+  "id, date, recurring_id, customer_email, paystack_reference, booking_snapshot, total_price, total_paid_zar, recurring_retry_count, recurring_first_failure_at, recurring_next_charge_attempt_at, payment_link_first_sent_at, payment_link_send_count, payment_status, is_monthly_billing_booking";
 
 async function loadRecurringChargeCandidateBookings(
   admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
@@ -154,6 +154,7 @@ export async function POST(request: Request) {
       customer_email: string | null;
       paystack_reference: string | null;
       booking_snapshot: unknown;
+      total_price: number | string | null;
       total_paid_zar: number | string | null;
       recurring_retry_count: number | null;
       recurring_first_failure_at: string | null;
@@ -233,12 +234,15 @@ export async function POST(request: Request) {
       continue;
     }
 
-    const totalZarRaw = row.total_paid_zar;
+    // New recurring rows persist the immutable amount due in total_price.
+    // Legacy rows may predate that contract and used total_paid_zar as payable;
+    // retain that fallback without rewriting historical records.
+    const payableRaw = row.total_price ?? row.total_paid_zar;
     const amountZar =
-      typeof totalZarRaw === "number" && Number.isFinite(totalZarRaw)
-        ? Math.round(totalZarRaw)
-        : typeof totalZarRaw === "string" && /^\d+(\.\d+)?$/.test(totalZarRaw.trim())
-          ? Math.round(Number(totalZarRaw))
+      typeof payableRaw === "number" && Number.isFinite(payableRaw)
+        ? Math.round(payableRaw)
+        : typeof payableRaw === "string" && /^\d+(\.\d+)?$/.test(payableRaw.trim())
+          ? Math.round(Number(payableRaw))
           : 0;
     const amountCents = Math.max(0, amountZar) * 100;
     if (amountCents < 100) continue;

@@ -37,7 +37,7 @@ import { logBookingDemandEvent } from "@/lib/booking/logBookingDemandEvent";
 import { SOFT_FULFILLMENT_CUSTOMER_COPY } from "@/lib/booking/bookingFulfillmentMode";
 import type { BookingFulfillmentMode } from "@/lib/booking/bookingFulfillmentMode";
 import { canonicalServiceSlugFromBookingV2 } from "@/lib/booking-v2/bookingV2ServiceSlug";
-import { spendCleaningCredit } from "@/lib/referrals/credits";
+import { reserveCleaningCreditForBooking, settleCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
 import { buildReferralCheckoutSnapshot } from "@/lib/referrals/referralCheckoutMetadata";
 import { buildReferralCheckoutFingerprint } from "@/lib/referrals/checkoutFingerprint";
 import { resolveReferralClientIp } from "@/lib/referrals/clientIp";
@@ -61,6 +61,9 @@ import { createFreshPaymentPreparationToken } from "@/lib/booking/freshPaymentPr
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import { upsertPendingRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
 import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
+import { fetchPricingRatesSnapshotByVersionId } from "@/lib/booking/pricingVersionDb";
+import { pricingSnapshotServiceKeyForBookingV2Slug } from "@/lib/pricing/pricingRatesSnapshot";
+import { liveServiceConfigFromPricingSnapshot } from "@/lib/booking-v2/liveServiceConfigFromPricingSnapshot";
 
 export const runtime = "nodejs";
 
@@ -75,6 +78,22 @@ async function trySettleFullyCoveredOrError(
   payAmountZar: number,
 ): Promise<{ requiresPayment: true } | { requiresPayment: false } | { errorResponse: NextResponse }> {
   if (payAmountZar > 0) return { requiresPayment: true };
+
+  // A zero-cash booking can be covered by promotions/referrals alone or by a
+  // Cleaning Credit reservation. Settle the reservation first when present so
+  // the booking can never become payment-success while its spent credit remains
+  // releasable. reservation_not_found is expected for non-credit R0 bookings.
+  const creditSettlement = await settleCleaningCreditForBooking(supabase, bookingId);
+  if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
+    console.error("[booking-v2/confirm] R0 Cleaning Credit settlement failed:", creditSettlement.error);
+    return {
+      errorResponse: NextResponse.json(
+        { error: "Could not settle Cleaning Credit. Please try again or contact support." },
+        { status: 503 },
+      ),
+    };
+  }
+
   const settled = await settleFullyCoveredBooking(supabase, { bookingId, payAmountZar });
   if (!settled.ok) {
     console.error("[booking-v2/confirm] R0 settlement failed:", settled.error, settled.code);
@@ -230,6 +249,46 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Service temporarily unavailable." }, { status: 503 });
   }
 
+  // A valid quote lock freezes the catalog used when the customer last changed
+  // a price-affecting input. Confirm must not silently move that customer to newer rates.
+  const suppliedQuoteLock = data.quoteLock ?? null;
+  if (!suppliedQuoteLock) {
+    return NextResponse.json(
+      { error: "Your price lock is missing. Please wait for pricing to refresh and try again.", code: "QUOTE_LOCK_REQUIRED" },
+      { status: 409 },
+    );
+  }
+  const lockExpiryMs = Date.parse(suppliedQuoteLock.expiresAt);
+  if (!Number.isFinite(lockExpiryMs) || lockExpiryMs <= Date.now()) {
+    return NextResponse.json(
+      { error: "Your price lock expired. Refresh the quote before continuing.", code: "QUOTE_LOCK_EXPIRED" },
+      { status: 409 },
+    );
+  }
+  if (suppliedQuoteLock.quoteSignature !== data.pricingSummary.quote_signature) {
+    return NextResponse.json(
+      { error: "Your price lock no longer matches this booking. Refresh pricing and try again.", code: "QUOTE_LOCK_MISMATCH" },
+      { status: 409 },
+    );
+  }
+  const lockedPricingSnapshot = await fetchPricingRatesSnapshotByVersionId(
+    supabase,
+    suppliedQuoteLock.pricingVersionId,
+  );
+  if (!lockedPricingSnapshot) {
+    return NextResponse.json(
+      { error: "Your locked pricing version is unavailable. Refresh pricing and try again.", code: "QUOTE_LOCK_VERSION_MISSING" },
+      { status: 409 },
+    );
+  }
+  const lockedServiceKey = pricingSnapshotServiceKeyForBookingV2Slug(data.serviceSlug);
+  if (!lockedServiceKey || !lockedPricingSnapshot.services[lockedServiceKey]) {
+    return NextResponse.json(
+      { error: "Your locked service pricing is unavailable. Refresh pricing and try again.", code: "QUOTE_LOCK_SERVICE_MISSING" },
+      { status: 409 },
+    );
+  }
+
   const ownershipColumnPromise = resolveBookingOwnershipColumn(supabase);
   const profilePromise = supabase
     .from("user_profiles")
@@ -314,15 +373,35 @@ export async function POST(request: Request) {
 
   const customerPhone = trimCustomerPhone(data.contactPhone) ?? customerPhoneFromAuth;
 
-  // ── 6. Server-side price verification ────────────────────────────────────────
+  // ── 6. Frozen-lock server-side price verification ──────────────────────────
   const equipmentRequiredFlag = data.equipmentRequired === "yes";
-  let liveConfig: LiveServiceConfig | null = null;
-  let feesConfig: Awaited<ReturnType<typeof loadBookingV2Catalog>>["feesConfig"] | null = null;
-  let serverEquipmentQuote: EquipmentQuoteResult | null = null;
-  let equipmentPricingSnapshot: ReturnType<typeof buildEquipmentPricingSnapshot> | null = null;
+  const feesConfig = defaultBookingV2FeesConfig();
+  const liveConfig = liveServiceConfigFromPricingSnapshot({
+    serviceSlug: data.serviceSlug,
+    snapshot: lockedPricingSnapshot,
+    feesConfig,
+  });
+  if (!liveConfig) {
+    return NextResponse.json(
+      { error: "Your locked service pricing is unavailable. Refresh pricing and try again.", code: "QUOTE_LOCK_SERVICE_MISSING" },
+      { status: 409 },
+    );
+  }
 
-  let catalogLoaded = false;
-  let serverBreakdown = buildSignedCustomerPricingFromForm({
+  // Equipment logistics is already part of the signed locked quote. Do not
+  // re-price it from today's logistics configuration during confirmation.
+  const serverEquipmentQuote =
+    equipmentRequiredFlag
+      ? ((data.equipmentQuote as EquipmentQuoteResult | null) ?? null)
+      : null;
+  const equipmentPricingSnapshot = serverEquipmentQuote
+    ? buildEquipmentPricingSnapshot({
+        config: await loadEquipmentPricingConfig(),
+        quote: serverEquipmentQuote,
+      })
+    : null;
+
+  const serverBreakdown = buildSignedCustomerPricingFromForm({
     serviceSlug: data.serviceSlug,
     values: {
       serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
@@ -331,64 +410,18 @@ export async function POST(request: Request) {
       cleanerCount: data.cleanerCount ?? 1,
       bookingType: data.bookingType,
       recurringFrequency: data.recurringFrequency ?? "",
-      equipmentRequired: data.equipmentRequired ?? "",
-      equipmentQuote: (data.equipmentQuote as EquipmentQuoteResult | null) ?? null,
+      equipmentRequired: equipmentRequiredFlag ? "yes" : "no",
+      equipmentQuote: serverEquipmentQuote,
     },
-    liveConfig: null,
-    feesConfig: null,
+    liveConfig,
+    feesConfig,
     vipTier,
   });
-
-  try {
-    const catalogPayload = await loadBookingV2Catalog();
-    feesConfig = catalogPayload.feesConfig;
-    liveConfig = catalogPayload.catalog[data.serviceSlug] ?? null;
-
-    const showEquipment =
-      liveConfig?.showEquipmentQuestion ??
-      liveConfig?.showCleaningProductsQuestion ??
-      serviceShowsEquipmentQuestion(data.serviceSlug);
-
-    if (showEquipment && equipmentRequiredFlag) {
-      const equipConfig = await loadEquipmentPricingConfig();
-      serverEquipmentQuote = await quoteEquipmentForAddress({
-        config: equipConfig,
-        address: data.address,
-        suburb: data.suburb,
-        city: data.city,
-        postalCode: data.postalCode,
-        equipmentRequired: true,
-      });
-      equipmentPricingSnapshot = buildEquipmentPricingSnapshot({
-        config: equipConfig,
-        quote: serverEquipmentQuote,
-      });
-    }
-
-    serverBreakdown = buildSignedCustomerPricingFromForm({
-      serviceSlug: data.serviceSlug,
-      values: {
-        serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
-        selectedExtras: data.selectedExtras ?? [],
-        cleanerMode: data.cleanerMode,
-        cleanerCount: data.cleanerCount ?? 1,
-        bookingType: data.bookingType,
-        recurringFrequency: data.recurringFrequency ?? "",
-        equipmentRequired: equipmentRequiredFlag ? "yes" : data.equipmentRequired === "no" ? "no" : "",
-        equipmentQuote: serverEquipmentQuote,
-      },
-      liveConfig,
-      feesConfig,
-      vipTier,
-    });
-    catalogLoaded = true;
-  } catch (e) {
-    console.warn("[booking-v2/confirm] server price check failed:", e);
-  }
+  const catalogLoaded = true;
 
   const quoteInput: CustomerTotalInput & { serviceSlug: ServiceSlug } = {
     serviceSlug: data.serviceSlug,
-    serviceLabel: liveConfig?.label ?? data.serviceSlug,
+    serviceLabel: liveConfig.label,
     serviceDetails: data.serviceDetails as Record<string, string | number | boolean>,
     selectedExtras: data.selectedExtras ?? [],
     cleanerMode: data.cleanerMode,
@@ -396,19 +429,24 @@ export async function POST(request: Request) {
     bookingType: data.bookingType,
     recurringFrequency: data.recurringFrequency ?? "",
     catalog: {
-      basePrice: liveConfig?.basePrice ?? 0,
-      pricePerBedroom: liveConfig?.pricePerBedroom ?? 0,
-      pricePerBathroom: liveConfig?.pricePerBathroom ?? 0,
-      pricePerExtraRoom: liveConfig?.pricePerExtraRoom ?? 0,
-      pricePerExtraCleaner: liveConfig?.pricePerExtraCleaner ?? 0,
-      estimatedDurationHours: liveConfig?.estimatedDurationHours ?? 3,
-      minDurationHours: liveConfig?.minDurationHours ?? 3.5,
-      maxDurationHours: liveConfig?.maxDurationHours ?? 8,
-      extras: liveConfig?.extras ?? [],
-      allowsExtraCleaner: liveConfig?.allowsExtraCleaner,
-      showEquipmentQuestion: liveConfig?.showEquipmentQuestion,
+      basePrice: liveConfig.basePrice,
+      pricePerBedroom: liveConfig.pricePerBedroom,
+      pricePerBathroom: liveConfig.pricePerBathroom,
+      pricePerExtraRoom: liveConfig.pricePerExtraRoom,
+      pricePerExtraCleaner: liveConfig.pricePerExtraCleaner,
+      serviceFeeZar: liveConfig.serviceFeeZar,
+      estimatedDurationHours: liveConfig.estimatedDurationHours,
+      durationBaseHours: liveConfig.durationBaseHours,
+      durationPerBedroomHours: liveConfig.durationPerBedroomHours,
+      durationPerBathroomHours: liveConfig.durationPerBathroomHours,
+      durationPerExtraRoomHours: liveConfig.durationPerExtraRoomHours,
+      minDurationHours: liveConfig.minDurationHours,
+      maxDurationHours: liveConfig.maxDurationHours,
+      extras: liveConfig.extras,
+      allowsExtraCleaner: liveConfig.allowsExtraCleaner,
+      showEquipmentQuestion: liveConfig.showEquipmentQuestion,
     },
-    feesConfig: feesConfig ?? defaultBookingV2FeesConfig(),
+    feesConfig,
     equipmentRequired: equipmentRequiredFlag,
     equipmentQuote: serverEquipmentQuote,
     vipTier,
@@ -421,15 +459,36 @@ export async function POST(request: Request) {
     clientPricingSummary,
     quoteInput,
   });
-  // Soft failures = client's cached quote is stale. Proceed with server-authoritative
-  // pricing so customers are not blocked; Paystack charges the recomputed amount.
   if (!quoteValidation.ok && !quoteValidation.soft) {
     console.error("[booking-v2/confirm] quote validation failed:", quoteValidation.code);
     return NextResponse.json({ error: quoteValidation.error }, { status: quoteValidation.status });
   }
   if (!quoteValidation.ok && quoteValidation.soft) {
+    const clientReviewedTotal =
+      typeof clientPricingSummary.estimated_total === "number"
+        ? clientPricingSummary.estimated_total
+        : clientPricingSummary.total;
+    const serverTotal = serverBreakdown.estimated_total;
+    const priceIncreased =
+      typeof clientReviewedTotal === "number" &&
+      Number.isFinite(clientReviewedTotal) &&
+      serverTotal > clientReviewedTotal + 0.005;
+
+    if (priceIncreased) {
+      return NextResponse.json(
+        {
+          error: "Your booking price has changed. Review the updated total before continuing to payment.",
+          code: "REQUOTE_REQUIRED",
+          pricingSummary: serverBreakdown,
+          previousTotalZar: clientReviewedTotal,
+          updatedTotalZar: serverTotal,
+        },
+        { status: 409 },
+      );
+    }
+
     console.warn(
-      "[booking-v2/confirm] stale client quote accepted; using server pricing:",
+      "[booking-v2/confirm] stale client quote accepted without price increase:",
       quoteValidation.code,
     );
   }
@@ -454,6 +513,9 @@ export async function POST(request: Request) {
     date: data.date,
     time: timeHm,
   });
+
+  // Preserve the exact pricing version attached to the customer's valid quote lock.
+  const pricingVersionId = suppliedQuoteLock.pricingVersionId;
 
   const locationCtx = await resolveConfirmLocationContext(supabase, {
     suburb: data.suburb,
@@ -763,6 +825,7 @@ export async function POST(request: Request) {
         paystack_reference: paystackReference,
         customer_phone: customerPhone,
         ...persistPricing,
+        pricing_version_id: pricingVersionId,
         ...equipmentPersist,
         ...locationFields,
         price_snapshot: priceSnapshot,
@@ -880,15 +943,14 @@ export async function POST(request: Request) {
 
     let creditAppliedZar = 0;
     if (creditToApplyCap > 0) {
-      const spendResult = await spendCleaningCredit({
+      const spendResult = await reserveCleaningCreditForBooking({
         admin: supabase,
         userId,
         amountZar: creditToApplyCap,
         bookingId: existingBooking.id,
-        note: "Applied at booking-v2 checkout",
       });
       if (spendResult.ok) {
-        creditAppliedZar = spendResult.spent;
+        creditAppliedZar = spendResult.amountZar;
         // If spend differed from cap, adjust payable for the client charge.
         if (creditAppliedZar !== creditToApplyCap) {
           payAmountZar = Math.max(0, payAmountZar + creditToApplyCap - creditAppliedZar);
@@ -1069,6 +1131,7 @@ export async function POST(request: Request) {
 
       // Pricing
       ...persistPricing,
+      pricing_version_id: pricingVersionId,
       ...equipmentPersist,
       price_snapshot: priceSnapshot,
       currency: "ZAR",
@@ -1195,15 +1258,14 @@ export async function POST(request: Request) {
 
   let creditAppliedZar = 0;
   if (creditToApplyCap > 0) {
-    const spendResult = await spendCleaningCredit({
+    const spendResult = await reserveCleaningCreditForBooking({
       admin: supabase,
       userId,
       amountZar: creditToApplyCap,
       bookingId: inserted.id,
-      note: "Applied at booking-v2 checkout",
     });
     if (spendResult.ok) {
-      creditAppliedZar = spendResult.spent;
+      creditAppliedZar = spendResult.amountZar;
       if (creditAppliedZar !== creditToApplyCap) {
         payAmountZar = Math.max(0, payAmountZar + creditToApplyCap - creditAppliedZar);
         await supabase

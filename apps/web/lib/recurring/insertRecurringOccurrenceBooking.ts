@@ -227,12 +227,12 @@ export async function insertRecurringOccurrenceBooking(
     city_id: null,
     date: params.occurrenceDateYmd,
     time: locked.time ?? null,
-    total_paid_zar: prepaidAllocation
-      ? occurrencePaidZar
-      : renewalQuote?.grossPackageZar ?? priceZar,
+    // Cash received only. Unpaid renewal packages must not masquerade as paid cash.
+    total_paid_zar: occurrencePaidZar,
     pricing_version_id,
     price_breakdown: null,
-    total_price: prepaidAllocation ? occurrencePaidZar : null,
+    // Explicit payable is the immutable source for Paystack and retries.
+    total_price: prepaidAllocation ? occurrencePaidZar : renewalQuote?.grossPackageZar ?? priceZar,
     price_snapshot: renewalQuote
       ? {
           ...provisionalPriceSnapshotJson(locked),
