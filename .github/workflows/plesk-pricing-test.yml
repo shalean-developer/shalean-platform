@@ -229,6 +229,14 @@ jobs:
           printf '}}' >> bootstrap/bootstrap.json
           jq -e --arg sha "$SHA" '.release_sha == $sha and (.files | length) == 3' bootstrap/bootstrap.json >/dev/null
 
+      - name: Publish bootstrap manifest as one-hour workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: plesk-pricing-test-bootstrap-${{ github.sha }}
+          path: bootstrap/bootstrap.json
+          if-no-files-found: error
+          retention-days: 1
+
       - uses: actions/upload-artifact@v4
         with:
           name: plesk-pricing-test-pull-${{ github.sha }}
