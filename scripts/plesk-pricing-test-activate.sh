@@ -50,8 +50,13 @@ cat > "$WRAPPER" <<'EOF'
 const fs=require('fs'); const path=require('path');
 const current=path.join(__dirname,'current');
 let resolved; try { resolved=fs.realpathSync(current); } catch(e) { console.error(e.message); process.exit(1); }
+const metaPath=path.join(resolved,'build-meta.json');
 const server=path.join(resolved,'runtime','apps','web','server.js');
+if(!fs.existsSync(metaPath)){ console.error('Missing candidate build-meta.json'); process.exit(1); }
 if(!fs.existsSync(server)){ console.error('Missing candidate server.js'); process.exit(1); }
+let meta; try { meta=JSON.parse(fs.readFileSync(metaPath,'utf8')); } catch(e) { console.error('Invalid candidate build-meta.json'); process.exit(1); }
+if(!meta.artifact_sha){ console.error('Missing candidate artifact SHA'); process.exit(1); }
+process.env.SHALEAN_RELEASE_SHA=String(meta.artifact_sha);
 process.chdir(path.dirname(server)); require(server);
 EOF
 

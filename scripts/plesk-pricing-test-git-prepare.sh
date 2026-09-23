@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # PLESK-AUTO-02A — guarded pricing-test preparation.
-# Resolves the latest successful pricing-test push workflow, downloads its
+# Resolves the exact successful pricing-test push workflow for the current
+# release head (or an explicitly supplied expected SHA), downloads its
 # bootstrap artifact using the protected read-only GitHub header, follows only
 # short-lived signed Supabase URLs, verifies checksum/build metadata, probes
 # the candidate locally, and prepares a stable pointer.
@@ -16,23 +17,40 @@ NODE_BIN="${NODE_BIN:-/opt/plesk/node/24/bin/node}"
 STABLE="$ROOT/pricing-test-runtime"
 WORK="$ROOT/.pricing-test-release-staging"
 OUT="$ROOT/plesk-pricing-test-prepare-result.txt"
+EXPECTED_SHA="${1:-}"
 
 fail(){ printf 'PLESK-AUTO-02A ERROR: %s\n' "$*" | tee "$OUT" >&2; exit 1; }
+if [ -n "$EXPECTED_SHA" ]; then
+  case "$EXPECTED_SHA" in *[!0-9a-f]*|'') fail "expected SHA must be lowercase hexadecimal" ;; esac
+  [ "${#EXPECTED_SHA}" -eq 40 ] || fail "expected SHA must be 40 chars"
+fi
 [ -r "$HEADER" ] || fail "GitHub auth header unreadable"
 [ -x "$NODE_BIN" ] || fail "Node 24 binary missing"
 for x in /usr/bin/curl /usr/bin/python3 /usr/bin/unzip /usr/bin/tar /usr/bin/sha256sum; do [ -x "$x" ] || fail "required tool missing: $x"; done
 rm -rf "$WORK"; mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 
-ghget(){ /usr/bin/curl -fsSL -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"; }
+ghget(){ /usr/bin/curl -fsSL --connect-timeout 10 --max-time 30 -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"; }
 
-# Resolve newest successful pricing-test push workflow on the release branch.
-ghget "$API/actions/runs?branch=integration%2Fshalean-release&event=push&status=success&per_page=20" > "$WORK/runs.json"
-/usr/bin/python3 - "$WORK/runs.json" > "$WORK/release.txt" <<'PY'
+# Resolve the current release head first. Automatic deployment passes this same
+# SHA explicitly so a later branch movement can never activate the wrong build.
+ghget "$API/branches/integration%2Fshalean-release" > "$WORK/branch.json"
+BRANCH_SHA="$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"]["sha"])' "$WORK/branch.json")"
+TARGET_SHA="${EXPECTED_SHA:-$BRANCH_SHA}"
+[ "$TARGET_SHA" = "$BRANCH_SHA" ] || fail "expected release SHA is not current release head"
+
+# Resolve the successful pricing-test workflow for exactly TARGET_SHA.
+ghget "$API/actions/runs?branch=integration%2Fshalean-release&event=push&status=success&per_page=50" > "$WORK/runs.json"
+/usr/bin/python3 - "$WORK/runs.json" "$TARGET_SHA" > "$WORK/release.txt" <<'PY'
 import json,sys
-d=json.load(open(sys.argv[1]))
-xs=[r for r in d.get("workflow_runs",[]) if r.get("name")=="Plesk pricing-test standalone artifact" and r.get("conclusion")=="success"]
-if not xs: raise SystemExit("no successful pricing-test workflow")
+d=json.load(open(sys.argv[1])); target=sys.argv[2]
+xs=[
+    r for r in d.get("workflow_runs",[])
+    if r.get("name")=="Plesk pricing-test standalone artifact"
+    and r.get("conclusion")=="success"
+    and r.get("head_sha")==target
+]
+if not xs: raise SystemExit("no successful pricing-test workflow for exact release SHA")
 r=xs[0]
 print(r["id"]); print(r["head_sha"])
 PY
@@ -40,11 +58,7 @@ RUN_ID="$(sed -n '1p' "$WORK/release.txt")"
 SHA="$(sed -n '2p' "$WORK/release.txt")"
 case "$SHA" in *[!0-9a-f]*|'') fail "invalid workflow SHA" ;; esac
 [ "${#SHA}" -eq 40 ] || fail "workflow SHA must be 40 chars"
-
-# Require the successful workflow SHA to equal current integration release.
-ghget "$API/branches/integration%2Fshalean-release" > "$WORK/branch.json"
-BRANCH_SHA="$(/usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"]["sha"])' "$WORK/branch.json")"
-[ "$SHA" = "$BRANCH_SHA" ] || fail "latest successful artifact is not current release head"
+[ "$SHA" = "$TARGET_SHA" ] || fail "resolved workflow SHA does not match target release"
 
 # Resolve exact bootstrap artifact for this run/SHA.
 ghget "$API/actions/runs/$RUN_ID/artifacts?per_page=100" > "$WORK/artifacts.json"
@@ -140,8 +154,14 @@ cat > "$STABLE/server.js" <<'EOF'
 'use strict';
 const fs=require('fs'),path=require('path');
 const resolved=fs.realpathSync(path.join(__dirname,'current'));
+const metaPath=path.join(resolved,'build-meta.json');
 const server=path.join(resolved,'runtime','apps','web','server.js');
+if(!fs.existsSync(metaPath)){console.error('Missing candidate build-meta.json');process.exit(1);}
 if(!fs.existsSync(server)){console.error('Missing candidate server.js');process.exit(1);}
+let meta;
+try { meta=JSON.parse(fs.readFileSync(metaPath,'utf8')); } catch(e) { console.error('Invalid candidate build-meta.json'); process.exit(1); }
+if(!meta.artifact_sha){console.error('Missing candidate artifact SHA');process.exit(1);}
+process.env.SHALEAN_RELEASE_SHA=String(meta.artifact_sha);
 process.chdir(path.dirname(server)); require(server);
 EOF
 rm -f "$NEXT"; ln -s "$RELEASE" "$NEXT"; mv -Tf "$NEXT" "$CURRENT"

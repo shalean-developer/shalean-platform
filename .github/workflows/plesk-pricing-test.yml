@@ -4,13 +4,6 @@ on:
   push:
     branches:
       - integration/shalean-release
-    paths:
-      - ".github/workflows/plesk-pricing-test.yml"
-      - "apps/web/**"
-      - "packages/**"
-      - "package.json"
-      - "supabase/migrations/**"
-      - "scripts/plesk-pricing-test-*.sh"
   workflow_dispatch:
 
 permissions:
