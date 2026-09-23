@@ -311,14 +311,11 @@ export async function loadBookingV2Catalog(): Promise<BookingV2CatalogPayload> {
       shortLabel: serviceDef.shortLabel,
       description: serviceDef.description,
       cleanerMode: serviceDef.cleanerMode,
-      showEquipmentQuestion:
-        slug === "office-cleaning" || slug === "airbnb-cleaning"
-          ? false
-          : serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
-      showCleaningProductsQuestion:
-        slug === "office-cleaning" || slug === "airbnb-cleaning"
-          ? false
-          : serviceDef.showEquipmentQuestion ?? serviceDef.showCleaningProductsQuestion === true,
+      // Supplies/equipment eligibility is a service policy, not mutable pricing
+      // configuration. This keeps UI, quote, frozen-lock confirm and Paystack aligned
+      // even when an older booking_v2 config explicitly stored a stale false value.
+      showEquipmentQuestion: serviceRequiresCustomerEquipmentChoice(slug),
+      showCleaningProductsQuestion: serviceRequiresCustomerEquipmentChoice(slug),
       allowsExtraCleaner:
         slug === "carpet-cleaning" ? false : serviceDef.allowsExtraCleaner,
       step1Questions: normalizeBookingV2Questions(
