@@ -356,10 +356,15 @@ export function bookingDetailsQuestionVisibleAtStage(
   const questionStage = bookingDetailsQuestionStage(serviceSlug, question);
   if (!questionStage) return false;
 
-  // Keep the selected property card visible while the room questions open
-  // directly underneath it. The property choice is not repeated as a second input.
+  // Keep the selected property card visible while the next dependent
+  // Moving choice opens underneath it, and while room questions are completed.
+  // Other services continue to retain Property only through the Rooms stage.
   if (question.key === "propertyType") {
-    return stage === "property" || stage === "rooms";
+    return (
+      stage === "property" ||
+      stage === "rooms" ||
+      (serviceSlug === "moving-cleaning" && stage === "move")
+    );
   }
 
   if (serviceSlug === "moving-cleaning" && question.key === "moveType") {
