@@ -58,7 +58,7 @@ export default async function CleaningPricesCapeTownRoutePage() {
       deep: bookingCatalog.catalog["deep-cleaning"].basePrice,
       move: bookingCatalog.catalog["moving-cleaning"].basePrice,
       airbnb: bookingCatalog.catalog["airbnb-cleaning"].basePrice,
-      office: null,
+      office: bookingCatalog.catalog["office-cleaning"].basePrice,
       carpet: bookingCatalog.catalog["carpet-cleaning"].basePrice,
     },
   };

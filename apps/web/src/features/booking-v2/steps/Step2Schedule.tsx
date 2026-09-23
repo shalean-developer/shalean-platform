@@ -99,7 +99,7 @@ const STEP2_COPY: Record<
   },
   "deep-cleaning": {
     title: "Book your deep clean",
-    subtitle: "Select a date — our full team will handle the rest.",
+    subtitle: "Select a date and time — our full team will handle the rest.",
     cleanerTitle: "Available team slots",
     cleanerSubtitle: "We assign a dedicated team of 3 for all deep cleans.",
   },
@@ -378,6 +378,7 @@ export function Step2Schedule() {
     control,
     watch,
     setValue,
+    clearErrors,
     formState: { errors },
   } = useFormContext<BookingV2FormData>();
 
@@ -505,8 +506,10 @@ export function Step2Schedule() {
     }).filter((slot) => availability[slot] === true);
     if (time && !verifiedAvailableTimeSlots.includes(time)) {
       setValue("time", "", { shouldValidate: true });
+    } else if (time) {
+      clearErrors("time");
     }
-  }, [availability, date, scheduling, setValue, slotsVerified, time]);
+  }, [availability, clearErrors, date, scheduling, setValue, slotsVerified, time]);
 
   // Start cleaner eligibility as soon as a verified slot is selected. By the
   // time the customer advances to cleaner preference, the shared request cache
@@ -756,7 +759,7 @@ export function Step2Schedule() {
                   minDate={today}
                   value={field.value ?? ""}
                   onChange={(nextDate) => {
-                    if (isMovingCleaning && nextDate !== field.value) {
+                    if (isTeamMode && nextDate !== field.value) {
                       setValue("assignedTeamId", "", {
                         shouldDirty: true,
                         shouldValidate: true,
@@ -786,7 +789,14 @@ export function Step2Schedule() {
                 <BookingTimeDropdown
                   id="booking-time"
                   value={field.value ?? ""}
-                  onChange={field.onChange}
+                  onChange={(nextTime) => {
+                    setValue("time", nextTime, {
+                      shouldDirty: true,
+                      shouldTouch: true,
+                      shouldValidate: true,
+                    });
+                    clearErrors("time");
+                  }}
                   slots={availableTimeSlots}
                   loading={slotsLoading || Boolean(date && !slotsVerified)}
                   disabled={
@@ -936,9 +946,6 @@ export function Step2Schedule() {
               setValue("assignedTeamName", name, {
                 shouldDirty: true,
               });
-              if (isDeepCleaning) {
-                void goNext();
-              }
             }}
             autoAssign
           />
@@ -1007,7 +1014,7 @@ export function Step2Schedule() {
         </section>
       )}
 
-      {isMovingCleaning && isTeamMode ? (
+      {isTeamMode && (isDeepCleaning || isMovingCleaning) ? (
         <div className="flex flex-col-reverse gap-3 pt-2 sm:flex-row sm:items-center sm:justify-between">
           <button
             type="button"

@@ -56,16 +56,18 @@ describe("Regular and Deep production parity during six-service convergence", ()
     );
   });
 
-  it("limits date-change team clearing to Moving Cleaning", () => {
-    expect(scheduleSource).toContain('if (isMovingCleaning && nextDate !== field.value) {');
-    expect(scheduleSource).not.toContain('if (isTeamMode && nextDate !== field.value) {');
+  it("clears team assignment when a team-mode booking changes date", () => {
+    expect(scheduleSource).toContain('if (isTeamMode && nextDate !== field.value) {');
+    expect(scheduleSource).not.toContain('if (isMovingCleaning && nextDate !== field.value) {');
   });
 
-  it("preserves Deep automatic-team auto-advance and Moving explicit continuation", () => {
-    expect(scheduleSource).toMatch(
+  it("requires explicit continuation for both Deep and Moving team schedules", () => {
+    expect(scheduleSource).not.toMatch(
       /if \(isDeepCleaning\) \{\s*void goNext\(\);\s*\}/,
     );
-    expect(scheduleSource).toContain("{isMovingCleaning && isTeamMode ? (");
+    expect(scheduleSource).toContain(
+      "{isTeamMode && (isDeepCleaning || isMovingCleaning) ? (",
+    );
     expect(scheduleSource).toContain("Continue to Review →");
   });
 
