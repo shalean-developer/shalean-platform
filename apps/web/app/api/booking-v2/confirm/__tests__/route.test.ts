@@ -9,7 +9,20 @@ import { resolveBookingV2LocationContext, loadBookingV2LocationContextById } fro
 import { bookingV2SlotHasEligibleCleaners, assessBookingV2SlotFulfillment } from "@/lib/booking-v2/bookingV2SlotEligibility";
 import { getEligibleCleaners } from "@/lib/booking/getEligibleCleaners";
 import { isBookingSoftFulfillmentEnabled } from "@/lib/booking/availabilityFlags";
+import { loadDispatchTeamsForBooking } from "@/lib/dispatch/loadDispatchTeamsForBooking";
+import { assignTeamAndSyncRoster } from "@/lib/booking/assignTeamAndSyncRoster";
 
+vi.mock("next/server", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("next/server")>();
+  return {
+    ...actual,
+    // Route handlers run inside a Next.js request scope in production. Vitest
+    // does not create that scope, so execute deferred work immediately here.
+    after: (task: () => void | Promise<void>) => {
+      void task();
+    },
+  };
+});
 vi.mock("@/lib/supabase/admin", () => ({ getSupabaseAdmin: vi.fn() }));
 vi.mock("@/lib/supabase/bookingRouteBearerAuth", () => ({ resolveBookingRouteBearerAuth: vi.fn() }));
 vi.mock("@/lib/customer/customerBookingsForUser", () => ({
@@ -39,8 +52,27 @@ vi.mock("@/lib/booking/availabilityFlags", async (importOriginal) => {
   };
 });
 vi.mock("@/lib/booking/getEligibleCleaners", () => ({ getEligibleCleaners: vi.fn() }));
+vi.mock("@/lib/dispatch/loadDispatchTeamsForBooking", () => ({
+  loadDispatchTeamsForBooking: vi.fn(),
+}));
+vi.mock("@/lib/booking/assignTeamAndSyncRoster", () => ({
+  assignTeamAndSyncRoster: vi.fn(),
+}));
 vi.mock("@/lib/referrals/validateReferral", () => ({
   validateReferralForCheckout: vi.fn().mockResolvedValue({ valid: false }),
+}));
+vi.mock("@/lib/referrals/creditReservations", () => ({
+  reserveCleaningCreditForBooking: vi.fn().mockResolvedValue({
+    ok: true,
+    reservationId: "credit-reservation-1",
+    amountZar: 0,
+    balanceAfter: 0,
+    status: "reserved",
+  }),
+  settleCleaningCreditForBooking: vi.fn().mockResolvedValue({
+    ok: false,
+    error: "reservation_not_found",
+  }),
 }));
 vi.mock("@/lib/promotions/server", () => ({
   evaluateCheckoutPromotions: vi.fn().mockResolvedValue({ applied: [], totalDiscountZar: 0 }),
@@ -113,6 +145,7 @@ function mockAdminForConfirm() {
         select: vi.fn().mockReturnValue(eqChain),
         insert,
         update: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
+        delete: vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ error: null }) }),
       };
     }
     if (table === "user_profiles") {
@@ -120,6 +153,30 @@ function mockAdminForConfirm() {
         select: vi.fn().mockReturnValue({
           eq: vi.fn().mockReturnValue({
             maybeSingle: vi.fn().mockResolvedValue({ data: { full_name: "Test User" }, error: null }),
+          }),
+        }),
+      };
+    }
+    if (table === "teams") {
+      return {
+        select: vi.fn().mockReturnValue({
+          eq: vi.fn().mockReturnValue({
+            maybeSingle: vi.fn().mockResolvedValue({
+              data: { lead_cleaner_id: "00000000-0000-4000-8000-000000000031" },
+              error: null,
+            }),
+          }),
+        }),
+      };
+    }
+    if (table === "recurring_prepaid_packages") {
+      return {
+        upsert: vi.fn().mockReturnValue({
+          select: vi.fn().mockReturnValue({
+            single: vi.fn().mockResolvedValue({
+              data: { id: "00000000-0000-4000-8000-000000000040" },
+              error: null,
+            }),
           }),
         }),
       };
@@ -191,6 +248,19 @@ describe("POST /api/booking-v2/confirm", () => {
     });
     vi.mocked(isBookingSoftFulfillmentEnabled).mockReturnValue(true);
     vi.mocked(getEligibleCleaners).mockResolvedValue([]);
+    vi.mocked(assignTeamAndSyncRoster).mockResolvedValue({ ok: true });
+    vi.mocked(loadDispatchTeamsForBooking).mockResolvedValue({
+      teams: [{
+        id: "00000000-0000-4000-8000-000000000030",
+        name: "Shalean Team 3",
+        service_type: "deep",
+        available: true,
+        active_member_count: 3,
+        qualified_member_count: 3,
+      }],
+      platformAtCapacity: false,
+      error: null,
+    });
   });
 
   it.each([null, "", "not-an-email", "missing-domain@"])(
@@ -315,6 +385,89 @@ describe("POST /api/booking-v2/confirm", () => {
     const row = admin.insert.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(row.fulfillment_mode).toBe("ops_assignment");
     expect(row.dispatch_status).toBe("unassigned");
+  });
+
+  it("persists the selected team and its payout owner for a team booking", async () => {
+    vi.mocked(loadBookingV2Catalog).mockResolvedValue({
+      catalog: {
+        "deep-cleaning": {
+          slug: "deep-cleaning",
+          label: "Deep Cleaning",
+          shortLabel: "Deep Clean",
+          description: "Deep cleaning",
+          cleanerMode: "team",
+          showEquipmentQuestion: false,
+          allowsExtraCleaner: false,
+          step1Questions: [],
+          basePrice: 950,
+          pricePerBedroom: 100,
+          pricePerBathroom: 80,
+          pricePerExtraRoom: 30,
+          pricePerExtraCleaner: 0,
+          serviceFeeZar: 60,
+          estimatedDurationHours: 7.3,
+          minDurationHours: 3.5,
+          maxDurationHours: 8,
+          extras: [],
+        },
+      },
+      feesConfig: {
+        serviceFeeRule: "flat",
+        serviceFeeFlatCents: 3000,
+        recurringDiscounts: {},
+        propertyFactorRates: {},
+      },
+    } as never);
+
+    const admin = mockAdminForConfirm();
+    vi.mocked(getSupabaseAdmin).mockReturnValue(admin as never);
+    const teamId = "00000000-0000-4000-8000-000000000030";
+    const payoutOwnerId = "00000000-0000-4000-8000-000000000031";
+
+    const res = await POST(
+      new Request("http://localhost/api/booking-v2/confirm", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: "Bearer token" },
+        body: JSON.stringify({
+          ...basePayload,
+          serviceSlug: "deep-cleaning",
+          serviceDetails: {
+            bedrooms: "1",
+            bathrooms: "3",
+            extraRooms: "2",
+            propertyType: "townhouse",
+            lastCleaned: "6_months_plus",
+            hasPets: "cats",
+          },
+          bookingType: "recurring",
+          recurringFrequency: "monthly",
+          recurringStartDate: basePayload.date,
+          cleanerMode: "team",
+          assignedTeamId: teamId,
+          pricingSummary: { total: 2140, estimated_total: 2140 },
+        }),
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const row = admin.insert.mock.calls[0]?.[0] as Record<string, unknown>;
+    // The initial row is deliberately non-team-shaped. The approved RPC then
+    // assigns the team and materializes booking_cleaners in one DB transaction.
+    expect(row.is_team_job).toBe(false);
+    expect(row.team_id).toBeNull();
+    expect(row.assigned_team_id).toBe(teamId);
+    expect(row.payout_owner_cleaner_id).toBeNull();
+    expect(assignTeamAndSyncRoster).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        bookingId: "00000000-0000-4000-8000-000000000099",
+        teamId,
+        payoutOwnerCleanerId: payoutOwnerId,
+        teamMemberCountSnapshot: 3,
+        variant: "admin",
+        source: "booking_v2_confirm",
+      }),
+    );
   });
 
   it("inserts booking with location_id and canonical service_slug when eligible", async () => {

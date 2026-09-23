@@ -17,7 +17,16 @@ import {
   shouldUseHorizontalOptionCards,
 } from "@/src/features/booking-v2/components/ServiceQuestionOptionCards";
 import { RoomCountSelector } from "@/src/features/booking-v2/components/RoomCountSelector";
-import { WhatsIncludedModal } from "@/src/features/booking-v2/components/WhatsIncludedModal";
+import {
+  adjacentBookingDetailsStage,
+  bookingDetailsAutoAdvanceTarget,
+  bookingDetailsQuestionVisibleAtStage,
+  bookingDetailsShowsExtras,
+  bookingDetailsStage,
+  bookingDetailsStageAutoAdvances,
+  bookingDetailsStageReady,
+  isProgressiveBookingDetailsService,
+} from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 
 // ─── Shared field components ───────────────────────────────────────────────────
 
@@ -153,7 +162,13 @@ function CustomSelect({
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type AnyForm = ReturnType<typeof useFormContext<any>>;
 
-function ServiceQuestion({ question }: { question: FormQuestion }) {
+function ServiceQuestion({
+  question,
+  onValueChange,
+}: {
+  question: FormQuestion;
+  onValueChange?: (key: string, value: string) => void;
+}) {
   const { register, control, formState: { errors } } = useFormContext() as AnyForm;
   const fieldKey = `serviceDetails.${question.key}`;
   const fieldError = (errors.serviceDetails as Record<string, { message?: string }> | undefined)?.[question.key]?.message;
@@ -177,7 +192,11 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
     question.label
   );
 
-  if (question.key === "bedrooms" || question.key === "bathrooms") {
+  if (
+    question.key === "bedrooms" ||
+    question.key === "bathrooms" ||
+    question.key === "extraRooms"
+  ) {
     return (
       <div className="min-w-0 w-full">
         <FieldLabel htmlFor={question.key} required={question.required}>
@@ -190,9 +209,12 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
           render={({ field }) => (
             <RoomCountSelector
               id={question.key}
-              kind={question.key as "bedrooms" | "bathrooms"}
+              kind={question.key as "bedrooms" | "bathrooms" | "extraRooms"}
               value={String(field.value ?? "")}
-              onChange={field.onChange}
+              onChange={(value) => {
+                field.onChange(value);
+                onValueChange?.(question.key, value);
+              }}
               error={fieldError}
             />
           )}
@@ -203,7 +225,12 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
   }
 
   if (shouldUseHorizontalOptionCards(question)) {
-    return <ServiceQuestionOptionCards question={question} />;
+    return (
+      <ServiceQuestionOptionCards
+        question={question}
+        onValueChange={(value) => onValueChange?.(question.key, value)}
+      />
+    );
   }
 
   if (question.type === "select") {
@@ -221,7 +248,10 @@ function ServiceQuestion({ question }: { question: FormQuestion }) {
               id={question.key}
               options={question.options ?? []}
               value={String(field.value ?? "")}
-              onChange={field.onChange}
+              onChange={(value) => {
+                field.onChange(value);
+                onValueChange?.(question.key, value);
+              }}
               placeholder={
                 question.key === "extraRooms" ? "Select extra rooms" : "Select…"
               }
@@ -323,14 +353,47 @@ function groupQuestions(questions: FormQuestion[]): QuestionGroup[] {
 // ─── Step 1 ─────────────────────────────────────────────────────────────────────
 
 export function Step1Details() {
-  const { serviceSlug, liveConfig } = useBookingV2();
+  const {
+    serviceSlug,
+    liveConfig,
+    detailsSectionOverride,
+    editDetailsSection,
+    goBack,
+    goNext,
+  } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
-  const { register, watch, setValue } = useFormContext<BookingV2FormData>();
+  const { watch, setValue } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
   const serviceDetails = watch("serviceDetails") ?? {};
+  const address = watch("address") ?? "";
+  const suburb = watch("suburb") ?? "";
+  const contactPhone = watch("contactPhone") ?? "";
+  const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
+  const isRegularCleaning = serviceSlug === "regular-cleaning";
+  const isProgressiveDetails = isProgressiveBookingDetailsService(serviceSlug);
+  const bookingDetails = {
+    address,
+    suburb,
+    contactPhone,
+    serviceAreaLocationId,
+  };
+  const derivedDetailsStage = bookingDetailsStage(
+    serviceSlug,
+    serviceDetails,
+    bookingDetails,
+    step1Questions,
+  );
+  const activeDetailsStage = isProgressiveDetails
+    ? detailsSectionOverride ?? derivedDetailsStage
+    : null;
+  const showAddress = !isProgressiveDetails || activeDetailsStage === "address";
+  const showEquipmentQuestion = isRegularCleaning && activeDetailsStage === "pets";
+  const showExtras =
+    !isProgressiveDetails ||
+    bookingDetailsShowsExtras(serviceSlug, activeDetailsStage);
 
   function isQuestionVisible(question: { showWhen?: { key: string; values: string[] } }): boolean {
     if (!question.showWhen) return true;
@@ -339,6 +402,61 @@ export function Step1Details() {
   }
 
   const moveTypeValue = String(serviceDetails.moveType ?? "");
+
+  useEffect(() => {
+    const retiredKeys =
+      serviceSlug === "office-cleaning"
+        ? ["officeType", "frequency", "afterHours", "specialInstructions"]
+        : serviceSlug === "moving-cleaning"
+          ? ["depositInspection", "specialInstructions"]
+          : serviceSlug === "regular-cleaning" || serviceSlug === "deep-cleaning"
+            ? ["specialInstructions"]
+            : [];
+
+    for (const key of retiredKeys) {
+      if (serviceDetails[key] === undefined || serviceDetails[key] === "") continue;
+      setValue(`serviceDetails.${key}` as "serviceDetails.bedrooms", "" as never, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [serviceDetails, serviceSlug, setValue]);
+
+  useEffect(() => {
+    if (serviceSlug !== "office-cleaning") return;
+
+    for (const key of ["frequency", "afterHours", "specialInstructions"] as const) {
+      if (serviceDetails[key] === undefined || serviceDetails[key] === "") continue;
+      setValue(`serviceDetails.${key}` as "serviceDetails.bedrooms", "" as never, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [
+    serviceDetails.afterHours,
+    serviceDetails.frequency,
+    serviceDetails.specialInstructions,
+    serviceSlug,
+    setValue,
+  ]);
+
+  useEffect(() => {
+    if (serviceSlug !== "airbnb-cleaning") return;
+
+    for (const key of ["guestCheckout", "welcomeBasket", "specialInstructions"] as const) {
+      if (serviceDetails[key] === undefined || serviceDetails[key] === "") continue;
+      setValue(`serviceDetails.${key}` as "serviceDetails.bedrooms", "" as never, {
+        shouldDirty: true,
+        shouldValidate: false,
+      });
+    }
+  }, [
+    serviceDetails.guestCheckout,
+    serviceDetails.specialInstructions,
+    serviceDetails.welcomeBasket,
+    serviceSlug,
+    setValue,
+  ]);
 
   // Clear answers for questions hidden by move-type (and similar) gates.
   useEffect(() => {
@@ -364,31 +482,61 @@ export function Step1Details() {
     setValue("selectedExtras", updated, { shouldDirty: true });
   }
 
-  const questionGroups = groupQuestions(
-    step1Questions.filter((q) => q.key !== "cleaningProducts" && isQuestionVisible(q)),
-  );
+  const visibleQuestions = step1Questions.filter((question) => {
+    if (question.key === "cleaningProducts" || !isQuestionVisible(question)) return false;
+    if (!isProgressiveDetails) return true;
+    return bookingDetailsQuestionVisibleAtStage(
+      serviceSlug,
+      question,
+      activeDetailsStage,
+    );
+  });
+  const questionGroups = groupQuestions(visibleQuestions);
+  const detailsStageReady = activeDetailsStage
+    ? bookingDetailsStageReady(
+        serviceSlug,
+        activeDetailsStage,
+        serviceDetails,
+        bookingDetails,
+        step1Questions,
+      )
+    : true;
+
+  function moveProgressiveStage(direction: "back" | "next") {
+    if (!activeDetailsStage) return;
+    const adjacentStage = adjacentBookingDetailsStage(
+      serviceSlug,
+      activeDetailsStage,
+      direction,
+    );
+    if (direction === "back") {
+      if (adjacentStage) editDetailsSection(adjacentStage);
+      else goBack();
+      return;
+    }
+    if (!detailsStageReady) return;
+    if (adjacentStage) editDetailsSection(adjacentStage);
+    else void goNext();
+  }
+
+  function handleProgressiveAnswer(key: string, value: string) {
+    if (!activeDetailsStage) return;
+    const target = bookingDetailsAutoAdvanceTarget(
+      serviceSlug,
+      activeDetailsStage,
+      { ...serviceDetails, [key]: value },
+    );
+    if (target) editDetailsSection(target);
+  }
+
+  const autoAdvanceStage =
+    activeDetailsStage != null &&
+    bookingDetailsStageAutoAdvances(serviceSlug, activeDetailsStage);
 
   return (
     <div className="space-y-8" data-lpignore="true" data-form-type="other">
-      <div className="text-center">
-        <h2 className="text-xl font-bold text-slate-900">Your details</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          Tell us about the property and what you need cleaned.
-        </p>
-      </div>
-
-      <hr className="border-slate-200" />
-
       {/* Service-specific questions */}
-      <section className="space-y-5">
-        <h3 className="text-center text-sm font-semibold uppercase tracking-wide text-slate-400">
-          About the clean
-        </h3>
-        {serviceSlug === "regular-cleaning" ? (
-          <div className="rounded-xl border border-slate-200 bg-slate-50/80 px-4 py-3">
-            <WhatsIncludedModal />
-          </div>
-        ) : null}
+      <section className={cn("space-y-5", isProgressiveDetails && questionGroups.length === 0 && "hidden")}>
         {questionGroups.map((group) => {
           if (group.type === "inline") {
             const isRooms = group.groupName === "rooms";
@@ -422,66 +570,37 @@ export function Step1Details() {
                         : null,
                     )}
                   >
-                    <ServiceQuestion question={q} />
+                    <ServiceQuestion
+                      question={q}
+                      onValueChange={handleProgressiveAnswer}
+                    />
                   </div>
                 ))}
               </div>
             );
           }
-          return <ServiceQuestion key={group.question.key} question={group.question} />;
+          return (
+            <ServiceQuestion
+              key={group.question.key}
+              question={group.question}
+              onValueChange={handleProgressiveAnswer}
+            />
+          );
         })}
       </section>
 
-      <hr className="border-slate-200" />
+      <hr className={cn("border-slate-200", !showAddress && "hidden")} />
 
-      <PropertyAddressSection />
+      <div className={cn(!showAddress && "hidden")}>
+        <PropertyAddressSection />
+      </div>
 
-      <EquipmentSection />
-
-      <div className="space-y-4">
-        <div>
-          <FieldLabel htmlFor="accessInstructions">Access instructions (optional)</FieldLabel>
-          <input
-            id="accessInstructions"
-            type="text"
-            placeholder="e.g. Ring bell, use side gate…"
-            {...register("accessInstructions")}
-            autoComplete="off"
-            suppressHydrationWarning
-            className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <div>
-            <FieldLabel htmlFor="parkingInstructions">Parking (optional)</FieldLabel>
-            <input
-              id="parkingInstructions"
-              type="text"
-              placeholder="Street parking, driveway…"
-              {...register("parkingInstructions")}
-              autoComplete="off"
-              suppressHydrationWarning
-              className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-          <div>
-            <FieldLabel htmlFor="gateCode">Gate / security code (optional)</FieldLabel>
-            <input
-              id="gateCode"
-              type="text"
-              placeholder="e.g. #1234"
-              {...register("gateCode")}
-              autoComplete="off"
-              suppressHydrationWarning
-              className="block w-full rounded-xl border border-slate-200 px-4 py-2.5 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-            />
-          </div>
-        </div>
+      <div className={cn(!showEquipmentQuestion && "hidden")}>
+        <EquipmentSection />
       </div>
 
       {/* Extras */}
-      {extras.length > 0 && (
+      {showExtras && extras.length > 0 && (
         <>
           <hr className="border-slate-200" />
           <section className="space-y-4">
@@ -536,6 +655,30 @@ export function Step1Details() {
           </section>
         </>
       )}
+
+      {isProgressiveDetails ? (
+        <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <button
+            type="button"
+            onClick={() => moveProgressiveStage("back")}
+            className="rounded-xl border border-slate-200 bg-white px-5 py-3 text-sm font-semibold text-slate-700 shadow-sm transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+          >
+            ← Back
+          </button>
+          {!autoAdvanceStage ? (
+            <button
+              type="button"
+              disabled={!detailsStageReady}
+              onClick={() => moveProgressiveStage("next")}
+              className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
+            >
+              {bookingDetailsShowsExtras(serviceSlug, activeDetailsStage)
+                ? "Continue to Schedule →"
+                : "Continue →"}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

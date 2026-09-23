@@ -10,6 +10,7 @@ import {
 import {
   BATHROOM_COUNT_OPTIONS,
   BEDROOM_COUNT_OPTIONS,
+  EXTRA_ROOM_COUNT_OPTIONS,
 } from "@/src/features/booking-v2/config/roomCountOptions";
 
 export const SERVICE_SLUGS = [
@@ -80,7 +81,7 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
     centered: true,
     options: [
       { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment / flat" },
+      { value: "apartment", label: "Apartment" },
       { value: "townhouse", label: "Townhouse" },
     ],
   },
@@ -106,12 +107,7 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: false,
     group: "rooms",
-    options: [
-      { value: "0", label: "No extra rooms" },
-      { value: "1", label: "1 extra room" },
-      { value: "2", label: "2 extra rooms" },
-      { value: "3", label: "3+ extra rooms" },
-    ],
+    options: [...EXTRA_ROOM_COUNT_OPTIONS],
   },
   {
     key: "hasPets",
@@ -124,12 +120,6 @@ const REGULAR_QUESTIONS: FormQuestion[] = [
       { value: "yes", label: "Yes" },
       { value: "no", label: "No" },
     ],
-  },
-  {
-    key: "specialInstructions",
-    label: "Special instructions (optional)",
-    type: "textarea",
-    placeholder: "e.g. focus on kitchen, avoid the study...",
   },
 ];
 
@@ -152,7 +142,7 @@ const DEEP_QUESTIONS: FormQuestion[] = [
     centered: true,
     options: [
       { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment / flat" },
+      { value: "apartment", label: "Apartment" },
       { value: "townhouse", label: "Townhouse" },
     ],
   },
@@ -178,12 +168,7 @@ const DEEP_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: false,
     group: "rooms",
-    options: [
-      { value: "0", label: "No extra rooms" },
-      { value: "1", label: "1 extra room" },
-      { value: "2", label: "2 extra rooms" },
-      { value: "3", label: "3+ extra rooms" },
-    ],
+    options: [...EXTRA_ROOM_COUNT_OPTIONS],
   },
   {
     key: "lastCleaned",
@@ -210,12 +195,6 @@ const DEEP_QUESTIONS: FormQuestion[] = [
       { value: "no", label: "No" },
     ],
   },
-  {
-    key: "specialInstructions",
-    label: "Special instructions (optional)",
-    type: "textarea",
-    placeholder: "Any areas to focus on or avoid...",
-  },
 ];
 
 const DEEP_EXTRAS: ServiceExtra[] = [
@@ -236,7 +215,7 @@ const MOVING_QUESTIONS: FormQuestion[] = [
     centered: true,
     options: [
       { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment / flat" },
+      { value: "apartment", label: "Apartment" },
       { value: "townhouse", label: "Townhouse" },
     ],
   },
@@ -250,7 +229,7 @@ const MOVING_QUESTIONS: FormQuestion[] = [
       { value: "move_out", label: "Move-out" },
       { value: "move_in", label: "Move-in" },
     ],
-    hint: "Choose one — we’ll tailor questions for that clean.",
+    hint: "Choose one — we’ll tailor the remaining questions for that clean.",
   },
   {
     key: "bedrooms",
@@ -272,53 +251,39 @@ const MOVING_QUESTIONS: FormQuestion[] = [
     key: "extraRooms",
     label: "Number of extra rooms",
     type: "select",
-    required: false,
+    required: true,
     group: "rooms",
-    options: [
-      { value: "0", label: "No extra rooms" },
-      { value: "1", label: "1 extra room" },
-      { value: "2", label: "2 extra rooms" },
-      { value: "3", label: "3+ extra rooms" },
-    ],
+    options: [...EXTRA_ROOM_COUNT_OPTIONS],
   },
   {
     key: "furnished",
     label: "Is the property furnished or empty?",
     type: "radio",
     required: true,
-    group: "yesno",
+    group: "condition",
     centered: true,
-    showWhen: { key: "moveType", values: ["move_out", "both"] },
     options: [
-      { value: "yes", label: "Furnished — furniture still inside" },
-      { value: "no", label: "Empty — cleared for handover" },
+      { value: "yes", label: "Furnished — furniture is inside" },
+      { value: "no", label: "Empty — cleared for the move" },
     ],
     hint: "Empty homes are usually quicker; furnished homes need more care around belongings.",
   },
   {
-    key: "depositInspection",
-    label: "Is this for a final rental / deposit inspection?",
+    key: "hasPets",
+    label: "Will any pets be at the property during the clean?",
     type: "radio",
     required: true,
-    group: "yesno",
+    group: "condition",
     centered: true,
-    showWhen: { key: "moveType", values: ["move_out", "both"] },
     options: [
-      { value: "yes", label: "Yes — landlord or agency inspection" },
-      { value: "no", label: "No — general move-out clean" },
+      { value: "yes", label: "Yes" },
+      { value: "no", label: "No" },
     ],
-    hint: "We’ll prioritise skirting, cupboards, and other inspection hotspots when yes.",
-  },
-  {
-    key: "specialInstructions",
-    label: "Special instructions (optional)",
-    type: "textarea",
-    placeholder: "Landlord requirements, key handover details...",
+    hint: "This helps the team plan safe access on moving day.",
   },
 ];
 
 const MOVING_EXTRAS: ServiceExtra[] = [
-  { id: "deposit-preparation", label: "Deposit preparation", description: "Extra detail for rental deposit / inspection readiness", priceZar: 250 },
   { id: "appliances-cleaning", label: "Appliances", description: "Clean major kitchen appliances inside and out", priceZar: 220 },
   { id: "inside-cabinets", label: "Cupboards", description: "Clean inside cabinets and cupboards", priceZar: 180 },
   { id: "garage-cleaning", label: "Garage", description: "Sweep and clean the garage", priceZar: 200 },
@@ -327,18 +292,6 @@ const MOVING_EXTRAS: ServiceExtra[] = [
 // ─── Office Cleaning ───────────────────────────────────────────────────────────
 
 const OFFICE_QUESTIONS: FormQuestion[] = [
-  {
-    key: "officeType",
-    label: "Office type",
-    type: "radio",
-    required: true,
-    centered: true,
-    options: [
-      { value: "open_plan", label: "Open plan" },
-      { value: "private_offices", label: "Private offices" },
-      { value: "coworking", label: "Co-working space" },
-    ],
-  },
   {
     key: "officeSize",
     label: "Office size",
@@ -354,43 +307,11 @@ const OFFICE_QUESTIONS: FormQuestion[] = [
   },
   {
     key: "bathrooms",
-    label: "Bathrooms / kitchenettes",
+    label: "Bathrooms",
     type: "select",
     required: true,
     group: "rooms",
     options: [...BATHROOM_COUNT_OPTIONS],
-  },
-  {
-    key: "frequency",
-    label: "Cleaning frequency",
-    type: "select",
-    required: true,
-    group: "rooms",
-    options: [
-      { value: "daily", label: "Daily (Mon–Fri)" },
-      { value: "twice_week", label: "Twice a week" },
-      { value: "weekly", label: "Weekly" },
-      { value: "once_off", label: "Once-off" },
-    ],
-    hint: "How often you need cleaning — this does not change today’s visit price. Choose a recurring plan on the schedule step if you want a plan discount.",
-  },
-  {
-    key: "afterHours",
-    label: "Preferred cleaning time",
-    type: "radio",
-    required: true,
-    centered: true,
-    options: [
-      { value: "during_hours", label: "During office hours" },
-      { value: "after_hours", label: "After hours / evenings" },
-      { value: "weekends", label: "Weekends only" },
-    ],
-  },
-  {
-    key: "specialInstructions",
-    label: "Special instructions (optional)",
-    type: "textarea",
-    placeholder: "Access code, areas to avoid, IT equipment notes...",
   },
 ];
 
@@ -411,13 +332,13 @@ const CARPET_QUESTIONS: FormQuestion[] = [
     centered: true,
     options: [
       { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment / flat" },
+      { value: "apartment", label: "Apartment" },
       { value: "townhouse", label: "Townhouse" },
     ],
   },
   {
     key: "carpetRooms",
-    label: "Number of carpeted rooms",
+    label: "Carpeted rooms",
     type: "select",
     required: true,
     group: "rooms",
@@ -471,34 +392,15 @@ const CARPET_QUESTIONS: FormQuestion[] = [
       { value: "no", label: "No" },
     ],
   },
-  {
-    key: "hasPets",
-    label: "Do you have any pets?",
-    type: "radio",
-    required: true,
-    group: "yesno",
-    centered: true,
-    options: [
-      { value: "yes", label: "Yes" },
-      { value: "no", label: "No" },
-    ],
-  },
-  {
-    key: "specialInstructions",
-    label: "Special instructions (optional)",
-    type: "textarea",
-    placeholder: "Problem areas, delicate rugs, stain details...",
-  },
 ];
 
 const CARPET_EXTRAS: ServiceExtra[] = [
   {
     id: "sofa-upholstery",
     label: "Sofa / upholstery",
-    description: "Clean one sofa or upholstered seat (add more via notes if needed)",
+    description: "Clean one sofa or upholstered seat",
     priceZar: 250,
   },
-  { id: "stain-treatment", label: "Stain treatment", description: "Professional stain removal", priceZar: 200 },
   { id: "pet-odour-treatment", label: "Pet odour treatment", description: "Enzyme-based odour neutraliser", priceZar: 220 },
   { id: "fabric-protector", label: "Fabric protector", description: "Scotchgard-style protection spray", priceZar: 180 },
   { id: "mattress-cleaning", label: "Mattress cleaning", description: "Clean and sanitise one mattress", priceZar: 250 },
@@ -515,7 +417,7 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
     centered: true,
     options: [
       { value: "house", label: "House" },
-      { value: "apartment", label: "Apartment / flat" },
+      { value: "apartment", label: "Apartment" },
       { value: "townhouse", label: "Townhouse" },
     ],
   },
@@ -541,35 +443,17 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
     type: "select",
     required: false,
     group: "rooms",
-    options: [
-      { value: "0", label: "No extra rooms" },
-      { value: "1", label: "1 extra room" },
-      { value: "2", label: "2 extra rooms" },
-      { value: "3", label: "3+ extra rooms" },
-    ],
+    options: [...EXTRA_ROOM_COUNT_OPTIONS],
   },
   {
     key: "linens",
-    label: "Linen service",
+    label: "Fresh linen for the beds?",
     type: "radio",
     required: true,
     centered: true,
     options: [
-      { value: "change", label: "Change and make beds" },
-      { value: "no_change", label: "No linen change needed" },
-    ],
-  },
-  {
-    key: "guestCheckout",
-    label: "Guest checkout time",
-    type: "select",
-    required: true,
-    group: "logistics",
-    options: [
-      { value: "10am", label: "By 10:00 AM" },
-      { value: "11am", label: "By 11:00 AM" },
-      { value: "12pm", label: "By 12:00 PM" },
-      { value: "flexible", label: "Flexible" },
+      { value: "change", label: "Yes — fresh linen will be available" },
+      { value: "no_change", label: "No linen change" },
     ],
   },
   {
@@ -584,23 +468,6 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
       { value: "in_person", label: "Meet in person" },
       { value: "managed", label: "Managed by agent" },
     ],
-  },
-  {
-    key: "welcomeBasket",
-    label: "Restock welcome essentials?",
-    type: "radio",
-    required: true,
-    centered: true,
-    options: [
-      { value: "yes", label: "Yes — I'll leave supplies" },
-      { value: "no", label: "No" },
-    ],
-  },
-  {
-    key: "specialInstructions",
-    label: "Special host instructions (optional)",
-    type: "textarea",
-    placeholder: "Staging preferences, check-in checklist, fragile items...",
   },
 ];
 
@@ -622,7 +489,7 @@ export const SERVICE_CONFIG: Record<ServiceSlug, ServiceConfig> = {
     description: "Keep your home fresh and comfortable with a reliable weekly or once-off clean.",
     icon: Home,
     cleanerMode: "individual_cleaners",
-    basePrice: 350,
+    basePrice: 250,
     pricePerExtraCleaner: 200,
     estimatedDurationHours: 3,
     step1Questions: REGULAR_QUESTIONS,
@@ -635,7 +502,7 @@ export const SERVICE_CONFIG: Record<ServiceSlug, ServiceConfig> = {
     description: "A thorough top-to-bottom clean of every surface, corner, and room.",
     icon: Droplets,
     cleanerMode: "team",
-    basePrice: 950,
+    basePrice: 1200,
     pricePerExtraCleaner: 0,
     estimatedDurationHours: 6,
     step1Questions: DEEP_QUESTIONS,
@@ -648,7 +515,7 @@ export const SERVICE_CONFIG: Record<ServiceSlug, ServiceConfig> = {
     description: "Move-in or move-out clean to ensure a smooth handover and full deposit return.",
     icon: Truck,
     cleanerMode: "team",
-    basePrice: 1100,
+    basePrice: 1200,
     pricePerExtraCleaner: 0,
     estimatedDurationHours: 7,
     step1Questions: MOVING_QUESTIONS,
@@ -661,7 +528,7 @@ export const SERVICE_CONFIG: Record<ServiceSlug, ServiceConfig> = {
     description: "Professional cleaning for offices and workspaces to keep your team productive.",
     icon: Building2,
     cleanerMode: "individual_cleaners",
-    basePrice: 450,
+    basePrice: 300,
     pricePerExtraCleaner: 220,
     estimatedDurationHours: 3,
     step1Questions: OFFICE_QUESTIONS,
@@ -675,7 +542,7 @@ export const SERVICE_CONFIG: Record<ServiceSlug, ServiceConfig> = {
     icon: Layers,
     cleanerMode: "individual_cleaners",
     basePrice: 500,
-    pricePerExtraCleaner: 200,
+    pricePerExtraCleaner: 0,
     estimatedDurationHours: 4,
     step1Questions: CARPET_QUESTIONS,
     extras: CARPET_EXTRAS,
@@ -687,7 +554,7 @@ export const SERVICE_CONFIG: Record<ServiceSlug, ServiceConfig> = {
     description: "Fast, reliable turnovers that keep your listing sparkling and guests happy.",
     icon: CalendarCheck,
     cleanerMode: "individual_cleaners",
-    basePrice: 400,
+    basePrice: 250,
     pricePerExtraCleaner: 200,
     estimatedDurationHours: 3,
     step1Questions: AIRBNB_QUESTIONS,

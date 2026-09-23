@@ -2,373 +2,441 @@
 
 import { useState } from "react";
 import { useFormContext } from "react-hook-form";
-import {
-  ChevronDown,
-  ChevronUp,
-  ShieldCheck,
-  CreditCard,
-  ThumbsUp,
-  Clock,
-  MapPin,
-  Calendar,
-  Users,
-  Star,
-  Tag,
-  Pencil,
-  type LucideIcon,
-} from "lucide-react";
+import { ChevronDown, ChevronUp, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { petAnswerLabel } from "@/lib/booking-v2/petOptions";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurringScheduleOptions";
 import type { BookingV2FormData, BookingStep } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
-import { formatAreasServedPreview } from "@/src/features/booking-v2/components/CleanerCard";
-import { formatEstimatedCleaningTimeLabel, estimatedCleaningHoursFromMinutes } from "@/lib/booking-v2/formatEstimatedCleaningTime";
-import { estimateRecurringMonthlySpend } from "@/lib/recurring/estimateMonthlyRevenue";
-
-const TRUST_BADGES = [
-  { Icon: ShieldCheck, title: "Vetted cleaners", desc: "Background checked & verified", color: "text-green-600" },
-  { Icon: CreditCard, title: "Secure payment", desc: "Your payment is safe and protected", color: "text-blue-600" },
-  { Icon: ThumbsUp, title: "Satisfaction guarantee", desc: "We'll make it right", color: "text-green-600" },
-] as const;
+import { estimatedCleaningHoursFromMinutes } from "@/lib/booking-v2/formatEstimatedCleaningTime";
+import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
+import {
+  isRegularCleaningScheduleStageComplete,
+  type RegularCleaningScheduleStage,
+} from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
+import {
+  bookingDetailsFinalStage,
+  bookingDetailsStage,
+  bookingDetailsStageIndex,
+  isProgressiveBookingDetailsService,
+  usesProgressiveIndividualSchedule,
+  type BookingDetailsStage,
+} from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
   try {
-    const d = new Date(dateStr + "T00:00:00");
-    return d.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short", year: "numeric" });
+    const date = new Date(`${dateStr}T00:00:00`);
+    return date.toLocaleDateString("en-ZA", {
+      weekday: "short",
+      day: "numeric",
+      month: "short",
+      year: "numeric",
+    });
   } catch {
     return dateStr;
   }
 }
 
-// ─── Reusable section scaffolding ───────────────────────────────────────────────
-
-function SectionIcon({ icon: Icon }: { icon: LucideIcon }) {
+function SummaryRow({ label, value, onEdit }: { label: string; value: string; onEdit: () => void }) {
   return (
-    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50">
-      <Icon className="h-4 w-4 text-blue-600" aria-hidden />
+    <div className="flex min-h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+      <p className="min-w-0 flex-1 truncate text-sm text-slate-700" title={`${label}: ${value}`}>
+        <span className="font-medium text-slate-500">{label}:</span>{" "}
+        <span className="font-semibold text-slate-900">{value}</span>
+      </p>
+      <button
+        type="button"
+        onClick={onEdit}
+        className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg text-blue-600 transition hover:bg-blue-50 hover:text-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2"
+        aria-label={`Edit ${label.toLowerCase()}`}
+      >
+        <Pencil className="h-4 w-4" aria-hidden />
+      </button>
     </div>
   );
 }
-
-function EditLink({ onClick }: { onClick: () => void }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      suppressHydrationWarning
-      className="flex items-center gap-1 text-sm font-medium text-blue-600 transition hover:text-blue-700"
-    >
-      <Pencil className="h-3.5 w-3.5" aria-hidden />
-      Edit
-    </button>
-  );
-}
-
-function Section({
-  icon,
-  label,
-  onEdit,
-  children,
-}: {
-  icon: LucideIcon;
-  label: string;
-  onEdit?: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-start gap-3 px-4 py-3 sm:px-5">
-      <SectionIcon icon={icon} />
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</p>
-          {onEdit && <EditLink onClick={onEdit} />}
-        </div>
-        <div className="mt-1 min-w-0">{children}</div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Panel ──────────────────────────────────────────────────────────────────────
 
 export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: { collapsed?: boolean }) {
   const [open, setOpen] = useState(!defaultCollapsed);
+  const [moreDetailsOpen, setMoreDetailsOpen] = useState(false);
+  const [priceBreakdownOpen, setPriceBreakdownOpen] = useState(false);
   const { watch } = useFormContext<BookingV2FormData>();
-  const { liveConfig, goToStep } = useBookingV2();
+  const {
+    currentStep,
+    liveConfig,
+    goToStep,
+    detailsSectionOverride,
+    editDetailsSection,
+    scheduleSectionOverride,
+    editScheduleSection,
+  } = useBookingV2();
   const values = watch();
 
   const config = SERVICE_CONFIG[values.serviceSlug];
   const pricing = values.pricingSummary;
   const displayTotal = pricing.estimated_total ?? pricing.total ?? 0;
+  const recurringPrepayment = values.bookingType === "recurring" && values.recurringFrequency
+    ? buildRecurringPrepaymentQuote({
+        startDate: values.recurringStartDate || values.date,
+        frequency: values.recurringFrequency,
+        recurringDays: values.recurringDays ?? [],
+        perVisitZar: displayTotal,
+        serviceSlug: values.serviceSlug,
+      })
+    : null;
   const durationHours = estimatedCleaningHoursFromMinutes(
     pricing.estimated_duration_minutes,
     liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours,
   );
   const hasAddress = values.address.length >= 5;
   const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(values.date);
-  const hasExtras = values.selectedExtras.length > 0;
+  const hasCleaner = values.cleanerMode === "team" || values.cleanerCount > 0;
   const hasPriceBreakdown = pricing.lineItems.length > 0;
-
   const edit = (step: BookingStep) => () => goToStep(step);
+  const editDetail = (section: BookingDetailsStage) => () => {
+    goToStep(1);
+    editDetailsSection(section);
+  };
+  const editSchedule = (section: RegularCleaningScheduleStage) => () => {
+    goToStep(2);
+    editScheduleSection(section);
+  };
 
-  const durationRow = (
-    <div className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
-      <Clock className="h-3.5 w-3.5 shrink-0" aria-hidden />
-      <span>
-        {pricing.estimated_duration_minutes > 0
-          ? formatEstimatedCleaningTimeLabel(pricing.estimated_duration_minutes)
-          : `Estimated cleaning time: ${durationHours} hours`}
-      </span>
-    </div>
+  const addressLabel = [values.address, values.suburb, values.city].filter(Boolean).join(", ");
+  const isCarpetCleaning = values.serviceSlug === "carpet-cleaning";
+  const isAirbnbCleaning = values.serviceSlug === "airbnb-cleaning";
+  const cleanerLabel = values.cleanerMode === "team"
+    ? values.assignedTeamName?.trim() || "Best available team"
+    : values.selectedCleanerDetails.length > 0
+      ? values.selectedCleanerDetails.map((cleaner) => cleaner.name).join(", ")
+      : isCarpetCleaning
+        ? "Shalean chooses specialist"
+        : `${values.cleanerCount} cleaner${values.cleanerCount === 1 ? "" : "s"}`;
+  const priceLabel = hasPriceBreakdown
+    ? `R${displayTotal.toLocaleString("en-ZA")}`
+    : `From R${(liveConfig?.basePrice ?? config.basePrice).toLocaleString("en-ZA")}`;
+  const checkoutPriceLabel = recurringPrepayment
+    ? `R${recurringPrepayment.grossPackageZar.toLocaleString("en-ZA")}`
+    : priceLabel;
+  const isRegularCleaning = values.serviceSlug === "regular-cleaning";
+  const isDeepCleaning = values.serviceSlug === "deep-cleaning";
+  const isMovingCleaning = values.serviceSlug === "moving-cleaning";
+  const progressiveDetails = isProgressiveBookingDetailsService(values.serviceSlug);
+  const progressiveSchedule = usesProgressiveIndividualSchedule(values.serviceSlug);
+  const bookingDetails = {
+    address: values.address,
+    suburb: values.suburb,
+    contactPhone: values.contactPhone,
+    serviceAreaLocationId: values.serviceAreaLocationId,
+  };
+  const questions = liveConfig?.step1Questions ?? config.step1Questions;
+  const detailsStage = bookingDetailsStage(
+    values.serviceSlug,
+    values.serviceDetails,
+    bookingDetails,
+    questions,
   );
+  const displayedDetailsStage = detailsSectionOverride ?? detailsStage;
+  const detailsStageIndex = bookingDetailsStageIndex(
+    values.serviceSlug,
+    displayedDetailsStage,
+  );
+  const finalDetailsStage = bookingDetailsFinalStage(values.serviceSlug);
+  const finalDetailsStageIndex = bookingDetailsStageIndex(
+    values.serviceSlug,
+    finalDetailsStage,
+  );
+  const optionLabel = (key: string, raw: unknown): string => {
+    const value = String(raw ?? "");
+    return (
+      questions
+        .find((question) => question.key === key)
+        ?.options?.find((option) => option.value === value)?.label ?? value
+    );
+  };
+
+  const propertyLabel =
+    values.serviceSlug === "office-cleaning"
+      ? ""
+      : optionLabel("propertyType", values.serviceDetails.propertyType);
+
+  const bedrooms = String(values.serviceDetails.bedrooms ?? "");
+  const bathrooms = String(values.serviceDetails.bathrooms ?? "");
+  const extraRooms = String(values.serviceDetails.extraRooms ?? "");
+  const homeRoomsComplete = [bedrooms, bathrooms, extraRooms].every(
+    (value) => value.trim() !== "",
+  );
+  const homeRoomsLabel = homeRoomsComplete
+    ? `${bedrooms} bed · ${bathrooms} bath${extraRooms !== "0" ? ` · ${extraRooms} extra` : ""}`
+    : "";
+
+  const roomsLabel =
+    values.serviceSlug === "office-cleaning"
+      ? [
+          optionLabel("officeSize", values.serviceDetails.officeSize),
+          bathrooms ? `${bathrooms} bathroom${bathrooms === "1" ? "" : "s"}` : "",
+        ].filter(Boolean).join(" · ")
+      : values.serviceSlug === "carpet-cleaning"
+        ? [
+            values.serviceDetails.carpetRooms
+              ? `${values.serviceDetails.carpetRooms} carpeted room${String(values.serviceDetails.carpetRooms) === "1" ? "" : "s"}`
+              : "",
+            values.serviceDetails.rugCount
+              ? `${values.serviceDetails.rugCount} rug${String(values.serviceDetails.rugCount) === "1" ? "" : "s"}`
+              : "",
+            optionLabel("carpetType", values.serviceDetails.carpetType),
+          ].filter(Boolean).join(" · ")
+        : homeRoomsLabel;
+
+  const moveType = String(values.serviceDetails.moveType ?? "");
+  const moveTypeLabel =
+    moveType === "move_in" ? "Move-in" : moveType === "move_out" ? "Move-out" : "";
+
+  const petsLabel = petAnswerLabel(values.serviceDetails.hasPets);
+  const equipmentLabel =
+    values.equipmentRequired === "yes" ? "Shalean supplies" : "Customer supplies";
+
+  const finalDetailValues =
+    values.serviceSlug === "regular-cleaning"
+      ? [petsLabel, equipmentLabel]
+      : values.serviceSlug === "deep-cleaning"
+        ? [
+            optionLabel("lastCleaned", values.serviceDetails.lastCleaned),
+            petsLabel,
+          ]
+        : values.serviceSlug === "moving-cleaning"
+          ? [
+              optionLabel("furnished", values.serviceDetails.furnished),
+              petsLabel,
+            ]
+          : values.serviceSlug === "office-cleaning"
+            ? []
+            : values.serviceSlug === "carpet-cleaning"
+              ? [
+                  values.serviceDetails.stains
+                    ? `Visible stains: ${optionLabel("stains", values.serviceDetails.stains)}`
+                    : "",
+                ]
+              : [
+                  optionLabel("linens", values.serviceDetails.linens),
+                  optionLabel("keyAccess", values.serviceDetails.keyAccess),
+                ];
+  const moreDetailsLabel = finalDetailValues.filter(Boolean).join(" · ");
+
+  const displayedScheduleStage =
+    scheduleSectionOverride ??
+    (isCarpetCleaning || isAirbnbCleaning ? "date_time" : "booking_type");
+  const cleanerIsVisible =
+    hasCleaner &&
+    !(isDeepCleaning && currentStep === 1) &&
+    (!progressiveSchedule || currentStep > 2 || displayedScheduleStage === "cleaner");
+  const bookingTypeLabel = values.bookingType === "recurring" ? "Recurring" : "Once-off";
+  const scheduleIsVisible =
+    !(isDeepCleaning && currentStep === 1) &&
+    (isCarpetCleaning || isAirbnbCleaning
+      ? currentStep > 2 || displayedScheduleStage === "cleaner"
+      : !progressiveSchedule ||
+        currentStep > 2 ||
+        isRegularCleaningScheduleStageComplete(
+          "booking_type",
+          displayedScheduleStage,
+          values.bookingType,
+        ));
+  const dateIsVisible =
+    hasDate &&
+    !(isDeepCleaning && currentStep === 1) &&
+    (!progressiveSchedule ||
+      currentStep > 2 ||
+      isRegularCleaningScheduleStageComplete(
+        "date_time",
+        displayedScheduleStage,
+        values.bookingType,
+      ));
+  const scheduleLabel = [
+    !isCarpetCleaning && !isAirbnbCleaning
+      ? values.bookingType === "recurring" && values.recurringFrequency
+        ? recurringFrequencyLabel(values.recurringFrequency)
+        : bookingTypeLabel
+      : "",
+    dateIsVisible ? formatDate(values.date) : "",
+    dateIsVisible && values.time ? values.time : "",
+  ].filter(Boolean).join(" · ");
+
+  const propertyIsVisible =
+    progressiveDetails &&
+    Boolean(propertyLabel) &&
+    (currentStep > 1 || detailsStageIndex >= 2);
+  const roomsAreVisible =
+    progressiveDetails &&
+    Boolean(roomsLabel) &&
+    (currentStep > 1 || detailsStageIndex > 2);
+  const homeLabel = [propertyIsVisible ? propertyLabel : "", roomsAreVisible ? roomsLabel : ""]
+    .filter(Boolean)
+    .join(" · ");
+  const finalDetailsVisible =
+    progressiveDetails &&
+    Boolean(moreDetailsLabel) &&
+    (currentStep > 1 || detailsStageIndex >= finalDetailsStageIndex);
+  const equipmentIsVisible = isRegularCleaning && currentStep > 1;
+  const hasMoreDetails = finalDetailsVisible || equipmentIsVisible;
 
   return (
-    <div className="rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-      {/* Mobile toggle header */}
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <button
         type="button"
-        onClick={() => setOpen((o) => !o)}
-        className="flex min-h-12 w-full items-center justify-between gap-2 px-4 py-3 sm:px-5 sm:py-4 lg:hidden"
+        onClick={() => setOpen((current) => !current)}
+        className="flex min-h-10 w-full items-center justify-between gap-2 px-3 py-2.5 lg:hidden"
         aria-expanded={open}
       >
-        <div className="flex min-w-0 items-center gap-2">
-          <config.icon className="h-4 w-4 shrink-0 text-blue-600" aria-hidden />
-          <span className="truncate text-sm font-semibold text-slate-800">Booking summary</span>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {displayTotal > 0 && (
-            <span className="text-sm font-bold text-blue-600">R{displayTotal.toLocaleString("en-ZA")}</span>
-          )}
-          {open ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
-        </div>
+        <span className="truncate text-sm font-semibold text-slate-900">Booking summary</span>
+        <span className="flex shrink-0 items-center gap-2">
+          <span className="text-sm font-bold text-blue-600">{priceLabel}</span>
+          {open
+            ? <ChevronUp className="h-4 w-4 text-slate-400" aria-hidden />
+            : <ChevronDown className="h-4 w-4 text-slate-400" aria-hidden />}
+        </span>
       </button>
 
-      <div
-        className={cn(
-          "lg:flex lg:max-h-[calc(100dvh-7rem)] lg:flex-col",
-          !open && "hidden",
-        )}
-      >
-        {/* Desktop header */}
-        <div className="hidden shrink-0 items-center gap-3 border-b border-slate-100 px-5 py-3 lg:flex">
-          <SectionIcon icon={config.icon} />
-          <p className="text-base font-bold text-slate-900">{config.label}</p>
-        </div>
+      <div className={cn("lg:block", !open && "hidden")}>
+        <div className="space-y-2 p-3">
+          <h2 className="hidden text-xl font-bold tracking-tight text-slate-900 lg:block">Booking summary</h2>
 
-        {/* Sections (desktop: scroll independently so the panel never grows past viewport) */}
-        <div className="divide-y divide-slate-100 border-b border-slate-100 lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
-          {/* Location */}
-          {hasAddress && (
-            <Section icon={MapPin} label="Location" onEdit={edit(1)}>
-              <p className="break-words text-sm font-medium text-slate-800">{values.address}</p>
-              {values.suburb && (
-                <p className="text-sm text-slate-500">
-                  {values.suburb}
-                  {values.city ? `, ${values.city}` : ""}
-                </p>
-              )}
-            </Section>
-          )}
+          {hasAddress && (!progressiveDetails || currentStep > 1 || detailsStageIndex >= finalDetailsStageIndex) ? (
+            <SummaryRow label="Address" value={addressLabel} onEdit={progressiveDetails ? editDetail("address") : edit(1)} />
+          ) : null}
+          <SummaryRow label="Service" value={config.label} onEdit={progressiveDetails ? editDetail(values.serviceSlug === "office-cleaning" ? "rooms" : "property") : edit(1)} />
+          {scheduleIsVisible ? (
+            <SummaryRow
+              label="Schedule"
+              value={scheduleLabel}
+              onEdit={
+                progressiveSchedule
+                  ? editSchedule(
+                      isCarpetCleaning || isAirbnbCleaning
+                        ? "date_time"
+                        : dateIsVisible
+                          ? "date_time"
+                          : "booking_type",
+                    )
+                  : edit(2)
+              }
+            />
+          ) : null}
+          {cleanerIsVisible ? (
+            <SummaryRow
+              label={isCarpetCleaning ? "Specialist" : "Cleaners"}
+              value={cleanerLabel}
+              onEdit={progressiveSchedule ? editSchedule("cleaner") : edit(2)}
+            />
+          ) : null}
+          {isMovingCleaning && moveTypeLabel && (currentStep > 1 || detailsStageIndex >= 3) ? (
+            <SummaryRow label="Move" value={moveTypeLabel} onEdit={editDetail("move")} />
+          ) : null}
+          {homeLabel ? (
+            <SummaryRow
+              label={
+                isCarpetCleaning
+                  ? "Carpet scope"
+                  : values.serviceSlug === "office-cleaning"
+                    ? "Office scope"
+                    : isAirbnbCleaning
+                      ? "Property"
+                      : "Home"
+              }
+              value={homeLabel}
+              onEdit={editDetail(values.serviceSlug === "office-cleaning" ? "rooms" : "property")}
+            />
+          ) : null}
 
-          {/* Date & time */}
-          {hasDate && (
-            <Section icon={Calendar} label="Date & Time" onEdit={edit(2)}>
-              <p className="text-sm font-medium text-slate-800">{formatDate(values.date)}</p>
-              {values.time && <p className="text-sm text-slate-500">{values.time}</p>}
-              {values.bookingType === "recurring" && values.recurringFrequency && (
-                <p className="mt-1 text-xs font-medium text-blue-600">
-                  Recurring: {recurringFrequencyLabel(values.recurringFrequency)}
-                  {(values.recurringDays ?? []).length > 0
-                    ? ` · ${values.recurringDays.join(", ")}`
-                    : ""}
-                </p>
-              )}
-            </Section>
-          )}
-
-          {/* Cleaners */}
-          {values.cleanerMode === "individual_cleaners" && values.cleanerCount > 0 && (
-            <Section icon={Users} label="Cleaners" onEdit={edit(2)}>
-              <p className="text-sm font-medium text-slate-800">
-                {values.cleanerCount} cleaner{values.cleanerCount > 1 ? "s" : ""}
-              </p>
-
-              {values.selectedCleanerDetails.length > 0 && (
-                <div className="mt-2 space-y-2">
-                  {values.selectedCleanerDetails.map((c) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5"
-                    >
-                      <div
-                        className={cn(
-                          "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-xs font-bold",
-                          c.avatarColor,
-                        )}
-                        aria-hidden
-                      >
-                        {c.initials}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-slate-800">{c.name}</p>
-                        <p className="flex flex-wrap items-center gap-x-1 gap-y-0.5 text-xs text-slate-500">
-                          {c.rating != null && (
-                            <span className="flex items-center gap-0.5">
-                              <Star className="h-3 w-3 fill-amber-400 text-amber-400" aria-hidden />
-                              {c.rating.toFixed(1)}
-                            </span>
-                          )}
-                          <span>· {c.jobsCompleted} jobs</span>
-                        </p>
-                        {(() => {
-                          const areas = formatAreasServedPreview(c.areasServed);
-                          if (!areas) return null;
-                          return (
-                            <p className="mt-0.5 truncate text-xs text-slate-400">
-                              {areas.primary}
-                              {areas.moreCount > 0 ? ` +${areas.moreCount} more` : ""}
-                            </p>
-                          );
-                        })()}
-                      </div>
-                    </div>
-                  ))}
+          {hasMoreDetails ? (
+            <div>
+              <button
+                type="button"
+                onClick={() => setMoreDetailsOpen((current) => !current)}
+                className="flex w-full items-center justify-between gap-2 px-1 py-1.5 text-sm font-medium text-slate-600 transition hover:text-slate-900"
+                aria-expanded={moreDetailsOpen}
+              >
+                <span>More details</span>
+                {moreDetailsOpen
+                  ? <ChevronUp className="h-4 w-4" aria-hidden />
+                  : <ChevronDown className="h-4 w-4" aria-hidden />}
+              </button>
+              {moreDetailsOpen ? (
+                <div className="rounded-xl bg-slate-50 p-2">
+                  <SummaryRow
+                    label={
+                      isCarpetCleaning
+                        ? "Condition"
+                        : isAirbnbCleaning
+                          ? "Turnover setup"
+                          : "Details"
+                    }
+                    value={moreDetailsLabel}
+                    onEdit={editDetail(finalDetailsStage)}
+                  />
                 </div>
-              )}
+              ) : null}
+            </div>
+          ) : null}
 
-              <p className="mt-2 text-xs font-medium text-blue-600">
-                {values.selectedCleanerIds.length > 0
-                  ? `${values.selectedCleanerIds.length} preferred cleaner${values.selectedCleanerIds.length > 1 ? "s" : ""} selected`
-                  : "Best available cleaner"}
-              </p>
-            </Section>
+          {values.equipmentRequired === "yes" && values.equipmentQuote?.manual_quote_required && (
+            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs text-amber-800">
+              {values.equipmentQuote.manual_quote_message}
+            </p>
           )}
 
-          {values.cleanerMode === "team" && (
-            <Section icon={Users} label="Team" onEdit={edit(2)}>
-              <p className="text-sm font-medium text-slate-800">
-                {values.assignedTeamId
-                  ? values.assignedTeamName?.trim() || "Selected team"
-                  : "Best available team"}
-              </p>
-            </Section>
-          )}
-
-          {/* Extras + duration */}
-          {hasExtras ? (
-            <Section icon={Star} label="Extras" onEdit={edit(1)}>
-              <ul className="space-y-1">
-                {values.selectedExtras.map((id) => {
-                  const extra = (liveConfig?.extras ?? []).find((e) => e.id === id);
-                  return (
-                    <li key={id} className="flex items-center justify-between gap-2 text-sm text-slate-700">
-                      <span className="min-w-0 truncate">{extra?.label ?? id}</span>
-                      <span className="shrink-0 font-medium text-slate-800">
-                        +R{(extra?.priceZar ?? 0).toLocaleString("en-ZA")}
+          {hasPriceBreakdown && (
+            <div>
+              <button
+                type="button"
+                onClick={() => setPriceBreakdownOpen((current) => !current)}
+                className="flex w-full items-center justify-between gap-2 px-1 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-700"
+                aria-expanded={priceBreakdownOpen}
+              >
+                <span>View price breakdown</span>
+                {priceBreakdownOpen
+                  ? <ChevronUp className="h-4 w-4" aria-hidden />
+                  : <ChevronDown className="h-4 w-4" aria-hidden />}
+              </button>
+              {priceBreakdownOpen && (
+                <ul className="mt-1 space-y-1.5 rounded-xl bg-slate-50 px-3 py-2.5">
+                  {pricing.lineItems.map((item, index) => (
+                    <li key={`${item.label}-${index}`} className="flex items-center justify-between gap-2 text-xs text-slate-600">
+                      <span className="min-w-0 truncate">{item.label}</span>
+                      <span className="shrink-0 tabular-nums">
+                        {item.amountZar < 0 ? "-" : ""}R{Math.abs(item.amountZar).toLocaleString("en-ZA")}
                       </span>
                     </li>
-                  );
-                })}
-              </ul>
-              {durationRow}
-            </Section>
-          ) : (
-            <div className="px-4 py-3 sm:px-5">{durationRow}</div>
-          )}
-
-          {/* Manual quote notice */}
-          {values.equipmentRequired === "yes" && values.equipmentQuote?.manual_quote_required && (
-            <div className="mx-4 mb-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:mx-5">
-              {values.equipmentQuote.manual_quote_message}
+                  ))}
+                </ul>
+              )}
             </div>
           )}
 
-          {/* Price breakdown */}
-          {hasPriceBreakdown && (
-            <Section icon={Tag} label="Price breakdown">
-              <ul className="space-y-1.5">
-                {pricing.lineItems.map((item, i) => (
-                  <li
-                    key={`${item.label}-${i}`}
-                    className="flex items-center justify-between gap-2 text-sm text-slate-600"
-                  >
-                    <span className="min-w-0 truncate">{item.label}</span>
-                    <span className="shrink-0 tabular-nums">
-                      {item.amountZar < 0 ? "-" : ""}R{Math.abs(item.amountZar).toLocaleString("en-ZA")}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </Section>
-          )}
+          {recurringPrepayment ? (
+              <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-slate-600">
+                <p>
+                  <span className="font-semibold text-slate-800">
+                    {isDeepCleaning ? "Monthly plan" : "First 30 days"} · {recurringPrepayment.visitCount} visit{recurringPrepayment.visitCount === 1 ? "" : "s"}
+                  </span>
+                  {` · ${isDeepCleaning ? "Pay this month now" : "Pay all visits now"}`}
+                </p>
+              </div>
+          ) : null}
         </div>
 
-        {/* Total + trust footer (pinned on desktop) */}
-        <div className="shrink-0 space-y-3 px-4 py-4 sm:px-5">
-            <div className="rounded-xl bg-blue-50 px-4 py-3 ring-1 ring-inset ring-blue-100">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <span className="text-base font-bold text-slate-900">
-                {values.bookingType === "recurring" ? "Price per visit" : "Estimated total"}
-              </span>
-              <span className="text-xl font-extrabold text-blue-600">
-                {hasPriceBreakdown
-                  ? `R${displayTotal.toLocaleString("en-ZA")}`
-                  : `From R${(liveConfig?.basePrice ?? config.basePrice).toLocaleString("en-ZA")}`}
-              </span>
-            </div>
-            {values.bookingType === "recurring" && values.recurringFrequency ? (
-              <div className="mt-1.5 space-y-0.5 text-xs text-slate-600">
-                {(() => {
-                  const { visitsPerMonth, estimatedMonthlyZar } = estimateRecurringMonthlySpend({
-                    frequency: values.recurringFrequency,
-                    daysOfWeek: values.recurringDays ?? [],
-                    pricePerVisitZar: displayTotal,
-                  });
-                  return (
-                    <>
-                      <p>
-                        {recurringFrequencyLabel(values.recurringFrequency)} plan
-                        {(values.recurringDays ?? []).length > 0
-                          ? ` · ${values.recurringDays.join(", ")}`
-                          : ""}
-                      </p>
-                      <p>
-                        About {visitsPerMonth} visit{visitsPerMonth === 1 ? "" : "s"}/month · estimated
-                        monthly total R{estimatedMonthlyZar.toLocaleString("en-ZA")}
-                      </p>
-                      <p className="font-medium text-slate-700">
-                        Pay today: R{displayTotal.toLocaleString("en-ZA")} (this visit)
-                      </p>
-                      <p className="text-slate-500">
-                        Each visit is billed at this per-visit price. Future visits are charged
-                        separately (or on your monthly invoice if your account uses monthly billing).
-                      </p>
-                    </>
-                  );
-                })()}
-              </div>
-            ) : (
-              <p className="mt-0.5 text-xs text-slate-500">
-                Final amount confirmed before payment. No hidden fees.
-              </p>
-            )}
+        <div className="grid grid-cols-2 bg-primary px-3 py-3 text-primary-foreground">
+          <div className="flex flex-col items-center justify-center border-r border-primary-foreground/35 px-2 text-center">
+            <span className="text-2xl font-semibold tabular-nums">{durationHours}</span>
+            <span className="text-[11px] font-medium text-primary-foreground/80">Est. hours</span>
           </div>
-
-          <div className="grid grid-cols-1 gap-2 rounded-xl bg-slate-50 p-3 sm:grid-cols-3">
-            {TRUST_BADGES.map(({ Icon, title, desc, color }) => (
-              <div
-                key={title}
-                className="flex flex-row items-center gap-2 text-left sm:flex-col sm:items-center sm:gap-1 sm:text-center"
-              >
-                <Icon className={cn("h-5 w-5 shrink-0", color)} aria-hidden />
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold leading-tight text-slate-700">{title}</p>
-                  <p className="text-[10px] leading-tight text-slate-400">{desc}</p>
-                </div>
-              </div>
-            ))}
+          <div className="flex flex-col items-center justify-center px-2 text-center">
+            <span className="text-2xl font-semibold tabular-nums">{checkoutPriceLabel}</span>
+            <span className="text-[11px] font-medium text-primary-foreground/80">
+              {recurringPrepayment ? "Due today" : "Est. price"}
+            </span>
           </div>
         </div>
       </div>

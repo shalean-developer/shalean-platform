@@ -20,7 +20,6 @@ export const SERVICE_EXTRA_SLUGS: Record<ServiceSlug, readonly string[]> = {
     "interior-walls",
   ],
   "moving-cleaning": [
-    "deposit-preparation",
     "appliances-cleaning",
     "inside-cabinets",
     "garage-cleaning",
@@ -32,7 +31,6 @@ export const SERVICE_EXTRA_SLUGS: Record<ServiceSlug, readonly string[]> = {
   ],
   "carpet-cleaning": [
     "sofa-upholstery",
-    "stain-treatment",
     "pet-odour-treatment",
     "fabric-protector",
     "mattress-cleaning",
@@ -46,6 +44,24 @@ export const SERVICE_EXTRA_SLUGS: Record<ServiceSlug, readonly string[]> = {
   ],
 };
 
+const SERVICE_EXTRA_SLUG_SETS: Record<ServiceSlug, ReadonlySet<string>> = {
+  "regular-cleaning": new Set(SERVICE_EXTRA_SLUGS["regular-cleaning"]),
+  "deep-cleaning": new Set(SERVICE_EXTRA_SLUGS["deep-cleaning"]),
+  "moving-cleaning": new Set(SERVICE_EXTRA_SLUGS["moving-cleaning"]),
+  "office-cleaning": new Set(SERVICE_EXTRA_SLUGS["office-cleaning"]),
+  "carpet-cleaning": new Set(SERVICE_EXTRA_SLUGS["carpet-cleaning"]),
+  "airbnb-cleaning": new Set(SERVICE_EXTRA_SLUGS["airbnb-cleaning"]),
+};
+
 export function extraSlugsForService(slug: ServiceSlug): readonly string[] {
   return SERVICE_EXTRA_SLUGS[slug];
+}
+
+/**
+ * Customer-facing add-ons are contract-owned by Booking V2.
+ * The database still owns the price and active state, but a stale service_slugs
+ * assignment must never make an add-on appear on the wrong service.
+ */
+export function isExtraSlugAllowedForService(serviceSlug: ServiceSlug, extraSlug: string): boolean {
+  return SERVICE_EXTRA_SLUG_SETS[serviceSlug].has(extraSlug.trim());
 }

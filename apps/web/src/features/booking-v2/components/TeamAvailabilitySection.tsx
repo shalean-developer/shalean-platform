@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Loader2, AlertCircle } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { TeamCard } from "@/src/features/booking-v2/components/TeamCard";
 
@@ -18,22 +18,64 @@ function useTeamAvailability(date: string, serviceSlug: string) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      setData(null);
+    if (serviceSlug !== "moving-cleaning") {
+      if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+        setData(null);
+        return;
+      }
+      setLoading(true);
+      setError(null);
+      fetch(`/api/booking-v2/team-availability?date=${date}&service=${serviceSlug}`)
+        .then((r) => r.json())
+        .then((json: TeamAvailabilityData) => {
+          setData(json);
+          setLoading(false);
+        })
+        .catch(() => {
+          setError("Could not check team availability. Please try again.");
+          setLoading(false);
+        });
       return;
     }
+
+    if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      setData(null);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    setData(null);
     setLoading(true);
     setError(null);
-    fetch(`/api/booking-v2/team-availability?date=${date}&service=${serviceSlug}`)
-      .then((r) => r.json())
-      .then((json: TeamAvailabilityData) => {
+
+    async function load() {
+      try {
+        const response = await fetch(
+          `/api/booking-v2/team-availability?date=${date}&service=${serviceSlug}`,
+          {
+            cache: "no-store",
+            signal: controller.signal,
+          },
+        );
+        if (!response.ok) {
+          throw new Error(`Team availability request failed with ${response.status}`);
+        }
+        const json = (await response.json()) as TeamAvailabilityData;
+        if (controller.signal.aborted) return;
         setData(json);
-        setLoading(false);
-      })
-      .catch(() => {
+      } catch (error) {
+        if (controller.signal.aborted) return;
+        console.error("[booking-v2/team-availability]", error);
         setError("Could not check team availability. Please try again.");
-        setLoading(false);
-      });
+      } finally {
+        if (!controller.signal.aborted) setLoading(false);
+      }
+    }
+
+    void load();
+    return () => controller.abort();
   }, [date, serviceSlug]);
 
   return { data, loading, error };
@@ -44,6 +86,7 @@ type Props = {
   serviceSlug: string;
   selectedTeamId: string;
   onSelect: (teamId: string, teamName: string) => void;
+  autoAssign?: boolean;
 };
 
 export function TeamAvailabilitySection({
@@ -51,8 +94,19 @@ export function TeamAvailabilitySection({
   serviceSlug,
   selectedTeamId,
   onSelect,
+  autoAssign = false,
 }: Props) {
   const { data: teamAvail, loading, error } = useTeamAvailability(date, serviceSlug);
+
+  useEffect(() => {
+    if (!autoAssign || !teamAvail?.available) return;
+    const selectedStillAvailable = teamAvail.teams.some(
+      (team) => team.id === selectedTeamId && team.available,
+    );
+    if (selectedStillAvailable) return;
+    const firstAvailable = teamAvail.teams.find((team) => team.available);
+    if (firstAvailable) onSelect(firstAvailable.id, firstAvailable.name);
+  }, [autoAssign, onSelect, selectedTeamId, teamAvail]);
 
   return (
     <div className="space-y-4">
@@ -112,6 +166,16 @@ export function TeamAvailabilitySection({
                 <p className="text-sm font-semibold text-amber-800">No teams are ready for this service yet</p>
                 <p className="mt-1 text-xs text-amber-700">
                   Ask ops to activate a deep/move team with at least two roster members, then try again.
+                </p>
+              </div>
+            </div>
+          ) : autoAssign ? (
+            <div className="flex items-start gap-3 rounded-xl border border-emerald-100 bg-emerald-50 px-4 py-4">
+              <CheckCircle2 className="mt-0.5 h-5 w-5 shrink-0 text-emerald-600" aria-hidden />
+              <div>
+                <p className="text-sm font-semibold text-emerald-900">Cleaning team available</p>
+                <p className="mt-1 text-xs text-emerald-700">
+                  Shalean will assign the available team for your booking.
                 </p>
               </div>
             </div>

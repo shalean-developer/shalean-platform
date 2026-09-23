@@ -40,7 +40,6 @@ export const EXTRA_CLEANER_SERVICE_SLUGS = new Set([
   "regular-cleaning",
   "airbnb-cleaning",
   "office-cleaning",
-  "carpet-cleaning",
 ]);
 
 function parseCount(details: Record<string, string | number | boolean>, key: string): number {
@@ -215,7 +214,7 @@ export function computePropertyFactors(
       rates,
       "stains",
       "stains",
-      "Stain treatment prep",
+      "Stain treatment",
       serviceDetails,
     );
   }

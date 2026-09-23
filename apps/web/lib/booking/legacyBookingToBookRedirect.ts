@@ -14,11 +14,11 @@ import { extraSlugsForService } from "@/lib/booking-v2/serviceExtraSlugs";
 /** Legacy `/booking/*` checkout segment → booking-v2 step (1–4). */
 export type LegacyCheckoutSegment = "details" | "schedule" | "cleaner" | "payment";
 
-const LEGACY_SEGMENT_TO_BOOK_STEP: Record<LegacyCheckoutSegment, number> = {
-  details: 1,
-  schedule: 2,
-  cleaner: 3,
-  payment: 4,
+const LEGACY_SEGMENT_TO_BOOK_STEP: Record<LegacyCheckoutSegment, string> = {
+  details: "details",
+  schedule: "schedule",
+  cleaner: "review",
+  payment: "payment",
 };
 
 const LEGACY_SERVICE_TO_BOOK_SLUG: Record<string, ServiceSlug> = {
@@ -31,22 +31,37 @@ const LEGACY_SERVICE_TO_BOOK_SLUG: Record<string, ServiceSlug> = {
   office: "office-cleaning",
 };
 
-export function legacyServiceIdToBookSlug(service: string | null | undefined): ServiceSlug {
-  const normalized = serviceFromUrlParam(service ?? undefined);
-  if (normalized && LEGACY_SERVICE_TO_BOOK_SLUG[normalized]) {
-    return LEGACY_SERVICE_TO_BOOK_SLUG[normalized];
-  }
+export function explicitBookServiceSlugFromParam(
+  service: string | null | undefined,
+): ServiceSlug | null {
   const raw = String(service ?? "")
     .trim()
     .toLowerCase()
     .replace(/_/g, "-");
-  if (raw && LEGACY_SERVICE_TO_BOOK_SLUG[raw]) {
-    return LEGACY_SERVICE_TO_BOOK_SLUG[raw];
-  }
+
+  if (!raw) return null;
+
+  // Booking V2 canonical slugs must win before the retired-funnel parser.
+  // The legacy parser intentionally maps office-cleaning -> standard, which is
+  // correct for the old funnel but wrong for /book/[serviceSlug].
   for (const slug of SERVICE_SLUGS) {
     if (slug === raw || slug.replace(/-cleaning$/, "") === raw) return slug;
   }
-  return "regular-cleaning";
+
+  if (LEGACY_SERVICE_TO_BOOK_SLUG[raw]) {
+    return LEGACY_SERVICE_TO_BOOK_SLUG[raw];
+  }
+
+  const normalized = serviceFromUrlParam(service ?? undefined);
+  if (normalized && LEGACY_SERVICE_TO_BOOK_SLUG[normalized]) {
+    return LEGACY_SERVICE_TO_BOOK_SLUG[normalized];
+  }
+
+  return null;
+}
+
+export function legacyServiceIdToBookSlug(service: string | null | undefined): ServiceSlug {
+  return explicitBookServiceSlugFromParam(service) ?? "regular-cleaning";
 }
 
 export function bookSlugFromLegacyServiceParam(sp: URLSearchParams): ServiceSlug {
@@ -63,7 +78,7 @@ export function buildBookHrefFromLegacySearchParams(
 ): string {
   const slug = bookSlugFromLegacyServiceParam(sp);
   const out = copyAllowedBookingParams(sp);
-  out.set("step", String(LEGACY_SEGMENT_TO_BOOK_STEP[segment]));
+  out.set("step", LEGACY_SEGMENT_TO_BOOK_STEP[segment]);
   const qs = out.toString();
   return qs ? `/book/${slug}?${qs}` : `/book/${slug}?step=${LEGACY_SEGMENT_TO_BOOK_STEP[segment]}`;
 }
@@ -77,6 +92,17 @@ export function buildBookHubHrefFromLegacySearchParams(sp: URLSearchParams): str
   const out = copyAllowedBookingParams(sp);
   const qs = out.toString();
   return qs ? `/book?${qs}` : "/book";
+}
+
+/** Preserve referral/marketing context when a service is selected on the /book hub. */
+export function buildBookServiceSelectionHref(
+  sp: URLSearchParams,
+  serviceSlug: ServiceSlug,
+): string {
+  const next = new URLSearchParams(sp);
+  next.set("service", serviceSlug);
+  const href = buildBookHrefFromLegacySearchParams(next, "details");
+  return `${href}&section=address`;
 }
 
 export type WidgetBookingSelection = {

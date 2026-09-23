@@ -17,6 +17,9 @@ import { buildZohoLineItemsWithReferralPromos } from "@/lib/referrals/zohoLineIt
 import { resolveZohoCustomerContactForBooking } from "@/lib/zoho/resolveZohoCustomerContact";
 import { provisionV2RecurringPlan } from "@/lib/recurring/provisionV2RecurringPlan";
 import { preferredCleanerIdsFromSnapshot } from "@/lib/booking/persistPreferredCleaners";
+import { activateRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
+import { resolvePersistedBookingDurationMinutes } from "@/lib/booking/quote/bookingQuotePersistence";
+import { settleCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
 
 export type SyncPaidBookingInvoiceResult =
   | {
@@ -68,6 +71,9 @@ type PaidBookingRow = {
   bathrooms?: number | null;
   total_paid_zar?: number | null;
   duration_minutes?: number | null;
+  estimated_duration_minutes?: number | null;
+  pricing_summary?: unknown;
+  duration_hours?: number | null;
   zoho_invoice_id?: string | null;
   is_monthly_billing_booking?: boolean | null;
   sales_document_id?: string | null;
@@ -79,10 +85,24 @@ type PaidBookingRow = {
   recurring_start_date?: string | null;
   recurring_end_date?: string | null;
   selected_cleaner_id?: string | null;
+  pricing_version_id?: string | null;
 };
 
 function zohoConfigured(): boolean {
   return Boolean(process.env.ZOHO_CLIENT_ID?.trim() && process.env.ZOHO_REFRESH_TOKEN?.trim());
+}
+
+function recurringPrepaymentFromSnapshot(raw: unknown): { perVisitZar: number; packagePaidZar: number } | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  const o = raw as Record<string, unknown>;
+  const nested = o.recurringPrepayment;
+  if (!nested || typeof nested !== "object" || Array.isArray(nested)) return null;
+  const r = nested as Record<string, unknown>;
+  if (r.scope !== "first_30_days" && r.scope !== "rolling_30_days") return null;
+  const perVisitZar = Number(r.perVisitZar);
+  const packagePaidZar = Number(r.packagePayableZar);
+  if (!Number.isFinite(perVisitZar) || !Number.isFinite(packagePaidZar)) return null;
+  return { perVisitZar: Math.max(0, Math.round(perVisitZar)), packagePaidZar: Math.max(0, Math.round(packagePaidZar)) };
 }
 
 /** Authoritative paid confirmation — never invent a zero balance. */
@@ -198,6 +218,9 @@ async function loadPaidBookingRow(
     "bathrooms",
     "total_paid_zar",
     "duration_minutes",
+    "estimated_duration_minutes",
+    "pricing_summary",
+    "duration_hours",
     "zoho_invoice_id",
     "is_monthly_billing_booking",
     "sales_document_id",
@@ -209,6 +232,7 @@ async function loadPaidBookingRow(
     "recurring_start_date",
     "recurring_end_date",
     "selected_cleaner_id",
+    "pricing_version_id",
   ].join(", ");
 
   const { data } = await admin.from("bookings").select(select).eq("id", bookingId).maybeSingle();
@@ -512,6 +536,18 @@ export async function syncPaidBookingSideEffects(
     }
   }
 
+  // Settle any Cleaning Credit reservation only after the booking is durably paid.
+  // The RPC is idempotent, so webhook/verify replays cannot create a second spend.
+  const creditSettlement = await settleCleaningCreditForBooking(admin, bookingId);
+  if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
+    await logSystemEvent({
+      level: "warn",
+      source: "booking/side_effects",
+      message: "cleaning_credit_reservation_settle_failed",
+      context: { bookingId, error: creditSettlement.error },
+    });
+  }
+
   // ── 2. Recurring plan provisioning (idempotent inside provisionV2RecurringPlan) ──
   const isRecurring =
     (row.booking_type === "recurring" || Boolean(row.recurring_frequency)) &&
@@ -521,6 +557,17 @@ export async function syncPaidBookingSideEffects(
 
   if (isRecurring) {
     try {
+      const authoritativeDurationMinutes = resolvePersistedBookingDurationMinutes(row);
+      if (authoritativeDurationMinutes == null) {
+        await logSystemEvent({
+          level: "warn",
+          source: "recurring/provision",
+          message: "recurring_plan_duration_missing",
+          context: { bookingId },
+        });
+        return { kind: "failed", error: "recurring_plan_duration_missing" };
+      }
+      const prepaid = recurringPrepaymentFromSnapshot(row.booking_snapshot);
       const planResult = await provisionV2RecurringPlan(admin, {
         bookingId,
         customerId: customerId!,
@@ -529,7 +576,8 @@ export async function syncPaidBookingSideEffects(
         startDate: row.recurring_start_date || row.date || new Date().toISOString().slice(0, 10),
         endDate: row.recurring_end_date ?? null,
         totalPaidZar: totalZar,
-        durationMinutes: row.duration_minutes ?? 120,
+        perVisitPriceZar: prepaid?.perVisitZar ?? totalZar,
+        durationMinutes: authoritativeDurationMinutes,
         service: row.service ?? "regular-cleaning",
         time: row.time ?? "09:00",
         location: row.location ?? "",
@@ -537,6 +585,8 @@ export async function syncPaidBookingSideEffects(
         rooms: row.rooms ?? 0,
         bathrooms: row.bathrooms ?? 0,
         preferredCleanerIds: preferredCleanerIdsFromSnapshot(row.booking_snapshot, row.selected_cleaner_id),
+        pricingVersionId: row.pricing_version_id ?? null,
+        pricingSummary: row.pricing_summary ?? null,
       });
 
       if (!planResult.ok) {
@@ -546,6 +596,21 @@ export async function syncPaidBookingSideEffects(
           message: "recurring_plan_provision_failed",
           context: { bookingId, error: planResult.error },
         });
+      } else if (prepaid) {
+        const activation = await activateRecurringPrepayment(admin, {
+          sourceBookingId: bookingId,
+          recurringId: planResult.planId,
+          paidPackageZar: prepaid.packagePaidZar || Math.round(amountCents / 100),
+          paidAt: new Date().toISOString(),
+        });
+        if (!activation.ok) {
+          await logSystemEvent({
+            level: "warn",
+            source: "booking/side_effects",
+            message: "recurring_prepayment_activation_failed",
+            context: { bookingId, planId: planResult.planId, error: activation.error },
+          });
+        }
       }
     } catch (err) {
       await logSystemEvent({

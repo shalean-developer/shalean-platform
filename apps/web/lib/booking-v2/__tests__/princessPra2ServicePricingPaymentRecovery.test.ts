@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import type { CustomerTotalInput } from "@/lib/booking-v2/types";
@@ -35,9 +37,8 @@ function baseCatalog(overrides: Partial<CustomerTotalInput["catalog"]> = {}) {
     minDurationHours: 2,
     maxDurationHours: 10,
     extras: [
-      { id: "sofa-upholstery", label: "Sofa / upholstery", priceZar: 250 },
-      { id: "laundry", label: "Laundry", priceZar: 150 },
-      { id: "inside-oven", label: "Inside Oven", priceZar: 200 },
+      { id: "laundry", label: "Laundry", priceZar: 35 },
+      { id: "inside-oven", label: "Inside Oven", priceZar: 20 },
     ],
     allowsExtraCleaner: true,
     ...overrides,
@@ -256,7 +257,7 @@ describe("PRINCESS PRA2 — Carpet rooms / rugs / sofa Extra", () => {
     expect(many.estimated_duration_minutes).toBeGreaterThan(one.estimated_duration_minutes);
   });
 
-  it("sofa-upholstery Extra prices; legacy sofaCount still prices", () => {
+  it("unapproved sofa-upholstery Extra does not price; legacy sofaCount still prices", () => {
     const withExtra = calculateCustomerTotal(
       input(
         "carpet-cleaning",
@@ -264,7 +265,7 @@ describe("PRINCESS PRA2 — Carpet rooms / rugs / sofa Extra", () => {
         { selectedExtras: ["sofa-upholstery"] },
       ),
     );
-    expect(withExtra.selected_extras_total).toBe(250);
+    expect(withExtra.selected_extras_total).toBe(0);
 
     const legacy = calculateCustomerTotal(
       input("carpet-cleaning", {
@@ -335,7 +336,69 @@ describe("PRINCESS PRA2 — Airbnb room pricing", () => {
         },
       ),
     );
-    expect(withLaundry.estimated_total).toBe(b.estimated_total + 150);
+    expect(withLaundry.estimated_total).toBe(b.estimated_total + 35);
+  });
+});
+
+describe("PRICING-03 — authoritative duration convergence", () => {
+  it("uses catalog duration coefficients instead of hardcoded Regular defaults", () => {
+    const quote = calculateCustomerTotal(
+      input(
+        "regular-cleaning",
+        { bedrooms: "2", bathrooms: "1", extraRooms: "1", propertyType: "house" },
+        {
+          catalog: baseCatalog({
+            durationBaseHours: 3.5,
+            durationPerBedroomHours: 0.5,
+            durationPerBathroomHours: 0.5,
+            durationPerExtraRoomHours: 0.3,
+            minDurationHours: 3.5,
+            maxDurationHours: 8,
+          }),
+        },
+      ),
+    );
+    expect(quote.estimated_duration_minutes).toBe(318);
+  });
+
+  it("uses Office catalog duration coefficients with office-size room proxy", () => {
+    const quote = calculateCustomerTotal(
+      input(
+        "office-cleaning",
+        { officeSize: "large", bathrooms: "2", frequency: "once_off" },
+        {
+          catalog: baseCatalog({
+            durationBaseHours: 3.5,
+            durationPerBedroomHours: 0.5,
+            durationPerBathroomHours: 0.5,
+            durationPerExtraRoomHours: 0.3,
+            minDurationHours: 3.5,
+            maxDurationHours: 8,
+          }),
+        },
+      ),
+    );
+    expect(quote.estimated_duration_minutes).toBe(390);
+  });
+
+  it("uses Carpet DB coefficients for carpet rooms and rugs", () => {
+    const quote = calculateCustomerTotal(
+      input(
+        "carpet-cleaning",
+        { carpetRooms: "2", rugCount: "1", carpetType: "standard", stains: "no" },
+        {
+          catalog: baseCatalog({
+            durationBaseHours: 4,
+            durationPerBedroomHours: 0.65,
+            durationPerBathroomHours: 0.65,
+            durationPerExtraRoomHours: 0.45,
+            minDurationHours: 3.5,
+            maxDurationHours: 8,
+          }),
+        },
+      ),
+    );
+    expect(quote.estimated_duration_minutes).toBe(345);
   });
 });
 
@@ -381,10 +444,135 @@ describe("PRINCESS PRA2 — duration label + quote consumption", () => {
   });
 });
 
+describe("PRICING-08A — exactly-once Cleaning Credit reservation lifecycle", () => {
+  it("database contract has one reservation identity per booking and idempotent transitions", () => {
+    const sql = readFileSync(
+      join(process.cwd(), "../../supabase/migrations/20260922103000_pricing_08a_cleaning_credit_reservations.sql"),
+      "utf8",
+    );
+    expect(sql).toContain("unique (booking_id)");
+    expect(sql).toContain("reserve_cleaning_credit_for_booking");
+    expect(sql).toContain("settle_cleaning_credit_for_booking");
+    expect(sql).toContain("release_cleaning_credit_for_booking");
+    expect(sql).toContain("for update");
+    expect(sql).toContain("if v.status='settled'");
+    expect(sql).toContain("if v.status='released'");
+  });
+
+  it("confirm reserves rather than permanently spending Cleaning Credit", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
+    expect(src).toContain("reserveCleaningCreditForBooking");
+    expect(src).not.toContain("spendCleaningCredit({");
+  });
+
+  it("payment side effects settle and expiry releases the same booking reservation", () => {
+    const paid = readFileSync(join(process.cwd(), "lib/booking/syncPaidBookingSideEffects.ts"), "utf8");
+    const expired = readFileSync(join(process.cwd(), "app/api/cron/expire-pending-payments/route.ts"), "utf8");
+    expect(paid).toContain("settleCleaningCreditForBooking(admin, bookingId)");
+    expect(expired).toContain("releaseCleaningCreditForBooking(admin, id)");
+  });
+
+  it("recurring base-rate provisioning never reads Cleaning Credit reservation state", () => {
+    const recurring = readFileSync(join(process.cwd(), "lib/recurring/provisionV2RecurringPlan.ts"), "utf8");
+    expect(recurring).not.toContain("cleaning_credit_reservations");
+    expect(recurring).toContain("price: perVisitPriceZar");
+  });
+});
+
+describe("PRICING-07A — recurring locked rate and explicit payable", () => {
+  it("provisions the recurring plan from a locked per-visit price, not future catalog pricing", () => {
+    const src = readFileSync(join(process.cwd(), "lib/recurring/provisionV2RecurringPlan.ts"), "utf8");
+    expect(src).toContain("perVisitPriceZar");
+    expect(src).toContain("price: perVisitPriceZar");
+    expect(src).toContain("finalPrice: perVisitPriceZar");
+    expect(src).not.toContain("pricing_services");
+  });
+
+  it("generated renewals persist amount due separately from cash received", () => {
+    const src = readFileSync(join(process.cwd(), "lib/recurring/insertRecurringOccurrenceBooking.ts"), "utf8");
+    expect(src).toContain("total_paid_zar: occurrencePaidZar");
+    expect(src).toContain("total_price: prepaidAllocation ? occurrencePaidZar : renewalQuote?.grossPackageZar ?? priceZar");
+  });
+
+  it("auto-charge prefers explicit payable and retains a legacy fallback only", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/cron/charge-recurring-bookings/route.ts"), "utf8");
+    expect(src).toContain("const payableRaw = row.total_price ?? row.total_paid_zar");
+  });
+
+  it("hands the originating pricing version and summary into recurring provisioning", () => {
+    const src = readFileSync(join(process.cwd(), "lib/booking/syncPaidBookingSideEffects.ts"), "utf8");
+    expect(src).toContain('"pricing_version_id"');
+    expect(src).toContain("pricingVersionId: row.pricing_version_id ?? null");
+    expect(src).toContain("pricingSummary: row.pricing_summary ?? null");
+  });
+});
+
+describe("PRICING-06B.4 — frozen snapshot is the confirm pricing source", () => {
+  it("rebuilds serverBreakdown from the locked pricing version, not the live catalog", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
+    expect(src).toContain("liveServiceConfigFromPricingSnapshot");
+    expect(src).toContain("snapshot: lockedPricingSnapshot");
+    expect(src).toContain("const serverBreakdown = buildSignedCustomerPricingFromForm");
+    expect(src).not.toContain("const catalogPayload = await loadBookingV2Catalog()");
+  });
+});
+
+describe("PRICING-06B.3 — frozen-lock confirm enforcement", () => {
+  it("confirm requires an unexpired matching quote lock and reuses its pricing version", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
+    expect(src).toContain('"QUOTE_LOCK_REQUIRED"');
+    expect(src).toContain('"QUOTE_LOCK_EXPIRED"');
+    expect(src).toContain('"QUOTE_LOCK_MISMATCH"');
+    expect(src).toContain("fetchPricingRatesSnapshotByVersionId");
+    expect(src).toContain("const pricingVersionId = suppliedQuoteLock.pricingVersionId");
+    expect(src).not.toContain("const pricingRatesSnapshot = await buildPricingRatesSnapshotFromDb");
+  });
+});
+
+describe("PRICING-06B.2 — client quote-lock lifecycle", () => {
+  it("stores the server lock in Booking V2 state", () => {
+    const src = readFileSync(join(process.cwd(), "src/features/booking-v2/types.ts"), "utf8");
+    expect(src).toContain("pricingVersionId: string");
+    expect(src).toContain("quoteSignature: string");
+    expect(src).toContain("quoteLock: null");
+  });
+
+  it("invalidates and replaces the lock only from the pricing-input watcher", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/features/booking-v2/hooks/useBookingV2Pricing.ts"),
+      "utf8",
+    );
+    expect(src).toContain('setValue("quoteLock", null');
+    expect(src).toContain('setValue("quoteLock", quoteLock');
+    expect(src).toContain("serviceDetailsSnapshot");
+    expect(src).toContain("selectedExtrasSnapshot");
+    expect(src).toContain("recurringFrequency");
+    expect(src).toContain("equipmentQuoteSnapshot");
+  });
+});
+
+describe("PRICING-06 — explicit higher-price requote", () => {
+  it("confirm route blocks a stale quote when the authoritative price increased", () => {
+    const src = readFileSync(join(process.cwd(), "app/api/booking-v2/confirm/route.ts"), "utf8");
+    expect(src).toContain('"REQUOTE_REQUIRED"');
+    expect(src).toContain("priceIncreased");
+    expect(src).toContain("previousTotalZar");
+    expect(src).toContain("updatedTotalZar");
+  });
+
+  it("Step4 replaces the quote and requires another Pay click", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/features/booking-v2/steps/Step4Payment.tsx"),
+      "utf8",
+    );
+    expect(src).toContain('confirmJson.code === "REQUOTE_REQUIRED"');
+    expect(src).toContain('setValue("pricingSummary", confirmJson.pricingSummary');
+    expect(src).toContain("Please review the updated total, then press Pay again to confirm it.");
+  });
+});
+
 describe("PRINCESS PRA2 — Paystack cancel recovery contracts", () => {
   it("Step4Payment persists pendingBookingId in form draft (static contract)", () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(
       join(process.cwd(), "src/features/booking-v2/steps/Step4Payment.tsx"),
       "utf8",
@@ -396,7 +584,7 @@ describe("PRINCESS PRA2 — Paystack cancel recovery contracts", () => {
     expect(src).toContain("confirmRes.status === 401");
     expect(src).toContain("sessRes.status === 401");
     expect(src).toContain("if (!requiresPayment)");
-    expect(src).toContain("Boolean(pendingBookingId) || quoteReadiness.ready");
+    expect(src).toContain("pendingBookingId ? Boolean(pendingSummary && !pendingSummaryLoading) : quoteReadiness.ready");
     expect(src).toContain("if (!pendingBookingId && !quoteReadiness.ready)");
     expect(src).toContain("Retry secure payment");
     expect(src).toContain("setPendingBookingId(null);");
@@ -404,21 +592,34 @@ describe("PRINCESS PRA2 — Paystack cancel recovery contracts", () => {
   });
 
   it("ensureBookingPaymentSession callback returns to /pay/{id}", () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(join(process.cwd(), "lib/booking/ensureBookingPaymentSession.ts"), "utf8");
     expect(src).toContain("/pay/");
     expect(src).not.toMatch(/callback_url: `\$\{appUrl\}\/account\/success`/);
   });
 
   it("payment-session supports owner retry without reference (idempotent path)", () => {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
-    const { join } = require("node:path") as typeof import("node:path");
     const src = readFileSync(
       join(process.cwd(), "app/api/bookings/[id]/payment-session/route.ts"),
       "utf8",
     );
     expect(src).toContain('kind: "owner"');
     expect(src).toContain("ensureBookingPaymentSession");
+  });
+});
+
+
+describe("PRICING-06B.5 — atomic quote-lock payment handoff", () => {
+  it("Step4 re-reads form state and refreshes a missing/stale lock before confirm", () => {
+    const src = readFileSync(
+      join(process.cwd(), "src/features/booking-v2/steps/Step4Payment.tsx"),
+      "utf8",
+    );
+    expect(src).toContain("let confirmValues = getValues()");
+    expect(src).toContain('fetchPaymentPreparation("/api/booking-v2/quote"');
+    expect(src).toContain('setValue("quoteLock", freshQuote.quoteLock');
+    expect(src).toContain("pricingSummary: freshQuote.pricingSummary");
+    expect(src).toContain("quoteLock: freshQuote.quoteLock");
+    expect(src).toContain("...confirmValues");
+    expect(src).not.toContain("...values,\n          applyCleaningCreditZar");
   });
 });

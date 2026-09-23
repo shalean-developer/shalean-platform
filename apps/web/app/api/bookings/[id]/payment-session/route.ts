@@ -4,12 +4,14 @@
  */
 import { NextResponse } from "next/server";
 import { ensureBookingPaymentSession } from "@/lib/booking/ensureBookingPaymentSession";
+import { paymentSessionFailureHttpStatus } from "@/lib/booking/paymentSessionFailureHttpStatus";
 import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearerAuth";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   checkPaystackInitializeBodyLimits,
   checkPaystackInitializeIpLimit,
 } from "@/lib/rateLimit/paystackInitializeAbuseLimit";
+import { verifyFreshPaymentPreparationToken } from "@/lib/booking/freshPaymentPreparationToken";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,9 +21,11 @@ const UUID_RE =
 
 type Body = {
   reference?: string;
+  paymentPreparationToken?: string;
 };
 
 export async function POST(request: Request, ctx: { params: Promise<{ id: string }> }) {
+  const requestStartedAt = performance.now();
   const { id: bookingIdRaw } = await ctx.params;
   const bookingId = bookingIdRaw?.trim() ?? "";
   if (!UUID_RE.test(bookingId)) {
@@ -65,6 +69,8 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   const reference = typeof body.reference === "string" ? body.reference.trim() : "";
+  const paymentPreparationToken =
+    typeof body.paymentPreparationToken === "string" ? body.paymentPreparationToken.trim() : "";
 
   const admin = getSupabaseAdmin();
   if (!admin) {
@@ -95,13 +101,25 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   }
 
   const userId = auth.kind === "authenticated" ? auth.userId.trim() : "";
+  const freshAttempt = Boolean(
+    userId &&
+      reference &&
+      paymentPreparationToken &&
+      verifyFreshPaymentPreparationToken(paymentPreparationToken, {
+        bookingId,
+        reference,
+        userId,
+      }),
+  );
 
   let access:
     | { kind: "paystack_ref"; reference: string }
     | { kind: "owner"; userId: string }
     | null = null;
 
-  if (reference) {
+  if (freshAttempt) {
+    access = { kind: "owner", userId };
+  } else if (reference) {
     access = { kind: "paystack_ref", reference };
   } else if (userId) {
     access = { kind: "owner", userId };
@@ -120,48 +138,52 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
     );
   }
 
-  const session = await ensureBookingPaymentSession(admin, { bookingId, access });
+  const paymentSessionStartedAt = performance.now();
+  const session = await ensureBookingPaymentSession(admin, { bookingId, access, freshAttempt });
+  const timingHeaders = {
+    "Server-Timing": `payment-session-total;dur=${(performance.now() - requestStartedAt).toFixed(1)}, payment-session-core;dur=${(performance.now() - paymentSessionStartedAt).toFixed(1)}`,
+  };
 
   if (session.status === "paid") {
-    return NextResponse.json({
-      status: "paid",
-      bookingId: session.bookingId,
-      reference: session.reference,
-      errorCode: session.errorCode,
-    });
+    return NextResponse.json(
+      {
+        status: "paid",
+        bookingId: session.bookingId,
+        reference: session.reference,
+        errorCode: session.errorCode,
+      },
+      { headers: timingHeaders },
+    );
   }
 
   if (session.status === "failed") {
-    const http =
-      session.errorCode === "PAYMENT_ACCESS_DENIED"
-        ? 403
-        : session.errorCode === "PAYMENT_BOOKING_NOT_FOUND"
-          ? 404
-          : session.errorCode === "PAYMENT_ALREADY_COMPLETED"
-            ? 409
-            : session.retryable
-              ? 503
-              : 409;
+    const http = paymentSessionFailureHttpStatus(session);
     return NextResponse.json(
       {
         status: "failed",
         bookingId: session.bookingId,
-        error: session.error,
+        error:
+          session.errorCode === "PAYMENT_BOOKING_NOT_FOUND"
+            ? "We could not verify your booking for payment. No payment was started. Please sign in again and retry your booking."
+            : session.error,
         errorCode: session.errorCode,
         retryable: session.retryable,
       },
-      { status: http },
+      { status: http, headers: timingHeaders },
     );
   }
 
-  return NextResponse.json({
-    status: "ready",
-    bookingId: session.bookingId,
-    reference: session.reference,
-    authorizationUrl: session.authorizationUrl,
-    reused: session.reused,
-    refreshed: session.refreshed,
-    message: session.message,
-    payment_link_expires_at: session.payment_link_expires_at,
-  });
+  return NextResponse.json(
+    {
+      status: "ready",
+      bookingId: session.bookingId,
+      reference: session.reference,
+      authorizationUrl: session.authorizationUrl,
+      reused: session.reused,
+      refreshed: session.refreshed,
+      message: session.message,
+      payment_link_expires_at: session.payment_link_expires_at,
+    },
+    { headers: timingHeaders },
+  );
 }

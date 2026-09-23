@@ -38,14 +38,10 @@ export type ServicePricingContract = {
 };
 
 /**
- * Office frequency model (approved for PRA2):
- * C — frequency records recurring commitment / ops preference only;
- * it does not change the per-visit price. Recurring discounts come only from
- * Step 2 bookingType + recurringFrequency when the customer chooses a plan.
+ * Office recurrence ownership:
+ * Booking frequency is selected in Step 2 using bookingType + recurringFrequency.
+ * The retired Step-1 serviceDetails.frequency field never affected per-visit pricing.
  */
-export const OFFICE_FREQUENCY_MODEL = "C" as const;
-export const OFFICE_FREQUENCY_UI_HINT =
-  "How often you need cleaning — this does not change today’s visit price. Choose a recurring plan on the schedule step if you want a plan discount.";
 
 export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContract> = {
   "regular-cleaning": {
@@ -58,7 +54,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog.pricePerBathroom + duration bathrooms" },
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog.pricePerExtraRoom + duration extraRooms" },
       { key: "hasPets", effect: "informational", consumedBy: "persisted in serviceDetails only" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
   "deep-cleaning": {
@@ -72,7 +67,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "lastCleaned", effect: "price_and_duration", consumedBy: "propertyFactorRates.lastCleaned" },
       { key: "hasPets", effect: "informational", consumedBy: "persisted only" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
   "moving-cleaning": {
@@ -90,8 +84,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "furnished", effect: "price_and_duration", consumedBy: "propertyFactorRates.furnished" },
-      { key: "depositInspection", effect: "informational", consumedBy: "ops hint; deposit-preparation is an Extra" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
   "office-cleaning": {
@@ -99,16 +91,8 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
     canonicalPricingKey: "office",
     aliases: ["office", "office-cleaning", "quick"],
     fields: [
-      { key: "officeType", effect: "informational", consumedBy: "persisted for ops" },
       { key: "officeSize", effect: "price_and_duration", consumedBy: "propertyFactorRates.officeSize + duration proxy rooms" },
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog.pricePerBathroom + duration" },
-      {
-        key: "frequency",
-        effect: "informational",
-        consumedBy: `Model ${OFFICE_FREQUENCY_MODEL}: commitment only — no per-visit price change`,
-      },
-      { key: "afterHours", effect: "informational", consumedBy: "persisted scheduling preference" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
   "carpet-cleaning": {
@@ -121,13 +105,6 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "rugCount", effect: "price_and_duration", consumedBy: "rugs_per_unit_zar + duration rug minutes" },
       { key: "carpetType", effect: "price_and_duration", consumedBy: "propertyFactorRates.carpetType" },
       { key: "stains", effect: "price_and_duration", consumedBy: "propertyFactorRates.stains" },
-      {
-        key: "sofaCount",
-        effect: "extras_or_remove",
-        consumedBy: "legacy: priced if present; new bookings use sofa-upholstery Extra",
-      },
-      { key: "hasPets", effect: "informational", consumedBy: "persisted only" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
   "airbnb-cleaning": {
@@ -140,10 +117,7 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "linens", effect: "informational", consumedBy: "ops; laundry Extra remains distinct" },
-      { key: "guestCheckout", effect: "informational", consumedBy: "scheduling logistics" },
       { key: "keyAccess", effect: "informational", consumedBy: "access logistics" },
-      { key: "welcomeBasket", effect: "informational", consumedBy: "ops; welcome-setup Extra distinct" },
-      { key: "specialInstructions", effect: "informational", consumedBy: "persisted notes" },
     ],
   },
 };

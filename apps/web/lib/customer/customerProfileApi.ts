@@ -4,6 +4,7 @@ import {
   normalizeCustomerProfileContactFields,
 } from "@shalean/utils";
 import { createClient } from "@supabase/supabase-js";
+import { readCustomerProfileContact } from "@/lib/customer/readCustomerProfileContact";
 
 export type CustomerProfileDto = {
   id: string;
@@ -65,6 +66,9 @@ export async function loadCustomerProfileDto(
     .maybeSingle();
 
   const r = (row ?? {}) as Record<string, unknown>;
+  // Use the same canonical contact resolver as admin/booking flows. This also
+  // falls back to auth metadata when legacy profiles do not have phone columns populated.
+  const canonicalContact = await readCustomerProfileContact(admin, userId, userData.user);
   const channel =
     typeof r.preferred_notification_channel === "string"
       ? r.preferred_notification_channel
@@ -79,9 +83,11 @@ export async function loadCustomerProfileDto(
       metaString(meta, "full_name") ||
       null,
     phone:
+      canonicalContact.phone ||
       (typeof r.phone === "string" && r.phone.trim()) ||
       (typeof r.phone_e164 === "string" && r.phone_e164.trim()) ||
       metaString(meta, "phone") ||
+      metaString(meta, "whatsapp") ||
       null,
     whatsapp: metaString(meta, "whatsapp"),
     preferredContact:

@@ -18,6 +18,8 @@ import {
 } from "@/src/features/booking-v2/config/serviceConfig";
 import {
   defaultBookingFormData,
+  bookingStepFromQuery,
+  bookingStepQueryValue,
   type BookingV2FormData,
   type BookingStep,
 } from "@/src/features/booking-v2/types";
@@ -25,13 +27,31 @@ import { coerceYesNoValue } from "@/src/features/booking-v2/components/serviceQu
 import type { LiveServiceConfig, ServicesCatalog } from "@/app/api/booking-v2/services/route";
 import type { BookingV2FeesConfig } from "@/lib/booking-v2/types";
 import type { BookingV2SchedulingConfig } from "@/lib/booking-v2/bookingV2CatalogTypes";
+import {
+  canEnterBookingPayment,
+  type BookingPricingAvailability,
+} from "@/lib/booking-v2/bookingPricingAvailability";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
-import { bookingV2PrefillPatchFromLegacySearchParams } from "@/lib/booking/legacyBookingToBookRedirect";
+import {
+  bookingV2PrefillPatchFromLegacySearchParams,
+  explicitBookServiceSlugFromParam,
+} from "@/lib/booking/legacyBookingToBookRedirect";
+import { setReferralCapture } from "@/lib/referrals/client";
+import { consumeBookingV2CompletedReset } from "@/lib/booking-v2/bookingV2PaymentRedirect";
 import { buildStep2Schema, step1Schema } from "@/src/features/booking-v2/schemas";
 import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import type { BookingRow } from "@/lib/dashboard/types";
 import { bookingServiceSlugFromBookingRow } from "@/lib/booking-v2/bookingV2ServiceSlug";
 import { bookingV2FormPatchFromBookingRow } from "@/lib/booking-v2/rebookFromBookingRow";
+import type { RegularCleaningScheduleStage } from "@/src/features/booking-v2/steps/regularCleaningScheduleProgressiveDisclosure";
+import {
+  bookingDetailsStage,
+  bookingDetailsStageFromSearchParam,
+  bookingDetailsStageIndex,
+  isProgressiveBookingDetailsService,
+  usesProgressiveIndividualSchedule,
+  type BookingDetailsStage,
+} from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 import {
   BOOKING_FUNNEL_ROW,
   bookingV2StepToFunnelStep,
@@ -53,6 +73,11 @@ type BookingV2ContextValue = {
   scheduling: BookingV2SchedulingConfig;
   feesConfig: BookingV2FeesConfig;
   catalogLoading: boolean;
+  pricingAvailability: BookingPricingAvailability;
+  detailsSectionOverride: BookingDetailsStage | null;
+  editDetailsSection: (section: BookingDetailsStage) => void;
+  scheduleSectionOverride: RegularCleaningScheduleStage | null;
+  editScheduleSection: (section: RegularCleaningScheduleStage) => void;
   goToStep: (step: BookingStep) => void;
   goNext: () => void;
   goBack: () => void;
@@ -86,7 +111,10 @@ function writeToStorage(data: BookingV2FormData): void {
   }
 }
 
-function sanitizeStoredForm(data: Partial<BookingV2FormData>): Partial<BookingV2FormData> {
+function sanitizeStoredForm(
+  data: Partial<BookingV2FormData>,
+  serviceSlug: ServiceSlug,
+): Partial<BookingV2FormData> {
   const serviceDetails = { ...(data.serviceDetails ?? {}) };
   for (const [key, value] of Object.entries(serviceDetails)) {
     if (value === null) {
@@ -96,12 +124,55 @@ function sanitizeStoredForm(data: Partial<BookingV2FormData>): Partial<BookingV2
     }
   }
 
+  if (serviceSlug === "carpet-cleaning") {
+    delete serviceDetails.sofaCount;
+    delete serviceDetails.hasPets;
+    delete serviceDetails.specialInstructions;
+  }
+
+  if (serviceSlug === "office-cleaning") {
+    delete serviceDetails.frequency;
+    delete serviceDetails.afterHours;
+    delete serviceDetails.specialInstructions;
+  }
+
+  if (serviceSlug === "airbnb-cleaning") {
+    delete serviceDetails.guestCheckout;
+    delete serviceDetails.welcomeBasket;
+    delete serviceDetails.specialInstructions;
+  }
+
   return {
     ...data,
     serviceDetails,
     ...(data.equipmentRequired != null
       ? { equipmentRequired: coerceYesNoValue(data.equipmentRequired) }
       : {}),
+    ...(serviceSlug === "carpet-cleaning"
+      ? {
+          bookingType: "once_off" as const,
+          recurringFrequency: "" as const,
+          recurringDays: [],
+          recurringStartDate: "",
+          recurringEndDate: "",
+          cleanerCount: 1,
+          selectedCleanerIds: (data.selectedCleanerIds ?? []).slice(0, 1),
+          selectedCleanerDetails: (data.selectedCleanerDetails ?? []).slice(0, 1),
+          selectedExtras: (data.selectedExtras ?? []).filter(
+            (extraId) => extraId !== "stain-treatment",
+          ),
+        }
+      : serviceSlug === "airbnb-cleaning"
+        ? {
+            bookingType: "once_off" as const,
+            recurringFrequency: "" as const,
+            recurringDays: [],
+            recurringStartDate: "",
+            recurringEndDate: "",
+            equipmentRequired: "no" as const,
+            equipmentQuote: null,
+          }
+        : {}),
   };
 }
 
@@ -135,16 +206,52 @@ export function BookingV2Provider({
   const searchParams = useSearchParams();
   const config = SERVICE_CONFIG[serviceSlug];
 
-  const rawStep = Number(searchParams.get("step") ?? "1");
-  const currentStep = (
-    rawStep >= 1 && rawStep <= 4 ? rawStep : 1
-  ) as BookingStep;
+  const currentStep = bookingStepFromQuery(searchParams.get("step"));
+  const requestedQueryServiceSlug = explicitBookServiceSlugFromParam(
+    searchParams.get("service"),
+  );
+  const requestedDetailsSection = bookingDetailsStageFromSearchParam(
+    serviceSlug,
+    searchParams.get("section"),
+  );
+
+  useEffect(() => {
+    if (!requestedQueryServiceSlug || requestedQueryServiceSlug === serviceSlug) return;
+
+    const params = new URLSearchParams(window.location.search);
+    params.set("service", requestedQueryServiceSlug);
+    router.replace(`/book/${requestedQueryServiceSlug}?${params.toString()}`);
+  }, [requestedQueryServiceSlug, router, serviceSlug]);
+
+  // Persist referral invitations again at booking entry. This makes the offer survive
+  // account creation, email confirmation, and direct /book links even if the landing
+  // page component was remounted before localStorage completed.
+  useEffect(() => {
+    const referralCode = searchParams.get("ref")?.trim();
+    if (referralCode) setReferralCapture(referralCode, "customer");
+  }, [searchParams]);
 
   // Live pricing catalog from DB
   const [catalog, setCatalog] = useState<ServicesCatalog | null>(null);
   const [scheduling, setScheduling] = useState<BookingV2SchedulingConfig>(DEFAULT_SCHEDULING);
   const [feesConfig, setFeesConfig] = useState<BookingV2FeesConfig>(defaultBookingV2FeesConfig());
   const [catalogLoading, setCatalogLoading] = useState(true);
+  const [pricingAvailability, setPricingAvailability] =
+    useState<BookingPricingAvailability>("loading");
+  const [detailsSectionOverride, setDetailsSectionOverride] =
+    useState<BookingDetailsStage | null>(
+      isProgressiveBookingDetailsService(serviceSlug)
+        ? requestedDetailsSection ?? "address"
+        : null,
+    );
+  const [scheduleSectionOverride, setScheduleSectionOverride] =
+    useState<RegularCleaningScheduleStage | null>(
+      usesProgressiveIndividualSchedule(serviceSlug)
+        ? serviceSlug === "carpet-cleaning" || serviceSlug === "airbnb-cleaning"
+          ? "date_time"
+          : "booking_type"
+        : null,
+    );
 
   useEffect(() => {
     fetch("/api/booking-v2/services")
@@ -157,12 +264,14 @@ export function BookingV2Provider({
         }>;
       })
       .then((json) => {
-        if (json.catalog) setCatalog(json.catalog);
+        if (!json.catalog) throw new Error("catalog_missing");
+        setCatalog(json.catalog);
+        setPricingAvailability("available");
         if (json.feesConfig) setFeesConfig(json.feesConfig);
         if (json.scheduling) setScheduling({ ...DEFAULT_SCHEDULING, ...json.scheduling });
       })
       .catch(() => {
-        /* fall back to static config — pricing still recomputes from SERVICE_CONFIG */
+        setPricingAvailability("unavailable");
       })
       .finally(() => setCatalogLoading(false));
   }, []);
@@ -181,7 +290,7 @@ export function BookingV2Provider({
   // After mount: restore persisted state, then merge marketing URL prefill (legacy /booking links).
   useEffect(() => {
     const saved = readFromStorage(serviceSlug);
-    const sanitized = saved ? sanitizeStoredForm(saved) : null;
+    const sanitized = saved ? sanitizeStoredForm(saved, serviceSlug) : null;
     const urlPatch = bookingV2PrefillPatchFromLegacySearchParams(searchParams);
     const merged = {
       ...defaults,
@@ -189,7 +298,7 @@ export function BookingV2Provider({
       ...(urlPatch.serviceDetails
         ? {
             serviceDetails: {
-              ...(saved?.serviceDetails ?? defaults.serviceDetails),
+              ...(sanitized?.serviceDetails ?? defaults.serviceDetails),
               ...urlPatch.serviceDetails,
             },
           }
@@ -200,11 +309,18 @@ export function BookingV2Provider({
         : urlPatch.selectedExtras?.length
           ? {
               selectedExtras: [
-                ...new Set([...(saved?.selectedExtras ?? defaults.selectedExtras), ...urlPatch.selectedExtras]),
+                ...new Set([
+                  ...(sanitized?.selectedExtras ?? defaults.selectedExtras),
+                  ...urlPatch.selectedExtras,
+                ]),
               ],
             }
           : {}),
     };
+    const normalizedMerged = sanitizeStoredForm(
+      merged,
+      serviceSlug,
+    ) as BookingV2FormData;
     if (
       sanitized ||
       urlPatch.serviceDetails ||
@@ -212,7 +328,24 @@ export function BookingV2Provider({
       urlPatch.selectedExtras?.length ||
       urlPatch.replaceSelectedExtras
     ) {
-      form.reset(merged, { keepDefaultValues: false });
+      form.reset(normalizedMerged, { keepDefaultValues: false });
+      if (isProgressiveBookingDetailsService(serviceSlug)) {
+        const details = normalizedMerged.serviceDetails ?? {};
+        const address = {
+          address: normalizedMerged.address,
+          suburb: normalizedMerged.suburb,
+          contactPhone: normalizedMerged.contactPhone,
+          serviceAreaLocationId: normalizedMerged.serviceAreaLocationId,
+        };
+        setDetailsSectionOverride(
+          bookingDetailsStage(
+            serviceSlug,
+            details,
+            address,
+            config.step1Questions,
+          ),
+        );
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -245,15 +378,34 @@ export function BookingV2Provider({
       const rowSlug = bookingServiceSlugFromBookingRow(row);
       if (rowSlug !== serviceSlug) {
         const redirectUrl = rebookToken
-          ? `/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=2&rt=${encodeURIComponent(rebookToken)}`
-          : `/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=2`;
+          ? `/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=schedule&rt=${encodeURIComponent(rebookToken)}`
+          : `/book/${rowSlug}?rebook=${encodeURIComponent(rebookId)}&step=schedule`;
         router.replace(redirectUrl);
         return;
       }
 
       const patch = bookingV2FormPatchFromBookingRow(row, serviceSlug, cleanerMode);
-      form.reset(patch, { keepDefaultValues: false });
-      writeToStorage(patch);
+      const normalizedPatch = sanitizeStoredForm(
+        patch,
+        serviceSlug,
+      ) as BookingV2FormData;
+      form.reset(normalizedPatch, { keepDefaultValues: false });
+      if (isProgressiveBookingDetailsService(serviceSlug)) {
+        setDetailsSectionOverride(
+          bookingDetailsStage(
+            serviceSlug,
+            normalizedPatch.serviceDetails,
+            {
+              address: normalizedPatch.address,
+              suburb: normalizedPatch.suburb,
+              contactPhone: normalizedPatch.contactPhone,
+              serviceAreaLocationId: normalizedPatch.serviceAreaLocationId,
+            },
+            config.step1Questions,
+          ),
+        );
+      }
+      writeToStorage(normalizedPatch);
     })();
     return () => {
       cancelled = true;
@@ -302,6 +454,17 @@ export function BookingV2Provider({
 
   const canGoNext = useCallback(
     async (step: BookingStep): Promise<boolean> => {
+      if (step === 3) {
+        const hasPendingBooking = Boolean(form.getValues("pendingBookingId")?.trim());
+        if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) {
+          trackBookingFunnelEvent(bookingV2StepToFunnelStep(step), BOOKING_FUNNEL_ROW.ERROR, {
+            flow: "booking_v2",
+            step,
+            reason: "pricing_unavailable",
+          });
+          return false;
+        }
+      }
       if (step === 1) {
         const values = form.getValues();
         const result = step1Schema.safeParse(values);
@@ -341,16 +504,28 @@ export function BookingV2Provider({
       }
       return true;
     },
-    [form, scheduling],
+    [form, scheduling, pricingAvailability],
   );
 
   const goToStep = useCallback(
     (step: BookingStep) => {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("step", String(step));
-      router.push(`/book/${serviceSlug}?${params.toString()}`);
+      if (step === 4) {
+        const hasPendingBooking = Boolean(form.getValues("pendingBookingId")?.trim());
+        if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) return;
+      }
+      const params = new URLSearchParams(window.location.search);
+      params.set("step", bookingStepQueryValue(step));
+      if (step === 1) {
+        if (detailsSectionOverride) params.set("section", detailsSectionOverride);
+      } else {
+        params.delete("section");
+      }
+      // The service page is already mounted; only the client-owned step changes.
+      // Native history is integrated with the Next.js App Router and avoids an
+      // unnecessary RSC request for every Continue/Back/Edit click.
+      window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
     },
-    [router, searchParams, serviceSlug],
+    [detailsSectionOverride, serviceSlug, pricingAvailability, form],
   );
 
   const goNext = useCallback(async () => {
@@ -380,7 +555,157 @@ export function BookingV2Provider({
   const clearBooking = useCallback(() => {
     clearStorage();
     form.reset(defaultBookingFormData(serviceSlug, cleanerMode));
+    setDetailsSectionOverride(
+      isProgressiveBookingDetailsService(serviceSlug) ? "address" : null,
+    );
+    setScheduleSectionOverride(
+      usesProgressiveIndividualSchedule(serviceSlug)
+        ? serviceSlug === "carpet-cleaning" || serviceSlug === "airbnb-cleaning"
+          ? "date_time"
+          : "booking_type"
+        : null,
+    );
   }, [form, serviceSlug, cleanerMode]);
+
+  const resetCompletedBooking = useCallback(() => {
+    if (!consumeBookingV2CompletedReset()) return;
+    clearBooking();
+    const params = new URLSearchParams({
+      service: serviceSlug,
+      step: "details",
+    });
+    if (isProgressiveBookingDetailsService(serviceSlug)) {
+      params.set("section", "address");
+    }
+    window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+  }, [clearBooking, serviceSlug]);
+
+  useEffect(() => {
+    resetCompletedBooking();
+    window.addEventListener("pageshow", resetCompletedBooking);
+    return () => window.removeEventListener("pageshow", resetCompletedBooking);
+  }, [resetCompletedBooking]);
+
+  const editDetailsSection = useCallback(
+    (section: BookingDetailsStage) => {
+      setDetailsSectionOverride(section);
+      const params = new URLSearchParams(window.location.search);
+      params.set("step", "details");
+      params.set("section", section);
+      window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+    },
+    [serviceSlug],
+  );
+
+  useEffect(() => {
+    if (
+      currentStep !== 1 ||
+      (serviceSlug !== "regular-cleaning" && serviceSlug !== "deep-cleaning")
+    ) return;
+
+    if (!requestedDetailsSection) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("step", "details");
+      params.set("section", detailsSectionOverride ?? "address");
+      window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+      return;
+    }
+
+    if (requestedDetailsSection !== detailsSectionOverride) {
+      setDetailsSectionOverride(requestedDetailsSection);
+    }
+  }, [
+    currentStep,
+    detailsSectionOverride,
+    requestedDetailsSection,
+    searchParams,
+    serviceSlug,
+  ]);
+
+  useEffect(() => {
+    if (
+      currentStep !== 1 ||
+      serviceSlug === "regular-cleaning" ||
+      serviceSlug === "deep-cleaning" ||
+      !isProgressiveBookingDetailsService(serviceSlug)
+    ) return;
+
+    const values = form.getValues();
+    const bookingDetails = {
+      address: values.address,
+      suburb: values.suburb,
+      contactPhone: values.contactPhone,
+      serviceAreaLocationId: values.serviceAreaLocationId,
+    };
+    const questions = liveConfig?.step1Questions ?? config.step1Questions;
+    const derivedStage = bookingDetailsStage(
+      serviceSlug,
+      values.serviceDetails,
+      bookingDetails,
+      questions,
+    );
+
+    let safeStage = requestedDetailsSection ?? detailsSectionOverride ?? derivedStage;
+    if (
+      requestedDetailsSection &&
+      bookingDetailsStageIndex(serviceSlug, requestedDetailsSection) >
+        bookingDetailsStageIndex(serviceSlug, derivedStage)
+    ) {
+      safeStage = derivedStage;
+    }
+
+    if (safeStage !== detailsSectionOverride) {
+      setDetailsSectionOverride(safeStage);
+    }
+
+    if (!requestedDetailsSection || safeStage !== requestedDetailsSection) {
+      const params = new URLSearchParams(window.location.search);
+      params.set("step", "details");
+      params.set("section", safeStage);
+      window.history.replaceState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+    }
+  }, [
+    config.step1Questions,
+    currentStep,
+    form,
+    liveConfig,
+    requestedDetailsSection,
+    serviceSlug,
+  ]);
+
+  const editScheduleSection = useCallback((section: RegularCleaningScheduleStage) => {
+    setScheduleSectionOverride(section);
+  }, []);
+
+  useEffect(() => {
+    if (
+      currentStep !== 1 ||
+      !isProgressiveBookingDetailsService(serviceSlug) ||
+      detailsSectionOverride !== null
+    ) return;
+    const values = form.getValues();
+    const bookingDetails = {
+      address: values.address,
+      suburb: values.suburb,
+      contactPhone: values.contactPhone,
+      serviceAreaLocationId: values.serviceAreaLocationId,
+    };
+    setDetailsSectionOverride(
+      bookingDetailsStage(
+        serviceSlug,
+        values.serviceDetails,
+        bookingDetails,
+        liveConfig?.step1Questions ?? config.step1Questions,
+      ),
+    );
+  }, [
+    config.step1Questions,
+    currentStep,
+    detailsSectionOverride,
+    form,
+    liveConfig,
+    serviceSlug,
+  ]);
 
   const value = useMemo<BookingV2ContextValue>(
     () => ({
@@ -391,14 +716,41 @@ export function BookingV2Provider({
       scheduling,
       feesConfig,
       catalogLoading,
+      pricingAvailability,
+      detailsSectionOverride,
+      editDetailsSection,
+      scheduleSectionOverride,
+      editScheduleSection,
       goToStep,
       goNext,
       goBack,
       canGoNext,
       clearBooking,
     }),
-    [form, currentStep, serviceSlug, liveConfig, scheduling, feesConfig, catalogLoading, goToStep, goNext, goBack, canGoNext, clearBooking],
+    [
+      form,
+      currentStep,
+      serviceSlug,
+      liveConfig,
+      scheduling,
+      feesConfig,
+      catalogLoading,
+      pricingAvailability,
+      detailsSectionOverride,
+      editDetailsSection,
+      scheduleSectionOverride,
+      editScheduleSection,
+      goToStep,
+      goNext,
+      goBack,
+      canGoNext,
+      clearBooking,
+    ],
   );
+
+  if (requestedQueryServiceSlug && requestedQueryServiceSlug !== serviceSlug) {
+    return null;
+  }
 
   return (
     <BookingV2Context.Provider value={value}>

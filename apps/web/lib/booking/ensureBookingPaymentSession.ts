@@ -12,12 +12,15 @@ import {
 } from "@/lib/booking/bookingPaymentAttemptHistory";
 import { PAYMENT_ERROR_CODES, type PaymentErrorCode } from "@/lib/booking/paymentErrorCodes";
 import { detectPaystackKeyModeMismatch } from "@/lib/booking/paystackKeyModeConsistency";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { assertEnvironmentPaymentSafety } from "@/lib/env/assertEnvironmentSafety";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
 import { runPaystackVerifyFinalizePipeline } from "@/lib/booking/runPaystackVerifyFinalizePipeline";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { syncRecurringPrepaymentReference } from "@/lib/recurring/recurringPrepaymentLedger";
+import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
 
 export type BookingPaymentSessionAccess =
   | { kind: "paystack_ref"; reference: string }
@@ -73,8 +76,28 @@ type BookingPayRow = {
   time: string | null;
 };
 
-const SELECT_COLS =
-  "id, status, payment_status, payment_completed_at, paystack_reference, payment_link, payment_link_expires_at, customer_email, customer_id, user_id, total_price, total_paid_zar, price_snapshot, booking_snapshot, service, date, time";
+const SELECT_BASE_COLS =
+  "id, status, payment_status, payment_completed_at, paystack_reference, payment_link, payment_link_expires_at, customer_email, total_price, total_paid_zar, price_snapshot, booking_snapshot, service, date, time";
+
+const PAYSTACK_INITIALIZE_TIMEOUT_MS = 12_000;
+
+function strictLocalPaymentSimulationEnabled(): boolean {
+  if (resolveDeploymentEnvironment() !== "local") return false;
+  const raw = (process.env.NEXT_PUBLIC_SUPABASE_URL ?? process.env.SUPABASE_URL ?? "").trim();
+  try {
+    const url = new URL(raw);
+    return (
+      (url.hostname === "127.0.0.1" || url.hostname === "localhost") &&
+      url.port === "54321"
+    );
+  } catch {
+    return false;
+  }
+}
+
+type BookingLoadResult =
+  | { row: BookingPayRow; error: null }
+  | { row: null; error: { message: string; code?: string } | null };
 
 /** In-process dedupe for concurrent ensure calls on the same instance. */
 const inflightByBookingId = new Map<string, Promise<EnsureBookingPaymentSessionResult>>();
@@ -145,10 +168,24 @@ function accessAllowed(row: BookingPayRow, access: BookingPaymentSessionAccess):
   );
 }
 
-async function loadBooking(admin: SupabaseClient, bookingId: string): Promise<BookingPayRow | null> {
-  const { data, error } = await admin.from("bookings").select(SELECT_COLS).eq("id", bookingId).maybeSingle();
-  if (error || !data || typeof data !== "object") return null;
-  return data as BookingPayRow;
+async function loadBooking(admin: SupabaseClient, bookingId: string): Promise<BookingLoadResult> {
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+  const { data, error } = await admin
+    .from("bookings")
+    .select(`${SELECT_BASE_COLS}, ${ownershipColumn}`)
+    .eq("id", bookingId)
+    .maybeSingle();
+  if (error) {
+    return {
+      row: null,
+      error: {
+        message: String(error.message ?? "booking_lookup_failed").slice(0, 240),
+        code: typeof error.code === "string" ? error.code : undefined,
+      },
+    };
+  }
+  if (!data || typeof data !== "object") return { row: null, error: null };
+  return { row: data as BookingPayRow, error: null };
 }
 
 function readyFromRow(
@@ -284,7 +321,7 @@ async function initializeFreshPaystackSession(
     .maybeSingle();
 
   if (claimErr || !claimed) {
-    const latest = await loadBooking(admin, row.id);
+    const { row: latest } = await loadBooking(admin, row.id);
     if (latest && isAlreadyPaid(latest)) {
       return { status: "paid", bookingId: row.id, reference: String(latest.paystack_reference ?? "") };
     }
@@ -306,6 +343,7 @@ async function initializeFreshPaystackSession(
       retryable: true,
     };
   }
+  await syncRecurringPrepaymentReference(admin, row.id, newRef);
 
   const appUrl = getPublicAppUrlBase();
   // Paystack appends reference/trxref; /pay page accepts those for cancel/retry recovery.
@@ -319,6 +357,7 @@ async function initializeFreshPaystackSession(
   try {
     const res = await fetch("https://api.paystack.co/transaction/initialize", {
       method: "POST",
+      signal: AbortSignal.timeout(PAYSTACK_INITIALIZE_TIMEOUT_MS),
       headers: {
         Authorization: `Bearer ${secret}`,
         "Content-Type": "application/json",
@@ -336,6 +375,13 @@ async function initializeFreshPaystackSession(
           expected_total_zar: String(amountZar),
           payment_path: "ensure_booking_payment_session",
           ensure_reason: reason,
+          payment_scope:
+            row.price_snapshot &&
+            typeof row.price_snapshot === "object" &&
+            !Array.isArray(row.price_snapshot) &&
+            (row.price_snapshot as { payment_scope?: unknown }).payment_scope === "recurring_first_30_days"
+              ? "recurring_first_30_days"
+              : "booking_visit",
         },
       }),
     });
@@ -390,12 +436,12 @@ async function initializeFreshPaystackSession(
     })
     .eq("id", row.id)
     .eq("paystack_reference", newRef)
-    .select(SELECT_COLS)
+    .select(`${SELECT_BASE_COLS}, ${await resolveBookingOwnershipColumn(admin)}`)
     .maybeSingle();
 
   if (persistErr || !persisted) {
     // Lost the race after Paystack init — prefer the winning row's usable link.
-    const latest = await loadBooking(admin, row.id);
+    const { row: latest } = await loadBooking(admin, row.id);
     if (
       latest &&
       isStoredPaymentLinkUsable({
@@ -422,6 +468,7 @@ async function initializeFreshPaystackSession(
   }
 
   const persistedRow = persisted as BookingPayRow;
+  await syncRecurringPrepaymentReference(admin, row.id, returnedRef || newRef);
   logPaymentStructured("payment_initialize", {
     booking_id: row.id,
     reference: returnedRef || newRef,
@@ -443,6 +490,7 @@ async function ensureBookingPaymentSessionInner(
   admin: SupabaseClient,
   bookingId: string,
   access: BookingPaymentSessionAccess,
+  options?: { freshAttempt?: boolean },
 ): Promise<EnsureBookingPaymentSessionResult> {
   const id = bookingId.trim();
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
@@ -455,40 +503,64 @@ async function ensureBookingPaymentSessionInner(
     };
   }
 
-  const keyMismatch = detectPaystackKeyModeMismatch();
-  if (keyMismatch) {
+  const localPaymentSimulation = strictLocalPaymentSimulationEnabled();
+  let secret = "";
+
+  if (!localPaymentSimulation) {
+    const keyMismatch = detectPaystackKeyModeMismatch();
+    if (keyMismatch) {
+      return {
+        status: "failed",
+        bookingId: id,
+        errorCode: keyMismatch.errorCode,
+        error: keyMismatch.error,
+        retryable: false,
+      };
+    }
+
+    const envSafety = assertEnvironmentPaymentSafety();
+    if (envSafety) {
+      return {
+        status: "failed",
+        bookingId: id,
+        errorCode: PAYMENT_ERROR_CODES.PAYMENT_CONFIGURATION_ERROR,
+        error: envSafety.message,
+        retryable: false,
+      };
+    }
+
+    secret = (process.env.PAYSTACK_SECRET_KEY ?? "").trim();
+    if (!secret) {
+      return {
+        status: "failed",
+        bookingId: id,
+        errorCode: PAYMENT_ERROR_CODES.PAYMENT_CONFIGURATION_ERROR,
+        error: "Paystack is not configured.",
+        retryable: false,
+      };
+    }
+  }
+
+  const loaded = await loadBooking(admin, id);
+  if (loaded.error) {
+    logPaymentStructured("payment_initialize", {
+      booking_id: id,
+      result: "failed",
+      error_code: PAYMENT_ERROR_CODES.PAYMENT_INITIALIZATION_FAILED,
+      database_error_code: loaded.error.code ?? null,
+      message: loaded.error.message,
+    });
     return {
       status: "failed",
       bookingId: id,
-      errorCode: keyMismatch.errorCode,
-      error: keyMismatch.error,
-      retryable: false,
+      errorCode: PAYMENT_ERROR_CODES.PAYMENT_INITIALIZATION_FAILED,
+      error:
+        "We could not verify your booking for payment. No payment was started. Please try again.",
+      retryable: true,
     };
   }
 
-  const envSafety = assertEnvironmentPaymentSafety();
-  if (envSafety) {
-    return {
-      status: "failed",
-      bookingId: id,
-      errorCode: PAYMENT_ERROR_CODES.PAYMENT_CONFIGURATION_ERROR,
-      error: envSafety.message,
-      retryable: false,
-    };
-  }
-
-  const secret = (process.env.PAYSTACK_SECRET_KEY ?? "").trim();
-  if (!secret) {
-    return {
-      status: "failed",
-      bookingId: id,
-      errorCode: PAYMENT_ERROR_CODES.PAYMENT_CONFIGURATION_ERROR,
-      error: "Paystack is not configured.",
-      retryable: false,
-    };
-  }
-
-  const row = await loadBooking(admin, id);
+  const row = loaded.row;
   if (!row) {
     return {
       status: "failed",
@@ -545,6 +617,60 @@ async function ensureBookingPaymentSessionInner(
     };
   }
 
+  if (localPaymentSimulation) {
+    const reference =
+      String(row.paystack_reference ?? "").trim() ||
+      `local_${Date.now().toString(36)}_${crypto.randomBytes(4).toString("hex")}`;
+    const amountCents = Math.round(amountZar * 100);
+
+    const finalized = await runPaystackVerifyFinalizePipeline(
+      {
+        status: "success",
+        reference,
+        amount: amountCents,
+        currency: "ZAR",
+        paid_at: new Date().toISOString(),
+        channel: "local_simulator",
+        customer: { email: String(row.customer_email ?? "").trim() },
+        metadata: {
+          booking_id: row.id,
+          shalean_booking_id: row.id,
+          customer_email: String(row.customer_email ?? "").trim(),
+          pay_total_zar: String(amountZar),
+          expected_total_zar: String(amountZar),
+          is_test: "true",
+          payment_path: "local_payment_simulator",
+        },
+      },
+      reference,
+      "local/payment-simulator",
+    );
+
+    if (finalized.result.error || !finalized.result.bookingId) {
+      return {
+        status: "failed",
+        bookingId: id,
+        errorCode: PAYMENT_ERROR_CODES.PAYMENT_INITIALIZATION_FAILED,
+        error: finalized.result.error ?? "Local test payment could not be finalized.",
+        retryable: true,
+      };
+    }
+
+    logPaymentStructured("payment_initialize", {
+      booking_id: id,
+      reference,
+      result: "local_simulated_paid",
+      amount_cents: amountCents,
+    });
+
+    return {
+      status: "paid",
+      bookingId: finalized.result.bookingId,
+      reference,
+      errorCode: PAYMENT_ERROR_CODES.PAYMENT_ALREADY_COMPLETED,
+    };
+  }
+
   if (
     isStoredPaymentLinkUsable({
       status: row.status,
@@ -560,9 +686,14 @@ async function ensureBookingPaymentSessionInner(
     return readyFromRow(row, { reused: true, refreshed: false, amountZar });
   }
 
-  // Uncertain / abandoned prior attempt — verify with Paystack before creating another charge.
-  const paid = await maybeFinalizeSuccessfulCharge(admin, row, secret);
-  if (paid) return paid;
+  // A booking created by the current confirm request has never reached Paystack,
+  // so verifying its fresh reference first only adds a guaranteed failed remote
+  // request. Recovery paths still verify uncertain/abandoned attempts before
+  // creating a replacement charge.
+  if (!options?.freshAttempt) {
+    const paid = await maybeFinalizeSuccessfulCharge(admin, row, secret);
+    if (paid) return paid;
+  }
 
   const reason = !String(row.payment_link ?? "").trim()
     ? PAYMENT_ERROR_CODES.PAYMENT_LINK_MISSING
@@ -584,13 +715,15 @@ async function ensureBookingPaymentSessionInner(
  */
 export async function ensureBookingPaymentSession(
   admin: SupabaseClient,
-  params: { bookingId: string; access: BookingPaymentSessionAccess },
+  params: { bookingId: string; access: BookingPaymentSessionAccess; freshAttempt?: boolean },
 ): Promise<EnsureBookingPaymentSessionResult> {
   const bookingId = params.bookingId.trim();
   const existing = inflightByBookingId.get(bookingId);
   if (existing) return existing;
 
-  const promise = ensureBookingPaymentSessionInner(admin, bookingId, params.access).finally(() => {
+  const promise = ensureBookingPaymentSessionInner(admin, bookingId, params.access, {
+    freshAttempt: params.freshAttempt,
+  }).finally(() => {
     if (inflightByBookingId.get(bookingId) === promise) {
       inflightByBookingId.delete(bookingId);
     }

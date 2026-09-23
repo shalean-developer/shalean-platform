@@ -5,20 +5,19 @@ import { fetchAdminDashboardRevenueSummary } from "@/lib/admin/dashboardRevenue"
 import { computeOfficeVisitDayFinance } from "@/lib/admin/dashboardVisitDayFinance";
 import { sumApprovedExpensesInRange } from "@/lib/admin/expenses/loadExpenses";
 import { loadFinancialDashboard } from "@/lib/admin/expenses/loadFinancialDashboard";
-import { computeOfficeAnalyticsSummary, extractPriorCustomerIds, officeAnalyticsFetchStartIso, officeAnalyticsWindowFromParams, priorCustomerQueryEndIso, type OfficeAnalyticsBookingRow } from "@/lib/admin/officeAnalytics";
+import { officeAnalyticsWindowFromParams } from "@/lib/admin/officeAnalytics";
 import { computeOfficeTodayScheduleStats } from "@/lib/admin/officeTodayScheduleStats";
 import { computeOpsSnapshotFromRows, OPS_SNAPSHOT_BOOKING_SELECT, type OpsSnapshotRow } from "@/lib/admin/opsSnapshot";
 import { emptyOwnerCommandCentreSections, OWNER_COMMAND_CENTRE_SOURCES, type OwnerCommandCentrePayload } from "@/lib/admin/ownerCommandCentre";
+import { loadOwnerCommandCentreAnalyticsRollup } from "@/lib/admin/ownerCommandCentreAnalyticsRollup";
 import { loadOfficePayoutPeriodReport } from "@/lib/admin/payouts/officePayoutPeriodReport";
 import { todayYmdJohannesburg } from "@/lib/booking/dateInJohannesburg";
 import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { listMoneyActionProposals } from "@/lib/payout/listMoneyActionProposals";
 
-const ANALYTICS_BOOKING_SELECT = "id, created_at, updated_at, status, payment_status, payment_completed_at, total_paid_zar, amount_paid_cents, refunded_at, refund_status, billing_type, is_monthly_billing_booking, monthly_invoice_id, service, service_slug, customer_id, is_recurring_generated";
 const SCHEDULE_BOOKING_SELECT = "id,date,time,status,cleaner_id,selected_cleaner_id,team_id,is_team_job,payment_status,payment_completed_at,payment_method,total_paid_zar,amount_paid_cents,total_price,refunded_at,refund_status,billing_type,is_monthly_billing_booking,monthly_invoice_id";
 const PERMISSION_CHANGE_EVENT = /permission|role|assignment|grant|revoke/i;
 const CRITICAL_AUDIT_EVENT = /critical|denied|forbidden|breach|security_alert/i;
-const PRIOR_CUSTOMER_FALLBACK_LIMIT = 20_000;
 
 function monthRangesMtd(today: string) {
   const [year, month, day] = today.split("-").map(Number);
@@ -36,32 +35,6 @@ function monthRangesMtd(today: string) {
 function growthPercent(current: number, previous: number): number | null {
   if (previous === 0) return current > 0 ? 100 : null;
   return Math.round(((current - previous) / previous) * 10000) / 100;
-}
-function isMissingPriorCustomerRpcError(error: { code?: string | null; message?: string | null } | null): boolean {
-  if (!error) return false;
-  if (error.code === "PGRST202" || error.code === "42883") return true;
-  return /could not find the function|function .*owner_prior_customer_ids.* does not exist/i.test(error.message ?? "");
-}
-async function loadPriorCustomerIds(admin: SupabaseClient, priorEndIso: string): Promise<Set<string>> {
-  const rpcRes = await admin.rpc("owner_prior_customer_ids", { p_before: priorEndIso });
-  if (!rpcRes.error) {
-    const row = (rpcRes.data?.[0] ?? null) as { customer_ids?: string[] | null } | null;
-    return new Set((row?.customer_ids ?? []).filter((id): id is string => typeof id === "string" && id.length > 0));
-  }
-
-  // Additive migration rollout safety only. Operational failures must not trigger the old 20k-row read.
-  if (!isMissingPriorCustomerRpcError(rpcRes.error)) throw new Error(rpcRes.error.message);
-
-  const fallback = await admin
-    .from("bookings")
-    .select("customer_id, payment_status, payment_completed_at")
-    .eq("payment_status", "success")
-    .not("payment_completed_at", "is", null)
-    .not("customer_id", "is", null)
-    .lt("payment_completed_at", priorEndIso)
-    .limit(PRIOR_CUSTOMER_FALLBACK_LIMIT);
-  if (fallback.error) throw new Error(fallback.error.message);
-  return new Set(extractPriorCustomerIds(fallback.data ?? []));
 }
 async function loadEligiblePayoutCents(admin: SupabaseClient): Promise<number> {
   const { data, error } = await admin.from("bookings").select("cleaner_id, payout_owner_cleaner_id, payout_frozen_cents, display_earnings_cents, cleaner_earnings_total_cents, cleaner_payout_cents").eq("payout_status", "eligible");
@@ -97,19 +70,14 @@ export async function loadOwnerCommandCentre(admin: SupabaseClient, viewerUserId
   const todayPromise=Promise.all([loadTodayBookings(admin,today),loadOfficePayoutPeriodReport(admin,today,today),loadOpsExceptionCount(admin)]).then(([bookings,dayReport,exceptions])=>{const stats=computeOfficeTodayScheduleStats(bookings);const vf=computeOfficeVisitDayFinance(bookings);sections.todaySnapshot.totalBookings=stats.total;sections.todaySnapshot.completed=stats.completed;sections.todaySnapshot.inProgress=stats.inProgress;sections.todaySnapshot.pendingOrUnallocated=stats.unassigned+stats.upcoming;sections.todaySnapshot.cancelled=stats.cancelled;sections.todaySnapshot.revenueZar=vf.completedPaidValueZar;sections.todaySnapshot.cleanerEarningsCents=dayReport.totals.earned_cents;sections.todaySnapshot.estimatedGrossProfitCents=stats.completed>0&&dayReport.totals.visit_count===0?null:dayReport.totals.company_earnings_cents;sections.todaySnapshot.lateOrExceptionCount=exceptions;sections.businessHealth.completedBookingsToday=stats.completed;}).catch((e:unknown)=>{sectionErrors.todaySnapshot=e instanceof Error?e.message:"Failed to load today's snapshot.";});
   const summariesPromise=(async()=>{
     const window=officeAnalyticsWindowFromParams(null,null,now);
-    const sinceIso=officeAnalyticsFetchStartIso(window);
-    const priorEndIso=priorCustomerQueryEndIso(window);
-    const [b,priorCustomerIds,c,a]=await Promise.all([
-      admin.from("bookings").select(ANALYTICS_BOOKING_SELECT).or(`created_at.gte.${sinceIso},payment_completed_at.gte.${sinceIso}`).order("created_at",{ascending:false}).limit(15000),
-      loadPriorCustomerIds(admin, priorEndIso),
+    const [analytics,c,a]=await Promise.all([
+      loadOwnerCommandCentreAnalyticsRollup(admin,window,now),
       admin.from("cleaners").select("id,is_active,is_available,status",{count:"exact"}).or("is_active.is.null,is_active.eq.true").limit(5000),
       admin.from("cleaner_applications").select("id",{count:"exact",head:true}).eq("status","pending")
     ]);
-    if(b.error)throw new Error(b.error.message);
     if(c.error)throw new Error(c.error.message);
-    const an=computeOfficeAnalyticsSummary((b.data??[]) as OfficeAnalyticsBookingRow[],priorCustomerIds,now,window);
-    sections.summaries.customers={retentionPct:an.kpis.customerRetentionPct,totalBookingsWindow:an.kpis.totalBookings,avgBookingValueZar:an.kpis.avgBookingValueZar};
-    sections.summaries.bookingServices=an.servicePopularity.slice(0,8).map(r=>({label:r.name,count:r.count,revenueZar:null}));
+    sections.summaries.customers={retentionPct:analytics.retentionPct,totalBookingsWindow:analytics.totalBookingsWindow,avgBookingValueZar:analytics.avgBookingValueZar};
+    sections.summaries.bookingServices=analytics.bookingServices;
     const cleaners=c.data??[];
     sections.summaries.workforce={activeCleaners:c.count??cleaners.length,availableToday:cleaners.filter(x=>x.is_available===true&&!['offline','paused','suspended'].includes(String(x.status??'').trim().toLowerCase())).length,pendingApplications:a.error?null:(a.count??0)};
   })().catch((e:unknown)=>{sectionErrors.summaries=sectionErrors.summaries??(e instanceof Error?e.message:"Failed to load owner summaries.");});

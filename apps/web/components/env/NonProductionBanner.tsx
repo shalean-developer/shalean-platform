@@ -2,6 +2,10 @@ import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
 
 /**
  * Visible STAGING / DEVELOPMENT banner. Invisible in production.
+ *
+ * The server is authoritative for this marker. Do not defer environment resolution
+ * to a client boundary: doing so can render a hidden placeholder on the server and
+ * a visible banner on hydration.
  */
 export function NonProductionBanner() {
   const env = resolveDeploymentEnvironment();
