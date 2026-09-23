@@ -28,10 +28,12 @@ NEXT="$STABLE/.current.next"
 ROLLBACK="$STABLE/rollback-target.txt"
 OUT="$ROOT/plesk-pricing-test-auto-result.txt"
 WORK="$ROOT/.pricing-test-auto-deploy"
+LOCK="$ROOT/.pricing-test-auto-deploy.lock"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 HEALTH_URL="${PLESK_TEST_HEALTH_URL:-https://pricing-test.shalean.co.za/api/health/environment}"
 WAIT_SECONDS="${PLESK_AUTO_WAIT_SECONDS:-1200}"
 POLL_SECONDS="${PLESK_AUTO_POLL_SECONDS:-15}"
+LOCK_WAIT_SECONDS="${PLESK_AUTO_LOCK_WAIT_SECONDS:-1500}"
 EXPECTED_REF="jhubpsbwmjgydkzztxeu"
 
 fail(){
@@ -40,20 +42,30 @@ fail(){
 }
 
 [ -r "$HEADER" ] || fail "GitHub auth header unreadable"
-for x in /usr/bin/curl /usr/bin/python3 /usr/bin/touch /bin/bash; do
+for x in /usr/bin/curl /usr/bin/python3 /usr/bin/touch /usr/bin/flock /bin/bash; do
   [ -x "$x" ] || fail "required tool missing: $x"
 done
 case "$WAIT_SECONDS" in *[!0-9]*|'') fail "wait seconds must be numeric" ;; esac
 case "$POLL_SECONDS" in *[!0-9]*|'') fail "poll seconds must be numeric" ;; esac
+case "$LOCK_WAIT_SECONDS" in *[!0-9]*|'') fail "lock wait seconds must be numeric" ;; esac
 [ "$WAIT_SECONDS" -ge 60 ] || fail "wait seconds must be at least 60"
 [ "$POLL_SECONDS" -ge 5 ] || fail "poll seconds must be at least 5"
+[ "$LOCK_WAIT_SECONDS" -ge 60 ] || fail "lock wait seconds must be at least 60"
+
+# Serialize every automatic deployment before touching shared staging/pointer
+# state. A newer invocation waits here while the active one either completes or
+# exits because its release was superseded.
+exec 9>"$LOCK"
+if ! /usr/bin/flock -w "$LOCK_WAIT_SECONDS" 9; then
+  fail "timed out waiting for pricing-test deployment lock"
+fi
 
 rm -rf "$WORK"
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 
 ghget(){
-  /usr/bin/curl -fsSL     -H "@$HEADER"     -H 'Accept: application/vnd.github+json'     -H 'X-GitHub-Api-Version: 2022-11-28'     "$@"
+  /usr/bin/curl -fsSL     --connect-timeout 10     --max-time 30     -H "@$HEADER"     -H 'Accept: application/vnd.github+json'     -H 'X-GitHub-Api-Version: 2022-11-28'     "$@"
 }
 
 branch_sha(){
@@ -61,7 +73,10 @@ branch_sha(){
   /usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"]["sha"])' "$WORK/branch.json"
 }
 
-TARGET_SHA="$(branch_sha)"
+TARGET_SHA=""
+if ! TARGET_SHA="$(branch_sha)"; then
+  fail "could not resolve current integration release SHA"
+fi
 case "$TARGET_SHA" in *[!0-9a-f]*|'') fail "invalid release branch SHA" ;; esac
 [ "${#TARGET_SHA}" -eq 40 ] || fail "release branch SHA must be 40 chars"
 printf 'PLESK-AUTO-03 target=%s\n' "$TARGET_SHA"
@@ -70,7 +85,13 @@ printf 'PLESK-AUTO-03 target=%s\n' "$TARGET_SHA"
 ELAPSED=0
 RUN_ID=""
 while [ "$ELAPSED" -le "$WAIT_SECONDS" ]; do
-  ghget "$API/actions/runs?branch=integration%2Fshalean-release&event=push&per_page=50" > "$WORK/runs.json"
+  if ! ghget "$API/actions/runs?branch=integration%2Fshalean-release&event=push&per_page=50" > "$WORK/runs.json"; then
+    printf 'PLESK-AUTO-03 GitHub workflow query failed; retrying (%ss/%ss)\n' "$ELAPSED" "$WAIT_SECONDS"
+    [ "$ELAPSED" -lt "$WAIT_SECONDS" ] || fail "timed out waiting for exact-SHA artifact workflow"
+    sleep "$POLL_SECONDS"
+    ELAPSED=$((ELAPSED + POLL_SECONDS))
+    continue
+  fi
   /usr/bin/python3 - "$WORK/runs.json" "$TARGET_SHA" > "$WORK/workflow-state.txt" <<'PY'
 import json,sys
 d=json.load(open(sys.argv[1])); target=sys.argv[2]
@@ -103,7 +124,11 @@ done
 
 # If the branch moved while we waited, stop. A subsequent Plesk auto-deploy will
 # process the newer push; this run must never prepare or activate that newer SHA.
-[ "$(branch_sha)" = "$TARGET_SHA" ] || fail "release branch moved while waiting; refusing stale activation"
+PREPARE_BRANCH_SHA=""
+if ! PREPARE_BRANCH_SHA="$(branch_sha)"; then
+  fail "could not re-check release branch before preparation"
+fi
+[ "$PREPARE_BRANCH_SHA" = "$TARGET_SHA" ] || fail "release branch moved while waiting; refusing stale activation"
 
 # Prepare/checksum/probe the exact immutable release. This moves the stable
 # pointer but does not restart Passenger.
@@ -126,10 +151,15 @@ restore_pointer_without_restart(){
   mv -Tf "$NEXT" "$CURRENT"
 }
 
-# Re-check immediately before activation. If a newer release appeared during
-# preparation, restore the old pointer without restarting and let the new push
-# drive its own deployment.
-if [ "$(branch_sha)" != "$TARGET_SHA" ]; then
+# Re-check immediately before activation. If GitHub is unavailable or a newer
+# release appeared during preparation, restore the old pointer without
+# restarting so an unverified candidate is never left selected.
+POST_PREPARE_SHA=""
+if ! POST_PREPARE_SHA="$(branch_sha)"; then
+  restore_pointer_without_restart || true
+  fail "could not re-check release branch after preparation; activation skipped"
+fi
+if [ "$POST_PREPARE_SHA" != "$TARGET_SHA" ]; then
   restore_pointer_without_restart || true
   fail "release branch moved during preparation; activation skipped"
 fi
