@@ -39,7 +39,7 @@ jobs:
           CHANGED="$(git diff --name-only "$BASE" "$HEAD" || true)"
           echo "Changed paths:"
           echo "$CHANGED"
-          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|\.github/workflows/web-test\.yml)'; then
+          if echo "$CHANGED" | grep -Eq '^(apps/web/|packages/|scripts/plesk-pricing-test-.*\.sh$|\.github/workflows/web-test\.yml)'; then
             echo "run_suite=true" >> "$GITHUB_OUTPUT"
             echo "Web/package paths changed — running vitest suite."
           else
@@ -64,6 +64,15 @@ jobs:
           echo "checkout=$GOT"
           echo "pr_head=$WANT"
           test "$GOT" = "$WANT"
+
+      - name: Plesk pricing-test automation shell syntax
+        if: steps.filter.outputs.run_suite == 'true'
+        working-directory: .
+        run: |
+          set -euo pipefail
+          bash -n scripts/plesk-pricing-test-git-prepare.sh
+          bash -n scripts/plesk-pricing-test-activate.sh
+          bash -n scripts/plesk-pricing-test-auto-deploy.sh
 
       - uses: actions/setup-node@v4
         if: steps.filter.outputs.run_suite == 'true'
@@ -124,6 +133,7 @@ jobs:
           lib/cron/__tests__/h15CronLockOverlapPrevention.test.ts
           lib/cron/__tests__/cr05RetryFailedJobsCadence.test.ts
           lib/cron/__tests__/cr10VercelBuildGate.test.ts
+          lib/deploy/__tests__/pleskPricingTestAutoDeployContract.test.ts
           lib/admin/__tests__/cr11OfficeOpsQueryCost.test.ts
           lib/admin/__tests__/ownerCommandCentreAnalyticsRollup.test.ts
           lib/admin/__tests__/m13m14AdminEligibilityConvergence.test.ts
