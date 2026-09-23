@@ -1,6 +1,15 @@
 name: Plesk pricing-test standalone artifact
 
 on:
+  push:
+    branches:
+      - integration/shalean-release
+    paths:
+      - ".github/workflows/plesk-pricing-test.yml"
+      - "apps/web/**"
+      - "packages/**"
+      - "package.json"
+      - "supabase/migrations/**"
   workflow_dispatch:
 
 permissions:
@@ -30,7 +39,10 @@ jobs:
       - name: Guard exact test branch and public configuration
         run: |
           set -euo pipefail
-          test "${GITHUB_REF_NAME}" = "fix/booking-v2-six-service-pricing-convergence"
+          case "${GITHUB_REF_NAME}" in
+            integration/shalean-release|feat/plesk-pricing-test-auto-deploy|fix/booking-v2-six-service-pricing-convergence) ;;
+            *) echo "::error::Unexpected pricing-test artifact branch: ${GITHUB_REF_NAME}"; exit 1 ;;
+          esac
           test "${NEXT_PUBLIC_SUPABASE_URL}" = "https://jhubpsbwmjgydkzztxeu.supabase.co"
           test -n "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
           case "${NEXT_PUBLIC_SUPABASE_ANON_KEY}" in sb_publishable_*|eyJ*) ;; *) exit 1;; esac
@@ -92,3 +104,65 @@ jobs:
           name: plesk-pricing-test-${{ github.sha }}
           path: plesk-pricing-test-${{ github.sha }}.tar.gz
           retention-days: 7
+
+      - name: Publish immutable pricing-test artifact to private release storage
+        env:
+          SHA: ${{ github.sha }}
+          SUPABASE_URL: ${{ secrets.PLESK_RELEASE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PLESK_RELEASE_SUPABASE_SERVICE_ROLE_KEY }}
+          BUCKET: ${{ vars.PLESK_RELEASE_BUCKET }}
+        run: |
+          set -euo pipefail
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
+          test -n "$BUCKET"
+          OBJECT="pricing-test/plesk-pricing-test-$SHA.tar.gz"
+          HTTP="$(curl -sS -o upload-response.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/storage/v1/object/$BUCKET/$OBJECT" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/gzip" \
+            -H "x-upsert: false" \
+            --data-binary @"plesk-pricing-test-$SHA.tar.gz")"
+          if [ "$HTTP" != 200 ] && [ "$HTTP" != 201 ]; then
+            # Immutable object may already exist on a workflow rerun. Verify
+            # existence instead of overwriting it.
+            curl -fsS \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              "$SUPABASE_URL/storage/v1/object/info/$BUCKET/$OBJECT" >/dev/null
+          fi
+
+      - name: Create guarded pricing-test pull bundle
+        env:
+          SHA: ${{ github.sha }}
+          SUPABASE_URL: ${{ secrets.PLESK_RELEASE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PLESK_RELEASE_SUPABASE_SERVICE_ROLE_KEY }}
+          BUCKET: ${{ vars.PLESK_RELEASE_BUCKET }}
+        run: |
+          set -euo pipefail
+          OBJECT="pricing-test/plesk-pricing-test-$SHA.tar.gz"
+          RESPONSE="$(curl -fsS \
+            -X POST "$SUPABASE_URL/storage/v1/object/sign/$BUCKET/$OBJECT" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{"expiresIn":3600}')"
+          SIGNED="$(jq -r '.signedURL // .signedUrl // empty' <<<"$RESPONSE")"
+          test -n "$SIGNED"
+          case "$SIGNED" in
+            http://*|https://*) URL="$SIGNED" ;;
+            *) URL="${SUPABASE_URL%/}/storage/v1$SIGNED" ;;
+          esac
+          echo "::add-mask::$URL"
+          mkdir -p pricing-test-pull
+          printf '%s' "$URL" > pricing-test-pull/url.txt
+          sha256sum "plesk-pricing-test-$SHA.tar.gz" > pricing-test-pull/release.sha256
+          cp artifact-stage/build-meta.json pricing-test-pull/build-meta.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plesk-pricing-test-pull-${{ github.sha }}
+          path: pricing-test-pull/
+          if-no-files-found: error
+          retention-days: 1
