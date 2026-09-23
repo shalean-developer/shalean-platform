@@ -163,6 +163,40 @@ jobs:
           sha256sum "plesk-pricing-test-$SHA.tar.gz" > pricing-test-pull/release.sha256
           cp artifact-stage/build-meta.json pricing-test-pull/build-meta.json
 
+      - name: Publish guarded pull metadata to private release storage
+        env:
+          SHA: ${{ github.sha }}
+          SUPABASE_URL: ${{ secrets.PLESK_RELEASE_SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PLESK_RELEASE_SUPABASE_SERVICE_ROLE_KEY }}
+          BUCKET: ${{ vars.PLESK_RELEASE_BUCKET }}
+        run: |
+          set -euo pipefail
+          PREFIX="pricing-test/pull/$SHA"
+          for FILE in url.txt release.sha256 build-meta.json; do
+            MIME="text/plain"
+            [ "$FILE" = "build-meta.json" ] && MIME="application/json"
+            HTTP="$(curl -sS -o "metadata-$FILE-response.json" -w '%{http_code}' \
+              -X POST "$SUPABASE_URL/storage/v1/object/$BUCKET/$PREFIX/$FILE" \
+              -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+              -H "Content-Type: $MIME" \
+              -H "x-upsert: true" \
+              --data-binary @"pricing-test-pull/$FILE")"
+            test "$HTTP" = 200 || test "$HTTP" = 201 || {
+              cat "metadata-$FILE-response.json"
+              exit 1
+            }
+          done
+          printf '%s' "$SHA" > current.txt
+          HTTP="$(curl -sS -o metadata-current-response.json -w '%{http_code}' \
+            -X POST "$SUPABASE_URL/storage/v1/object/$BUCKET/pricing-test/pull/current.txt" \
+            -H "Authorization: Bearer $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "apikey: $SUPABASE_SERVICE_ROLE_KEY" \
+            -H "Content-Type: text/plain" \
+            -H "x-upsert: true" \
+            --data-binary @current.txt)"
+          test "$HTTP" = 200 || test "$HTTP" = 201
+
       - uses: actions/upload-artifact@v4
         with:
           name: plesk-pricing-test-pull-${{ github.sha }}
