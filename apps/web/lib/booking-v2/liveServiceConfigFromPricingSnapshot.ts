@@ -5,7 +5,7 @@ import {
   pricingSnapshotServiceKeyForBookingV2Slug,
   type PricingRatesSnapshot,
 } from "@/lib/pricing/pricingRatesSnapshot";
-import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
+import { SERVICE_CONFIG, serviceShowsEquipmentQuestion } from "@/src/features/booking-v2/config/serviceConfig";
 import { isExtraSlugAllowedForService } from "@/lib/booking-v2/serviceExtraSlugs";
 
 /**
@@ -43,7 +43,7 @@ export function liveServiceConfigFromPricingSnapshot(params: {
     cleanerMode: staticConfig.cleanerMode,
     // Equipment eligibility is product behavior, not a monetary tariff. Preserve
     // the service policy while all rates/durations still come from the frozen snapshot.
-    showEquipmentQuestion: staticConfig.showEquipmentQuestion ?? false,
+    showEquipmentQuestion: serviceShowsEquipmentQuestion(serviceSlug),
     allowsExtraCleaner:
       serviceSlug === "regular-cleaning" ||
       serviceSlug === "airbnb-cleaning" ||
