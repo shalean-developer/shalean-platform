@@ -40,6 +40,18 @@ export async function upsertPendingRecurringPrepayment(
   return { ok: true, packageId: String(data.id) };
 }
 
+export async function discardPendingRecurringPrepaymentForBooking(
+  admin: SupabaseClient,
+  sourceBookingId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { error } = await admin
+    .from("recurring_prepaid_packages")
+    .delete()
+    .eq("source_booking_id", sourceBookingId)
+    .eq("status", "pending_payment");
+  return error ? { ok: false, error: error.message } : { ok: true };
+}
+
 export async function syncRecurringPrepaymentReference(
   admin: SupabaseClient,
   sourceBookingId: string,
