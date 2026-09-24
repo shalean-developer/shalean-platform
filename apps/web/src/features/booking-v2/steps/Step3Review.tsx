@@ -631,6 +631,7 @@ function CleanerEditPanel() {
   const { watch, setValue } = useFormContext<BookingV2FormData>();
   const date = watch("date");
   const time = watch("time");
+  const pricingSummary = watch("pricingSummary");
   const cleanerCount = isCarpetCleaning ? 1 : (watch("cleanerCount") ?? 1);
   const selectedCleanerIds = watch("selectedCleanerIds") ?? [];
   const selectedCleanerDetails = watch("selectedCleanerDetails") ?? [];
@@ -638,7 +639,9 @@ function CleanerEditPanel() {
   const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
 
   const durationMinutes = Math.round(
-    (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
+    pricingSummary?.team_scaled_duration_minutes ??
+      pricingSummary?.estimated_duration_minutes ??
+      (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
   );
 
   function toggleCleaner(cleaner: AvailableCleanerV2) {
@@ -897,7 +900,13 @@ function ReviewSection({
 type EditPanel = "location" | "equipment" | "property" | "schedule" | "cleaner" | "extras" | null;
 
 export function Step3Review() {
-  const { serviceSlug, liveConfig } = useBookingV2();
+  const {
+    serviceSlug,
+    liveConfig,
+    goToStep,
+    editDetailsSection,
+    editScheduleSection,
+  } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
   const isCarpetCleaning = serviceSlug === "carpet-cleaning";
   const isOfficeCleaning = serviceSlug === "office-cleaning";
@@ -921,7 +930,12 @@ export function Step3Review() {
     const params = new URLSearchParams({ serviceSlug });
     const date = getValues("date");
     const time = getValues("time");
-    const duration = Math.round(estimatedDurationHours * 60);
+    const pricingSummary = getValues("pricingSummary");
+    const duration = Math.round(
+      pricingSummary?.team_scaled_duration_minutes ??
+        pricingSummary?.estimated_duration_minutes ??
+        estimatedDurationHours * 60,
+    );
     if (date) params.set("date", date);
     if (time) params.set("time", time);
     params.set("durationMinutes", String(duration));
@@ -958,6 +972,20 @@ export function Step3Review() {
     setSnapshot(getValues());
     setEditPanel(panel);
   }
+
+  function editOfficeDetails() {
+    editDetailsSection("rooms");
+  }
+
+  function editOfficeSchedule() {
+    editScheduleSection("booking_type");
+    goToStep(2);
+  }
+
+  function editOfficeCleaner() {
+    editScheduleSection("cleaner");
+    goToStep(2);
+  }
   function saveEdit() {
     setEditPanel(null);
     setSnapshot(null);
@@ -983,6 +1011,7 @@ export function Step3Review() {
   const selectedExtras = values.selectedExtras ?? [];
   const pricingSummary = values.pricingSummary;
   const extrasSource = liveConfig?.extras ?? [];
+  const showAddonsReview = extrasSource.length > 0 || selectedExtras.length > 0;
   const estimatedTotal =
     pricingSummary?.estimated_total ?? pricingSummary?.total ?? liveConfig?.basePrice ?? config.basePrice;
   const showEquipment =
@@ -1107,7 +1136,7 @@ export function Step3Review() {
           <ReviewSection
             number={cleanDetailsNumber}
             title="Carpet details"
-            onEdit={() => openEdit("property")}
+            onEdit={isOfficeCleaning ? editOfficeDetails : () => openEdit("property")}
             className="sm:col-span-2"
           >
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -1175,7 +1204,7 @@ export function Step3Review() {
         <ReviewSection
           number={scheduleNumber}
           title="Schedule"
-          onEdit={() => openEdit("schedule")}
+          onEdit={isOfficeCleaning ? editOfficeSchedule : () => openEdit("schedule")}
           className="sm:col-span-2"
         >
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
@@ -1223,7 +1252,7 @@ export function Step3Review() {
             <ReviewSection
               number={cleanerNumber}
               title={isCarpetCleaning ? "Specialist" : "Cleaner preference"}
-              onEdit={() => openEdit("cleaner")}
+              onEdit={isOfficeCleaning ? editOfficeCleaner : () => openEdit("cleaner")}
             >
               {!hasDetails && !hasIds ? (
                 <div className="flex items-center gap-2">
@@ -1263,37 +1292,39 @@ export function Step3Review() {
           );
         })()}
 
-        {/* ⑤ Add-ons */}
-        <ReviewSection
-          number={extrasNumber}
-          title="Add-ons"
-          onEdit={() => openEdit("extras")}
-          className={values.cleanerMode === "individual_cleaners" ? undefined : "sm:col-span-2"}
-        >
-          {selectedExtras.length === 0 ? (
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <Package className="h-4 w-4" aria-hidden />
-              No add-ons selected.
-            </div>
-          ) : (
-            <SelectedExtrasList
-              extras={
-                pricingSummary?.selected_extras?.length
-                  ? pricingSummary.selected_extras
-                  : selectedExtras.map((id) => {
-                      const extra = extrasSource.find((e) => e.id === id);
-                      return {
-                        extra_id: id,
-                        name: extra?.label ?? id,
-                        price: extra?.priceZar ?? 0,
-                        quantity: 1,
-                        total: extra?.priceZar ?? 0,
-                      };
-                    })
-              }
-            />
-          )}
-        </ReviewSection>
+        {/* ⑤ Add-ons — hide entirely when this service has no DB-backed extras. */}
+        {showAddonsReview ? (
+          <ReviewSection
+            number={extrasNumber}
+            title="Add-ons"
+            onEdit={isOfficeCleaning ? editOfficeDetails : () => openEdit("extras")}
+            className={values.cleanerMode === "individual_cleaners" ? undefined : "sm:col-span-2"}
+          >
+            {selectedExtras.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-slate-400">
+                <Package className="h-4 w-4" aria-hidden />
+                No add-ons selected.
+              </div>
+            ) : (
+              <SelectedExtrasList
+                extras={
+                  pricingSummary?.selected_extras?.length
+                    ? pricingSummary.selected_extras
+                    : selectedExtras.map((id) => {
+                        const extra = extrasSource.find((e) => e.id === id);
+                        return {
+                          extra_id: id,
+                          name: extra?.label ?? id,
+                          price: extra?.priceZar ?? 0,
+                          quantity: 1,
+                          total: extra?.priceZar ?? 0,
+                        };
+                      })
+                }
+              />
+            )}
+          </ReviewSection>
+        ) : null}
 
         {/* Price breakdown */}
         <div className="rounded-2xl border border-slate-200 bg-white sm:col-span-2">
