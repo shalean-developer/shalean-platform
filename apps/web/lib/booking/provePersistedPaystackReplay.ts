@@ -20,17 +20,11 @@ export async function provePersistedPaystackReplay(params: {
   const { supabase, bookingId, reference } = params;
   const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
   const { data, error } = await supabase.from("bookings")
-    .select(`id, status, payment_status, payment_completed_at, paystack_reference, customer_email, ${ownershipColumn}`)
+    .select(`id, status, paystack_reference, customer_email, ${ownershipColumn}`)
     .eq("id", bookingId).maybeSingle();
   const row = data as unknown as Record<string, unknown> | null;
   if (error || !row || row.id !== bookingId || typeof row.status !== "string" || !row.status ||
     ["pending_payment", "payment_mismatch", "payment_reconciliation_required"].includes(row.status)) return false;
-  const paymentStatus = String(row.payment_status ?? "").trim().toLowerCase();
-  const paymentCompletedAt = typeof row.payment_completed_at === "string"
-    ? row.payment_completed_at.trim()
-    : "";
-  const settled = Boolean(paymentCompletedAt) || paymentStatus === "success" || paymentStatus === "paid";
-  if (!settled) return false;
   const metadata = normalizePaystackMetadata(params.metadata);
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: params.amountCents });
   const gatewayEmail = normalizeEmail(params.customerEmail);
