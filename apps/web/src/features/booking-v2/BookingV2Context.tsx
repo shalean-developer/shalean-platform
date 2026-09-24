@@ -693,6 +693,111 @@ export function BookingV2Provider({
           return false;
         }
 
+        if (
+          serviceSlug === "regular-cleaning" ||
+          serviceSlug === "deep-cleaning" ||
+          serviceSlug === "moving-cleaning"
+        ) {
+          const values = form.getValues();
+          const bookingDetails = {
+            address: values.address,
+            suburb: values.suburb,
+            contactPhone: values.contactPhone,
+            serviceAreaLocationId: values.serviceAreaLocationId,
+          };
+          const questions = liveConfig?.step1Questions ?? config.step1Questions;
+          const stages =
+            serviceSlug === "regular-cleaning"
+              ? (["property", "rooms", "pets", "equipment"] as const)
+              : serviceSlug === "deep-cleaning"
+                ? (["property", "rooms", "pets"] as const)
+                : (["property", "move", "rooms", "condition"] as const);
+          const firstInvalidStage = stages.find(
+            (stage) =>
+              !bookingDetailsStageReady(
+                serviceSlug,
+                stage,
+                values.serviceDetails ?? {},
+                bookingDetails,
+                questions,
+              ),
+          );
+          if (firstInvalidStage) {
+            setDetailsSectionOverride(firstInvalidStage);
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "details");
+            params.set("section", firstInvalidStage);
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          const scheduleResult = buildStep2Schema(scheduling).safeParse(values);
+          if (!scheduleResult.success) {
+            scheduleResult.error.errors.forEach((e) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              form.setError(e.path.join(".") as any, { message: e.message });
+            });
+            const paths = scheduleResult.error.errors.map((e) => e.path[0]);
+            const targetStage: RegularCleaningScheduleStage =
+              paths.includes("bookingType") || paths.includes("recurringFrequency")
+                ? "booking_type"
+                : paths.includes("date") || paths.includes("time")
+                  ? "date_time"
+                  : "cleaner";
+            setScheduleSectionOverride(targetStage);
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "schedule");
+            params.delete("section");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          const durationMinutes = Math.round(
+            values.pricingSummary?.team_scaled_duration_minutes ??
+              values.pricingSummary?.estimated_duration_minutes ??
+              (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
+          );
+          const verificationInput = {
+            date: values.date,
+            time: values.time,
+            locationId: values.serviceAreaLocationId.trim(),
+            serviceSlug,
+            serviceDetails: values.serviceDetails ?? {},
+            selectedExtras: values.selectedExtras ?? [],
+            durationMinutes,
+          };
+          const slotStillAvailable = await verifySelectedBookingV2Slot(verificationInput);
+          if (!slotStillAvailable) {
+            form.setError("time", {
+              message: "Reconfirm an available time before payment.",
+            });
+            setScheduleSectionOverride("date_time");
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "schedule");
+            params.delete("section");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          const selectedCleanerIds = values.selectedCleanerIds ?? [];
+          if (values.cleanerMode === "individual_cleaners" && selectedCleanerIds.length > 0) {
+            const cleanersStillAvailable = await verifySelectedBookingV2Cleaners({
+              ...verificationInput,
+              selectedCleanerIds,
+            });
+            if (!cleanersStillAvailable) {
+              form.setValue("selectedCleanerIds", [], { shouldDirty: true });
+              form.setValue("selectedCleanerDetails", [], { shouldDirty: true });
+              setScheduleSectionOverride("cleaner");
+              const params = new URLSearchParams(window.location.search);
+              params.set("step", "schedule");
+              params.delete("section");
+              window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+              return false;
+            }
+          }
+        }
+
         if (serviceSlug === "office-cleaning") {
           const values = form.getValues();
           const officeDetailsReady = bookingDetailsStageReady(
