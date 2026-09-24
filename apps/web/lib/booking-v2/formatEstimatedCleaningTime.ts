@@ -33,7 +33,20 @@ export function stableEstimatedCleaningHours(params: {
   durationMinutes: number | null | undefined;
   quoteReady: boolean;
   detailsReady: boolean;
+  minimumHours?: number | null;
 }): string {
-  if (!params.quoteReady || !params.detailsReady) return "—";
-  return estimatedCleaningHoursFromMinutes(params.durationMinutes);
+  if (params.quoteReady && params.detailsReady) {
+    return estimatedCleaningHoursFromMinutes(params.durationMinutes);
+  }
+  if (
+    typeof params.minimumHours === "number" &&
+    Number.isFinite(params.minimumHours) &&
+    params.minimumHours > 0
+  ) {
+    const minimum = Number.isInteger(params.minimumHours)
+      ? String(params.minimumHours)
+      : params.minimumHours.toFixed(1).replace(/\.0$/, "");
+    return `${minimum}+`;
+  }
+  return "—";
 }

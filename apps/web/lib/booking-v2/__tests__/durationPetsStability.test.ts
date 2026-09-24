@@ -9,20 +9,23 @@ describe("Booking V2 duration and pets stability", () => {
         durationMinutes: 288,
         quoteReady: false,
         detailsReady: true,
+        minimumHours: 4,
       }),
-    ).toBe("—");
+    ).toBe("4+");
     expect(
       stableEstimatedCleaningHours({
         durationMinutes: 288,
         quoteReady: true,
         detailsReady: false,
+        minimumHours: 4,
       }),
-    ).toBe("—");
+    ).toBe("4+");
     expect(
       stableEstimatedCleaningHours({
         durationMinutes: 288,
         quoteReady: true,
         detailsReady: true,
+        minimumHours: 4,
       }),
     ).toBe("4.8");
   });

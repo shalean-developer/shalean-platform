@@ -54,6 +54,45 @@ describe("SR-04B service pricing source of truth", () => {
     expect(resolveBookingV2PricingServiceRow({ standard: { base: 350 } }, "deep-cleaning", "standard")).toBeNull();
   });
 
+  it("sources all Booking V2 duration inputs from pricing_services and freezes them into quote snapshots", () => {
+    const loader = readFileSync(path.resolve(__dirname, "../loadBookingV2Catalog.ts"), "utf8");
+    const snapshotBuilder = readFileSync(
+      path.resolve(__dirname, "../../pricing/buildPricingRatesSnapshotFromDb.ts"),
+      "utf8",
+    );
+    const snapshotConfig = readFileSync(
+      path.resolve(__dirname, "../liveServiceConfigFromPricingSnapshot.ts"),
+      "utf8",
+    );
+
+    expect(loader).toContain(
+      "duration_base, duration_per_bedroom, duration_per_bathroom, duration_per_extra_room, min_hours, max_hours",
+    );
+    expect(loader).toContain("durationBaseHours: dbSvc?.duration_base");
+    expect(loader).toContain("durationPerBedroomHours: dbSvc?.duration_per_bedroom");
+    expect(loader).toContain("durationPerBathroomHours: dbSvc?.duration_per_bathroom");
+    expect(loader).toContain("durationPerExtraRoomHours: dbSvc?.duration_per_extra_room");
+    expect(loader).toContain("minDurationHours: dbSvc?.min_hours");
+    expect(loader).toContain("dbSvc?.max_hours");
+
+    expect(snapshotBuilder).toContain(
+      "duration_base, duration_per_bedroom, duration_per_bathroom, duration_per_extra_room, min_hours, max_hours",
+    );
+    expect(snapshotBuilder).toContain("base: Number(row.duration_base)");
+    expect(snapshotBuilder).toContain("bedroom: Number(row.duration_per_bedroom)");
+    expect(snapshotBuilder).toContain("bathroom: Number(row.duration_per_bathroom)");
+    expect(snapshotBuilder).toContain("extraRoom: Number(row.duration_per_extra_room)");
+    expect(snapshotBuilder).toContain("minHours");
+    expect(snapshotBuilder).toContain("maxHours");
+
+    expect(snapshotConfig).toContain("durationBaseHours: tariff.duration.base");
+    expect(snapshotConfig).toContain("durationPerBedroomHours: tariff.duration.bedroom");
+    expect(snapshotConfig).toContain("durationPerBathroomHours: tariff.duration.bathroom");
+    expect(snapshotConfig).toContain("durationPerExtraRoomHours: tariff.duration.extraRoom");
+    expect(snapshotConfig).toContain("minDurationHours: tariff.durationLimits?.minHours");
+    expect(snapshotConfig).toContain("maxDurationHours: tariff.durationLimits?.maxHours");
+  });
+
   it("keeps the catalog loader free of cross-service Standard fallback while preserving configured pricingSlug", () => {
     const loader = readFileSync(path.resolve(__dirname, "../loadBookingV2Catalog.ts"), "utf8");
     expect(loader).toContain("resolveBookingV2PricingServiceRow(dbServices, slug, serviceDef.pricingSlug)");

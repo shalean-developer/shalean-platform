@@ -162,11 +162,15 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         bookingDetails,
         questions,
       ));
+  const durationIsStable = quoteReadiness.ready && detailsScopeReady;
   const durationHours = stableEstimatedCleaningHours({
     durationMinutes: pricing.estimated_duration_minutes,
     quoteReady: quoteReadiness.ready,
     detailsReady: detailsScopeReady,
+    minimumHours: liveConfig?.minDurationHours,
   });
+  const durationLabel =
+    durationIsStable ? "Est. hours" : durationHours !== "—" ? "Min. hours" : "Est. hours";
   const optionLabel = (key: string, raw: unknown): string => {
     const value = String(raw ?? "");
     return (
@@ -449,7 +453,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         <div className="grid grid-cols-2 bg-primary px-3 py-3 text-primary-foreground">
           <div className="flex flex-col items-center justify-center border-r border-primary-foreground/35 px-2 text-center">
             <span className="text-2xl font-semibold tabular-nums">{durationHours}</span>
-            <span className="text-[11px] font-medium text-primary-foreground/80">Est. hours</span>
+            <span className="text-[11px] font-medium text-primary-foreground/80">{durationLabel}</span>
           </div>
           <div className="flex flex-col items-center justify-center px-2 text-center">
             <span className="text-2xl font-semibold tabular-nums">{checkoutPriceLabel}</span>

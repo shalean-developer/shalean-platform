@@ -62,6 +62,9 @@ describe("booking details presentation", () => {
     expect(summarySource).toContain("stableEstimatedCleaningHours");
     expect(summarySource).toContain("requirePriceLock: true");
     expect(summarySource).toContain("quoteReady: quoteReadiness.ready");
+    expect(summarySource).toContain("minimumHours: liveConfig?.minDurationHours");
+    expect(summarySource).toContain('durationIsStable ? "Est. hours"');
+    expect(summarySource).toContain('"Min. hours"');
   });
 
   it("keeps Regular equipment with pets while extras use the service final stage", () => {
