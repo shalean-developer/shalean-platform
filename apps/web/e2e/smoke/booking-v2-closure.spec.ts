@@ -186,6 +186,25 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
       return;
     }
 
+    if (path === "/api/booking-v2/team-availability") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          available: true,
+          teams: [
+            {
+              id: "team-closure",
+              name: "Closure Test Team",
+              available: true,
+              active_member_count: 2,
+              qualified_member_count: 2,
+            },
+          ],
+        },
+      });
+      return;
+    }
+
     // Promotion, profile, cleaner and other optional GETs stay local and fail closed.
     await route.fulfill({ status: 404, json: { error: `unmocked_e2e_get:${path}` } });
   });
