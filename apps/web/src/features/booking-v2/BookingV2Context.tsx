@@ -63,6 +63,7 @@ import {
   verifySelectedBookingV2Slot,
 } from "@/lib/booking-v2/verifySelectedBookingV2Schedule";
 import { recurringScheduleAllowedForService } from "@/lib/booking-v2/serviceRecurringPolicy";
+import { getSession } from "@/lib/auth/authClient";
 
 export type { LiveServiceConfig };
 
@@ -438,6 +439,74 @@ export function BookingV2Provider({
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     };
   }, [form]);
+
+  /**
+   * A pending-payment booking owns a frozen server price and Paystack session.
+   * Once the customer leaves Payment and edits the draft, expire that old
+   * pending payment before allowing live pricing to resume. This prevents a
+   * stale Paystack amount/reference from surviving a changed booking.
+   */
+  const pendingPaymentInvalidationRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentStep === 4) return;
+
+    const systemOnlyFields = new Set([
+      "pendingBookingId",
+      "pricingSummary",
+      "quoteLock",
+    ]);
+
+    const subscription = form.watch((_values, info) => {
+      const fieldName = info.name ?? "";
+      if (!fieldName || systemOnlyFields.has(fieldName)) return;
+
+      const pendingBookingId = form.getValues("pendingBookingId")?.trim() ?? "";
+      if (!pendingBookingId || pendingPaymentInvalidationRef.current === pendingBookingId) return;
+      pendingPaymentInvalidationRef.current = pendingBookingId;
+
+      void (async () => {
+        try {
+          const session = await getSession();
+          if (!session?.access_token) {
+            pendingPaymentInvalidationRef.current = null;
+            return;
+          }
+
+          const response = await fetch(
+            `/api/bookings/${encodeURIComponent(pendingBookingId)}/abandon-payment`,
+            {
+              method: "POST",
+              headers: { Authorization: `Bearer ${session.access_token}` },
+              cache: "no-store",
+            },
+          );
+
+          if (!response.ok) {
+            pendingPaymentInvalidationRef.current = null;
+            return;
+          }
+
+          // Clear only after the server has made the old Paystack booking
+          // non-payable. The pricing hook will then immediately requote the
+          // customer's current edited scope and obtain a fresh quote lock.
+          if (form.getValues("pendingBookingId")?.trim() === pendingBookingId) {
+            form.setValue("pendingBookingId", null, {
+              shouldDirty: false,
+              shouldValidate: false,
+            });
+            form.setValue("quoteLock", null, {
+              shouldDirty: false,
+              shouldValidate: false,
+            });
+          }
+        } catch {
+          pendingPaymentInvalidationRef.current = null;
+        }
+      })();
+    });
+
+    return () => subscription.unsubscribe();
+  }, [currentStep, form]);
 
   /** When service area changes, drop incompatible schedule / cleaner / team selections. */
   const prevLocationIdRef = useRef<string | undefined>(undefined);
