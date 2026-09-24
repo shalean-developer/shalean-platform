@@ -117,7 +117,9 @@ describe("booking details presentation", () => {
     expect(reviewSource).toContain(
       'title={isCarpetCleaning ? "Specialist" : "Cleaner preference"}',
     );
-    expect(reviewSource).toContain('onEdit={() => openEdit("cleaner")}');
+    expect(reviewSource).toContain(
+      'onEdit={isOfficeCleaning ? editOfficeCleaner : () => openEdit("cleaner")}',
+    );
     expect(reviewSource).toContain('<div className="grid grid-cols-1 gap-2.5">');
     expect(reviewSource).not.toContain('cleanerDetails.length > 1 && "md:grid-cols-2"');
     expect(reviewSource).toContain(
