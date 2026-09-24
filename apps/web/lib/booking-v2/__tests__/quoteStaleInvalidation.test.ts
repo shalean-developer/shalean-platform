@@ -22,11 +22,14 @@ const sixServices = [
 ] as const;
 
 describe("UAT-QUOTE-STALE-01", () => {
-  it("clears the displayed summary and quote lock before recomputing changed pricing inputs", () => {
+  it("invalidates the signed lock and replaces the displayed quote from the current serialized scope", () => {
     expect(pricingHook).toContain('setValue("quoteLock", null');
-    expect(pricingHook).toContain('setValue("pricingSummary", emptyCustomerPricingBreakdown()');
-    expect(pricingHook.indexOf('setValue("pricingSummary", emptyCustomerPricingBreakdown()'))
-      .toBeLessThan(pricingHook.indexOf("buildCustomerPricingFromForm({"));
+    expect(pricingHook).toContain("const currentServiceDetails = JSON.parse(serviceDetailsSnapshot)");
+    expect(pricingHook).toContain("const currentSelectedExtras = JSON.parse(selectedExtrasSnapshot)");
+    expect(pricingHook).toContain("const breakdown = buildCustomerPricingFromForm({");
+    expect(pricingHook).toContain('setValue("pricingSummary", breakdown');
+    expect(pricingHook.indexOf("const breakdown = buildCustomerPricingFromForm({"))
+      .toBeLessThan(pricingHook.indexOf('setValue("pricingSummary", breakdown'));
   });
 
   it("subscribes to nested service details and selected extras for every service", () => {
