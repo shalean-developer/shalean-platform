@@ -274,6 +274,49 @@ export const bookingV2ConfirmSchema = z.object({
   ),
 }).superRefine((data, ctx) => {
   if (data.serviceSlug === "carpet-cleaning") {
+    const details = data.serviceDetails ?? {};
+    const propertyType = String(details.propertyType ?? "").trim();
+    const carpetRooms = Number(details.carpetRooms);
+    const rugCount = Number(details.rugCount);
+    const carpetType = String(details.carpetType ?? "").trim();
+    const stains = String(details.stains ?? "").trim();
+
+    if (!["house", "apartment", "townhouse"].includes(propertyType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose a valid property type.",
+        path: ["serviceDetails", "propertyType"],
+      });
+    }
+    if (!Number.isInteger(carpetRooms) || carpetRooms < 1 || carpetRooms > 25) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of carpeted rooms (1–25).",
+        path: ["serviceDetails", "carpetRooms"],
+      });
+    }
+    if (!Number.isInteger(rugCount) || rugCount < 0 || rugCount > 25) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of rugs (0–25).",
+        path: ["serviceDetails", "rugCount"],
+      });
+    }
+    if (!["standard", "thick_pile", "berber", "persian_rug"].includes(carpetType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose a valid carpet type.",
+        path: ["serviceDetails", "carpetType"],
+      });
+    }
+    if (!["yes", "no"].includes(stains)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Tell us whether there are visible stains.",
+        path: ["serviceDetails", "stains"],
+      });
+    }
+
     if (data.cleanerCount !== 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
