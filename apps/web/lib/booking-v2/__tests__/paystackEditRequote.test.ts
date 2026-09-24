@@ -79,14 +79,14 @@ describe("BOOKING-PAY-01 — Paystack cancel → edit → requote", () => {
     expect(ensureSource).toContain("This checkout was replaced after you edited the booking");
   });
 
-  it("accepts non-pending Paystack replay only with persisted settlement evidence", () => {
-    expect(replaySource).toContain("payment_completed_at");
-    expect(replaySource).toContain("payment_status");
-    expect(replaySource).toContain("if (!settled) return false");
+  it("rejects persisted replay only for the explicit edit-superseded expiry", () => {
+    expect(replaySource).toContain('row.status === "payment_expired"');
+    expect(replaySource).toContain("isPaymentEditSupersededSnapshot");
   });
 
-  it("rejects stale unpaid finalization against the superseded booking", () => {
-    expect(upsertSource).toContain("payment_completed_at");
+  it("rejects stale finalization against the explicit superseded booking", () => {
+    expect(upsertSource).toContain('st === "payment_expired"');
+    expect(upsertSource).toContain("isPaymentEditSupersededSnapshot");
     expect(upsertSource).toContain('error: "PAYMENT_NOT_PAYABLE"');
   });
 });
