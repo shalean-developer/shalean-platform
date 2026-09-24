@@ -8,6 +8,7 @@ import {
   bookingDetailsQuestionVisibleAtStage,
   bookingDetailsShowsExtras,
   bookingDetailsStage,
+  bookingDetailsStageFromSearchParam,
   bookingDetailsStageReady,
   usesProgressiveIndividualSchedule,
 } from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
@@ -100,7 +101,7 @@ describe("six-service progressive booking details", () => {
     expect(bookingDetailsStage("office-cleaning", {
       officeSize: "medium",
       bathrooms: "2",
-    }, address)).toBe("preferences");
+    }, address)).toBe("rooms");
     expect(
       bookingDetailsQuestionStage("office-cleaning", {
         key: "frequency",
@@ -110,7 +111,8 @@ describe("six-service progressive booking details", () => {
     expect(
       SERVICE_CONFIG["office-cleaning"].step1Questions.some((q) => q.key === "frequency"),
     ).toBe(false);
-    expect(bookingDetailsShowsExtras("office-cleaning", "preferences")).toBe(true);
+    expect(bookingDetailsShowsExtras("office-cleaning", "rooms")).toBe(true);
+    expect(bookingDetailsStageFromSearchParam("office-cleaning", "preferences")).toBeNull();
   });
 
   it("uses progressive Airbnb stages", () => {
@@ -268,7 +270,7 @@ describe("six-service progressive booking details", () => {
 
   it("supports deterministic back/next stages for every service", () => {
     expect(adjacentBookingDetailsStage("office-cleaning", "rooms", "back")).toBe("address");
-    expect(adjacentBookingDetailsStage("office-cleaning", "rooms", "next")).toBe("preferences");
+    expect(adjacentBookingDetailsStage("office-cleaning", "rooms", "next")).toBeNull();
     expect(adjacentBookingDetailsStage("airbnb-cleaning", "turnover", "next")).toBeNull();
     expect(adjacentBookingDetailsStage("carpet-cleaning", "condition", "back")).toBe("rooms");
   });
