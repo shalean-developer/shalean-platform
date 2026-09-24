@@ -274,7 +274,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
 
   const existingSelect =
-    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode`;
+    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, payment_completed_at, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode`;
 
   const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
@@ -349,6 +349,23 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
       };
     }
     if (st !== "pending_payment") {
+      const persistedPaymentStatus = String(existing.payment_status ?? "").trim().toLowerCase();
+      const persistedPaymentCompletedAt =
+        typeof existing.payment_completed_at === "string" ? existing.payment_completed_at.trim() : "";
+      const persistedPaid =
+        Boolean(persistedPaymentCompletedAt) ||
+        persistedPaymentStatus === "success" ||
+        persistedPaymentStatus === "paid";
+      if (!persistedPaid) {
+        return {
+          ok: false,
+          skipped: true,
+          bookingId: bidEarly,
+          bookingInDatabase: true,
+          error: "PAYMENT_NOT_PAYABLE",
+          code: "PAYMENT_NOT_PAYABLE",
+        };
+      }
       const replayEmail = normalizeEmail(input.customerEmail);
       // Reads verified snapshot/metadata, then auth ID by email; never claims ownership.
       const replayOwner = await resolveBookingUserId(supabase, input.snapshot, input.paystackMetadata, replayEmail);
