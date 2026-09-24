@@ -62,7 +62,12 @@ TARGET_SHA="$(branch_sha)" || fail "could not resolve integration release head"
 case "$TARGET_SHA" in *[!0-9a-f]*|'') fail "invalid release SHA" ;; esac
 [ "${#TARGET_SHA}" -eq 40 ] || fail "release SHA must be 40 chars"
 SHORT="${TARGET_SHA:0:8}"
-printf 'PLESK-PROD-AUTO-01 target=%s\n' "$TARGET_SHA"
+{
+  printf 'PLESK_PROD_AUTO_03=RUNNING\n'
+  printf 'RELEASE_SHA=%s\n' "$TARGET_SHA"
+  printf 'PHASE=WAITING_FOR_EXACT_ARTIFACT\n'
+} > "$OUT"
+printf 'PLESK-PROD-AUTO-03 target=%s waiting for exact artifact\n' "$TARGET_SHA"
 
 # Wait for the exact production artifact. Never fall back to an older artifact.
 ELAPSED=0; RUN_ID=""; ART_ID=""
@@ -79,9 +84,14 @@ else:
  r=xs[0]; print("found|{}|{}|{}".format(r.get("id",""),r.get("status",""),r.get("conclusion") or ""))
 PY
   IFS='|' read -r FOUND RUN_ID STATUS CONCLUSION < "$WORK/run.txt"
-  if [ "$FOUND" = found ] && [ "$STATUS" = completed ]; then
-    [ "$CONCLUSION" = success ] || fail "exact production artifact workflow completed with $CONCLUSION"
-    break
+  if [ "$FOUND" = found ]; then
+    printf 'PLESK-PROD-AUTO-03 workflow run=%s status=%s conclusion=%s (%ss/%ss)\n' "$RUN_ID" "$STATUS" "${CONCLUSION:-pending}" "$ELAPSED" "$WAIT_SECONDS"
+    if [ "$STATUS" = completed ]; then
+      [ "$CONCLUSION" = success ] || fail "exact production artifact workflow completed with $CONCLUSION"
+      break
+    fi
+  else
+    printf 'PLESK-PROD-AUTO-03 waiting for exact-SHA production workflow (%ss/%ss)\n' "$ELAPSED" "$WAIT_SECONDS"
   fi
   [ "$ELAPSED" -lt "$WAIT_SECONDS" ] || fail "timed out waiting for exact production artifact"
   sleep "$POLL_SECONDS"; ELAPSED=$((ELAPSED + POLL_SECONDS))
@@ -96,6 +106,13 @@ if len(xs)!=1: raise SystemExit("expected exactly one exact-SHA production artif
 print(xs[0]["id"])
 PY
 ART_ID="$(cat "$WORK/artifact-id.txt")"
+{
+  printf 'PLESK_PROD_AUTO_03=RUNNING\n'
+  printf 'RELEASE_SHA=%s\n' "$TARGET_SHA"
+  printf 'WORKFLOW_RUN_ID=%s\n' "$RUN_ID"
+  printf 'ARTIFACT_ID=%s\n' "$ART_ID"
+  printf 'PHASE=DOWNLOADING_EXACT_ARTIFACT\n'
+} > "$OUT"
 ghdownload "$API/actions/artifacts/$ART_ID/zip" > "$WORK/artifact.zip"
 /usr/bin/unzip -q "$WORK/artifact.zip" -d "$WORK/downloaded"
 TAR="$WORK/downloaded/plesk-prod-$TARGET_SHA.tar.gz"
@@ -186,7 +203,7 @@ PY
 
 if health_exact; then
   {
-    echo "PLESK_PROD_AUTO_01=PASS"
+    echo "PLESK_PROD_AUTO_03=PASS"
     echo "RELEASE_SHA=$TARGET_SHA"
     echo "RELEASE=$RELEASE"
     echo "ROLLBACK=$ROLLBACK"
