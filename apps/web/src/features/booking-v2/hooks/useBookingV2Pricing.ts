@@ -42,7 +42,10 @@ export function useBookingV2Pricing(): void {
     if (pendingBookingId?.trim()) return;
 
     const revision = ++quoteRevision.current;
-    // Any price-affecting customer change invalidates the previous lock immediately.
+    // Any price/duration-affecting customer change invalidates both the previous
+    // signed lock and its displayed summary immediately. This prevents a quote
+    // from an earlier scope (for example 3 bedrooms) remaining visible while
+    // the new authoritative quote (for example 4 bedrooms) is being resolved.
     setValue("quoteLock", null, { shouldDirty: false, shouldValidate: false });
     const currentServiceDetails = JSON.parse(serviceDetailsSnapshot) as NonNullable<
       BookingV2FormData["serviceDetails"]
@@ -65,6 +68,9 @@ export function useBookingV2Pricing(): void {
       feesConfig,
       vipTier,
     });
+    // Publish the latest local quote only after it has been calculated from the
+    // current serialized scope. This replaces the old scope atomically instead
+    // of rendering an empty summary that React may batch away.
     setValue("pricingSummary", breakdown, { shouldDirty: false, shouldValidate: false });
 
     // Reconcile the optimistic browser quote with a fresh server quote. The server
