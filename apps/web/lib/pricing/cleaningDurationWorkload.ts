@@ -200,6 +200,7 @@ const EXTRA_DURATION_POLICIES: Record<string, ExtraDurationPolicy> = {
   "blinds-cleaning": durationExtra("blinds-cleaning", 30, 0.25),
   "balcony-cleaning": durationExtra("balcony-cleaning", 45, 0.35, "elevated"),
   "carpet-cleaning": durationExtra("carpet-cleaning", 60, 0.5, "specialized"),
+  "deep-carpet-cleaning": durationExtra("deep-carpet-cleaning", 60, 0.5, "specialized"),
   "ceiling-cleaning": durationExtra("ceiling-cleaning", 45, 0.4, "elevated"),
   "garage-cleaning": durationExtra("garage-cleaning", 45, 0.35, "elevated"),
   "mattress-cleaning": durationExtra("mattress-cleaning", 45, 0.35, "specialized"),

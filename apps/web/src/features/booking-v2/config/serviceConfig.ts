@@ -198,10 +198,12 @@ const DEEP_QUESTIONS: FormQuestion[] = [
 ];
 
 const DEEP_EXTRAS: ServiceExtra[] = [
-  { id: "inside-cabinets", label: "Cupboards", description: "Clean inside kitchen and bathroom cupboards", priceZar: 180 },
-  { id: "inside-wardrobes", label: "Wardrobes", description: "Clean inside wardrobes and shelving", priceZar: 180 },
-  { id: "blinds-cleaning", label: "Blinds", description: "Dust and wipe blinds", priceZar: 200 },
-  { id: "interior-walls", label: "Walls", description: "Wipe down interior walls", priceZar: 150 },
+  { id: "balcony-cleaning", label: "Balcony cleaning", description: "Clean balcony surfaces", priceZar: 50 },
+  { id: "deep-carpet-cleaning", label: "Carpet cleaning", description: "Deep clean carpeted areas", priceZar: 350 },
+  { id: "ceiling-cleaning", label: "Ceiling cleaning", description: "Dust and wipe accessible ceiling surfaces", priceZar: 100 },
+  { id: "garage-cleaning", label: "Garage cleaning", description: "Sweep and clean the garage", priceZar: 100 },
+  { id: "mattress-cleaning", label: "Mattress cleaning", description: "Clean and sanitise one mattress", priceZar: 250 },
+  { id: "outside-windows", label: "Outside windows", description: "Clean accessible exterior windows", priceZar: 350 },
 ];
 
 // ─── Moving Cleaning ───────────────────────────────────────────────────────────
@@ -283,11 +285,7 @@ const MOVING_QUESTIONS: FormQuestion[] = [
   },
 ];
 
-const MOVING_EXTRAS: ServiceExtra[] = [
-  { id: "appliances-cleaning", label: "Appliances", description: "Clean major kitchen appliances inside and out", priceZar: 220 },
-  { id: "inside-cabinets", label: "Cupboards", description: "Clean inside cabinets and cupboards", priceZar: 180 },
-  { id: "garage-cleaning", label: "Garage", description: "Sweep and clean the garage", priceZar: 200 },
-];
+const MOVING_EXTRAS: ServiceExtra[] = DEEP_EXTRAS.map((extra) => ({ ...extra }));
 
 // ─── Office Cleaning ───────────────────────────────────────────────────────────
 

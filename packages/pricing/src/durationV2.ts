@@ -87,6 +87,7 @@ const EXTRA_DURATION_MINUTES: Record<string, number> = {
   "blinds-cleaning": 30,
   "balcony-cleaning": 45,
   "carpet-cleaning": 60,
+  "deep-carpet-cleaning": 60,
   "ceiling-cleaning": 45,
   "garage-cleaning": 45,
   "mattress-cleaning": 45,
