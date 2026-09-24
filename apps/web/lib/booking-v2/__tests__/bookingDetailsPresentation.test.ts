@@ -63,7 +63,8 @@ describe("booking details presentation", () => {
     expect(summarySource).toContain("requirePriceLock: true");
     expect(summarySource).toContain("quoteReady: quoteReadiness.ready");
     expect(summarySource).toContain("minimumHours: liveConfig?.minDurationHours");
-    expect(summarySource).toContain('durationIsStable ? "Est. hours"');
+    expect(summarySource).toContain("const hasLiveDuration =");
+    expect(summarySource).toContain('hasLiveDuration ? "Est. hours"');
     expect(summarySource).toContain('"Min. hours"');
   });
 
