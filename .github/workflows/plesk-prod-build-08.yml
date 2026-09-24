@@ -9,6 +9,7 @@ on:
       - test/plesk-prod-build-08
       - fix/plesk-prod-converge-08b
       - integration/shalean-release
+      - production
     paths:
       - ".github/workflows/plesk-prod-build-08.yml"
       - "apps/web/**"
@@ -53,7 +54,7 @@ jobs:
         run: |
           set -euo pipefail
           case "${GITHUB_REF_NAME}" in
-            test/plesk-prod-build-08|fix/plesk-prod-converge-08b|integration/shalean-release) ;;
+            test/plesk-prod-build-08|fix/plesk-prod-converge-08b|integration/shalean-release|production) ;;
             *) echo "::error::Unexpected production-artifact branch: ${GITHUB_REF_NAME}"; exit 1 ;;
           esac
           git merge-base --is-ancestor f5dd54548ac4b1c50c7ce0cde744b05c4d8913e9 HEAD
@@ -222,7 +223,7 @@ jobs:
           cp -a apps/web/.next/standalone artifact-stage/runtime
           cat > artifact-stage/build-meta.json <<META
           {
-            "source_release_ref": "integration/shalean-release",
+            "source_release_ref": "${GITHUB_REF_NAME}",
             "source_release_sha": "f5dd54548ac4b1c50c7ce0cde744b05c4d8913e9",
             "artifact_branch": "${GITHUB_REF_NAME}",
             "artifact_sha": "${GITHUB_SHA}",
