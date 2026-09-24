@@ -161,6 +161,23 @@ describe("PRINCESS PR-A — quote integrity / readiness", () => {
     ).toBe("missing_quote");
   });
 
+  it("requires the price lock to match the visible quote signature", () => {
+    const quote = resolveBookingV2Quote(baseInput());
+    const result = assessBookingQuoteReadiness({
+      catalogLoading: false,
+      pricingSummary: quote.breakdown,
+      quoteLock: {
+        pricingVersionId: "00000000-0000-4000-8000-000000000001",
+        quoteSignature: "different-signature",
+        lockedAt: "2026-09-24T00:00:00.000Z",
+        expiresAt: "2026-09-24T00:30:00.000Z",
+      },
+      requirePriceLock: true,
+    });
+    expect(result.ready).toBe(false);
+    expect(result.reason).toBe("stale_price_lock");
+  });
+
   it("server zero base+total is hard-rejected", () => {
     const quote = resolveBookingV2Quote(
       baseInput({
