@@ -21,6 +21,8 @@ export type BookingDetailsAddress = {
   suburb?: string;
   contactPhone?: string;
   serviceAreaLocationId?: string;
+  gateCode?: string;
+  accessInstructions?: string;
 };
 
 const STAGES: Record<ServiceSlug, readonly BookingDetailsStage[]> = {
@@ -141,7 +143,7 @@ export function bookingDetailsStage(
         details,
         questions,
       );
-      if (!(roomsReady ?? all(details, ["bedrooms", "bathrooms", "extraRooms"]))) {
+      if (!(roomsReady ?? all(details, ["bedrooms", "bathrooms"]))) {
         return "rooms";
       }
       return "turnover";
@@ -166,7 +168,11 @@ function catalogStageQuestionsReady(
   });
 
   const blockingQuestions = visibleStageQuestions.filter(
-    (question) => question.required || (stage === "rooms" && question.group === "rooms"),
+    (question) =>
+      question.required ||
+      (stage === "rooms" &&
+        question.group === "rooms" &&
+        serviceSlug !== "airbnb-cleaning"),
   );
 
   if (blockingQuestions.length === 0) return null;
@@ -235,11 +241,20 @@ export function bookingDetailsStageReady(
         details,
         questions,
       );
-      if (dynamicReady != null) return dynamicReady;
-      if (stage === "property") return has(details, "propertyType");
-      if (stage === "rooms") return all(details, ["bedrooms", "bathrooms", "extraRooms"]);
+      if (stage === "property") {
+        return dynamicReady ?? has(details, "propertyType");
+      }
+      if (stage === "rooms") {
+        return dynamicReady ?? all(details, ["bedrooms", "bathrooms"]);
+      }
       if (stage === "turnover") {
-        return all(details, ["linens", "keyAccess"]);
+        const turnoverReady = dynamicReady ?? all(details, ["linens", "keyAccess"]);
+        if (!turnoverReady) return false;
+        const accessMethod = String(details.keyAccess ?? "");
+        if (accessMethod === "lockbox" || accessMethod === "smart_lock") {
+          return Boolean(String(address.gateCode ?? "").trim());
+        }
+        return true;
       }
       return false;
     }
