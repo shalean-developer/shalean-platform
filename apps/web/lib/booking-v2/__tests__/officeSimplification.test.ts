@@ -171,6 +171,12 @@ describe("Office Booking V2 simplification", () => {
     );
   });
 
+  it("centres the three supported Office frequency cards horizontally", () => {
+    expect(step2Source).toContain("recurringFrequencyOptions.length === 3");
+    expect(step2Source).toContain('"max-w-3xl lg:grid-cols-3"');
+    expect(step2Source).toContain('"max-w-5xl lg:grid-cols-4"');
+  });
+
   it("uses the current wall-clock quote duration for Office availability", () => {
     expect(step2Source).toContain("pricingSummary?.team_scaled_duration_minutes");
     expect(step2Source).toContain("pricingSummary?.estimated_duration_minutes");
