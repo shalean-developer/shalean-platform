@@ -69,7 +69,7 @@ export async function handleCustomerPendingPaymentAbandon(
   const ownershipColumn = await resolveBookingOwnershipColumn(auth.admin);
   const { data: row, error: loadErr } = await auth.admin
     .from("bookings")
-    .select(`id, status, payment_status, payment_completed_at, amount_paid_cents, total_paid_zar, ${ownershipColumn}`)
+    .select(`id, status, payment_status, payment_completed_at, amount_paid_cents, ${ownershipColumn}`)
     .eq("id", bookingId)
     .eq(ownershipColumn, auth.userId)
     .maybeSingle();
@@ -83,13 +83,11 @@ export async function handleCustomerPendingPaymentAbandon(
 
   const paymentStatus = String(row.payment_status ?? "").trim().toLowerCase();
   const amountPaidCents = Number(row.amount_paid_cents);
-  const totalPaidZar = Number(row.total_paid_zar);
   const paid =
     Boolean(row.payment_completed_at) ||
     paymentStatus === "paid" ||
     paymentStatus === "success" ||
-    (Number.isFinite(amountPaidCents) && amountPaidCents > 0) ||
-    (Number.isFinite(totalPaidZar) && totalPaidZar > 0);
+    (Number.isFinite(amountPaidCents) && amountPaidCents > 0);
 
   if (paid) {
     return NextResponse.json(
