@@ -48,6 +48,15 @@ describe("FINAL-SIX-CLOSEOUT", () => {
     expect(contextSource).toContain("verifySelectedBookingV2Cleaners({");
   });
 
+  it("preserves pending-payment recovery while hardening new draft entry", () => {
+    expect(contextSource).toContain("!hasPendingBooking");
+    expect(contextSource).toContain('["address", "property", "rooms", "pets", "equipment"]');
+    expect(contextSource).toContain('["address", "property", "rooms", "pets"]');
+    expect(contextSource).toContain('["address", "property", "move", "rooms", "condition"]');
+    expect(contextSource).toContain("recurringScheduleAllowedForService({");
+    expect(contextSource).toContain('setScheduleSectionOverride("booking_type")');
+  });
+
   it("keeps Moving property type informational with Moving-specific metadata", () => {
     const propertyType = SERVICE_PRICING_CONTRACTS["moving-cleaning"].fields.find(
       (field) => field.key === "propertyType",
