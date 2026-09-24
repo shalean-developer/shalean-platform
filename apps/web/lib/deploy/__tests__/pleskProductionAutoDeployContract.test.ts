@@ -24,6 +24,15 @@ describe("PLESK-PROD-AUTO-01 production deployment contract", () => {
     expect(source).toContain('d.get("supabase_ref")==ref');
   });
 
+  it("allows large production artifact downloads without weakening metadata API timeouts", () => {
+    expect(source).toContain("ghdownload(){");
+    expect(source).toContain("--max-time 600");
+    expect(source).toContain("--retry 4");
+    expect(source).toContain('ghdownload "$API/actions/artifacts/$ART_ID/zip"');
+    expect(source).toContain("ghget(){");
+    expect(source).toContain("--max-time 30");
+  });
+
   it("probes before activation and rolls back failed public health", () => {
     expect(source).toContain("candidate loopback health failed");
     expect(source).toContain('mv "$LIVE" "$ROLLBACK"');
