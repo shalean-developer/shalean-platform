@@ -368,18 +368,21 @@ async function seedCatalog(admin) {
   }
 
   // pricing_extras
+  const deepMovingExtras = [
+    { slug: "balcony-cleaning",    name: "Balcony cleaning",  description: "Clean balcony surfaces",                    price: 50,  service_type: "deep", is_popular: false, is_active: true, sort_order: 10 },
+    { slug: "deep-carpet-cleaning",name: "Carpet cleaning",   description: "Deep clean carpeted areas",                 price: 350, service_type: "deep", is_popular: false, is_active: true, sort_order: 20 },
+    { slug: "ceiling-cleaning",    name: "Ceiling cleaning",  description: "Dust and wipe accessible ceiling surfaces",price: 100, service_type: "deep", is_popular: false, is_active: true, sort_order: 30 },
+    { slug: "garage-cleaning",     name: "Garage cleaning",   description: "Sweep and clean the garage",                price: 100, service_type: "deep", is_popular: false, is_active: true, sort_order: 40 },
+    { slug: "mattress-cleaning",   name: "Mattress cleaning", description: "Clean and sanitise one mattress",           price: 250, service_type: "deep", is_popular: false, is_active: true, sort_order: 50 },
+    { slug: "outside-windows",     name: "Outside windows",   description: "Clean accessible exterior windows",         price: 350, service_type: "deep", is_popular: false, is_active: true, sort_order: 60 },
+  ].map((row) => ({ ...row, service_slugs: ["deep-cleaning", "moving-cleaning"] }));
+
   const extras = [
     { slug: "inside-fridge",       name: "Inside Fridge",      description: "Interior fridge clean",                         price: 150, service_type: "light", is_popular: true,  is_active: true, sort_order: 10,  service_slugs: ["regular-cleaning"] },
     { slug: "inside-oven",         name: "Inside Oven",        description: "Deep clean inside the oven",                    price: 200, service_type: "light", is_popular: true,  is_active: true, sort_order: 20,  service_slugs: ["regular-cleaning", "airbnb-cleaning"] },
     { slug: "laundry",             name: "Laundry",            description: "Wash and hang up to 1 load",                    price: 150, service_type: "light", is_popular: false, is_active: true, sort_order: 30,  service_slugs: ["regular-cleaning", "airbnb-cleaning"] },
     { slug: "ironing",             name: "Ironing",            description: "Ironing up to 1 load",                          price: 150, service_type: "light", is_popular: false, is_active: true, sort_order: 40,  service_slugs: ["regular-cleaning"] },
     { slug: "interior-windows",    name: "Interior Windows",   description: "Clean all interior windows",                    price: 180, service_type: "light", is_popular: false, is_active: true, sort_order: 50,  service_slugs: ["regular-cleaning", "airbnb-cleaning"] },
-    { slug: "inside-cabinets",     name: "Cupboards",          description: "Clean inside kitchen and bathroom cupboards",   price: 180, service_type: "heavy", is_popular: false, is_active: true, sort_order: 60,  service_slugs: ["deep-cleaning", "moving-cleaning"] },
-    { slug: "interior-walls",      name: "Walls",              description: "Wipe down interior walls",                      price: 150, service_type: "heavy", is_popular: false, is_active: true, sort_order: 80,  service_slugs: ["deep-cleaning"] },
-    { slug: "garage-cleaning",     name: "Garage",             description: "Sweep and clean the garage",                    price: 200, service_type: "heavy", is_popular: false, is_active: true, sort_order: 140, service_slugs: ["moving-cleaning"] },
-    { slug: "mattress-cleaning",   name: "Mattress",           description: "Clean and sanitise one mattress",               price: 250, service_type: "heavy", is_popular: false, is_active: true, sort_order: 150, service_slugs: ["carpet-cleaning"] },
-    { slug: "inside-wardrobes",    name: "Wardrobes",          description: "Clean inside wardrobes and shelving",           price: 180, service_type: "heavy", is_popular: false, is_active: true, sort_order: 170, service_slugs: ["deep-cleaning"] },
-    { slug: "blinds-cleaning",     name: "Blinds",             description: "Dust and wipe blinds",                          price: 200, service_type: "heavy", is_popular: false, is_active: true, sort_order: 180, service_slugs: ["deep-cleaning"] },
     { slug: "pet-odour-treatment", name: "Pet Odour",          description: "Enzyme-based odour neutraliser",                price: 220, service_type: "heavy", is_popular: false, is_active: true, sort_order: 220, service_slugs: ["carpet-cleaning"] },
     { slug: "fabric-protector",    name: "Fabric Protector",   description: "Scotchgard-style protection spray",             price: 180, service_type: "heavy", is_popular: false, is_active: true, sort_order: 230, service_slugs: ["carpet-cleaning"] },
     { slug: "sofa-upholstery",     name: "Sofa / Upholstery",  description: "Clean one sofa or upholstered seat",            price: 250, service_type: "heavy", is_popular: false, is_active: true, sort_order: 240, service_slugs: ["carpet-cleaning"] },
@@ -388,7 +391,7 @@ async function seedCatalog(admin) {
     { slug: "office-kitchen",      name: "Kitchen",            description: "Clean shared office kitchenette",               price: 200, service_type: "light", is_popular: false, is_active: true, sort_order: 410, service_slugs: ["office-cleaning"] },
     { slug: "office-sanitisation", name: "Sanitisation",       description: "High-touch sanitisation of desks and common areas", price: 250, service_type: "light", is_popular: false, is_active: true, sort_order: 420, service_slugs: ["office-cleaning"] },
     { slug: "waste-removal",       name: "Waste Removal",      description: "Remove bagged office waste",                    price: 180, service_type: "light", is_popular: false, is_active: true, sort_order: 430, service_slugs: ["office-cleaning"] },
-    { slug: "appliances-cleaning", name: "Appliances",         description: "Clean major kitchen appliances inside and out", price: 220, service_type: "heavy", is_popular: false, is_active: true, sort_order: 520, service_slugs: ["moving-cleaning"] },
+    ...deepMovingExtras,
   ];
   for (const row of extras) {
     await admin.from("pricing_extras").upsert(row, { onConflict: "slug" });
