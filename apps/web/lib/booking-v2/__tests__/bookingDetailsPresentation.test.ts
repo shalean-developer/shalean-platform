@@ -22,6 +22,14 @@ const shellSource = readFileSync(
   join(process.cwd(), "src/features/booking-v2/BookingV2Shell.tsx"),
   "utf8",
 );
+const optionCardsSource = readFileSync(
+  join(process.cwd(), "src/features/booking-v2/components/ServiceQuestionOptionCards.tsx"),
+  "utf8",
+);
+const summarySource = readFileSync(
+  join(process.cwd(), "src/features/booking-v2/components/BookingV2SummaryPanel.tsx"),
+  "utf8",
+);
 
 describe("booking details presentation", () => {
   it("does not render the redundant About the clean heading", () => {
@@ -38,6 +46,22 @@ describe("booking details presentation", () => {
     expect(source).toContain("bookingDetailsStageAutoAdvances(serviceSlug, activeDetailsStage)");
     expect(source).toContain("disabled={!detailsStageReady}");
     expect(source).toContain('onClick={() => moveProgressiveStage("next")}');
+  });
+
+  it("persists the visible No pets default so it never blocks Continue", () => {
+    expect(optionCardsSource).toContain('setValue(fieldKey, "no"');
+    expect(optionCardsSource).toContain("shouldValidate: true");
+    expect(optionCardsSource).toContain(
+      "<PetsDropdownField question={question} onValueChange={onValueChange} />",
+    );
+  });
+
+  it("keeps estimated hours tied to a current locked quote without blocking Details navigation", () => {
+    expect(source).toContain("disabled={!detailsStageReady}");
+    expect(source).not.toContain("const canAdvanceDetails =");
+    expect(summarySource).toContain("stableEstimatedCleaningHours");
+    expect(summarySource).toContain("requirePriceLock: true");
+    expect(summarySource).toContain("quoteReady: quoteReadiness.ready");
   });
 
   it("keeps Regular equipment with pets while extras use the service final stage", () => {

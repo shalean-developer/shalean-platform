@@ -2,7 +2,13 @@ import type { CustomerPricingBreakdown } from "@/lib/booking-v2/types";
 
 export type BookingQuoteReadiness = {
   ready: boolean;
-  reason?: "catalog_loading" | "missing_quote" | "missing_price_lock" | "zero_quote" | "missing_duration";
+  reason?:
+    | "catalog_loading"
+    | "missing_quote"
+    | "missing_price_lock"
+    | "stale_price_lock"
+    | "zero_quote"
+    | "missing_duration";
   message?: string;
 };
 
@@ -46,6 +52,18 @@ export function assessBookingQuoteReadiness(params: {
       message: "Your quote is missing. Refresh this page and try again.",
     };
   }
+  if (
+    params.requirePriceLock &&
+    (!p.quote_signature?.trim() ||
+      params.quoteLock?.quoteSignature?.trim() !== p.quote_signature.trim())
+  ) {
+    return {
+      ready: false,
+      reason: "stale_price_lock",
+      message: "Finalising your estimated time and secured price…",
+    };
+  }
+
   const total =
     typeof p.estimated_total === "number"
       ? p.estimated_total
@@ -68,4 +86,20 @@ export function assessBookingQuoteReadiness(params: {
     };
   }
   return { ready: true };
+}
+
+
+/**
+ * Payment can safely recover a missing/stale lock because Step 4 refreshes the
+ * authoritative quote before calling confirm. Other readiness failures remain
+ * blocking because there is no usable quote to refresh from.
+ */
+export function canRefreshBookingQuoteAtPayment(
+  readiness: BookingQuoteReadiness,
+): boolean {
+  return (
+    !readiness.ready &&
+    (readiness.reason === "missing_price_lock" ||
+      readiness.reason === "stale_price_lock")
+  );
 }

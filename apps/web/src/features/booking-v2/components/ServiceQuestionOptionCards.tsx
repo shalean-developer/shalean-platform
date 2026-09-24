@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { Building2, Home, PanelsTopLeft, type LucideIcon } from "lucide-react";
 import { Controller, useFormContext } from "react-hook-form";
 import { FloatingSelect } from "@/components/ui/floating-select";
@@ -93,15 +94,35 @@ function YesNoServiceQuestionField({
   );
 }
 
-function PetsDropdownField({ question }: { question: FormQuestion }) {
+function PetsDropdownField({
+  question,
+  onValueChange,
+}: {
+  question: FormQuestion;
+  onValueChange?: (value: string) => void;
+}) {
   const {
     control,
+    setValue,
+    getValues,
+    clearErrors,
     formState: { errors },
   } = useFormContext<BookingV2FormData>();
   const fieldKey = `serviceDetails.${question.key}` as const;
   const fieldError = (errors.serviceDetails as Record<string, { message?: string }> | undefined)?.[
     question.key
   ]?.message;
+
+  useEffect(() => {
+    const current = getValues(fieldKey);
+    if (current !== undefined && current !== null && String(current).trim() !== "") return;
+    setValue(fieldKey, "no", {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: true,
+    });
+    clearErrors(fieldKey);
+  }, [clearErrors, fieldKey, getValues, setValue]);
 
   return (
     <div className="w-full">
@@ -115,7 +136,10 @@ function PetsDropdownField({ question }: { question: FormQuestion }) {
             label={question.label}
             name={field.name}
             value={String(field.value ?? "no")}
-            onChange={field.onChange}
+            onChange={(value) => {
+              field.onChange(value);
+              onValueChange?.(value);
+            }}
             options={[...PET_OPTIONS]}
             aria-label={question.label}
             className="mt-2"
@@ -154,7 +178,7 @@ export function ServiceQuestionOptionCards({
   const gridClass = optionGridClass(options.length);
 
   if (question.key === "hasPets") {
-    return <PetsDropdownField question={question} />;
+    return <PetsDropdownField question={question} onValueChange={onValueChange} />;
   }
 
   if (isYesNoQuestion(question)) {

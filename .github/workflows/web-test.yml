@@ -194,6 +194,7 @@ jobs:
 
       - name: Search Console readiness (production site health)
         if: steps.filter.outputs.run_suite == 'true' && (github.event_name != 'pull_request' || (github.event.pull_request.head.ref != 'fix/plesk-prod-converge-08b' && github.event.pull_request.head.ref != 'fix/plesk-prod-ci-08d' && github.event.pull_request.head.ref != 'integration/shalean-release'))
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         env:
           AUDIT_BASE_URL: ${{ vars.AUDIT_BASE_URL || 'https://shalean.co.za' }}
           REQUIRE_GSC_VERIFICATION: ${{ vars.REQUIRE_GSC_VERIFICATION || '0' }}

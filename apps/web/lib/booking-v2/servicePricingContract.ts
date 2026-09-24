@@ -84,6 +84,7 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "furnished", effect: "price_and_duration", consumedBy: "propertyFactorRates.furnished" },
+      { key: "hasPets", effect: "informational", consumedBy: "persisted in serviceDetails only" },
     ],
   },
   "office-cleaning": {

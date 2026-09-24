@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import type { CustomerTotalInput } from "@/lib/booking-v2/types";
-import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
+import {
+  assessBookingQuoteReadiness,
+  canRefreshBookingQuoteAtPayment,
+} from "@/lib/booking-v2/bookingQuoteReadiness";
 import { emptyCustomerPricingBreakdown } from "@/lib/booking-v2/emptyPricingBreakdown";
 import {
   pricingServiceSlugCandidates,
@@ -159,6 +162,44 @@ describe("PRINCESS PR-A — quote integrity / readiness", () => {
         pricingSummary: null,
       }).reason,
     ).toBe("missing_quote");
+  });
+
+  it("requires the price lock to match the visible quote signature", () => {
+    const quote = resolveBookingV2Quote(baseInput());
+    const result = assessBookingQuoteReadiness({
+      catalogLoading: false,
+      pricingSummary: quote.breakdown,
+      quoteLock: {
+        pricingVersionId: "00000000-0000-4000-8000-000000000001",
+        quoteSignature: "different-signature",
+        lockedAt: "2026-09-24T00:00:00.000Z",
+        expiresAt: "2026-09-24T00:30:00.000Z",
+      },
+      requirePriceLock: true,
+    });
+    expect(result.ready).toBe(false);
+    expect(result.reason).toBe("stale_price_lock");
+  });
+
+  it("keeps missing and stale price locks refreshable from Payment", () => {
+    expect(
+      canRefreshBookingQuoteAtPayment({
+        ready: false,
+        reason: "missing_price_lock",
+      }),
+    ).toBe(true);
+    expect(
+      canRefreshBookingQuoteAtPayment({
+        ready: false,
+        reason: "stale_price_lock",
+      }),
+    ).toBe(true);
+    expect(
+      canRefreshBookingQuoteAtPayment({
+        ready: false,
+        reason: "missing_duration",
+      }),
+    ).toBe(false);
   });
 
   it("server zero base+total is hard-rejected", () => {

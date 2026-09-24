@@ -501,7 +501,6 @@ export function Step1Details() {
         step1Questions,
       )
     : true;
-
   function moveProgressiveStage(direction: "back" | "next") {
     if (!activeDetailsStage) return;
     const adjacentStage = adjacentBookingDetailsStage(
