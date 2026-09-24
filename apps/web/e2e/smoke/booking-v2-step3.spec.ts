@@ -22,6 +22,7 @@ type StoredDraft = Record<string, unknown> & {
 
 function reviewDraft(serviceSlug: string, cleanerMode: CleanerMode): Record<string, unknown> {
   const individual = cleanerMode === "individual_cleaners";
+  const deepCleaning = serviceSlug === "deep-cleaning";
   return {
     serviceSlug,
     serviceDetails: {
@@ -50,8 +51,8 @@ function reviewDraft(serviceSlug: string, cleanerMode: CleanerMode): Record<stri
     time: "08:30",
     alternativeDate: "",
     alternativeTime: "",
-    recurringFrequency: "weekly",
-    recurringDays: ["Monday"],
+    recurringFrequency: deepCleaning ? "monthly" : "weekly",
+    recurringDays: deepCleaning ? [] : ["Monday"],
     recurringStartDate: "2026-11-16",
     recurringEndDate: "",
     cleanerMode,
@@ -290,7 +291,7 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Clean details", exact: true })).toBeVisible();
     await expect(page.getByText("08:30", { exact: true })).toBeVisible();
-    await expect(page.getByText(/Recurring · Weekly/)).toBeVisible();
+    await expect(page.getByText(/Recurring · Monthly/)).toBeVisible();
     await expectReviewSectionNumbers(page, [
       "Location",
       "Clean details",
