@@ -19,6 +19,7 @@ const V2_TO_CANONICAL: Record<string, string> = {
   "moving-cleaning": "move",
   "office-cleaning": "standard",
   "carpet-cleaning": "carpet",
+  "deep-carpet-cleaning": 60,
   "airbnb-cleaning": "airbnb",
 };
 
