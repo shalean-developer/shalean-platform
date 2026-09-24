@@ -64,6 +64,7 @@ describe("booking details presentation", () => {
     expect(summarySource).toContain("quoteReady: quoteReadiness.ready");
     expect(summarySource).toContain("minimumHours: liveConfig?.minDurationHours");
     expect(summarySource).toContain("const hasLiveDuration =");
+    expect(summarySource).not.toMatch(/const hasLiveDuration =\s*detailsScopeReady &&/);
     expect(summarySource).toContain('hasLiveDuration ? "Est. hours"');
     expect(summarySource).toContain('"Min. hours"');
   });
