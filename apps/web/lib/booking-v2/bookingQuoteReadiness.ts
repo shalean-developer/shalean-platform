@@ -87,3 +87,19 @@ export function assessBookingQuoteReadiness(params: {
   }
   return { ready: true };
 }
+
+
+/**
+ * Payment can safely recover a missing/stale lock because Step 4 refreshes the
+ * authoritative quote before calling confirm. Other readiness failures remain
+ * blocking because there is no usable quote to refresh from.
+ */
+export function canRefreshBookingQuoteAtPayment(
+  readiness: BookingQuoteReadiness,
+): boolean {
+  return (
+    !readiness.ready &&
+    (readiness.reason === "missing_price_lock" ||
+      readiness.reason === "stale_price_lock")
+  );
+}
