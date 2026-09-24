@@ -294,7 +294,10 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const roomsAreVisible =
     progressiveDetails &&
     Boolean(roomsLabel) &&
-    (currentStep > 1 || detailsStageIndex > 2);
+    (currentStep > 1 ||
+      (values.serviceSlug === "office-cleaning"
+        ? detailsStageIndex >= finalDetailsStageIndex
+        : detailsStageIndex > 2));
   const homeLabel = [propertyIsVisible ? propertyLabel : "", roomsAreVisible ? roomsLabel : ""]
     .filter(Boolean)
     .join(" · ");

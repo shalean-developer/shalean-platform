@@ -417,8 +417,10 @@ export function Step2Schedule() {
     ? activeScheduleStage === "booking_type"
     : allowsRecurringBookings;
 
+  const pricingSummary = watch("pricingSummary");
   const durationMinutes = Math.round(
-    (watch("pricingSummary")?.estimated_duration_minutes ??
+    (pricingSummary?.team_scaled_duration_minutes ??
+      pricingSummary?.estimated_duration_minutes ??
       (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60),
   );
 
