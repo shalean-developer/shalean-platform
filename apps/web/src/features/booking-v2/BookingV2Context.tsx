@@ -463,6 +463,81 @@ export function BookingV2Provider({
     return () => subscription.unsubscribe();
   }, [form]);
 
+  /** Regular, Deep and Moving scope edits invalidate previous slot / cleaner / team checks. */
+  const prevCoreServiceScopeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      serviceSlug !== "regular-cleaning" &&
+      serviceSlug !== "deep-cleaning" &&
+      serviceSlug !== "moving-cleaning"
+    ) {
+      return;
+    }
+
+    function scopeFingerprint(
+      details: Record<string, string | number | boolean>,
+      extras: readonly string[],
+    ): string {
+      const common = [
+        String(details.bedrooms ?? ""),
+        String(details.bathrooms ?? ""),
+        String(details.extraRooms ?? ""),
+      ];
+      if (serviceSlug === "deep-cleaning") {
+        common.push(String(details.lastCleaned ?? ""));
+      }
+      if (serviceSlug === "moving-cleaning") {
+        common.push(
+          String(details.moveType ?? ""),
+          String(details.furnished ?? ""),
+        );
+      }
+      common.push([...extras].sort().join(","));
+      return common.join("|");
+    }
+
+    const currentDetails = form.getValues("serviceDetails") ?? {};
+    const currentExtras = form.getValues("selectedExtras") ?? [];
+    prevCoreServiceScopeRef.current = scopeFingerprint(currentDetails, currentExtras);
+
+    const watchedNames = new Set([
+      "serviceDetails.bedrooms",
+      "serviceDetails.bathrooms",
+      "serviceDetails.extraRooms",
+      "selectedExtras",
+      ...(serviceSlug === "deep-cleaning" ? ["serviceDetails.lastCleaned"] : []),
+      ...(serviceSlug === "moving-cleaning"
+        ? ["serviceDetails.moveType", "serviceDetails.furnished"]
+        : []),
+    ]);
+
+    const subscription = form.watch((values, info) => {
+      if (info.name && !watchedNames.has(info.name)) return;
+      const details = values.serviceDetails ?? {};
+      const extras = values.selectedExtras ?? [];
+      const nextScope = scopeFingerprint(
+        details as Record<string, string | number | boolean>,
+        extras,
+      );
+      const prevScope = prevCoreServiceScopeRef.current;
+      if (prevScope == null || nextScope === prevScope) {
+        prevCoreServiceScopeRef.current = nextScope;
+        return;
+      }
+      prevCoreServiceScopeRef.current = nextScope;
+      form.setValue("time", "", { shouldDirty: true });
+      form.setValue("alternativeTime", "", { shouldDirty: true });
+      form.setValue("selectedCleanerIds", [], { shouldDirty: true });
+      form.setValue("selectedCleanerDetails", [], { shouldDirty: true });
+      form.setValue("assignedTeamId", "", { shouldDirty: true });
+      form.setValue("assignedTeamName", "", { shouldDirty: true });
+      if (usesProgressiveIndividualSchedule(serviceSlug)) {
+        setScheduleSectionOverride("date_time");
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [form, serviceSlug]);
+
   /** Office size/bathroom edits change job duration, so previous slot/cleaner checks are stale. */
   const prevOfficeScopeRef = useRef<string | null>(null);
   useEffect(() => {
