@@ -21,6 +21,7 @@ import { runPaystackVerifyFinalizePipeline } from "@/lib/booking/runPaystackVeri
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { syncRecurringPrepaymentReference } from "@/lib/recurring/recurringPrepaymentLedger";
 import { resolveDeploymentEnvironment } from "@/lib/env/deploymentEnvironment";
+import { isPaymentEditSupersededSnapshot } from "@/lib/booking/paymentEditSupersedeMarker";
 
 export type BookingPaymentSessionAccess =
   | { kind: "paystack_ref"; reference: string }
@@ -596,6 +597,16 @@ async function ensureBookingPaymentSessionInner(
   }
 
   const status = String(row.status ?? "").toLowerCase();
+  if (status === "payment_expired" && isPaymentEditSupersededSnapshot(row.booking_snapshot)) {
+    return {
+      status: "failed",
+      bookingId: id,
+      errorCode: PAYMENT_ERROR_CODES.PAYMENT_NOT_PAYABLE,
+      error:
+        "This checkout was replaced after you edited the booking. Continue from the updated booking instead.",
+      retryable: false,
+    };
+  }
   if (status !== "pending_payment" && status !== "payment_expired") {
     return {
       status: "failed",
