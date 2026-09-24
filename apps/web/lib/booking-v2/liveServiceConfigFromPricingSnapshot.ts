@@ -53,6 +53,7 @@ export function liveServiceConfigFromPricingSnapshot(params: {
     pricePerBedroom: tariff.bedroom,
     pricePerBathroom: tariff.bathroom,
     pricePerExtraRoom: tariff.extraRoom,
+    ...(tariff.serviceFeeZar != null ? { serviceFeeZar: tariff.serviceFeeZar } : {}),
     pricePerExtraCleaner: feesConfig.extraCleanerFeeZar,
     estimatedDurationHours: tariff.duration.base,
     durationBaseHours: tariff.duration.base,
