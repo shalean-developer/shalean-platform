@@ -986,6 +986,25 @@ export function Step3Review() {
     editScheduleSection("cleaner");
     goToStep(2);
   }
+
+  function editCarpetDetails() {
+    editDetailsSection("rooms");
+  }
+
+  function editCarpetSchedule() {
+    editScheduleSection("date_time");
+    goToStep(2);
+  }
+
+  function editCarpetCleaner() {
+    editScheduleSection("cleaner");
+    goToStep(2);
+  }
+
+  function editCarpetAddons() {
+    editDetailsSection("condition");
+  }
+
   function saveEdit() {
     setEditPanel(null);
     setSnapshot(null);
@@ -1136,7 +1155,7 @@ export function Step3Review() {
           <ReviewSection
             number={cleanDetailsNumber}
             title="Carpet details"
-            onEdit={isOfficeCleaning ? editOfficeDetails : () => openEdit("property")}
+            onEdit={editCarpetDetails}
             className="sm:col-span-2"
           >
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -1204,7 +1223,13 @@ export function Step3Review() {
         <ReviewSection
           number={scheduleNumber}
           title="Schedule"
-          onEdit={isOfficeCleaning ? editOfficeSchedule : () => openEdit("schedule")}
+          onEdit={
+            isOfficeCleaning
+              ? editOfficeSchedule
+              : isCarpetCleaning
+                ? editCarpetSchedule
+                : () => openEdit("schedule")
+          }
           className="sm:col-span-2"
         >
           <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-sm">
@@ -1252,7 +1277,13 @@ export function Step3Review() {
             <ReviewSection
               number={cleanerNumber}
               title={isCarpetCleaning ? "Specialist" : "Cleaner preference"}
-              onEdit={isOfficeCleaning ? editOfficeCleaner : () => openEdit("cleaner")}
+              onEdit={
+                isOfficeCleaning
+                  ? editOfficeCleaner
+                  : isCarpetCleaning
+                    ? editCarpetCleaner
+                    : () => openEdit("cleaner")
+              }
             >
               {!hasDetails && !hasIds ? (
                 <div className="flex items-center gap-2">
@@ -1281,7 +1312,13 @@ export function Step3Review() {
                     : `${cleanerIds.length} preferred cleaner${cleanerIds.length > 1 ? "s" : ""} selected.`}
                   <button
                     type="button"
-                    onClick={() => openEdit("cleaner")}
+                    onClick={
+                      isOfficeCleaning
+                        ? editOfficeCleaner
+                        : isCarpetCleaning
+                          ? editCarpetCleaner
+                          : () => openEdit("cleaner")
+                    }
                     className="ml-1.5 font-medium text-blue-600 hover:underline"
                   >
                     Go back to view
@@ -1297,7 +1334,13 @@ export function Step3Review() {
           <ReviewSection
             number={extrasNumber}
             title="Add-ons"
-            onEdit={isOfficeCleaning ? editOfficeDetails : () => openEdit("extras")}
+            onEdit={
+              isOfficeCleaning
+                ? editOfficeDetails
+                : isCarpetCleaning
+                  ? editCarpetAddons
+                  : () => openEdit("extras")
+            }
             className={values.cleanerMode === "individual_cleaners" ? undefined : "sm:col-span-2"}
           >
             {selectedExtras.length === 0 ? (
