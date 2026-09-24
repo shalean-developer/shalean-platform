@@ -91,6 +91,8 @@ function BookingV2Inner() {
     goBack,
     serviceSlug,
     pricingAvailability,
+    paymentEditResetting,
+    paymentEditResetError,
   } = useBookingV2();
   const { watch } = useFormContext<BookingV2FormData>();
   const reviewTime = watch("time")?.trim() ?? "";
@@ -155,6 +157,23 @@ function BookingV2Inner() {
               </div>
             )}
 
+            {paymentEditResetting ? (
+              <div
+                role="status"
+                aria-live="polite"
+                className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950 sm:mb-6"
+              >
+                Updating your booking and releasing the previous payment session…
+              </div>
+            ) : paymentEditResetError ? (
+              <div
+                role="alert"
+                className="mb-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 sm:mb-6"
+              >
+                {paymentEditResetError}
+              </div>
+            ) : null}
+
             <div
               data-review-time-missing={reviewTimeMissing ? "true" : undefined}
               className={
@@ -199,7 +218,11 @@ function BookingV2Inner() {
                 <Button
                   size="lg"
                   onClick={goNext}
-                  disabled={currentStep === 3 && !paymentEntryAllowed}
+                  disabled={
+                    paymentEditResetting ||
+                    Boolean(paymentEditResetError) ||
+                    (currentStep === 3 && !paymentEntryAllowed)
+                  }
                   suppressHydrationWarning
                   className="w-full rounded-xl sm:w-auto"
                 >
