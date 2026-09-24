@@ -28,14 +28,13 @@ describe("SERVICE_EXTRA_SLUGS", () => {
     expect(airbnb).not.toBe(office);
   });
 
-  it("does not share identical sets between deep, moving, and carpet", () => {
+  it("shares the approved Deep/Moving set while keeping Carpet distinct", () => {
     const deep = [...SERVICE_EXTRA_SLUGS["deep-cleaning"]].sort().join(",");
     const moving = [...SERVICE_EXTRA_SLUGS["moving-cleaning"]].sort().join(",");
     const carpet = [...SERVICE_EXTRA_SLUGS["carpet-cleaning"]].sort().join(",");
 
-    expect(moving).not.toBe(deep);
+    expect(moving).toBe(deep);
     expect(carpet).not.toBe(deep);
-    expect(carpet).not.toBe(moving);
   });
 
   it("matches the approved six-service customer add-on contract", () => {
@@ -46,17 +45,16 @@ describe("SERVICE_EXTRA_SLUGS", () => {
       "ironing",
       "interior-windows",
     ]);
-    expect(SERVICE_EXTRA_SLUGS["deep-cleaning"]).toEqual([
-      "inside-cabinets",
-      "inside-wardrobes",
-      "blinds-cleaning",
-      "interior-walls",
-    ]);
-    expect(SERVICE_EXTRA_SLUGS["moving-cleaning"]).toEqual([
-      "appliances-cleaning",
-      "inside-cabinets",
+    const deepMoving = [
+      "balcony-cleaning",
+      "deep-carpet-cleaning",
+      "ceiling-cleaning",
       "garage-cleaning",
-    ]);
+      "mattress-cleaning",
+      "outside-windows",
+    ];
+    expect(SERVICE_EXTRA_SLUGS["deep-cleaning"]).toEqual(deepMoving);
+    expect(SERVICE_EXTRA_SLUGS["moving-cleaning"]).toEqual(deepMoving);
     expect(SERVICE_EXTRA_SLUGS["office-cleaning"]).toEqual([
       "office-kitchen",
       "office-sanitisation",
@@ -88,7 +86,8 @@ describe("SERVICE_EXTRA_SLUGS", () => {
   it("rejects cross-service and self-referential extras", () => {
     expect(isExtraSlugAllowedForService("carpet-cleaning", "carpet-cleaning")).toBe(false);
     expect(isExtraSlugAllowedForService("office-cleaning", "inside-fridge")).toBe(false);
-    expect(isExtraSlugAllowedForService("deep-cleaning", "inside-cabinets")).toBe(true);
+    expect(isExtraSlugAllowedForService("deep-cleaning", "deep-carpet-cleaning")).toBe(true);
+    expect(isExtraSlugAllowedForService("moving-cleaning", "outside-windows")).toBe(true);
     expect(isExtraSlugAllowedForService("airbnb-cleaning", "welcome-setup")).toBe(true);
   });
 });
