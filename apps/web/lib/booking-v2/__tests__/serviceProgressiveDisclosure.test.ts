@@ -130,6 +130,13 @@ describe("six-service progressive booking details", () => {
       { linens: "change", keyAccess: "lockbox" },
       address,
       SERVICE_CONFIG["airbnb-cleaning"].step1Questions,
+    )).toBe(false);
+    expect(bookingDetailsStageReady(
+      "airbnb-cleaning",
+      "turnover",
+      { linens: "change", keyAccess: "lockbox" },
+      { ...address, gateCode: "4821" },
+      SERVICE_CONFIG["airbnb-cleaning"].step1Questions,
     )).toBe(true);
     expect(bookingDetailsShowsExtras("airbnb-cleaning", "turnover")).toBe(true);
   });
