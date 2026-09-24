@@ -44,7 +44,7 @@ describe("booking details presentation", () => {
 
   it("uses Continue as the only way to leave button-controlled detail stages", () => {
     expect(source).toContain("bookingDetailsStageAutoAdvances(serviceSlug, activeDetailsStage)");
-    expect(source).toContain("disabled={!detailsStageReady}");
+    expect(source).toContain("disabled={!canAdvanceDetails}");
     expect(source).toContain('onClick={() => moveProgressiveStage("next")}');
   });
 
