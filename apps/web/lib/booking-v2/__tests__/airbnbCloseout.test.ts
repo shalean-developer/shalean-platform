@@ -130,10 +130,12 @@ describe("Airbnb Booking V2 closeout", () => {
     ]);
   });
 
-  it("keeps Airbnb extras database-authoritative", () => {
+  it("keeps Airbnb extras database-authoritative across drafts and asynchronous rebooks", () => {
     expect(SERVICE_CONFIG["airbnb-cleaning"].extras).toEqual([]);
     expect(contextSource).toContain("Reconcile old Airbnb drafts against the current authoritative extras catalog");
     expect(contextSource).toContain('form.setValue("selectedExtras", pruned');
+    expect(contextSource).toContain('if (serviceSlug === "airbnb-cleaning" && liveConfig)');
+    expect(contextSource).toContain("normalizedPatch.selectedExtras = (normalizedPatch.selectedExtras ?? []).filter");
   });
 
   it("invalidates stale Airbnb slot and cleaner choices when scope changes", () => {
