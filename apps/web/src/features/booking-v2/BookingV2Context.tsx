@@ -48,6 +48,7 @@ import {
   bookingDetailsStage,
   bookingDetailsStageFromSearchParam,
   bookingDetailsStageIndex,
+  bookingDetailsStageReady,
   isProgressiveBookingDetailsService,
   usesProgressiveIndividualSchedule,
   type BookingDetailsStage,
@@ -452,6 +453,44 @@ export function BookingV2Provider({
     return () => subscription.unsubscribe();
   }, [form]);
 
+  /** Office size/bathroom edits change job duration, so previous slot/cleaner checks are stale. */
+  const prevOfficeScopeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (serviceSlug !== "office-cleaning") return;
+
+    const currentDetails = form.getValues("serviceDetails") ?? {};
+    prevOfficeScopeRef.current = `${String(currentDetails.officeSize ?? "")}|${String(
+      currentDetails.bathrooms ?? "",
+    )}`;
+
+    const subscription = form.watch((values, info) => {
+      if (
+        info.name &&
+        info.name !== "serviceDetails.officeSize" &&
+        info.name !== "serviceDetails.bathrooms"
+      ) {
+        return;
+      }
+      const details = values.serviceDetails ?? {};
+      const nextScope = `${String(details.officeSize ?? "")}|${String(details.bathrooms ?? "")}`;
+      const prevScope = prevOfficeScopeRef.current;
+      if (prevScope == null || nextScope === prevScope) {
+        prevOfficeScopeRef.current = nextScope;
+        return;
+      }
+      prevOfficeScopeRef.current = nextScope;
+      form.setValue("date", "", { shouldDirty: true });
+      form.setValue("time", "", { shouldDirty: true });
+      form.setValue("alternativeDate", "", { shouldDirty: true });
+      form.setValue("alternativeTime", "", { shouldDirty: true });
+      form.setValue("selectedCleanerIds", [], { shouldDirty: true });
+      form.setValue("selectedCleanerDetails", [], { shouldDirty: true });
+      form.setValue("assignedTeamId", "", { shouldDirty: true });
+      form.setValue("assignedTeamName", "", { shouldDirty: true });
+    });
+    return () => subscription.unsubscribe();
+  }, [form, serviceSlug]);
+
   const canGoNext = useCallback(
     async (step: BookingStep): Promise<boolean> => {
       if (step === 3) {
@@ -463,6 +502,51 @@ export function BookingV2Provider({
             reason: "pricing_unavailable",
           });
           return false;
+        }
+
+        if (serviceSlug === "office-cleaning") {
+          const values = form.getValues();
+          const officeDetailsReady = bookingDetailsStageReady(
+            serviceSlug,
+            "rooms",
+            values.serviceDetails ?? {},
+            {
+              address: values.address,
+              suburb: values.suburb,
+              contactPhone: values.contactPhone,
+              serviceAreaLocationId: values.serviceAreaLocationId,
+            },
+            liveConfig?.step1Questions ?? config.step1Questions,
+          );
+          if (!officeDetailsReady) {
+            setDetailsSectionOverride("rooms");
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "details");
+            params.set("section", "rooms");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          const scheduleResult = buildStep2Schema(scheduling).safeParse(values);
+          if (!scheduleResult.success) {
+            scheduleResult.error.errors.forEach((e) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              form.setError(e.path.join(".") as any, { message: e.message });
+            });
+            const paths = scheduleResult.error.errors.map((e) => e.path[0]);
+            const targetStage: RegularCleaningScheduleStage =
+              paths.includes("bookingType") || paths.includes("recurringFrequency")
+                ? "booking_type"
+                : paths.includes("date") || paths.includes("time")
+                  ? "date_time"
+                  : "cleaner";
+            setScheduleSectionOverride(targetStage);
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "schedule");
+            params.delete("section");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
         }
       }
       if (step === 1) {
@@ -504,7 +588,14 @@ export function BookingV2Provider({
       }
       return true;
     },
-    [form, scheduling, pricingAvailability],
+    [
+      form,
+      scheduling,
+      pricingAvailability,
+      serviceSlug,
+      liveConfig,
+      config.step1Questions,
+    ],
   );
 
   const goToStep = useCallback(
