@@ -246,21 +246,28 @@ export async function abandonPendingPaymentForEdit(
   const reference =
     typeof row.paystack_reference === "string" ? row.paystack_reference.trim() : "";
   if (reference) {
-    try {
-      const verified = await fetchPaystackTransactionVerify(reference);
-      const gatewayStatus = String(verified.data?.status ?? "").trim().toLowerCase();
-      if (verified.status && gatewayStatus === "success") {
-        return {
-          ok: false,
-          code: "PAYMENT_ALREADY_COMPLETED",
-          error: "This payment has already completed. Open your confirmed booking instead of editing this checkout.",
-        };
-      }
-    } catch {
+    const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
+    if (!secret) {
+      return {
+        ok: false,
+        code: "PAYMENT_EDIT_SUPERSEDE_FAILED",
+        error: "Payment verification is temporarily unavailable. Please try again before editing this checkout.",
+      };
+    }
+    const verified = await fetchPaystackTransactionVerify(reference, secret);
+    if (!verified.status) {
       return {
         ok: false,
         code: "PAYMENT_EDIT_SUPERSEDE_FAILED",
         error: "We could not safely verify the previous payment. Please try again before editing this checkout.",
+      };
+    }
+    const gatewayStatus = String(verified.data?.status ?? "").trim().toLowerCase();
+    if (gatewayStatus === "success") {
+      return {
+        ok: false,
+        code: "PAYMENT_ALREADY_COMPLETED",
+        error: "This payment has already completed. Open your confirmed booking instead of editing this checkout.",
       };
     }
   }
