@@ -44,7 +44,7 @@ describe("booking details presentation", () => {
 
   it("uses Continue as the only way to leave button-controlled detail stages", () => {
     expect(source).toContain("bookingDetailsStageAutoAdvances(serviceSlug, activeDetailsStage)");
-    expect(source).toContain("disabled={!canAdvanceDetails}");
+    expect(source).toContain("disabled={!detailsStageReady}");
     expect(source).toContain('onClick={() => moveProgressiveStage("next")}');
   });
 
@@ -56,11 +56,11 @@ describe("booking details presentation", () => {
     );
   });
 
-  it("keeps estimated hours tied to a current locked quote", () => {
-    expect(source).toContain("const canAdvanceDetails =");
-    expect(source).toContain("requirePriceLock: true");
-    expect(source).toContain("disabled={!canAdvanceDetails}");
+  it("keeps estimated hours tied to a current locked quote without blocking Details navigation", () => {
+    expect(source).toContain("disabled={!detailsStageReady}");
+    expect(source).not.toContain("const canAdvanceDetails =");
     expect(summarySource).toContain("stableEstimatedCleaningHours");
+    expect(summarySource).toContain("requirePriceLock: true");
     expect(summarySource).toContain("quoteReady: quoteReadiness.ready");
   });
 
