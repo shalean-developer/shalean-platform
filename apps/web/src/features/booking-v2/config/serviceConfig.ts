@@ -463,13 +463,9 @@ const AIRBNB_QUESTIONS: FormQuestion[] = [
   },
 ];
 
-const AIRBNB_EXTRAS: ServiceExtra[] = [
-  { id: "laundry", label: "Laundry", description: "Wash, dry and fold linens", priceZar: 250 },
-  { id: "inside-oven", label: "Inside Oven", description: "Deep clean inside the oven", priceZar: 200 },
-  { id: "welcome-setup", label: "Welcome setup", description: "Arrange towels, toiletries, staging", priceZar: 150 },
-  { id: "interior-windows", label: "Interior windows", description: "Clean all interior windows", priceZar: 180 },
-  { id: "inspection-photos", label: "Post-clean photos", description: "Timestamped photos for your records", priceZar: 100 },
-];
+// Airbnb extras are database-authoritative. Keep the static fallback empty so
+// inactive or unassigned extras cannot reappear with stale hard-coded prices.
+const AIRBNB_EXTRAS: ServiceExtra[] = [];
 
 // ─── Master Config Map ──────────────────────────────────────────────────────────
 
