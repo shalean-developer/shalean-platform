@@ -47,6 +47,12 @@ ghdownload(){
   /usr/bin/curl -fL --connect-timeout 15 --max-time 600 --retry 4 --retry-delay 3 --retry-all-errors \
     -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"
 }
+ghdownload(){
+  # Artifact downloads are ~50 MB and GitHub redirects to blob storage. Give the
+  # transfer enough time for shared-host bandwidth and retry transient stalls.
+  /usr/bin/curl -fL --connect-timeout 15 --max-time 600 --retry 4 --retry-delay 3 --retry-all-errors \
+    -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"
+}
 branch_sha(){
   ghget "$API/branches/production" > "$WORK/branch.json"
   /usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"]["sha"])' "$WORK/branch.json"
