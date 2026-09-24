@@ -16,6 +16,7 @@ import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsFo
 import { assertEnvironmentPaymentSafety } from "@/lib/env/assertEnvironmentSafety";
 import { getPublicAppUrlBase } from "@/lib/email/appUrl";
 import { logPaymentStructured } from "@/lib/observability/paymentStructuredLog";
+import { isPaymentEditSupersededSnapshot } from "@/lib/booking/abandonPendingPaymentForEdit";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
 import { runPaystackVerifyFinalizePipeline } from "@/lib/booking/runPaystackVerifyFinalizePipeline";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -596,6 +597,15 @@ async function ensureBookingPaymentSessionInner(
   }
 
   const status = String(row.status ?? "").toLowerCase();
+  if (status === "payment_expired" && isPaymentEditSupersededSnapshot(row.booking_snapshot)) {
+    return {
+      status: "failed",
+      bookingId: id,
+      errorCode: PAYMENT_ERROR_CODES.PAYMENT_NOT_PAYABLE,
+      error: "This checkout was replaced after you edited the booking. Continue from the updated booking instead.",
+      retryable: false,
+    };
+  }
   if (status !== "pending_payment" && status !== "payment_expired") {
     return {
       status: "failed",
