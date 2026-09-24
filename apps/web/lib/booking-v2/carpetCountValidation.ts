@@ -1,4 +1,4 @@
-export function canonicalCarpetCount(
+export function canonicalBookingCount(
   value: unknown,
   options: { min: number; max: number },
 ): number | null {
@@ -19,3 +19,7 @@ export function canonicalCarpetCount(
 
   return parsed >= options.min && parsed <= options.max ? parsed : null;
 }
+
+
+/** Backward-compatible alias for the Carpet closeout contract. */
+export const canonicalCarpetCount = canonicalBookingCount;
