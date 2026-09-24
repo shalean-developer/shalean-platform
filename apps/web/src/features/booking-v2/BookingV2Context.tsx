@@ -62,6 +62,7 @@ import {
   verifySelectedBookingV2Cleaners,
   verifySelectedBookingV2Slot,
 } from "@/lib/booking-v2/verifySelectedBookingV2Schedule";
+import { recurringScheduleAllowedForService } from "@/lib/booking-v2/serviceRecurringPolicy";
 
 export type { LiveServiceConfig };
 
@@ -692,9 +693,12 @@ export function BookingV2Provider({
         }
 
         if (
-          serviceSlug === "regular-cleaning" ||
-          serviceSlug === "deep-cleaning" ||
-          serviceSlug === "moving-cleaning"
+          !hasPendingBooking &&
+          (
+            serviceSlug === "regular-cleaning" ||
+            serviceSlug === "deep-cleaning" ||
+            serviceSlug === "moving-cleaning"
+          )
         ) {
           const values = form.getValues();
           const bookingDetails = {
@@ -706,10 +710,10 @@ export function BookingV2Provider({
           const questions = liveConfig?.step1Questions ?? config.step1Questions;
           const stages =
             serviceSlug === "regular-cleaning"
-              ? (["property", "rooms", "pets", "equipment"] as const)
+              ? (["address", "property", "rooms", "pets", "equipment"] as const)
               : serviceSlug === "deep-cleaning"
-                ? (["property", "rooms", "pets"] as const)
-                : (["property", "move", "rooms", "condition"] as const);
+                ? (["address", "property", "rooms", "pets"] as const)
+                : (["address", "property", "move", "rooms", "condition"] as const);
           const firstInvalidStage = stages.find(
             (stage) =>
               !bookingDetailsStageReady(
@@ -743,6 +747,25 @@ export function BookingV2Provider({
                   ? "date_time"
                   : "cleaner";
             setScheduleSectionOverride(targetStage);
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "schedule");
+            params.delete("section");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          if (
+            !recurringScheduleAllowedForService({
+              serviceSlug,
+              bookingType: values.bookingType,
+              recurringFrequency: values.recurringFrequency,
+              recurringDays: values.recurringDays ?? [],
+            })
+          ) {
+            form.setError("recurringFrequency", {
+              message: "Choose a recurring option supported for this service.",
+            });
+            setScheduleSectionOverride("booking_type");
             const params = new URLSearchParams(window.location.search);
             params.set("step", "schedule");
             params.delete("section");
