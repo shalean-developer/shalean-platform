@@ -117,7 +117,7 @@ const STEP2_COPY: Record<
   },
   "carpet-cleaning": {
     title: "Schedule carpet cleaning",
-    subtitle: "Allow 2–4 hours for a thorough steam treatment.",
+    subtitle: "Choose a date and time — we'll calculate the cleaning time from your carpeted rooms and rugs.",
     cleanerTitle: "Choose your specialist",
     cleanerSubtitle: "Our carpet specialists bring all their own equipment.",
   },
