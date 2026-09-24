@@ -63,6 +63,7 @@ import {
   verifySelectedBookingV2Slot,
 } from "@/lib/booking-v2/verifySelectedBookingV2Schedule";
 import { recurringScheduleAllowedForService } from "@/lib/booking-v2/serviceRecurringPolicy";
+import { getSession } from "@/lib/auth/authClient";
 
 export type { LiveServiceConfig };
 
@@ -80,6 +81,8 @@ type BookingV2ContextValue = {
   feesConfig: BookingV2FeesConfig;
   catalogLoading: boolean;
   pricingAvailability: BookingPricingAvailability;
+  paymentEditResetting: boolean;
+  paymentEditResetError: string | null;
   detailsSectionOverride: BookingDetailsStage | null;
   editDetailsSection: (section: BookingDetailsStage) => void;
   scheduleSectionOverride: RegularCleaningScheduleStage | null;
@@ -438,6 +441,97 @@ export function BookingV2Provider({
       if (persistTimerRef.current) clearTimeout(persistTimerRef.current);
     };
   }, [form]);
+
+  /**
+   * A pending-payment row owns a frozen server price and Paystack reference.
+   * Keep normal payment retry intact until the customer actually changes a field
+   * after leaving Payment. At the first edit, supersede the old checkout on the
+   * server before clearing pendingBookingId and allowing live pricing to resume.
+   */
+  const [paymentEditResetting, setPaymentEditResetting] = useState(false);
+  const [paymentEditResetError, setPaymentEditResetError] = useState<string | null>(null);
+  const pendingPaymentInvalidationRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentStep === 4) return;
+
+    const systemOnlyFields = new Set([
+      "pendingBookingId",
+      "pricingSummary",
+      "quoteLock",
+    ]);
+
+    const subscription = form.watch((_values, info) => {
+      const fieldName = info.name ?? "";
+      if (!fieldName || systemOnlyFields.has(fieldName)) return;
+
+      const pendingBookingId = form.getValues("pendingBookingId")?.trim() ?? "";
+      if (!pendingBookingId || pendingPaymentInvalidationRef.current === pendingBookingId) return;
+      pendingPaymentInvalidationRef.current = pendingBookingId;
+      setPaymentEditResetting(true);
+      setPaymentEditResetError(null);
+
+      void (async () => {
+        let succeeded = false;
+        try {
+          const session = await getSession();
+          if (!session?.access_token) {
+            setPaymentEditResetError(
+              "Your sign-in session expired. Sign in again before changing this unpaid booking.",
+            );
+            return;
+          }
+
+          const response = await fetch(
+            `/api/bookings/${encodeURIComponent(pendingBookingId)}/abandon-payment`,
+            {
+              method: "POST",
+              headers: { Authorization: `Bearer ${session.access_token}` },
+              cache: "no-store",
+            },
+          );
+          const json = (await response.json().catch(() => ({}))) as {
+            ok?: boolean;
+            error?: string;
+          };
+
+          if (!response.ok || !json.ok) {
+            setPaymentEditResetError(
+              json.error?.trim() ||
+                "We could not release the previous payment session. Change the booking again to retry.",
+            );
+            return;
+          }
+
+          // Clear only after the server has made the old Paystack booking
+          // non-payable and released checkout reservations. The pricing hook
+          // then requotes the customer's latest form values immediately.
+          if (form.getValues("pendingBookingId")?.trim() === pendingBookingId) {
+            form.setValue("pendingBookingId", null, {
+              shouldDirty: false,
+              shouldValidate: false,
+            });
+            form.setValue("quoteLock", null, {
+              shouldDirty: false,
+              shouldValidate: false,
+            });
+          }
+          succeeded = true;
+          setPaymentEditResetError(null);
+        } catch {
+          setPaymentEditResetError(
+            "We could not release the previous payment session. Check your connection and change the booking again to retry.",
+          );
+        } finally {
+          setPaymentEditResetting(false);
+          if (!succeeded) {
+            pendingPaymentInvalidationRef.current = null;
+          }
+        }
+      })();
+    });
+
+    return () => subscription.unsubscribe();
+  }, [currentStep, form]);
 
   /** When service area changes, drop incompatible schedule / cleaner / team selections. */
   const prevLocationIdRef = useRef<string | undefined>(undefined);
@@ -1084,6 +1178,7 @@ export function BookingV2Provider({
   const goToStep = useCallback(
     (step: BookingStep) => {
       if (step === 4) {
+        if (paymentEditResetting || paymentEditResetError) return;
         const hasPendingBooking = Boolean(form.getValues("pendingBookingId")?.trim());
         if (!canEnterBookingPayment(pricingAvailability, hasPendingBooking)) return;
       }
@@ -1099,7 +1194,14 @@ export function BookingV2Provider({
       // unnecessary RSC request for every Continue/Back/Edit click.
       window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
     },
-    [detailsSectionOverride, serviceSlug, pricingAvailability, form],
+    [
+      detailsSectionOverride,
+      serviceSlug,
+      pricingAvailability,
+      form,
+      paymentEditResetting,
+      paymentEditResetError,
+    ],
   );
 
   const goNext = useCallback(async () => {
@@ -1293,6 +1395,8 @@ export function BookingV2Provider({
       feesConfig,
       catalogLoading,
       pricingAvailability,
+      paymentEditResetting,
+      paymentEditResetError,
       detailsSectionOverride,
       editDetailsSection,
       scheduleSectionOverride,
@@ -1312,6 +1416,8 @@ export function BookingV2Provider({
       feesConfig,
       catalogLoading,
       pricingAvailability,
+      paymentEditResetting,
+      paymentEditResetError,
       detailsSectionOverride,
       editDetailsSection,
       scheduleSectionOverride,
