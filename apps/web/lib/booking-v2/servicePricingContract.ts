@@ -62,7 +62,7 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
     canonicalPricingKey: "deep",
     aliases: ["deep", "deep-cleaning"],
     fields: [
-      { key: "propertyType", effect: "price_and_duration", consumedBy: "propertyFactorRates.propertyType" },
+      { key: "propertyType", effect: "informational", consumedBy: "persisted for turnover/property context" },
       { key: "bedrooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
