@@ -14,9 +14,14 @@ export function recurringFrequenciesForService(
   serviceSlug: ServiceSlug,
 ): RecurringFrequency[] {
   if (!serviceAllowsRecurringBookings(serviceSlug)) return [];
-  return serviceSlug === "deep-cleaning"
-    ? [DEEP_CLEANING_RECURRING_FREQUENCY]
-    : ["custom", "weekly", "fortnightly", "monthly"];
+  if (serviceSlug === "deep-cleaning") {
+    return [DEEP_CLEANING_RECURRING_FREQUENCY];
+  }
+  if (serviceSlug === "office-cleaning") {
+    // Custom recurrence is not yet supported by the 30-day package engine.
+    return ["weekly", "fortnightly", "monthly"];
+  }
+  return ["custom", "weekly", "fortnightly", "monthly"];
 }
 
 export function recurringScheduleAllowedForService(input: {
@@ -27,9 +32,11 @@ export function recurringScheduleAllowedForService(input: {
 }): boolean {
   if (input.bookingType !== "recurring") return true;
   if (!serviceAllowsRecurringBookings(input.serviceSlug)) return false;
-  if (input.serviceSlug !== "deep-cleaning") {
-    return Boolean(input.recurringFrequency);
+  const supported = recurringFrequenciesForService(input.serviceSlug);
+  if (!supported.includes(input.recurringFrequency as RecurringFrequency)) {
+    return false;
   }
+  if (input.serviceSlug !== "deep-cleaning") return true;
   return (
     input.recurringFrequency === DEEP_CLEANING_RECURRING_FREQUENCY &&
     input.recurringDays.length === 0
