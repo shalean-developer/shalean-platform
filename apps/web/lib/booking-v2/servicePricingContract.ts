@@ -8,6 +8,7 @@ import type { ServiceSlug } from "@/src/features/booking-v2/config/serviceConfig
 /** Field effect classification for the pricing matrix. */
 export type PricingFieldEffect =
   | "price_and_duration"
+  | "price_only"
   | "duration_only"
   | "informational"
   | "extras_or_remove";
@@ -101,11 +102,11 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
     canonicalPricingKey: "carpet",
     aliases: ["carpet", "carpet-cleaning"],
     fields: [
-      { key: "propertyType", effect: "price_and_duration", consumedBy: "propertyFactorRates.propertyType" },
+      { key: "propertyType", effect: "informational", consumedBy: "persisted for access / property context" },
       { key: "carpetRooms", effect: "price_and_duration", consumedBy: "carpetRooms_per_room_zar or pricePerBedroom + duration" },
       { key: "rugCount", effect: "price_and_duration", consumedBy: "rugs_per_unit_zar + duration rug minutes" },
-      { key: "carpetType", effect: "price_and_duration", consumedBy: "propertyFactorRates.carpetType" },
-      { key: "stains", effect: "price_and_duration", consumedBy: "propertyFactorRates.stains" },
+      { key: "carpetType", effect: "price_only", consumedBy: "propertyFactorRates.carpetType" },
+      { key: "stains", effect: "price_only", consumedBy: "propertyFactorRates.stains" },
     ],
   },
   "airbnb-cleaning": {
@@ -126,7 +127,12 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
 /** Pricing-relevant fields that must appear in quote factor lines or be explicitly informational. */
 export function pricingRelevantFieldKeys(serviceSlug: ServiceSlug): string[] {
   return SERVICE_PRICING_CONTRACTS[serviceSlug].fields
-    .filter((f) => f.effect === "price_and_duration" || f.effect === "duration_only")
+    .filter(
+      (f) =>
+        f.effect === "price_and_duration" ||
+        f.effect === "price_only" ||
+        f.effect === "duration_only",
+    )
     .map((f) => f.key);
 }
 

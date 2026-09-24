@@ -491,6 +491,49 @@ export function BookingV2Provider({
     return () => subscription.unsubscribe();
   }, [form, serviceSlug]);
 
+  /** Carpet room/rug counts and duration-affecting extras invalidate slot/specialist checks. */
+  const prevCarpetScopeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (serviceSlug !== "carpet-cleaning") return;
+
+    const currentDetails = form.getValues("serviceDetails") ?? {};
+    const currentExtras = form.getValues("selectedExtras") ?? [];
+    prevCarpetScopeRef.current = [
+      String(currentDetails.carpetRooms ?? ""),
+      String(currentDetails.rugCount ?? ""),
+      [...currentExtras].sort().join(","),
+    ].join("|");
+
+    const subscription = form.watch((values, info) => {
+      if (
+        info.name &&
+        info.name !== "serviceDetails.carpetRooms" &&
+        info.name !== "serviceDetails.rugCount" &&
+        info.name !== "selectedExtras"
+      ) {
+        return;
+      }
+      const details = values.serviceDetails ?? {};
+      const extras = values.selectedExtras ?? [];
+      const nextScope = [
+        String(details.carpetRooms ?? ""),
+        String(details.rugCount ?? ""),
+        [...extras].sort().join(","),
+      ].join("|");
+      const prevScope = prevCarpetScopeRef.current;
+      if (prevScope == null || nextScope === prevScope) {
+        prevCarpetScopeRef.current = nextScope;
+        return;
+      }
+      prevCarpetScopeRef.current = nextScope;
+      form.setValue("time", "", { shouldDirty: true });
+      form.setValue("alternativeTime", "", { shouldDirty: true });
+      form.setValue("selectedCleanerIds", [], { shouldDirty: true });
+      form.setValue("selectedCleanerDetails", [], { shouldDirty: true });
+    });
+    return () => subscription.unsubscribe();
+  }, [form, serviceSlug]);
+
   const canGoNext = useCallback(
     async (step: BookingStep): Promise<boolean> => {
       if (step === 3) {
@@ -540,6 +583,66 @@ export function BookingV2Provider({
                 : paths.includes("date") || paths.includes("time")
                   ? "date_time"
                   : "cleaner";
+            setScheduleSectionOverride(targetStage);
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "schedule");
+            params.delete("section");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+        }
+
+        if (serviceSlug === "carpet-cleaning") {
+          const values = form.getValues();
+          const bookingDetails = {
+            address: values.address,
+            suburb: values.suburb,
+            contactPhone: values.contactPhone,
+            serviceAreaLocationId: values.serviceAreaLocationId,
+          };
+          const questions = liveConfig?.step1Questions ?? config.step1Questions;
+          const stages = ["property", "rooms", "condition"] as const;
+          const firstInvalidStage = stages.find(
+            (stage) =>
+              !bookingDetailsStageReady(
+                serviceSlug,
+                stage,
+                values.serviceDetails ?? {},
+                bookingDetails,
+                questions,
+              ),
+          );
+          if (firstInvalidStage) {
+            setDetailsSectionOverride(firstInvalidStage);
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "details");
+            params.set("section", firstInvalidStage);
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          if (
+            values.bookingType !== "once_off" ||
+            values.cleanerCount !== 1 ||
+            (values.selectedCleanerIds ?? []).length > 1
+          ) {
+            setScheduleSectionOverride("cleaner");
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "schedule");
+            params.delete("section");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          const scheduleResult = buildStep2Schema(scheduling).safeParse(values);
+          if (!scheduleResult.success) {
+            scheduleResult.error.errors.forEach((e) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              form.setError(e.path.join(".") as any, { message: e.message });
+            });
+            const paths = scheduleResult.error.errors.map((e) => e.path[0]);
+            const targetStage: RegularCleaningScheduleStage =
+              paths.includes("date") || paths.includes("time") ? "date_time" : "cleaner";
             setScheduleSectionOverride(targetStage);
             const params = new URLSearchParams(window.location.search);
             params.set("step", "schedule");

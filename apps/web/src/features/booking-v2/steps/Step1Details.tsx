@@ -195,7 +195,9 @@ function ServiceQuestion({
   if (
     question.key === "bedrooms" ||
     question.key === "bathrooms" ||
-    question.key === "extraRooms"
+    question.key === "extraRooms" ||
+    question.key === "carpetRooms" ||
+    question.key === "rugCount"
   ) {
     return (
       <div className="min-w-0 w-full">
@@ -209,7 +211,14 @@ function ServiceQuestion({
           render={({ field }) => (
             <RoomCountSelector
               id={question.key}
-              kind={question.key as "bedrooms" | "bathrooms" | "extraRooms"}
+              kind={
+                question.key as
+                  | "bedrooms"
+                  | "bathrooms"
+                  | "extraRooms"
+                  | "carpetRooms"
+                  | "rugCount"
+              }
               value={String(field.value ?? "")}
               onChange={(value) => {
                 field.onChange(value);

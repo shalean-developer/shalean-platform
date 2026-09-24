@@ -3,15 +3,24 @@
 export const BEDROOM_CHIP_VALUES = ["0", "1", "2", "3+"] as const;
 export const BATHROOM_CHIP_VALUES = ["1", "2", "3", "4+"] as const;
 export const EXTRA_ROOM_CHIP_VALUES = ["0", "1", "2", "3+"] as const;
+export const CARPET_ROOM_CHIP_VALUES = ["1", "2", "3", "4", "5", "6+"] as const;
+export const RUG_COUNT_CHIP_VALUES = ["0", "1", "2", "3", "4+"] as const;
 
-export type RoomKind = "bedrooms" | "bathrooms" | "extraRooms";
+export type RoomKind =
+  | "bedrooms"
+  | "bathrooms"
+  | "extraRooms"
+  | "carpetRooms"
+  | "rugCount";
 
 export type BedroomChipValue = (typeof BEDROOM_CHIP_VALUES)[number];
 export type BathroomChipValue = (typeof BATHROOM_CHIP_VALUES)[number];
 export type ExtraRoomChipValue = (typeof EXTRA_ROOM_CHIP_VALUES)[number];
 
 export function roomCountCustomMinimum(kind: RoomKind): number {
-  return kind === "bathrooms" ? 4 : 3;
+  if (kind === "bathrooms" || kind === "rugCount") return 4;
+  if (kind === "carpetRooms") return 6;
+  return 3;
 }
 
 export function roomCountCustomChip(kind: RoomKind): string {
@@ -49,8 +58,13 @@ export function roomCountToChip(value: string | number | undefined | null, kind:
   if (!Number.isFinite(n)) return "";
   const customMinimum = roomCountCustomMinimum(kind);
   if (n >= customMinimum) return roomCountCustomChip(kind);
-  if ((kind === "bedrooms" || kind === "extraRooms") && n >= 0) return String(n);
-  if (kind === "bathrooms" && n >= 1) return String(n);
+  if (
+    (kind === "bedrooms" || kind === "extraRooms" || kind === "rugCount") &&
+    n >= 0
+  ) {
+    return String(n);
+  }
+  if ((kind === "bathrooms" || kind === "carpetRooms") && n >= 1) return String(n);
   return "";
 }
 

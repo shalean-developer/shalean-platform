@@ -7,12 +7,13 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { loadCachedBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
+import { canonicalCarpetCount } from "@/lib/booking-v2/carpetCountValidation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const detailValue = z.union([z.string(), z.number(), z.boolean()]);
-const quoteSchema = z.object({
+export const quoteSchema = z.object({
   serviceSlug: z.enum(SERVICE_SLUGS),
   serviceDetails: z.record(detailValue).default({}),
   selectedExtras: z.array(z.string()).default([]),
@@ -23,6 +24,34 @@ const quoteSchema = z.object({
   equipmentRequired: z.enum(["yes", "no", ""]).default("no"),
   equipmentQuote: z.record(z.unknown()).nullable().default(null),
   vipTier: z.string().nullable().default(null),
+}).superRefine((data, ctx) => {
+  if (data.serviceSlug !== "carpet-cleaning") return;
+
+  const rooms = data.serviceDetails.carpetRooms;
+  if (
+    rooms !== undefined &&
+    rooms !== "" &&
+    canonicalCarpetCount(rooms, { min: 1, max: 25 }) == null
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Enter a valid exact carpeted-room count.",
+      path: ["serviceDetails", "carpetRooms"],
+    });
+  }
+
+  const rugs = data.serviceDetails.rugCount;
+  if (
+    rugs !== undefined &&
+    rugs !== "" &&
+    canonicalCarpetCount(rugs, { min: 0, max: 25 }) == null
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Enter a valid exact rug count.",
+      path: ["serviceDetails", "rugCount"],
+    });
+  }
 });
 
 export async function POST(request: Request) {

@@ -5,7 +5,9 @@ import { cn } from "@/lib/utils";
 import {
   BATHROOM_CHIP_VALUES,
   BEDROOM_CHIP_VALUES,
+  CARPET_ROOM_CHIP_VALUES,
   EXTRA_ROOM_CHIP_VALUES,
+  RUG_COUNT_CHIP_VALUES,
   roomCountChipLabel,
   roomCountCustomChip,
   roomCountCustomMinimum,
@@ -31,7 +33,11 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
       ? BEDROOM_CHIP_VALUES
       : kind === "bathrooms"
         ? BATHROOM_CHIP_VALUES
-        : EXTRA_ROOM_CHIP_VALUES;
+        : kind === "carpetRooms"
+          ? CARPET_ROOM_CHIP_VALUES
+          : kind === "rugCount"
+            ? RUG_COUNT_CHIP_VALUES
+            : EXTRA_ROOM_CHIP_VALUES;
   const customMinimum = roomCountCustomMinimum(kind);
   const customChip = roomCountCustomChip(kind);
   const selectedChip = roomCountToChip(value, kind);
@@ -83,7 +89,11 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
             ? "Number of bedrooms"
             : kind === "bathrooms"
               ? "Number of bathrooms"
-              : "Number of extra rooms"
+              : kind === "carpetRooms"
+                ? "Number of carpeted rooms"
+                : kind === "rugCount"
+                  ? "Number of rugs"
+                  : "Number of extra rooms"
         }
         className="flex flex-wrap gap-2"
       >
@@ -126,7 +136,15 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
           <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={() => setCustomOpen(false)} />
           <div className="relative z-10 w-full max-w-sm rounded-t-2xl bg-white p-5 shadow-2xl sm:rounded-2xl">
             <h4 id={`${id}-custom-title`} className="text-base font-bold text-slate-900">
-              Enter exact {kind === "bedrooms" ? "bedroom" : kind === "bathrooms" ? "bathroom" : "extra room"} count
+              Enter exact {kind === "bedrooms"
+                ? "bedroom"
+                : kind === "bathrooms"
+                  ? "bathroom"
+                  : kind === "carpetRooms"
+                    ? "carpeted room"
+                    : kind === "rugCount"
+                      ? "rug"
+                      : "extra room"} count
             </h4>
             <p className="mt-1 text-sm text-slate-500">
               Enter {customMinimum} or more. Pricing and duration use the exact number you enter.
@@ -134,7 +152,15 @@ export function RoomCountSelector({ id, kind, value, onChange, error }: RoomCoun
             <div
               className="mt-4 grid grid-cols-[3.5rem_1fr_3.5rem] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm"
               role="group"
-              aria-label={`Exact ${kind === "bedrooms" ? "bedroom" : kind === "bathrooms" ? "bathroom" : "extra room"} count`}
+              aria-label={`Exact ${kind === "bedrooms"
+                ? "bedroom"
+                : kind === "bathrooms"
+                  ? "bathroom"
+                  : kind === "carpetRooms"
+                    ? "carpeted room"
+                    : kind === "rugCount"
+                      ? "rug"
+                      : "extra room"} count`}
             >
               <button
                 type="button"

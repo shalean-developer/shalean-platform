@@ -10,6 +10,7 @@ import {
   CONTACT_PHONE_VALIDATION_MESSAGE,
   isValidContactPhone,
 } from "@/lib/booking/contactPhoneValidation";
+import { canonicalCarpetCount } from "@/lib/booking-v2/carpetCountValidation";
 
 const contactPhoneField = z
   .string()
@@ -274,6 +275,49 @@ export const bookingV2ConfirmSchema = z.object({
   ),
 }).superRefine((data, ctx) => {
   if (data.serviceSlug === "carpet-cleaning") {
+    const details = data.serviceDetails ?? {};
+    const propertyType = String(details.propertyType ?? "").trim();
+    const carpetRooms = canonicalCarpetCount(details.carpetRooms, { min: 1, max: 25 });
+    const rugCount = canonicalCarpetCount(details.rugCount, { min: 0, max: 25 });
+    const carpetType = String(details.carpetType ?? "").trim();
+    const stains = String(details.stains ?? "").trim();
+
+    if (!["house", "apartment", "townhouse"].includes(propertyType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose a valid property type.",
+        path: ["serviceDetails", "propertyType"],
+      });
+    }
+    if (carpetRooms == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of carpeted rooms (1–25).",
+        path: ["serviceDetails", "carpetRooms"],
+      });
+    }
+    if (rugCount == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of rugs (0–25).",
+        path: ["serviceDetails", "rugCount"],
+      });
+    }
+    if (!["standard", "thick_pile", "berber", "persian_rug"].includes(carpetType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose a valid carpet type.",
+        path: ["serviceDetails", "carpetType"],
+      });
+    }
+    if (!["yes", "no"].includes(stains)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Tell us whether there are visible stains.",
+        path: ["serviceDetails", "stains"],
+      });
+    }
+
     if (data.cleanerCount !== 1) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

@@ -348,7 +348,7 @@ const CARPET_QUESTIONS: FormQuestion[] = [
       { value: "3", label: "3 rooms" },
       { value: "4", label: "4 rooms" },
       { value: "5", label: "5 rooms" },
-      { value: "6", label: "6+ rooms" },
+      { value: "6+", label: "6+ Custom" },
     ],
     hint: "Each carpeted room is priced and timed separately.",
   },
@@ -363,7 +363,7 @@ const CARPET_QUESTIONS: FormQuestion[] = [
       { value: "1", label: "1 rug" },
       { value: "2", label: "2 rugs" },
       { value: "3", label: "3 rugs" },
-      { value: "4", label: "4+ rugs" },
+      { value: "4+", label: "4+ Custom" },
     ],
     hint: "Area rugs and runners — priced per rug.",
   },
@@ -394,17 +394,9 @@ const CARPET_QUESTIONS: FormQuestion[] = [
   },
 ];
 
-const CARPET_EXTRAS: ServiceExtra[] = [
-  {
-    id: "sofa-upholstery",
-    label: "Sofa / upholstery",
-    description: "Clean one sofa or upholstered seat",
-    priceZar: 250,
-  },
-  { id: "pet-odour-treatment", label: "Pet odour treatment", description: "Enzyme-based odour neutraliser", priceZar: 220 },
-  { id: "fabric-protector", label: "Fabric protector", description: "Scotchgard-style protection spray", priceZar: 180 },
-  { id: "mattress-cleaning", label: "Mattress cleaning", description: "Clean and sanitise one mattress", priceZar: 250 },
-];
+// Carpet extras are database-authoritative. Keep the static fallback empty so
+// retired or unconfigured extras cannot reappear with stale hard-coded prices.
+const CARPET_EXTRAS: ServiceExtra[] = [];
 
 // ─── Airbnb Cleaning ───────────────────────────────────────────────────────────
 
