@@ -24,6 +24,14 @@ type StoredDraft = Record<string, unknown> & {
 
 function closureDraft(serviceSlug: string, cleanerMode: string): Record<string, unknown> {
   const teamMode = cleanerMode === "team";
+  const carpetDetails =
+    serviceSlug === "carpet-cleaning"
+      ? {
+          rugCount: "0",
+          carpetType: "standard",
+          stains: "no",
+        }
+      : {};
   return {
     serviceSlug,
     serviceDetails: {
@@ -37,6 +45,7 @@ function closureDraft(serviceSlug: string, cleanerMode: string): Record<string, 
       furnished: "no",
       officeSize: "small",
       carpetRooms: "2",
+      ...carpetDetails,
     },
     address: "1 Closure Test Street",
     suburb: "Claremont",
