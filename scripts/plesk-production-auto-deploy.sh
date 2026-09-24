@@ -6,7 +6,7 @@ set -euo pipefail
 # It never touches pricing-test-runtime or runs the staging deploy scripts.
 #
 # Production contract:
-# - exact current integration/shalean-release SHA only
+# - exact current production SHA only
 # - exact successful "Plesk production standalone artifact" for that SHA
 # - production metadata only (target host, environment, production Supabase ref)
 # - immutable release directory
@@ -48,7 +48,7 @@ ghdownload(){
     -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"
 }
 branch_sha(){
-  ghget "$API/branches/integration%2Fshalean-release" > "$WORK/branch.json"
+  ghget "$API/branches/production" > "$WORK/branch.json"
   /usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"]["sha"])' "$WORK/branch.json"
 }
 
@@ -61,7 +61,7 @@ printf 'PLESK-PROD-AUTO-01 target=%s\n' "$TARGET_SHA"
 # Wait for the exact production artifact. Never fall back to an older artifact.
 ELAPSED=0; RUN_ID=""; ART_ID=""
 while [ "$ELAPSED" -le "$WAIT_SECONDS" ]; do
-  ghget "$API/actions/runs?branch=integration%2Fshalean-release&per_page=50" > "$WORK/runs.json" || true
+  ghget "$API/actions/runs?branch=production&per_page=50" > "$WORK/runs.json" || true
   /usr/bin/python3 - "$WORK/runs.json" "$TARGET_SHA" > "$WORK/run.txt" <<'PY'
 import json,sys
 try: d=json.load(open(sys.argv[1]))
