@@ -7,6 +7,7 @@ import type { BookingV2FormData } from "@/src/features/booking-v2/types";
 import { buildCustomerPricingFromForm } from "@/lib/booking-v2/buildCustomerPricingFromForm";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 import { cachedClientRequest } from "@/lib/booking-v2/clientRequestCache";
+import { emptyCustomerPricingBreakdown } from "@/lib/booking-v2/emptyPricingBreakdown";
 
 /**
  * Recomputes pricingSummary whenever booking inputs, live catalog/config, or VIP tier change.
@@ -42,8 +43,15 @@ export function useBookingV2Pricing(): void {
     if (pendingBookingId?.trim()) return;
 
     const revision = ++quoteRevision.current;
-    // Any price-affecting customer change invalidates the previous lock immediately.
+    // Any price/duration-affecting customer change invalidates both the previous
+    // signed lock and its displayed summary immediately. This prevents a quote
+    // from an earlier scope (for example 3 bedrooms) remaining visible while
+    // the new authoritative quote (for example 4 bedrooms) is being resolved.
     setValue("quoteLock", null, { shouldDirty: false, shouldValidate: false });
+    setValue("pricingSummary", emptyCustomerPricingBreakdown(), {
+      shouldDirty: false,
+      shouldValidate: false,
+    });
     const currentServiceDetails = JSON.parse(serviceDetailsSnapshot) as NonNullable<
       BookingV2FormData["serviceDetails"]
     >;
