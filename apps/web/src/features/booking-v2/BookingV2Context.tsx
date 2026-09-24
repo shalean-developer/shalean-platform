@@ -394,6 +394,12 @@ export function BookingV2Provider({
         patch,
         serviceSlug,
       ) as BookingV2FormData;
+      if (serviceSlug === "airbnb-cleaning" && liveConfig) {
+        const validExtras = new Set((liveConfig.extras ?? []).map((extra) => extra.id));
+        normalizedPatch.selectedExtras = (normalizedPatch.selectedExtras ?? []).filter((id) =>
+          validExtras.has(id),
+        );
+      }
       form.reset(normalizedPatch, { keepDefaultValues: false });
       if (isProgressiveBookingDetailsService(serviceSlug)) {
         setDetailsSectionOverride(
@@ -415,7 +421,7 @@ export function BookingV2Provider({
     return () => {
       cancelled = true;
     };
-  }, [rebookId, rebookToken, serviceSlug, cleanerMode, form, router]);
+  }, [rebookId, rebookToken, serviceSlug, cleanerMode, form, router, liveConfig]);
 
   // Persist to localStorage whenever form changes
   const persistTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
