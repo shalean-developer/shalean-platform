@@ -164,15 +164,25 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         bookingDetails,
         questions,
       ));
-  const durationIsStable = quoteReadiness.ready && detailsScopeReady;
-  const durationHours = stableEstimatedCleaningHours({
-    durationMinutes: pricing.estimated_duration_minutes,
-    quoteReady: quoteReadiness.ready,
-    detailsReady: detailsScopeReady,
-    minimumHours: liveConfig?.minDurationHours,
-  });
+  // pricingSummary is recalculated optimistically on every scope selection before
+  // the debounced server quote/lock arrives. Use that current duration immediately
+  // once the relevant details are complete; quote readiness is still enforced at
+  // the payment boundary and must not make the summary look one selection behind.
+  const hasLiveDuration =
+    detailsScopeReady &&
+    typeof pricing.estimated_duration_minutes === "number" &&
+    Number.isFinite(pricing.estimated_duration_minutes) &&
+    pricing.estimated_duration_minutes > 0;
+  const durationHours = hasLiveDuration
+    ? (pricing.estimated_duration_minutes / 60).toFixed(1).replace(/\.0$/, "")
+    : stableEstimatedCleaningHours({
+        durationMinutes: pricing.estimated_duration_minutes,
+        quoteReady: quoteReadiness.ready,
+        detailsReady: detailsScopeReady,
+        minimumHours: liveConfig?.minDurationHours,
+      });
   const durationLabel =
-    durationIsStable ? "Est. hours" : durationHours !== "—" ? "Min. hours" : "Est. hours";
+    hasLiveDuration ? "Est. hours" : durationHours !== "—" ? "Min. hours" : "Est. hours";
   const optionLabel = (key: string, raw: unknown): string => {
     const value = String(raw ?? "");
     return (

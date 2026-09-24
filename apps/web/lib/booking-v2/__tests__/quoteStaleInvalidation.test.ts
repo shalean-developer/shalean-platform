@@ -11,6 +11,10 @@ const contextSource = readFileSync(
   join(process.cwd(), "src/features/booking-v2/BookingV2Context.tsx"),
   "utf8",
 );
+const summarySource = readFileSync(
+  join(process.cwd(), "src/features/booking-v2/components/BookingV2SummaryPanel.tsx"),
+  "utf8",
+);
 
 const sixServices = [
   "regular-cleaning",
@@ -77,3 +81,12 @@ describe("BOOKING-PAY-01 — edit after Paystack cancel", () => {
   });
 });
 
+
+
+describe("BOOKING-DURATION-01 — live duration summary", () => {
+  it("renders the current optimistic duration without waiting for the server quote lock", () => {
+    expect(summarySource).toContain("const hasLiveDuration =");
+    expect(summarySource).toContain("pricing.estimated_duration_minutes / 60");
+    expect(summarySource).toContain('hasLiveDuration ? "Est. hours"');
+  });
+});
