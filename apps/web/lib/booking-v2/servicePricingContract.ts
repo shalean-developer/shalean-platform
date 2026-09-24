@@ -75,7 +75,7 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
     canonicalPricingKey: "move",
     aliases: ["move", "move-in", "move-out", "moving", "moving-cleaning", "moving-in-cleaning"],
     fields: [
-      { key: "propertyType", effect: "price_and_duration", consumedBy: "propertyFactorRates.propertyType" },
+      { key: "propertyType", effect: "informational", consumedBy: "property/access context; no current Airbnb rate or duration adjustment" },
       {
         key: "moveType",
         effect: "price_and_duration",
@@ -114,7 +114,7 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
     canonicalPricingKey: "airbnb",
     aliases: ["airbnb", "airbnb-cleaning"],
     fields: [
-      { key: "propertyType", effect: "price_and_duration", consumedBy: "propertyFactorRates.propertyType" },
+      { key: "propertyType", effect: "informational", consumedBy: "property/access context; no current Airbnb rate or duration adjustment" },
       { key: "bedrooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "bathrooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },
       { key: "extraRooms", effect: "price_and_duration", consumedBy: "catalog room rates + duration" },

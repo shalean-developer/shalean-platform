@@ -10,7 +10,10 @@ import {
   CONTACT_PHONE_VALIDATION_MESSAGE,
   isValidContactPhone,
 } from "@/lib/booking/contactPhoneValidation";
-import { canonicalCarpetCount } from "@/lib/booking-v2/carpetCountValidation";
+import {
+  canonicalBookingCount,
+  canonicalCarpetCount,
+} from "@/lib/booking-v2/carpetCountValidation";
 
 const contactPhoneField = z
   .string()
@@ -329,6 +332,87 @@ export const bookingV2ConfirmSchema = z.object({
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Choose at most one preferred Carpet Cleaning specialist.",
+        path: ["selectedCleanerIds"],
+      });
+    }
+  }
+
+  if (data.serviceSlug === "airbnb-cleaning") {
+    const details = data.serviceDetails ?? {};
+    const propertyType = String(details.propertyType ?? "").trim();
+    const bedrooms = canonicalBookingCount(details.bedrooms, { min: 0, max: 25 });
+    const bathrooms = canonicalBookingCount(details.bathrooms, { min: 1, max: 25 });
+    const rawExtraRooms = details.extraRooms;
+    const extraRooms =
+      rawExtraRooms === undefined || rawExtraRooms === ""
+        ? 0
+        : canonicalBookingCount(rawExtraRooms, { min: 0, max: 25 });
+    const linens = String(details.linens ?? "").trim();
+    const keyAccess = String(details.keyAccess ?? "").trim();
+
+    if (!["house", "apartment", "townhouse"].includes(propertyType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose a valid Airbnb property type.",
+        path: ["serviceDetails", "propertyType"],
+      });
+    }
+    if (bedrooms == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of bedrooms (0–25).",
+        path: ["serviceDetails", "bedrooms"],
+      });
+    }
+    if (bathrooms == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of bathrooms (1–25).",
+        path: ["serviceDetails", "bathrooms"],
+      });
+    }
+    if (extraRooms == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the exact number of extra rooms (0–25).",
+        path: ["serviceDetails", "extraRooms"],
+      });
+    }
+    if (!["change", "no_change"].includes(linens)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose whether fresh linen will be available.",
+        path: ["serviceDetails", "linens"],
+      });
+    }
+    if (!["lockbox", "smart_lock", "in_person", "managed"].includes(keyAccess)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Choose a valid key or access method.",
+        path: ["serviceDetails", "keyAccess"],
+      });
+    }
+    if (
+      (keyAccess === "lockbox" || keyAccess === "smart_lock") &&
+      !data.gateCode.trim()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter the access code for this turnover.",
+        path: ["gateCode"],
+      });
+    }
+    if (data.cleanerMode !== "individual_cleaners") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Airbnb Cleaning uses individual cleaner selection.",
+        path: ["cleanerMode"],
+      });
+    }
+    if ((data.selectedCleanerIds ?? []).length > data.cleanerCount) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Preferred cleaners cannot exceed the selected cleaner count.",
         path: ["selectedCleanerIds"],
       });
     }

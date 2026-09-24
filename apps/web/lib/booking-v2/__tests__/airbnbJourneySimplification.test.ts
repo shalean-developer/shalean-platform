@@ -61,6 +61,7 @@ const address = {
   suburb: "Claremont",
   contactPhone: "+27820000000",
   serviceAreaLocationId: "13bb6c75-58a4-4a89-9416-bab320aa203b",
+  gateCode: "4821",
 };
 
 describe("Airbnb Booking V2 simplified journey", () => {
@@ -86,12 +87,12 @@ describe("Airbnb Booking V2 simplified journey", () => {
 
   it("keeps pricing ownership on property size while turnover setup stays informational", () => {
     expect(pricingRelevantFieldKeys("airbnb-cleaning")).toEqual([
-      "propertyType",
       "bedrooms",
       "bathrooms",
       "extraRooms",
     ]);
     expect(informationalFieldKeys("airbnb-cleaning")).toEqual([
+      "propertyType",
       "linens",
       "keyAccess",
     ]);
@@ -143,6 +144,15 @@ describe("Airbnb Booking V2 simplified journey", () => {
         "turnover",
         { linens: "change" },
         address,
+        SERVICE_CONFIG["airbnb-cleaning"].step1Questions,
+      ),
+    ).toBe(false);
+    expect(
+      bookingDetailsStageReady(
+        "airbnb-cleaning",
+        "turnover",
+        { linens: "change", keyAccess: "lockbox" },
+        { ...address, gateCode: "" },
         SERVICE_CONFIG["airbnb-cleaning"].step1Questions,
       ),
     ).toBe(false);

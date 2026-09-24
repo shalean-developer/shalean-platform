@@ -32,6 +32,13 @@ function closureDraft(serviceSlug: string, cleanerMode: string): Record<string, 
           stains: "no",
         }
       : {};
+  const airbnbDetails =
+    serviceSlug === "airbnb-cleaning"
+      ? {
+          linens: "change",
+          keyAccess: "managed",
+        }
+      : {};
   return {
     serviceSlug,
     serviceDetails: {
@@ -46,6 +53,7 @@ function closureDraft(serviceSlug: string, cleanerMode: string): Record<string, 
       officeSize: "small",
       carpetRooms: "2",
       ...carpetDetails,
+      ...airbnbDetails,
     },
     address: "1 Closure Test Street",
     suburb: "Claremont",
@@ -139,6 +147,40 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
             slotIntervalMinutes: 30,
             timezone: "Africa/Johannesburg",
           },
+        },
+      });
+      return;
+    }
+
+    if (path === "/api/booking/time-slots") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          slots: [{ time: "08:30", available: true }],
+        },
+      });
+      return;
+    }
+
+    if (path === "/api/booking-v2/available-cleaners") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          cleaners: [
+            {
+              id: "cleaner-closure",
+              name: "Closure Test Cleaner",
+              initials: "CT",
+              avatarColor: "bg-blue-100 text-blue-700",
+              rating: 4.9,
+              jobsCompleted: 100,
+              areasServed: null,
+              isAvailable: true,
+              slotEligible: true,
+              badges: ["recommended"],
+              unavailableReason: null,
+            },
+          ],
         },
       });
       return;

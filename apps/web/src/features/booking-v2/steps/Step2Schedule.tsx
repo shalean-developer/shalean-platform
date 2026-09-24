@@ -123,7 +123,7 @@ const STEP2_COPY: Record<
   },
   "airbnb-cleaning": {
     title: "Schedule the turnover",
-    subtitle: "We'll be ready and waiting before your next guest arrives.",
+    subtitle: "Choose the turnover date and cleaning start time.",
     cleanerTitle: "Choose your cleaner",
     cleanerSubtitle: "Pick a cleaner who knows Airbnb standards inside out.",
   },
@@ -401,6 +401,8 @@ export function Step2Schedule() {
   const isMovingCleaning = serviceSlug === "moving-cleaning";
   const isCarpetCleaning = serviceSlug === "carpet-cleaning";
   const isAirbnbCleaning = serviceSlug === "airbnb-cleaning";
+  const extraCleanerSurchargeZar =
+    liveConfig?.pricePerExtraCleaner ?? config.pricePerExtraCleaner;
   const skipsBookingTypeStage = isCarpetCleaning || isAirbnbCleaning;
   const progressiveIndividualSchedule = usesProgressiveIndividualSchedule(serviceSlug);
   const allowsRecurringBookings = serviceAllowsRecurringBookings(serviceSlug);
@@ -977,7 +979,9 @@ export function Step2Schedule() {
                     onClick={() => setValue("cleanerCount", cleanerCount + 1, { shouldDirty: true })}
                     className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-2 text-sm font-semibold text-blue-700 transition hover:bg-blue-100"
                   >
-                    Add another cleaner
+                    {isAirbnbCleaning
+                      ? `Add another cleaner (+R${extraCleanerSurchargeZar.toLocaleString("en-ZA")})`
+                      : "Add another cleaner"}
                   </button>
                 ) : null}
                 {cleanerCount > 1 ? (

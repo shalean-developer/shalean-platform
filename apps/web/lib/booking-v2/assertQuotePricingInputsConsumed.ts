@@ -133,12 +133,13 @@ export function assertQuotePricingInputsConsumed(params: {
       ? ["carpetRooms"]
       : serviceSlug === "office-cleaning"
         ? ["officeSize", "bathrooms"]
-        : serviceSlug === "moving-cleaning" ||
-            serviceSlug === "regular-cleaning" ||
-            serviceSlug === "deep-cleaning" ||
-            serviceSlug === "airbnb-cleaning"
-          ? ["bathrooms"]
-          : [];
+        : serviceSlug === "airbnb-cleaning"
+          ? ["bedrooms", "bathrooms"]
+          : serviceSlug === "moving-cleaning" ||
+              serviceSlug === "regular-cleaning" ||
+              serviceSlug === "deep-cleaning"
+            ? ["bathrooms"]
+            : [];
   for (const key of coreRequired) {
     if (!detailPresent(details, key)) {
       missing.push(key);

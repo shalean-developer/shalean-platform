@@ -7,7 +7,10 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { loadCachedBookingV2Catalog } from "@/lib/booking-v2/loadBookingV2Catalog";
 import { SERVICE_SLUGS } from "@/src/features/booking-v2/config/serviceConfig";
 import type { EquipmentQuoteResult } from "@/lib/booking-v2/equipmentPricing";
-import { canonicalCarpetCount } from "@/lib/booking-v2/carpetCountValidation";
+import {
+  canonicalBookingCount,
+  canonicalCarpetCount,
+} from "@/lib/booking-v2/carpetCountValidation";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -25,32 +28,65 @@ export const quoteSchema = z.object({
   equipmentQuote: z.record(z.unknown()).nullable().default(null),
   vipTier: z.string().nullable().default(null),
 }).superRefine((data, ctx) => {
-  if (data.serviceSlug !== "carpet-cleaning") return;
+  if (data.serviceSlug === "carpet-cleaning") {
+    const rooms = data.serviceDetails.carpetRooms;
+    if (
+      rooms !== undefined &&
+      rooms !== "" &&
+      canonicalCarpetCount(rooms, { min: 1, max: 25 }) == null
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter a valid exact carpeted-room count.",
+        path: ["serviceDetails", "carpetRooms"],
+      });
+    }
 
-  const rooms = data.serviceDetails.carpetRooms;
-  if (
-    rooms !== undefined &&
-    rooms !== "" &&
-    canonicalCarpetCount(rooms, { min: 1, max: 25 }) == null
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Enter a valid exact carpeted-room count.",
-      path: ["serviceDetails", "carpetRooms"],
-    });
+    const rugs = data.serviceDetails.rugCount;
+    if (
+      rugs !== undefined &&
+      rugs !== "" &&
+      canonicalCarpetCount(rugs, { min: 0, max: 25 }) == null
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter a valid exact rug count.",
+        path: ["serviceDetails", "rugCount"],
+      });
+    }
   }
 
-  const rugs = data.serviceDetails.rugCount;
-  if (
-    rugs !== undefined &&
-    rugs !== "" &&
-    canonicalCarpetCount(rugs, { min: 0, max: 25 }) == null
-  ) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Enter a valid exact rug count.",
-      path: ["serviceDetails", "rugCount"],
-    });
+  if (data.serviceSlug === "airbnb-cleaning") {
+    for (const [key, min] of [
+      ["bedrooms", 0],
+      ["bathrooms", 1],
+    ] as const) {
+      const value = data.serviceDetails[key];
+      if (
+        value !== undefined &&
+        value !== "" &&
+        canonicalBookingCount(value, { min, max: 25 }) == null
+      ) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Enter a valid exact ${key} count.`,
+          path: ["serviceDetails", key],
+        });
+      }
+    }
+
+    const extraRooms = data.serviceDetails.extraRooms;
+    if (
+      extraRooms !== undefined &&
+      extraRooms !== "" &&
+      canonicalBookingCount(extraRooms, { min: 0, max: 25 }) == null
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Enter a valid exact extra-room count.",
+        path: ["serviceDetails", "extraRooms"],
+      });
+    }
   }
 });
 

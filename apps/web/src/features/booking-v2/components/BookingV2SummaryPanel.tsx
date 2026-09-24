@@ -128,6 +128,8 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     suburb: values.suburb,
     contactPhone: values.contactPhone,
     serviceAreaLocationId: values.serviceAreaLocationId,
+    gateCode: values.gateCode,
+    accessInstructions: values.accessInstructions,
   };
   const questions = liveConfig?.step1Questions ?? config.step1Questions;
   const detailsStage = bookingDetailsStage(
@@ -188,11 +190,14 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   const bedrooms = String(values.serviceDetails.bedrooms ?? "");
   const bathrooms = String(values.serviceDetails.bathrooms ?? "");
   const extraRooms = String(values.serviceDetails.extraRooms ?? "");
-  const homeRoomsComplete = [bedrooms, bathrooms, extraRooms].every(
-    (value) => value.trim() !== "",
-  );
+  const effectiveExtraRooms =
+    isAirbnbCleaning && extraRooms.trim() === "" ? "0" : extraRooms;
+  const homeRoomsComplete =
+    bedrooms.trim() !== "" &&
+    bathrooms.trim() !== "" &&
+    (isAirbnbCleaning || effectiveExtraRooms.trim() !== "");
   const homeRoomsLabel = homeRoomsComplete
-    ? `${bedrooms} bed · ${bathrooms} bath${extraRooms !== "0" ? ` · ${extraRooms} extra` : ""}`
+    ? `${bedrooms} bed · ${bathrooms} bath${effectiveExtraRooms !== "0" ? ` · ${effectiveExtraRooms} extra` : ""}`
     : "";
 
   const roomsLabel =
