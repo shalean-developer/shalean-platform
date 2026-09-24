@@ -31,7 +31,10 @@ import {
   clearBookingV2DraftStorage,
   consumeBookingV2SuccessRedirect,
 } from "@/lib/booking-v2/bookingV2PaymentRedirect";
-import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
+import {
+  assessBookingQuoteReadiness,
+  canRefreshBookingQuoteAtPayment,
+} from "@/lib/booking-v2/bookingQuoteReadiness";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import { useBookingVipTier } from "@/components/booking/useBookingVipTier";
 
@@ -412,11 +415,12 @@ function PaymentSection({
       referralLoading &&
       (referralCodeFromUrl?.trim() || getStoredReferral("customer")),
   );
+  const quoteLockRefreshable = canRefreshBookingQuoteAtPayment(quoteReadiness);
   const canStartPayment = referralValidationPending
     ? false
     : pendingBookingId
       ? Boolean(pendingSummary && !pendingSummaryLoading)
-      : quoteReadiness.ready;
+      : quoteReadiness.ready || quoteLockRefreshable;
   const referralToApply = referralDiscount?.discountZar ?? 0;
   const totalAfterPromo = Math.max(0, checkoutSubtotal - promoDiscountZar);
   const totalAfterReferral = Math.max(0, totalAfterPromo - referralToApply);
@@ -570,7 +574,7 @@ function PaymentSection({
   async function handleConfirmAndPay() {
     // A saved booking already has a server-owned canonical amount. Do not block its
     // idempotent payment-session recovery when the client quote catalogue is unavailable.
-    if (!pendingBookingId && !quoteReadiness.ready) {
+    if (!pendingBookingId && !quoteReadiness.ready && !quoteLockRefreshable) {
       setError(quoteReadiness.message ?? "Your quote is not ready. Please refresh pricing.");
       return;
     }
