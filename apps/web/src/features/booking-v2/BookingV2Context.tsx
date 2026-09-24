@@ -64,7 +64,6 @@ import {
 } from "@/lib/booking-v2/verifySelectedBookingV2Schedule";
 import { recurringScheduleAllowedForService } from "@/lib/booking-v2/serviceRecurringPolicy";
 import { getSession } from "@/lib/auth/authClient";
-import { getSession } from "@/lib/auth/authClient";
 
 export type { LiveServiceConfig };
 
