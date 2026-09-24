@@ -218,11 +218,7 @@ function BookingV2Inner() {
                 <Button
                   size="lg"
                   onClick={goNext}
-                  disabled={
-                    paymentEditResetting ||
-                    Boolean(paymentEditResetError) ||
-                    (currentStep === 3 && !paymentEntryAllowed)
-                  }
+                  disabled={currentStep === 3 && !paymentEntryAllowed}
                   suppressHydrationWarning
                   className="w-full rounded-xl sm:w-auto"
                 >
