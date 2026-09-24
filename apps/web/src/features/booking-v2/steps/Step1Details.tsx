@@ -23,10 +23,12 @@ import {
   bookingDetailsQuestionVisibleAtStage,
   bookingDetailsShowsExtras,
   bookingDetailsStage,
+  bookingDetailsFinalStage,
   bookingDetailsStageAutoAdvances,
   bookingDetailsStageReady,
   isProgressiveBookingDetailsService,
 } from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
+import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
 
 // ─── Shared field components ───────────────────────────────────────────────────
 
@@ -356,6 +358,7 @@ export function Step1Details() {
   const {
     serviceSlug,
     liveConfig,
+    catalogLoading,
     detailsSectionOverride,
     editDetailsSection,
     goBack,
@@ -369,6 +372,8 @@ export function Step1Details() {
   const suburb = watch("suburb") ?? "";
   const contactPhone = watch("contactPhone") ?? "";
   const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
+  const pricingSummary = watch("pricingSummary");
+  const quoteLock = watch("quoteLock");
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
@@ -501,6 +506,16 @@ export function Step1Details() {
         step1Questions,
       )
     : true;
+  const isFinalDetailsStage =
+    activeDetailsStage === bookingDetailsFinalStage(serviceSlug);
+  const quoteReadiness = assessBookingQuoteReadiness({
+    catalogLoading,
+    pricingSummary,
+    quoteLock,
+    requirePriceLock: true,
+  });
+  const canAdvanceDetails =
+    detailsStageReady && (!isFinalDetailsStage || quoteReadiness.ready);
 
   function moveProgressiveStage(direction: "back" | "next") {
     if (!activeDetailsStage) return;
@@ -514,7 +529,7 @@ export function Step1Details() {
       else goBack();
       return;
     }
-    if (!detailsStageReady) return;
+    if (!canAdvanceDetails) return;
     if (adjacentStage) editDetailsSection(adjacentStage);
     else void goNext();
   }
@@ -668,7 +683,7 @@ export function Step1Details() {
           {!autoAdvanceStage ? (
             <button
               type="button"
-              disabled={!detailsStageReady}
+              disabled={!canAdvanceDetails}
               onClick={() => moveProgressiveStage("next")}
               className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-600 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:bg-slate-300"
             >
@@ -676,6 +691,11 @@ export function Step1Details() {
                 ? "Continue to Schedule →"
                 : "Continue →"}
             </button>
+          ) : null}
+          {isFinalDetailsStage && detailsStageReady && !quoteReadiness.ready ? (
+            <p className="text-center text-xs text-slate-500 sm:ml-auto">
+              {quoteReadiness.message ?? "Finalising your estimated time and secured price…"}
+            </p>
           ) : null}
         </div>
       ) : null}
