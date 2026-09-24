@@ -1005,6 +1005,24 @@ export function Step3Review() {
     editDetailsSection("condition");
   }
 
+  function editAirbnbDetails() {
+    editDetailsSection("property");
+  }
+
+  function editAirbnbSchedule() {
+    editScheduleSection("date_time");
+    goToStep(2);
+  }
+
+  function editAirbnbCleaner() {
+    editScheduleSection("cleaner");
+    goToStep(2);
+  }
+
+  function editAirbnbAddons() {
+    editDetailsSection("turnover");
+  }
+
   function saveEdit() {
     setEditPanel(null);
     setSnapshot(null);
@@ -1177,7 +1195,7 @@ export function Step3Review() {
           <ReviewSection
             number={cleanDetailsNumber}
             title="Airbnb details"
-            onEdit={() => openEdit("property")}
+            onEdit={editAirbnbDetails}
             className="sm:col-span-2"
           >
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -1228,7 +1246,9 @@ export function Step3Review() {
               ? editOfficeSchedule
               : isCarpetCleaning
                 ? editCarpetSchedule
-                : () => openEdit("schedule")
+                : isAirbnbCleaning
+                  ? editAirbnbSchedule
+                  : () => openEdit("schedule")
           }
           className="sm:col-span-2"
         >
@@ -1282,7 +1302,9 @@ export function Step3Review() {
                   ? editOfficeCleaner
                   : isCarpetCleaning
                     ? editCarpetCleaner
-                    : () => openEdit("cleaner")
+                    : isAirbnbCleaning
+                      ? editAirbnbCleaner
+                      : () => openEdit("cleaner")
               }
             >
               {!hasDetails && !hasIds ? (
@@ -1317,7 +1339,9 @@ export function Step3Review() {
                         ? editOfficeCleaner
                         : isCarpetCleaning
                           ? editCarpetCleaner
-                          : () => openEdit("cleaner")
+                          : isAirbnbCleaning
+                            ? editAirbnbCleaner
+                            : () => openEdit("cleaner")
                     }
                     className="ml-1.5 font-medium text-blue-600 hover:underline"
                   >
@@ -1339,7 +1363,9 @@ export function Step3Review() {
                 ? editOfficeDetails
                 : isCarpetCleaning
                   ? editCarpetAddons
-                  : () => openEdit("extras")
+                  : isAirbnbCleaning
+                    ? editAirbnbAddons
+                    : () => openEdit("extras")
             }
             className={values.cleanerMode === "individual_cleaners" ? undefined : "sm:col-span-2"}
           >
