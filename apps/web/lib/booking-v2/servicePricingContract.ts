@@ -75,7 +75,7 @@ export const SERVICE_PRICING_CONTRACTS: Record<ServiceSlug, ServicePricingContra
     canonicalPricingKey: "move",
     aliases: ["move", "move-in", "move-out", "moving", "moving-cleaning", "moving-in-cleaning"],
     fields: [
-      { key: "propertyType", effect: "informational", consumedBy: "property/access context; no current Airbnb rate or duration adjustment" },
+      { key: "propertyType", effect: "informational", consumedBy: "property/access context; no current Moving rate or duration adjustment" },
       {
         key: "moveType",
         effect: "price_and_duration",
