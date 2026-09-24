@@ -502,6 +502,53 @@ export async function evaluateCheckoutPromotions(
   });
 }
 
+export async function reverseAppliedPromotionRedemptionsForBooking(
+  admin: Admin,
+  args: { bookingId: string; bookingRevenueZar: number },
+): Promise<{ ok: true; reversed: number } | { ok: false; error: string }> {
+  const { data: reversedRows, error } = await admin
+    .from("promotion_redemptions")
+    .update({ status: "reversed" })
+    .eq("booking_id", args.bookingId)
+    .eq("status", "applied")
+    .select("promotion_id, discount_zar");
+
+  if (error) return { ok: false, error: error.message };
+
+  // The status transition above is the idempotency anchor. Only rows reversed by
+  // this call are used to repair aggregate counters, so retries cannot subtract
+  // the same redemption twice.
+  for (const row of reversedRows ?? []) {
+    const promotionId = typeof row.promotion_id === "string" ? row.promotion_id.trim() : "";
+    if (!promotionId) continue;
+    const discountZar = Math.max(0, Number(row.discount_zar ?? 0));
+
+    const { data: promotion } = await admin
+      .from("promotions")
+      .select("redemptions_count, budget_spent_zar, revenue_generated_zar")
+      .eq("id", promotionId)
+      .maybeSingle();
+    if (!promotion) continue;
+
+    const previousCount = Math.max(0, Number(promotion.redemptions_count ?? 0));
+    await admin
+      .from("promotions")
+      .update({
+        redemptions_count: Math.max(0, previousCount - 1),
+        budget_spent_zar: Math.max(0, Number(promotion.budget_spent_zar ?? 0) - discountZar),
+        revenue_generated_zar: Math.max(
+          0,
+          Number(promotion.revenue_generated_zar ?? 0) - Math.max(0, args.bookingRevenueZar),
+        ),
+        updated_at: new Date().toISOString(),
+      })
+      .eq("id", promotionId)
+      .eq("redemptions_count", previousCount);
+  }
+
+  return { ok: true, reversed: reversedRows?.length ?? 0 };
+}
+
 export async function recordPromotionEvent(
   admin: Admin,
   args: {
