@@ -11,6 +11,10 @@ const contextSource = readFileSync(
   join(process.cwd(), "src/features/booking-v2/BookingV2Context.tsx"),
   "utf8",
 );
+const summarySource = readFileSync(
+  join(process.cwd(), "src/features/booking-v2/components/BookingV2SummaryPanel.tsx"),
+  "utf8",
+);
 
 const sixServices = [
   "regular-cleaning",
