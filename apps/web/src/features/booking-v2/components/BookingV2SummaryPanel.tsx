@@ -169,7 +169,6 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
   // once the relevant details are complete; quote readiness is still enforced at
   // the payment boundary and must not make the summary look one selection behind.
   const hasLiveDuration =
-    detailsScopeReady &&
     typeof pricing.estimated_duration_minutes === "number" &&
     Number.isFinite(pricing.estimated_duration_minutes) &&
     pricing.estimated_duration_minutes > 0;
