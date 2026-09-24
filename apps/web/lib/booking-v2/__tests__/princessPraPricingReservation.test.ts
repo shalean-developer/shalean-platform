@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { calculateCustomerTotal } from "@/lib/booking-v2/calculateCustomerTotal";
 import { defaultBookingV2FeesConfig } from "@/lib/booking-v2/bookingV2FeesConfig";
 import type { CustomerTotalInput } from "@/lib/booking-v2/types";
-import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
+import {
+  assessBookingQuoteReadiness,
+  canRefreshBookingQuoteAtPayment,
+} from "@/lib/booking-v2/bookingQuoteReadiness";
 import { emptyCustomerPricingBreakdown } from "@/lib/booking-v2/emptyPricingBreakdown";
 import {
   pricingServiceSlugCandidates,
@@ -176,6 +179,27 @@ describe("PRINCESS PR-A — quote integrity / readiness", () => {
     });
     expect(result.ready).toBe(false);
     expect(result.reason).toBe("stale_price_lock");
+  });
+
+  it("keeps missing and stale price locks refreshable from Payment", () => {
+    expect(
+      canRefreshBookingQuoteAtPayment({
+        ready: false,
+        reason: "missing_price_lock",
+      }),
+    ).toBe(true);
+    expect(
+      canRefreshBookingQuoteAtPayment({
+        ready: false,
+        reason: "stale_price_lock",
+      }),
+    ).toBe(true);
+    expect(
+      canRefreshBookingQuoteAtPayment({
+        ready: false,
+        reason: "missing_duration",
+      }),
+    ).toBe(false);
   });
 
   it("server zero base+total is hard-rejected", () => {
