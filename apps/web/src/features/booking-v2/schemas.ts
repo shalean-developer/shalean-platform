@@ -10,6 +10,7 @@ import {
   CONTACT_PHONE_VALIDATION_MESSAGE,
   isValidContactPhone,
 } from "@/lib/booking/contactPhoneValidation";
+import { canonicalCarpetCount } from "@/lib/booking-v2/carpetCountValidation";
 
 const contactPhoneField = z
   .string()
@@ -276,8 +277,8 @@ export const bookingV2ConfirmSchema = z.object({
   if (data.serviceSlug === "carpet-cleaning") {
     const details = data.serviceDetails ?? {};
     const propertyType = String(details.propertyType ?? "").trim();
-    const carpetRooms = Number(details.carpetRooms);
-    const rugCount = Number(details.rugCount);
+    const carpetRooms = canonicalCarpetCount(details.carpetRooms, { min: 1, max: 25 });
+    const rugCount = canonicalCarpetCount(details.rugCount, { min: 0, max: 25 });
     const carpetType = String(details.carpetType ?? "").trim();
     const stains = String(details.stains ?? "").trim();
 
@@ -288,14 +289,14 @@ export const bookingV2ConfirmSchema = z.object({
         path: ["serviceDetails", "propertyType"],
       });
     }
-    if (!Number.isInteger(carpetRooms) || carpetRooms < 1 || carpetRooms > 25) {
+    if (carpetRooms == null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Enter the exact number of carpeted rooms (1–25).",
         path: ["serviceDetails", "carpetRooms"],
       });
     }
-    if (!Number.isInteger(rugCount) || rugCount < 0 || rugCount > 25) {
+    if (rugCount == null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
         message: "Enter the exact number of rugs (0–25).",
