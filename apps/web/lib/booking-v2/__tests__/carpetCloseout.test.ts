@@ -14,6 +14,7 @@ import {
   roomCountToChip,
 } from "@/src/features/booking-v2/config/roomCountOptions";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
+import { canonicalCarpetCount } from "@/lib/booking-v2/carpetCountValidation";
 
 const step1Source = readFileSync(
   join(process.cwd(), "src/features/booking-v2/steps/Step1Details.tsx"),
@@ -29,6 +30,10 @@ const reviewSource = readFileSync(
 );
 const contextSource = readFileSync(
   join(process.cwd(), "src/features/booking-v2/BookingV2Context.tsx"),
+  "utf8",
+);
+const quoteRouteSource = readFileSync(
+  join(process.cwd(), "app/api/booking-v2/quote/route.ts"),
   "utf8",
 );
 
@@ -170,6 +175,20 @@ describe("Carpet Booking V2 closeout", () => {
     expect(contextSource).toContain("buildStep2Schema(scheduling).safeParse(values)");
   });
 
+  it("uses one canonical decimal-count parser at quote and confirm boundaries", () => {
+    expect(canonicalCarpetCount("10", { min: 1, max: 25 })).toBe(10);
+    expect(canonicalCarpetCount(10, { min: 1, max: 25 })).toBe(10);
+    expect(canonicalCarpetCount("0", { min: 0, max: 25 })).toBe(0);
+    expect(canonicalCarpetCount("1e1", { min: 0, max: 25 })).toBeNull();
+    expect(canonicalCarpetCount("0x10", { min: 0, max: 25 })).toBeNull();
+    expect(canonicalCarpetCount("06", { min: 1, max: 25 })).toBeNull();
+    expect(canonicalCarpetCount("6+", { min: 1, max: 25 })).toBeNull();
+    expect(canonicalCarpetCount(1.5, { min: 1, max: 25 })).toBeNull();
+
+    expect(quoteRouteSource).toContain('canonicalCarpetCount(rooms, { min: 1, max: 25 })');
+    expect(quoteRouteSource).toContain('canonicalCarpetCount(rugs, { min: 0, max: 25 })');
+  });
+
   it("server confirm rejects incomplete or capped pseudo-count Carpet payloads", () => {
     expect(bookingV2ConfirmSchema.safeParse(confirmPayload()).success).toBe(true);
 
@@ -199,5 +218,26 @@ describe("Carpet Booking V2 closeout", () => {
         }),
       ).success,
     ).toBe(false);
+
+    for (const serviceDetails of [
+      {
+        propertyType: "house",
+        carpetRooms: "0x10",
+        rugCount: "0",
+        carpetType: "standard",
+        stains: "no",
+      },
+      {
+        propertyType: "house",
+        carpetRooms: "2",
+        rugCount: "1e1",
+        carpetType: "standard",
+        stains: "no",
+      },
+    ]) {
+      expect(
+        bookingV2ConfirmSchema.safeParse(confirmPayload({ serviceDetails })).success,
+      ).toBe(false);
+    }
   });
 });
