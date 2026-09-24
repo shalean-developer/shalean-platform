@@ -14,6 +14,7 @@ on:
       - ".github/workflows/plesk-prod-build-08.yml"
       - "apps/web/**"
       - "packages/**"
+      - "scripts/plesk-production-auto-deploy.sh"
       - "package.json"
   workflow_dispatch:
 
