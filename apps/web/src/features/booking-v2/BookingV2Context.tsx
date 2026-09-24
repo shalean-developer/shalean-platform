@@ -531,9 +531,7 @@ export function BookingV2Provider({
       form.setValue("selectedCleanerDetails", [], { shouldDirty: true });
       form.setValue("assignedTeamId", "", { shouldDirty: true });
       form.setValue("assignedTeamName", "", { shouldDirty: true });
-      if (usesProgressiveIndividualSchedule(serviceSlug)) {
-        setScheduleSectionOverride("date_time");
-      }
+      setScheduleSectionOverride("date_time");
     });
     return () => subscription.unsubscribe();
   }, [form, serviceSlug]);
