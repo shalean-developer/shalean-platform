@@ -9,7 +9,8 @@ import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
 import { recurringFrequencyLabel } from "@/src/features/booking-v2/config/recurringScheduleOptions";
 import type { BookingV2FormData, BookingStep } from "@/src/features/booking-v2/types";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
-import { estimatedCleaningHoursFromMinutes } from "@/lib/booking-v2/formatEstimatedCleaningTime";
+import { stableEstimatedCleaningHours } from "@/lib/booking-v2/formatEstimatedCleaningTime";
+import { assessBookingQuoteReadiness } from "@/lib/booking-v2/bookingQuoteReadiness";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import {
   isRegularCleaningScheduleStageComplete,
@@ -19,6 +20,7 @@ import {
   bookingDetailsFinalStage,
   bookingDetailsStage,
   bookingDetailsStageIndex,
+  bookingDetailsStageReady,
   isProgressiveBookingDetailsService,
   usesProgressiveIndividualSchedule,
   type BookingDetailsStage,
@@ -86,10 +88,6 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
         serviceSlug: values.serviceSlug,
       })
     : null;
-  const durationHours = estimatedCleaningHoursFromMinutes(
-    pricing.estimated_duration_minutes,
-    liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours,
-  );
   const hasAddress = values.address.length >= 5;
   const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(values.date);
   const hasCleaner = values.cleanerMode === "team" || values.cleanerCount > 0;
@@ -148,6 +146,27 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     values.serviceSlug,
     finalDetailsStage,
   );
+  const quoteReadiness = assessBookingQuoteReadiness({
+    catalogLoading: false,
+    pricingSummary: pricing,
+    quoteLock: values.quoteLock,
+    requirePriceLock: true,
+  });
+  const detailsScopeReady =
+    currentStep > 1 ||
+    (detailsStage === finalDetailsStage &&
+      bookingDetailsStageReady(
+        values.serviceSlug,
+        finalDetailsStage,
+        values.serviceDetails,
+        bookingDetails,
+        questions,
+      ));
+  const durationHours = stableEstimatedCleaningHours({
+    durationMinutes: pricing.estimated_duration_minutes,
+    quoteReady: quoteReadiness.ready,
+    detailsReady: detailsScopeReady,
+  });
   const optionLabel = (key: string, raw: unknown): string => {
     const value = String(raw ?? "");
     return (
