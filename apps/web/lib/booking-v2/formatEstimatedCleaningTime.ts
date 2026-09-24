@@ -27,3 +27,13 @@ export function estimatedCleaningHoursFromMinutes(
   }
   return "—";
 }
+
+
+export function stableEstimatedCleaningHours(params: {
+  durationMinutes: number | null | undefined;
+  quoteReady: boolean;
+  detailsReady: boolean;
+}): string {
+  if (!params.quoteReady || !params.detailsReady) return "—";
+  return estimatedCleaningHoursFromMinutes(params.durationMinutes);
+}
