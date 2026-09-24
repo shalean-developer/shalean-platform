@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SERVICE_CONFIG } from "@/src/features/booking-v2/config/serviceConfig";
-import { bookingDetailsStageReady } from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
+import {
+  bookingDetailsFinalStage,
+  bookingDetailsShowsExtras,
+  bookingDetailsStageFromSearchParam,
+  bookingDetailsStageReady,
+} from "@/src/features/booking-v2/steps/serviceProgressiveDisclosure";
 import { serviceAllowsRecurringBookings } from "@/lib/booking-v2/serviceRecurringPolicy";
 import {
   informationalFieldKeys,
@@ -61,13 +66,15 @@ describe("Office Booking V2 simplification", () => {
     ).toBe(false);
   });
 
-  it("lets the add-ons-only final Office details stage continue", () => {
+  it("uses Office rooms as the final details/add-ons stage with no empty preferences page", () => {
+    expect(bookingDetailsFinalStage("office-cleaning")).toBe("rooms");
+    expect(bookingDetailsShowsExtras("office-cleaning", "rooms")).toBe(true);
+    expect(bookingDetailsStageFromSearchParam("office-cleaning", "preferences")).toBeNull();
     expect(
       bookingDetailsStageReady(
         "office-cleaning",
-        "preferences",
+        "rooms",
         {
-          officeType: "open_plan",
           officeSize: "medium",
           bathrooms: "2",
         },
@@ -134,6 +141,8 @@ describe("Office Booking V2 simplification", () => {
   it("presents consolidated Office details in Review and Summary", () => {
     expect(reviewSource).toContain('"Office details"');
     expect(summarySource).toContain('"Office scope"');
+    expect(summarySource).toContain('values.serviceSlug === "office-cleaning"');
+    expect(summarySource).toContain("detailsStageIndex >= finalDetailsStageIndex");
     expect(summarySource).not.toContain(
       'optionLabel("afterHours", values.serviceDetails.afterHours)',
     );
