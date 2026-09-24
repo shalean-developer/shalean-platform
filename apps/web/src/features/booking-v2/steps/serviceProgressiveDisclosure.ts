@@ -27,7 +27,7 @@ const STAGES: Record<ServiceSlug, readonly BookingDetailsStage[]> = {
   "regular-cleaning": ["address", "property", "rooms", "pets", "equipment"],
   "deep-cleaning": ["address", "property", "rooms", "pets"],
   "moving-cleaning": ["address", "property", "move", "rooms", "condition"],
-  "office-cleaning": ["address", "rooms", "preferences"],
+  "office-cleaning": ["address", "rooms"],
   "carpet-cleaning": ["address", "property", "rooms", "condition"],
   "airbnb-cleaning": ["address", "property", "rooms", "turnover"],
 };
@@ -36,7 +36,7 @@ const EXTRAS_STAGE: Record<ServiceSlug, BookingDetailsStage> = {
   "regular-cleaning": "equipment",
   "deep-cleaning": "pets",
   "moving-cleaning": "condition",
-  "office-cleaning": "preferences",
+  "office-cleaning": "rooms",
   "carpet-cleaning": "condition",
   "airbnb-cleaning": "turnover",
 };
@@ -99,16 +99,11 @@ export function bookingDetailsStage(
       if (!all(details, ["bedrooms", "bathrooms", "extraRooms"])) return "rooms";
       return "condition";
 
-    case "office-cleaning": {
-      const roomsReady = catalogStageQuestionsReady(
-        serviceSlug,
-        "rooms",
-        details,
-        questions,
-      );
-      if (!(roomsReady ?? all(details, ["officeSize", "bathrooms"]))) return "rooms";
-      return "preferences";
-    }
+    case "office-cleaning":
+      // Office Details is intentionally one consolidated final stage after Address.
+      // Required size/bathroom validation controls the Continue button, while
+      // optional DB-backed add-ons render on the same stage when available.
+      return "rooms";
 
     case "carpet-cleaning": {
       const propertyReady = catalogStageQuestionsReady(
@@ -216,8 +211,6 @@ export function bookingDetailsStageReady(
       );
       if (dynamicReady != null) return dynamicReady;
       if (stage === "rooms") return all(details, ["officeSize", "bathrooms"]);
-      // The final Office stage now contains optional add-ons only.
-      if (stage === "preferences") return true;
       return false;
     }
 
@@ -329,11 +322,23 @@ export function bookingDetailsQuestionStage(
       return "condition";
 
     case "office-cleaning":
-      if (question.key === "frequency" || question.key === "officeType" || question.key === "specialInstructions") return null;
-      if (question.group === "rooms" || question.key === "officeSize" || question.key === "bathrooms") {
+      if (
+        question.key === "frequency" ||
+        question.key === "officeType" ||
+        question.key === "specialInstructions"
+      ) {
+        return null;
+      }
+      if (
+        question.group === "rooms" ||
+        question.key === "officeSize" ||
+        question.key === "bathrooms"
+      ) {
         return "rooms";
       }
-      return "preferences";
+      // Office no longer has a separate preferences stage. Any stale/unknown
+      // Office detail question must not resurrect an empty orphan stage.
+      return null;
 
     case "carpet-cleaning":
       if (question.key === "propertyType") return "property";
