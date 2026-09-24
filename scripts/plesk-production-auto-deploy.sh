@@ -23,6 +23,7 @@ BACKUPS="$ROOT/plesk-production-releases"
 WORK="$ROOT/.plesk-production-auto"
 LOCK="$ROOT/.plesk-production-auto.lock"
 OUT="$ROOT/plesk-production-auto-result.txt"
+DUPLICATE_OUT="$ROOT/plesk-production-auto-duplicate-result.txt"
 HEALTH_URL="${PLESK_PROD_HEALTH_URL:-https://shalean.co.za/api/health/environment}"
 EXPECTED_REF="${PLESK_PROD_EXPECTED_SUPABASE_REF:-paqjwfulwywtsyyvdxrq}"
 WAIT_SECONDS="${PLESK_PROD_AUTO_WAIT_SECONDS:-1200}"
@@ -36,17 +37,24 @@ for x in /usr/bin/curl /usr/bin/python3 /usr/bin/unzip /usr/bin/tar /usr/bin/sha
 done
 
 exec 9>"$LOCK"
-/usr/bin/flock -w 1500 9 || fail "timed out waiting for production deployment lock"
+if ! /usr/bin/flock -n 9; then
+  {
+    printf 'PLESK_PROD_AUTO_04=SKIPPED_LOCK_BUSY\n'
+    printf 'TIMESTAMP=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf 'ACTION=NO_LIVE_CHANGE\n'
+  } > "$DUPLICATE_OUT"
+  cat "$DUPLICATE_OUT"
+  exit 0
+fi
+{
+  printf 'PLESK_PROD_AUTO_04=LOCK_ACQUIRED\n'
+  printf 'PID=%s\n' "$"
+  printf 'TIMESTAMP=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "$OUT"
 rm -rf "$WORK"; mkdir -p "$WORK" "$BACKUPS"
 trap 'rm -rf "$WORK"' EXIT
 
 ghget(){ /usr/bin/curl -fsSL --connect-timeout 10 --max-time 30 -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"; }
-ghdownload(){
-  # Artifact downloads are ~50 MB and GitHub redirects to blob storage. Give the
-  # transfer enough time for shared-host bandwidth and retry transient stalls.
-  /usr/bin/curl -fL --connect-timeout 15 --max-time 600 --retry 4 --retry-delay 3 --retry-all-errors \
-    -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"
-}
 ghdownload(){
   # Artifact downloads are ~50 MB and GitHub redirects to blob storage. Give the
   # transfer enough time for shared-host bandwidth and retry transient stalls.
@@ -63,7 +71,7 @@ case "$TARGET_SHA" in *[!0-9a-f]*|'') fail "invalid release SHA" ;; esac
 [ "${#TARGET_SHA}" -eq 40 ] || fail "release SHA must be 40 chars"
 SHORT="${TARGET_SHA:0:8}"
 {
-  printf 'PLESK_PROD_AUTO_03=RUNNING\n'
+  printf 'PLESK_PROD_AUTO_04=RUNNING\n'
   printf 'RELEASE_SHA=%s\n' "$TARGET_SHA"
   printf 'PHASE=WAITING_FOR_EXACT_ARTIFACT\n'
 } > "$OUT"
@@ -107,7 +115,7 @@ print(xs[0]["id"])
 PY
 ART_ID="$(cat "$WORK/artifact-id.txt")"
 {
-  printf 'PLESK_PROD_AUTO_03=RUNNING\n'
+  printf 'PLESK_PROD_AUTO_04=RUNNING\n'
   printf 'RELEASE_SHA=%s\n' "$TARGET_SHA"
   printf 'WORKFLOW_RUN_ID=%s\n' "$RUN_ID"
   printf 'ARTIFACT_ID=%s\n' "$ART_ID"
@@ -203,7 +211,7 @@ PY
 
 if health_exact; then
   {
-    echo "PLESK_PROD_AUTO_03=PASS"
+    echo "PLESK_PROD_AUTO_04=PASS"
     echo "RELEASE_SHA=$TARGET_SHA"
     echo "RELEASE=$RELEASE"
     echo "ROLLBACK=$ROLLBACK"
