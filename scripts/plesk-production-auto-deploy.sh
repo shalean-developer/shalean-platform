@@ -41,6 +41,12 @@ rm -rf "$WORK"; mkdir -p "$WORK" "$BACKUPS"
 trap 'rm -rf "$WORK"' EXIT
 
 ghget(){ /usr/bin/curl -fsSL --connect-timeout 10 --max-time 30 -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"; }
+ghdownload(){
+  # Artifact downloads are ~50 MB and GitHub redirects to blob storage. Give the
+  # transfer enough time for shared-host bandwidth and retry transient stalls.
+  /usr/bin/curl -fL --connect-timeout 15 --max-time 600 --retry 4 --retry-delay 3 --retry-all-errors \
+    -H "@$HEADER" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$@"
+}
 branch_sha(){
   ghget "$API/branches/integration%2Fshalean-release" > "$WORK/branch.json"
   /usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"]["sha"])' "$WORK/branch.json"
@@ -84,7 +90,7 @@ if len(xs)!=1: raise SystemExit("expected exactly one exact-SHA production artif
 print(xs[0]["id"])
 PY
 ART_ID="$(cat "$WORK/artifact-id.txt")"
-ghget "$API/actions/artifacts/$ART_ID/zip" > "$WORK/artifact.zip"
+ghdownload "$API/actions/artifacts/$ART_ID/zip" > "$WORK/artifact.zip"
 /usr/bin/unzip -q "$WORK/artifact.zip" -d "$WORK/downloaded"
 TAR="$WORK/downloaded/plesk-prod-$TARGET_SHA.tar.gz"
 [ -s "$TAR" ] || fail "production tarball missing"
