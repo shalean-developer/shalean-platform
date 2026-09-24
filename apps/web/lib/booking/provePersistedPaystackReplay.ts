@@ -7,6 +7,7 @@ import { resolveInternalBookingIdFromPaystackReference } from "@/lib/booking/pay
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { resolveBookingUserId } from "@/lib/booking/resolveBookingUserId";
 import { paymentFinalizationReplayEquivalent } from "@/lib/booking/paymentCustomerIdentityGuard";
+import { isPaymentEditSupersededSnapshot } from "@/lib/booking/paymentEditSupersedeMarker";
 
 /** Call only with verified gateway transaction data or an authenticated webhook payload. */
 export async function provePersistedPaystackReplay(params: {
@@ -20,17 +21,26 @@ export async function provePersistedPaystackReplay(params: {
   const { supabase, bookingId, reference } = params;
   const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
   const { data, error } = await supabase.from("bookings")
-    .select(`id, status, payment_status, payment_completed_at, paystack_reference, customer_email, ${ownershipColumn}`)
+    .select(`id, status, paystack_reference, customer_email, ${ownershipColumn}`)
     .eq("id", bookingId).maybeSingle();
   const row = data as unknown as Record<string, unknown> | null;
   if (error || !row || row.id !== bookingId || typeof row.status !== "string" || !row.status ||
     ["pending_payment", "payment_mismatch", "payment_reconciliation_required"].includes(row.status)) return false;
-  const paymentStatus = String(row.payment_status ?? "").trim().toLowerCase();
-  const paymentCompletedAt =
-    typeof row.payment_completed_at === "string" ? row.payment_completed_at.trim() : "";
-  const settled =
-    Boolean(paymentCompletedAt) || paymentStatus === "success" || paymentStatus === "paid";
-  if (!settled) return false;
+
+  // Generic historical replay remains unchanged. Only the explicit Booking V2
+  // edit-superseded state is non-payable: an old Paystack reference must never
+  // be accepted as the persisted booking after the customer changed the draft.
+  if (row.status === "payment_expired") {
+    const { data: expiredRow, error: expiredReadError } = await supabase
+      .from("bookings")
+      .select("booking_snapshot")
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (expiredReadError || isPaymentEditSupersededSnapshot(expiredRow?.booking_snapshot)) {
+      return false;
+    }
+  }
+
   const metadata = normalizePaystackMetadata(params.metadata);
   const { snapshot } = parseBookingSnapshot(metadata, { amountCents: params.amountCents });
   const gatewayEmail = normalizeEmail(params.customerEmail);
