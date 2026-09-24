@@ -1,5 +1,5 @@
 import { canonicalServiceSlugFromBookingV2 } from "@/lib/booking-v2/bookingV2ServiceSlug";
-import { bedroomsBathroomsFromV2ServiceDetails } from "@/lib/booking-v2/bookingV2SlotEligibility";
+import { canonicalBookingCount } from "@/lib/booking-v2/carpetCountValidation";
 
 type AirbnbScheduleVerificationInput = {
   date: string;
@@ -12,8 +12,12 @@ type AirbnbScheduleVerificationInput = {
 };
 
 function availabilityUrl(input: AirbnbScheduleVerificationInput): string {
-  const { bedrooms, bathrooms, extraRooms } =
-    bedroomsBathroomsFromV2ServiceDetails(input.serviceDetails);
+  const bedrooms =
+    canonicalBookingCount(input.serviceDetails.bedrooms, { min: 0, max: 25 }) ?? 0;
+  const bathrooms =
+    canonicalBookingCount(input.serviceDetails.bathrooms, { min: 1, max: 25 }) ?? 1;
+  const extraRooms =
+    canonicalBookingCount(input.serviceDetails.extraRooms, { min: 0, max: 25 }) ?? 0;
   const params = new URLSearchParams({
     date: input.date,
     serviceType: canonicalServiceSlugFromBookingV2(input.serviceSlug),
