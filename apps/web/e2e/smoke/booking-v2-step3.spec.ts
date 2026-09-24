@@ -169,6 +169,25 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
       return;
     }
 
+    if (path === "/api/booking-v2/team-availability") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          available: true,
+          teams: [
+            {
+              id: "team-alpha",
+              name: "RD Team Alpha",
+              available: true,
+              active_member_count: 2,
+              qualified_member_count: 2,
+            },
+          ],
+        },
+      });
+      return;
+    }
+
     // Step 3 should not need a real backend for this seeded review state.
     await route.fulfill({ status: 404, json: { error: `unmocked_e2e_get:${path}` } });
   });
