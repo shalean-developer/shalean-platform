@@ -842,7 +842,14 @@ export function Step2Schedule() {
                 name="recurringFrequency"
                 control={control}
                 render={({ field }) => (
-                  <div className="mx-auto mt-6 grid w-full max-w-5xl gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <div
+                    className={cn(
+                      "mx-auto mt-6 grid w-full gap-4 sm:grid-cols-2",
+                      recurringFrequencyOptions.length === 3
+                        ? "max-w-3xl lg:grid-cols-3"
+                        : "max-w-5xl lg:grid-cols-4",
+                    )}
+                  >
                     {recurringFrequencyOptions.map((opt) => {
                       const selected = field.value === opt.value;
                       const presentation = FREQUENCY_PRESENTATION[opt.value];
