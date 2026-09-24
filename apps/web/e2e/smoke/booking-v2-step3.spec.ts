@@ -126,6 +126,32 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
       return;
     }
 
+    if (path === "/api/booking/time-slots") {
+      await route.fulfill({
+        status: 200,
+        json: { slots: [{ time: "08:30", available: true }] },
+      });
+      return;
+    }
+
+    if (path === "/api/booking-v2/available-cleaners") {
+      const selectedId = path.includes("closure") ? "cleaner-closure" : "cleaner-alice";
+      await route.fulfill({
+        status: 200,
+        json: {
+          cleaners: [
+            {
+              id: selectedId,
+              name: selectedId === "cleaner-closure" ? "Closure Test Cleaner" : "Alice Test",
+              isAvailable: true,
+              slotEligible: true,
+            },
+          ],
+        },
+      });
+      return;
+    }
+
     if (path === "/api/booking-v2/services") {
       await route.fulfill({
         status: 200,
