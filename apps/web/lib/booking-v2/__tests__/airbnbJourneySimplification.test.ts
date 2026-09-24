@@ -86,12 +86,12 @@ describe("Airbnb Booking V2 simplified journey", () => {
 
   it("keeps pricing ownership on property size while turnover setup stays informational", () => {
     expect(pricingRelevantFieldKeys("airbnb-cleaning")).toEqual([
-      "propertyType",
       "bedrooms",
       "bathrooms",
       "extraRooms",
     ]);
     expect(informationalFieldKeys("airbnb-cleaning")).toEqual([
+      "propertyType",
       "linens",
       "keyAccess",
     ]);
