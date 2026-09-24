@@ -5,6 +5,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { releaseCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
+import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
 
 const PAYMENT_EDIT_SUPERSEDED_REASON = "customer_edit_after_checkout";
 
@@ -235,6 +236,33 @@ export async function abandonPendingPaymentForEdit(
       code: "PAYMENT_ALREADY_COMPLETED",
       error: "This payment has already completed. Open your confirmed booking instead of editing this checkout.",
     };
+  }
+
+  // Do not supersede a checkout solely from our local row. A charge can complete
+  // at Paystack just before its callback/webhook reaches Shalean. Verify the
+  // gateway reference before making the old booking non-payable so a successful
+  // payment racing with "edit booking" remains recoverable by the normal
+  // finalization path.
+  const reference =
+    typeof row.paystack_reference === "string" ? row.paystack_reference.trim() : "";
+  if (reference) {
+    try {
+      const verified = await fetchPaystackTransactionVerify(reference);
+      const gatewayStatus = String(verified.data?.status ?? "").trim().toLowerCase();
+      if (verified.status && gatewayStatus === "success") {
+        return {
+          ok: false,
+          code: "PAYMENT_ALREADY_COMPLETED",
+          error: "This payment has already completed. Open your confirmed booking instead of editing this checkout.",
+        };
+      }
+    } catch {
+      return {
+        ok: false,
+        code: "PAYMENT_EDIT_SUPERSEDE_FAILED",
+        error: "We could not safely verify the previous payment. Please try again before editing this checkout.",
+      };
+    }
   }
 
   const existingMarker = supersedeMarker(row.booking_snapshot);
