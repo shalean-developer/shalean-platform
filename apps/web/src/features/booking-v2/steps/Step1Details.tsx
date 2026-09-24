@@ -371,13 +371,20 @@ export function Step1Details() {
     goNext,
   } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
-  const { watch, setValue } = useFormContext<BookingV2FormData>();
+  const {
+    watch,
+    setValue,
+    register,
+    formState: { errors },
+  } = useFormContext<BookingV2FormData>();
   const selectedExtras = watch("selectedExtras") ?? [];
   const serviceDetails = watch("serviceDetails") ?? {};
   const address = watch("address") ?? "";
   const suburb = watch("suburb") ?? "";
   const contactPhone = watch("contactPhone") ?? "";
   const serviceAreaLocationId = watch("serviceAreaLocationId") ?? "";
+  const gateCode = watch("gateCode") ?? "";
+  const accessInstructions = watch("accessInstructions") ?? "";
 
   const extras = liveConfig?.extras ?? [];
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
@@ -388,6 +395,8 @@ export function Step1Details() {
     suburb,
     contactPhone,
     serviceAreaLocationId,
+    gateCode,
+    accessInstructions,
   };
   const derivedDetailsStage = bookingDetailsStage(
     serviceSlug,
@@ -466,6 +475,27 @@ export function Step1Details() {
     serviceSlug,
     setValue,
   ]);
+
+  // Airbnb extra rooms are optional and default to zero for pricing/duration.
+  useEffect(() => {
+    if (serviceSlug !== "airbnb-cleaning") return;
+    const current = serviceDetails.extraRooms;
+    if (current !== undefined && current !== null && String(current).trim() !== "") return;
+    setValue("serviceDetails.extraRooms", "0", {
+      shouldDirty: false,
+      shouldValidate: true,
+    });
+  }, [serviceDetails.extraRooms, serviceSlug, setValue]);
+
+  const airbnbAccessMethod =
+    serviceSlug === "airbnb-cleaning" ? String(serviceDetails.keyAccess ?? "") : "";
+  const airbnbNeedsAccessCode =
+    airbnbAccessMethod === "lockbox" || airbnbAccessMethod === "smart_lock";
+
+  useEffect(() => {
+    if (serviceSlug !== "airbnb-cleaning" || airbnbNeedsAccessCode || !gateCode) return;
+    setValue("gateCode", "", { shouldDirty: true, shouldValidate: false });
+  }, [airbnbNeedsAccessCode, gateCode, serviceSlug, setValue]);
 
   // Clear answers for questions hidden by move-type (and similar) gates.
   useEffect(() => {
@@ -606,6 +636,44 @@ export function Step1Details() {
       <div className={cn(!showEquipmentQuestion && "hidden")}>
         <EquipmentSection />
       </div>
+
+      {serviceSlug === "airbnb-cleaning" && activeDetailsStage === "turnover" ? (
+        <section className="space-y-4 rounded-2xl border border-slate-100 bg-slate-50/60 p-4">
+          {airbnbNeedsAccessCode ? (
+            <div>
+              <FieldLabel htmlFor="airbnb-access-code" required>
+                Access code
+              </FieldLabel>
+              <input
+                id="airbnb-access-code"
+                type="text"
+                autoComplete="off"
+                placeholder={airbnbAccessMethod === "lockbox" ? "Lockbox code" : "Smart lock / door code"}
+                {...register("gateCode", {
+                  required: airbnbNeedsAccessCode
+                    ? "Enter the access code for this turnover."
+                    : false,
+                })}
+                className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              />
+              <FieldError message={errors.gateCode?.message} />
+            </div>
+          ) : null}
+
+          <div>
+            <FieldLabel htmlFor="airbnb-access-instructions">
+              Access instructions
+            </FieldLabel>
+            <textarea
+              id="airbnb-access-instructions"
+              rows={2}
+              placeholder="Optional arrival, parking, concierge, key-return or access notes"
+              {...register("accessInstructions")}
+              className="block w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 placeholder-slate-400 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+            />
+          </div>
+        </section>
+      ) : null}
 
       {/* Extras */}
       {showExtras && extras.length > 0 && (
