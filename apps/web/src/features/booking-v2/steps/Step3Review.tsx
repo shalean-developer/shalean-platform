@@ -908,9 +908,14 @@ export function Step3Review() {
     editScheduleSection,
   } = useBookingV2();
   const config = SERVICE_CONFIG[serviceSlug];
+  const isRegularCleaning = serviceSlug === "regular-cleaning";
+  const isDeepCleaning = serviceSlug === "deep-cleaning";
+  const isMovingCleaning = serviceSlug === "moving-cleaning";
   const isCarpetCleaning = serviceSlug === "carpet-cleaning";
   const isOfficeCleaning = serviceSlug === "office-cleaning";
   const isAirbnbCleaning = serviceSlug === "airbnb-cleaning";
+  const isCoreCloseoutService =
+    isRegularCleaning || isDeepCleaning || isMovingCleaning;
   const step1Questions = liveConfig?.step1Questions ?? config.step1Questions;
   const estimatedDurationHours = liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours;
   const { watch, getValues, reset, setValue } = useFormContext<BookingV2FormData>();
@@ -971,6 +976,26 @@ export function Step3Review() {
   function openEdit(panel: EditPanel) {
     setSnapshot(getValues());
     setEditPanel(panel);
+  }
+
+  function editCoreDetails() {
+    editDetailsSection("property");
+  }
+
+  function editCoreSchedule() {
+    editScheduleSection("booking_type");
+    goToStep(2);
+  }
+
+  function editCoreCleaner() {
+    editScheduleSection("cleaner");
+    goToStep(2);
+  }
+
+  function editCoreAddons() {
+    editDetailsSection(
+      isRegularCleaning ? "equipment" : isDeepCleaning ? "pets" : "condition",
+    );
   }
 
   function editOfficeDetails() {
@@ -1217,7 +1242,7 @@ export function Step3Review() {
           <ReviewSection
             number={cleanDetailsNumber}
             title={isOfficeCleaning ? "Office details" : "Clean details"}
-            onEdit={() => openEdit("property")}
+            onEdit={isCoreCloseoutService ? editCoreDetails : () => openEdit("property")}
             className="sm:col-span-2"
           >
             <div className="flex flex-wrap gap-x-4 gap-y-1.5">
@@ -1248,7 +1273,9 @@ export function Step3Review() {
                 ? editCarpetSchedule
                 : isAirbnbCleaning
                   ? editAirbnbSchedule
-                  : () => openEdit("schedule")
+                  : isCoreCloseoutService
+                    ? editCoreSchedule
+                    : () => openEdit("schedule")
           }
           className="sm:col-span-2"
         >
@@ -1304,7 +1331,9 @@ export function Step3Review() {
                     ? editCarpetCleaner
                     : isAirbnbCleaning
                       ? editAirbnbCleaner
-                      : () => openEdit("cleaner")
+                      : isCoreCloseoutService
+                        ? editCoreCleaner
+                        : () => openEdit("cleaner")
               }
             >
               {!hasDetails && !hasIds ? (
@@ -1341,7 +1370,9 @@ export function Step3Review() {
                           ? editCarpetCleaner
                           : isAirbnbCleaning
                             ? editAirbnbCleaner
-                            : () => openEdit("cleaner")
+                            : isCoreCloseoutService
+                              ? editCoreCleaner
+                              : () => openEdit("cleaner")
                     }
                     className="ml-1.5 font-medium text-blue-600 hover:underline"
                   >
@@ -1365,7 +1396,9 @@ export function Step3Review() {
                   ? editCarpetAddons
                   : isAirbnbCleaning
                     ? editAirbnbAddons
-                    : () => openEdit("extras")
+                    : isCoreCloseoutService
+                      ? editCoreAddons
+                      : () => openEdit("extras")
             }
             className={values.cleanerMode === "individual_cleaners" ? undefined : "sm:col-span-2"}
           >
