@@ -56,3 +56,24 @@ describe("UAT-QUOTE-STALE-01", () => {
     expect(pricingHook).toContain("revision === quoteRevision.current");
   });
 });
+
+describe("BOOKING-PAY-01 — edit after Paystack cancel", () => {
+  it("expires the old pending payment before clearing its client recovery id", () => {
+    expect(contextSource).toContain("/abandon-payment");
+    expect(contextSource).toContain("pendingPaymentInvalidationRef");
+    expect(contextSource).toContain('form.setValue("pendingBookingId", null');
+    expect(contextSource).toContain('form.setValue("quoteLock", null');
+    expect(contextSource.indexOf("if (!response.ok)"))
+      .toBeLessThan(contextSource.indexOf('form.setValue("pendingBookingId", null'));
+  });
+
+  it("does not invalidate the pending payment while the customer remains on Payment", () => {
+    expect(contextSource).toContain("if (currentStep === 4) return");
+  });
+
+  it("keeps the pricing hook frozen only until the stale pending id is cleared", () => {
+    expect(pricingHook).toContain("if (pendingBookingId?.trim()) return");
+    expect(pricingHook).toContain('setValue("pricingSummary", breakdown');
+  });
+});
+

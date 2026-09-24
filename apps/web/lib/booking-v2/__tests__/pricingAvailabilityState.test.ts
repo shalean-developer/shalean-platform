@@ -50,7 +50,7 @@ describe("SPC-01-04 SR-04D1 pricing availability state", () => {
     expect(src).toContain("<PricingBlockedNotice availability={pricingAvailability} />");
     expect(src).toContain("BOOKING_PRICING_LOADING_MESSAGE");
     expect(src).toContain("BOOKING_PRICING_UNAVAILABLE_MESSAGE");
-    expect(src).toMatch(/disabled=\{currentStep === 3 && !paymentEntryAllowed\}/);
+    expect(src).toMatch(/disabled=\{paymentEditResetting \|\| \(currentStep === 3 && !paymentEntryAllowed\)\}/);
   });
 
   it("preserves the server-owned pending payment-session recovery path", () => {

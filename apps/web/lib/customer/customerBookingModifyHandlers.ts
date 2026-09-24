@@ -16,6 +16,7 @@ import {
 } from "@/lib/dashboard/customerBookingModifyStatuses";
 import { expirePendingDispatchOffersForBooking } from "@/lib/dispatch/expirePendingDispatchOffersForBooking";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
+import { releaseCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
 import {
   BOOKING_MIN_LEAD_MINUTES,
   billingMonthFromYmd,
@@ -59,6 +60,97 @@ export async function authenticateCustomerBookingRequest(
     viewerEmail: userData.user.email ?? null,
     admin,
   };
+}
+
+export async function handleCustomerPendingPaymentAbandon(
+  auth: Extract<CustomerBookingAuthResult, { ok: true }>,
+  bookingId: string,
+): Promise<NextResponse> {
+  const ownershipColumn = await resolveBookingOwnershipColumn(auth.admin);
+  const { data: row, error: loadErr } = await auth.admin
+    .from("bookings")
+    .select(`id, status, payment_status, payment_completed_at, amount_paid_cents, ${ownershipColumn}`)
+    .eq("id", bookingId)
+    .eq(ownershipColumn, auth.userId)
+    .maybeSingle();
+
+  if (loadErr) {
+    return NextResponse.json({ error: "Could not load the pending payment." }, { status: 500 });
+  }
+  if (!row) {
+    return NextResponse.json({ error: "Pending payment not found." }, { status: 404 });
+  }
+
+  const paymentStatus = String(row.payment_status ?? "").trim().toLowerCase();
+  const amountPaidCents = Number(row.amount_paid_cents);
+  const paid =
+    Boolean(row.payment_completed_at) ||
+    paymentStatus === "paid" ||
+    paymentStatus === "success" ||
+    (Number.isFinite(amountPaidCents) && amountPaidCents > 0);
+
+  if (paid) {
+    return NextResponse.json(
+      { error: "This payment has already completed and cannot be replaced.", code: "PAYMENT_ALREADY_COMPLETED" },
+      { status: 409 },
+    );
+  }
+
+  const status = String(row.status ?? "").trim().toLowerCase();
+  if (status === "payment_expired") {
+    await releaseCleaningCreditForBooking(auth.admin, bookingId);
+    return NextResponse.json({ ok: true, bookingId, alreadyAbandoned: true });
+  }
+  if (status !== "pending_payment") {
+    return NextResponse.json(
+      { error: "This booking is no longer waiting for payment.", code: "PAYMENT_NOT_PENDING" },
+      { status: 409 },
+    );
+  }
+
+  const { data: updated, error: updateErr } = await auth.admin
+    .from("bookings")
+    .update({
+      status: "payment_expired",
+      dispatch_status: "unassigned",
+      payment_link: null,
+      payment_link_expires_at: new Date().toISOString(),
+      payment_needs_follow_up: false,
+    })
+    .eq("id", bookingId)
+    .eq(ownershipColumn, auth.userId)
+    .eq("status", "pending_payment")
+    .select("id")
+    .maybeSingle();
+
+  if (updateErr) {
+    return NextResponse.json({ error: "Could not replace the pending payment. Please try again." }, { status: 500 });
+  }
+  if (!updated) {
+    return NextResponse.json(
+      { error: "The pending payment changed while it was being replaced. Please refresh and try again." },
+      { status: 409 },
+    );
+  }
+
+  const released = await releaseCleaningCreditForBooking(auth.admin, bookingId);
+  if (!released.ok) {
+    void logSystemEvent({
+      level: "error",
+      source: "customer_pending_payment_abandon",
+      message: "Pending payment expired but Cleaning Credit release failed",
+      context: { bookingId, error: released.error },
+    });
+  }
+
+  void logSystemEvent({
+    level: "info",
+    source: "customer_pending_payment_abandon",
+    message: "Expired stale pending payment before customer requote",
+    context: { bookingId },
+  });
+
+  return NextResponse.json({ ok: true, bookingId });
 }
 
 export async function handleCustomerBookingCancel(

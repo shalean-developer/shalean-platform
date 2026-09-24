@@ -97,6 +97,10 @@ import { describe, expect, it } from "vitest";
  *   remain behind the payment finalization command boundary.
  *
  *   Customer-facing safe paths:
+ *   - `lib/booking/abandonPendingPaymentForEdit.ts`
+ *       Customer intentionally leaves Booking V2 Payment to edit an unpaid checkout.
+ *       Transitions only owned `pending_payment` rows to `payment_expired`, clears the
+ *       stored checkout URL, and releases checkout reservations before repricing resumes.
  *   - `app/api/dashboard/bookings/[id]/cancel/route.ts`
  *       Customer self-cancel: requires session auth, owner check
  *       (`user_id === userData.user.id`), pre-state in CANCELLABLE
@@ -194,7 +198,8 @@ const APPROVED_BOOKINGS_STATUS_WRITERS: ReadonlySet<string> = new Set([
   // runtime-owned status writes stay explicitly allow-listed here.
   "lib/launch/launchReadinessChecks.ts",
 
-  // Customer-facing safe path (auth-gated self-cancel).
+  // Customer-facing safe paths.
+  "lib/booking/abandonPendingPaymentForEdit.ts",
   "lib/customer/customerBookingModifyHandlers.ts",
 
   // Recovery / reconciliation (catch-block only).
