@@ -62,6 +62,7 @@ import {
   verifySelectedBookingV2Cleaners,
   verifySelectedBookingV2Slot,
 } from "@/lib/booking-v2/verifySelectedBookingV2Schedule";
+import { recurringScheduleAllowedForService } from "@/lib/booking-v2/serviceRecurringPolicy";
 
 export type { LiveServiceConfig };
 
@@ -463,6 +464,79 @@ export function BookingV2Provider({
     return () => subscription.unsubscribe();
   }, [form]);
 
+  /** Regular, Deep and Moving scope edits invalidate previous slot / cleaner / team checks. */
+  const prevCoreServiceScopeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (
+      serviceSlug !== "regular-cleaning" &&
+      serviceSlug !== "deep-cleaning" &&
+      serviceSlug !== "moving-cleaning"
+    ) {
+      return;
+    }
+
+    function scopeFingerprint(
+      details: Record<string, string | number | boolean>,
+      extras: readonly string[],
+    ): string {
+      const common = [
+        String(details.bedrooms ?? ""),
+        String(details.bathrooms ?? ""),
+        String(details.extraRooms ?? ""),
+      ];
+      if (serviceSlug === "deep-cleaning") {
+        common.push(String(details.lastCleaned ?? ""));
+      }
+      if (serviceSlug === "moving-cleaning") {
+        common.push(
+          String(details.moveType ?? ""),
+          String(details.furnished ?? ""),
+        );
+      }
+      common.push([...extras].sort().join(","));
+      return common.join("|");
+    }
+
+    const currentDetails = form.getValues("serviceDetails") ?? {};
+    const currentExtras = form.getValues("selectedExtras") ?? [];
+    prevCoreServiceScopeRef.current = scopeFingerprint(currentDetails, currentExtras);
+
+    const watchedNames = new Set([
+      "serviceDetails.bedrooms",
+      "serviceDetails.bathrooms",
+      "serviceDetails.extraRooms",
+      "selectedExtras",
+      ...(serviceSlug === "deep-cleaning" ? ["serviceDetails.lastCleaned"] : []),
+      ...(serviceSlug === "moving-cleaning"
+        ? ["serviceDetails.moveType", "serviceDetails.furnished"]
+        : []),
+    ]);
+
+    const subscription = form.watch((values, info) => {
+      if (info.name && !watchedNames.has(info.name)) return;
+      const details = values.serviceDetails ?? {};
+      const extras = values.selectedExtras ?? [];
+      const nextScope = scopeFingerprint(
+        details as Record<string, string | number | boolean>,
+        extras,
+      );
+      const prevScope = prevCoreServiceScopeRef.current;
+      if (prevScope == null || nextScope === prevScope) {
+        prevCoreServiceScopeRef.current = nextScope;
+        return;
+      }
+      prevCoreServiceScopeRef.current = nextScope;
+      form.setValue("time", "", { shouldDirty: true });
+      form.setValue("alternativeTime", "", { shouldDirty: true });
+      form.setValue("selectedCleanerIds", [], { shouldDirty: true });
+      form.setValue("selectedCleanerDetails", [], { shouldDirty: true });
+      form.setValue("assignedTeamId", "", { shouldDirty: true });
+      form.setValue("assignedTeamName", "", { shouldDirty: true });
+      setScheduleSectionOverride("date_time");
+    });
+    return () => subscription.unsubscribe();
+  }, [form, serviceSlug]);
+
   /** Office size/bathroom edits change job duration, so previous slot/cleaner checks are stale. */
   const prevOfficeScopeRef = useRef<string | null>(null);
   useEffect(() => {
@@ -616,6 +690,133 @@ export function BookingV2Provider({
             reason: "pricing_unavailable",
           });
           return false;
+        }
+
+        if (
+          !hasPendingBooking &&
+          (
+            serviceSlug === "regular-cleaning" ||
+            serviceSlug === "deep-cleaning" ||
+            serviceSlug === "moving-cleaning"
+          )
+        ) {
+          const values = form.getValues();
+          const bookingDetails = {
+            address: values.address,
+            suburb: values.suburb,
+            contactPhone: values.contactPhone,
+            serviceAreaLocationId: values.serviceAreaLocationId,
+          };
+          const questions = liveConfig?.step1Questions ?? config.step1Questions;
+          const stages =
+            serviceSlug === "regular-cleaning"
+              ? (["address", "property", "rooms", "pets", "equipment"] as const)
+              : serviceSlug === "deep-cleaning"
+                ? (["address", "property", "rooms", "pets"] as const)
+                : (["address", "property", "move", "rooms", "condition"] as const);
+          const firstInvalidStage = stages.find(
+            (stage) =>
+              !bookingDetailsStageReady(
+                serviceSlug,
+                stage,
+                values.serviceDetails ?? {},
+                bookingDetails,
+                questions,
+              ),
+          );
+          if (firstInvalidStage) {
+            setDetailsSectionOverride(firstInvalidStage);
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "details");
+            params.set("section", firstInvalidStage);
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          const scheduleResult = buildStep2Schema(scheduling).safeParse(values);
+          if (!scheduleResult.success) {
+            scheduleResult.error.errors.forEach((e) => {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              form.setError(e.path.join(".") as any, { message: e.message });
+            });
+            const paths = scheduleResult.error.errors.map((e) => e.path[0]);
+            const targetStage: RegularCleaningScheduleStage =
+              paths.includes("bookingType") || paths.includes("recurringFrequency")
+                ? "booking_type"
+                : paths.includes("date") || paths.includes("time")
+                  ? "date_time"
+                  : "cleaner";
+            setScheduleSectionOverride(targetStage);
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "schedule");
+            params.delete("section");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          if (
+            !recurringScheduleAllowedForService({
+              serviceSlug,
+              bookingType: values.bookingType,
+              recurringFrequency: values.recurringFrequency,
+              recurringDays: values.recurringDays ?? [],
+            })
+          ) {
+            form.setError("recurringFrequency", {
+              message: "Choose a recurring option supported for this service.",
+            });
+            setScheduleSectionOverride("booking_type");
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "schedule");
+            params.delete("section");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          const durationMinutes = Math.round(
+            values.pricingSummary?.team_scaled_duration_minutes ??
+              values.pricingSummary?.estimated_duration_minutes ??
+              (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
+          );
+          const verificationInput = {
+            date: values.date,
+            time: values.time,
+            locationId: values.serviceAreaLocationId.trim(),
+            serviceSlug,
+            serviceDetails: values.serviceDetails ?? {},
+            selectedExtras: values.selectedExtras ?? [],
+            durationMinutes,
+          };
+          const slotStillAvailable = await verifySelectedBookingV2Slot(verificationInput);
+          if (!slotStillAvailable) {
+            form.setError("time", {
+              message: "Reconfirm an available time before payment.",
+            });
+            setScheduleSectionOverride("date_time");
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "schedule");
+            params.delete("section");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+
+          const selectedCleanerIds = values.selectedCleanerIds ?? [];
+          if (values.cleanerMode === "individual_cleaners" && selectedCleanerIds.length > 0) {
+            const cleanersStillAvailable = await verifySelectedBookingV2Cleaners({
+              ...verificationInput,
+              selectedCleanerIds,
+            });
+            if (!cleanersStillAvailable) {
+              form.setValue("selectedCleanerIds", [], { shouldDirty: true });
+              form.setValue("selectedCleanerDetails", [], { shouldDirty: true });
+              setScheduleSectionOverride("cleaner");
+              const params = new URLSearchParams(window.location.search);
+              params.set("step", "schedule");
+              params.delete("section");
+              window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+              return false;
+            }
+          }
         }
 
         if (serviceSlug === "office-cleaning") {

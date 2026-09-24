@@ -22,6 +22,7 @@ type StoredDraft = Record<string, unknown> & {
 
 function reviewDraft(serviceSlug: string, cleanerMode: CleanerMode): Record<string, unknown> {
   const individual = cleanerMode === "individual_cleaners";
+  const deepCleaning = serviceSlug === "deep-cleaning";
   return {
     serviceSlug,
     serviceDetails: {
@@ -50,8 +51,8 @@ function reviewDraft(serviceSlug: string, cleanerMode: CleanerMode): Record<stri
     time: "08:30",
     alternativeDate: "",
     alternativeTime: "",
-    recurringFrequency: "weekly",
-    recurringDays: ["Monday"],
+    recurringFrequency: deepCleaning ? "monthly" : "weekly",
+    recurringDays: deepCleaning ? [] : ["Monday"],
     recurringStartDate: "2026-11-16",
     recurringEndDate: "",
     cleanerMode,
@@ -126,6 +127,32 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
       return;
     }
 
+    if (path === "/api/booking/time-slots") {
+      await route.fulfill({
+        status: 200,
+        json: { slots: [{ time: "08:30", available: true }] },
+      });
+      return;
+    }
+
+    if (path === "/api/booking-v2/available-cleaners") {
+      const selectedId = path.includes("closure") ? "cleaner-closure" : "cleaner-alice";
+      await route.fulfill({
+        status: 200,
+        json: {
+          cleaners: [
+            {
+              id: selectedId,
+              name: selectedId === "cleaner-closure" ? "Closure Test Cleaner" : "Alice Test",
+              isAvailable: true,
+              slotEligible: true,
+            },
+          ],
+        },
+      });
+      return;
+    }
+
     if (path === "/api/booking-v2/services") {
       await route.fulfill({
         status: 200,
@@ -138,6 +165,25 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
             slotIntervalMinutes: 30,
             timezone: "Africa/Johannesburg",
           },
+        },
+      });
+      return;
+    }
+
+    if (path === "/api/booking-v2/team-availability") {
+      await route.fulfill({
+        status: 200,
+        json: {
+          available: true,
+          teams: [
+            {
+              id: "team-alpha",
+              name: "RD Team Alpha",
+              available: true,
+              active_member_count: 2,
+              qualified_member_count: 2,
+            },
+          ],
         },
       });
       return;
@@ -245,7 +291,7 @@ test.describe("RD-P05E — Booking V2 Step 3 review smoke", () => {
     await expect(page.getByRole("heading", { name: "Review your booking" })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Clean details", exact: true })).toBeVisible();
     await expect(page.getByText("08:30", { exact: true })).toBeVisible();
-    await expect(page.getByText(/Recurring · Weekly/)).toBeVisible();
+    await expect(page.getByText(/Recurring · Monthly/)).toBeVisible();
     await expectReviewSectionNumbers(page, [
       "Location",
       "Clean details",
