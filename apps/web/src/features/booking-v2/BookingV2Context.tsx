@@ -58,6 +58,10 @@ import {
   bookingV2StepToFunnelStep,
   trackBookingFunnelEvent,
 } from "@/lib/booking/bookingFlowAnalytics";
+import {
+  verifySelectedBookingV2Cleaners,
+  verifySelectedBookingV2Slot,
+} from "@/lib/booking-v2/verifySelectedBookingV2Schedule";
 
 export type { LiveServiceConfig };
 
@@ -534,6 +538,67 @@ export function BookingV2Provider({
     return () => subscription.unsubscribe();
   }, [form, serviceSlug]);
 
+  /** Reconcile old Airbnb drafts against the current authoritative extras catalog. */
+  useEffect(() => {
+    if (serviceSlug !== "airbnb-cleaning" || !liveConfig) return;
+    const validExtras = new Set((liveConfig.extras ?? []).map((extra) => extra.id));
+    const current = form.getValues("selectedExtras") ?? [];
+    const pruned = current.filter((id) => validExtras.has(id));
+    if (pruned.length !== current.length) {
+      form.setValue("selectedExtras", pruned, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+  }, [form, liveConfig, serviceSlug]);
+
+  /** Airbnb room/extras changes alter duration, so old slot/cleaner checks become stale. */
+  const prevAirbnbScopeRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (serviceSlug !== "airbnb-cleaning") return;
+
+    const currentDetails = form.getValues("serviceDetails") ?? {};
+    const currentExtras = form.getValues("selectedExtras") ?? [];
+    prevAirbnbScopeRef.current = [
+      String(currentDetails.bedrooms ?? ""),
+      String(currentDetails.bathrooms ?? ""),
+      String(currentDetails.extraRooms ?? "0"),
+      [...currentExtras].sort().join(","),
+    ].join("|");
+
+    const subscription = form.watch((values, info) => {
+      if (
+        info.name &&
+        info.name !== "serviceDetails.bedrooms" &&
+        info.name !== "serviceDetails.bathrooms" &&
+        info.name !== "serviceDetails.extraRooms" &&
+        info.name !== "selectedExtras"
+      ) {
+        return;
+      }
+      const details = values.serviceDetails ?? {};
+      const extras = values.selectedExtras ?? [];
+      const nextScope = [
+        String(details.bedrooms ?? ""),
+        String(details.bathrooms ?? ""),
+        String(details.extraRooms ?? "0"),
+        [...extras].sort().join(","),
+      ].join("|");
+      const prevScope = prevAirbnbScopeRef.current;
+      if (prevScope == null || nextScope === prevScope) {
+        prevAirbnbScopeRef.current = nextScope;
+        return;
+      }
+      prevAirbnbScopeRef.current = nextScope;
+      form.setValue("time", "", { shouldDirty: true });
+      form.setValue("alternativeTime", "", { shouldDirty: true });
+      form.setValue("selectedCleanerIds", [], { shouldDirty: true });
+      form.setValue("selectedCleanerDetails", [], { shouldDirty: true });
+      setScheduleSectionOverride("date_time");
+    });
+    return () => subscription.unsubscribe();
+  }, [form, serviceSlug]);
+
   const canGoNext = useCallback(
     async (step: BookingStep): Promise<boolean> => {
       if (step === 3) {
@@ -644,6 +709,114 @@ export function BookingV2Provider({
             const targetStage: RegularCleaningScheduleStage =
               paths.includes("date") || paths.includes("time") ? "date_time" : "cleaner";
             setScheduleSectionOverride(targetStage);
+            const params = new URLSearchParams(window.location.search);
+            params.set("step", "schedule");
+            params.delete("section");
+            window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+            return false;
+          }
+        }
+      }
+
+      if (step === 3 && serviceSlug === "airbnb-cleaning") {
+        const values = form.getValues();
+        const bookingDetails = {
+          address: values.address,
+          suburb: values.suburb,
+          contactPhone: values.contactPhone,
+          serviceAreaLocationId: values.serviceAreaLocationId,
+          gateCode: values.gateCode,
+          accessInstructions: values.accessInstructions,
+        };
+        const questions = liveConfig?.step1Questions ?? config.step1Questions;
+        const stages = ["property", "rooms", "turnover"] as const;
+        const firstInvalidStage = stages.find(
+          (stage) =>
+            !bookingDetailsStageReady(
+              serviceSlug,
+              stage,
+              values.serviceDetails ?? {},
+              bookingDetails,
+              questions,
+            ),
+        );
+        if (firstInvalidStage) {
+          setDetailsSectionOverride(firstInvalidStage);
+          const params = new URLSearchParams(window.location.search);
+          params.set("step", "details");
+          params.set("section", firstInvalidStage);
+          window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+          return false;
+        }
+
+        const selectedCleanerIds = values.selectedCleanerIds ?? [];
+        if (
+          values.bookingType !== "once_off" ||
+          values.cleanerCount < 1 ||
+          values.cleanerCount > 3 ||
+          selectedCleanerIds.length > values.cleanerCount
+        ) {
+          setScheduleSectionOverride("cleaner");
+          const params = new URLSearchParams(window.location.search);
+          params.set("step", "schedule");
+          params.delete("section");
+          window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+          return false;
+        }
+
+        const scheduleResult = buildStep2Schema(scheduling).safeParse(values);
+        if (!scheduleResult.success) {
+          scheduleResult.error.errors.forEach((e) => {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            form.setError(e.path.join(".") as any, { message: e.message });
+          });
+          const paths = scheduleResult.error.errors.map((e) => e.path[0]);
+          const targetStage: RegularCleaningScheduleStage =
+            paths.includes("date") || paths.includes("time") ? "date_time" : "cleaner";
+          setScheduleSectionOverride(targetStage);
+          const params = new URLSearchParams(window.location.search);
+          params.set("step", "schedule");
+          params.delete("section");
+          window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+          return false;
+        }
+
+        const durationMinutes = Math.round(
+          values.pricingSummary?.team_scaled_duration_minutes ??
+            values.pricingSummary?.estimated_duration_minutes ??
+            (liveConfig?.estimatedDurationHours ?? config.estimatedDurationHours) * 60,
+        );
+        const verificationInput = {
+          date: values.date,
+          time: values.time,
+          locationId: values.serviceAreaLocationId.trim(),
+          serviceSlug,
+          serviceDetails: values.serviceDetails ?? {},
+          selectedExtras: values.selectedExtras ?? [],
+          durationMinutes,
+        };
+        const slotStillAvailable = await verifySelectedBookingV2Slot(verificationInput);
+        if (!slotStillAvailable) {
+          form.setError("time", {
+            message: "Reconfirm an available turnover time before payment.",
+          });
+          setScheduleSectionOverride("date_time");
+          const params = new URLSearchParams(window.location.search);
+          params.set("step", "schedule");
+          params.delete("section");
+          window.history.pushState(null, "", `/book/${serviceSlug}?${params.toString()}`);
+          return false;
+        }
+
+        if (selectedCleanerIds.length > 0) {
+          const cleanersStillAvailable = await verifySelectedBookingV2Cleaners({
+            ...verificationInput,
+            selectedCleanerIds,
+          });
+          if (!cleanersStillAvailable) {
+            form.setValue("selectedCleanerIds", [], { shouldDirty: true });
+            form.setValue("selectedCleanerDetails", [], { shouldDirty: true });
+            setScheduleSectionOverride("cleaner");
             const params = new URLSearchParams(window.location.search);
             params.set("step", "schedule");
             params.delete("section");
@@ -830,6 +1003,8 @@ export function BookingV2Provider({
       suburb: values.suburb,
       contactPhone: values.contactPhone,
       serviceAreaLocationId: values.serviceAreaLocationId,
+      gateCode: values.gateCode,
+      accessInstructions: values.accessInstructions,
     };
     const questions = liveConfig?.step1Questions ?? config.step1Questions;
     const derivedStage = bookingDetailsStage(
