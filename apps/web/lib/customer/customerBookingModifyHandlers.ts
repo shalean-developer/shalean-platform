@@ -16,6 +16,15 @@ import {
 } from "@/lib/dashboard/customerBookingModifyStatuses";
 import { expirePendingDispatchOffersForBooking } from "@/lib/dispatch/expirePendingDispatchOffersForBooking";
 import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
+import { releaseCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
+import { reverseAppliedPromotionRedemptionsForBooking } from "@/lib/promotions/server";
+import { discardPendingRecurringPrepaymentForBooking } from "@/lib/recurring/recurringPrepaymentLedger";
+import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
+import {
+  markPaymentEditSupersedeCleanupDone,
+  readPaymentEditSupersedeMarker,
+  withPaymentEditSupersedeMarker,
+} from "@/lib/booking/paymentEditSupersedeMarker";
 import {
   BOOKING_MIN_LEAD_MINUTES,
   billingMonthFromYmd,
@@ -59,6 +68,296 @@ export async function authenticateCustomerBookingRequest(
     viewerEmail: userData.user.email ?? null,
     admin,
   };
+}
+
+type PendingPaymentEditRow = {
+  id: string;
+  status?: string | null;
+  payment_status?: string | null;
+  payment_completed_at?: string | null;
+  amount_paid_cents?: number | null;
+  paystack_reference?: string | null;
+  payment_link?: string | null;
+  booking_snapshot?: unknown;
+  total_price?: number | string | null;
+};
+
+function pendingPaymentHasSettledEvidence(row: PendingPaymentEditRow): boolean {
+  const paymentStatus = String(row.payment_status ?? "").trim().toLowerCase();
+  const amountPaidCents = Number(row.amount_paid_cents ?? 0);
+  return (
+    Boolean(String(row.payment_completed_at ?? "").trim()) ||
+    paymentStatus === "paid" ||
+    paymentStatus === "success" ||
+    (Number.isFinite(amountPaidCents) && amountPaidCents > 0)
+  );
+}
+
+async function cleanupAbandonedPendingPayment(
+  auth: Extract<CustomerBookingAuthResult, { ok: true }>,
+  row: PendingPaymentEditRow,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const creditRelease = await releaseCleaningCreditForBooking(auth.admin, row.id);
+  if (!creditRelease.ok && creditRelease.error !== "reservation_not_found") {
+    return { ok: false, error: `Cleaning Credit release failed: ${creditRelease.error}` };
+  }
+
+  const revenueRaw = Number(row.total_price ?? 0);
+  const promotionRelease = await reverseAppliedPromotionRedemptionsForBooking(auth.admin, {
+    bookingId: row.id,
+    bookingRevenueZar: Number.isFinite(revenueRaw) ? Math.max(0, Math.round(revenueRaw)) : 0,
+  });
+  if (!promotionRelease.ok) {
+    return { ok: false, error: `Promotion release failed: ${promotionRelease.error}` };
+  }
+
+  const recurringRelease = await discardPendingRecurringPrepaymentForBooking(auth.admin, row.id);
+  if (!recurringRelease.ok) {
+    return { ok: false, error: `Recurring prepayment release failed: ${recurringRelease.error}` };
+  }
+
+  return { ok: true };
+}
+
+/**
+ * Booking V2 payment edit boundary.
+ *
+ * A customer may return from Paystack and keep retrying the exact same unpaid
+ * booking. Once they edit the booking, however, the old price/reference must be
+ * superseded before live pricing resumes. This command is owner-only, verifies
+ * Paystack did not already succeed, makes the old row non-payable, then releases
+ * checkout reservations so a fresh confirm can create the replacement booking.
+ */
+export async function handleCustomerPendingPaymentAbandonForEdit(
+  auth: Extract<CustomerBookingAuthResult, { ok: true }>,
+  bookingId: string,
+): Promise<NextResponse> {
+  const ownershipColumn = await resolveBookingOwnershipColumn(auth.admin);
+  const { data, error: loadErr } = await auth.admin
+    .from("bookings")
+    .select(
+      `id, status, payment_status, payment_completed_at, amount_paid_cents, paystack_reference, payment_link, booking_snapshot, total_price, ${ownershipColumn}`,
+    )
+    .eq("id", bookingId)
+    .eq(ownershipColumn, auth.userId)
+    .maybeSingle();
+
+  if (loadErr) {
+    return NextResponse.json(
+      { ok: false, code: "PAYMENT_EDIT_LOAD_FAILED", error: "Could not load the pending payment." },
+      { status: 500 },
+    );
+  }
+  if (!data) {
+    return NextResponse.json(
+      { ok: false, code: "BOOKING_NOT_FOUND", error: "Pending payment not found." },
+      { status: 404 },
+    );
+  }
+
+  const row = data as PendingPaymentEditRow;
+  if (pendingPaymentHasSettledEvidence(row)) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "PAYMENT_ALREADY_COMPLETED",
+        error: "This payment has already completed and cannot be replaced.",
+      },
+      { status: 409 },
+    );
+  }
+
+  const status = String(row.status ?? "").trim().toLowerCase();
+  const existingMarker = readPaymentEditSupersedeMarker(row.booking_snapshot);
+
+  // Idempotent retry after the status transition: finish any cleanup that did
+  // not complete on the first request, then let the browser unlock fresh pricing.
+  if (status === "payment_expired" && existingMarker) {
+    if (!existingMarker.cleanup_done_at) {
+      const cleanup = await cleanupAbandonedPendingPayment(auth, row);
+      if (!cleanup.ok) {
+        void logSystemEvent({
+          level: "error",
+          source: "customer_pending_payment_edit",
+          message: "Superseded payment cleanup failed",
+          context: { bookingId, error: cleanup.error },
+        });
+        return NextResponse.json(
+          { ok: false, code: "PAYMENT_EDIT_CLEANUP_FAILED", error: cleanup.error },
+          { status: 503 },
+        );
+      }
+
+      const { error: markerErr } = await auth.admin
+        .from("bookings")
+        .update({
+          booking_snapshot: markPaymentEditSupersedeCleanupDone(
+            row.booking_snapshot,
+            new Date().toISOString(),
+          ),
+        })
+        .eq("id", bookingId)
+        .eq(ownershipColumn, auth.userId)
+        .eq("status", "payment_expired");
+      if (markerErr) {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: "PAYMENT_EDIT_CLEANUP_FAILED",
+            error: "Could not finish releasing the previous payment session.",
+          },
+          { status: 503 },
+        );
+      }
+    }
+
+    return NextResponse.json({ ok: true, bookingId, alreadySuperseded: true });
+  }
+
+  if (status !== "pending_payment") {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "PAYMENT_NOT_PENDING",
+        error: "This booking is no longer waiting for payment.",
+      },
+      { status: 409 },
+    );
+  }
+
+  // If a real Paystack checkout was created, fail closed unless the gateway
+  // confirms that transaction is still unpaid. This closes the race where the
+  // customer pays and immediately navigates back before webhook/verify persistence.
+  const reference = String(row.paystack_reference ?? "").trim();
+  const paymentLink = String(row.payment_link ?? "").trim();
+  if (reference && paymentLink) {
+    const secret = process.env.PAYSTACK_SECRET_KEY?.trim() ?? "";
+    if (!secret) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "PAYMENT_STATUS_UNAVAILABLE",
+          error: "Could not verify the previous payment safely. Please try again shortly.",
+        },
+        { status: 503 },
+      );
+    }
+
+    const verified = await fetchPaystackTransactionVerify(reference, secret);
+    if (verified.status !== true || !verified.data) {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "PAYMENT_STATUS_UNAVAILABLE",
+          error: "Could not verify the previous payment safely. Please try again shortly.",
+        },
+        { status: 503 },
+      );
+    }
+
+    if (String(verified.data.status ?? "").trim().toLowerCase() === "success") {
+      return NextResponse.json(
+        {
+          ok: false,
+          code: "PAYMENT_ALREADY_COMPLETED",
+          error: "Paystack reports this payment as successful. The booking cannot be replaced.",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
+  const nowIso = new Date().toISOString();
+  const markedSnapshot = withPaymentEditSupersedeMarker(row.booking_snapshot, {
+    supersededAt: nowIso,
+    paystackReference: reference || null,
+  });
+
+  const { data: transitioned, error: transitionErr } = await auth.admin
+    .from("bookings")
+    .update({
+      status: "payment_expired",
+      dispatch_status: "unassigned",
+      payment_link: null,
+      payment_link_expires_at: nowIso,
+      payment_needs_follow_up: false,
+      booking_snapshot: markedSnapshot,
+    })
+    .eq("id", bookingId)
+    .eq(ownershipColumn, auth.userId)
+    .eq("status", "pending_payment")
+    .is("payment_completed_at", null)
+    .select("id")
+    .maybeSingle();
+
+  if (transitionErr) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "PAYMENT_EDIT_SUPERSEDE_FAILED",
+        error: "Could not replace the pending payment. Please try again.",
+      },
+      { status: 500 },
+    );
+  }
+  if (!transitioned) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "PAYMENT_EDIT_RACE",
+        error: "The payment changed while your edit was being prepared. Please try again.",
+      },
+      { status: 409 },
+    );
+  }
+
+  const cleanup = await cleanupAbandonedPendingPayment(auth, {
+    ...row,
+    booking_snapshot: markedSnapshot,
+  });
+  if (!cleanup.ok) {
+    void logSystemEvent({
+      level: "error",
+      source: "customer_pending_payment_edit",
+      message: "Superseded payment cleanup failed",
+      context: { bookingId, error: cleanup.error },
+    });
+    return NextResponse.json(
+      { ok: false, code: "PAYMENT_EDIT_CLEANUP_FAILED", error: cleanup.error },
+      { status: 503 },
+    );
+  }
+
+  const { error: cleanupMarkerErr } = await auth.admin
+    .from("bookings")
+    .update({
+      booking_snapshot: markPaymentEditSupersedeCleanupDone(
+        markedSnapshot,
+        new Date().toISOString(),
+      ),
+    })
+    .eq("id", bookingId)
+    .eq(ownershipColumn, auth.userId)
+    .eq("status", "payment_expired");
+  if (cleanupMarkerErr) {
+    return NextResponse.json(
+      {
+        ok: false,
+        code: "PAYMENT_EDIT_CLEANUP_FAILED",
+        error: "Could not finish releasing the previous payment session.",
+      },
+      { status: 503 },
+    );
+  }
+
+  void logSystemEvent({
+    level: "info",
+    source: "customer_pending_payment_edit",
+    message: "Superseded stale pending payment before booking requote",
+    context: { bookingId, paystackReference: reference || null },
+  });
+
+  return NextResponse.json({ ok: true, bookingId, alreadySuperseded: false });
 }
 
 export async function handleCustomerBookingCancel(
