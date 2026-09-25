@@ -134,20 +134,19 @@ describe("SR-10B customer booking pagination", () => {
     expect(page).toContain("void loadMore()");
   });
 
-  it("preserves complete history for deployed no-parameter clients with bounded internal pages", () => {
+  it("keeps no-parameter customer booking requests on the bounded cursor contract", () => {
     const route = read("apps/web/app/api/customer/bookings/route.ts");
-    expect(route).toContain("const legacyNoParameterRequest =");
-    expect(route).toContain("url.searchParams.size === 0");
-    expect(route).toContain("loadLegacyCompleteBookingHistory");
-    expect(route).toContain("limit: CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT");
-    expect(route).toContain("seenCursors.has(nextCursor)");
-    expect(route).toContain("cursor = nextCursor");
+    expect(route).not.toContain("legacyNoParameterRequest");
+    expect(route).not.toContain("loadLegacyCompleteBookingHistory");
+    expect(route).toContain("loadCustomerBookingPageForUser");
+    expect(route).toContain("limit: parsePageLimit(url)");
+    expect(route).toContain('cursor: url.searchParams.get("cursor")');
   });
 
-  it("keeps complete-history consumers explicit while account bookings stays paged", () => {
+  it("keeps complete-history consumers explicit while account bookings defaults paged", () => {
     const hook = read("apps/web/hooks/useBookings.ts");
     const page = read("apps/web/app/(ui-redesign)/account/bookings/page.tsx");
-    expect(hook).toContain('mode = options?.mode === "paged" ? "paged" : "complete"');
+    expect(hook).toContain('mode = options?.mode === "complete" ? "complete" : "paged"');
     expect(hook).toContain("async function fetchBookingPages(options:");
     expect(hook).toContain("limit: String(CUSTOMER_BOOKINGS_PAGE_LIMIT)");
     expect(hook).toContain('query.set("cursor", cursor)');
