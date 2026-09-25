@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# PLESK-PROD-AUTO-01 — guarded production activation.
+# PLESK-PROD-AUTO-05 — guarded production activation with recovered lock namespace.
 # Intended only for shalean.co.za Plesk "Additional deployment actions".
 # It never touches pricing-test-runtime or runs the staging deploy scripts.
 #
@@ -21,7 +21,7 @@ NODE_BIN="${NODE_BIN:-/opt/plesk/node/24/bin/node}"
 LIVE="$ROOT/plesk-runtime"
 BACKUPS="$ROOT/plesk-production-releases"
 WORK="$ROOT/.plesk-production-auto"
-LOCK="$ROOT/.plesk-production-auto.lock"
+LOCK="$ROOT/.plesk-production-auto-v2.lock"
 OUT="$ROOT/plesk-production-auto-result.txt"
 DUPLICATE_OUT="$ROOT/plesk-production-auto-duplicate-result.txt"
 HEALTH_URL="${PLESK_PROD_HEALTH_URL:-https://shalean.co.za/api/health/environment}"
@@ -29,7 +29,7 @@ EXPECTED_REF="${PLESK_PROD_EXPECTED_SUPABASE_REF:-paqjwfulwywtsyyvdxrq}"
 WAIT_SECONDS="${PLESK_PROD_AUTO_WAIT_SECONDS:-1200}"
 POLL_SECONDS="${PLESK_PROD_AUTO_POLL_SECONDS:-15}"
 
-fail(){ printf 'PLESK-PROD-AUTO-01 ERROR: %s\n' "$*" | tee "$OUT" >&2; exit 1; }
+fail(){ printf 'PLESK-PROD-AUTO-05 ERROR: %s\n' "$*" | tee "$OUT" >&2; exit 1; }
 [ -r "$HEADER" ] || fail "GitHub auth header unreadable"
 [ -x "$NODE_BIN" ] || fail "Node 24 binary missing"
 for x in /usr/bin/curl /usr/bin/python3 /usr/bin/unzip /usr/bin/tar /usr/bin/sha256sum /usr/bin/flock /usr/bin/touch; do
@@ -39,7 +39,7 @@ done
 exec 9>"$LOCK"
 if ! /usr/bin/flock -n 9; then
   {
-    printf 'PLESK_PROD_AUTO_04=SKIPPED_LOCK_BUSY\n'
+    printf 'PLESK_PROD_AUTO_05=SKIPPED_LOCK_BUSY\n'
     printf 'TIMESTAMP=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     printf 'ACTION=NO_LIVE_CHANGE\n'
   } > "$DUPLICATE_OUT"
@@ -47,7 +47,7 @@ if ! /usr/bin/flock -n 9; then
   exit 0
 fi
 {
-  printf 'PLESK_PROD_AUTO_04=LOCK_ACQUIRED\n'
+  printf 'PLESK_PROD_AUTO_05=LOCK_ACQUIRED\n'
   printf 'PID=%s\n' "$"
   printf 'TIMESTAMP=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "$OUT"
@@ -66,16 +66,16 @@ branch_sha(){
   /usr/bin/python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["commit"]["sha"])' "$WORK/branch.json"
 }
 
-TARGET_SHA="$(branch_sha)" || fail "could not resolve integration release head"
+TARGET_SHA="$(branch_sha)" || fail "could not resolve production branch head"
 case "$TARGET_SHA" in *[!0-9a-f]*|'') fail "invalid release SHA" ;; esac
 [ "${#TARGET_SHA}" -eq 40 ] || fail "release SHA must be 40 chars"
 SHORT="${TARGET_SHA:0:8}"
 {
-  printf 'PLESK_PROD_AUTO_04=RUNNING\n'
+  printf 'PLESK_PROD_AUTO_05=RUNNING\n'
   printf 'RELEASE_SHA=%s\n' "$TARGET_SHA"
   printf 'PHASE=WAITING_FOR_EXACT_ARTIFACT\n'
 } > "$OUT"
-printf 'PLESK-PROD-AUTO-03 target=%s waiting for exact artifact\n' "$TARGET_SHA"
+printf 'PLESK-PROD-AUTO-05 target=%s waiting for exact artifact\n' "$TARGET_SHA"
 
 # Wait for the exact production artifact. Never fall back to an older artifact.
 ELAPSED=0; RUN_ID=""; ART_ID=""
@@ -93,13 +93,13 @@ else:
 PY
   IFS='|' read -r FOUND RUN_ID STATUS CONCLUSION < "$WORK/run.txt"
   if [ "$FOUND" = found ]; then
-    printf 'PLESK-PROD-AUTO-03 workflow run=%s status=%s conclusion=%s (%ss/%ss)\n' "$RUN_ID" "$STATUS" "${CONCLUSION:-pending}" "$ELAPSED" "$WAIT_SECONDS"
+    printf 'PLESK-PROD-AUTO-05 workflow run=%s status=%s conclusion=%s (%ss/%ss)\n' "$RUN_ID" "$STATUS" "${CONCLUSION:-pending}" "$ELAPSED" "$WAIT_SECONDS"
     if [ "$STATUS" = completed ]; then
       [ "$CONCLUSION" = success ] || fail "exact production artifact workflow completed with $CONCLUSION"
       break
     fi
   else
-    printf 'PLESK-PROD-AUTO-03 waiting for exact-SHA production workflow (%ss/%ss)\n' "$ELAPSED" "$WAIT_SECONDS"
+    printf 'PLESK-PROD-AUTO-05 waiting for exact-SHA production workflow (%ss/%ss)\n' "$ELAPSED" "$WAIT_SECONDS"
   fi
   [ "$ELAPSED" -lt "$WAIT_SECONDS" ] || fail "timed out waiting for exact production artifact"
   sleep "$POLL_SECONDS"; ELAPSED=$((ELAPSED + POLL_SECONDS))
@@ -115,7 +115,7 @@ print(xs[0]["id"])
 PY
 ART_ID="$(cat "$WORK/artifact-id.txt")"
 {
-  printf 'PLESK_PROD_AUTO_04=RUNNING\n'
+  printf 'PLESK_PROD_AUTO_05=RUNNING\n'
   printf 'RELEASE_SHA=%s\n' "$TARGET_SHA"
   printf 'WORKFLOW_RUN_ID=%s\n' "$RUN_ID"
   printf 'ARTIFACT_ID=%s\n' "$ART_ID"
@@ -211,7 +211,7 @@ PY
 
 if health_exact; then
   {
-    echo "PLESK_PROD_AUTO_04=PASS"
+    echo "PLESK_PROD_AUTO_05=PASS"
     echo "RELEASE_SHA=$TARGET_SHA"
     echo "RELEASE=$RELEASE"
     echo "ROLLBACK=$ROLLBACK"
