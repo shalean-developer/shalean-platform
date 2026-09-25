@@ -18,13 +18,16 @@ describe("BOOKING-E2E-05 customer pagination convergence", () => {
     expect(src).toContain('const mode = options?.mode === "complete" ? "complete" : "paged";');
   });
 
-  it("keeps consumers that still require complete historical aggregates explicit", () => {
+  it("moves historical account totals to the server aggregate view", () => {
+    const route = read("app/api/customer/bookings/route.ts");
+    expect(route).toContain('url.searchParams.get("view") === "aggregates"');
     for (const file of [
       "app/(ui-redesign)/account/payments/page.tsx",
       "app/(ui-redesign)/account/invoices/page.tsx",
       "app/(ui-redesign)/account/profile/page.tsx",
     ]) {
-      expect(read(file)).toContain('useBookings({ mode: "complete" })');
+      expect(read(file)).not.toContain('mode: "complete"');
+      expect(read(file)).toContain("useCustomerBookingAggregates");
     }
   });
 
