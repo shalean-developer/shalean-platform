@@ -6,6 +6,79 @@ const CITY_ID = "22222222-2222-4222-8222-222222222222";
 
 type CleanerMode = "team" | "individual_cleaners";
 
+function liveServiceFixture(slug: string) {
+  return {
+    slug,
+    label: "Test Cleaning",
+    shortLabel: "Test",
+    description: "Smoke fixture",
+    cleanerMode: slug === "deep-cleaning" || slug === "moving-cleaning" ? "team" : "individual_cleaners",
+    showEquipmentQuestion: slug === "regular-cleaning",
+    allowsExtraCleaner: true,
+    step1Questions: [
+      { key: "propertyType", label: "Property type", type: "select", required: true, options: [{ value: "house", label: "House" }] },
+      { key: "bedrooms", label: "Bedrooms", type: "number", required: true },
+      { key: "bathrooms", label: "Bathrooms", type: "number", required: true },
+    ],
+    basePrice: 500,
+    pricePerBedroom: 0,
+    pricePerBathroom: 0,
+    pricePerExtraRoom: 0,
+    pricePerExtraCleaner: 0,
+    serviceFeeZar: 0,
+    estimatedDurationHours: 3,
+    durationBaseHours: 3,
+    durationPerBedroomHours: 0,
+    durationPerBathroomHours: 0,
+    durationPerExtraRoomHours: 0,
+    minDurationHours: 1,
+    maxDurationHours: 12,
+    extras: [],
+  };
+}
+
+function authoritativeQuoteFixture(signature: string) {
+  return {
+    pricingSummary: {
+      base_service_price: 500,
+      property_factors_total: 0,
+      bedrooms_price: 0,
+      bathrooms_price: 0,
+      extra_rooms_price: 0,
+      property_size_price: 0,
+      selected_extras: [],
+      selected_extras_total: 0,
+      supplies_equipment_fee: 0,
+      equipment_logistics_fee: 0,
+      equipment_distance_km: 0,
+      equipment_base_fee: 0,
+      equipment_distance_charge: 0,
+      manual_quote_required: false,
+      extra_cleaner_cost: 0,
+      cleaning_service_subtotal: 500,
+      subtotal_before_service_fee: 500,
+      service_fee: 0,
+      recurring_discount: 0,
+      estimated_total: 500,
+      estimated_duration_minutes: 180,
+      team_scaled_duration_minutes: 180,
+      quote_signature: signature,
+      calculation_version: 1,
+      lineItems: [{ label: "Cleaning service", amountZar: 500 }],
+      basePrice: 500,
+      extrasTotal: 0,
+      cleanerSurcharge: 0,
+      total: 500,
+    },
+    quoteLock: {
+      pricingVersionId: "11111111-1111-4111-8111-111111111112",
+      quoteSignature: signature,
+      lockedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    },
+  };
+}
+
 type StoredDraft = Record<string, unknown> & {
   address?: string;
   bookingType?: string;
@@ -116,10 +189,16 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
     const url = new URL(request.url());
     const path = url.pathname;
 
+    if (request.method() === "POST" && path === "/api/booking-v2/quote") {
+      await route.fulfill({ status: 200, json: authoritativeQuoteFixture("e2e-authoritative") });
+      return;
+    }
+
     if (path.startsWith("/api/analytics/")) {
       await route.fulfill({ status: 204, body: "" });
       return;
     }
+
 
     if (request.method() !== "GET") {
       forbiddenMutations.push(`${request.method()} ${path}`);
@@ -157,7 +236,7 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
       await route.fulfill({
         status: 200,
         json: {
-          catalog: {},
+          catalog: { "regular-cleaning": liveServiceFixture("regular-cleaning"), "deep-cleaning": liveServiceFixture("deep-cleaning") },
           scheduling: {
             leadMinutes: 0,
             slotStartHour: 8,

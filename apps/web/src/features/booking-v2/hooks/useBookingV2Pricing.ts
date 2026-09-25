@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormContext, useWatch } from "react-hook-form";
 import { useBookingV2 } from "@/src/features/booking-v2/BookingV2Context";
 import type { BookingV2FormData } from "@/src/features/booking-v2/types";
@@ -13,11 +13,15 @@ import { cachedClientRequest } from "@/lib/booking-v2/clientRequestCache";
  * Mount once inside BookingV2Provider (e.g. BookingV2Shell).
  * VIP must match confirm/Paystack (user_profiles.tier) so display total === charge amount.
  */
-export function useBookingV2Pricing(): void {
+export type BookingV2QuoteRequestState = "loading" | "ready" | "error";
+
+export function useBookingV2Pricing(): { state: BookingV2QuoteRequestState; error: string | null } {
   const { serviceSlug, liveConfig, feesConfig } = useBookingV2();
   const { control, setValue } = useFormContext<BookingV2FormData>();
   const { tier: vipTier } = useBookingVipTier();
   const quoteRevision = useRef(0);
+  const [quoteRequestState, setQuoteRequestState] = useState<BookingV2QuoteRequestState>("loading");
+  const [quoteRequestError, setQuoteRequestError] = useState<string | null>(null);
 
   // useWatch subscribes this hook to nested field updates. React Hook Form may keep
   // the serviceDetails object identity stable while changing a bedroom/bathroom
@@ -39,7 +43,11 @@ export function useBookingV2Pricing(): void {
     // Once confirm has created a pending booking, its persisted pricing snapshot
     // is canonical. Do not let the live/draft pricing hook overwrite the recovery
     // summary while the customer retries the same payment.
-    if (pendingBookingId?.trim()) return;
+    if (pendingBookingId?.trim()) {
+      setQuoteRequestState("ready");
+      setQuoteRequestError(null);
+      return;
+    }
 
     const revision = ++quoteRevision.current;
     // Any price/duration-affecting customer change invalidates both the previous
@@ -47,6 +55,8 @@ export function useBookingV2Pricing(): void {
     // from an earlier scope (for example 3 bedrooms) remaining visible while
     // the new authoritative quote (for example 4 bedrooms) is being resolved.
     setValue("quoteLock", null, { shouldDirty: false, shouldValidate: false });
+    setQuoteRequestState("loading");
+    setQuoteRequestError(null);
     const currentServiceDetails = JSON.parse(serviceDetailsSnapshot) as NonNullable<
       BookingV2FormData["serviceDetails"]
     >;
@@ -109,7 +119,8 @@ export function useBookingV2Pricing(): void {
         .then(({ pricingSummary, quoteLock }) => {
           // A slower response for a previous room selection must never replace
           // the immediately calculated total for the customer's latest choice.
-          if (pricingSummary && quoteLock && revision === quoteRevision.current) {
+          if (revision !== quoteRevision.current) return;
+          if (pricingSummary && quoteLock) {
             setValue("pricingSummary", pricingSummary, {
               shouldDirty: false,
               shouldValidate: false,
@@ -118,11 +129,19 @@ export function useBookingV2Pricing(): void {
               shouldDirty: false,
               shouldValidate: false,
             });
+            setQuoteRequestState("ready");
+            setQuoteRequestError(null);
+            return;
           }
+          setQuoteRequestState("error");
+          setQuoteRequestError("The pricing service returned an incomplete secured quote. Change any booking option to retry.");
         })
-        .catch(() => {
-          // The immediate quote above remains usable; confirm still recalculates
-          // and signs the authoritative amount before a booking is created.
+.catch(() => {
+          if (revision !== quoteRevision.current) return;
+          // Keep the optimistic amount visible for orientation, but never present
+          // it as payment-ready when the authoritative server quote failed.
+          setQuoteRequestState("error");
+          setQuoteRequestError("We could not secure your latest price. Check your connection and change any booking option to retry.");
         });
     }, 450);
 
@@ -145,4 +164,6 @@ export function useBookingV2Pricing(): void {
     selectedExtrasSnapshot,
     equipmentQuoteSnapshot,
   ]);
+
+  return { state: quoteRequestState, error: quoteRequestError };
 }

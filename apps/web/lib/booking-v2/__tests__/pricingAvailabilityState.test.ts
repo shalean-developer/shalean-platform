@@ -47,7 +47,7 @@ describe("SPC-01-04 SR-04D1 pricing availability state", () => {
     expect(src).toContain('watch("pendingBookingId")');
     expect(src).toContain("canEnterBookingPayment(pricingAvailability, hasPendingBooking)");
     expect(src).toContain("currentStep === 4 && !paymentEntryAllowed");
-    expect(src).toContain("<PricingBlockedNotice availability={pricingAvailability} />");
+    expect(src).toContain("<PricingBlockedNotice availability={pricingAvailability} quoteError={quoteRequest.error} />");
     expect(src).toContain("BOOKING_PRICING_LOADING_MESSAGE");
     expect(src).toContain("BOOKING_PRICING_UNAVAILABLE_MESSAGE");
     expect(src).toMatch(/disabled=\{paymentEditResetting \|\| \(currentStep === 3 && !paymentEntryAllowed\)\}/);
