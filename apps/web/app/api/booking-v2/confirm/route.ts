@@ -1,4 +1,5 @@
 import { buildBookingV2HistorySnapshot } from "@/lib/booking-v2/buildBookingV2HistorySnapshot";
+import { buildBookingV2MutablePersistence } from "@/lib/booking-v2/buildBookingV2MutablePersistence";
 import { after, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearerAuth";
@@ -827,6 +828,43 @@ export async function POST(request: Request) {
       confirmedAt: canonicalConfirmedAt,
     });
 
+  const buildMutablePersistence = (payableZar: number) =>
+    buildBookingV2MutablePersistence({
+      customerPhone,
+      canonicalServiceSlug,
+      serviceSlug: data.serviceSlug,
+      serviceDetails: data.serviceDetails,
+      selectedExtraIds,
+      date: data.date,
+      time: data.time,
+      alternativeDate: data.alternativeDate,
+      alternativeTime: data.alternativeTime,
+      bookingType: data.bookingType,
+      recurringFrequency: data.recurringFrequency,
+      recurringDays: data.recurringDays,
+      recurringStartDate: data.recurringStartDate,
+      recurringEndDate: data.recurringEndDate,
+      cleanerMode: data.cleanerMode,
+      assignedTeamId: data.assignedTeamId,
+      cleanerCount: data.cleanerCount,
+      preferredCleanerIds,
+      preferredCleanerFields: preferredCleanerAssignmentFields(preferredCleanerIds),
+      persistPricing,
+      pricingVersionId,
+      equipmentPersist,
+      locationFields,
+      priceSnapshot,
+      fulfillmentMode,
+      fulfillmentReason,
+      address: data.address,
+      suburb: data.suburb,
+      postalCode: data.postalCode,
+      accessInstructions: data.accessInstructions,
+      parkingInstructions: data.parkingInstructions,
+      gateCode: data.gateCode,
+      bookingSnapshot: buildHistorySnapshot(payableZar),
+    });
+
   // ── 9. Reuse an existing pending_payment booking for the same slot (retry path) ──
   // The unique index idx_bookings_unique_active_customer_slot prevents duplicate inserts
   // for (user_id, date, time, service_slug) when status != cancelled/failed/payment_expired.
@@ -846,32 +884,7 @@ export async function POST(request: Request) {
       .from("bookings")
       .update({
         paystack_reference: paystackReference,
-        customer_phone: customerPhone,
-        ...persistPricing,
-        pricing_version_id: pricingVersionId,
-        ...equipmentPersist,
-        ...locationFields,
-        price_snapshot: priceSnapshot,
-        service_slug: canonicalServiceSlug,
-        fulfillment_mode: fulfillmentMode,
-        fulfillment_reason: fulfillmentReason,
-        dispatch_status: fulfillmentMode === "ops_assignment" ? "unassigned" : "searching",
-        cleaner_mode: data.cleanerMode,
-        ...(data.cleanerMode === "team"
-          ? { assigned_team_id: data.assignedTeamId }
-          : {
-              is_team_job: false,
-              team_id: null,
-              assigned_team_id: null,
-              payout_owner_cleaner_id: null,
-            }),
-        ...(data.cleanerMode === "individual_cleaners"
-          ? {
-              cleaner_count: Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount,
-              ...preferredCleanerAssignmentFields(preferredCleanerIds),
-            }
-          : {}),
-        booking_snapshot: buildHistorySnapshot(payAmountZar),
+        ...buildMutablePersistence(payAmountZar),
       })
       .eq("id", existingBooking.id);
 
@@ -1039,73 +1052,15 @@ export async function POST(request: Request) {
   const { data: inserted, error: insertErr } = await supabase
     .from("bookings")
     .insert({
-      // Core identity
+      // Insert-only identity and lifecycle defaults remain explicit.
       ...bookingCustomerOwnershipPatch(userId, ownershipColumn),
       customer_email: customerEmailNormalized,
       customer_name: customerName,
-      customer_phone: customerPhone,
       paystack_reference: paystackReference,
-
-      // Service
-      service: data.serviceSlug,
-      service_slug: canonicalServiceSlug,
-
-      // Status
       status: "pending_payment",
       payment_status: "pending",
-      dispatch_status: fulfillmentMode === "ops_assignment" ? "unassigned" : "searching",
-      fulfillment_mode: fulfillmentMode,
-      fulfillment_reason: fulfillmentReason,
-
-      // Location
-      location: data.address,
-      suburb: data.suburb,
-      postal_code: data.postalCode,
-      ...locationFields,
-      access_instructions: data.accessInstructions || null,
-      parking_instructions: data.parkingInstructions || null,
-      gate_code: data.gateCode || null,
-
-      // Schedule
-      date: data.date,
-      time: data.time,
-      alt_date: data.alternativeDate || null,
-      alt_time: data.alternativeTime || null,
-      booking_type: data.bookingType,
-      recurring_frequency: data.recurringFrequency || null,
-      recurring_days: data.recurringDays?.length ? data.recurringDays : null,
-      recurring_start_date: data.recurringStartDate || null,
-      recurring_end_date: data.recurringEndDate || null,
-
-      // Cleaner / team
-      cleaner_mode: data.cleanerMode,
-      // Team header + booking_cleaners roster must be written atomically by
-      // assign_team_and_sync_roster after this provisional booking exists.
-      is_team_job: false,
-      team_id: null,
-      assigned_team_id: data.cleanerMode === "team" ? data.assignedTeamId : null,
-      payout_owner_cleaner_id: null,
-      cleaner_count:
-        data.cleanerMode === "individual_cleaners"
-          ? Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount
-          : null,
-      ...preferredCleanerAssignmentFields(
-        data.cleanerMode === "individual_cleaners" ? preferredCleanerIds : [],
-      ),
-
-      // Service-specific
-      service_details: data.serviceDetails,
-      selected_extras: selectedExtraIds,
-
-      // Pricing
-      ...persistPricing,
-      pricing_version_id: pricingVersionId,
-      ...equipmentPersist,
-      price_snapshot: priceSnapshot,
       currency: "ZAR",
-
-      // Snapshot for history
-      booking_snapshot: buildHistorySnapshot(payAmountZar),
+      ...buildMutablePersistence(payAmountZar),
     })
     .select("id")
     .single();
