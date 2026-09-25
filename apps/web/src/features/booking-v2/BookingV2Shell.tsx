@@ -19,6 +19,7 @@ import { useBookingV2Pricing } from "@/src/features/booking-v2/hooks/useBookingV
 import { useClientMounted } from "@/src/features/booking-v2/hooks/useClientMounted";
 import { cn } from "@/lib/utils";
 import { shouldShowBookingShellNavigation } from "@/lib/booking-v2/bookingShellNavigation";
+import { authoritativeQuoteAllowsPaymentEntry } from "@/lib/booking-v2/bookingQuoteReadiness";
 import {
   BOOKING_PRICING_LOADING_MESSAGE,
   BOOKING_PRICING_UNAVAILABLE_MESSAGE,
@@ -112,7 +113,7 @@ function BookingV2Inner() {
   const hasPendingBooking = Boolean(pendingBookingId);
   const paymentEntryAllowed =
     canEnterBookingPayment(pricingAvailability, hasPendingBooking) &&
-    (hasPendingBooking || quoteRequest.state === "ready");
+    authoritativeQuoteAllowsPaymentEntry({ requestState: quoteRequest.state, hasPendingBooking });
   const stepContent =
     currentStep === 4 && !paymentEntryAllowed
       ? <PricingBlockedNotice availability={pricingAvailability} quoteError={quoteRequest.error} />
