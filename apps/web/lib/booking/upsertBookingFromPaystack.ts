@@ -1,4 +1,5 @@
 import { preservePaymentCustomerIdentity, paymentFinalizationReplayEquivalent } from "@/lib/booking/paymentCustomerIdentityGuard";
+import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
 import { after } from "next/server";
 import { syncPreferredCleanerRosterFromBookingRow } from "@/lib/booking/persistPreferredCleaners";
 import { resolveCustomerPhoneFromAuthAdmin } from "@/lib/admin/adminBookingCustomerContact";
@@ -734,8 +735,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
             attempted_cleaner_id: userConfirmedCleanerId,
             assignment_type: "user_selected" as const,
             cleaner_id: null as string | null,
-            status: "pending_assignment" as const,
-            dispatch_status: "searching",
+            ...bookingCreationLifecyclePatch("paystack_paid_selected_cleaner"),
             cleaner_response_status: CLEANER_RESPONSE.NONE,
           }
         : checkoutResolution.kind === "fallback" && normalizedPickedCleaner != null
@@ -744,8 +744,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
               attempted_cleaner_id: normalizedPickedCleaner,
               assignment_type: "user_selected" as const,
               cleaner_id: null as string | null,
-              status: "pending_assignment" as const,
-              dispatch_status: "searching",
+              ...bookingCreationLifecyclePatch("paystack_paid_selected_cleaner"),
               cleaner_response_status: CLEANER_RESPONSE.NONE,
               fallback_reason: checkoutResolution.reason,
             }
@@ -906,8 +905,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           time: locked?.time ?? pendingExisting?.time ?? null,
         })),
     ...(serviceSlugForRow ? { service_slug: serviceSlugForRow } : {}),
-    status: "pending",
-    dispatch_status: "searching",
+    ...bookingCreationLifecyclePatch("paystack_paid"),
     is_test: isTest,
     surge_multiplier: surgeMultiplier,
     surge_reason: surgeReason,
