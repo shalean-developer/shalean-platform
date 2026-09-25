@@ -17,7 +17,7 @@ import { Card, CardContent } from "@/components/ui/card";
 
 export default function AccountInvoicesPage() {
   const { invoices, loading, error, refetch } = useMonthlyInvoices();
-  const { bookings, loading: bookingsLoading } = useBookings();
+  const { bookings, loading: bookingsLoading } = useBookings({ mode: "complete" });
   const sorted = useMemo(() => [...invoices].sort((a, b) => b.month.localeCompare(a.month)), [invoices]);
 
   const perBookingInvoices = useMemo(
