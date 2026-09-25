@@ -96,6 +96,7 @@ export function useBookings(options?: {
   const mode = options?.mode === "complete" ? "complete" : "paged";
   const includeUpcoming = options?.includeUpcoming === true;
   const includeCompleteReviewHistory = options?.includeCompleteReviewHistory === true;
+  const userEmail = typeof user?.email === "string" ? user.email.trim().toLowerCase() : "";
 
   const applyPageInfo = useCallback((pageInfo: CustomerBookingsPageInfo | undefined) => {
     setNextCursor(typeof pageInfo?.nextCursor === "string" ? pageInfo.nextCursor : null);
@@ -228,6 +229,23 @@ export function useBookings(options?: {
     const tid = window.setTimeout(() => void fetchBookings(), 0);
     return () => window.clearTimeout(tid);
   }, [userLoading, fetchBookings]);
+
+  useEffect(() => {
+    if (userLoading || !userId || !userEmail) return;
+    let cancelled = false;
+    const link = async () => {
+      const out = await dashboardFetchJson<{ success?: boolean; linkedCount?: number }>("/api/auth/link-guest-bookings", {
+        method: "POST",
+      });
+      if (!cancelled && out.ok && Number(out.data.linkedCount ?? 0) > 0) {
+        await fetchBookings({ silent: true });
+      }
+    };
+    void link();
+    return () => {
+      cancelled = true;
+    };
+  }, [userLoading, userId, userEmail, fetchBookings]);
 
   useEffect(() => {
     if (userLoading || !userId) return;
