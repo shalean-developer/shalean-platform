@@ -1,4 +1,5 @@
 import { isAuthoritativeBookingCompleted } from "@/lib/booking/deriveBookingOperationalPhase";
+import { bookingIsCustomerPaymentSettled } from "@/lib/booking/bookingPaymentSettlementState";
 import type { BookingRow, DashboardBooking } from "@/lib/dashboard/types";
 
 export type CustomerPaymentBadgeTone = "success" | "warning" | "neutral" | "error";
@@ -24,13 +25,6 @@ export function isMonthlyBilledBookingRow(row: BookingRow): boolean {
     .trim()
     .toLowerCase();
   return bt === "monthly_contract" || bt === "recurring_invoice";
-}
-
-function hasCapturedPaystackPayment(row: BookingRow): boolean {
-  if (String(row.payment_completed_at ?? "").trim()) return true;
-  if (String(row.paystack_reference ?? "").trim()) return true;
-  const cents = row.amount_paid_cents;
-  return typeof cents === "number" && cents > 0;
 }
 
 /**
@@ -66,7 +60,7 @@ export function customerPaymentRowDisplay(booking: DashboardBooking): CustomerPa
       rowMuted: true,
     };
   }
-  if (ps === "pending_monthly" || (isMonthlyBilledBookingRow(row) && !hasCapturedPaystackPayment(row))) {
+  if (ps === "pending_monthly" || isMonthlyBilledBookingRow(row)) {
     return {
       badgeLabel: authDone ? "Billed monthly" : "Monthly invoice",
       badgeTone: "warning",
@@ -74,7 +68,7 @@ export function customerPaymentRowDisplay(booking: DashboardBooking): CustomerPa
       rowMuted: false,
     };
   }
-  if (st === "pending_payment" || (ps === "pending" && !hasCapturedPaystackPayment(row))) {
+  if (st === "pending_payment" || ps === "pending") {
     return {
       badgeLabel: "Awaiting payment",
       badgeTone: "warning",
@@ -102,6 +96,15 @@ export function customerPaymentRowDisplay(booking: DashboardBooking): CustomerPa
       badgeLabel: "Partially refunded",
       badgeTone: "warning",
       countsAsPaidTransaction: true,
+      rowMuted: false,
+    };
+  }
+
+  if (!bookingIsCustomerPaymentSettled(row)) {
+    return {
+      badgeLabel: "Awaiting payment",
+      badgeTone: "warning",
+      countsAsPaidTransaction: false,
       rowMuted: false,
     };
   }

@@ -1,4 +1,6 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { bookingIsCustomerPaymentSettled } from "@/lib/booking/bookingPaymentSettlementState";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 export type CustomerMonthlyInvoiceListItem = {
   id: string;
@@ -60,6 +62,7 @@ export async function loadCustomerInvoicesList(
   admin: SupabaseClient,
   userId: string,
 ): Promise<{ ok: true; data: CustomerInvoicesListDto } | { ok: false; error: string }> {
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
   const [{ data: monthlyRows, error: monthlyErr }, { data: bookingRows, error: bookingErr }] =
     await Promise.all([
       admin
@@ -71,9 +74,9 @@ export async function loadCustomerInvoicesList(
       admin
         .from("bookings")
         .select(
-          "id, service, date, total_paid_zar, total_price, status, payment_status, created_at, zoho_invoice_id, is_monthly_billing_booking, user_id",
+          `id, service, date, total_paid_zar, total_paid_cents, amount_paid_cents, total_price, status, payment_status, payment_completed_at, paid_at, created_at, zoho_invoice_id, is_monthly_billing_booking, monthly_invoice_id, billing_type, ${ownershipColumn}`,
         )
-        .eq("user_id", userId)
+        .eq(ownershipColumn, userId)
         .order("created_at", { ascending: false })
         .limit(200),
     ]);
@@ -117,8 +120,9 @@ export async function loadCustomerInvoicesList(
     ) {
       continue;
     }
-    const amountZar = num(r.total_paid_zar) || num(r.total_price);
-    if (!(paymentStatus === "success" || amountZar > 0)) continue;
+    if (!bookingIsCustomerPaymentSettled(r)) continue;
+    const paidCents = num(r.amount_paid_cents) || num(r.total_paid_cents);
+    const amountZar = paidCents > 0 ? paidCents / 100 : num(r.total_paid_zar);
     perVisit.push({
       bookingId: String(r.id),
       serviceName: typeof r.service === "string" && r.service.trim() ? r.service.trim() : "Cleaning",

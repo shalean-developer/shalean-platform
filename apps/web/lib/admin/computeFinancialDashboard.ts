@@ -17,10 +17,12 @@ export type FinancialBookingInput = {
 };
 
 export function resolvedRevenueCents(b: FinancialBookingInput): number {
+  // amount_paid_cents is the collected-cash SoT. total_paid_zar is a rounded
+  // legacy mirror and is consulted only when exact cents are unavailable.
+  const ac = Number(b.amount_paid_cents);
+  if (Number.isFinite(ac) && ac >= 0) return Math.max(0, Math.round(ac));
   const z = Number(b.total_paid_zar);
   if (Number.isFinite(z) && z > 0) return Math.max(0, Math.round(z * 100));
-  const ac = Number(b.amount_paid_cents);
-  if (Number.isFinite(ac) && ac > 0) return Math.max(0, Math.round(ac));
   return 0;
 }
 
