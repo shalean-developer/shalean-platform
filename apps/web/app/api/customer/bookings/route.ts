@@ -5,8 +5,12 @@ import {
   CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT,
   loadCustomerBookingPageForUser,
 } from "@/lib/customer/customerBookingPageForUser";
-import type { BookingRow } from "@/lib/dashboard/types";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { loadCustomerBookingAggregateRowsForUser } from "@/lib/customer/customerBookingAggregatesForUser";
+import { mapBookingRow } from "@/lib/dashboard/bookingUtils";
+import { isDashboardBookingAuthoritativelyCompleted } from "@/lib/dashboard/dashboardBookingOperational";
+import { customerPaymentRowDisplay } from "@/lib/dashboard/customerPaymentDisplay";
+import { perBookingInvoicesFromBookings } from "@/lib/dashboard/perBookingInvoice";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,39 +21,6 @@ function parsePageLimit(url: URL): number {
   const parsed = Number(raw);
   if (!Number.isInteger(parsed) || parsed < 1) return CUSTOMER_BOOKINGS_PAGE_DEFAULT_LIMIT;
   return Math.min(parsed, CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT);
-}
-
-async function loadLegacyCompleteBookingHistory(
-  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
-  userId: string,
-  viewerEmail: string | null,
-) {
-  const bookings: BookingRow[] = [];
-  const seenCursors = new Set<string>();
-  let cursor: string | null = null;
-
-  do {
-    const out = await loadCustomerBookingPageForUser(admin, userId, {
-      viewerEmail,
-      cursor,
-      limit: CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT,
-      view: "all",
-    });
-    if (!out.ok) return out;
-    bookings.push(...out.bookings);
-
-    const nextCursor = out.pageInfo.hasMore ? out.pageInfo.nextCursor : null;
-    if (!nextCursor) {
-      return { ok: true as const, bookings, pageInfo: { hasMore: false, nextCursor: null } };
-    }
-    if (seenCursors.has(nextCursor)) {
-      return { ok: false as const, error: "Bookings pagination did not converge.", status: 500 };
-    }
-    seenCursors.add(nextCursor);
-    cursor = nextCursor;
-  } while (cursor);
-
-  return { ok: true as const, bookings, pageInfo: { hasMore: false, nextCursor: null } };
 }
 
 /**
@@ -82,17 +53,36 @@ export async function GET(request: Request) {
 
   const url = new URL(request.url);
   const viewerEmail = typeof userData.user.email === "string" ? userData.user.email : null;
-  const legacyNoParameterRequest = url.searchParams.size === 0;
-  const out = legacyNoParameterRequest
-    ? await loadLegacyCompleteBookingHistory(admin, userData.user.id, viewerEmail)
-    : await loadCustomerBookingPageForUser(admin, userData.user.id, {
-        viewerEmail,
-        cursor: url.searchParams.get("cursor"),
-        limit: parsePageLimit(url),
-        view: url.searchParams.get("view") === "upcoming"
-          ? "upcoming"
-          : url.searchParams.get("view") === "review_eligibility" ? "review_eligibility" : "all",
-      });
+  if (url.searchParams.get("view") === "aggregates") {
+    const complete = await loadCustomerBookingAggregateRowsForUser(admin, userData.user.id, { viewerEmail });
+    if (!complete.ok) return NextResponse.json({ error: complete.error }, { status: complete.status });
+    const mapped = complete.bookings.map((row) => mapBookingRow(row));
+    const paymentRows = mapped.map((booking) => ({ booking, display: customerPaymentRowDisplay(booking) }));
+    const paidRows = paymentRows.filter((row) => row.display.countsAsPaidTransaction);
+    const perVisitInvoices = perBookingInvoicesFromBookings(mapped);
+    return NextResponse.json({
+      aggregates: {
+        totalBookingsCount: mapped.length,
+        completedBookingsCount: mapped.filter(isDashboardBookingAuthoritativelyCompleted).length,
+        payments: {
+          totalPaidZar: paidRows.reduce((sum, row) => sum + row.booking.priceZar, 0),
+          transactionCount: paidRows.length,
+        },
+        perBookingInvoices: {
+          totalCount: perVisitInvoices.length,
+          totalPaidCents: perVisitInvoices.reduce((sum, invoice) => sum + Math.round(invoice.amountZar * 100), 0),
+        },
+      },
+    });
+  }
+  const out = await loadCustomerBookingPageForUser(admin, userData.user.id, {
+    viewerEmail,
+    cursor: url.searchParams.get("cursor"),
+    limit: parsePageLimit(url),
+    view: url.searchParams.get("view") === "upcoming"
+      ? "upcoming"
+      : url.searchParams.get("view") === "review_eligibility" ? "review_eligibility" : "all",
+  });
   if (!out.ok) {
     return NextResponse.json({ error: out.error }, { status: out.status });
   }

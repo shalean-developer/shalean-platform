@@ -12,6 +12,7 @@ import {
   XCircle,
 } from "lucide-react";
 import { useBookings } from "@/hooks/useBookings";
+import { useCustomerBookingAggregates } from "@/hooks/useCustomerBookingAggregates";
 import { HelpCard } from "@/components/account/HelpCard";
 import { StatCard } from "@/components/account/StatCard";
 import { Badge, type BadgeVariant } from "@/components/ui/badge";
@@ -53,6 +54,7 @@ function PaymentStatusBadge({ label, tone }: { label: string; tone: CustomerPaym
 
 export default function AccountPaymentsPage() {
   const { bookings, loading, error, refetch } = useBookings();
+  const { aggregates, loading: aggregatesLoading } = useCustomerBookingAggregates();
 
   const rows = useMemo(
     () => [...bookings].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
@@ -65,14 +67,13 @@ export default function AccountPaymentsPage() {
   );
 
   const stats = useMemo(() => {
-    const paidRows = rowDisplays.filter((r) => r.display.countsAsPaidTransaction);
-    const totalPaid = paidRows.reduce((s, r) => s + r.booking.priceZar, 0);
-    const txCount = paidRows.length;
+    const totalPaid = aggregates?.payments.totalPaidZar ?? 0;
+    const txCount = aggregates?.payments.transactionCount ?? 0;
     const avgSpend = txCount > 0 ? Math.round(totalPaid / txCount) : 0;
     return { totalPaid, txCount, avgSpend };
-  }, [rowDisplays]);
+  }, [aggregates]);
 
-  if (loading) {
+  if (loading || aggregatesLoading) {
     return (
       <div className="space-y-6" aria-hidden>
         <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />

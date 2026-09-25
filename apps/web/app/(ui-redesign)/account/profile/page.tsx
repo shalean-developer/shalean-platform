@@ -24,7 +24,7 @@ import {
 } from "@/lib/customer/customerProfileContactFields";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
 import { useUser } from "@/hooks/useUser";
-import { useBookings } from "@/hooks/useBookings";
+import { useCustomerBookingAggregates } from "@/hooks/useCustomerBookingAggregates";
 import { useAddresses } from "@/hooks/useAddresses";
 import { useReviews } from "@/hooks/useReviews";
 import { useReferralSummary } from "@/hooks/useReferralSummary";
@@ -69,7 +69,7 @@ function ProfileStat({
 export default function AccountProfilePage() {
   const toast = useDashboardToast();
   const { user, loading: userLoading } = useUser();
-  const { bookings, loading: bookLoading } = useBookings();
+  const { aggregates: bookingAggregates, loading: bookLoading } = useCustomerBookingAggregates();
   const { addresses } = useAddresses();
   const { reviews } = useReviews();
   const { data: referralData } = useReferralSummary();
@@ -87,7 +87,7 @@ export default function AccountProfilePage() {
   const meta = user?.user_metadata as { full_name?: string; phone?: string; whatsapp?: string; preferred_contact?: string } | undefined;
   const initials = initialsFromName(meta?.full_name, user?.email);
 
-  const completedBookings = bookings.filter((b) => b.status?.toLowerCase().includes("complet")).length;
+  const completedBookings = bookingAggregates?.completedBookingsCount ?? 0;
   const primaryAddress = addresses.find((a) => a.is_default) ?? addresses[0];
   const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : null;
 
@@ -219,7 +219,7 @@ export default function AccountProfilePage() {
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-semibold">
                   <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-                  {bookLoading ? "—" : `${bookings.length} booking${bookings.length !== 1 ? "s" : ""}`}
+                  {bookLoading ? "—" : `${bookingAggregates?.totalBookingsCount ?? 0} booking${(bookingAggregates?.totalBookingsCount ?? 0) !== 1 ? "s" : ""}`}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-semibold">
                   <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
@@ -240,7 +240,7 @@ export default function AccountProfilePage() {
       <section aria-label="Account overview" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <ProfileStat
           icon={<CalendarDays className="h-5 w-5" strokeWidth={1.75} aria-hidden />}
-          value={bookLoading ? "—" : bookings.length}
+          value={bookLoading ? "—" : bookingAggregates?.totalBookingsCount ?? 0}
           label="Total bookings"
         />
         <ProfileStat

@@ -5,6 +5,7 @@ import { useMemo } from "react";
 import { AlertCircle, CheckCircle2, Clock, FileText, Receipt } from "lucide-react";
 import { useMonthlyInvoices } from "@/hooks/useMonthlyInvoices";
 import { useBookings } from "@/hooks/useBookings";
+import { useCustomerBookingAggregates } from "@/hooks/useCustomerBookingAggregates";
 import { formatZarFromCents } from "@/lib/dashboard/formatZar";
 import { daysPastDueJhb, invoiceOverdueEscalationText } from "@/lib/dashboard/invoiceOverdueEscalation";
 import { perBookingInvoicesFromBookings } from "@/lib/dashboard/perBookingInvoice";
@@ -18,6 +19,7 @@ import { Card, CardContent } from "@/components/ui/card";
 export default function AccountInvoicesPage() {
   const { invoices, loading, error, refetch } = useMonthlyInvoices();
   const { bookings, loading: bookingsLoading } = useBookings();
+  const { aggregates, loading: aggregatesLoading } = useCustomerBookingAggregates();
   const sorted = useMemo(() => [...invoices].sort((a, b) => b.month.localeCompare(a.month)), [invoices]);
 
   const perBookingInvoices = useMemo(
@@ -34,9 +36,10 @@ export default function AccountInvoicesPage() {
     const monthlyPaidCents = sorted
       .filter((i) => i.status === "paid")
       .reduce((s, i) => s + i.amount_paid_cents, 0);
-    const perVisitPaidCents = perBookingInvoices.reduce((s, i) => s + Math.round(i.amountZar * 100), 0);
-    const totalCount = sorted.length + perBookingInvoices.length;
-    const paid = monthlyPaid + perBookingInvoices.length;
+    const perVisitPaidCents = aggregates?.perBookingInvoices.totalPaidCents ?? 0;
+    const perVisitCount = aggregates?.perBookingInvoices.totalCount ?? 0;
+    const totalCount = sorted.length + perVisitCount;
+    const paid = monthlyPaid + perVisitCount;
     return {
       totalCount,
       paid,
@@ -44,14 +47,14 @@ export default function AccountInvoicesPage() {
       overdue,
       totalPaidCents: monthlyPaidCents + perVisitPaidCents,
     };
-  }, [sorted, perBookingInvoices]);
+  }, [aggregates, sorted]);
 
   const overdueInvoice = useMemo(
     () => sorted.find((i) => i.is_overdue && i.status !== "paid"),
     [sorted],
   );
 
-  if (loading || bookingsLoading) {
+  if (loading || bookingsLoading || aggregatesLoading) {
     return (
       <div className="space-y-6" aria-hidden>
         <div className="h-8 w-48 animate-pulse rounded-lg bg-muted" />
