@@ -103,3 +103,13 @@ export function canRefreshBookingQuoteAtPayment(
       readiness.reason === "stale_price_lock")
   );
 }
+
+export type BookingAuthoritativeQuoteRequestState = "loading" | "ready" | "error";
+
+/** Review/payment may advance only after the latest authoritative quote request succeeded. */
+export function authoritativeQuoteAllowsPaymentEntry(params: {
+  requestState: BookingAuthoritativeQuoteRequestState;
+  hasPendingBooking: boolean;
+}): boolean {
+  return params.hasPendingBooking || params.requestState === "ready";
+}
