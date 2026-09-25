@@ -833,6 +833,49 @@ export async function POST(request: Request) {
     confirmedAt,
   };
 
+  // Shared persistence contract for both first confirmation and pending-payment retry.
+  // Keep customer-editable booking truth here so the two paths cannot drift.
+  const confirmationMutableFields = {
+    customer_phone: customerPhone,
+    service: data.serviceSlug,
+    service_slug: canonicalServiceSlug,
+    location: data.address,
+    suburb: data.suburb,
+    postal_code: data.postalCode,
+    ...locationFields,
+    access_instructions: data.accessInstructions || null,
+    parking_instructions: data.parkingInstructions || null,
+    gate_code: data.gateCode || null,
+    date: data.date,
+    time: data.time,
+    alt_date: data.alternativeDate || null,
+    alt_time: data.alternativeTime || null,
+    booking_type: data.bookingType,
+    recurring_frequency: data.recurringFrequency || null,
+    recurring_days: data.recurringDays?.length ? data.recurringDays : null,
+    recurring_start_date: data.recurringStartDate || null,
+    recurring_end_date: data.recurringEndDate || null,
+    service_details: data.serviceDetails,
+    selected_extras: selectedExtraIds,
+    ...persistPricing,
+    pricing_version_id: pricingVersionId,
+    ...equipmentPersist,
+    price_snapshot: priceSnapshot,
+    booking_snapshot: bookingSnapshot,
+    fulfillment_mode: fulfillmentMode,
+    fulfillment_reason: fulfillmentReason,
+    dispatch_status: fulfillmentMode === "ops_assignment" ? "unassigned" : "searching",
+    cleaner_mode: data.cleanerMode,
+    assigned_team_id: data.cleanerMode === "team" ? data.assignedTeamId : null,
+    cleaner_count:
+      data.cleanerMode === "individual_cleaners"
+        ? Math.max(data.cleanerCount, preferredCleanerIds.length) || data.cleanerCount
+        : null,
+    ...preferredCleanerAssignmentFields(
+      data.cleanerMode === "individual_cleaners" ? preferredCleanerIds : [],
+    ),
+  };
+
   // ── 9. Reuse an existing pending_payment booking for the same slot (retry path) ──
   // The unique index idx_bookings_unique_active_customer_slot prevents duplicate inserts
   // for (user_id, date, time, service_slug) when status != cancelled/failed/payment_expired.
@@ -851,8 +894,8 @@ export async function POST(request: Request) {
     const { error: updateErr } = await supabase
       .from("bookings")
       .update({
+        ...confirmationMutableFields,
         paystack_reference: paystackReference,
-        customer_phone: customerPhone,
         ...persistPricing,
         pricing_version_id: pricingVersionId,
         ...equipmentPersist,
@@ -1110,8 +1153,9 @@ export async function POST(request: Request) {
       price_snapshot: priceSnapshot,
       currency: "ZAR",
 
-      // Snapshot for history
-      booking_snapshot: bookingSnapshot,
+      // Shared mutable confirmation truth is deliberately applied last.
+      ...confirmationMutableFields,
+      currency: "ZAR",
     })
     .select("id")
     .single();
