@@ -6,6 +6,32 @@ const CITY_ID = "22222222-2222-4222-8222-222222222222";
 
 type CleanerMode = "team" | "individual_cleaners";
 
+function authoritativeQuoteFixture(signature: string) {
+  return {
+    pricingSummary: {
+      base_service_price: 500,
+      service_fee: 0,
+      extras_total: 0,
+      equipment_total: 0,
+      subtotal: 500,
+      discount_total: 0,
+      estimated_total: 500,
+      total: 500,
+      pay_total_zar: 500,
+      estimated_duration_minutes: 180,
+      team_scaled_duration_minutes: 180,
+      selected_extras: [],
+      quote_signature: signature,
+    },
+    quoteLock: {
+      pricingVersionId: "11111111-1111-4111-8111-111111111112",
+      quoteSignature: signature,
+      lockedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    },
+  };
+}
+
 type StoredDraft = Record<string, unknown> & {
   address?: string;
   bookingType?: string;
@@ -123,7 +149,7 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
 
     if (request.method() === "POST" && path === "/api/booking-v2/quote") {
       const signature = "e2e-step3-authoritative";
-      await route.fulfill({ status: 200, json: { pricingSummary: { base_service_price: 500, estimated_total: 500, total: 500, estimated_duration_minutes: 180, quote_signature: signature }, quoteLock: { pricingVersionId: "e2e-v1", quoteSignature: signature, lockedAt: "2026-09-25T09:00:00.000Z", expiresAt: "2026-09-25T10:00:00.000Z" } } });
+      await route.fulfill({ status: 200, json: authoritativeQuoteFixture(signature) });
       return;
     }
 
