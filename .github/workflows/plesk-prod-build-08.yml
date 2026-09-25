@@ -6,9 +6,6 @@ name: Plesk production standalone artifact
 on:
   push:
     branches:
-      - test/plesk-prod-build-08
-      - fix/plesk-prod-converge-08b
-      - integration/shalean-release
       - production
     paths:
       - ".github/workflows/plesk-prod-build-08.yml"
@@ -54,10 +51,10 @@ jobs:
       - name: Guard approved release lineage
         run: |
           set -euo pipefail
-          case "${GITHUB_REF_NAME}" in
-            test/plesk-prod-build-08|fix/plesk-prod-converge-08b|integration/shalean-release|production) ;;
-            *) echo "::error::Unexpected production-artifact branch: ${GITHUB_REF_NAME}"; exit 1 ;;
-          esac
+          test "${GITHUB_REF_NAME}" = "production" || {
+            echo "::error::Production artifacts may only be built from the production branch."
+            exit 1
+          }
           git merge-base --is-ancestor f5dd54548ac4b1c50c7ce0cde744b05c4d8913e9 HEAD
           echo "Approved source release: f5dd54548ac4b1c50c7ce0cde744b05c4d8913e9"
           echo "Artifact branch head: ${GITHUB_SHA}"
