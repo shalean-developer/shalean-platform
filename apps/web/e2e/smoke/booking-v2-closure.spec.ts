@@ -14,6 +14,33 @@ const SERVICES = [
   { slug: "airbnb-cleaning", label: "Airbnb Cleaning", cleanerMode: "individual_cleaners" },
 ] as const;
 
+function liveServiceFixture(slug: string) {
+  return {
+    slug,
+    label: "Test Cleaning",
+    shortLabel: "Test",
+    description: "Smoke fixture",
+    cleanerMode: slug === "deep-cleaning" || slug === "moving-cleaning" ? "team" : "individual_cleaners",
+    showEquipmentQuestion: slug === "regular-cleaning",
+    allowsExtraCleaner: true,
+    step1Questions: [],
+    basePrice: 500,
+    pricePerBedroom: 0,
+    pricePerBathroom: 0,
+    pricePerExtraRoom: 0,
+    pricePerExtraCleaner: 0,
+    serviceFeeZar: 0,
+    estimatedDurationHours: 3,
+    durationBaseHours: 3,
+    durationPerBedroomHours: 0,
+    durationPerBathroomHours: 0,
+    durationPerExtraRoomHours: 0,
+    minDurationHours: 1,
+    maxDurationHours: 12,
+    extras: [],
+  };
+}
+
 function authoritativeQuoteFixture(signature: string) {
   return {
     pricingSummary: {
@@ -171,7 +198,7 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
       await route.fulfill({
         status: 200,
         json: {
-          catalog: Object.fromEntries(SERVICES.map((service) => [service.slug, { basePrice: 500 }])),
+          catalog: Object.fromEntries(SERVICES.map((service) => [service.slug, liveServiceFixture(service.slug)])),
           scheduling: {
             leadMinutes: 0,
             slotStartHour: 8,
