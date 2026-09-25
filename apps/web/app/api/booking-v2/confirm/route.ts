@@ -871,7 +871,7 @@ export async function POST(request: Request) {
               ...preferredCleanerAssignmentFields(preferredCleanerIds),
             }
           : {}),
-        booking_snapshot: buildHistorySnapshot(payAmountZar),,
+        booking_snapshot: buildHistorySnapshot(payAmountZar),
       })
       .eq("id", existingBooking.id);
 
@@ -1105,7 +1105,7 @@ export async function POST(request: Request) {
       currency: "ZAR",
 
       // Snapshot for history
-      booking_snapshot: buildHistorySnapshot(payAmountZar),,
+      booking_snapshot: buildHistorySnapshot(payAmountZar),
     })
     .select("id")
     .single();
