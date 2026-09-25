@@ -873,6 +873,14 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     : { payment_status: "success" };
 
   const paystackPaidLifecycle = bookingCreationLifecyclePatch("paystack_paid");
+  const selectedCleanerIdForRow =
+    "selected_cleaner_id" in userSelectedCheckoutRow
+      ? (userSelectedCheckoutRow.selected_cleaner_id ?? null)
+      : null;
+  const cleanerIdForRow =
+    "cleaner_id" in userSelectedCheckoutRow
+      ? (userSelectedCheckoutRow.cleaner_id ?? null)
+      : null;
   const row = {
     paystack_reference: input.paystackReference,
     customer_email: emailStored,
@@ -942,6 +950,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     ...postPayAssignmentClear,
     ...checkoutIntentRow,
     ...userSelectedCheckoutRow,
+    cleaner_id: cleanerIdForRow,
+    selected_cleaner_id: selectedCleanerIdForRow,
     ...(tenureShareLine != null ? { cleaner_share_percentage: tenureShareLine } : {}),
   };
 
