@@ -10,7 +10,19 @@ export type BookingCreationProfile =
   | "admin_payment_received"
   | "admin_monthly";
 
-export type BookingCreationLifecyclePatch = {\n  status?: string;\n  dispatch_status?: string;\n  payment_status?: string;\n  amount_paid_cents?: number;\n  total_paid_cents?: number;\n  currency?: string;\n  is_recurring_generated?: boolean;\n  is_monthly_billing_booking?: boolean;\n  billing_type?: string;\n};\n\nexport function bookingCreationLifecyclePatch(profile: BookingCreationProfile): BookingCreationLifecyclePatch {
+export type BookingCreationLifecyclePatch = {
+  status?: string;
+  dispatch_status?: string;
+  payment_status?: string;
+  amount_paid_cents?: number;
+  total_paid_cents?: number;
+  currency?: string;
+  is_recurring_generated?: boolean;
+  is_monthly_billing_booking?: boolean;
+  billing_type?: string;
+};
+
+export function bookingCreationLifecyclePatch(profile: BookingCreationProfile): BookingCreationLifecyclePatch {
   switch (profile) {
     case "customer_pending_payment":
       return { status: "pending_payment", dispatch_status: "searching", amount_paid_cents: 0, currency: "ZAR" };
