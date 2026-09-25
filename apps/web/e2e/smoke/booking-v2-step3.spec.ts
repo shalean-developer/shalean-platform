@@ -15,7 +15,11 @@ function liveServiceFixture(slug: string) {
     cleanerMode: slug === "deep-cleaning" || slug === "moving-cleaning" ? "team" : "individual_cleaners",
     showEquipmentQuestion: slug === "regular-cleaning",
     allowsExtraCleaner: true,
-    step1Questions: [\n      { key: "propertyType", label: "Property type", type: "select", required: true, options: [{ value: "house", label: "House" }] },\n      { key: "bedrooms", label: "Bedrooms", type: "number", required: true },\n      { key: "bathrooms", label: "Bathrooms", type: "number", required: true },\n    ],
+    step1Questions: [
+      { key: "propertyType", label: "Property type", type: "select", required: true, options: [{ value: "house", label: "House" }] },
+      { key: "bedrooms", label: "Bedrooms", type: "number", required: true },
+      { key: "bathrooms", label: "Bathrooms", type: "number", required: true },
+    ],
     basePrice: 500,
     pricePerBedroom: 0,
     pricePerBathroom: 0,
