@@ -69,7 +69,7 @@ function ProfileStat({
 export default function AccountProfilePage() {
   const toast = useDashboardToast();
   const { user, loading: userLoading } = useUser();
-  const { bookings, loading: bookLoading } = useBookings();
+  const { bookings, loading: bookLoading } = useBookings({ mode: "complete" });
   const { addresses } = useAddresses();
   const { reviews } = useReviews();
   const { data: referralData } = useReferralSummary();
