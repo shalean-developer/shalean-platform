@@ -219,7 +219,7 @@ export default function AccountProfilePage() {
               <div className="mt-3 flex flex-wrap gap-2">
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-semibold">
                   <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-                  {bookLoading ? "—" : `${bookings.length} booking${bookings.length !== 1 ? "s" : ""}`}
+                  {bookLoading ? "—" : `${bookingAggregates?.totalBookingsCount ?? 0} booking${(bookingAggregates?.totalBookingsCount ?? 0) !== 1 ? "s" : ""}`}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-full bg-primary-foreground/15 px-3 py-1 text-xs font-semibold">
                   <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
@@ -240,7 +240,7 @@ export default function AccountProfilePage() {
       <section aria-label="Account overview" className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <ProfileStat
           icon={<CalendarDays className="h-5 w-5" strokeWidth={1.75} aria-hidden />}
-          value={bookLoading ? "—" : bookings.length}
+          value={bookLoading ? "—" : bookingAggregates?.totalBookingsCount ?? 0}
           label="Total bookings"
         />
         <ProfileStat
