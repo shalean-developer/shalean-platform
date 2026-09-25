@@ -872,6 +872,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     ? {}
     : { payment_status: "success" };
 
+  const paystackPaidLifecycle = bookingCreationLifecyclePatch("paystack_paid");
   const row = {
     paystack_reference: input.paystackReference,
     customer_email: emailStored,
@@ -905,7 +906,8 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
           time: locked?.time ?? pendingExisting?.time ?? null,
         })),
     ...(serviceSlugForRow ? { service_slug: serviceSlugForRow } : {}),
-    ...bookingCreationLifecyclePatch("paystack_paid"),
+    status: paystackPaidLifecycle.status!,
+    dispatch_status: paystackPaidLifecycle.dispatch_status!,
     is_test: isTest,
     surge_multiplier: surgeMultiplier,
     surge_reason: surgeReason,
