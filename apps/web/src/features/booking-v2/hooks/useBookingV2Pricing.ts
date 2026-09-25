@@ -119,7 +119,8 @@ export function useBookingV2Pricing(): { state: BookingV2QuoteRequestState; erro
         .then(({ pricingSummary, quoteLock }) => {
           // A slower response for a previous room selection must never replace
           // the immediately calculated total for the customer's latest choice.
-          if (pricingSummary && quoteLock && revision === quoteRevision.current) {
+          if (revision !== quoteRevision.current) return;
+          if (pricingSummary && quoteLock) {
             setValue("pricingSummary", pricingSummary, {
               shouldDirty: false,
               shouldValidate: false,
@@ -130,7 +131,10 @@ export function useBookingV2Pricing(): { state: BookingV2QuoteRequestState; erro
             });
             setQuoteRequestState("ready");
             setQuoteRequestError(null);
+            return;
           }
+          setQuoteRequestState("error");
+          setQuoteRequestError("The pricing service returned an incomplete secured quote. Change any booking option to retry.");
         })
 .catch(() => {
           if (revision !== quoteRevision.current) return;
