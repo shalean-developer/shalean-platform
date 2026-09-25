@@ -97,7 +97,7 @@ function BookingV2Inner() {
   const { watch } = useFormContext<BookingV2FormData>();
   const reviewTime = watch("time")?.trim() ?? "";
   const pendingBookingId = watch("pendingBookingId")?.trim() ?? "";
-  useBookingV2Pricing();
+  const quoteRequest = useBookingV2Pricing();
   useBookingV2FunnelTelemetry(currentStep, serviceSlug);
 
   if (!mounted) {
@@ -105,7 +105,9 @@ function BookingV2Inner() {
   }
 
   const hasPendingBooking = Boolean(pendingBookingId);
-  const paymentEntryAllowed = canEnterBookingPayment(pricingAvailability, hasPendingBooking);
+  const paymentEntryAllowed =
+    canEnterBookingPayment(pricingAvailability, hasPendingBooking) &&
+    (hasPendingBooking || quoteRequest.state === "ready");
   const stepContent =
     currentStep === 4 && !paymentEntryAllowed
       ? <PricingBlockedNotice availability={pricingAvailability} />
@@ -125,7 +127,11 @@ function BookingV2Inner() {
   const paymentBlockMessage =
     pricingAvailability === "loading"
       ? BOOKING_PRICING_LOADING_MESSAGE
-      : BOOKING_PRICING_UNAVAILABLE_MESSAGE;
+      : pricingAvailability === "unavailable"
+        ? BOOKING_PRICING_UNAVAILABLE_MESSAGE
+        : quoteRequest.state === "error"
+          ? quoteRequest.error ?? "We could not secure your latest price. Please retry before payment."
+          : "Securing your latest price and estimated cleaning time…";
 
   return (
     <div className="min-h-dvh bg-muted/35 text-foreground">
@@ -187,7 +193,7 @@ function BookingV2Inner() {
               {stepContent}
             </div>
 
-            {currentStep === 3 && !paymentEntryAllowed ? (
+            {(currentStep === 3 || currentStep === 4) && !paymentEntryAllowed ? (
               <div role="status" aria-live="polite" className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950">
                 {paymentBlockMessage}
               </div>
