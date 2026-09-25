@@ -28,6 +28,8 @@ HEALTH_URL="${PLESK_PROD_HEALTH_URL:-https://shalean.co.za/api/health/environmen
 EXPECTED_REF="${PLESK_PROD_EXPECTED_SUPABASE_REF:-paqjwfulwywtsyyvdxrq}"
 WAIT_SECONDS="${PLESK_PROD_AUTO_WAIT_SECONDS:-1200}"
 POLL_SECONDS="${PLESK_PROD_AUTO_POLL_SECONDS:-15}"
+KEEP_RELEASES="${PLESK_PROD_KEEP_RELEASES:-3}"
+KEEP_ROLLBACKS="${PLESK_PROD_KEEP_ROLLBACKS:-2}"
 
 fail(){ printf 'PLESK-PROD-AUTO-05 ERROR: %s\n' "$*" | tee "$OUT" >&2; exit 1; }
 [ -r "$HEADER" ] || fail "GitHub auth header unreadable"
@@ -209,7 +211,32 @@ PY
   return 1
 }
 
+cleanup_old_backups(){
+  # Run only after exact public health succeeds. Keep the active immutable
+  # release plus a small recent rollback window; never touch /plesk-runtime.
+  /usr/bin/python3 - "$BACKUPS" "$RELEASE" "$ROLLBACK" "$KEEP_RELEASES" "$KEEP_ROLLBACKS" <<'PY'
+import os, shutil, sys
+root, active_release, current_rollback = sys.argv[1:4]
+keep_releases, keep_rollbacks = map(int, sys.argv[4:6])
+def prune(prefix, keep, protected):
+    xs=[]
+    for name in os.listdir(root):
+        path=os.path.join(root,name)
+        if name.startswith(prefix) and os.path.isdir(path):
+            xs.append((os.path.getmtime(path),path))
+    xs.sort(reverse=True)
+    keep_paths={p for _,p in xs[:keep]} | set(protected)
+    for _,path in xs:
+        if path not in keep_paths:
+            shutil.rmtree(path)
+prune("plesk-prod-", keep_releases, {active_release})
+prune("rollback-", keep_rollbacks, {current_rollback})
+PY
+  rm -f "$ROOT/plesk-production-lock-test.txt" "$ROOT/plesk-production-lock-diagnostic.txt" "$ROOT/plesk-production-process-diagnostic.txt" 2>/dev/null || true
+}
+
 if health_exact; then
+  cleanup_old_backups
   {
     echo "PLESK_PROD_AUTO_05=PASS"
     echo "RELEASE_SHA=$TARGET_SHA"
