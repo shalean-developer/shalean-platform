@@ -24,7 +24,7 @@ import {
 } from "@/lib/customer/customerProfileContactFields";
 import { normalizeSouthAfricaPhone } from "@/lib/utils/phone";
 import { useUser } from "@/hooks/useUser";
-import { useBookings } from "@/hooks/useBookings";
+import { useCustomerBookingAggregates } from "@/hooks/useCustomerBookingAggregates";
 import { useAddresses } from "@/hooks/useAddresses";
 import { useReviews } from "@/hooks/useReviews";
 import { useReferralSummary } from "@/hooks/useReferralSummary";
@@ -69,7 +69,7 @@ function ProfileStat({
 export default function AccountProfilePage() {
   const toast = useDashboardToast();
   const { user, loading: userLoading } = useUser();
-  const { bookings, loading: bookLoading } = useBookings({ mode: "complete" });
+  const { aggregates: bookingAggregates, loading: bookLoading } = useCustomerBookingAggregates();
   const { addresses } = useAddresses();
   const { reviews } = useReviews();
   const { data: referralData } = useReferralSummary();
@@ -87,7 +87,7 @@ export default function AccountProfilePage() {
   const meta = user?.user_metadata as { full_name?: string; phone?: string; whatsapp?: string; preferred_contact?: string } | undefined;
   const initials = initialsFromName(meta?.full_name, user?.email);
 
-  const completedBookings = bookings.filter((b) => b.status?.toLowerCase().includes("complet")).length;
+  const completedBookings = bookingAggregates?.completedBookingsCount ?? 0;
   const primaryAddress = addresses.find((a) => a.is_default) ?? addresses[0];
   const avgRating = reviews.length > 0 ? (reviews.reduce((s, r) => s + r.rating, 0) / reviews.length).toFixed(1) : null;
 
