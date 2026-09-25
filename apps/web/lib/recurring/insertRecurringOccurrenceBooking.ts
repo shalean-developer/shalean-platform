@@ -350,6 +350,7 @@ export async function insertRecurringOccurrenceBooking(
       bookingId: id,
       customerEmail: email,
       createdAt: new Date().toISOString(),
+      paymentLinkExpiresAt: null,
     });
   }
 
