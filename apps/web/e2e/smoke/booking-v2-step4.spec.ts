@@ -4,6 +4,33 @@ const STORAGE_KEY = "shalean:booking-v2:v1";
 const LOCATION_ID = "11111111-1111-4111-8111-111111111111";
 const CITY_ID = "22222222-2222-4222-8222-222222222222";
 
+function liveServiceFixture(slug: string) {
+  return {
+    slug,
+    label: "Test Cleaning",
+    shortLabel: "Test",
+    description: "Smoke fixture",
+    cleanerMode: slug === "deep-cleaning" || slug === "moving-cleaning" ? "team" : "individual_cleaners",
+    showEquipmentQuestion: slug === "regular-cleaning",
+    allowsExtraCleaner: true,
+    step1Questions: [],
+    basePrice: 500,
+    pricePerBedroom: 0,
+    pricePerBathroom: 0,
+    pricePerExtraRoom: 0,
+    pricePerExtraCleaner: 0,
+    serviceFeeZar: 0,
+    estimatedDurationHours: 3,
+    durationBaseHours: 3,
+    durationPerBedroomHours: 0,
+    durationPerBathroomHours: 0,
+    durationPerExtraRoomHours: 0,
+    minDurationHours: 1,
+    maxDurationHours: 12,
+    extras: [],
+  };
+}
+
 function authoritativeQuoteFixture(signature: string) {
   return {
     pricingSummary: {
@@ -133,7 +160,7 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
       await route.fulfill({
         status: 200,
         json: {
-          catalog: { "regular-cleaning": { basePrice: 500 } },
+          catalog: { "regular-cleaning": liveServiceFixture("regular-cleaning") },
           scheduling: {
             leadMinutes: 0,
             slotStartHour: 8,
