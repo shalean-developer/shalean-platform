@@ -93,7 +93,7 @@ export function useBookings(options?: {
   const fetchEpochRef = useRef(0);
   const loadingEpochRef = useRef<number | null>(null);
   const loadMoreInFlightRef = useRef<Promise<void> | null>(null);
-  const mode = options?.mode === "paged" ? "paged" : "complete";
+  const mode = options?.mode === "complete" ? "complete" : "paged";
   const includeUpcoming = options?.includeUpcoming === true;
   const includeCompleteReviewHistory = options?.includeCompleteReviewHistory === true;
 
