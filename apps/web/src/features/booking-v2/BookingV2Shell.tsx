@@ -64,8 +64,9 @@ function BookingV2LoadingShell() {
   );
 }
 
-function PricingBlockedNotice({ availability }: { availability: BookingPricingAvailability }) {
+function PricingBlockedNotice({ availability, quoteError }: { availability: BookingPricingAvailability; quoteError?: string | null }) {
   const loading = availability === "loading";
+  const quoteBlocked = availability === "available";
   return (
     <div
       role="status"
@@ -73,10 +74,14 @@ function PricingBlockedNotice({ availability }: { availability: BookingPricingAv
       className="rounded-[var(--ui-radius-xl)] border border-amber-200 bg-amber-50 p-5 text-amber-950 shadow-[var(--ui-shadow-sm)] sm:p-6"
     >
       <h2 className="text-lg font-bold">
-        {loading ? "Loading live pricing" : "Live pricing is temporarily unavailable"}
+        {loading ? "Loading live pricing" : quoteBlocked ? "Securing your latest price" : "Live pricing is temporarily unavailable"}
       </h2>
       <p className="mt-2 text-sm leading-6">
-        {loading ? BOOKING_PRICING_LOADING_MESSAGE : BOOKING_PRICING_UNAVAILABLE_MESSAGE}
+        {loading
+          ? BOOKING_PRICING_LOADING_MESSAGE
+          : quoteBlocked
+            ? quoteError ?? "Please wait while we secure your latest price and estimated cleaning time."
+            : BOOKING_PRICING_UNAVAILABLE_MESSAGE}
       </p>
     </div>
   );
@@ -110,7 +115,7 @@ function BookingV2Inner() {
     (hasPendingBooking || quoteRequest.state === "ready");
   const stepContent =
     currentStep === 4 && !paymentEntryAllowed
-      ? <PricingBlockedNotice availability={pricingAvailability} />
+      ? <PricingBlockedNotice availability={pricingAvailability} quoteError={quoteRequest.error} />
       : ({
           1: <Step1Details />,
           2: <Step2Schedule />,
