@@ -143,7 +143,7 @@ describe("SR-10B customer booking pagination", () => {
     expect(route).toContain('cursor: url.searchParams.get("cursor")');
   });
 
-  it("keeps complete-history consumers explicit while account bookings defaults paged", () => {
+  it("keeps the account bookings hook paged by default", () => {
     const hook = read("apps/web/hooks/useBookings.ts");
     const page = read("apps/web/app/(ui-redesign)/account/bookings/page.tsx");
     expect(hook).toContain('mode = options?.mode === "complete" ? "complete" : "paged"');
