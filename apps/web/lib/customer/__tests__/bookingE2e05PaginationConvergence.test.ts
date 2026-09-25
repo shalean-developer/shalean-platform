@@ -21,6 +21,9 @@ describe("BOOKING-E2E-05 customer pagination convergence", () => {
   it("moves historical account totals to the server aggregate view", () => {
     const route = read("app/api/customer/bookings/route.ts");
     expect(route).toContain('url.searchParams.get("view") === "aggregates"');
+    expect(route).not.toContain("loadCustomerBookingRowsForUser");
+    expect(read("lib/customer/customerBookingAggregatesForUser.ts")).toContain("loadCustomerBookingPageForUser");
+    expect(read("lib/customer/customerBookingAggregatesForUser.ts")).toContain("CUSTOMER_BOOKINGS_PAGE_MAX_LIMIT");
     for (const file of [
       "app/(ui-redesign)/account/payments/page.tsx",
       "app/(ui-redesign)/account/invoices/page.tsx",
