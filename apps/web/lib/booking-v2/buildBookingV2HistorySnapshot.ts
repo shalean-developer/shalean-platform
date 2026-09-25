@@ -1,7 +1,5 @@
-import type { BookingV2FormData } from "@/src/features/booking-v2/types";
-
 type SnapshotInput = {
-  data: BookingV2FormData;
+  data: { serviceSlug: string; serviceDetails: Record<string, unknown>; address: string; suburb: string; city: string; date: string; time: string; cleanerMode: string; cleanerCount: number; assignedTeamId?: string | null; equipmentRequired?: string | null; recurringFrequency?: string | null; recurringDays?: string[] | null };
   selectedExtraIds: string[];
   serverEquipmentQuote: unknown;
   serverBreakdown: unknown;
