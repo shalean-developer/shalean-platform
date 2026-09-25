@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
 
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
@@ -160,10 +161,7 @@ export async function POST(request: Request) {
       customer_name: null,
       customer_phone: null,
       user_id: userId,
-      amount_paid_cents: 0,
-      currency: "ZAR",
-      status: "pending",
-      dispatch_status: "searching",
+      ...bookingCreationLifecyclePatch("dashboard_monthly"),
       surge_multiplier: 1,
       surge_reason: null,
       service: getServiceLabel(serviceRaw as BookingServiceId),
