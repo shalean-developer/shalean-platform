@@ -14,6 +14,32 @@ const SERVICES = [
   { slug: "airbnb-cleaning", label: "Airbnb Cleaning", cleanerMode: "individual_cleaners" },
 ] as const;
 
+function authoritativeQuoteFixture(signature: string) {
+  return {
+    pricingSummary: {
+      base_service_price: 500,
+      service_fee: 0,
+      extras_total: 0,
+      equipment_total: 0,
+      subtotal: 500,
+      discount_total: 0,
+      estimated_total: 500,
+      total: 500,
+      pay_total_zar: 500,
+      estimated_duration_minutes: 180,
+      team_scaled_duration_minutes: 180,
+      selected_extras: [],
+      quote_signature: signature,
+    },
+    quoteLock: {
+      pricingVersionId: "11111111-1111-4111-8111-111111111112",
+      quoteSignature: signature,
+      lockedAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
+    },
+  };
+}
+
 type StoredDraft = Record<string, unknown> & {
   serviceSlug?: string;
   address?: string;
@@ -129,6 +155,11 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
       return;
     }
 
+    if (request.method() === "POST" && path === "/api/booking-v2/quote") {
+      await route.fulfill({ status: 200, json: authoritativeQuoteFixture("e2e-closure-authoritative") });
+      return;
+    }
+
     if (request.method() !== "GET") {
       forbiddenMutations.push(`${request.method()} ${path}`);
       await route.abort("blockedbyclient");
@@ -139,7 +170,7 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
       await route.fulfill({
         status: 200,
         json: {
-          catalog: {},
+          catalog: Object.fromEntries(SERVICES.map((service) => [service.slug, { basePrice: 500 }])),
           scheduling: {
             leadMinutes: 0,
             slotStartHour: 8,
