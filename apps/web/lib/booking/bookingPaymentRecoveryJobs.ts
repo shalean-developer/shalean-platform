@@ -9,8 +9,10 @@ import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog"
 export type SchedulePaymentRecoveryJobsParams = {
   bookingId: string;
   customerEmail: string;
-  /** Booking `created_at` ISO — anchors 1h / 24h / 48h schedules. */
+  /** Booking `created_at` retained for compatibility/audit. */
   createdAt: string;
+  /** Canonical payment-link expiry; terminal customer communication is anchored here when supplied. */
+  paymentLinkExpiresAt?: string | null;
 };
 
 function parseCreatedAtMs(createdAt: string): number | null {
@@ -19,8 +21,7 @@ function parseCreatedAtMs(createdAt: string): number | null {
 }
 
 /**
- * Inserts `booking_payment_recovery_jobs` rows (idempotent via unique index on booking_id + job_type).
- * Only for unpaid bookings — call at `pending_payment` insert time.
+ * Inserts newly scheduled recovery jobs (idempotent via unique index on booking_id + job_type).\n * Pre-expiry reminders are owned by the TTL-aware payment-link-reminders cron; this scheduler\n * creates only the terminal expiry communication. Historical reminder rows remain processable.
  */
 export async function scheduleBookingPaymentRecoveryJobs(
   supabase: SupabaseClient,
@@ -48,7 +49,13 @@ export async function scheduleBookingPaymentRecoveryJobs(
   let ok = true;
   for (const jobType of PAYMENT_RECOVERY_JOB_TYPES) {
     const offset = PAYMENT_RECOVERY_SCHEDULE_OFFSET_MS[jobType];
-    const scheduledFor = new Date(baseMs + offset).toISOString();
+    const expiryMs =
+      jobType === "booking_payment_expired" && params.paymentLinkExpiresAt
+        ? Date.parse(params.paymentLinkExpiresAt)
+        : NaN;
+    const scheduledFor = new Date(
+      Number.isFinite(expiryMs) ? expiryMs : baseMs + offset,
+    ).toISOString();
     const { error } = await supabase.from("booking_payment_recovery_jobs").insert({
       booking_id: params.bookingId,
       customer_email: email,

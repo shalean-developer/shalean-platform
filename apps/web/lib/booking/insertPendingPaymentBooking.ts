@@ -172,6 +172,7 @@ export async function insertPendingPaymentBookingRow(
     bookingId: id,
     customerEmail: email,
     createdAt,
+    paymentLinkExpiresAt,
   });
 
   return { ok: true, id };

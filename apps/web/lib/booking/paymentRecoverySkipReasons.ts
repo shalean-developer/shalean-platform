@@ -13,11 +13,8 @@ export type PaymentRecoverySkipReason = (typeof PAYMENT_RECOVERY_SKIP)[keyof typ
 
 export type PaymentRecoveryJobType = "payment_reminder_1h" | "payment_reminder_24h" | "booking_payment_expired";
 
-export const PAYMENT_RECOVERY_JOB_TYPES: PaymentRecoveryJobType[] = [
-  "payment_reminder_1h",
-  "payment_reminder_24h",
-  "booking_payment_expired",
-];
+/** Historical job types remain processable, but new bookings schedule only the terminal expiry communication. */
+export const PAYMENT_RECOVERY_JOB_TYPES: PaymentRecoveryJobType[] = ["booking_payment_expired"];
 
 const HOUR_MS = 60 * 60 * 1000;
 
