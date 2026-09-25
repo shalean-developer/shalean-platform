@@ -4,7 +4,11 @@ export type BookingCreationProfile =
   | "widget_draft"
   | "recurring_unpaid"
   | "recurring_prepaid"
-  | "recurring_monthly";
+  | "recurring_monthly"
+  | "paystack_paid"
+  | "paystack_paid_selected_cleaner"
+  | "admin_payment_received"
+  | "admin_monthly";
 
 export function bookingCreationLifecyclePatch(profile: BookingCreationProfile): Record<string, unknown> {
   switch (profile) {
@@ -20,5 +24,13 @@ export function bookingCreationLifecyclePatch(profile: BookingCreationProfile): 
       return { status: "pending", dispatch_status: "searching", payment_status: "success", is_recurring_generated: true, billing_type: "prepaid", currency: "ZAR" };
     case "recurring_monthly":
       return { status: "pending", dispatch_status: "searching", payment_status: "pending_monthly", is_recurring_generated: true, is_monthly_billing_booking: true, billing_type: "recurring_invoice", currency: "ZAR" };
+    case "paystack_paid":
+      return { status: "pending", dispatch_status: "searching" };
+    case "paystack_paid_selected_cleaner":
+      return { status: "pending_assignment", dispatch_status: "searching" };
+    case "admin_payment_received":
+      return { is_monthly_billing_booking: false, payment_status: "pending", billing_type: "per_booking" };
+    case "admin_monthly":
+      return { is_monthly_billing_booking: true, payment_status: "pending_monthly", billing_type: "recurring_invoice" };
   }
 }
