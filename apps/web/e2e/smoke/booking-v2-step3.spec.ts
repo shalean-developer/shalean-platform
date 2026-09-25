@@ -121,7 +121,13 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
       return;
     }
 
-    if (request.method() === "POST" && path === "/api/booking-v2/quote") {\n      const signature = "e2e-step3-authoritative";\n      await route.fulfill({ status: 200, json: { pricingSummary: { base_service_price: 500, estimated_total: 500, total: 500, estimated_duration_minutes: 180, quote_signature: signature }, quoteLock: { pricingVersionId: "e2e-v1", quoteSignature: signature, lockedAt: "2026-09-25T09:00:00.000Z", expiresAt: "2026-09-25T10:00:00.000Z" } } });\n      return;\n    }\n\n    if (request.method() !== "GET") {
+    if (request.method() === "POST" && path === "/api/booking-v2/quote") {
+      const signature = "e2e-step3-authoritative";
+      await route.fulfill({ status: 200, json: { pricingSummary: { base_service_price: 500, estimated_total: 500, total: 500, estimated_duration_minutes: 180, quote_signature: signature }, quoteLock: { pricingVersionId: "e2e-v1", quoteSignature: signature, lockedAt: "2026-09-25T09:00:00.000Z", expiresAt: "2026-09-25T10:00:00.000Z" } } });
+      return;
+    }
+
+    if (request.method() !== "GET") {
       forbiddenMutations.push(`${request.method()} ${path}`);
       await route.abort("blockedbyclient");
       return;
