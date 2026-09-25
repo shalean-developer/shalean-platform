@@ -1,4 +1,5 @@
 import crypto from "crypto";
+import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
 
 import { createClient } from "@supabase/supabase-js";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -1280,9 +1281,7 @@ export async function POST(request: Request) {
               admin_force_slot_override: true,
             }
           : {}),
-        is_monthly_billing_booking: false,
-        payment_status: "pending",
-        billing_type: "per_booking",
+        ...bookingCreationLifecyclePatch("admin_payment_received"),
       },
       rooms,
       bathrooms,
@@ -1699,9 +1698,7 @@ export async function POST(request: Request) {
               admin_force_slot_override: true,
             }
           : {}),
-        is_monthly_billing_booking: true,
-        payment_status: "pending_monthly",
-        billing_type: "recurring_invoice",
+        ...bookingCreationLifecyclePatch("admin_monthly"),
       },
       rooms,
       bathrooms,
