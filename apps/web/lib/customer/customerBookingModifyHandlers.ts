@@ -10,12 +10,10 @@ import { notifyCustomerBookingCancelled } from "@/lib/notifications/customerUser
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
 import { logSystemEvent } from "@/lib/logging/systemLog";
 import {
-  CUSTOMER_RESCHEDULE_REDISPATCH_STATUSES,
   isCustomerCancellableBookingStatus,
   isCustomerReschedulableBookingStatus,
 } from "@/lib/dashboard/customerBookingModifyStatuses";
 import { expirePendingDispatchOffersForBooking } from "@/lib/dispatch/expirePendingDispatchOffersForBooking";
-import { ensureBookingAssignment } from "@/lib/dispatch/ensureBookingAssignment";
 import { releaseCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
 import {
   BOOKING_MIN_LEAD_MINUTES,
@@ -352,12 +350,6 @@ export async function handleCustomerBookingReschedule(
     newTime: time,
     serviceLabel: row.service ?? null,
   });
-
-  const cleanerId = row.cleaner_id;
-  const autoDispatch = process.env.AUTO_DISPATCH_CLEANERS !== "false";
-  if (CUSTOMER_RESCHEDULE_REDISPATCH_STATUSES.has(status) && !cleanerId && autoDispatch) {
-    void ensureBookingAssignment(auth.admin, bookingId, { source: "customer_reschedule" });
-  }
 
   return NextResponse.json({ ok: true });
 }
