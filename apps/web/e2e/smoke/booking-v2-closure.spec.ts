@@ -150,15 +150,16 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
     const url = new URL(request.url());
     const path = url.pathname;
 
+    if (request.method() === "POST" && path === "/api/booking-v2/quote") {
+      await route.fulfill({ status: 200, json: authoritativeQuoteFixture("e2e-authoritative") });
+      return;
+    }
+
     if (path.startsWith("/api/analytics/")) {
       await route.fulfill({ status: 204, body: "" });
       return;
     }
 
-    if (request.method() === "POST" && path === "/api/booking-v2/quote") {
-      await route.fulfill({ status: 200, json: authoritativeQuoteFixture("e2e-closure-authoritative") });
-      return;
-    }
 
     if (request.method() !== "GET") {
       forbiddenMutations.push(`${request.method()} ${path}`);
