@@ -52,7 +52,7 @@ function PaymentStatusBadge({ label, tone }: { label: string; tone: CustomerPaym
 }
 
 export default function AccountPaymentsPage() {
-  const { bookings, loading, error, refetch } = useBookings();
+  const { bookings, loading, error, refetch } = useBookings({ mode: "complete" });
 
   const rows = useMemo(
     () => [...bookings].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()),
