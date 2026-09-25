@@ -5,6 +5,7 @@ import { dashboardFetchJson } from "@/lib/dashboard/dashboardFetch";
 import { useUser } from "@/hooks/useUser";
 
 export type CustomerBookingAggregates = {
+  totalBookingsCount: number;
   completedBookingsCount: number;
   payments: { totalPaidZar: number; transactionCount: number };
   perBookingInvoices: { totalCount: number; totalPaidCents: number };
