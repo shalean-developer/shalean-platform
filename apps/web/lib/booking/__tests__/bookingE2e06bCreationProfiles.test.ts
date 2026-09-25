@@ -19,4 +19,13 @@ describe("BOOKING-E2E-06B typed creation lifecycle profiles", () => {
     expect(bookingCreationLifecyclePatch("recurring_unpaid")).toMatchObject({ status: "pending_payment", payment_status: "pending" });
     expect(bookingCreationLifecyclePatch("recurring_prepaid")).toMatchObject({ status: "pending", payment_status: "success", billing_type: "prepaid" });
   });
+  it("preserves Paystack paid assignment transitions", () => {
+    expect(bookingCreationLifecyclePatch("paystack_paid")).toEqual({ status: "pending", dispatch_status: "searching" });
+    expect(bookingCreationLifecyclePatch("paystack_paid_selected_cleaner")).toEqual({ status: "pending_assignment", dispatch_status: "searching" });
+  });
+
+  it("preserves admin billing-mode defaults without owning dynamic status or assignment", () => {
+    expect(bookingCreationLifecyclePatch("admin_payment_received")).toEqual({ is_monthly_billing_booking: false, payment_status: "pending", billing_type: "per_booking" });
+    expect(bookingCreationLifecyclePatch("admin_monthly")).toEqual({ is_monthly_billing_booking: true, payment_status: "pending_monthly", billing_type: "recurring_invoice" });
+  });
 });
