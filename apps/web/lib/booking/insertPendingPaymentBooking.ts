@@ -1,4 +1,5 @@
 import "server-only";
+import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
 
 import { getServiceLabel } from "@/components/booking/serviceCategories";
 import { adminBookingServiceSlug } from "@/lib/admin/adminBookingCreateFingerprint";
@@ -129,12 +130,9 @@ export async function insertPendingPaymentBookingRow(
       ...ownershipPatch,
       ...(params.slotDuplicateExempt === true ? { slot_duplicate_exempt: true } : {}),
       ...(params.adminForceSlotOverride === true ? { admin_force_slot_override: true } : {}),
-      amount_paid_cents: 0,
-      currency: "ZAR",
+      ...bookingCreationLifecyclePatch("customer_pending_payment"),
       booking_snapshot: minimalSnapshot,
       service_slug: serviceSlug,
-      status: "pending_payment",
-      dispatch_status: "searching",
       surge_multiplier: 1,
       surge_reason: null,
       service: locked.service != null ? getServiceLabel(locked.service) : null,

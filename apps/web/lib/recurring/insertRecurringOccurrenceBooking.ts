@@ -1,4 +1,5 @@
 import "server-only";
+import { bookingCreationLifecyclePatch } from "@/lib/booking/bookingCreationProfiles";
 
 import crypto from "crypto";
 
@@ -210,11 +211,11 @@ export async function insertRecurringOccurrenceBooking(
     ...customerOwnershipPatch,
     amount_paid_cents: occurrencePaidZar * 100,
     total_paid_cents: occurrencePaidZar * 100,
-    currency: "ZAR",
+    ...(prepaidAllocation
+      ? bookingCreationLifecyclePatch("recurring_prepaid")
+      : bookingCreationLifecyclePatch("recurring_unpaid")),
     booking_snapshot: snapshot,
     ...lockedDurationMinutesPatch(locked),
-    status: prepaidAllocation ? ("pending" as const) : ("pending_payment" as const),
-    dispatch_status: "searching" as const,
     surge_multiplier: 1,
     surge_reason: null,
     service: locked.service != null ? getServiceLabel(locked.service) : null,
@@ -248,11 +249,7 @@ export async function insertRecurringOccurrenceBooking(
         }
       : provisionalPriceSnapshotJson(locked),
     recurring_id: params.recurring.id,
-    is_recurring_generated: true,
-    payment_status: prepaidAllocation ? ("success" as const) : ("pending" as const),
-    ...(prepaidAllocation
-      ? { payment_completed_at: prepaidAllocation.paidAt, billing_type: "prepaid" }
-      : {}),
+    ...(prepaidAllocation ? { payment_completed_at: prepaidAllocation.paidAt } : {}),
     recurring_retry_count: 0,
     ...(preferredCleanerIds.length > 1 ? { cleaner_count: preferredCleanerIds.length } : {}),
     ...cleanerPatch,
