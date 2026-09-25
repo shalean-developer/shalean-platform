@@ -1,3 +1,4 @@
+import { buildBookingV2HistorySnapshot } from "@/lib/booking-v2/buildBookingV2HistorySnapshot";
 import { after, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { resolveBookingRouteBearerAuth } from "@/lib/supabase/bookingRouteBearerAuth";
@@ -804,6 +805,28 @@ export async function POST(request: Request) {
       : {}),
   };
 
+  const canonicalConfirmedAt = new Date().toISOString();
+  const buildHistorySnapshot = (payableZar: number) =>
+    buildBookingV2HistorySnapshot({
+      data,
+      selectedExtraIds,
+      serverEquipmentQuote,
+      serverBreakdown,
+      customerPhone,
+      customerName,
+      customerEmailNormalized,
+      referralCheckoutSnapshot,
+      promotionApplied,
+      promotionDiscountZar,
+      promoCodeInput,
+      payAmountZar: payableZar,
+      recurringPrepaymentQuote,
+      fulfillmentMode,
+      fulfillmentReason,
+      preferredExtrasSnapshotExtension: preferredExtras.snapshotExtension,
+      confirmedAt: canonicalConfirmedAt,
+    });
+
   // ── 9. Reuse an existing pending_payment booking for the same slot (retry path) ──
   // The unique index idx_bookings_unique_active_customer_slot prevents duplicate inserts
   // for (user_id, date, time, service_slug) when status != cancelled/failed/payment_expired.
@@ -848,62 +871,7 @@ export async function POST(request: Request) {
               ...preferredCleanerAssignmentFields(preferredCleanerIds),
             }
           : {}),
-        booking_snapshot: {
-          serviceSlug: data.serviceSlug,
-          serviceDetails: data.serviceDetails,
-          address: data.address,
-          suburb: data.suburb,
-          city: data.city,
-          date: data.date,
-          time: data.time,
-          cleanerMode: data.cleanerMode,
-          cleanerCount: data.cleanerCount,
-          assignedTeamId: data.assignedTeamId,
-          selectedExtras: selectedExtraIds,
-          equipmentRequired: data.equipmentRequired,
-          equipmentQuote: serverEquipmentQuote,
-          pricingSummary: serverBreakdown,
-          contactPhone: customerPhone,
-          customer: {
-            name: customerName || null,
-            email: customerEmailNormalized,
-            phone: customerPhone,
-          },
-          ...(data.recurringFrequency
-            ? {
-                recurringFrequency: data.recurringFrequency,
-                recurringDays: data.recurringDays?.length ? data.recurringDays : [],
-              }
-            : {}),
-          ...(referralCheckoutSnapshot ? { referralCheckout: referralCheckoutSnapshot } : {}),
-          ...(promotionApplied.length
-            ? {
-                promotionCheckout: {
-                  applied: promotionApplied,
-                  totalDiscountZar: promotionDiscountZar,
-                  promoCode: promoCodeInput || null,
-                },
-              }
-            : {}),
-          payTotalZar: payAmountZar,
-          ...(recurringPrepaymentQuote
-            ? {
-                recurringPrepayment: {
-                  scope: "first_30_days",
-                  coverageStartDate: recurringPrepaymentQuote.coverageStartDate,
-                  coverageEndDate: recurringPrepaymentQuote.coverageEndDate,
-                  occurrenceDates: recurringPrepaymentQuote.occurrenceDates,
-                  visitCount: recurringPrepaymentQuote.visitCount,
-                  perVisitZar: recurringPrepaymentQuote.perVisitZar,
-                  packagePayableZar: payAmountZar,
-                },
-              }
-            : {}),
-          fulfillmentMode,
-          fulfillmentReason,
-          ...preferredExtras.snapshotExtension,
-          confirmedAt: new Date().toISOString(),
-        },
+        booking_snapshot: buildHistorySnapshot(payAmountZar),,
       })
       .eq("id", existingBooking.id);
 
@@ -1137,62 +1105,7 @@ export async function POST(request: Request) {
       currency: "ZAR",
 
       // Snapshot for history
-      booking_snapshot: {
-        serviceSlug: data.serviceSlug,
-        serviceDetails: data.serviceDetails,
-        address: data.address,
-        suburb: data.suburb,
-        city: data.city,
-        date: data.date,
-        time: data.time,
-        cleanerMode: data.cleanerMode,
-        cleanerCount: data.cleanerCount,
-        assignedTeamId: data.assignedTeamId,
-        selectedExtras: selectedExtraIds,
-        equipmentRequired: data.equipmentRequired,
-        equipmentQuote: serverEquipmentQuote,
-        pricingSummary: serverBreakdown,
-        contactPhone: customerPhone,
-        customer: {
-          name: customerName || null,
-          email: customerEmailNormalized,
-          phone: customerPhone,
-        },
-        ...(data.recurringFrequency
-          ? {
-              recurringFrequency: data.recurringFrequency,
-              recurringDays: data.recurringDays?.length ? data.recurringDays : [],
-            }
-          : {}),
-        ...(referralCheckoutSnapshot ? { referralCheckout: referralCheckoutSnapshot } : {}),
-        ...(promotionApplied.length
-          ? {
-              promotionCheckout: {
-                applied: promotionApplied,
-                totalDiscountZar: promotionDiscountZar,
-                promoCode: promoCodeInput || null,
-              },
-            }
-          : {}),
-        payTotalZar: payAmountZar,
-        ...(recurringPrepaymentQuote
-          ? {
-              recurringPrepayment: {
-                scope: "first_30_days",
-                coverageStartDate: recurringPrepaymentQuote.coverageStartDate,
-                coverageEndDate: recurringPrepaymentQuote.coverageEndDate,
-                occurrenceDates: recurringPrepaymentQuote.occurrenceDates,
-                visitCount: recurringPrepaymentQuote.visitCount,
-                perVisitZar: recurringPrepaymentQuote.perVisitZar,
-                packagePayableZar: payAmountZar,
-              },
-            }
-          : {}),
-        fulfillmentMode,
-        fulfillmentReason,
-        ...preferredExtras.snapshotExtension,
-        confirmedAt: new Date().toISOString(),
-      },
+      booking_snapshot: buildHistorySnapshot(payAmountZar),,
     })
     .select("id")
     .single();
