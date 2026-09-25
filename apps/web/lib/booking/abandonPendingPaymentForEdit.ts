@@ -6,6 +6,7 @@ import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsFo
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
 import { releaseCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
 import { fetchPaystackTransactionVerify } from "@/lib/payments/verifyPaystackTransaction";
+import { expirePendingPaymentTerminal } from "@/lib/booking/expirePendingPaymentTerminal";
 
 const PAYMENT_EDIT_SUPERSEDED_REASON = "customer_edit_after_checkout";
 
@@ -152,10 +153,13 @@ async function reverseAppliedPromotionRedemptions(
 async function cleanupSupersededCheckout(
   admin: SupabaseClient,
   row: BookingRow,
+  options?: { creditAlreadyReleased?: boolean },
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const creditRelease = await releaseCleaningCreditForBooking(admin, row.id);
-  if (!creditRelease.ok && creditRelease.error !== "reservation_not_found") {
-    return { ok: false, error: `Cleaning Credit release failed: ${creditRelease.error}` };
+  if (!options?.creditAlreadyReleased) {
+    const creditRelease = await releaseCleaningCreditForBooking(admin, row.id);
+    if (!creditRelease.ok && creditRelease.error !== "reservation_not_found") {
+      return { ok: false, error: `Cleaning Credit release failed: ${creditRelease.error}` };
+    }
   }
 
   const promotionRelease = await reverseAppliedPromotionRedemptions(
@@ -313,33 +317,27 @@ export async function abandonPendingPaymentForEdit(
     cleanup_done_at: null,
   } satisfies SupersedeMarker;
 
-  const { data: transitioned, error: transitionError } = await admin
-    .from("bookings")
-    .update({
-      status: "payment_expired",
-      dispatch_status: "unassigned",
-      payment_needs_follow_up: false,
-      payment_link: null,
+  const terminal = await expirePendingPaymentTerminal(admin, {
+    bookingId,
+    reason: PAYMENT_EDIT_SUPERSEDED_REASON,
+    paymentNeedsFollowUp: false,
+    extraPatch: {
       payment_link_expires_at: null,
       booking_snapshot: snapshot,
-    })
-    .eq("id", bookingId)
-    .eq("status", "pending_payment")
-    .is("payment_completed_at", null)
-    .select("id")
-    .maybeSingle();
+    },
+  });
 
-  if (transitionError || !transitioned) {
+  if (!terminal.ok || !terminal.transitioned) {
     return {
       ok: false,
-      code: "PAYMENT_EDIT_SUPERSEDE_FAILED",
-      error:
-        transitionError?.message ??
-        "The previous payment attempt changed while we were preparing your edit. Please try again.",
+      code: terminal.ok ? "PAYMENT_EDIT_SUPERSEDE_FAILED" : "PAYMENT_EDIT_CLEANUP_FAILED",
+      error: terminal.ok
+        ? "The previous payment attempt changed while we were preparing your edit. Please try again."
+        : terminal.error,
     };
   }
 
-  const cleanup = await cleanupSupersededCheckout(admin, row);
+  const cleanup = await cleanupSupersededCheckout(admin, row, { creditAlreadyReleased: true });
   if (!cleanup.ok) {
     return {
       ok: false,
