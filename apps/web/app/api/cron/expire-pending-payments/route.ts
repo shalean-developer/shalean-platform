@@ -3,7 +3,7 @@ import { withCronLock } from "@/lib/cron/cronLock";
 import { CRON_LOCK_KEYS } from "@/lib/cron/cronLockKeys";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { releaseCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
+import { expirePendingPaymentTerminal } from "@/lib/booking/expirePendingPaymentTerminal";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -55,16 +55,17 @@ export async function POST(request: Request) {
       for (const r of rows ?? []) {
         const id = typeof (r as { id?: unknown }).id === "string" ? String((r as { id: string }).id) : "";
         if (!id) continue;
-        const { error: upErr } = await admin
-          .from("bookings")
-          .update({ status: "payment_expired", dispatch_status: "unassigned", payment_needs_follow_up: true })
-          .eq("id", id)
-          .eq("status", "pending_payment");
-        if (!upErr) {
-          updated++;
-          // Idempotent: no reservation is a harmless no-op at the lifecycle boundary.
-          await releaseCleaningCreditForBooking(admin, id);
+        const expired = await expirePendingPaymentTerminal(admin, {
+          bookingId: id,
+          reason: "booking_payment_expired",
+          paymentNeedsFollowUp: true,
+          clearLinkExpiry: false,
+        });
+        if (!expired.ok) {
+          await reportOperationalIssue("error", "cron/expire-pending-payments", expired.error, { bookingId: id });
+          continue;
         }
+        if (expired.transitioned) updated++;
       }
 
       await logSystemEvent({
