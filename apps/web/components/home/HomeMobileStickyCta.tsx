@@ -18,7 +18,7 @@ export function HomeMobileStickyCta() {
         </div>
         <HomeBookingLink
           source="home_sticky_cta"
-          className="flex min-h-12 w-full items-center justify-center rounded-xl bg-blue-600 px-6 py-3 text-base font-semibold text-white transition hover:bg-blue-700 active:scale-[0.99] md:w-auto"
+          className="flex min-h-12 w-full items-center justify-center rounded-xl bg-red-600 px-6 py-3 text-base font-semibold text-white transition hover:bg-red-700 active:scale-[0.99] md:w-auto"
         >
           Book a Cleaning
         </HomeBookingLink>
