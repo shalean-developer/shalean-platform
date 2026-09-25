@@ -3,7 +3,7 @@ type SnapshotInput = {
   selectedExtraIds: string[];
   serverEquipmentQuote: unknown;
   serverBreakdown: unknown;
-  customerPhone: string;
+  customerPhone: string | null;
   customerName: string;
   customerEmailNormalized: string | null;
   referralCheckoutSnapshot?: unknown;
