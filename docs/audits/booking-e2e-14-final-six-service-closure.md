@@ -600,6 +600,28 @@ B14-010 UI note: cleaner job details expose technical booking-line-item names ge
 Office Accept → En route → Start gate: **PASS**.
 B14-010: **OPEN / presentation cleanup**.
 
+## Office completion — SHL-BK-000048
+
+Controlled early-finish completion completed successfully:
+
+- booking status: `completed`,
+- cleaner response status: `completed`,
+- completed_at persisted,
+- payment remains successful at R338,
+- cleaner payout remains R250,
+- display / payout / internal earnings all R250,
+- cleaner earnings total finalized at R250,
+- exactly one `cleaner_earnings` ledger row exists for R250,
+- ledger status remains `pending`,
+- no disbursement, approval, payment, payout batch, frozen payout, or transfer exists,
+- line earnings finalized to R250 on the Office base item,
+- service fee remains company-only and earns R0,
+- bathroom scope line earns R0.
+
+Office Accept → En route → Start → Complete → earnings finalization: **PASS**.
+
+B14-010 remains the only Office blocker before full service closure: technical backfill/scope labels are exposed in cleaner-facing booked line items.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
