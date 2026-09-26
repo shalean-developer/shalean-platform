@@ -31,6 +31,12 @@ function whatsAppSupportHref(bookingReference: string | null): string {
   return `https://wa.me/${CUSTOMER_SUPPORT_WHATSAPP_E164.replace(/\D/g, "")}?text=${text}`;
 }
 
+function formatConfirmationPaidAmount(totalPaidZar: number | null): string {
+  if (totalPaidZar === 0) return "R0.00";
+  if (totalPaidZar == null) return "—";
+  return formatCustomerBookingTotalPaid(totalPaidZar);
+}
+
 export function BookingConfirmationHero({
   bookingReference,
   totalPaidZar,
@@ -81,7 +87,7 @@ export function BookingConfirmationHero({
               </dd>
               <div className="mt-2 space-y-0.5 text-xs tabular-nums text-zinc-500 dark:text-zinc-400">
                 <p>Cleaning Credit −{formatCustomerBookingTotalPaid(cleaningCreditZar)}</p>
-                <p>Paid by Paystack {totalPaidZar != null ? formatCustomerBookingTotalPaid(totalPaidZar) : "—"}</p>
+                <p>Paid by Paystack {formatConfirmationPaidAmount(totalPaidZar)}</p>
               </div>
             </>
           ) : (
@@ -90,7 +96,7 @@ export function BookingConfirmationHero({
                 Total paid
               </dt>
               <dd className="mt-1 text-base font-bold tabular-nums text-primary">
-                {totalPaidZar != null ? formatCustomerBookingTotalPaid(totalPaidZar) : "—"}
+                {formatConfirmationPaidAmount(totalPaidZar)}
               </dd>
             </>
           )}
