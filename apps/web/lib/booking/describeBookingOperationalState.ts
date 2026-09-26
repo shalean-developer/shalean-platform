@@ -444,6 +444,7 @@ function computeDisplayBadge(row: Record<string, unknown>, ui: CleanerJobUiState
     return bookingMatchesRecurringCleanerPendingPayment(row) ? "Awaiting customer payment" : "Awaiting payment";
   }
   const dst = String(row.dispatch_status ?? "").toLowerCase();
+  if (dst === "no_cleaner" || dst === "unassignable") return "Needs assignment";
   if (dst === "expired") return "Dispatch expired";
   if (st === "in_progress") return "In progress";
   if (st === "pending") return row.en_route_at ? "En route" : "Pending";
@@ -464,6 +465,8 @@ function displayToneFrom(row: Record<string, unknown>, operationalPhase: Booking
   if (overrideAppliedFromRow(row) && isAuthoritativeBookingCompleted(row)) return "warning";
   if (isAuthoritativeBookingCompleted(row) || operationalPhase === "completed") return "success";
   if (st === "pending_payment") return "warning";
+  const dst = String(row.dispatch_status ?? "").trim().toLowerCase();
+  if (dst === "no_cleaner" || dst === "unassignable") return "warning";
   if (operationalPhase === "expired") return "muted";
   return "neutral";
 }
