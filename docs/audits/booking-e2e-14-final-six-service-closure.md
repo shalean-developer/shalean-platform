@@ -620,7 +620,7 @@ Controlled early-finish completion completed successfully:
 
 Office Accept → En route → Start → Complete → earnings finalization: **PASS**.
 
-B14-010 remains the only Office blocker before full service closure: technical backfill/scope labels are exposed in cleaner-facing booked line items.
+B14-010 remains the only Office blocker before full service closure: technical backfill/scope labels are exposed in cleaner-facing booked line items. Fix is implemented in Draft PR #597 at exact head `fc8866359c7f489409d9e1d69a4dd1689d419297`; CI pending.
 
 ## Existing automation gap
 
