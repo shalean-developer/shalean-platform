@@ -160,6 +160,22 @@ Pricing-test booking `SHL-BK-000042` / `92ea1421-df46-4718-86fc-2526aaf6bdca` ha
 Regular assignment / accept / en-route / start: **PASS**. Completion / payout: **PENDING**.
 
 
+## Regular completion blocker — B14-003
+
+On pricing-test booking `SHL-BK-000042` / `92ea1421-df46-4718-86fc-2526aaf6bdca`, cleaner completion is correctly blocked by the payout financial-cap guard, but the guard is using the wrong basis for a fully covered R0 prepaid booking.
+
+Runtime evidence:
+- `payment_status=success`, `billing_type=prepaid`.
+- Collected cash columns are intentionally zero: `total_paid_cents=0`, `amount_paid_cents=0`, `total_paid_zar=0`.
+- Quote/service value remains R680 in `pricing_summary.total`, `price_snapshot.server_computed_total`, with R680 Cleaning Credit settled.
+- Canonical cleaner payout is R300.
+- `persistCleanerPayoutIfUnset` logs `cap=0`, `hybrid=30000` and returns `payout_exceeds_financial_cap`.
+- Booking remains `in_progress`; no payout columns or cleaner earnings ledger were written.
+
+Root cause: prepaid financial-cap semantics equate "cash collected" with the maximum payable cleaner amount. That is invalid for a fully settled booking funded by Cleaning Credit (and potentially other company-funded discounts), where collected cash may be R0 while the service still has non-zero settled economic value.
+
+Required closure: preserve the financial safety cap, but give settled non-cash prepaid bookings an authoritative service-value / settlement-value basis. Do not fake cash collected, change the R0 payment ledger, or bypass the cap.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
@@ -230,6 +246,7 @@ After completion verify:
 |---|---|---|---|---|---|
 | B14-001 | Blocker | All six | Release automation | No automated six-service post-payment/dashboard/lifecycle runtime matrix; existing closure smoke is intentionally non-mutating. | OPEN |
 | B14-002 | Blocker | Regular observed; generic R0 boundary | R0 post-payment dispatch | Root cause fixed by merged PR #587. Fresh R0 Regular SHL-BK-000042 created preferred dispatch offer with canonical R300 earnings snapshot and lifecycle jobs after zero-cash settlement. Cleaner accept/start/complete still pending runtime. | FIXED-RUNTIME-OFFER-VERIFIED |
+| B14-003 | Blocker | Regular R0 observed; likely discounted/credit-covered prepaid scope | Cleaner completion / payout cap | Fully settled R0 prepaid booking has economic service value R680 and canonical cleaner payout R300, but payout cap derives only collected cash and resolves to R0. Completion is blocked with `payout_exceeds_financial_cap`. | OPEN |
 
 ## Final release decision
 
