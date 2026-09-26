@@ -87,19 +87,34 @@ export function resolveCleanerDashboardEarningsCents(
     cleaner_earnings_total_cents?: unknown;
     payout_frozen_cents?: unknown;
     display_earnings_cents?: unknown;
+    is_team_job?: boolean | null;
   },
   cleanerId: string,
 ): number {
   const viewerPayout = optionalCentsFromDb(booking.viewer_payout_cents);
   if (viewerPayout !== null) return Math.max(0, Math.round(viewerPayout));
 
-  const locked = resolveCleanerEarningsCents(booking);
-  if (locked !== null) return Math.max(0, Math.round(locked));
-
   const facing = resolveCleanerFacingEarnings(
     parseBookingEarningsSummary(booking.earnings_summary),
     cleanerId,
   );
+
+  /*
+   * Team bookings can have a generic booking-level display lock (for example
+   * the standard member amount) while the canonical earnings summary carries
+   * viewer-specific amounts such as a lead uplift. In that case the summary
+   * is the authoritative per-cleaner value.
+   *
+   * Solo bookings keep the historical policy-lock precedence so stale summary
+   * JSON cannot override an explicitly frozen/displayed amount.
+   */
+  if (booking.is_team_job === true && facing) {
+    return Math.max(0, Math.round(facing.total_cents));
+  }
+
+  const locked = resolveCleanerEarningsCents(booking);
+  if (locked !== null) return Math.max(0, Math.round(locked));
+
   if (facing) return Math.max(0, Math.round(facing.total_cents));
   return 0;
 }

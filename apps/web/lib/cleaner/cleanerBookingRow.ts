@@ -61,6 +61,8 @@ export type CleanerBookingRow = {
   display_earnings_cents?: number | null;
   /** Line-ledger total from DB when exposed by cleaner APIs. */
   cleaner_earnings_total_cents?: number | null;
+  /** Canonical v3 per-cleaner earnings summary when exposed by cleaner APIs. */
+  earnings_summary?: unknown;
   /** True when pay is the team-job placeholder until stored display earnings exist. */
   displayEarningsIsEstimate?: boolean;
   earnings_cents?: number | null;
