@@ -531,6 +531,30 @@ Pricing-test booking `SHL-BK-000045` / `c6c8499e-b939-40d8-a949-5e1860df4cc2` wa
 
 Fresh-post-fix Moving payout classification: **PASS**.
 
+## Fresh Moving variant — SHL-BK-000046
+
+Pricing-test booking `SHL-BK-000046` / `b4499fc0-de2b-4e03-a8b5-75bc13d16771` broadens post-fix Moving coverage:
+
+- move-in,
+- townhouse,
+- furnished yes,
+- no pets,
+- 1 bedroom / 3 bathrooms / 1 extra room,
+- extras: Carpet cleaning + Balcony cleaning,
+- total paid: R1,820 via Paystack,
+- no Cleaning Credit,
+- booking / dispatch: assigned / assigned,
+- selected team: Shalean Move Team 1 (`move_cleaning`),
+- roster: Test Cleaner A lead + Test Cleaner B member,
+- canonical service type: `move`,
+- fixed-service payout applied: true,
+- Cleaner A lead payout: R270,
+- Cleaner B member payout: R250,
+- team obligation: R520,
+- team payout rows pending and unbatched.
+
+Fresh Moving move-in + furnished + extras variant: **PASS**.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
