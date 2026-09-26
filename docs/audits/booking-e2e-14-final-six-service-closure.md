@@ -195,6 +195,18 @@ Runtime repair verification:
 
 B14-004 result: **PASS / runtime repaired and replay-idempotent**.
 
+## Deep team-picker runtime verification
+
+Pricing-test release `0fd541e7721b64cedbf78f5a1a220f5d7ffd77b7` visually verifies the Deep Cleaning customer team-selection correction:
+
+- Deep schedule now allows explicit customer team choice instead of silent auto-assignment.
+- Selected team on Review: `Shalean Team 1`.
+- No Move-team name is shown on the Deep booking.
+- Review preserves the selected team in the booking summary.
+- Review pricing remains internally consistent at R1,590 for the tested scope.
+
+Deep Step 2 team selection / Step 3 preservation: **PASS**.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
