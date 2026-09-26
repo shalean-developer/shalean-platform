@@ -20,6 +20,8 @@ export type BookingRowForPayoutCap = {
   total_paid_cents?: number | null;
   amount_paid_cents?: number | null;
   total_paid_zar?: number | null;
+  /** Authoritative visit subtotal before the company-only service fee. */
+  base_amount_cents?: number | null;
 };
 
 function normLower(s: string | null | undefined): string {
@@ -76,7 +78,24 @@ export function bookingPayoutConstraintCapCents(row: BookingRowForPayoutCap): nu
   }
 
   const ap = finiteNonNegInt(row.amount_paid_cents);
-  return tpc ?? ap ?? zarMinor ?? 0;
+  const collectedCap = tpc ?? ap ?? zarMinor ?? 0;
+
+  /**
+   * A successfully settled prepaid booking may be funded partly or fully by
+   * company-funded value (Cleaning Credit / promotion / referral) while the
+   * cash ledger is lower than the visit value. Cleaner earnings are calculated
+   * from the persisted visit subtotal, so the safety cap must allow that same
+   * authoritative subtotal after settlement.
+   *
+   * Before settlement we stay strict: quoted value alone must never authorize
+   * payout persistence on an unpaid booking.
+   */
+  if (normLower(row.payment_status) === "success") {
+    const quotedBase = finiteNonNegInt(row.base_amount_cents) ?? 0;
+    return Math.max(collectedCap, quotedBase);
+  }
+
+  return collectedCap;
 }
 
 export type BookingFinancialDiagnostics = {
@@ -85,7 +104,7 @@ export type BookingFinancialDiagnostics = {
   constraint_mode: "prepaid" | "accrual";
   /** Best-effort: booked customer cash on the row (`total_paid_cents` ?? `amount_paid_cents`). */
   customer_collected_cents: number | null;
-  /** Quoted line in minor units from `total_paid_zar` when present. */
+  /** Persisted visit subtotal in minor units (falls back to legacy ZAR line). */
   service_value_cents: number | null;
   /** RHS of hybrid payout cap (same as {@link bookingPayoutConstraintCapCents}). */
   payout_accrual_basis_cents: number;
@@ -99,6 +118,7 @@ export function bookingFinancialDiagnostics(row: BookingRowForPayoutCap): Bookin
   const tpc = finiteNonNegInt(row.total_paid_cents);
   const apAll = finiteNonNegInt(row.amount_paid_cents);
   const zarMinor = zarToMinorCents(row.total_paid_zar);
+  const quotedBase = finiteNonNegInt(row.base_amount_cents);
   const collected = tpc ?? apAll ?? null;
   const settlement = amountPaidNonZeroCents(row.amount_paid_cents);
   return {
@@ -106,7 +126,7 @@ export function bookingFinancialDiagnostics(row: BookingRowForPayoutCap): Bookin
     payment_status: row.payment_status != null ? String(row.payment_status) : null,
     constraint_mode: accrual ? "accrual" : "prepaid",
     customer_collected_cents: collected,
-    service_value_cents: zarMinor,
+    service_value_cents: quotedBase ?? zarMinor,
     payout_accrual_basis_cents: bookingPayoutConstraintCapCents(row),
     payout_settlement_basis_cents: settlement,
   };
