@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CLEANER_COMPLETION_MIN_ELAPSED_RATIO,
+  cleanerUiCompletionTimingBlocked,
   earlyFinishApprovalFromSnapshot,
   evaluateCleanerJobCompletionGate,
 } from "@/lib/cleaner/cleanerJobCompletionGate";
@@ -88,5 +89,37 @@ describe("earlyFinishApprovalFromSnapshot", () => {
         },
       }),
     ).toEqual({ approved: false, source: null });
+  });
+});
+
+
+describe("cleanerUiCompletionTimingBlocked", () => {
+  it("unlocks the Complete UI when an approved early-finish marker exists", () => {
+    const now = Date.parse("2026-09-26T21:10:00.000Z");
+    expect(
+      cleanerUiCompletionTimingBlocked({
+        durationMinutes: 300,
+        startedAt: "2026-09-26T21:00:00.000Z",
+        nowMs: now,
+        booking_snapshot: {
+          early_finish_approval: {
+            source: "admin",
+            approved_at: "2026-09-26T21:04:33.715Z",
+          },
+        },
+      }),
+    ).toEqual({ blocked: false, remainingMinutes: 260 });
+  });
+
+  it("keeps the Complete UI blocked before 90% elapsed when approval is absent", () => {
+    const now = Date.parse("2026-09-26T21:10:00.000Z");
+    expect(
+      cleanerUiCompletionTimingBlocked({
+        durationMinutes: 300,
+        startedAt: "2026-09-26T21:00:00.000Z",
+        nowMs: now,
+        booking_snapshot: null,
+      }),
+    ).toEqual({ blocked: true, remainingMinutes: 260 });
   });
 });
