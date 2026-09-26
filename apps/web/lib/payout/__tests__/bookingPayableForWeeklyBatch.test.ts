@@ -47,6 +47,48 @@ describe("bookingPayableForWeeklyBatch", () => {
     expect(bookingPayableForWeeklyBatch({ ...basePrepaid, cleaner_payout_cents: null }, new Map()).payable).toBe(false);
   });
 
+  it("allows an explicit positive member-row payout basis without changing booking-level team payout columns", () => {
+    expect(
+      bookingPayableForWeeklyBatch(
+        { ...basePrepaid, cleaner_payout_cents: 0 },
+        new Map(),
+        { payoutBasisCents: 27_000 },
+      ),
+    ).toEqual({ payable: true });
+  });
+
+  it("does not let a missing/zero member-row basis bypass the payout-basis gate", () => {
+    expect(
+      bookingPayableForWeeklyBatch(
+        { ...basePrepaid, cleaner_payout_cents: 0 },
+        new Map(),
+        { payoutBasisCents: 0 },
+      ),
+    ).toEqual({ payable: false, reason: "missing_cleaner_payout_basis" });
+  });
+
+  it("preserves payment and refund safety gates when an explicit member-row basis is provided", () => {
+    expect(
+      bookingPayableForWeeklyBatch(
+        { ...basePrepaid, cleaner_payout_cents: 0, payment_status: "pending" },
+        new Map(),
+        { payoutBasisCents: 27_000 },
+      ),
+    ).toEqual({ payable: false, reason: "prepaid_customer_payment_not_settled" });
+
+    expect(
+      bookingPayableForWeeklyBatch(
+        {
+          ...basePrepaid,
+          cleaner_payout_cents: 0,
+          refunded_at: "2026-01-01T00:00:00.000Z",
+        },
+        new Map(),
+        { payoutBasisCents: 27_000 },
+      ),
+    ).toEqual({ payable: false, reason: "refund_or_reversal_blocked" });
+  });
+
   it("rejects when refund signals set", () => {
     expect(
       bookingPayableForWeeklyBatch({ ...basePrepaid, refunded_at: "2026-01-01T00:00:00.000Z" }, new Map()).payable,
@@ -58,6 +100,31 @@ describe("bookingPayableForWeeklyBatch", () => {
     const mid = String(baseMonthlySettled.monthly_invoice_id);
     const m = invMap([[mid, "paid"]]);
     expect(bookingPayableForWeeklyBatch(baseMonthlySettled, m).payable).toBe(true);
+  });
+
+  it("keeps accrual settlement gates when a member-row payout basis is provided", () => {
+    const mid = String(baseMonthlySettled.monthly_invoice_id);
+    const paidInvoices = invMap([[mid, "paid"]]);
+
+    expect(
+      bookingPayableForWeeklyBatch(
+        { ...baseMonthlySettled, cleaner_payout_cents: 0 },
+        paidInvoices,
+        { payoutBasisCents: 25_000 },
+      ),
+    ).toEqual({ payable: true });
+
+    expect(
+      bookingPayableForWeeklyBatch(
+        {
+          ...baseMonthlySettled,
+          cleaner_payout_cents: 0,
+          payout_status: "pending",
+        },
+        paidInvoices,
+        { payoutBasisCents: 25_000 },
+      ),
+    ).toEqual({ payable: false, reason: "monthly_payout_status_not_eligible" });
   });
 
   it("rejects monthly when invoice not paid", () => {
