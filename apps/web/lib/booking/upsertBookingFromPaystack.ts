@@ -726,15 +726,25 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     bookingVisitZar,
     priceSnapshotSubtotalZar: priceSnapshot.subtotal_zar,
     totalPaidCents,
-    persistedBaseAmountCents: pendingExisting?.base_amount_cents,
-    persistedServiceFeeCents: pendingExisting?.service_fee_cents,
+    persistedBaseAmountCents:
+      existing && typeof existing === "object"
+        ? (existing as { base_amount_cents?: number | null }).base_amount_cents
+        : null,
+    persistedServiceFeeCents:
+      existing && typeof existing === "object"
+        ? (existing as { service_fee_cents?: number | null }).service_fee_cents
+        : null,
   });
   const baseAmountCents = financialSplit.baseAmountCents;
   const serviceFeeCents = financialSplit.serviceFeeCents;
+  const persistedExtrasAmountCents =
+    existing && typeof existing === "object"
+      ? (existing as { extras_amount_cents?: number | null }).extras_amount_cents
+      : null;
   const extrasAmountCents = isRecurringPrepayment
     ? 0
-    : pendingExisting?.extras_amount_cents != null && Number.isFinite(Number(pendingExisting.extras_amount_cents))
-      ? Math.max(0, Math.round(Number(pendingExisting.extras_amount_cents)))
+    : persistedExtrasAmountCents != null && Number.isFinite(Number(persistedExtrasAmountCents))
+      ? Math.max(0, Math.round(Number(persistedExtrasAmountCents)))
       : Math.max(0, Math.round(priceSnapshot.extras_total_zar * 100));
   const isTest =
     input.isTest === true ||
