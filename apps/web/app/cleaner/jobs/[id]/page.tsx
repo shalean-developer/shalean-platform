@@ -43,7 +43,6 @@ import { wireLikeFromJobDetailCacheBody } from "@/lib/cleaner/cleanerQueuedLifec
 import { buildScheduleHintModel, latenessVsSchedule } from "@/lib/cleaner/cleanerJobDetailScheduleModel";
 import { buildUnifiedJobScope } from "@/lib/cleaner/cleanerJobDetailUnifiedScope";
 import { deriveMobilePhase } from "@/lib/cleaner/cleanerMobileBookingMap";
-import { stripExtraTimeSuffixFromDisplayLabel } from "@/lib/cleaner/cleanerExtraDisplayLabel";
 import { cleanerBookedLineItemPresentation } from "@/lib/cleaner/cleanerBookedLineItemDisplay";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import {
