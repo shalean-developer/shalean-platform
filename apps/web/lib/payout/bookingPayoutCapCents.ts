@@ -2,8 +2,13 @@
  * Mode-aware financial cap for `bookings_cleaner_payout_lte_financial_cap` (mirrors migration
  * `20260639_bookings_billing_type_mode_aware_payout_cap.sql`).
  *
- * Prepaid: cap = collected cash semantics — `total_paid_cents` then `amount_paid_cents` (including 0)
- * then ZAR line.
+ * Prepaid before settlement: cap = collected cash semantics — `total_paid_cents` then
+ * `amount_paid_cents` (including 0), then the legacy ZAR line.
+ *
+ * Prepaid after authoritative success: company-funded value (Cleaning Credit / promotions /
+ * referrals) may reduce collected cash below the visit value. The cap therefore uses the
+ * greater of collected cash and persisted `base_amount_cents` (visit subtotal before the
+ * company-only service fee).
  *
  * Accrual (invoice / recurring): cap = service/invoice line value — `total_paid_cents` then ZAR minor,
  * then `nullif(amount_paid_cents, 0)` so an explicit pre-settlement `0` does not hide quoted value.
