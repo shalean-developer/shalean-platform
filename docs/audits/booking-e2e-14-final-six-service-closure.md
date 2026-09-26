@@ -258,7 +258,7 @@ Pricing-test cleaner UI for `SHL-BK-000043` exposes a per-cleaner display mismat
 
 Root-cause trace: `resolveCleanerDashboardEarningsCents` checks the booking-level locked display amount before consulting `earnings_summary.per_cleaner_earnings`. For team jobs this masks the cleaner-specific lead uplift. The resolver needs team-aware precedence: viewer/member payout → per-cleaner summary → booking-level generic display; solo jobs should preserve existing policy-lock precedence.
 
-B14-006 result: **OPEN / cleaner-facing payout display blocker**.
+B14-006 implementation: Draft PR #593 (`BOOKING-E2E-14B.6: show viewer-specific team earnings`) at `91eb97e14e70e3e9afee30a7f48318215222847a`. The fix batches viewer `team_job_member_payouts`, preserves `earnings_summary` on cleaner list/dashboard wires, and uses team-aware per-cleaner precedence while leaving solo display-lock precedence unchanged. **FIX-IN-PR-593 / CI pending**.
 
 ## Legacy Deep UAT residue observed on Cleaner A
 
@@ -278,7 +278,7 @@ This row predates the BOOKING-E2E-14 fixes and is historical UAT residue from bo
 1. pre-PR #591 Deep/Move shared team pool allowed a Move team on a Deep booking;
 2. pre-PR #592 paid pre-reserved team lifecycle did not promote the row to assigned.
 
-It should be cleaned from pricing-test so it no longer dominates Cleaner A's "Next job", but it is **not evidence that the newly deployed code still creates the defect**.
+It was cleaned from pricing-test with a guarded terminal cancellation: `status=cancelled`, `cancelled_by=system`. Payment evidence was preserved unchanged at R1,590; no payout rows, cleaner earnings rows, or Cleaning Credit reservation existed. It no longer belongs in Cleaner A's open/upcoming workload. This is **not evidence that the newly deployed code still creates the defect**.
 
 The R270 shown on this detail page also strengthens B14-006: the detail surface can resolve Cleaner A's lead-specific R270, while the Jobs list for current SHL-BK-000043 showed the generic R250 booking display lock.
 
