@@ -436,6 +436,34 @@ Pricing-test booking `SHL-BK-000044` is visible to Test Cleaner A on both Home a
 
 Moving cleaner visibility + earnings display: **PASS**.
 
+## Moving lifecycle runtime after assignment
+
+Pricing-test booking `SHL-BK-000044`:
+
+- Accept: PASS.
+- En route: PASS.
+- Start: PASS.
+- Current state: `status=in_progress`, `cleaner_response_status=started`.
+- `accepted_at`, `en_route_at`, and `started_at` are persisted.
+- Cleaner A expected earnings remain R300.
+- Cleaner B team payout remains R300.
+- Payment remains successful at R1,463.
+- No team payout row is batched before completion.
+
+Controlled early-finish UAT approval:
+- request `3021d45a-7521-416e-afe2-5d4438c389fe`,
+- status `admin_approved`,
+- source `admin`,
+- reason `work_completed_faster`,
+- quoted duration 450 minutes,
+- elapsed at approval 1 minute,
+- booking snapshot now contains the valid `early_finish_approval` marker,
+- payment and payout rows were not altered.
+
+This unlocks normal cleaner self-completion for the controlled pricing-test Moving run.
+
+Moving pre-completion lifecycle: **PASS**.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
