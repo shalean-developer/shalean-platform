@@ -228,7 +228,21 @@ despite `team_id`, `assigned_team_id`, `is_team_job=true`, payout owner, and ros
 
 Root-cause trace: Booking V2 confirm reserves the selected team and roster before payment. After Paystack success, `promoteV2TeamBookingAfterPayment` sees `is_team_job=true` and `team_id===assigned_team_id` and returns after roster sync without promoting the booking lifecycle to operational assigned state.
 
-B14-005 result: **OPEN / release-gate blocker**. Required closure: idempotently promote a paid pre-reserved team booking to assigned lifecycle state without re-claiming capacity, changing payment, or duplicating roster rows.
+B14-005 implementation: PR #592 merged and deployed to pricing-test at `7a055e42a35306ff90dc123af4f429a172450005`.
+
+Runtime repair of SHL-BK-000043 replayed the merged guarded promotion conditions:
+- exactly 1 booking row promoted,
+- `status=assigned`,
+- `dispatch_status=assigned`,
+- `assigned_at` persisted,
+- `cleaner_response_status=pending`,
+- `cleaner_id` now equals the team lead / payout owner (Test Cleaner A),
+- Shalean Team 1 and the two-row booking roster remained unchanged,
+- payment remained successful,
+- R320 Cleaning Credit remained settled,
+- Paystack cash remained R1,270.
+
+B14-005 assignment promotion result: **PASS**. Cleaner lifecycle and final team earnings/payout remain to be exercised.
 
 ## Existing automation gap
 
