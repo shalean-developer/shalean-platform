@@ -33,7 +33,7 @@ The gate closes only when every required six-service runtime row below is PASS a
 | Customer dashboard | DB-OWNERSHIP-PASS / UI-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Admin dashboard / financial coherence | DB-PERSISTENCE-PASS / UI-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Cleaner/team dashboard | OFFER-PASS / ACCEPT-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
-| Assignment / accept / start / complete | ACCEPT-ENROUTE-START-PASS / COMPLETE-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
+| Assignment / accept / start / complete | PASS | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Completion / payout eligibility coherence | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 
 ## Static/read-only audit — 14A
@@ -175,6 +175,25 @@ Runtime evidence:
 Root cause: prepaid financial-cap semantics equate "cash collected" with the maximum payable cleaner amount. That is invalid for a fully settled booking funded by Cleaning Credit (and potentially other company-funded discounts), where collected cash may be R0 while the service still has non-zero settled economic value.
 
 Required closure: preserve the financial safety cap, but give settled non-cash prepaid bookings an authoritative service-value / settlement-value basis. Do not fake cash collected, change the R0 payment ledger, or bypass the cap.
+
+## Regular completion & earnings ledger — B14-004
+
+After BOOKING-E2E-14B.3, pricing-test booking `SHL-BK-000042` completed successfully with R300 booking payout/display earnings, but the earnings-ledger rail was still incomplete because no booking line items existed.
+
+BOOKING-E2E-14B.4 was merged as PR #590 and deployed on pricing-test at `038ee48b2b93e16a12b6a67782a4f3a4522ae5ea`.
+
+Runtime repair verification:
+- authoritative visit subtotal line: R650,
+- company-only service-fee line: R30,
+- finalized line earnings total: R300,
+- `cleaner_earnings_total_cents=30000`,
+- exactly one `cleaner_earnings` ledger row,
+- ledger total: R300,
+- booking remains completed,
+- payout status remains pending,
+- replay of the repair produced no duplicate line items or ledger rows.
+
+B14-004 result: **PASS / runtime repaired and replay-idempotent**.
 
 ## Existing automation gap
 
