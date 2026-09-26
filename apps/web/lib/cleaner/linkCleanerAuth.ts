@@ -82,6 +82,30 @@ async function cleanerIdClaimingAuthUser(admin: SupabaseClient, authUserId: stri
   return data?.id ?? null;
 }
 
+async function authUserIsUsable(admin: SupabaseClient, authUserId: string): Promise<boolean> {
+  const uid = String(authUserId ?? "").trim();
+  if (!uid) return false;
+  const check = await admin.auth.admin.getUserById(uid);
+  return !check.error && Boolean(check.data.user?.id);
+}
+
+function fallbackCleanerAuthEmail(cleanerRowId: string): string {
+  return ("cleaner+" + cleanerRowId + "@cleaner.shalean.com").toLowerCase();
+}
+
+function authCreationEmailCandidates(row: {
+  id: string;
+  email?: string | null;
+  phone?: string | null;
+}): string[] {
+  const candidates = [
+    row.phone ? cleanerGeneratedLoginEmailFromAnyPhone(String(row.phone)) : null,
+    String(row.email ?? "").trim().toLowerCase() || null,
+    fallbackCleanerAuthEmail(row.id),
+  ];
+  return [...new Set(candidates.filter((value): value is string => Boolean(value)))];
+}
+
 async function finishCleanerAuthLink(admin: SupabaseClient, cleanerRowId: string, authUserId: string): Promise<string> {
   const synced = await syncCleanerUserProfileForCleanerRow(admin, cleanerRowId);
   if (!synced.ok) {
@@ -109,14 +133,21 @@ export async function ensureCleanerLinkedToAuth(
   if (fetchErr) throw new Error(fetchErr.message);
   if (!row?.id) throw new Error("Cleaner not found.");
 
-  const existingAuth = row.auth_user_id as string | null | undefined;
+  const existingAuth = String(row.auth_user_id ?? "").trim() || null;
+  if (existingAuth && (await authUserIsUsable(admin, existingAuth))) {
+    return finishCleanerAuthLink(admin, cleanerRowId, existingAuth);
+  }
+
+  /*
+   * cleaners.auth_user_id is NOT NULL in the current schema, so stale-link
+   * repair must never clear it before a replacement Auth user is ready.
+   *
+   * Pricing/UAT fixtures can contain DB-seeded auth.users rows that resolve by
+   * email but are invisible to GoTrue Admin. Treat those as ghosts: never
+   * re-link them merely because the DB email resolver found an id.
+   */
   if (existingAuth) {
-    const check = await admin.auth.admin.getUserById(existingAuth);
-    if (!check.error && check.data.user) {
-      return finishCleanerAuthLink(admin, cleanerRowId, existingAuth);
-    }
-    log("clearing stale auth_user_id", cleanerRowId, existingAuth);
-    await admin.from("cleaners").update({ auth_user_id: null }).eq("id", cleanerRowId);
+    log("stale auth_user_id detected; keeping link until replacement is ready", cleanerRowId, existingAuth);
   }
 
   const emails = resolveAuthEmailsForCleaner(row);
@@ -124,9 +155,18 @@ export async function ensureCleanerLinkedToAuth(
     throw new Error("Could not derive an email for Auth; add an email or phone on the cleaner row.");
   }
 
+  const unusableEmails = new Set<string>();
+
   for (const email of emails) {
     const uid = await findAuthUserIdByEmail(admin, email);
     if (!uid) continue;
+
+    if (!(await authUserIsUsable(admin, uid))) {
+      unusableEmails.add(email);
+      log("ignoring ghost auth user resolved by email", cleanerRowId, email, uid);
+      continue;
+    }
+
     const claimant = await cleanerIdClaimingAuthUser(admin, uid);
     if (claimant && claimant !== cleanerRowId) continue;
 
@@ -138,46 +178,48 @@ export async function ensureCleanerLinkedToAuth(
     return finishCleanerAuthLink(admin, cleanerRowId, uid);
   }
 
-  const generatedLogin = row.phone ? cleanerGeneratedLoginEmailFromAnyPhone(String(row.phone)) : null;
-  const createEmail =
-    (generatedLogin && emails.includes(generatedLogin) ? generatedLogin : null) ??
-    emails.find((e) => e.endsWith("@cleaner.shalean.com")) ??
-    emails[0];
   const fullName = String(row.full_name ?? "Cleaner").trim() || "Cleaner";
+  const createCandidates = authCreationEmailCandidates(row).filter((email) => !unusableEmails.has(email));
+  let lastCreateError = "Could not create Supabase Auth user.";
 
-  const created = await admin.auth.admin.createUser({
-    email: createEmail,
-    password: options.passwordForNewUser,
-    email_confirm: true,
-    user_metadata: { role: "cleaner", source: "ensure_cleaner_auth", full_name: fullName },
-  });
+  for (const createEmail of createCandidates) {
+    const created = await admin.auth.admin.createUser({
+      email: createEmail,
+      password: options.passwordForNewUser,
+      email_confirm: true,
+      user_metadata: { role: "cleaner", source: "ensure_cleaner_auth", full_name: fullName },
+    });
 
-  if (created.error || !created.data.user?.id) {
-    const msg = created.error?.message ?? "createUser failed";
-    if (msg.toLowerCase().includes("already")) {
-      const uid = await findAuthUserIdByEmail(admin, createEmail);
-      if (uid) {
-        const claimant = await cleanerIdClaimingAuthUser(admin, uid);
-        if (!claimant || claimant === cleanerRowId) {
-          const { error: upErr } = await admin.from("cleaners").update({ auth_user_id: uid }).eq("id", cleanerRowId);
-          if (!upErr) return finishCleanerAuthLink(admin, cleanerRowId, uid);
+    if (created.error || !created.data.user?.id) {
+      const msg = created.error?.message ?? "createUser failed";
+      lastCreateError = msg;
+
+      if (msg.toLowerCase().includes("already")) {
+        const uid = await findAuthUserIdByEmail(admin, createEmail);
+        if (uid && (await authUserIsUsable(admin, uid))) {
+          const claimant = await cleanerIdClaimingAuthUser(admin, uid);
+          if (!claimant || claimant === cleanerRowId) {
+            const { error: upErr } = await admin.from("cleaners").update({ auth_user_id: uid }).eq("id", cleanerRowId);
+            if (!upErr) return finishCleanerAuthLink(admin, cleanerRowId, uid);
+          }
         }
       }
+
+      log("auth create candidate failed", cleanerRowId, createEmail, msg);
+      continue;
     }
-    throw new Error(msg);
+
+    const newId = created.data.user.id;
+    const { error: upErr } = await admin.from("cleaners").update({ auth_user_id: newId }).eq("id", cleanerRowId);
+    if (upErr) {
+      await admin.auth.admin.deleteUser(newId).catch(() => {});
+      throw new Error(upErr.message);
+    }
+
+    return finishCleanerAuthLink(admin, cleanerRowId, newId);
   }
 
-  const newId = created.data.user.id;
-  const patch: { auth_user_id: string; email?: string } = { auth_user_id: newId };
-  if (!String(row.email ?? "").trim()) patch.email = createEmail;
-
-  const { error: upErr } = await admin.from("cleaners").update(patch).eq("id", cleanerRowId);
-  if (upErr) {
-    await admin.auth.admin.deleteUser(newId).catch(() => {});
-    throw new Error(upErr.message);
-  }
-
-  return finishCleanerAuthLink(admin, cleanerRowId, newId);
+  throw new Error(lastCreateError);
 }
 
 /**
