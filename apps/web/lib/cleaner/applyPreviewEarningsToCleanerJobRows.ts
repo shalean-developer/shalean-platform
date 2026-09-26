@@ -1,16 +1,26 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { resolveCleanerEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
+import { resolveCleanerDashboardEarningsCents } from "@/lib/cleaner/resolveCleanerEarnings";
 import { previewDisplayEarningsCentsForCleanerJob, persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 
 /** Default cap for sequential `previewDisplayEarningsCentsForCleanerJob` calls per HTTP request. */
 export const DEFAULT_CLEANER_JOB_EARNINGS_PREVIEW_CAP = 50;
 
-function resolvedEarningsCentsFromWireRow(rec: Record<string, unknown>): number | null {
-  return resolveCleanerEarningsCents({
-    cleaner_earnings_total_cents: rec.cleaner_earnings_total_cents,
-    payout_frozen_cents: rec.payout_frozen_cents,
-    display_earnings_cents: rec.display_earnings_cents ?? rec.displayEarningsCents,
-  });
+function resolvedEarningsCentsFromWireRow(
+  rec: Record<string, unknown>,
+  cleanerId: string,
+): number | null {
+  const cents = resolveCleanerDashboardEarningsCents(
+    {
+      viewer_payout_cents: rec.viewer_payout_cents,
+      earnings_summary: rec.earnings_summary,
+      cleaner_earnings_total_cents: rec.cleaner_earnings_total_cents,
+      payout_frozen_cents: rec.payout_frozen_cents,
+      display_earnings_cents: rec.display_earnings_cents ?? rec.displayEarningsCents,
+      is_team_job: rec.is_team_job === true,
+    },
+    cleanerId,
+  );
+  return cents > 0 ? cents : null;
 }
 
 /**
@@ -43,7 +53,7 @@ export async function applyPreviewEarningsToCleanerJobRows(
   const out: Record<string, unknown>[] = [];
 
   for (const j of params.rows) {
-    const resolved = resolvedEarningsCentsFromWireRow(j);
+    const resolved = resolvedEarningsCentsFromWireRow(j, cleanerId);
     if (isPositiveCents(resolved)) {
       out.push({
         ...j,
