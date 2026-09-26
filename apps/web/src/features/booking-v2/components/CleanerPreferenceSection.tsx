@@ -26,6 +26,15 @@ function availableCleanersUrl({ serviceSlug, date, time, durationMinutes, locati
   return `/api/booking-v2/available-cleaners?${params.toString()}`;
 }
 
+export function selectedCleanerIdsAreVisibleAndAvailable(
+  selectedIds: string[],
+  cleaners: AvailableCleanerV2[],
+): boolean {
+  if (selectedIds.length === 0) return true;
+  const availableIds = new Set(cleaners.filter((cleaner) => cleaner.isAvailable).map((cleaner) => cleaner.id));
+  return selectedIds.every((id) => availableIds.has(id));
+}
+
 export function prefetchAvailableCleaners(params: CleanerFetchParams): Promise<{
   cleaners?: AvailableCleanerV2[];
   error?: string;
@@ -129,6 +138,17 @@ export function CleanerPreferenceSection({
     durationMinutes,
     locationId,
   });
+
+  // Never let a persisted/localStorage cleaner id survive invisibly. If the current
+  // authoritative availability result does not contain every selected cleaner, clear the
+  // preference so checkout falls back to "Shalean chooses for me" instead of dispatching
+  // a cleaner the customer could not see or select in this booking.
+  useEffect(() => {
+    if (loading || error || selectedIds.length === 0) return;
+    if (!selectedCleanerIdsAreVisibleAndAvailable(selectedIds, cleaners)) {
+      onClearAll();
+    }
+  }, [cleaners, error, loading, onClearAll, selectedIds]);
 
   // After cleaners load, resync details if selectedIds exist but details are stale/missing.
   // This handles the case where the user had IDs saved in localStorage but details weren't stored.

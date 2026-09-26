@@ -264,6 +264,43 @@ export function resolvePreferredDispatchScheduleAtPayment(params: {
   return { dateYmd, timeHm };
 }
 
+export function resolvePaidBookingQuoteFinancialSplitCents(params: {
+  isRecurringPrepayment: boolean;
+  bookingVisitZar: number;
+  priceSnapshotSubtotalZar: number;
+  totalPaidCents: number;
+  persistedBaseAmountCents?: number | null;
+  persistedServiceFeeCents?: number | null;
+}): { baseAmountCents: number; serviceFeeCents: number } {
+  const totalPaidCents = Math.max(0, Math.round(Number(params.totalPaidCents) || 0));
+  if (params.isRecurringPrepayment) {
+    const baseAmountCents = Math.max(0, Math.round((Number(params.bookingVisitZar) || 0) * 100));
+    return {
+      baseAmountCents,
+      serviceFeeCents: Math.max(0, totalPaidCents - baseAmountCents),
+    };
+  }
+
+  const persistedBase = Number(params.persistedBaseAmountCents);
+  const persistedFee = Number(params.persistedServiceFeeCents);
+  const hasPersistedBase =
+    params.persistedBaseAmountCents != null && Number.isFinite(persistedBase) && persistedBase >= 0;
+  const hasPersistedFee =
+    params.persistedServiceFeeCents != null && Number.isFinite(persistedFee) && persistedFee >= 0;
+
+  // Booking V2 creates the pending row from the authoritative locked quote before Paystack.
+  // Preserve that financial split at payment finalization. The checkout price snapshot's
+  // subtotal is a legacy/base-service field and can omit property factors and quote discounts.
+  const baseAmountCents = hasPersistedBase
+    ? Math.round(persistedBase)
+    : Math.max(0, Math.round((Number(params.priceSnapshotSubtotalZar) || 0) * 100));
+  const serviceFeeCents = hasPersistedFee
+    ? Math.round(persistedFee)
+    : Math.max(0, totalPaidCents - baseAmountCents);
+
+  return { baseAmountCents, serviceFeeCents };
+}
+
 export async function upsertBookingFromPaystack(input: UpsertBookingInput): Promise<UpsertBookingFromPaystackResult> {
   const supabase = getSupabaseAdmin();
   if (!supabase) {
@@ -276,7 +313,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
 
   const existingSelect =
-    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode`;
+    `id, status, customer_email, ${ownershipColumn}, paystack_reference, is_recurring_generated, price_snapshot, selected_cleaner_id, billing_type, is_monthly_billing_booking, monthly_invoice_id, payment_status, location, date, time, service, service_slug, service_details, selected_extras, pricing_summary, booking_snapshot, rooms, bathrooms, extras, suburb, access_instructions, parking_instructions, gate_code, cleaner_mode, cleaner_count, assigned_team_id, booking_type, fulfillment_mode, base_amount_cents, service_fee_cents, extras_amount_cents`;
 
   const { data: existingByRef, error: selectErr } = await supabase
     .from("bookings")
@@ -681,13 +718,34 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
   const flat = buildSnapshotFlat(locked ?? undefined);
   const bookingSnapshotMerged = mergeSnapshotWithFlat(input.snapshot, flat);
 
-  const baseAmountCents = Math.max(0, Math.round((isRecurringPrepayment ? bookingVisitZar : priceSnapshot.subtotal_zar) * 100));
-  const extrasAmountCents = isRecurringPrepayment ? 0 : Math.max(0, Math.round(priceSnapshot.extras_total_zar * 100));
   const totalPaidCents = isRecurringPrepayment
     ? Math.max(0, Math.round(bookingVisitZar * 100))
     : Math.max(0, Math.round(input.amountCents));
-  const serviceFeeCents =
-    baseAmountCents != null ? Math.max(0, totalPaidCents - baseAmountCents) : 0;
+  const financialSplit = resolvePaidBookingQuoteFinancialSplitCents({
+    isRecurringPrepayment,
+    bookingVisitZar,
+    priceSnapshotSubtotalZar: priceSnapshot.subtotal_zar,
+    totalPaidCents,
+    persistedBaseAmountCents:
+      existing && typeof existing === "object"
+        ? (existing as { base_amount_cents?: number | null }).base_amount_cents
+        : null,
+    persistedServiceFeeCents:
+      existing && typeof existing === "object"
+        ? (existing as { service_fee_cents?: number | null }).service_fee_cents
+        : null,
+  });
+  const baseAmountCents = financialSplit.baseAmountCents;
+  const serviceFeeCents = financialSplit.serviceFeeCents;
+  const persistedExtrasAmountCents =
+    existing && typeof existing === "object"
+      ? (existing as { extras_amount_cents?: number | null }).extras_amount_cents
+      : null;
+  const extrasAmountCents = isRecurringPrepayment
+    ? 0
+    : persistedExtrasAmountCents != null && Number.isFinite(Number(persistedExtrasAmountCents))
+      ? Math.max(0, Math.round(Number(persistedExtrasAmountCents)))
+      : Math.max(0, Math.round(priceSnapshot.extras_total_zar * 100));
   const isTest =
     input.isTest === true ||
     process.env.NODE_ENV !== "production" ||
@@ -806,6 +864,9 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
     assigned_team_id?: string | null;
     booking_type?: string | null;
     selected_cleaner_id?: string | null;
+    base_amount_cents?: number | null;
+    service_fee_cents?: number | null;
+    extras_amount_cents?: number | null;
   };
   const pendingExisting = (existing ?? null) as PendingPersistedRow | null;
   const locationSource: BookingLocationSource = {
