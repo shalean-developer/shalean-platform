@@ -44,6 +44,7 @@ import { buildScheduleHintModel, latenessVsSchedule } from "@/lib/cleaner/cleane
 import { buildUnifiedJobScope } from "@/lib/cleaner/cleanerJobDetailUnifiedScope";
 import { deriveMobilePhase } from "@/lib/cleaner/cleanerMobileBookingMap";
 import { stripExtraTimeSuffixFromDisplayLabel } from "@/lib/cleaner/cleanerExtraDisplayLabel";
+import { cleanerBookedLineItemPresentation } from "@/lib/cleaner/cleanerBookedLineItemDisplay";
 import { formatZarFromCents } from "@/lib/cleaner/cleanerZarFormat";
 import {
   cleanerJobEarningFromCents,
@@ -330,6 +331,20 @@ export default function CleanerJobDetailPage() {
     if (!job) return null;
     return { ...job, ...optimisticPatch };
   }, [job, optimisticPatch]);
+
+  const cleanerBookedLineItems = useMemo(() => {
+    return (displayJob?.lineItems ?? []).flatMap((item, idx) => {
+      const presentation = cleanerBookedLineItemPresentation(item);
+      if (!presentation) return [];
+      return [
+        {
+          ...presentation,
+          quantity: item.quantity,
+          key: `${item.slug ?? item.name}-${idx}`,
+        },
+      ];
+    });
+  }, [displayJob]);
 
   /** Same as `displayJob` — updated during render so `loadJob` / flush always see merged state without extra effect deps. */
   latestJobRef.current = displayJob;
@@ -1377,17 +1392,17 @@ export default function CleanerJobDetailPage() {
                   </dl>
                 </div>
               ) : null}
-              {displayJob.lineItems && displayJob.lineItems.length > 0 ? (
+              {cleanerBookedLineItems.length > 0 ? (
                 <div className="mt-4 border-t border-border pt-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Booked line items</p>
                   <ul className="mt-1.5 space-y-1.5 text-sm text-foreground">
-                    {displayJob.lineItems.map((it, idx) => (
-                      <li key={`${it.slug ?? it.name}-${idx}`} className="flex justify-between gap-2">
+                    {cleanerBookedLineItems.map((it) => (
+                      <li key={it.key} className="flex justify-between gap-2">
                         <span className="min-w-0">
-                          {stripExtraTimeSuffixFromDisplayLabel(String(it.name ?? ""))}
+                          {it.label}
                           {it.quantity > 1 ? <span className="text-muted-foreground"> ×{it.quantity}</span> : null}
                         </span>
-                        <span className="shrink-0 text-xs font-medium uppercase text-muted-foreground">{it.item_type}</span>
+                        <span className="shrink-0 text-xs font-medium text-muted-foreground">{it.category}</span>
                       </li>
                     ))}
                   </ul>
