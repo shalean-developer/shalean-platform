@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   CLEANER_COMPLETION_MIN_ELAPSED_RATIO,
+  earlyFinishApprovalFromSnapshot,
   evaluateCleanerJobCompletionGate,
 } from "@/lib/cleaner/cleanerJobCompletionGate";
 import { formatCleanerJobElapsedLabel } from "@/lib/cleaner/cleanerJobElapsedTimer";
@@ -55,5 +56,37 @@ describe("cleanerJobCompletionGate (Phase 6)", () => {
 
   it("formatCleanerJobElapsedLabel renders on-site elapsed time", () => {
     expect(formatCleanerJobElapsedLabel(startedAt, Date.parse(startedAt) + 75 * 60_000)).toBe("1h 15m on site");
+  });
+});
+
+
+describe("earlyFinishApprovalFromSnapshot", () => {
+  it("accepts an approved admin marker written by the controlled early-finish flow", () => {
+    expect(
+      earlyFinishApprovalFromSnapshot({
+        early_finish_approval: {
+          request_id: "req-1",
+          source: "admin",
+          approved_at: "2026-09-26T21:04:33.715Z",
+        },
+      }),
+    ).toEqual({ approved: true, source: "admin" });
+  });
+
+  it("rejects missing approval timestamps or unsupported sources", () => {
+    expect(
+      earlyFinishApprovalFromSnapshot({
+        early_finish_approval: { source: "admin" },
+      }),
+    ).toEqual({ approved: false, source: "admin" });
+
+    expect(
+      earlyFinishApprovalFromSnapshot({
+        early_finish_approval: {
+          source: "cleaner",
+          approved_at: "2026-09-26T21:04:33.715Z",
+        },
+      }),
+    ).toEqual({ approved: false, source: null });
   });
 });
