@@ -393,6 +393,33 @@ The fix persists the visible default `"no"` for missing Yes/No form fields, vali
 
 B14-008 status: **FIX-IN-PR-595 / CI pending**.
 
+## Moving payment runtime — SHL-BK-000044
+
+Pricing-test booking `SHL-BK-000044` / `024b6725-23b3-4726-81e0-ce268eaa192d`:
+
+- service: Moving Cleaning / `move`,
+- move type: move-out,
+- property: townhouse,
+- 2 bedrooms / 2 bathrooms / 1 extra room,
+- furnished: no,
+- pets: no,
+- quoted and paid total: R1,463,
+- Paystack cash: R1,463,
+- no Cleaning Credit reservation,
+- payment status: success,
+- booking status: assigned,
+- dispatch status: assigned,
+- selected operational team: **Shalean Move Team 1**,
+- persisted team service type: `move_cleaning`,
+- no Deep team is attached,
+- roster: Test Cleaner A (lead) + Test Cleaner B (member),
+- payout owner / cleaner: Test Cleaner A,
+- team member payout rows: R300 + R300, both pending and unbatched.
+
+Moving payment + Move-team filtering + post-payment team promotion: **PASS**.
+
+B14-008 (default visible No not persisted) remains a separate UI defect fix in Draft PR #595; this booking succeeded after the field was explicitly interacted with and stored as `furnished=no`.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
