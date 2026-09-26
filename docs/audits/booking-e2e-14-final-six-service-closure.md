@@ -32,8 +32,8 @@ The gate closes only when every required six-service runtime row below is PASS a
 | Payment finalization | PASS-R0 / POSITIVE-PAYSTACK-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Customer dashboard | DB-OWNERSHIP-PASS / UI-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Admin dashboard / financial coherence | DB-PERSISTENCE-PASS / UI-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
-| Cleaner/team dashboard | BLOCKED-B14-002 | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
-| Assignment / accept / start / complete | BLOCKED-B14-002 | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
+| Cleaner/team dashboard | OFFER-PASS / ACCEPT-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
+| Assignment / accept / start / complete | OFFER-PASS / ACCEPT-START-COMPLETE-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Completion / payout eligibility coherence | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 
 ## Static/read-only audit — 14A
@@ -128,6 +128,22 @@ Static comparison confirms positive-Paystack finalization runs post-payment disp
 
 **Required closure:** converge R0 post-settlement behavior on the same idempotent post-payment assignment/dispatch boundary without inventing cash, re-running settlement, or duplicating referral/Cleaning Credit effects.
 
+## Regular R0 retest — 14B.1 verification
+
+Fresh pricing-test booking `92ea1421-df46-4718-86fc-2526aaf6bdca` / `SHL-BK-000042` on merged release `a05ca957c0f8cc8b9f8941c233936c28865af110` verifies the B14-002 fix:
+
+- `payment_status=success`, collected cash R0.
+- R0 payment transaction is settled and linked.
+- Cleaning Credit R680 settled exactly once; wallet retained R320.
+- Customer-selected cleaner persisted as `Test Cleaner A`.
+- Booking now moves to `dispatch_status=offered` rather than remaining `searching`.
+- Preferred dispatch offer `64b7f784-d953-43f3-b665-3c641f729fa8` exists and is pending.
+- Offer carries canonical `display_earnings_cents=30000` (R300).
+- Lifecycle jobs were created for reminder/review.
+- No cleaner earnings row yet, which is expected before accept/completion.
+
+This closes the original stranded-R0 finding. Remaining Regular runtime work is cleaner acceptance, start, completion, dashboard convergence and payout closeout.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
@@ -197,7 +213,7 @@ After completion verify:
 | ID | Severity | Service(s) | Surface | Finding | Status |
 |---|---|---|---|---|---|
 | B14-001 | Blocker | All six | Release automation | No automated six-service post-payment/dashboard/lifecycle runtime matrix; existing closure smoke is intentionally non-mutating. | OPEN |
-| B14-002 | Blocker | Regular observed; potentially all six R0 flows | R0 post-payment dispatch | Fully-covered Booking V2 settles payment/credit but does not run equivalent post-payment dispatch/assignment side effects; SHL-BK-000041 has selected cleaner but no offer/assignment/earnings path. | OPEN |
+| B14-002 | Blocker | Regular observed; generic R0 boundary | R0 post-payment dispatch | Root cause fixed by merged PR #587. Fresh R0 Regular SHL-BK-000042 created preferred dispatch offer with canonical R300 earnings snapshot and lifecycle jobs after zero-cash settlement. Cleaner accept/start/complete still pending runtime. | FIXED-RUNTIME-OFFER-VERIFIED |
 
 ## Final release decision
 
