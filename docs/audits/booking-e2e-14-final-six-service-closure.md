@@ -29,11 +29,11 @@ The gate closes only when every required six-service runtime row below is PASS a
 | Step 2 Schedule / cleaner or team | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Step 3 Review / edit round-trip | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Step 4 Payment entry | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
-| Payment finalization | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
-| Customer dashboard | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
-| Admin dashboard / financial coherence | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
-| Cleaner/team dashboard | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
-| Assignment / accept / start / complete | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
+| Payment finalization | PASS-R0 / POSITIVE-PAYSTACK-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
+| Customer dashboard | DB-OWNERSHIP-PASS / UI-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
+| Admin dashboard / financial coherence | DB-PERSISTENCE-PASS / UI-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
+| Cleaner/team dashboard | BLOCKED-B14-002 | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
+| Assignment / accept / start / complete | BLOCKED-B14-002 | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Completion / payout eligibility coherence | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 
 ## Static/read-only audit — 14A
@@ -81,6 +81,52 @@ Current focused tests cover:
 Current automated contracts cover customer visibility/canonical lifecycle, cleaner lifecycle state mapping/completion owner stamping, admin booking visibility, positive earnings completion gates, and Cleaning Credit settlement/release authority.
 
 These are shared lifecycle contracts; they are not yet a six-service runtime proof.
+
+## Regular runtime evidence — 14B-R1
+
+Booking `70212af9-8292-4e5d-ac3e-caca5d62286b` / `SHL-BK-000041` was created on pricing-test.
+
+Verified database state:
+
+- `service=regular-cleaning`, canonical `service_slug=standard`.
+- Customer ownership persisted to `customer_id=f358591d-3304-4c68-943e-a66300beec68` and matching customer email.
+- Authoritative gross quote = R440:
+  - base R250,
+  - bathroom R60,
+  - two extra rooms R60,
+  - ironing R40,
+  - service fee R30.
+- Cleaning Credit covered R440; payable and collected cash both R0.
+- Booking `payment_status=success`, `amount_paid_cents=0`, R0 payment transaction linked.
+- Payment ledger: `gateway=other`, `gateway_reference=r0:<bookingId>`, `amount_cents=0`, `settlement_status=settled`, `payment_channel=promo_credit_cover`.
+- Cleaning Credit reservation settled exactly once; wallet balance after = R0; one spend row.
+- Selected cleaner `10000000-0000-4000-8000-000000000006` exists, is active and available.
+
+However, after successful R0 settlement:
+
+- booking remains `pending_assignment` + `dispatch_status=searching`,
+- `assignment_type=user_selected`,
+- `cleaner_id=NULL`,
+- `selected_cleaner_id` is populated,
+- no `dispatch_offers` row exists,
+- no `booking_cleaners` row exists,
+- no `cleaner_earnings` row exists,
+- no assignment/start/completion timestamps exist.
+
+Static comparison confirms positive-Paystack finalization runs post-payment dispatch/assignment side effects in `upsertBookingFromPaystack`, while the R0 branch in Booking V2 confirm settles the booking then returns without invoking the equivalent dispatch boundary.
+
+### B14-002 — R0 settlement skips post-payment assignment/dispatch side effects
+
+**Severity:** Release-gate blocker  
+**Status:** OPEN  
+**Observed service:** Regular  
+**Potential scope:** Any fully-covered Booking V2 service using the R0 path
+
+**Runtime evidence:** `SHL-BK-000041` is payment-settled but has no dispatch offer/assignment/earnings path despite a valid selected cleaner.
+
+**Code evidence:** `trySettleFullyCoveredOrError` / the R0 confirm branch settles Cleaning Credit and the R0 payment ledger, then returns `requiresPayment=false`. The positive-Paystack path separately runs selected-cleaner dispatch, auto-assignment/team promotion, booking side effects and later lifecycle/earnings work in `upsertBookingFromPaystack`.
+
+**Required closure:** converge R0 post-settlement behavior on the same idempotent post-payment assignment/dispatch boundary without inventing cash, re-running settlement, or duplicating referral/Cleaning Credit effects.
 
 ## Existing automation gap
 
@@ -151,6 +197,7 @@ After completion verify:
 | ID | Severity | Service(s) | Surface | Finding | Status |
 |---|---|---|---|---|---|
 | B14-001 | Blocker | All six | Release automation | No automated six-service post-payment/dashboard/lifecycle runtime matrix; existing closure smoke is intentionally non-mutating. | OPEN |
+| B14-002 | Blocker | Regular observed; potentially all six R0 flows | R0 post-payment dispatch | Fully-covered Booking V2 settles payment/credit but does not run equivalent post-payment dispatch/assignment side effects; SHL-BK-000041 has selected cleaner but no offer/assignment/earnings path. | OPEN |
 
 ## Final release decision
 
