@@ -221,3 +221,54 @@ export async function markSmartDispatchFailed(params: {
 }): Promise<void> {
   await params.admin.from("bookings").update({ dispatch_status: "failed" }).eq("id", params.bookingId);
 }
+
+
+/**
+ * Post-payment promotion for a Booking V2 team that was already reserved during
+ * checkout. This is deliberately narrower than a fresh team assignment:
+ * capacity was claimed/reserved before payment and the roster already exists.
+ *
+ * Guarded invariants:
+ * - customer payment must already be successful,
+ * - booking must still be pending,
+ * - persisted team_id and assigned_team_id must match the selected team,
+ * - booking must already be a team job,
+ * - cleaner_id must still be empty,
+ * - payout_owner_cleaner_id must match the supplied team lead.
+ *
+ * A zero-row result is an idempotent/race no-op; callers should re-read if they
+ * need to distinguish "already promoted" from an unexpected state.
+ */
+export async function promotePaidReservedTeamBookingAssignment(params: {
+  admin: SupabaseClient;
+  bookingId: string;
+  teamId: string;
+  payoutOwnerCleanerId: string;
+  assignedAtIso: string;
+}): Promise<{
+  data: { id?: string } | null;
+  error: AssignmentBookingUpdateError | null;
+}> {
+  const { data, error } = await params.admin
+    .from("bookings")
+    .update({
+      status: "assigned",
+      dispatch_status: "assigned",
+      assigned_at: params.assignedAtIso,
+      cleaner_response_status: "pending",
+      cleaner_id: params.payoutOwnerCleanerId,
+      payout_owner_cleaner_id: params.payoutOwnerCleanerId,
+    })
+    .eq("id", params.bookingId)
+    .eq("payment_status", "success")
+    .eq("status", "pending")
+    .eq("team_id", params.teamId)
+    .eq("assigned_team_id", params.teamId)
+    .eq("is_team_job", true)
+    .eq("payout_owner_cleaner_id", params.payoutOwnerCleanerId)
+    .is("cleaner_id", null)
+    .select("id")
+    .maybeSingle();
+
+  return { data: data as { id?: string } | null, error };
+}
