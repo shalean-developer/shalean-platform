@@ -20,7 +20,10 @@ const SERVICE_DETAIL_FIELD_LABELS: Record<string, string> = {
   cleaningProducts: "Cleaning products at home",
   equipmentRequired: "Equipment delivery",
   specialInstructions: "Special instructions",
-  carpetRooms: "Carpet rooms",
+  carpetRooms: "Carpeted rooms",
+  rugCount: "Rugs",
+  carpetType: "Carpet type",
+  stains: "Visible stains",
   squareMeters: "Square meters",
   furnished: "Furnished",
   ovenType: "Oven type",
@@ -105,6 +108,11 @@ function formatServiceDetailValue(key: string, value: unknown): string | null {
     if (s === "studio") return "Studio";
   }
   if (key === "hasPets") return petAnswerLabel(s);
+  if (key === "stains") {
+    if (s === "yes") return "Yes";
+    if (s === "no") return "No";
+  }
+  if (key === "carpetType") return humanizeBookingToken(s);
   if (key === "cleaningProducts" || key === "furnished" || key === "laundryIncluded") {
     if (s === "yes") return "Yes";
     if (s === "no") return "No";
