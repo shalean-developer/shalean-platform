@@ -9,6 +9,7 @@ import { notifyCleanerAssignedBooking } from "@/lib/dispatch/notifyCleanerAssign
 import { startPreferredCleanerDispatchAfterPayment } from "@/lib/dispatch/preferredCleanerDispatch";
 import { assignBestCleaner } from "@/lib/marketplace-intelligence/assignBestCleaner";
 import { reportOperationalIssue } from "@/lib/logging/systemLog";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 type R0BookingRow = {
   id: string;
@@ -16,7 +17,6 @@ type R0BookingRow = {
   payment_status?: string | null;
   payment_completed_at?: string | null;
   amount_paid_cents?: number | string | null;
-  customer_id?: string | null;
   customer_email?: string | null;
   date?: string | null;
   time?: string | null;
@@ -73,6 +73,8 @@ export async function finalizeR0BookingPostPayment(
   const id = String(bookingId ?? "").trim();
   if (!id) return { ok: false, error: "missing_booking_id" };
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(admin);
+
   const { data, error } = await admin
     .from("bookings")
     .select(
@@ -82,7 +84,7 @@ export async function finalizeR0BookingPostPayment(
         "payment_status",
         "payment_completed_at",
         "amount_paid_cents",
-        "customer_id",
+        ownershipColumn,
         "customer_email",
         "date",
         "time",
@@ -114,7 +116,7 @@ export async function finalizeR0BookingPostPayment(
     return { ok: false, error: "booking_not_settled_r0" };
   }
 
-  const customerId = String(row.customer_id ?? "").trim() || null;
+  const customerId = String((row as Record<string, unknown>)[ownershipColumn] ?? "").trim() || null;
   const customerEmail = String(row.customer_email ?? "").trim();
   const paystackReference = String(row.paystack_reference ?? "").trim() || `r0:${id}`;
 
