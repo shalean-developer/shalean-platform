@@ -52,6 +52,7 @@ import { loadCustomerGrowthContext, persistCustomerSegmentRow } from "@/lib/grow
 import { logPostBookingGrowthDecision } from "@/lib/growth/postBookingGrowthHint";
 import { syncUserPrimaryCityFromBooking } from "@/lib/growth/syncPrimaryCity";
 import { createPendingCustomerReferral, processCustomerReferralAfterFirstPaidBooking } from "@/lib/referrals/server";
+import { settleCleaningCreditForBooking } from "@/lib/referrals/creditReservations";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import {
   checkoutPaidDispatchOfferCleanerId,
@@ -1419,6 +1420,16 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         bookingId: id,
         paystackReference: input.paystackReference,
       });
+    }
+
+    const creditSettlement = await settleCleaningCreditForBooking(supabase, id);
+    if (!creditSettlement.ok && creditSettlement.error !== "reservation_not_found") {
+      await reportOperationalIssue(
+        "error",
+        "upsertBookingFromPaystack",
+        `Cleaning Credit settlement failed after verified payment: ${creditSettlement.error}`,
+        { bookingId: id, paystackReference: input.paystackReference },
+      );
     }
 
     void syncUserPrimaryCityFromBooking(supabase, userIdForEffects, cityId);
