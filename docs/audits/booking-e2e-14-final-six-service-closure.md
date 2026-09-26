@@ -391,7 +391,7 @@ Root cause:
 B14-008 implementation: Draft PR #595 at `0bf9db1fe69db73d4138c4ef4ffb284675991cdc`.
 The fix persists the visible default `"no"` for missing Yes/No form fields, validates it immediately, clears stale required errors, and propagates explicit toggle changes through the progressive booking callback.
 
-B14-008 status: **PR #595 exact head `0bf9db1fe69db73d4138c4ef4ffb284675991cdc` — all CI checks PASS; merge not yet authorised**.
+B14-008 status: **PR #595 refreshed onto latest `integration/shalean-release@322fb5be2759793fb621bb350d10a984f651a0df`; new exact head `2b7b8016b5149f614e191c4aab1243bb69cb0c4d`; CI rerun pending**.
 
 ## Moving payment runtime — SHL-BK-000044
 
