@@ -375,6 +375,24 @@ Controlled pricing-test batch creation was executed with a guarded transaction s
 
 No transfer/release was executed.
 
+## Moving condition-stage form-state defect — B14-008
+
+Pricing-test Moving Cleaning Step 1 exposed a UI/state mismatch:
+- the Furnished/Empty toggle visibly rendered **No**,
+- the Pets field visibly rendered **No pets**,
+- but `Continue to Schedule` remained disabled.
+
+Root cause:
+- the generic Yes/No toggle visually coerced an undefined value to the unchecked **No** state,
+- but did not persist `"no"` into `serviceDetails`,
+- Moving condition validation correctly requires both `furnished` and `hasPets`,
+- therefore the UI looked complete while `serviceDetails.furnished` was still missing.
+
+B14-008 implementation: Draft PR #595 at `0bf9db1fe69db73d4138c4ef4ffb284675991cdc`.
+The fix persists the visible default `"no"` for missing Yes/No form fields, validates it immediately, clears stale required errors, and propagates explicit toggle changes through the progressive booking callback.
+
+B14-008 status: **FIX-IN-PR-595 / CI pending**.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
