@@ -207,6 +207,29 @@ Pricing-test release `0fd541e7721b64cedbf78f5a1a220f5d7ffd77b7` visually verifie
 
 Deep Step 2 team selection / Step 3 preservation: **PASS**.
 
+## Deep mixed-payment runtime — B14-005
+
+Pricing-test booking `SHL-BK-000043` / `f087dbf8-f019-4d36-89c3-05f06de048c6` verifies the customer payment portion of the Deep matrix:
+
+- Review total: R1,590.
+- Cleaning Credit settled exactly once: R320.
+- Paystack cash paid: R1,270.
+- Booking `payment_status=success`.
+- Selected Deep team persisted as Shalean Team 1.
+- Team roster persisted with Test Cleaner A as lead and Test Cleaner B as member.
+- `payout_owner_cleaner_id` correctly points to Test Cleaner A.
+
+Post-payment lifecycle defect:
+- booking remains `status=pending`,
+- `dispatch_status=searching`,
+- `assigned_at` is null,
+- `cleaner_response_status=pending`,
+despite `team_id`, `assigned_team_id`, `is_team_job=true`, payout owner, and roster already being present.
+
+Root-cause trace: Booking V2 confirm reserves the selected team and roster before payment. After Paystack success, `promoteV2TeamBookingAfterPayment` sees `is_team_job=true` and `team_id===assigned_team_id` and returns after roster sync without promoting the booking lifecycle to operational assigned state.
+
+B14-005 result: **OPEN / release-gate blocker**. Required closure: idempotently promote a paid pre-reserved team booking to assigned lifecycle state without re-claiming capacity, changing payment, or duplicating roster rows.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
