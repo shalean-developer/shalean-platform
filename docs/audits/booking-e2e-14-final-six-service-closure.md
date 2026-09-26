@@ -509,6 +509,28 @@ Required closure:
 - prove Moving team completion yields lead R270 + member R250,
 - repair SHL-BK-000044 in pricing-test before any batch creation.
 
+## Fresh Moving post-fix booking — SHL-BK-000045
+
+Pricing-test booking `SHL-BK-000045` / `c6c8499e-b939-40d8-a949-5e1860df4cc2` was created after release `322fb5be2759793fb621bb350d10a984f651a0df` and proves B14-009 on a new booking without repair:
+
+- service: Moving Cleaning / `move`,
+- move-out, house, furnished no, no pets,
+- extras: Garage cleaning + Balcony cleaning,
+- total paid: R1,616 via Paystack,
+- payment status: success,
+- no Cleaning Credit reservation,
+- status / dispatch: assigned / assigned,
+- correct operational team: Shalean Move Team 1 (`move_cleaning`),
+- roster: Test Cleaner A lead + Test Cleaner B member,
+- canonical earnings summary service type: `move`,
+- fixed service payout applied: true,
+- Cleaner A lead payout: R270,
+- Cleaner B member payout: R250,
+- team total cleaner obligation: R520,
+- member payout rows are pending and unbatched.
+
+Fresh-post-fix Moving payout classification: **PASS**.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
