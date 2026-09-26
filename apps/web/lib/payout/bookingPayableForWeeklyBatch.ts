@@ -26,6 +26,15 @@ export type BookingRowForWeeklyBatchEligibility = BookingRowForPayoutCap &
 
 export type BookingPayableForWeeklyBatchResult = { payable: true } | { payable: false; reason: string };
 
+export type BookingWeeklyPayoutBasisOverride = {
+  /**
+   * Alternative positive cleaner payout basis for rails whose money is not
+   * stored on bookings.cleaner_payout_cents (for example team member rows).
+   * Omitting this preserves the historical solo-booking gate exactly.
+   */
+  payoutBasisCents?: number | null;
+};
+
 function normLower(s: string | null | undefined): string {
   return String(s ?? "")
     .trim()
@@ -54,13 +63,20 @@ function prepaidCustomerPaymentSettledForWeeklyBatch(paymentStatus: string | nul
 export function bookingPayableForWeeklyBatch(
   row: BookingRowForWeeklyBatchEligibility,
   invoiceStatusById: Map<string, string>,
+  opts?: BookingWeeklyPayoutBasisOverride,
 ): BookingPayableForWeeklyBatchResult {
   if (normLower(row.status) !== "completed") {
     return { payable: false, reason: "not_completed" };
   }
 
-  const cp = Number(row.cleaner_payout_cents);
-  if (!Number.isFinite(cp) || cp <= 0) {
+  const bookingBasis = Number(row.cleaner_payout_cents);
+  const overrideBasis = Number(opts?.payoutBasisCents);
+  const effectivePayoutBasisCents =
+    Number.isFinite(overrideBasis) && overrideBasis > 0
+      ? overrideBasis
+      : bookingBasis;
+
+  if (!Number.isFinite(effectivePayoutBasisCents) || effectivePayoutBasisCents <= 0) {
     return { payable: false, reason: "missing_cleaner_payout_basis" };
   }
 

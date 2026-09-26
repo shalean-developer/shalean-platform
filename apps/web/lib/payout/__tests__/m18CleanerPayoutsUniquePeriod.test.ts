@@ -329,10 +329,12 @@ describe("M-18 generateWeeklyPayouts: 23505 unique-violation is handled idempote
     expect(db.tables.cleaner_payouts[0]!.total_amount_cents).toBe(25_000);
   });
 
-  it("links a team-only earning even when the booking belongs to another cleaner batch", async () => {
+  it("links a team-only earning when the canonical team booking keeps booking-level payout at zero", async () => {
     const db = new StubDb();
     seedSingleCleanerSinglePayableBooking(db);
     db.tables.bookings[0]!.cleaner_id = "lead-cleaner";
+    db.tables.bookings[0]!.cleaner_payout_cents = 0;
+    db.tables.bookings[0]!.cleaner_bonus_cents = 0;
     db.tables.bookings[0]!.payout_id = "lead-payout";
     db.tables.team_job_member_payouts = [{
       id: "team-line-1",
@@ -348,6 +350,7 @@ describe("M-18 generateWeeklyPayouts: 23505 unique-violation is handled idempote
 
     expect(result.payoutsCreated).toBe(1);
     expect(result.bookingsLinked).toBe(1);
+    expect(db.tables.bookings[0]!.cleaner_payout_cents).toBe(0);
     expect(db.tables.team_job_member_payouts[0]!.status).toBe("batched");
     expect(db.tables.team_job_member_payouts[0]!.cleaner_payout_id).toBe(db.tables.cleaner_payouts[0]!.id);
     expect(db.tables.cleaner_payouts[0]!.total_amount_cents).toBe(25_000);
