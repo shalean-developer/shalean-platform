@@ -298,6 +298,19 @@ Pricing-test booking `SHL-BK-000043` after release `0f3119b1c6cb67040129cb6d103d
 
 Deep team display and pre-completion lifecycle: **PASS**.
 
+Controlled early-finish UAT override:
+- early-finish request `04d572d6-5563-42a1-b33c-3b38d7bfa01a`,
+- status `admin_approved`,
+- source `admin`,
+- reason `work_completed_faster`,
+- quoted duration 525 minutes,
+- elapsed at request 5 minutes,
+- booking snapshot now carries `early_finish_approval`,
+- payment / roster / payout rows were not altered.
+
+This unlocks cleaner self-completion through the normal completion gate for the controlled pricing-test run.
+
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
