@@ -642,6 +642,22 @@ Office Cleaning is now closed for BOOKING-E2E-14 runtime coverage:
 
 Office Cleaning runtime closure: **PASS**.
 
+## Carpet runtime stage
+
+Opened against pricing-test release `153611249b4c7d503be8ce5162171823debafe7e`.
+
+Pre-audit contract:
+- Booking V2 slug: `carpet-cleaning`.
+- Canonical pricing key: `carpet`.
+- `propertyType`: informational.
+- `carpetRooms`: price + duration input.
+- `rugCount`: price + duration input.
+- `carpetType`: price input.
+- `stains`: price input.
+- Carpet belongs to the fixed-special payout catalog.
+
+Runtime matrix status: **OPEN — fresh Carpet booking required**.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
