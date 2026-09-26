@@ -620,7 +620,27 @@ Controlled early-finish completion completed successfully:
 
 Office Accept → En route → Start → Complete → earnings finalization: **PASS**.
 
-B14-010 fix: PR #597 merged and deployed to pricing-test at `153611249b4c7d503be8ce5162171823debafe7e`. Exact Plesk artifact workflow `36264876329` completed successfully and PLESK_AUTO_03 activated the same SHA. **Deployment PASS / final cleaner UI retest pending**.
+B14-010 fix: PR #597 merged and deployed to pricing-test at `153611249b4c7d503be8ce5162171823debafe7e`. Exact Plesk artifact workflow `36264876329` completed successfully and PLESK_AUTO_03 activated the same SHA. Final cleaner UI retest on completed Office booking `SHL-BK-000048` confirmed friendly labels `Office Cleaning` and `Bathrooms`, friendly category labels `Service` / `Bathroom`, and removal of technical backfill/scope/service-fee rows. **PASS**.
+
+## Office service closure
+
+Office Cleaning is now closed for BOOKING-E2E-14 runtime coverage:
+
+- Details flow: PASS.
+- Office size / bathroom scope: PASS.
+- Schedule / preferred cleaner flow: PASS.
+- Review / Paystack payment: PASS.
+- Preferred dispatch offer: PASS.
+- Cleaner offer earnings: R250 and matched backend.
+- Accept → En route → Start → Complete: PASS.
+- Controlled early-finish approval: PASS.
+- Completion timestamps and cleaner response finalization: PASS.
+- Solo payout / display / internal earnings: R250.
+- Exactly one pending cleaner earnings ledger row: R250.
+- No disbursement, payout batch, approval, frozen payout, or transfer created during UAT.
+- Cleaner-facing booked line items normalized to friendly copy after PR #597.
+
+Office Cleaning runtime closure: **PASS**.
 
 ## Existing automation gap
 
