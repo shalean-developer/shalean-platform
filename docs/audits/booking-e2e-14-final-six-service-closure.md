@@ -311,6 +311,40 @@ Controlled early-finish UAT override:
 This unlocks cleaner self-completion through the normal completion gate for the controlled pricing-test run.
 
 
+## Deep completion & weekly team payout gate — B14-007
+
+Pricing-test booking `SHL-BK-000043` completed successfully after the controlled early-finish approval:
+
+- booking `status=completed`,
+- cleaner response `completed`,
+- `completed_at` persisted,
+- payment remains `success`,
+- Cleaner A lead amount remains R270,
+- Cleaner B member amount remains R250,
+- canonical team total remains R520,
+- `team_job_member_payouts` contains exactly two pending rows (R270 + R250),
+- no duplicate cleaner ledger rows were created.
+
+Completion result: **PASS**.
+
+A new payout-batch blocker was found while verifying weekly payout eligibility:
+- `listTeamJobMemberWeeklyPayoutCandidates` correctly reads pending `team_job_member_payouts` rows,
+- but it reuses `bookingPayableForWeeklyBatch`,
+- that shared predicate rejects any booking whose booking-level `cleaner_payout_cents <= 0`,
+- canonical team bookings intentionally persist `cleaner_payout_cents=0` and hold the real money in `team_job_member_payouts`.
+
+Runtime proof on SHL-BK-000043:
+- completed prepaid booking,
+- `payment_status=success`,
+- not refunded,
+- not test,
+- R270 + R250 pending team-member payouts,
+- booking-level `cleaner_payout_cents=0`.
+
+Therefore the team-member weekly candidate path will currently reject this valid completed team booking with `missing_cleaner_payout_basis` before it can batch either member.
+
+B14-007 result: **OPEN / release-gate blocker**. Required closure: team-member weekly candidates must validate positive `team_job_member_payouts.payout_cents` as their payout basis while preserving the shared payment/refund/accrual gates. Do not invent or copy a booking-level solo payout for team jobs.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
