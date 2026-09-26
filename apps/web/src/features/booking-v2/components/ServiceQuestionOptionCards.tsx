@@ -57,18 +57,38 @@ const PROPERTY_TYPE_PRESENTATION: Record<
 function YesNoServiceQuestionField({
   question,
   compact,
+  onValueChange,
 }: {
   question: FormQuestion;
   compact?: boolean;
+  onValueChange?: (value: string) => void;
 }) {
   const {
     control,
+    setValue,
+    getValues,
+    clearErrors,
     formState: { errors },
   } = useFormContext<BookingV2FormData>();
   const fieldKey = `serviceDetails.${question.key}` as const;
   const fieldError = (errors.serviceDetails as Record<string, { message?: string }> | undefined)?.[
     question.key
   ]?.message;
+
+  useEffect(() => {
+    const current = getValues(fieldKey);
+    if (current !== undefined && current !== null && String(current).trim() !== "") return;
+
+    // The toggle visually renders an unchecked field as "No". Persist that same
+    // canonical value so progressive validation cannot see an unanswered field
+    // while the customer sees a selected No state.
+    setValue(fieldKey, "no", {
+      shouldDirty: false,
+      shouldTouch: false,
+      shouldValidate: true,
+    });
+    clearErrors(fieldKey);
+  }, [clearErrors, fieldKey, getValues, setValue]);
 
   return (
     <Controller
@@ -85,7 +105,11 @@ function YesNoServiceQuestionField({
           hint={question.hint}
           required={question.required}
           checked={coerceYesNoValue(field.value) === "yes"}
-          onCheckedChange={(next) => field.onChange(next ? "yes" : "no")}
+          onCheckedChange={(next) => {
+            const value = next ? "yes" : "no";
+            field.onChange(value);
+            onValueChange?.(value);
+          }}
           error={fieldError}
           bordered={!compact}
         />
@@ -182,7 +206,13 @@ export function ServiceQuestionOptionCards({
   }
 
   if (isYesNoQuestion(question)) {
-    return <YesNoServiceQuestionField question={question} compact={compact} />;
+    return (
+      <YesNoServiceQuestionField
+        question={question}
+        compact={compact}
+        onValueChange={onValueChange}
+      />
+    );
   }
 
   if (question.key === "propertyType") {
