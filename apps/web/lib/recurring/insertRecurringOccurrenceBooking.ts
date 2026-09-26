@@ -25,7 +25,6 @@ import { fetchLastAssignedCleanerForRecurringPlan } from "@/lib/recurring/fetchL
 import { applyRecurringOccurrenceRosterContinuity } from "@/lib/recurring/applyRecurringOccurrenceRosterContinuity";
 import { syncPreferredCleanerRoster } from "@/lib/booking/persistPreferredCleaners";
 import { resolveRecurringPreferredCleanerIds } from "@/lib/recurring/parsePreferredCleanerIdFromBody";
-import { scheduleBookingPaymentRecoveryJobs } from "@/lib/booking/bookingPaymentRecoveryJobs";
 import { buildExactSourceLineItems } from "@/lib/booking/buildBookingLineItems";
 import { persistBookingLineItems } from "@/lib/booking/persistBookingLineItems";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -344,15 +343,6 @@ export async function insertRecurringOccurrenceBooking(
       }],
     }),
   );
-
-  if (!prepaidAllocation) {
-    void scheduleBookingPaymentRecoveryJobs(admin, {
-      bookingId: id,
-      customerEmail: email,
-      createdAt: new Date().toISOString(),
-      paymentLinkExpiresAt: null,
-    });
-  }
 
   if (preferredCleanerIds.length >= 2) {
     const continuity = await applyRecurringOccurrenceRosterContinuity(admin, {
