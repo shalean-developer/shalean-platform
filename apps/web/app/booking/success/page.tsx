@@ -816,10 +816,13 @@ function SuccessContent() {
     typeof (statusData as StatusPayload & { cleaningCreditZar?: number }).cleaningCreditZar === "number"
       ? (statusData as StatusPayload & { cleaningCreditZar?: number }).cleaningCreditZar ?? null
       : null;
-  const totalPaidZar = resolveCustomerTotalPaidZar({
-    amountCents: statusData.amountCents,
-    snapshotTotalZar: typeof snap?.total_zar === "number" ? snap.total_zar : null,
-  });
+  const totalPaidZar =
+    statusData.coveredSettlement === true
+      ? 0
+      : resolveCustomerTotalPaidZar({
+          amountCents: statusData.amountCents,
+          snapshotTotalZar: typeof snap?.total_zar === "number" ? snap.total_zar : null,
+        });
 
   if (!persistedBookingId) {
     return (
