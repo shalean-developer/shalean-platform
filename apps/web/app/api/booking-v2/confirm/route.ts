@@ -62,6 +62,7 @@ import type { AppliedPromotionDiscount } from "@/lib/promotions/types";
 import { resolveCheckoutPromoEligibilityExtras } from "@/lib/promotions/resolveCheckoutPromoEligibilityExtras";
 import { bookingUncollectedCashColumns } from "@/lib/booking/bookingPaidAmountColumns";
 import { settleFullyCoveredBooking } from "@/lib/payments/settleFullyCoveredBooking";
+import { finalizeR0BookingPostPayment } from "@/lib/booking/finalizeR0BookingPostPayment";
 import { createFreshPaymentPreparationToken } from "@/lib/booking/freshPaymentPreparationToken";
 import { buildRecurringPrepaymentQuote } from "@/lib/recurring/recurringPrepayment";
 import { upsertPendingRecurringPrepayment } from "@/lib/recurring/recurringPrepaymentLedger";
@@ -109,6 +110,17 @@ async function trySettleFullyCoveredOrError(
       ),
     };
   }
+
+  // R0 is a real paid-booking boundary. Converge the operational work that a
+  // positive Paystack finalization would normally start without inventing cash
+  // or re-running credit/referral settlement.
+  const postPayment = await finalizeR0BookingPostPayment(supabase, bookingId);
+  if (!postPayment.ok) {
+    // Payment is already authoritatively settled. Preserve customer success and
+    // leave a loud operational signal instead of rolling back a valid R0 payment.
+    console.error("[booking-v2/confirm] R0 post-payment operations failed:", postPayment.error);
+  }
+
   return { requiresPayment: false };
 }
 
