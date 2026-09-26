@@ -1215,6 +1215,7 @@ async function persistCleanerPayoutIfUnsetCore(
     total_paid_cents: r.total_paid_cents,
     amount_paid_cents: r.amount_paid_cents,
     total_paid_zar: r.total_paid_zar,
+    base_amount_cents: r.base_amount_cents,
   };
   const finDiag = bookingFinancialDiagnostics(capRow);
   const capOk = assertHybridPayoutWithinFinancialCap({
