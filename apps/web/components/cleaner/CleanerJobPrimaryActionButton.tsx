@@ -11,6 +11,7 @@ import { postCleanerLifecycleWithRetry } from "@/lib/cleaner/cleanerLifecyclePos
 import { getCleanerAuthHeaders } from "@/lib/cleaner/cleanerClientHeaders";
 import { isCleanerJobEarningPositive, JOB_EARNING_BLOCK_COMPLETION_MESSAGE, resolveCleanerJobEarning } from "@/lib/cleaner/cleanerJobEarning";
 import { cleanerLifecycleFailureMessage } from "@/lib/cleaner/cleanerLifecycleClientErrors";
+import { earlyFinishApprovalFromSnapshot } from "@/lib/cleaner/cleanerJobCompletionGate";
 
 type CleanerJobPrimaryActionButtonProps = {
   bookingId: string;
@@ -96,7 +97,8 @@ export function CleanerJobPrimaryActionButton({
   const cta = useMemo(() => deriveCleanerJobPrimaryCta({ row: effectiveRow, nowMs, mapsQuery }), [effectiveRow, nowMs, mapsQuery]);
   const jobEarningPositive = isCleanerJobEarningPositive(resolveCleanerJobEarning(effectiveRow));
   const remainingMinutes = cta.kind === "lifecycle" && cta.action === "complete" ? completionRemainingMinutes(effectiveRow, nowMs) : null;
-  const completionTimingBlocked = remainingMinutes != null && remainingMinutes > 0;
+  const earlyFinishApproval = earlyFinishApprovalFromSnapshot(effectiveRow.booking_snapshot);
+  const completionTimingBlocked = remainingMinutes != null && remainingMinutes > 0 && !earlyFinishApproval.approved;
 
   const runLifecycle = useCallback(async (action: "accept" | "en_route" | "start" | "complete", mapsHref?: string) => {
     if (guardRef.current) return;
