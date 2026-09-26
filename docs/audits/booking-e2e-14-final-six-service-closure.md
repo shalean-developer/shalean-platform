@@ -343,7 +343,22 @@ Runtime proof on SHL-BK-000043:
 
 Therefore the team-member weekly candidate path will currently reject this valid completed team booking with `missing_cleaner_payout_basis` before it can batch either member.
 
-B14-007 result: **OPEN / release-gate blocker**. Required closure: team-member weekly candidates must validate positive `team_job_member_payouts.payout_cents` as their payout basis while preserving the shared payment/refund/accrual gates. Do not invent or copy a booking-level solo payout for team jobs.
+B14-007 implementation: PR #594 merged and deployed to pricing-test at `aafc979bf67aa40a7a59d217298fa1e12135af87`.
+
+Read-only runtime eligibility verification on `SHL-BK-000043` after deployment:
+- completed booking,
+- `is_test=false`,
+- prepaid rail,
+- `payment_status=success`,
+- no refund signals,
+- no monthly invoice dependency,
+- Cleaner A team-member row: R270, pending, unbatched,
+- Cleaner B team-member row: R250, pending, unbatched,
+- booking-level `cleaner_payout_cents` remains intentionally R0.
+
+The deployed candidate code now passes each member row's positive `payout_cents` into the shared weekly gate as `payoutBasisCents`, while preserving the existing payment/refund/accrual checks.
+
+B14-007 candidate eligibility result: **PASS / actual staging batch creation still pending controlled financial-mutation gate**.
 
 ## Existing automation gap
 
