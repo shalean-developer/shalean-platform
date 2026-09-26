@@ -99,6 +99,14 @@ export function TeamAvailabilitySection({
   const { data: teamAvail, loading, error } = useTeamAvailability(date, serviceSlug);
 
   useEffect(() => {
+    if (!teamAvail || !selectedTeamId) return;
+    const selectedStillAvailable = teamAvail.teams.some(
+      (team) => team.id === selectedTeamId && team.available,
+    );
+    if (!selectedStillAvailable) onSelect("", "");
+  }, [onSelect, selectedTeamId, teamAvail]);
+
+  useEffect(() => {
     if (!autoAssign || !teamAvail?.available) return;
     const selectedStillAvailable = teamAvail.teams.some(
       (team) => team.id === selectedTeamId && team.available,
@@ -112,9 +120,13 @@ export function TeamAvailabilitySection({
     <div className="space-y-4">
       {/* Heading */}
       <div className="text-center">
-        <h3 className="text-sm font-semibold text-slate-900">Team availability</h3>
+        <h3 className="text-sm font-semibold text-slate-900">
+          {autoAssign ? "Team availability" : "Choose your cleaning team"}
+        </h3>
         <p className="mt-1 text-xs text-slate-500">
-          We&apos;ll assign an available cleaning team for this service.
+          {autoAssign
+            ? "We'll assign an available cleaning team for this service."
+            : "Select one available team for this service."}
         </p>
       </div>
 
