@@ -485,7 +485,23 @@ Completion exposed a payout-classification defect:
 Root cause:
 `normalizeBookingServiceIdForPayout` recognizes labels containing `"move"`, but the persisted booking service label is `"moving-cleaning"`; `"moving"` does not contain the token `"move"`. The booking snapshot also lacks `locked.service`, so normalization falls through to `standard`.
 
-B14-009 implementation: Draft PR #596 at `b5eba20b8146d21c3ec1f7e71347bcfd743cc034`. The fix routes persisted Moving service labels through the canonical service parser and adds Moving fixed-team payout regression coverage. **FIX-IN-PR-596 / CI pending**.
+B14-009 implementation: PR #596 merged and deployed to pricing-test at `322fb5be2759793fb621bb350d10a984f651a0df`.
+
+Guarded pricing-test repair of `SHL-BK-000044` after deployment:
+- service type corrected from `standard` to `move`,
+- fixed-service flag corrected to `true`,
+- payout type corrected to `team_fixed_with_leader`,
+- booking display/payout earnings corrected from R300 to R250 generic team display,
+- internal team obligation corrected from R600 to R520,
+- Cleaner A lead row corrected from R300 to R270,
+- Cleaner B member row corrected from R300 to R250,
+- company revenue corrected to R943,
+- booking-level cleaner payout remains R0 by team-job design,
+- member rows remain `pending` and unbatched,
+- no payout batch exists for this booking,
+- no payout transfer exists.
+
+B14-009 result: **PASS / runtime repaired before batching**.
 
 Required closure:
 - normalize `moving-cleaning` / `moving cleaning` to canonical `move`,
