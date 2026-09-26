@@ -70,6 +70,25 @@ describe("bookingV2CustomerDisplay", () => {
     ]);
   });
 
+
+  it("formats Carpet details with customer-facing labels and values", () => {
+    expect(
+      cleanDetailLinesFromServiceDetails({
+        stains: "no",
+        rugCount: "1",
+        carpetType: "thick_pile",
+        carpetRooms: "3",
+        propertyType: "apartment",
+      }),
+    ).toEqual([
+      { label: "Visible stains", value: "No" },
+      { label: "Rugs", value: "1" },
+      { label: "Carpet type", value: "Thick Pile" },
+      { label: "Carpeted rooms", value: "3" },
+      { label: "Property type", value: "Apartment / flat" },
+    ]);
+  });
+
   it("builds price lines from pricing_summary", () => {
     expect(
       priceLinesFromPricingSummary({
