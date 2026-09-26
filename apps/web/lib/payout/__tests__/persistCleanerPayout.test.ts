@@ -683,6 +683,63 @@ describe("persistCleanerPayoutIfUnset", { timeout: 60_000 }, () => {
     expect(booking.payout_type).toBe("fixed_special");
   });
 
+  it("persists solo payout for settled R0 prepaid booking using authoritative visit subtotal cap", async () => {
+    const admin = new MockSupabaseClient({
+      bookings: [
+        {
+          id: "b-r0-credit",
+          cleaner_id: "c1",
+          team_id: null,
+          is_team_job: false,
+          status: "in_progress",
+          payment_status: "success",
+          billing_type: "prepaid",
+          is_monthly_billing_booking: false,
+          monthly_invoice_id: null,
+          date: "2026-10-09",
+          time: "08:30:00",
+          total_paid_zar: 0,
+          total_paid_cents: 0,
+          amount_paid_cents: 0,
+          base_amount_cents: 65_000,
+          service_fee_cents: 3_000,
+          service: "Regular Cleaning",
+          booking_snapshot: { serviceSlug: "regular-cleaning" },
+          price_snapshot: {
+            server_computed_total: 680,
+            cleaning_credit_zar: 680,
+            pay_total_zar: 0,
+          },
+          cleaner_payout_cents: null,
+          cleaner_bonus_cents: 0,
+          company_revenue_cents: null,
+          display_earnings_cents: null,
+        },
+      ],
+      cleaners: [{ id: "c1", joined_at: "2026-03-01T00:00:00.000Z", created_at: "2026-03-01T00:00:00.000Z" }],
+      service_earning_caps: [{ service_id: "standard", cap_cents: 30_000, is_active: true }],
+    });
+    mockState.admin = admin;
+
+    const { persistCleanerPayoutIfUnset } = await import("@/lib/payout/persistCleanerPayout");
+    const result = await persistCleanerPayoutIfUnset({
+      admin: admin as unknown as never,
+      bookingId: "b-r0-credit",
+      cleanerId: "c1",
+      forceDisplayRecompute: true,
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.skipped).toBe(false);
+
+    const booking = admin.tables.bookings[0]!;
+    expect(booking.cleaner_payout_cents).toBe(30_000);
+    expect(booking.display_earnings_cents).toBe(30_000);
+    expect(booking.total_paid_cents).toBe(0);
+    expect(booking.amount_paid_cents).toBe(0);
+    expect(booking.total_paid_zar).toBe(0);
+  });
+
   it("persists solo payout for recurring_invoice when amount_paid_cents is 0 but zar quotes line value", async () => {
     const admin = new MockSupabaseClient({
       bookings: [
