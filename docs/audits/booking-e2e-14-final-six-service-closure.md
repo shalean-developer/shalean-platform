@@ -391,7 +391,7 @@ Root cause:
 B14-008 implementation: Draft PR #595 at `0bf9db1fe69db73d4138c4ef4ffb284675991cdc`.
 The fix persists the visible default `"no"` for missing Yes/No form fields, validates it immediately, clears stale required errors, and propagates explicit toggle changes through the progressive booking callback.
 
-B14-008 implementation: PR #595 merged and deployed to pricing-test at `4832b977754f345554ec1438ec81d15b9ad25287`. Exact Plesk artifact workflow `36261756254` completed successfully and PLESK_AUTO_03 activated the same SHA. **Deployment PASS / final UI retest pending**.
+B14-008 implementation: PR #595 merged and deployed to pricing-test at `4832b977754f345554ec1438ec81d15b9ad25287`. Exact Plesk artifact workflow `36261756254` completed successfully and PLESK_AUTO_03 activated the same SHA. Final pricing-test UI retest confirmed Moving condition defaults `furnished=no` + `hasPets=no` now enable Continue to Schedule without requiring a toggle round-trip. **PASS**.
 
 ## Moving payment runtime — SHL-BK-000044
 
@@ -554,6 +554,27 @@ Pricing-test booking `SHL-BK-000046` / `b4499fc0-de2b-4e03-a8b5-75bc13d16771` br
 - team payout rows pending and unbatched.
 
 Fresh Moving move-in + furnished + extras variant: **PASS**.
+
+## Moving service closure
+
+Moving Cleaning is now closed for BOOKING-E2E-14 runtime coverage:
+
+- Step 1 progressive Details flow: PASS.
+- Default No-state condition form persistence: PASS.
+- Move-in and move-out variants: PASS.
+- Furnished and empty variants: PASS.
+- Optional extras pricing: PASS.
+- Schedule / Move-team filtering: PASS.
+- Review / payment: PASS.
+- Paystack positive-cash settlement: PASS.
+- Customer → team assignment: PASS.
+- Cleaner visibility: PASS.
+- Accept → En route → Start → Complete: PASS.
+- Canonical Moving payout classification: PASS.
+- Team lead/member fixed payout model: R270 / R250.
+- No payout batch or transfer was created for the fresh post-fix validation bookings.
+
+Moving Cleaning runtime closure: **PASS**.
 
 ## Existing automation gap
 
