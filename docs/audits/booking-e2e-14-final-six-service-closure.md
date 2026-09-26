@@ -358,7 +358,22 @@ Read-only runtime eligibility verification on `SHL-BK-000043` after deployment:
 
 The deployed candidate code now passes each member row's positive `payout_cents` into the shared weekly gate as `payoutBasisCents`, while preserving the existing payment/refund/accrual checks.
 
-B14-007 candidate eligibility result: **PASS / actual staging batch creation still pending controlled financial-mutation gate**.
+B14-007 runtime batch result: **PASS**.
+
+Controlled pricing-test batch creation was executed with a guarded transaction scoped only to `SHL-BK-000043` and its two existing team-member payout rows:
+- Cleaner A batch `0882910b-3973-44a1-bfd8-0e29d79881aa`: R270, pending.
+- Cleaner B batch `50c3b93d-3c4b-486c-b56c-9c7b03c2ae3c`: R250, pending.
+- each member row changed exactly once from `pending` to `batched` and links to the matching cleaner batch,
+- exactly one active September batch exists per cleaner,
+- no payout run is linked,
+- no approval timestamp,
+- no paid timestamp,
+- no payment reference,
+- `payout_transfers` count for both batches is 0,
+- booking payment remains successful and unchanged,
+- booking-level `cleaner_payout_cents` remains R0 and `payout_id` remains null.
+
+No transfer/release was executed.
 
 ## Existing automation gap
 
