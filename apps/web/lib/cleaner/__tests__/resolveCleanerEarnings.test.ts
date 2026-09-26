@@ -112,6 +112,74 @@ describe("resolveCleanerDashboardEarningsCents", () => {
     ).toBe(50_000);
   });
 
+  it("uses viewer-specific team lead earnings before the generic booking display lock", () => {
+    expect(
+      resolveCleanerDashboardEarningsCents(
+        {
+          is_team_job: true,
+          earnings_summary: {
+            model_version: "v3",
+            per_cleaner_earnings: [
+              {
+                cleaner_id: "lead",
+                role: "lead",
+                base_earning_cents: 27_000,
+                bonus_cents: 0,
+                deduction_cents: 0,
+                total_cents: 27_000,
+              },
+              {
+                cleaner_id: "member",
+                role: "member",
+                base_earning_cents: 25_000,
+                bonus_cents: 0,
+                deduction_cents: 0,
+                total_cents: 25_000,
+              },
+            ],
+          },
+          display_earnings_cents: 25_000,
+          cleaner_earnings_total_cents: 52_000,
+        },
+        "lead",
+      ),
+    ).toBe(27_000);
+  });
+
+  it("uses viewer-specific team member earnings before the team-wide total", () => {
+    expect(
+      resolveCleanerDashboardEarningsCents(
+        {
+          is_team_job: true,
+          earnings_summary: {
+            model_version: "v3",
+            per_cleaner_earnings: [
+              {
+                cleaner_id: "lead",
+                role: "lead",
+                base_earning_cents: 27_000,
+                bonus_cents: 0,
+                deduction_cents: 0,
+                total_cents: 27_000,
+              },
+              {
+                cleaner_id: "member",
+                role: "member",
+                base_earning_cents: 25_000,
+                bonus_cents: 0,
+                deduction_cents: 0,
+                total_cents: 25_000,
+              },
+            ],
+          },
+          display_earnings_cents: 25_000,
+          cleaner_earnings_total_cents: 52_000,
+        },
+        "member",
+      ),
+    ).toBe(25_000);
+  });
+
   it("uses the policy-locked display amount when the cleaner is missing from the summary", () => {
     expect(
       resolveCleanerDashboardEarningsCents(
