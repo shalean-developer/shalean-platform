@@ -33,7 +33,7 @@ The gate closes only when every required six-service runtime row below is PASS a
 | Customer dashboard | DB-OWNERSHIP-PASS / UI-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Admin dashboard / financial coherence | DB-PERSISTENCE-PASS / UI-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Cleaner/team dashboard | OFFER-PASS / ACCEPT-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
-| Assignment / accept / start / complete | OFFER-PASS / ACCEPT-START-COMPLETE-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
+| Assignment / accept / start / complete | ACCEPT-ENROUTE-START-PASS / COMPLETE-PENDING | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 | Completion / payout eligibility coherence | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME | PENDING-RUNTIME |
 
 ## Static/read-only audit — 14A
@@ -143,6 +143,22 @@ Fresh pricing-test booking `92ea1421-df46-4718-86fc-2526aaf6bdca` / `SHL-BK-0000
 - No cleaner earnings row yet, which is expected before accept/completion.
 
 This closes the original stranded-R0 finding. Remaining Regular runtime work is cleaner acceptance, start, completion, dashboard convergence and payout closeout.
+
+## Regular cleaner lifecycle — 14B.2
+
+Pricing-test booking `SHL-BK-000042` / `92ea1421-df46-4718-86fc-2526aaf6bdca` has progressed through the selected-cleaner lifecycle:
+
+- Preferred offer accepted; booking `dispatch_status=assigned`.
+- `cleaner_id` now matches the original `selected_cleaner_id`.
+- Booking `accepted_at` persisted.
+- Cleaner marked en route; `en_route_at` persisted.
+- Cleaner started the job; `status=in_progress`, `cleaner_response_status=started`, `started_at` persisted.
+- Preferred offer remains `status=accepted` with canonical R300 earnings snapshot.
+- Cleaner earnings ledger row is not created yet, which remains expected until completion/finalization.
+- Cleaner completion is currently blocked by the canonical 90% on-site duration gate: persisted duration 366 minutes → required minimum 329.4 minutes, rounded to 330 minutes.
+
+Regular assignment / accept / en-route / start: **PASS**. Completion / payout: **PENDING**.
+
 
 ## Existing automation gap
 
