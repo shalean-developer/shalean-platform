@@ -244,6 +244,22 @@ Runtime repair of SHL-BK-000043 replayed the merged guarded promotion conditions
 
 B14-005 assignment promotion result: **PASS**. Cleaner lifecycle and final team earnings/payout remain to be exercised.
 
+## Deep team lead earnings display — B14-006
+
+Pricing-test cleaner UI for `SHL-BK-000043` exposes a per-cleaner display mismatch after successful team promotion:
+
+- Test Cleaner A is the persisted team lead and payout owner.
+- Canonical `earnings_summary` records:
+  - lead (Cleaner A): R270,
+  - member (Cleaner B): R250,
+  - total team cleaner earnings: R520.
+- Booking-level `display_earnings_cents` is R250 (the generic per-member display lock).
+- Cleaner A's Jobs card currently renders R250, so the lead sees the member amount instead of the canonical R270.
+
+Root-cause trace: `resolveCleanerDashboardEarningsCents` checks the booking-level locked display amount before consulting `earnings_summary.per_cleaner_earnings`. For team jobs this masks the cleaner-specific lead uplift. The resolver needs team-aware precedence: viewer/member payout → per-cleaner summary → booking-level generic display; solo jobs should preserve existing policy-lock precedence.
+
+B14-006 result: **OPEN / cleaner-facing payout display blocker**.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
