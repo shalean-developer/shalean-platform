@@ -260,6 +260,28 @@ Root-cause trace: `resolveCleanerDashboardEarningsCents` checks the booking-leve
 
 B14-006 result: **OPEN / cleaner-facing payout display blocker**.
 
+## Legacy Deep UAT residue observed on Cleaner A
+
+The Cleaner A detail screenshot for the overdue 24 Sep job is **not** SHL-BK-000043. It is legacy pricing-test booking `SHL-BK-000025` / `c111653c-36b9-4bee-95c2-1f6bf011ad39`.
+
+Read-only verification:
+- service: Deep Cleaning,
+- paid successfully: R1,590,
+- booking date/time: 24 Sep 2026 10:00,
+- booking still `status=pending`, `dispatch_status=searching`, `assigned_at=null`,
+- team persisted as **Dev Move Team Alpha** even though the service is Deep Cleaning,
+- Cleaner A is the team lead / payout owner,
+- booking-level stored display earnings are null,
+- the detail page dynamically previews **R270** for Cleaner A.
+
+This row predates the BOOKING-E2E-14 fixes and is historical UAT residue from both earlier defects:
+1. pre-PR #591 Deep/Move shared team pool allowed a Move team on a Deep booking;
+2. pre-PR #592 paid pre-reserved team lifecycle did not promote the row to assigned.
+
+It should be cleaned from pricing-test so it no longer dominates Cleaner A's "Next job", but it is **not evidence that the newly deployed code still creates the defect**.
+
+The R270 shown on this detail page also strengthens B14-006: the detail surface can resolve Cleaner A's lead-specific R270, while the Jobs list for current SHL-BK-000043 showed the generic R250 booking display lock.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
