@@ -19,6 +19,7 @@ export type CleanerDashboardEarningsWireRow = {
   payout_frozen_cents?: unknown;
   display_earnings_cents?: unknown;
   earnings_summary?: unknown;
+  is_team_job?: boolean | null;
 };
 
 /** Tight wire for “today” expandable list (dashboard + client). */
@@ -50,6 +51,7 @@ function wireRowEarningsCents(row: CleanerDashboardEarningsWireRow, cleanerId: s
       cleaner_earnings_total_cents: row.cleaner_earnings_total_cents,
       payout_frozen_cents: row.payout_frozen_cents,
       display_earnings_cents: optionalCentsFromDb(row.display_earnings_cents),
+      is_team_job: row.is_team_job === true,
     },
     cleanerId,
   );
