@@ -64,13 +64,20 @@ export async function generateCleanerRecoveryLinkForAdmin(
     .maybeSingle();
   if (refetchErr) throw new Error(refetchErr.message);
 
-  const email = String(linked?.email ?? "").trim().toLowerCase();
-  if (!email) {
-    throw new Error("Cleaner has no email on file; add an email before generating a recovery link.");
-  }
-
   if (!linked?.auth_user_id) {
     throw new Error("Could not link cleaner to Supabase Auth.");
+  }
+
+  const authUser = await admin.auth.admin.getUserById(String(linked.auth_user_id));
+  if (authUser.error || !authUser.data.user) {
+    throw new Error(authUser.error?.message ?? "Linked Supabase Auth account was not found.");
+  }
+
+  const email =
+    String(authUser.data.user.email ?? "").trim().toLowerCase() ||
+    String(linked?.email ?? "").trim().toLowerCase();
+  if (!email) {
+    throw new Error("Cleaner has no Auth email; repair the cleaner Auth link before generating a recovery link.");
   }
 
   const { data, error } = await admin.auth.admin.generateLink({
