@@ -258,7 +258,7 @@ Pricing-test cleaner UI for `SHL-BK-000043` exposes a per-cleaner display mismat
 
 Root-cause trace: `resolveCleanerDashboardEarningsCents` checks the booking-level locked display amount before consulting `earnings_summary.per_cleaner_earnings`. For team jobs this masks the cleaner-specific lead uplift. The resolver needs team-aware precedence: viewer/member payout → per-cleaner summary → booking-level generic display; solo jobs should preserve existing policy-lock precedence.
 
-B14-006 implementation: Draft PR #593 (`BOOKING-E2E-14B.6: show viewer-specific team earnings`) at `91eb97e14e70e3e9afee30a7f48318215222847a`. The fix batches viewer `team_job_member_payouts`, preserves `earnings_summary` on cleaner list/dashboard wires, and uses team-aware per-cleaner precedence while leaving solo display-lock precedence unchanged. **FIX-IN-PR-593 / CI pending**.
+B14-006 implementation: PR #593 merged and deployed to pricing-test at `0f3119b1c6cb67040129cb6d103d6ab91a5cdcec`. Runtime verification on Cleaner A now shows R270 consistently on Home/Next Job and job detail, while canonical team member payouts remain lead R270 / member R250. **PASS**.
 
 ## Legacy Deep UAT residue observed on Cleaner A
 
@@ -281,6 +281,22 @@ This row predates the BOOKING-E2E-14 fixes and is historical UAT residue from bo
 It was cleaned from pricing-test with a guarded terminal cancellation: `status=cancelled`, `cancelled_by=system`. Payment evidence was preserved unchanged at R1,590; no payout rows, cleaner earnings rows, or Cleaning Credit reservation existed. It no longer belongs in Cleaner A's open/upcoming workload. This is **not evidence that the newly deployed code still creates the defect**.
 
 The R270 shown on this detail page also strengthens B14-006: the detail surface can resolve Cleaner A's lead-specific R270, while the Jobs list for current SHL-BK-000043 showed the generic R250 booking display lock.
+
+## Deep lifecycle runtime after B14-006
+
+Pricing-test booking `SHL-BK-000043` after release `0f3119b1c6cb67040129cb6d103d6ab91a5cdcec`:
+
+- Cleaner A Home / Next Job: R270.
+- Cleaner A job detail: R270.
+- Canonical team member payout rows: lead R270, member R250.
+- Accept: PASS.
+- En route: PASS.
+- Start: PASS.
+- Current lifecycle: `status=in_progress`, `cleaner_response_status=started`.
+- `accepted_at`, `en_route_at`, and `started_at` are persisted.
+- Completion is blocked only by the expected on-site duration gate (473 minutes remaining at the captured test moment).
+
+Deep team display and pre-completion lifecycle: **PASS**.
 
 ## Existing automation gap
 
