@@ -13,7 +13,10 @@ import {
   TEAM_CAPACITY_CONSUMING_STATUSES,
   TEAM_MIN_ROSTER_MEMBERS,
 } from "@/lib/dispatch/teamJobsPerDay";
-import { isDispatchTeamPoolServiceType } from "@/lib/dispatch/teamServiceTypeDb";
+import {
+  isDispatchTeamPoolServiceType,
+  teamServiceTypeMatchesBookingV2Slug,
+} from "@/lib/dispatch/teamServiceTypeDb";
 
 export type DispatchTeamAvailabilityRow = {
   id: string;
@@ -86,9 +89,13 @@ export async function loadDispatchTeamsForBooking(
     .limit(250);
   if (tErr) return { teams: [], platformAtCapacity: false, error: tErr.message };
 
-  const teamRows = (teamsRaw ?? []).filter((row) =>
-    isDispatchTeamPoolServiceType(String((row as { service_type?: string }).service_type ?? "")),
-  );
+  const teamRows = (teamsRaw ?? []).filter((row) => {
+    const serviceType = String((row as { service_type?: string }).service_type ?? "");
+    return (
+      isDispatchTeamPoolServiceType(serviceType) &&
+      teamServiceTypeMatchesBookingV2Slug(serviceType, opts.serviceSlug)
+    );
+  });
   const teamIds = teamRows.map((t) => String((t as { id?: string }).id ?? "").trim()).filter(Boolean);
   if (teamIds.length === 0) {
     return { teams: [], platformAtCapacity: false, error: null };
