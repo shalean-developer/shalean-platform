@@ -246,7 +246,7 @@ After completion verify:
 |---|---|---|---|---|---|
 | B14-001 | Blocker | All six | Release automation | No automated six-service post-payment/dashboard/lifecycle runtime matrix; existing closure smoke is intentionally non-mutating. | OPEN |
 | B14-002 | Blocker | Regular observed; generic R0 boundary | R0 post-payment dispatch | Root cause fixed by merged PR #587. Fresh R0 Regular SHL-BK-000042 created preferred dispatch offer with canonical R300 earnings snapshot and lifecycle jobs after zero-cash settlement. Cleaner accept/start/complete still pending runtime. | FIXED-RUNTIME-OFFER-VERIFIED |
-| B14-003 | Blocker | Regular R0 observed; likely discounted/credit-covered prepaid scope | Cleaner completion / payout cap | Fully settled R0 prepaid booking has economic service value R680 and canonical cleaner payout R300, but payout cap derives only collected cash and resolves to R0. Completion is blocked with `payout_exceeds_financial_cap`. | OPEN |
+| B14-003 | Blocker | Regular R0 observed; settled discounted/credit-covered prepaid scope | Cleaner completion / payout cap | Fully settled R0 prepaid booking has economic service value R680 and canonical cleaner payout R300, but payout cap derived only collected cash and resolved to R0. Draft PR #589 changes settled prepaid cap to greater of collected cash or persisted visit subtotal while keeping unpaid prepaid cash-only. Pricing-test read-only preflight: target cap becomes R650 and 0 existing payout rows violate the proposed constraint. | FIX-IN-PR-589 |
 
 ## Final release decision
 
