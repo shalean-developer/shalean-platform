@@ -391,7 +391,7 @@ Root cause:
 B14-008 implementation: Draft PR #595 at `0bf9db1fe69db73d4138c4ef4ffb284675991cdc`.
 The fix persists the visible default `"no"` for missing Yes/No form fields, validates it immediately, clears stale required errors, and propagates explicit toggle changes through the progressive booking callback.
 
-B14-008 status: **FIX-IN-PR-595 / CI pending**.
+B14-008 status: **PR #595 exact head `0bf9db1fe69db73d4138c4ef4ffb284675991cdc` — all CI checks PASS; merge not yet authorised**.
 
 ## Moving payment runtime — SHL-BK-000044
 
@@ -419,6 +419,22 @@ Pricing-test booking `SHL-BK-000044` / `024b6725-23b3-4726-81e0-ce268eaa192d`:
 Moving payment + Move-team filtering + post-payment team promotion: **PASS**.
 
 B14-008 (default visible No not persisted) remains a separate UI defect fix in Draft PR #595; this booking succeeded after the field was explicitly interacted with and stored as `furnished=no`.
+
+## Moving cleaner visibility runtime
+
+Pricing-test booking `SHL-BK-000044` is visible to Test Cleaner A on both Home and Job Detail:
+
+- service label: Moving Cleaning,
+- schedule: 4 Oct 2026 at 08:30,
+- team roster: 2 cleaners — Test Cleaner B shown as peer,
+- Move details preserved: move_out / furnished no / townhouse / no pets,
+- Cleaner A expected earning: R300 on Home and Job Detail,
+- booking state remains `assigned`,
+- `cleaner_response_status=pending`,
+- payout owner / cleaner is Test Cleaner A,
+- team payout rows remain R300 + R300, pending and unbatched.
+
+Moving cleaner visibility + earnings display: **PASS**.
 
 ## Existing automation gap
 
