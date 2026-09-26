@@ -464,6 +464,35 @@ This unlocks normal cleaner self-completion for the controlled pricing-test Movi
 
 Moving pre-completion lifecycle: **PASS**.
 
+## Moving completion earnings normalization — B14-009
+
+Pricing-test booking `SHL-BK-000044` completed successfully:
+- booking `status=completed`,
+- cleaner response `completed`,
+- `completed_at` persisted,
+- payment remains successful at R1,463,
+- no payout transfer exists.
+
+Operational completion: **PASS**.
+
+Completion exposed a payout-classification defect:
+- Moving Cleaning is a canonical fixed-special service (`move`),
+- canonical fixed-team rule should produce lead R270 + member R250,
+- but SHL-BK-000044 recomputed as `service_type=standard`,
+- `fixed_service_payout_applied=false`,
+- Cleaner A R300 + Cleaner B R300.
+
+Root cause:
+`normalizeBookingServiceIdForPayout` recognizes labels containing `"move"`, but the persisted booking service label is `"moving-cleaning"`; `"moving"` does not contain the token `"move"`. The booking snapshot also lacks `locked.service`, so normalization falls through to `standard`.
+
+B14-009 status: **OPEN / payout-integrity release blocker**.
+
+Required closure:
+- normalize `moving-cleaning` / `moving cleaning` to canonical `move`,
+- add regression coverage for the exact persisted label,
+- prove Moving team completion yields lead R270 + member R250,
+- repair SHL-BK-000044 in pricing-test before any batch creation.
+
 ## Existing automation gap
 
 ### B14-001 — Six-service post-payment lifecycle matrix is not automated
