@@ -284,7 +284,7 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     expect(response?.status()).toBeLessThan(400);
     await expect(page).toHaveURL(/\/book\/deep-cleaning\?step=schedule/);
     await expect(page.getByRole("heading", { name: "Book your deep clean" })).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Team availability" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Choose your cleaning team" })).toBeVisible();
 
     const chosenDate = await chooseFutureCalendarDate(page, 16);
     expect(chosenDate).toMatch(/^\d{4}-\d{2}-16$/);
@@ -292,12 +292,22 @@ test.describe("RD-P05D — Booking V2 Step 2 schedule smoke", () => {
     await expect(page.getByText("Confirming which times are free in your area…")).toHaveCount(0);
     await page.locator("#booking-time").click();
     await page.getByRole("button", { name: "9:00 AM", exact: true }).click();
+
+    await expect(page.getByRole("button", { name: /RD Team Alpha/ })).toBeVisible();
+    await expect(page.getByRole("button", { name: /RD Team Beta/ })).toBeVisible();
+    await expectDraft(page, {
+      date: chosenDate,
+      time: "09:00",
+      assignedTeamId: "",
+    });
+
+    await page.getByRole("button", { name: /RD Team Alpha/ }).click();
     await expectDraft(page, {
       date: chosenDate,
       time: "09:00",
       assignedTeamId: "team-alpha",
     });
-    await expect(page.getByText("Cleaning team available", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Selected")).toBeVisible();
 
     expect(forbiddenMutations, "Team-mode smoke must never submit a booking or payment mutation").toEqual([]);
   });

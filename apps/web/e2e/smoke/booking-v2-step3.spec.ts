@@ -91,6 +91,7 @@ type StoredDraft = Record<string, unknown> & {
   assignedTeamId?: string;
   assignedTeamName?: string;
   pricingSummary?: { total?: number; estimated_total?: number };
+  quoteLock?: { quoteSignature?: string };
 };
 
 function reviewDraft(serviceSlug: string, cleanerMode: CleanerMode): Record<string, unknown> {
@@ -276,17 +277,25 @@ async function installNonMutatingApiSandbox(page: Page): Promise<string[]> {
 }
 
 async function expectReviewPrice(page: Page) {
-  const total = await expect
+  // The pricing hook first renders an optimistic client total, then replaces it
+  // with the mocked authoritative server quote. In the full closure suite,
+  // localStorage can briefly be one render ahead of the visible review card.
+  // Wait for the authoritative quote lock, then assert the UI and persisted
+  // draft agree on that exact settled review price.
+  await expect
     .poll(async () => {
       const draft = await readDraft(page);
-      return Number(draft.pricingSummary?.estimated_total ?? draft.pricingSummary?.total ?? 0);
+      return {
+        quoteSignature: draft.quoteLock?.quoteSignature ?? null,
+        amount: Number(draft.pricingSummary?.estimated_total ?? draft.pricingSummary?.total ?? 0),
+      };
     }, { timeout: 7_500 })
-    .toBeGreaterThan(0);
-  void total;
+    .toEqual({ quoteSignature: "e2e-authoritative", amount: 500 });
 
-  const draft = await readDraft(page);
-  const amount = Number(draft.pricingSummary?.estimated_total ?? draft.pricingSummary?.total ?? 0);
-  await expect(page.getByRole("heading", { name: "Price breakdown", exact: true }).locator("xpath=../..").getByText(`R${amount.toLocaleString("en-ZA")}`, { exact: true }).first()).toBeVisible();
+  const priceCard = page
+    .getByRole("heading", { name: "Price breakdown", exact: true })
+    .locator("xpath=../..");
+  await expect(priceCard.getByText("R500", { exact: true }).first()).toBeVisible();
 }
 
 async function expectReviewSectionNumbers(page: Page, titles: string[]) {

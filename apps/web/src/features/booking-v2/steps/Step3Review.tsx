@@ -675,7 +675,6 @@ function CleanerEditPanel() {
             setValue("assignedTeamId", id);
             setValue("assignedTeamName", name);
           }}
-          autoAssign
         />
       ) : (
         <>

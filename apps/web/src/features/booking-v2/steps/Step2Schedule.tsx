@@ -958,7 +958,6 @@ export function Step2Schedule() {
                 shouldDirty: true,
               });
             }}
-            autoAssign
           />
           <FieldError message={errors.assignedTeamId?.message} />
         </section>

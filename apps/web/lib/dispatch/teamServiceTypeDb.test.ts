@@ -3,6 +3,7 @@ import {
   isDispatchTeamPoolServiceType,
   normalizeTeamServiceTypeFromDb,
   teamServiceTypeDatabaseValues,
+  teamServiceTypeMatchesBookingV2Slug,
 } from "@/lib/dispatch/teamServiceTypeDb";
 
 describe("teamServiceTypeDb", () => {
@@ -26,5 +27,14 @@ describe("teamServiceTypeDb", () => {
     expect(isDispatchTeamPoolServiceType("deep_cleaning")).toBe(true);
     expect(isDispatchTeamPoolServiceType("move_cleaning")).toBe(true);
     expect(isDispatchTeamPoolServiceType("standard")).toBe(false);
+  });
+
+  it("matches team rows to the requested Booking V2 service", () => {
+    expect(teamServiceTypeMatchesBookingV2Slug("deep_cleaning", "deep-cleaning")).toBe(true);
+    expect(teamServiceTypeMatchesBookingV2Slug("deep", "deep-cleaning")).toBe(true);
+    expect(teamServiceTypeMatchesBookingV2Slug("move_cleaning", "deep-cleaning")).toBe(false);
+    expect(teamServiceTypeMatchesBookingV2Slug("move", "moving-cleaning")).toBe(true);
+    expect(teamServiceTypeMatchesBookingV2Slug("deep_cleaning", "moving-cleaning")).toBe(false);
+    expect(teamServiceTypeMatchesBookingV2Slug("standard", "deep-cleaning")).toBe(false);
   });
 });

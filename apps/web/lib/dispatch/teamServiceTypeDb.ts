@@ -38,3 +38,16 @@ export function isDispatchTeamPoolServiceType(raw: string | null | undefined): b
   const n = normalizeTeamServiceTypeFromDb(raw);
   return n === "deep_cleaning" || n === "move_cleaning";
 }
+
+
+/** True when a persisted team belongs to the requested Booking V2 team service. */
+export function teamServiceTypeMatchesBookingV2Slug(
+  raw: string | null | undefined,
+  serviceSlug: string | null | undefined,
+): boolean {
+  const normalizedTeam = normalizeTeamServiceTypeFromDb(raw);
+  const normalizedService = String(serviceSlug ?? "").trim().toLowerCase();
+  if (normalizedService === "deep-cleaning") return normalizedTeam === "deep_cleaning";
+  if (normalizedService === "moving-cleaning") return normalizedTeam === "move_cleaning";
+  return false;
+}

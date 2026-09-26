@@ -90,7 +90,7 @@ export function BookingV2SummaryPanel({ collapsed: defaultCollapsed = false }: {
     : null;
   const hasAddress = values.address.length >= 5;
   const hasDate = /^\d{4}-\d{2}-\d{2}$/.test(values.date);
-  const hasCleaner = values.cleanerMode === "team" || values.cleanerCount > 0;
+  const hasCleaner = values.cleanerMode === "team" ? Boolean(values.assignedTeamId?.trim()) : values.cleanerCount > 0;
   const hasPriceBreakdown = pricing.lineItems.length > 0;
   const edit = (step: BookingStep) => () => goToStep(step);
   const editDetail = (section: BookingDetailsStage) => () => {
