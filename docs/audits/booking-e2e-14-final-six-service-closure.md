@@ -485,7 +485,7 @@ Completion exposed a payout-classification defect:
 Root cause:
 `normalizeBookingServiceIdForPayout` recognizes labels containing `"move"`, but the persisted booking service label is `"moving-cleaning"`; `"moving"` does not contain the token `"move"`. The booking snapshot also lacks `locked.service`, so normalization falls through to `standard`.
 
-B14-009 status: **OPEN / payout-integrity release blocker**.
+B14-009 implementation: Draft PR #596 at `b5eba20b8146d21c3ec1f7e71347bcfd743cc034`. The fix routes persisted Moving service labels through the canonical service parser and adds Moving fixed-team payout regression coverage. **FIX-IN-PR-596 / CI pending**.
 
 Required closure:
 - normalize `moving-cleaning` / `moving cleaning` to canonical `move`,
