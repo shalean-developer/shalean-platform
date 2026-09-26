@@ -26,6 +26,14 @@ describe("normalizeBookingServiceIdForPayout", () => {
     expect(normalizeBookingServiceIdForPayout(null, "Deep clean today")).toBe("deep");
     expect(normalizeBookingServiceIdForPayout(null, "Quick clean")).toBe("standard");
   });
+
+  it("normalizes Booking V2 Moving labels through the catalog parser", () => {
+    expect(normalizeBookingServiceIdForPayout(null, "moving-cleaning")).toBe("move");
+    expect(normalizeBookingServiceIdForPayout(null, "moving_cleaning")).toBe("move");
+    expect(normalizeBookingServiceIdForPayout(null, "Moving Cleaning")).toBe("move");
+  });
+
+
 });
 
 describe("isFixedPayoutSpecial", () => {
@@ -168,6 +176,41 @@ describe("resolveCanonicalCleanerPayout", () => {
     const memberRow = r.earningsSummary?.per_cleaner_earnings.find((x) => x.cleaner_id === member);
     expect(leadRow?.base_earning_cents).toBe(TEAM_LEADER_FIXED_PAYOUT_CENTS);
     expect(memberRow?.base_earning_cents).toBe(TEAM_MEMBER_FIXED_PAYOUT_CENTS);
+  });
+
+  it("fixed team Moving: leader R270, member R250", () => {
+    const leader = "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee";
+    const member = "ffffffff-ffff-4fff-8fff-ffffffffffff";
+    const serviceId = normalizeBookingServiceIdForPayout(null, "moving-cleaning");
+
+    const r = resolveCanonicalCleanerPayout({
+      serviceId,
+      bookingValueCents: 120_000,
+      customerTotalCents: 146_300,
+      isTeamJob: true,
+      teamLeaderId: leader,
+      participantCleanerIds: [leader, member],
+      rosterRoles: [
+        { cleaner_id: leader, role: "lead" },
+        { cleaner_id: member, role: "member" },
+      ],
+      bookingAppointmentIsoUtc: "2026-10-04T08:30:00.000Z",
+      cleanerJoinedAtIso: null,
+      computedAtIso: base.computedAtIso,
+    });
+
+    expect(r.fixedServiceOverride).toBe(true);
+    expect(r.payoutType).toBe("team_fixed_with_leader");
+    expect(r.earningsSummary?.service_type).toBe("move");
+
+    const leadRow = r.earningsSummary?.per_cleaner_earnings.find((x) => x.cleaner_id === leader);
+    const memberRow = r.earningsSummary?.per_cleaner_earnings.find((x) => x.cleaner_id === member);
+
+    expect(leadRow?.total_cents).toBe(TEAM_LEADER_FIXED_PAYOUT_CENTS);
+    expect(memberRow?.total_cents).toBe(TEAM_MEMBER_FIXED_PAYOUT_CENTS);
+    expect(r.earningsSummary?.total_cleaner_earnings_cents).toBe(
+      TEAM_LEADER_FIXED_PAYOUT_CENTS + TEAM_MEMBER_FIXED_PAYOUT_CENTS,
+    );
   });
 
   it("standard team: same percentage earning for every member", () => {
