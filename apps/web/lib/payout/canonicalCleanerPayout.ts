@@ -219,9 +219,12 @@ export function normalizeBookingServiceIdForPayout(
       if (parsed) return parsed;
     }
   }
+  const parsedLabel = parseBookingServiceId(serviceLabel);
+  if (parsedLabel) return parsedLabel;
+
   const s = String(serviceLabel ?? "").toLowerCase();
   if (s.includes("deep")) return "deep";
-  if (s.includes("move")) return "move";
+  if (s.includes("move") || s.includes("moving")) return "move";
   if (s.includes("airbnb")) return "airbnb";
   if (s.includes("carpet")) return "carpet";
   return "standard";
