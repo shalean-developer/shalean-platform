@@ -39,7 +39,7 @@ export type CleanerJobCompletionGateRow = BookingDurationRowLike & {
   booking_snapshot?: unknown | null;
 };
 
-function earlyFinishApprovalFromSnapshot(snapshot: unknown): { approved: boolean; source: string | null } {
+export function earlyFinishApprovalFromSnapshot(snapshot: unknown): { approved: boolean; source: string | null } {
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return { approved: false, source: null };
   const marker = (snapshot as Record<string, unknown>).early_finish_approval;
   if (!marker || typeof marker !== "object" || Array.isArray(marker)) return { approved: false, source: null };
