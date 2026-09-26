@@ -52,8 +52,39 @@ export async function applyPreviewEarningsToCleanerJobRows(
   let used = 0;
   const out: Record<string, unknown>[] = [];
 
+  const teamBookingIds = [
+    ...new Set(
+      params.rows
+        .filter((row) => row.is_team_job === true)
+        .map((row) => String(row.id ?? "").trim())
+        .filter(Boolean),
+    ),
+  ];
+  const viewerTeamPayoutByBooking = new Map<string, number>();
+  if (teamBookingIds.length > 0) {
+    const { data: viewerRows, error: viewerRowsError } = await admin
+      .from("team_job_member_payouts")
+      .select("booking_id, payout_cents")
+      .eq("cleaner_id", cleanerId)
+      .in("booking_id", teamBookingIds);
+    if (!viewerRowsError) {
+      for (const raw of viewerRows ?? []) {
+        const bid = String((raw as { booking_id?: string | null }).booking_id ?? "").trim();
+        const cents = Number((raw as { payout_cents?: number | null }).payout_cents);
+        if (bid && Number.isFinite(cents) && cents >= 0) {
+          viewerTeamPayoutByBooking.set(bid, Math.round(cents));
+        }
+      }
+    }
+  }
+
   for (const j of params.rows) {
-    const resolved = resolvedEarningsCentsFromWireRow(j, cleanerId);
+    const id = String(j.id ?? "").trim();
+    const viewerPayoutCents = id ? viewerTeamPayoutByBooking.get(id) : undefined;
+    const resolved = resolvedEarningsCentsFromWireRow(
+      viewerPayoutCents == null ? j : { ...j, viewer_payout_cents: viewerPayoutCents },
+      cleanerId,
+    );
     if (isPositiveCents(resolved)) {
       out.push({
         ...j,
@@ -81,7 +112,6 @@ export async function applyPreviewEarningsToCleanerJobRows(
       continue;
     }
 
-    const id = String(j.id ?? "").trim();
     if (!id) {
       out.push({ ...clearedZero, earnings_basis_pending: true });
       continue;
