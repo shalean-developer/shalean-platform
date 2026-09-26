@@ -32,7 +32,7 @@ export async function ensureBookingLineItemsForEarningsIfMissing(
 
   const { data: row, error: rErr } = await admin
     .from("bookings")
-    .select("id, service, rooms, bathrooms, extras, total_paid_zar, amount_paid_cents, booking_snapshot, is_team_job")
+    .select("id, service, rooms, bathrooms, extras, total_paid_zar, amount_paid_cents, base_amount_cents, service_fee_cents, booking_snapshot, is_team_job")
     .eq("id", bid)
     .maybeSingle();
   if (rErr || !row) return { ok: false, error: rErr?.message ?? "Booking not found" };
