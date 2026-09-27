@@ -46,7 +46,8 @@ export async function updateObservedPendingPaymentBooking(params: {
 }): Promise<{ data: PaymentFinalizationPersistedBookingRow | null; error: DbError | null }> {
   const { supabase, row, observed, ownershipColumn } = params;
   if (
-    !observed.id || observed.status !== "pending_payment" ||
+    !observed.id ||
+    !["pending_payment", "payment_expired"].includes(observed.status) ||
     [observed.customerEmail, observed.customerAuthId, observed.paystackReference]
       .some((value) => value !== null && typeof value !== "string")
   ) {
