@@ -30,7 +30,7 @@ export const CLEANING_SERVICES_CAPE_TOWN_HUB_FAQS = [
     idSlug: "supplies",
     question: "Do cleaners bring their own supplies?",
     answer:
-      "Yes. Teams arrive with the products and equipment needed for the booked checklist. Add notes at checkout if you prefer specific products or have sensitivities.",
+      "It depends on the service. Deep and Move In / Out Cleaning include Shalean-provided cleaning supplies. For Regular home cleaning and Airbnb Cleaning, customers provide the usual products and equipment unless a separate supplies option or charge is selected or agreed. Office and specialist services follow the booking scope.",
   },
   {
     idSlug: "duration",
