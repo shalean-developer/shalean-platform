@@ -61,7 +61,8 @@ const HTTP_JOBS = [
   ["referral-campaigns", "0 7 1 * *", "/api/cron/referral-campaigns"],
   ["payout-integrity-daily", "15 4 * * *", "/api/cron/payout-integrity-daily"],
   ["repair-monthly-payment-state-drift", "30 4 * * *", "/api/cron/repair-monthly-payment-state-drift"],
-  ["gsc-sync", "15 5 * * *", "/api/cron/gsc-sync"],
+  // SITE-E2E-07: provider-dependent SEO jobs are intentionally omitted while
+  // production lacks verified GSC / SERP provider configuration.
   ["customer-retention", "30 7 * * *", "/api/cron/customer-retention"],
   ["extend-cleaner-availability", "30 2 * * *", "/api/cron/extend-cleaner-availability"],
   ["charge-monthly-invoices", "55 21 * * *", "/api/cron/charge-monthly-invoices"],
