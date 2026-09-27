@@ -115,6 +115,7 @@ type JobState = {
   skipped_reason: string | null;
 
   processed_at: string | null;
+  scheduled_for?: string | null;
 
 };
 
@@ -549,6 +550,9 @@ describe("processLifecycleJob enterprise scenarios", () => {
     expect(mock.getJob().status).toBe("pending");
 
     expect(mock.getJob().skipped_reason).toBeNull();
+
+    expect(mock.getJob().scheduled_for).toBeTruthy();
+    expect(Date.parse(String(mock.getJob().scheduled_for))).toBeGreaterThan(Date.now());
 
     expect(mocks.logSystemEvent).toHaveBeenCalledWith(
 
