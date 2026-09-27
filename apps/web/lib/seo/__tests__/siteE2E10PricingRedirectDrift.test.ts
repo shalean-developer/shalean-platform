@@ -36,7 +36,7 @@ describe("SITE-E2E-10 pricing redirect and internal-link convergence", () => {
 
   it("keeps next.config /pricing redirect aligned and avoids the methodology blog target", () => {
     const config = readFileSync(join(process.cwd(), "next.config.ts"), "utf8");
-    const pricingBlock = config.match(/source:\s*"\\\/pricing"[\\s\\S]{0,180}?permanent:\s*true/);
+    const pricingBlock = config.match(/source:\s*"\\/pricing"[\s\S]{0,180}?permanent:\s*true/);
     expect(pricingBlock?.[0]).toContain('destination: "/cleaning-prices-cape-town"');
     expect(pricingBlock?.[0]).not.toContain("/blog/how-much-does-cleaning-cost-cape-town-2026");
   });
