@@ -2,7 +2,7 @@
 export const SERVICES_HUB_FAQS = [
   {
     q: "How much does a cleaner cost?",
-    a: "Your cleaning price depends on the service and property details you choose. Use the booking flow to see the current calculated total before you confirm; any optional add-ons you select are included in that total.",
+    a: "Current base prices start from R250 for Regular Cleaning and Airbnb Cleaning, R300 for Office Cleaning, R500 for Carpet Cleaning, and R1,200 for Deep Cleaning or Move In / Out Cleaning. Your exact total can change with property details, extras, frequency, and other booking inputs, so use the booking flow for the live price before checkout.",
   },
   {
     q: "Do cleaners bring supplies?",
