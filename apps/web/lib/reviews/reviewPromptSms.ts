@@ -112,6 +112,10 @@ export async function enqueueReviewSmsPromptQueue(
   supabase: SupabaseClient,
   bookingId: string,
 ): Promise<void> {
+  // SMS is intentionally disabled in the current communication policy. Do not
+  // create permanent due-backlog while the channel cannot send.
+  if (!getSmsOutboundDecision("customer").allowed) return;
+
   const delayMin = 30 + Math.floor(Math.random() * 31);
   const firstDue = new Date(Date.now() + delayMin * 60 * 1000).toISOString();
   const reminderDue = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
