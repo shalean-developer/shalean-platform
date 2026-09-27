@@ -452,6 +452,36 @@ export async function processLifecycleJob(
 
     }
 
+
+
+    if (rev.allowed) {
+      const { data: existingReview, error: reviewErr } = await supabase
+        .from("reviews")
+        .select("id")
+        .eq("booking_id", bookingId)
+        .maybeSingle();
+
+      if (reviewErr) {
+        await revertToPending(supabase, jobId);
+        await reportOperationalIssue("warn", "processLifecycleJob/review_request", reviewErr.message, {
+          jobId,
+          bookingId,
+          phase: "review_lookup",
+        });
+        return "retry";
+      }
+
+      if (existingReview) {
+        await markSkipped(supabase, jobId, LIFECYCLE_SKIP.reviewAlreadySubmitted, jobType);
+        void logSystemEvent({
+          level: "info",
+          source: "processLifecycleJob",
+          message: "lifecycle.review_request.skipped",
+          context: { jobId, bookingId, skipReason: LIFECYCLE_SKIP.reviewAlreadySubmitted },
+        });
+        return "skipped";
+      }
+    }
   }
 
 
