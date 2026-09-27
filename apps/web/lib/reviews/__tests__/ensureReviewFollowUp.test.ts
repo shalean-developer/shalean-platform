@@ -47,9 +47,15 @@ function makeSupabase(opts?: {
           },
           update(payload: Record<string, unknown>) {
             state.revived = payload;
-            return {
-              eq: async () => ({ error: null }),
-            };
+            const chain: any = {};
+            chain.eq = () => chain;
+            chain.is = () => chain;
+            chain.select = () => chain;
+            chain.maybeSingle = async () => ({
+              data: { id: opts?.existingJob?.id ?? "job-updated" },
+              error: null,
+            });
+            return chain;
           },
           async insert(payload: Record<string, unknown>) {
             state.inserted = payload;
