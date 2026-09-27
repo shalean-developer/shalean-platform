@@ -35,10 +35,10 @@ const sqlHost = host.replace(/'/g, "''");
 
 /** [jobname, cron expression, path] */
 const HTTP_JOBS = [
-  ["generate-recurring-bookings", "*/10 * * * *", "/api/cron/generate-recurring-bookings"],
+  ["generate-recurring-bookings", "*/20 * * * *", "/api/cron/generate-recurring-bookings"],
   ["charge-recurring-bookings", "*/10 * * * *", "/api/cron/charge-recurring-bookings"],
   ["dispatch-timeouts", "*/2 * * * *", "/api/cron/dispatch-timeouts"],
-  ["retry-failed-jobs", "*/2 * * * *", "/api/cron/retry-failed-jobs"],
+  ["retry-failed-jobs", "*/10 * * * *", "/api/cron/retry-failed-jobs"],
   ["whatsapp-worker", "*/2 * * * *", "/api/cron/whatsapp-worker"],
   ["booking-lifecycle", "*/15 * * * *", "/api/cron/booking-lifecycle"],
   ["review-prompts", "*/10 * * * *", "/api/cron/review-prompts"],
@@ -48,7 +48,7 @@ const HTTP_JOBS = [
   ["booking-reminders", "*/15 * * * *", "/api/cron/booking-reminders"],
   ["payment-link-reminders", "*/15 * * * *", "/api/cron/payment-link-reminders"],
   ["deferred-payment-link-emails", "*/5 * * * *", "/api/cron/deferred-payment-link-emails"],
-  ["ops-health", "*/15 * * * *", "/api/cron/ops-health"],
+  ["ops-health", "*/30 * * * *", "/api/cron/ops-health"],
   ["reconcile-paystack-transfers", "*/30 * * * *", "/api/cron/reconcile-paystack-transfers"],
   ["expire-pending-payments", "0 * * * *", "/api/cron/expire-pending-payments"],
   ["ai-optimize", "0 * * * *", "/api/cron/ai-optimize"],
