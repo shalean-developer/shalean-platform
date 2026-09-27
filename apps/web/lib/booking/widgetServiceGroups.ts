@@ -26,7 +26,7 @@ export const WIDGET_SERVICE_GROUPS: readonly WidgetServiceGroupDef[] = [
     subtitle: "Maintenance & guest turnovers",
     description: "Weekly / maintenance cleaning and guest turnovers.",
     services: [
-      { id: "standard", name: "Standard Cleaning", subtitle: "Regular home upkeep" },
+      { id: "standard", name: "Regular Cleaning", subtitle: "Regular home upkeep" },
       { id: "airbnb", name: "Airbnb Cleaning", subtitle: "Between-guest refresh" },
     ],
   },
