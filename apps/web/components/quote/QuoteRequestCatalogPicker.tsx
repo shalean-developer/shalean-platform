@@ -286,9 +286,9 @@ export function QuoteRequestCatalogPicker({
           </section>
 
           <section className="rounded-xl border border-blue-100 bg-blue-50 p-4">
-            <p className="text-sm font-semibold text-blue-950">Need a standard cleaning service?</p>
+            <p className="text-sm font-semibold text-blue-950">Need a regular cleaning service?</p>
             <p className="mt-1 text-xs leading-relaxed text-blue-800">
-              Standard, Airbnb, deep, move-in/out and carpet cleaning have instant online pricing.
+              Regular, Airbnb, deep, move-in/out and carpet cleaning have instant online pricing.
             </p>
             <Link
               href="/book"
