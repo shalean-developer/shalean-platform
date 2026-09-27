@@ -387,7 +387,7 @@ export async function upsertBookingFromPaystack(input: UpsertBookingInput): Prom
         error: "finalization_failed",
       };
     }
-    if (st !== "pending_payment") {
+    if (st !== "pending_payment" && st !== "payment_expired") {
       const replayEmail = normalizeEmail(input.customerEmail);
       // Reads verified snapshot/metadata, then auth ID by email; never claims ownership.
       const replayOwner = await resolveBookingUserId(supabase, input.snapshot, input.paystackMetadata, replayEmail);
