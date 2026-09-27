@@ -164,7 +164,7 @@ export default function ServicesHubPage() {
   const serviceDetails = [
     {
       id: "standard",
-      title: "Standard cleaning checklist",
+      title: "Regular cleaning checklist",
       bullets: p["standard-cleaning-cape-town"].included,
     },
     {
