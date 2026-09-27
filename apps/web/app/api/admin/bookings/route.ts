@@ -51,6 +51,7 @@ import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsFo
 import { BOOKING_EXTRA_ID_SET } from "@/lib/pricing/extrasConfig";
 import { processPaystackInitializeBody } from "@/lib/booking/paystackInitializeCore";
 import { reportOperationalIssue, logSystemEvent } from "@/lib/logging/systemLog";
+import { ensureReviewFollowUpForCompletedBooking } from "@/lib/reviews/ensureReviewFollowUp";
 import { aggregatePaymentLinkDeliveryStats } from "@/lib/pay/paymentLinkDeliveryStats";
 import { getServiceLabel, parseBookingServiceId, type BookingServiceId } from "@/components/booking/serviceCategories";
 import { getDemandSupplySnapshotByCity } from "@/lib/pricing/demandSupplySurge";
@@ -1892,6 +1893,29 @@ export async function POST(request: Request) {
 
     await runAdminBookingPostCreateNormalizationAndEarnings(admin, newBookingId, "admin_booking_create_monthly");
     await syncAdminPreferredCleanerRoster(admin, newBookingId, selectedCleanerIds);
+
+    if (adminMarkCompleted) {
+      const { data: reviewBooking, error: reviewBookingErr } = await admin
+        .from("bookings")
+        .select(
+          "id, customer_email, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id",
+        )
+        .eq("id", newBookingId)
+        .maybeSingle();
+      if (reviewBookingErr) {
+        void reportOperationalIssue(
+          "warn",
+          "admin_booking_create",
+          "review follow-up booking refetch failed",
+          { bookingId: newBookingId, error: reviewBookingErr.message },
+        );
+      } else if (reviewBooking) {
+        await ensureReviewFollowUpForCompletedBooking(
+          admin,
+          reviewBooking as Record<string, unknown>,
+        );
+      }
+    }
 
     void logSystemEvent({
       level: "info",

@@ -41,12 +41,28 @@ export function buildReviewPromptSmsBody(params: {
   return `Hi ${params.firstName}, thanks for choosing Shalean 🙌\nPlease rate your cleaning experience:\n${link}${googleLine}`;
 }
 
+type ReviewSmsDeliveryResult = { sent: true } | { sent: false; terminal: boolean; error: string };
+
+function isTerminalReviewSmsError(error: string | undefined): boolean {
+  const msg = String(error ?? "").toLowerCase();
+  return [
+    "invalid phone",
+    "invalid number",
+    "not a valid",
+    "unsubscribed",
+    "blocked",
+    "opted out",
+    "21610",
+    "21211",
+  ].some((needle) => msg.includes(needle));
+}
+
 async function deliverReviewPromptSms(params: {
   bookingId: string;
   phoneRaw: string;
   firstName: string;
   kind: ReviewPromptKind;
-}): Promise<boolean> {
+}): Promise<ReviewSmsDeliveryResult> {
   const body = buildReviewPromptSmsBody({
     firstName: params.firstName,
     bookingId: params.bookingId,
@@ -61,7 +77,7 @@ async function deliverReviewPromptSms(params: {
       error: "invalid_phone_e164",
       prompt_kind: params.kind,
     });
-    return false;
+    return { sent: false, terminal: true, error: "invalid_phone_e164" };
   }
 
   const smsRes = await sendSmsFallback({
@@ -85,7 +101,9 @@ async function deliverReviewPromptSms(params: {
     error: smsRes.error,
     prompt_kind: params.kind,
   });
-  return smsRes.sent;
+  if (smsRes.sent) return { sent: true };
+  const error = String(smsRes.error ?? "sms_send_failed");
+  return { sent: false, terminal: isTerminalReviewSmsError(error), error };
 }
 
 type BookingRow = {
@@ -93,6 +111,7 @@ type BookingRow = {
   status?: string | null;
   completed_at?: string | null;
   cleaner_id?: string | null;
+  payout_owner_cleaner_id?: string | null;
   is_team_job?: boolean | null;
   team_id?: string | null;
   customer_phone?: string | null;
@@ -112,9 +131,13 @@ export async function enqueueReviewSmsPromptQueue(
   supabase: SupabaseClient,
   bookingId: string,
 ): Promise<void> {
+  // SMS is intentionally disabled in the current communication policy. Do not
+  // create permanent due-backlog while the channel cannot send.
+  if (!getSmsOutboundDecision("customer").allowed) return;
+
   const delayMin = 30 + Math.floor(Math.random() * 31);
   const firstDue = new Date(Date.now() + delayMin * 60 * 1000).toISOString();
-  const reminderDue = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+  const reminderDue = new Date(Date.parse(firstDue) + 24 * 60 * 60 * 1000).toISOString();
   const { error } = await supabase.from("review_sms_prompt_queue").upsert(
     {
       booking_id: bookingId,
@@ -163,7 +186,7 @@ export async function processReviewSmsPromptQueue(
 
   const { data: firstDueRows, error: q1 } = await supabase
     .from("review_sms_prompt_queue")
-    .select("booking_id")
+    .select("booking_id, first_attempts")
     .is("first_sent_at", null)
     .lte("first_due_at", nowIso)
     .limit(limit);
@@ -177,13 +200,20 @@ export async function processReviewSmsPromptQueue(
   if (firstIds.length) {
     const { data: bookings, error: bErr } = await supabase
       .from("bookings")
-      .select("id, status, completed_at, cleaner_id, is_team_job, team_id, customer_phone, customer_name, booking_snapshot")
+      .select("id, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id, customer_phone, customer_name, booking_snapshot")
       .in("id", firstIds);
     if (bErr) {
       console.error("[processReviewSmsPromptQueue] bookings", bErr.message);
     } else {
+      const firstAttemptsByBooking = new Map(
+        (firstDueRows ?? []).map((r) => [
+          String((r as { booking_id: string }).booking_id),
+          Number((r as { first_attempts?: number | null }).first_attempts ?? 0),
+        ]),
+      );
       for (const b of (bookings ?? []) as BookingRow[]) {
         const bid = b.id;
+        const firstAttempts = firstAttemptsByBooking.get(bid) ?? 0;
         const promptOk = evaluateCustomerReviewPromptEligibility(b as unknown as Record<string, unknown>);
         if (!promptOk.allowed) {
           await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
@@ -197,6 +227,7 @@ export async function processReviewSmsPromptQueue(
         }
         const phone = String(b.customer_phone ?? "").trim();
         if (!phone) {
+          await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
           skipped++;
           continue;
         }
@@ -211,16 +242,37 @@ export async function processReviewSmsPromptQueue(
           skipped++;
           continue;
         }
-        const ok = await deliverReviewPromptSms({
+        const delivery = await deliverReviewPromptSms({
           bookingId: bid,
           phoneRaw: phone,
           firstName: firstNameFromBooking(b),
           kind: "initial",
         });
-        if (ok) {
+        if (delivery.sent) {
+          const reminderDueAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+          await supabase
+            .from("review_sms_prompt_queue")
+            .update({ reminder_due_at: reminderDueAt })
+            .eq("booking_id", bid);
           firstSent++;
-        } else {
+        } else if (delivery.terminal) {
           await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
+          skipped++;
+        } else {
+          const nextAttempts = firstAttempts + 1;
+          if (nextAttempts >= 5) {
+            await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
+          } else {
+            await supabase
+              .from("review_sms_prompt_queue")
+              .update({
+                first_sent_at: null,
+                first_attempts: nextAttempts,
+                last_error: delivery.error.slice(0, 500),
+                first_due_at: new Date(Date.now() + Math.min(60, 15 * nextAttempts) * 60 * 1000).toISOString(),
+              })
+              .eq("booking_id", bid);
+          }
           skipped++;
         }
       }
@@ -229,7 +281,7 @@ export async function processReviewSmsPromptQueue(
 
   const { data: remRows, error: q2 } = await supabase
     .from("review_sms_prompt_queue")
-    .select("booking_id")
+    .select("booking_id, reminder_attempts")
     .not("first_sent_at", "is", null)
     .is("reminder_sent_at", null)
     .lte("reminder_due_at", nowIso)
@@ -244,13 +296,20 @@ export async function processReviewSmsPromptQueue(
   if (remIds.length) {
     const { data: bookings2, error: b2Err } = await supabase
       .from("bookings")
-      .select("id, status, completed_at, cleaner_id, is_team_job, team_id, customer_phone, customer_name, booking_snapshot")
+      .select("id, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id, customer_phone, customer_name, booking_snapshot")
       .in("id", remIds);
     if (b2Err) {
       console.error("[processReviewSmsPromptQueue] bookings2", b2Err.message);
     } else {
+      const reminderAttemptsByBooking = new Map(
+        (remRows ?? []).map((r) => [
+          String((r as { booking_id: string }).booking_id),
+          Number((r as { reminder_attempts?: number | null }).reminder_attempts ?? 0),
+        ]),
+      );
       for (const b of (bookings2 ?? []) as BookingRow[]) {
         const bid = b.id;
+        const reminderAttempts = reminderAttemptsByBooking.get(bid) ?? 0;
         const promptOk = evaluateCustomerReviewPromptEligibility(b as unknown as Record<string, unknown>);
         if (!promptOk.allowed) {
           await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
@@ -264,6 +323,7 @@ export async function processReviewSmsPromptQueue(
         }
         const phone = String(b.customer_phone ?? "").trim();
         if (!phone) {
+          await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
           skipped++;
           continue;
         }
@@ -279,16 +339,32 @@ export async function processReviewSmsPromptQueue(
           skipped++;
           continue;
         }
-        const ok = await deliverReviewPromptSms({
+        const delivery = await deliverReviewPromptSms({
           bookingId: bid,
           phoneRaw: phone,
           firstName: firstNameFromBooking(b),
           kind: "reminder",
         });
-        if (ok) {
+        if (delivery.sent) {
           remindersSent++;
-        } else {
+        } else if (delivery.terminal) {
           await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
+          skipped++;
+        } else {
+          const nextAttempts = reminderAttempts + 1;
+          if (nextAttempts >= 5) {
+            await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
+          } else {
+            await supabase
+              .from("review_sms_prompt_queue")
+              .update({
+                reminder_sent_at: null,
+                reminder_attempts: nextAttempts,
+                last_error: delivery.error.slice(0, 500),
+                reminder_due_at: new Date(Date.now() + Math.min(60, 15 * nextAttempts) * 60 * 1000).toISOString(),
+              })
+              .eq("booking_id", bid);
+          }
           skipped++;
         }
       }

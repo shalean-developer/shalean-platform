@@ -46,6 +46,7 @@ import { tryClaimNotificationIdempotency, releaseNotificationIdempotencyClaim } 
 import { notifyBookingDebug } from "@/lib/notifications/notifyBookingDebug";
 import { dispatchBookingCancelledNotifications } from "@/lib/notifications/bookingCancelledNotifications";
 import { enqueueReviewSmsPromptQueue } from "@/lib/reviews/reviewPromptSms";
+import { ensureReviewFollowUpForCompletedBooking } from "@/lib/reviews/ensureReviewFollowUp";
 import { evaluateCustomerReviewPromptEligibility } from "@/lib/reviews/customerReviewFollowUpContract";
 import { sendSmsFallback } from "@/lib/notifications/smsFallback";
 
@@ -816,20 +817,26 @@ export async function notifyBookingEvent(event: NotifyBookingEventInput): Promis
   }
 
   if (event.type === "completed") {
-    const completedClaimed = await tryClaimNotificationDedupe(supabase, "completed_sent", {
-      bookingId: event.bookingId,
-    });
-    if (!completedClaimed) return emptyNotifyDeliveryResult();
-
     const { data: b } = await supabase
       .from("bookings")
       .select(
-        "id, paystack_reference, customer_email, customer_name, customer_phone, service, service_slug, date, time, location, suburb, booking_snapshot, amount_paid_cents, cleaner_id, status, completed_at, is_team_job, team_id",
+        "id, paystack_reference, customer_email, customer_name, customer_phone, service, service_slug, date, time, location, suburb, booking_snapshot, amount_paid_cents, cleaner_id, payout_owner_cleaner_id, status, completed_at, is_team_job, team_id",
       )
       .eq("id", event.bookingId)
       .maybeSingle();
     if (!b || typeof b !== "object") return emptyNotifyDeliveryResult();
     const row = b as Record<string, unknown>;
+
+    // Completion is the durable convergence point for review follow-up. This
+    // runs before completed-notification dedupe so a repeated completion event
+    // can repair a missing review_request lifecycle job without re-sending the
+    // customer completion notification.
+    await ensureReviewFollowUpForCompletedBooking(supabase, row);
+
+    const completedClaimed = await tryClaimNotificationDedupe(supabase, "completed_sent", {
+      bookingId: event.bookingId,
+    });
+    if (!completedClaimed) return emptyNotifyDeliveryResult();
     const email = String(row.customer_email ?? "").trim();
     if (!email) {
       await logSystemEvent({

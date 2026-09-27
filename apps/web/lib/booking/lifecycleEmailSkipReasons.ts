@@ -7,6 +7,7 @@ export const LIFECYCLE_SKIP = {
   bookingUnpaid: "booking_unpaid",
   bookingNotCompleted: "booking_not_completed",
   noCleanerOrTeamAssigned: "no_cleaner_or_team_assigned",
+  reviewAlreadySubmitted: "review_already_submitted",
   customerHasActiveRecurringPlan: "customer_has_active_recurring_plan",
   customerHasFutureBooking: "customer_has_future_booking",
   customerAlreadyRebooked: "customer_already_rebooked",

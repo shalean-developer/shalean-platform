@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveBookingEmailLabelsFromRow } from "@/lib/notifications/bookingNotifyFormat";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 
@@ -194,6 +195,22 @@ async function revertToPending(supabase: SupabaseClient, jobId: string): Promise
 
 }
 
+async function deferToPending(
+  supabase: SupabaseClient,
+  jobId: string,
+  delayMs = 15 * 60 * 1000,
+): Promise<void> {
+  await supabase
+    .from("booking_lifecycle_jobs")
+    .update({
+      status: "pending",
+      processed_at: null,
+      scheduled_for: new Date(Date.now() + delayMs).toISOString(),
+    })
+    .eq("id", jobId)
+    .eq("status", "processing");
+}
+
 
 
 /**
@@ -302,13 +319,15 @@ export async function processLifecycleJob(
 
 
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
+
   const { data: booking, error: bErr } = await supabase
 
     .from("bookings")
 
     .select(
 
-      "id, service, service_slug, booking_snapshot, location, suburb, status, completed_at, cleaner_id, is_team_job, team_id, date, time, user_id, recurring_id, is_recurring_generated, payment_status, amount_paid_cents, total_paid_cents, total_paid_zar",
+      `id, service, service_slug, booking_snapshot, location, suburb, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id, date, time, ${ownershipColumn}, recurring_id, is_recurring_generated, payment_status, amount_paid_cents, total_paid_cents, total_paid_zar`,
 
     )
 
@@ -360,7 +379,10 @@ export async function processLifecycleJob(
 
   const bookingRow = booking as Record<string, unknown>;
   const snap = (bookingRow.booking_snapshot as BookingSnapshotV1 | null | undefined) ?? null;
-  const userId = typeof bookingRow.user_id === "string" ? bookingRow.user_id : null;
+  const userId =
+    ownershipColumn === "customer_id"
+      ? (typeof bookingRow.customer_id === "string" ? bookingRow.customer_id : null)
+      : (typeof bookingRow.user_id === "string" ? bookingRow.user_id : null);
 
   if (isBookingCancelledForLifecycle(bookingRow)) {
 
@@ -414,6 +436,26 @@ export async function processLifecycleJob(
 
     if (!rev.allowed) {
 
+      if (rev.reason === LIFECYCLE_SKIP.bookingNotCompleted) {
+
+        await deferToPending(supabase, jobId);
+
+        void logSystemEvent({
+
+          level: "info",
+
+          source: "processLifecycleJob",
+
+          message: "lifecycle.review_request.deferred",
+
+          context: { jobId, bookingId, skipReason: rev.reason },
+
+        });
+
+        return "skipped";
+
+      }
+
       await markSkipped(supabase, jobId, rev.reason, jobType);
 
       void logSystemEvent({
@@ -432,6 +474,36 @@ export async function processLifecycleJob(
 
     }
 
+
+
+    if (rev.allowed) {
+      const { data: existingReview, error: reviewErr } = await supabase
+        .from("reviews")
+        .select("id")
+        .eq("booking_id", bookingId)
+        .maybeSingle();
+
+      if (reviewErr) {
+        await deferToPending(supabase, jobId);
+        await reportOperationalIssue("warn", "processLifecycleJob/review_request", reviewErr.message, {
+          jobId,
+          bookingId,
+          phase: "review_lookup",
+        });
+        return "retry";
+      }
+
+      if (existingReview) {
+        await markSkipped(supabase, jobId, LIFECYCLE_SKIP.reviewAlreadySubmitted, jobType);
+        void logSystemEvent({
+          level: "info",
+          source: "processLifecycleJob",
+          message: "lifecycle.review_request.skipped",
+          context: { jobId, bookingId, skipReason: LIFECYCLE_SKIP.reviewAlreadySubmitted },
+        });
+        return "skipped";
+      }
+    }
   }
 
 
@@ -511,11 +583,9 @@ export async function processLifecycleJob(
   const { serviceLabel, dateLabel, timeLabel, location } = resolveBookingEmailLabelsFromRow(bookingRow);
 
   const customerId =
-    typeof bookingRow.customer_id === "string"
-      ? bookingRow.customer_id
-      : typeof bookingRow.user_id === "string"
-        ? bookingRow.user_id
-        : null;
+    ownershipColumn === "customer_id"
+      ? (typeof bookingRow.customer_id === "string" ? bookingRow.customer_id : null)
+      : (typeof bookingRow.user_id === "string" ? bookingRow.user_id : null);
 
   let firstName: string | null = null;
   if (customerId) {
