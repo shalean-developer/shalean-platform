@@ -39,7 +39,7 @@ export type CleanerJobCompletionGateRow = BookingDurationRowLike & {
   booking_snapshot?: unknown | null;
 };
 
-function earlyFinishApprovalFromSnapshot(snapshot: unknown): { approved: boolean; source: string | null } {
+export function earlyFinishApprovalFromSnapshot(snapshot: unknown): { approved: boolean; source: string | null } {
   if (!snapshot || typeof snapshot !== "object" || Array.isArray(snapshot)) return { approved: false, source: null };
   const marker = (snapshot as Record<string, unknown>).early_finish_approval;
   if (!marker || typeof marker !== "object" || Array.isArray(marker)) return { approved: false, source: null };
@@ -48,6 +48,27 @@ function earlyFinishApprovalFromSnapshot(snapshot: unknown): { approved: boolean
   const source = typeof record.source === "string" ? record.source.trim() : "";
   const allowedSource = source === "customer" || source === "admin" || source === "supervisor" || source === "manager";
   return { approved: Boolean(approvedAt) && allowedSource, source: allowedSource ? source : null };
+}
+
+export function cleanerUiCompletionTimingBlocked(params: {
+  booking_snapshot?: unknown | null;
+  durationMinutes: number | null;
+  startedAt?: string | null;
+  nowMs: number;
+}): { blocked: boolean; remainingMinutes: number | null } {
+  const { durationMinutes, startedAt, nowMs } = params;
+  const startedAtMs = typeof startedAt === "string" ? Date.parse(startedAt) : Number.NaN;
+  if (durationMinutes == null || !Number.isFinite(durationMinutes) || durationMinutes <= 0 || !Number.isFinite(startedAtMs)) {
+    return { blocked: false, remainingMinutes: null };
+  }
+  const requiredMinutes = durationMinutes * CLEANER_COMPLETION_MIN_ELAPSED_RATIO;
+  const elapsedMinutes = Math.max(0, (nowMs - startedAtMs) / 60_000);
+  const remainingMinutes = Math.max(0, Math.ceil(requiredMinutes - elapsedMinutes));
+  const earlyFinish = earlyFinishApprovalFromSnapshot(params.booking_snapshot);
+  return {
+    blocked: remainingMinutes > 0 && !earlyFinish.approved,
+    remainingMinutes,
+  };
 }
 
 export function evaluateCleanerJobCompletionGate(
