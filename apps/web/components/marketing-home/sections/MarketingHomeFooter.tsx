@@ -99,7 +99,7 @@ export function MarketingHomeFooter({
           </a>
           <a href={`mailto:${CUSTOMER_SUPPORT_EMAIL}`} className="group rounded-lg border border-[#DCE7FF] p-5 transition hover:border-[#0051FF] hover:bg-[#F5F7FB]">
             <Mail className="h-5 w-5 text-[#0051FF]" aria-hidden />
-            <span className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email support</span>
+            <span className="mt-4 block text-xs font-semibold uppercase tracking-wide text-slate-500">Email</span>{" "}
             <span className="mt-1 block font-medium group-hover:text-[#0033A1]">{CUSTOMER_SUPPORT_EMAIL}</span>
           </a>
         </div>
