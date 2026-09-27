@@ -186,7 +186,7 @@ export async function processReviewSmsPromptQueue(
 
   const { data: firstDueRows, error: q1 } = await supabase
     .from("review_sms_prompt_queue")
-    .select("booking_id")
+    .select("booking_id, first_attempts")
     .is("first_sent_at", null)
     .lte("first_due_at", nowIso)
     .limit(limit);
@@ -205,8 +205,15 @@ export async function processReviewSmsPromptQueue(
     if (bErr) {
       console.error("[processReviewSmsPromptQueue] bookings", bErr.message);
     } else {
+      const firstAttemptsByBooking = new Map(
+        (firstDueRows ?? []).map((r) => [
+          String((r as { booking_id: string }).booking_id),
+          Number((r as { first_attempts?: number | null }).first_attempts ?? 0),
+        ]),
+      );
       for (const b of (bookings ?? []) as BookingRow[]) {
         const bid = b.id;
+        const firstAttempts = firstAttemptsByBooking.get(bid) ?? 0;
         const promptOk = evaluateCustomerReviewPromptEligibility(b as unknown as Record<string, unknown>);
         if (!promptOk.allowed) {
           await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
@@ -252,13 +259,20 @@ export async function processReviewSmsPromptQueue(
           await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
           skipped++;
         } else {
-          await supabase
-            .from("review_sms_prompt_queue")
-            .update({
-              first_sent_at: null,
-              first_due_at: new Date(Date.now() + 15 * 60 * 1000).toISOString(),
-            })
-            .eq("booking_id", bid);
+          const nextAttempts = firstAttempts + 1;
+          if (nextAttempts >= 5) {
+            await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
+          } else {
+            await supabase
+              .from("review_sms_prompt_queue")
+              .update({
+                first_sent_at: null,
+                first_attempts: nextAttempts,
+                last_error: delivery.error.slice(0, 500),
+                first_due_at: new Date(Date.now() + Math.min(60, 15 * nextAttempts) * 60 * 1000).toISOString(),
+              })
+              .eq("booking_id", bid);
+          }
           skipped++;
         }
       }
@@ -267,7 +281,7 @@ export async function processReviewSmsPromptQueue(
 
   const { data: remRows, error: q2 } = await supabase
     .from("review_sms_prompt_queue")
-    .select("booking_id")
+    .select("booking_id, reminder_attempts")
     .not("first_sent_at", "is", null)
     .is("reminder_sent_at", null)
     .lte("reminder_due_at", nowIso)
@@ -287,8 +301,15 @@ export async function processReviewSmsPromptQueue(
     if (b2Err) {
       console.error("[processReviewSmsPromptQueue] bookings2", b2Err.message);
     } else {
+      const reminderAttemptsByBooking = new Map(
+        (remRows ?? []).map((r) => [
+          String((r as { booking_id: string }).booking_id),
+          Number((r as { reminder_attempts?: number | null }).reminder_attempts ?? 0),
+        ]),
+      );
       for (const b of (bookings2 ?? []) as BookingRow[]) {
         const bid = b.id;
+        const reminderAttempts = reminderAttemptsByBooking.get(bid) ?? 0;
         const promptOk = evaluateCustomerReviewPromptEligibility(b as unknown as Record<string, unknown>);
         if (!promptOk.allowed) {
           await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
@@ -330,13 +351,20 @@ export async function processReviewSmsPromptQueue(
           await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
           skipped++;
         } else {
-          await supabase
-            .from("review_sms_prompt_queue")
-            .update({
-              reminder_sent_at: null,
-              reminder_due_at: new Date(Date.now() + 30 * 60 * 1000).toISOString(),
-            })
-            .eq("booking_id", bid);
+          const nextAttempts = reminderAttempts + 1;
+          if (nextAttempts >= 5) {
+            await supabase.from("review_sms_prompt_queue").delete().eq("booking_id", bid);
+          } else {
+            await supabase
+              .from("review_sms_prompt_queue")
+              .update({
+                reminder_sent_at: null,
+                reminder_attempts: nextAttempts,
+                last_error: delivery.error.slice(0, 500),
+                reminder_due_at: new Date(Date.now() + Math.min(60, 15 * nextAttempts) * 60 * 1000).toISOString(),
+              })
+              .eq("booking_id", bid);
+          }
           skipped++;
         }
       }
