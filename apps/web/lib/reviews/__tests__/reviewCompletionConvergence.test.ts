@@ -27,10 +27,15 @@ describe("review completion-path convergence", () => {
     expect(src).toContain("if (adminMarkCompleted)");
   });
 
-  it("booking lifecycle cron retains bounded recent-completion self-heal", () => {
+  it("booking lifecycle cron does not backfill historical review follow-ups", () => {
     const src = read("app/api/cron/booking-lifecycle/route.ts");
-    expect(src).toContain("repairRecentMissingReviewFollowUps");
-    expect(src).toContain("lookbackHours: 24");
-    expect(src).toContain("limit: 20");
+    expect(src).not.toContain("repairRecentMissingReviewFollowUps");
+    expect(src).not.toContain("review_follow_up.repair");
+  });
+
+  it("new cleaner completions still create review follow-up going forward", () => {
+    const src = read("lib/booking/bookingOperations.ts");
+    expect(src).toContain("ensureReviewFollowUpForCompletedBooking");
+    expect(src).toContain("export async function markBookingCompleted");
   });
 });
