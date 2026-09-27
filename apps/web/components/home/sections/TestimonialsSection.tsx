@@ -25,7 +25,7 @@ const reviews = [
   {
     name: "Nadia K",
     area: "Table View",
-    service: "Standard Cleaning",
+    service: "Regular Cleaning",
     rating: 5,
     comment: "The booking flow was quick and our home felt fresh again after a busy week.",
   },
