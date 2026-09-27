@@ -59,13 +59,14 @@ export async function scheduleBookingLifecycleJobs(
     .eq("id", params.bookingId)
     .maybeSingle();
 
+  const bookingMetaRow = (bookingMeta ?? {}) as Record<string, unknown>;
   const rebookEligible = await evaluateRebookEligibility({
     supabase,
     userId:
       params.userId ??
       (ownershipColumn === "customer_id"
-        ? (typeof bookingMeta?.customer_id === "string" ? bookingMeta.customer_id : null)
-        : (typeof bookingMeta?.user_id === "string" ? bookingMeta.user_id : null)),
+        ? (typeof bookingMetaRow.customer_id === "string" ? bookingMetaRow.customer_id : null)
+        : (typeof bookingMetaRow.user_id === "string" ? bookingMetaRow.user_id : null)),
     customerEmail: email,
     excludeBookingId: params.bookingId,
     recurringId: typeof bookingMeta?.recurring_id === "string" ? bookingMeta.recurring_id : null,
