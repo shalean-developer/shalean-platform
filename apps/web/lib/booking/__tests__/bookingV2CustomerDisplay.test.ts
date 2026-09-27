@@ -89,6 +89,21 @@ describe("bookingV2CustomerDisplay", () => {
     ]);
   });
 
+
+  it("formats Airbnb details with cleaner-friendly labels and values", () => {
+    expect(
+      cleanDetailLinesFromServiceDetails({
+        linens: "change",
+        keyAccess: "smart_lock",
+        propertyType: "townhouse",
+      }),
+    ).toEqual([
+      { label: "Linen service", value: "Change linens" },
+      { label: "Key access", value: "Smart lock" },
+      { label: "Property type", value: "Townhouse" },
+    ]);
+  });
+
   it("builds price lines from pricing_summary", () => {
     expect(
       priceLinesFromPricingSummary({
