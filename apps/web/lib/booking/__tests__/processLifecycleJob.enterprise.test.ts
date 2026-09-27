@@ -165,6 +165,8 @@ function createMockSupabase(params: {
 
   sentHistory?: { sent_at: string }[];
 
+  reviewExists?: boolean;
+
 }) {
 
   let job = { ...params.job };
