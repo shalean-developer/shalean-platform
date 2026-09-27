@@ -16,7 +16,10 @@ export type OfficeReviewFunnelSummary = {
   completedJobs: number;
   promptsSent: number;
   promptClicks: number;
-  reviewsSubmitted: number;
+  /** All reviews created in the selected window, regardless of acquisition source. */
+  reviewsReceived: number;
+  /** Reviews from bookings that had a successful review prompt in the selected window. */
+  promptedReviewsSubmitted: number;
   conversionPct: number | null;
   clickThroughPct: number | null;
   recentRequests: OfficeReviewFunnelRecentRequest[];
@@ -63,6 +66,7 @@ export async function loadOfficeReviewFunnelSummary(
       .map((r) => String((r as { booking_id?: string | null }).booking_id ?? "").trim())
       .filter(Boolean),
   );
+  const reviewsReceived = reviewedBookingIds.size;
 
   const nowMs = Date.now();
   const recentRequests: OfficeReviewFunnelRecentRequest[] = [];
@@ -97,7 +101,8 @@ export async function loadOfficeReviewFunnelSummary(
     completedJobs: completedRes.count ?? 0,
     promptsSent: funnel.promptsSent,
     promptClicks: funnel.promptClicks,
-    reviewsSubmitted: funnel.reviewsSubmitted,
+    reviewsReceived,
+    promptedReviewsSubmitted: funnel.reviewsSubmitted,
     conversionPct: funnel.conversionRate != null ? Math.round(funnel.conversionRate * 10000) / 100 : null,
     clickThroughPct: funnel.clickThroughRate != null ? Math.round(funnel.clickThroughRate * 10000) / 100 : null,
     recentRequests,
