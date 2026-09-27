@@ -13,12 +13,12 @@ describe("pricing route authority proxy", () => {
     expect(response.headers.get("x-middleware-next")).toBe("1");
   });
 
-  it("preserves the separate /pricing redirect to the dated supporting guide", async () => {
+  it("redirects /pricing to the canonical pricing hub", async () => {
     const response = await proxy(new NextRequest("http://localhost/pricing"));
 
     expect(response.status).toBe(308);
     expect(response.headers.get("location")).toBe(
-      "http://localhost/blog/how-much-does-cleaning-cost-cape-town-2026",
+      "http://localhost/cleaning-prices-cape-town",
     );
   });
 });

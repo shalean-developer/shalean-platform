@@ -24,7 +24,7 @@ export const LEGACY_MARKETING_EXACT_REDIRECTS: readonly LegacyMarketingRedirect[
   { source: "/cleaning-services", destination: "/services", status: 308 },
   { source: "/home-cleaning", destination: "/services/standard-cleaning-cape-town", status: 308 },
   { source: "/deep-cleaning", destination: "/services/deep-cleaning-cape-town", status: 308 },
-  { source: "/pricing", destination: "/blog/how-much-does-cleaning-cost-cape-town-2026", status: 308 },
+  { source: "/pricing", destination: "/cleaning-prices-cape-town", status: 308 },
   { source: "/help", destination: "/faq", status: 308 },
   { source: "/help-centre", destination: "/faq", status: 308 },
   { source: "/help-center", destination: "/faq", status: 308 },
