@@ -124,6 +124,11 @@ jobs:
           lib/booking-v2/__tests__/airbnbJourneySimplification.test.ts
           lib/booking-v2/__tests__/bookingShellNavigation.test.ts
           lib/booking/__tests__/processLifecycleJob.enterprise.test.ts
+          app/api/bookings/__tests__/reviewRouteTeamEligibility.test.ts
+          lib/reviews/__tests__/customerReviewFollowUpContract.test.ts
+          lib/reviews/__tests__/ensureReviewFollowUp.test.ts
+          lib/reviews/__tests__/reviewPromptSms.policy.test.ts
+          lib/reviews/__tests__/reviewFunnelMetrics.test.ts
           lib/booking/__tests__/cleanerServicePreferenceEligibility.test.ts
           lib/customer/__tests__/sr10CustomerBookingAddressBatching.test.ts
           lib/customer/__tests__/sr10bCustomerBookingPaginationContract.test.ts
