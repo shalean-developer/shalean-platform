@@ -30,7 +30,7 @@ describe("customerReviewFollowUpContract", () => {
   });
 
   it("prompt blocks cancelled", () => {
-    const r = evaluateCustomerReviewPromptEligibility({ status: "cancelled", cleaner_id: "c1" });
+    const r = evaluateCustomerReviewPromptEligibility({ status: "cancelled", cleaner_id: "00000000-0000-4000-8000-000000000001" });
     expect(r.allowed).toBe(false);
     if (!r.allowed) expect(r.skipReason).toBe("review_prompt_terminal_booking");
   });
@@ -38,7 +38,7 @@ describe("customerReviewFollowUpContract", () => {
   it("prompt blocks pending_payment", () => {
     const r = evaluateCustomerReviewPromptEligibility({
       status: "pending_payment",
-      cleaner_id: "c1",
+      cleaner_id: "00000000-0000-4000-8000-000000000001",
       completed_at: null,
     });
     expect(r.allowed).toBe(false);
@@ -48,7 +48,7 @@ describe("customerReviewFollowUpContract", () => {
     const r = evaluateCustomerReviewPromptEligibility({
       status: "assigned",
       completed_at: null,
-      cleaner_id: "c1",
+      cleaner_id: "00000000-0000-4000-8000-000000000001",
     });
     expect(r.allowed).toBe(false);
     if (!r.allowed) expect(r.skipReason).toBe("review_prompt_booking_not_completed");
