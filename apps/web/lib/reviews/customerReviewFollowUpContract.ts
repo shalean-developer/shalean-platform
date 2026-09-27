@@ -125,7 +125,12 @@ export function evaluateCustomerReviewPromptEligibility(row: Record<string, unkn
  */
 export function evaluateCustomerReviewSubmissionEligibility(row: Record<string, unknown>): CustomerReviewFollowUpEligibility {
   const prompt = evaluateCustomerReviewPromptEligibility(row);
-  if (!prompt.allowed) return prompt;
+  if (!prompt.allowed) {
+    if (prompt.skipReason === "review_prompt_no_assignee") {
+      return { allowed: false, skipReason: "review_submit_requires_cleaner_id" };
+    }
+    return prompt;
+  }
 
   if (resolveReviewCleanerIdForSubmission(row) == null) {
     return { allowed: false, skipReason: "review_submit_requires_cleaner_id" };
