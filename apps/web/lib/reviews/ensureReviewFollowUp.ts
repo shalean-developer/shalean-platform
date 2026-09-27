@@ -181,26 +181,10 @@ export async function repairRecentMissingReviewFollowUps(
   opts?: { lookbackHours?: number; limit?: number },
 ): Promise<RepairRecentReviewFollowUpsResult> {
   const lookbackHours = Math.min(Math.max(opts?.lookbackHours ?? 24, 1), 48);
-  const limit = Math.min(Math.max(opts?.limit ?? 20, 1), 50);
+  const repairLimit = Math.min(Math.max(opts?.limit ?? 20, 1), 50);
   const cutoff = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
-
-  const { data, error } = await supabase
-    .from("bookings")
-    .select(
-      "id, customer_email, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id",
-    )
-    .gte("completed_at", cutoff)
-    .order("completed_at", { ascending: false })
-    .limit(limit);
-
-  if (error) {
-    await reportOperationalIssue("warn", "repairRecentReviewFollowUps", error.message, {
-      phase: "completed_booking_scan",
-      lookbackHours,
-      limit,
-    });
-    return { scanned: 0, created: 0, revived: 0, alreadyHealthy: 0, skipped: 0, failed: 1 };
-  }
+  const pageSize = 100;
+  const maxScan = 500;
 
   const out: RepairRecentReviewFollowUpsResult = {
     scanned: 0,
@@ -211,24 +195,64 @@ export async function repairRecentMissingReviewFollowUps(
     failed: 0,
   };
 
-  for (const row of (data ?? []) as Record<string, unknown>[]) {
-    out.scanned++;
-    const result = await ensureReviewFollowUpForCompletedBooking(supabase, row);
-    if (!result.ok) {
+  let offset = 0;
+  let repairs = 0;
+
+  // Scan through the bounded lookback window and apply the repair limit only
+  // to rows that actually need creation/revival. Healthy recent bookings must
+  // not permanently hide older missing follow-ups below a SQL LIMIT.
+  while (offset < maxScan && repairs < repairLimit) {
+    const { data, error } = await supabase
+      .from("bookings")
+      .select(
+        "id, customer_email, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id",
+      )
+      .gte("completed_at", cutoff)
+      .order("completed_at", { ascending: false })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) {
+      await reportOperationalIssue("warn", "repairRecentReviewFollowUps", error.message, {
+        phase: "completed_booking_scan",
+        lookbackHours,
+        repairLimit,
+        offset,
+      });
       out.failed++;
-      continue;
+      break;
     }
-    if (result.reason === "created") out.created++;
-    else if (result.reason === "revived_existing_job") out.revived++;
-    else if (
-      result.reason === "existing_active_job" ||
-      result.reason === "existing_sent_job" ||
-      result.reason === "duplicate_job"
-    ) {
-      out.alreadyHealthy++;
-    } else {
-      out.skipped++;
+
+    const rows = (data ?? []) as Record<string, unknown>[];
+    if (rows.length === 0) break;
+
+    for (const row of rows) {
+      out.scanned++;
+      const result = await ensureReviewFollowUpForCompletedBooking(supabase, row);
+      if (!result.ok) {
+        out.failed++;
+        continue;
+      }
+      if (result.reason === "created") {
+        out.created++;
+        repairs++;
+      } else if (result.reason === "revived_existing_job") {
+        out.revived++;
+        repairs++;
+      } else if (
+        result.reason === "existing_active_job" ||
+        result.reason === "existing_sent_job" ||
+        result.reason === "duplicate_job"
+      ) {
+        out.alreadyHealthy++;
+      } else {
+        out.skipped++;
+      }
+
+      if (repairs >= repairLimit) break;
     }
+
+    if (rows.length < pageSize) break;
+    offset += pageSize;
   }
 
   return out;
