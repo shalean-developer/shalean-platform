@@ -11,7 +11,10 @@ describe("P3-13 Review Funnel metric semantics", () => {
     const loader = read("lib/admin/officeReviewFunnel.ts");
     expect(loader).toContain("reviewsReceived: number");
     expect(loader).toContain("promptedReviewsSubmitted: number");
-    expect(loader).toContain("const reviewsReceived = reviewedBookingIds.size");
+    expect(loader).toContain('.select("id", { count: "exact", head: true })');
+    expect(loader).toContain("const reviewsReceived = reviewsCountRes.count ?? 0");
+    expect(loader).toContain("Could not count reviews received");
+    expect(loader).toContain("Could not resolve recent review-request outcomes");
     expect(loader).toContain("reviewsReceived,");
     expect(loader).toContain("promptedReviewsSubmitted: funnel.reviewsSubmitted");
   });
