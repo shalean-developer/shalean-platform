@@ -13,7 +13,6 @@ import { completeCleanerReferralOnFirstJob, processCustomerReferralAfterFirstPai
 import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { repairRecentMissingReviewFollowUps } from "@/lib/reviews/ensureReviewFollowUp";
 import { recordAssignmentOutcomeAndLearn } from "@/lib/marketplace-intelligence/assignmentOutcomeFeedback";
 import { buildBookingEvent } from "@/lib/booking/bookingEvents";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
@@ -290,19 +289,6 @@ export async function POST(request: Request) {
   });
 
   const complete = await markPastBookingsCompleted();
-
-  const reviewRepair = await repairRecentMissingReviewFollowUps(supabase, {
-    lookbackHours: 24,
-    limit: 20,
-  });
-  if (reviewRepair.created || reviewRepair.revived || reviewRepair.failed) {
-    void logSystemEvent({
-      level: reviewRepair.failed ? "warn" : "info",
-      source: "cron/booking-lifecycle",
-      message: "review_follow_up.repair",
-      context: reviewRepair,
-    });
-  }
 
   const { data: jobs, error: jobErr } = await supabase
     .from("booking_lifecycle_jobs")
