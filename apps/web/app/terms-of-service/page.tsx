@@ -74,8 +74,9 @@ export default function TermsOfServicePage() {
       </p>
       <p className="mt-3 text-base leading-relaxed text-slate-600">
         We will review the concern against the booking details, selected service, add-ons, and applicable cleaning
-        checklist. Where we confirm that an included part of the agreed scope was missed, Shalean may arrange an
-        appropriate corrective clean or another reasonable resolution.
+        checklist. Where we confirm that an included part of the agreed scope was missed, Shalean will arrange an
+        appropriate corrective clean where re-cleaning is reasonably possible. If re-cleaning is not reasonably
+        possible, we will provide another appropriate resolution after reviewing the circumstances.
       </p>
       <p className="mt-3 text-base leading-relaxed text-slate-600">
         The satisfaction guarantee applies only to items included in the confirmed booking scope. It does not cover
