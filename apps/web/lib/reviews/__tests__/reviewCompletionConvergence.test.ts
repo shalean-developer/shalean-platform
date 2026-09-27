@@ -33,6 +33,13 @@ describe("review completion-path convergence", () => {
     expect(src).not.toContain("review_follow_up.repair");
   });
 
+  it("cron auto-completions await the completion notification path", () => {
+    const src = read("app/api/cron/booking-lifecycle/route.ts");
+    expect(src).toContain("const nav = await routeBookingNotificationEvent");
+    expect(src).toContain('await notifyBookingEvent({ type: "completed"');
+    expect(src).not.toContain("void routeBookingNotificationEvent(event, { admin }).then");
+  });
+
   it("new cleaner completions still create review follow-up going forward", () => {
     const src = read("lib/booking/bookingOperations.ts");
     expect(src).toContain("ensureReviewFollowUpForCompletedBooking");
