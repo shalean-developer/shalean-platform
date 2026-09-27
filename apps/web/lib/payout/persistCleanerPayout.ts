@@ -779,10 +779,17 @@ async function persistCleanerPayoutIfUnsetCore(
 
   const persistEligibility = evaluatePersistCleanerPayoutEligibility(row as unknown as Record<string, unknown>);
   if (!persistEligibility.allowed) {
-    void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", persistEligibility.skipReason, {
-      bookingId,
-      cleanerId: expectedCleanerId,
-    });
+    const context = { bookingId, cleanerId: expectedCleanerId };
+    if (persistEligibility.skipReason === "payout_eligibility_team_missing_team_id") {
+      void reportOperationalIssue("warn", "persistCleanerPayoutIfUnset", persistEligibility.skipReason, context);
+    } else {
+      void logSystemEvent({
+        level: "info",
+        source: "persistCleanerPayoutIfUnset",
+        message: persistEligibility.skipReason,
+        context,
+      });
+    }
     return { ok: true, skipped: true, skipReason: persistEligibility.skipReason };
   }
 
@@ -1398,20 +1405,17 @@ async function verifyDisplayEarningsRowAfterWrite(
 }
 
 /**
- * Eligibility skips (e.g. terminal booking) may legitimately leave display unset.
- * Only bypass {@link finalizePersistResult} when display is already persisted —
- * otherwise callers like cleaner complete would see `ok: true` then fail verify.
+ * Eligibility skips are policy outcomes, not failed writes.
+ * A terminal/unpaid/not-yet-assigned booking is intentionally ineligible and may
+ * legitimately have no persisted display earnings. Do not convert that policy
+ * decision into an operational error or retry storm.
  */
 async function shouldBypassFinalizeForEligibilitySkip(
-  admin: SupabaseClient,
-  bookingId: string,
+  _admin: SupabaseClient,
+  _bookingId: string,
   core: PersistCleanerPayoutIfUnsetResult,
 ): Promise<boolean> {
-  if (!core.ok || !core.skipped || !isPayoutEligibilitySkipReason(core.skipReason)) {
-    return false;
-  }
-  const cents = await fetchBookingDisplayEarningsCents(admin, bookingId);
-  return hasPersistedDisplayEarningsBasis(cents);
+  return Boolean(core.ok && core.skipped && isPayoutEligibilitySkipReason(core.skipReason));
 }
 
 async function finalizePersistResult(
