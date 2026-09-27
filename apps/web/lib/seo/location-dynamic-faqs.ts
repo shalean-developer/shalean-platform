@@ -36,7 +36,7 @@ export function buildDynamicLocationFaqs(row: CapeTownLocationRow): { q: string;
   const base: { q: string; a: string }[] = [
     {
       q: `What do “cleaning services in ${name}” include when I book through Shalean?`,
-      a: `Cleaning services in ${name}, ${city} cover the scope you lock online—typically kitchens, bathrooms, living areas, and bedrooms based on your selections, with vetted crews and supplies dispatched for your address. Adjust rooms and add-ons before checkout so the quote matches the visit.`,
+      a: `Cleaning services in ${name}, ${city} cover the scope you lock online—typically kitchens, bathrooms, living areas, and bedrooms based on your selections, with vetted crews dispatched for your address. Supply and equipment responsibility follows the service and options shown in your booking. Adjust rooms and add-ons before checkout so the quote matches the visit.`,
     },
     {
       q: `What do ${name} customers usually highlight after a Shalean visit?`,
@@ -48,7 +48,7 @@ export function buildDynamicLocationFaqs(row: CapeTownLocationRow): { q: string;
     },
     {
       q: `Do cleaners bring supplies for ${name} bookings?`,
-      a: `Yes—teams arrive with professional-grade products and equipment suited to typical ${city} homes. Flag allergies or preferred products in your notes so we brief the crew before arrival.`,
+      a: `It depends on the service. Deep and Move In / Out Cleaning include Shalean-provided cleaning supplies. For Regular home cleaning and Airbnb Cleaning, customers provide the usual products and equipment unless a separate supplies option or charge is selected or agreed. Check the booking scope and flag allergies or preferred products before arrival.`,
     },
     {
       q: `How soon can I book a cleaner in ${name}?`,

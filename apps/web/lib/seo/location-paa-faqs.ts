@@ -20,10 +20,10 @@ export function buildPeopleAlsoAskFaqs(location: CapeTownLocationRow): FaqPair[]
 
   const suppliesLead =
     tone === 0
-      ? `Yes—Shalean crews servicing ${name} normally arrive with professional cleaning products and equipment matched to your booked scope.`
+      ? `Supply and equipment responsibility in ${name} depends on the service: Deep and Move In / Out Cleaning include Shalean-provided cleaning supplies, while Regular home cleaning and Airbnb Cleaning use customer-provided products and equipment unless a separate supplies option or charge is selected or agreed.`
       : tone === 1
-        ? `Supplies are included on standard Shalean visits in ${name} unless you note estate rules, allergies, or BYO-product preferences at checkout.`
-        : `Professional visits in ${name} include products and tools for the checklist you confirm—add notes if your building restricts certain chemicals.`;
+        ? `For Regular home cleaning and Airbnb Cleaning in ${name}, customers provide the usual products and equipment unless a separate supplies option or charge is selected or agreed. Deep and Move In / Out Cleaning include Shalean-provided cleaning supplies.`
+        : `Check the booked service before preparing supplies in ${name}: Deep and Move In / Out Cleaning include Shalean-provided cleaning supplies; Regular home cleaning and Airbnb Cleaning use customer-provided products and equipment unless a separate supplies arrangement is selected or agreed.`;
 
   const sameDayLead =
     tone === 0

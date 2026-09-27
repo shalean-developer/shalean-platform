@@ -57,10 +57,10 @@ export const FAQ_FEATURED: readonly FaqStructuredItem[] = [
   {
     id: "feat-supplies",
     question: "Do cleaners bring supplies?",
-    lead: "Yes—teams arrive with professional-grade products and equipment aligned to the scope you confirmed.",
+    lead: "Supplies and equipment depend on the service you book.",
     paragraphs: [
-      "If you prefer specific eco brands or fragrance-free products, mention it in booking notes—we’ll align where possible.",
-      "Rare speciality finishes (untreated wood, delicate stone) should be called out so crews bring the right approach.",
+      "Deep Cleaning and Move In / Out Cleaning include Shalean-provided cleaning supplies. For Regular home cleaning and Airbnb Cleaning, customers provide the usual products and equipment unless a separate supplies option or charge is selected or agreed.",
+      "Office and specialist services can have different requirements, so use the booking scope as the authority. Add allergy, product, or delicate-surface notes before checkout.",
     ],
     keywords: ["supplies", "products", "equipment", "vacuum", "mop", "chemicals"],
     showInlineCta: false,
