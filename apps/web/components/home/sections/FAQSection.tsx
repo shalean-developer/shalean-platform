@@ -31,7 +31,7 @@ const faqs = [
   {
     id: "supplies",
     q: "Do cleaners bring supplies?",
-    a: "Yes. Teams arrive with professional-grade products and equipment. If you need hypoallergenic options or want us to use your supplies, add a short note when you book.",
+    a: "It depends on the service. Deep and Move In / Out Cleaning include Shalean-provided cleaning supplies. For Regular home cleaning and Airbnb Cleaning, customers provide the usual products and equipment unless a separate supplies option or charge is selected or agreed. Office and specialist services follow the booking scope.",
   },
 ] as const;
 
