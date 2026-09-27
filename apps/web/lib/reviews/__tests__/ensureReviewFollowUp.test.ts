@@ -9,8 +9,15 @@ import { ensureReviewFollowUpForCompletedBooking } from "@/lib/reviews/ensureRev
 
 const CLEANER_ID = "44444444-4444-4444-8444-444444444444";
 
-function makeSupabase(opts?: { reviewExists?: boolean; insertError?: { code?: string; message: string } | null }) {
-  const state = { inserted: null as Record<string, unknown> | null };
+function makeSupabase(opts?: {
+  reviewExists?: boolean;
+  existingJob?: { id: string; status: string; sent_at: string | null } | null;
+  insertError?: { code?: string; message: string } | null;
+}) {
+  const state = {
+    inserted: null as Record<string, unknown> | null,
+    revived: null as Record<string, unknown> | null,
+  };
 
   const supabase = {
     from(table: string) {
@@ -29,14 +36,28 @@ function makeSupabase(opts?: { reviewExists?: boolean; insertError?: { code?: st
           },
         };
       }
+
       if (table === "booking_lifecycle_jobs") {
         return {
+          select() {
+            const chain: any = {};
+            chain.eq = () => chain;
+            chain.maybeSingle = async () => ({ data: opts?.existingJob ?? null, error: null });
+            return chain;
+          },
+          update(payload: Record<string, unknown>) {
+            state.revived = payload;
+            return {
+              eq: async () => ({ error: null }),
+            };
+          },
           async insert(payload: Record<string, unknown>) {
             state.inserted = payload;
             return { error: opts?.insertError ?? null };
           },
         };
       }
+
       throw new Error(`unexpected table ${table}`);
     },
   } as unknown as SupabaseClient;
@@ -77,6 +98,7 @@ describe("ensureReviewFollowUpForCompletedBooking", () => {
 
     expect(result).toMatchObject({ ok: true, created: false, reason: "existing_review" });
     expect(state.inserted).toBeNull();
+    expect(state.revived).toBeNull();
   });
 
   it("does not prompt a team booking without a resolvable lead cleaner", async () => {
@@ -93,10 +115,42 @@ describe("ensureReviewFollowUpForCompletedBooking", () => {
 
     expect(result).toMatchObject({ ok: true, created: false, reason: "ineligible" });
     expect(state.inserted).toBeNull();
+    expect(state.revived).toBeNull();
+  });
+
+  it("revives a failed terminal review job instead of being blocked by the unique constraint", async () => {
+    const { supabase, state } = makeSupabase({
+      existingJob: { id: "job-1", status: "failed_terminal", sent_at: null },
+    });
+    const result = await ensureReviewFollowUpForCompletedBooking(supabase, completedBooking());
+
+    expect(result).toMatchObject({ ok: true, created: false, reason: "revived_existing_job" });
+    expect(state.revived).toMatchObject({
+      status: "pending",
+      attempts: 0,
+      last_error: null,
+      skipped_reason: null,
+      processed_at: null,
+    });
+    expect(state.inserted).toBeNull();
+  });
+
+  it("leaves an already active review job alone", async () => {
+    const { supabase, state } = makeSupabase({
+      existingJob: { id: "job-2", status: "pending", sent_at: null },
+    });
+    const result = await ensureReviewFollowUpForCompletedBooking(supabase, completedBooking());
+
+    expect(result).toMatchObject({ ok: true, created: false, reason: "existing_active_job" });
+    expect(state.revived).toBeNull();
+    expect(state.inserted).toBeNull();
   });
 
   it("treats unique job conflicts as an idempotent duplicate", async () => {
-    const { supabase } = makeSupabase({ insertError: { code: "23505", message: "duplicate" } });
+    const { supabase } = makeSupabase({
+      existingJob: null,
+      insertError: { code: "23505", message: "duplicate" },
+    });
     const result = await ensureReviewFollowUpForCompletedBooking(supabase, completedBooking());
 
     expect(result).toMatchObject({ ok: true, created: false, reason: "duplicate_job" });
