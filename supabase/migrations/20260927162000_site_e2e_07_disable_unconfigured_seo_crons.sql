@@ -26,5 +26,4 @@ begin
     );
     raise notice 'SITE-E2E-07 disabled cron job % (id=%)', r.jobname, r.jobid;
   end loop;
-end;
-$$;
+end $;
