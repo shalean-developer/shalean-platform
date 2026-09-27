@@ -127,6 +127,7 @@ jobs:
           app/api/bookings/__tests__/reviewRouteTeamEligibility.test.ts
           lib/reviews/__tests__/customerReviewFollowUpContract.test.ts
           lib/reviews/__tests__/ensureReviewFollowUp.test.ts
+          lib/reviews/__tests__/reviewCompletionConvergence.test.ts
           lib/reviews/__tests__/reviewPromptSms.policy.test.ts
           lib/reviews/__tests__/reviewFunnelMetrics.test.ts
           lib/booking/__tests__/cleanerServicePreferenceEligibility.test.ts
