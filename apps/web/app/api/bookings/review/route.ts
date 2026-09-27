@@ -137,7 +137,7 @@ export async function POST(request: Request) {
 export async function PATCH(request: Request) {
   const auth = await getUserFromBearer(request);
   if (auth instanceof NextResponse) return auth;
-  const { userId, email: viewerEmail } = auth;
+  const { userId } = auth;
 
   let body: { bookingId?: string; rating?: number; comment?: string | undefined };
   try {
