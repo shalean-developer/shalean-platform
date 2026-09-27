@@ -111,6 +111,7 @@ type BookingRow = {
   status?: string | null;
   completed_at?: string | null;
   cleaner_id?: string | null;
+  payout_owner_cleaner_id?: string | null;
   is_team_job?: boolean | null;
   team_id?: string | null;
   customer_phone?: string | null;
@@ -199,7 +200,7 @@ export async function processReviewSmsPromptQueue(
   if (firstIds.length) {
     const { data: bookings, error: bErr } = await supabase
       .from("bookings")
-      .select("id, status, completed_at, cleaner_id, is_team_job, team_id, customer_phone, customer_name, booking_snapshot")
+      .select("id, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id, customer_phone, customer_name, booking_snapshot")
       .in("id", firstIds);
     if (bErr) {
       console.error("[processReviewSmsPromptQueue] bookings", bErr.message);
@@ -281,7 +282,7 @@ export async function processReviewSmsPromptQueue(
   if (remIds.length) {
     const { data: bookings2, error: b2Err } = await supabase
       .from("bookings")
-      .select("id, status, completed_at, cleaner_id, is_team_job, team_id, customer_phone, customer_name, booking_snapshot")
+      .select("id, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id, customer_phone, customer_name, booking_snapshot")
       .in("id", remIds);
     if (b2Err) {
       console.error("[processReviewSmsPromptQueue] bookings2", b2Err.message);
