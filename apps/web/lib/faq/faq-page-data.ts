@@ -14,7 +14,7 @@ export const FAQ_FEATURED: readonly FaqStructuredItem[] = [
   {
     id: "feat-cost",
     question: "How much does cleaning cost in Cape Town?",
-    lead: "Cleaning services in Cape Town typically cost between R300 and R900 depending on home size, service tier, bathrooms, and add-ons.",
+    lead: "Current base prices start from R250 for Regular Cleaning and Airbnb Cleaning, R300 for Office Cleaning, R500 for Carpet Cleaning, and R1,200 for Deep Cleaning or Move In / Out Cleaning.",
     paragraphs: [
       "Your total is calculated online from bedrooms, bathrooms, service type (regular, deep, move-out, Airbnb, etc.), and extras—so you approve a locked quote before we dispatch.",
       SEO_REBUILD_PHASE >= 2
