@@ -470,6 +470,92 @@ describe("processLifecycleJob enterprise scenarios", () => {
 
 
 
+  it("P3-13: review request waits in pending until authoritative completion", async () => {
+
+    const mock = createMockSupabase({
+
+      job: {
+
+        id: "job-review-wait",
+
+        booking_id: "book-review-wait",
+
+        job_type: "review_request",
+
+        customer_email: "customer@example.com",
+
+        status: "pending",
+
+        attempts: 0,
+
+        sent_at: null,
+
+        last_error: null,
+
+        skipped_reason: null,
+
+        processed_at: null,
+
+      },
+
+      booking: {
+
+        id: "book-review-wait",
+
+        status: "in_progress",
+
+        completed_at: null,
+
+        payment_status: "success",
+
+        service: "standard",
+
+        booking_snapshot: pastAppointmentSnapshot(),
+
+        location: "Cape Town",
+
+        cleaner_id: "00000000-0000-4000-8000-000000000001",
+
+      },
+
+    });
+
+
+
+    const result = await processLifecycleJob(mock as never, {
+
+      id: "job-review-wait",
+
+      booking_id: "book-review-wait",
+
+      job_type: "review_request",
+
+      customer_email: "customer@example.com",
+
+      attempts: 0,
+
+    });
+
+
+
+    expect(result).toBe("skipped");
+
+    expect(mocks.sendReviewEmail).not.toHaveBeenCalled();
+
+    expect(mock.getJob().status).toBe("pending");
+
+    expect(mock.getJob().skipped_reason).toBeNull();
+
+    expect(mocks.logSystemEvent).toHaveBeenCalledWith(
+
+      expect.objectContaining({ message: "lifecycle.review_request.deferred" }),
+
+    );
+
+  });
+
+
+
   it("Scenario 8: Resend failure → failed_retryable, attempts increment", async () => {
 
     mocks.sendReminderEmail.mockResolvedValue({ sent: false, error: "Email not configured" });
