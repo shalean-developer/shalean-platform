@@ -175,7 +175,11 @@ export function priorityPermissionsForRequest(request: Request): AdminPermission
   ) {
     return read ? ["cleaner.view"] : ["cleaner.edit"];
   }
-  if (path.includes("/reviews") || path.includes("/review-funnel")) {
+  if (
+    path.includes("/reviews") ||
+    path.includes("/review-funnel") ||
+    path.includes("/office-review-funnel")
+  ) {
     return read ? ["customer.view", "marketing.view"] : ["customer.contact"];
   }
   if (path.includes("/blog/")) {
