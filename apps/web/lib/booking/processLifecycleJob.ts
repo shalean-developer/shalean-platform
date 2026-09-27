@@ -1,6 +1,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 import { resolveBookingEmailLabelsFromRow } from "@/lib/notifications/bookingNotifyFormat";
+import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 
 import { normalizeEmail } from "@/lib/booking/normalizeEmail";
 
@@ -302,13 +303,15 @@ export async function processLifecycleJob(
 
 
 
+  const ownershipColumn = await resolveBookingOwnershipColumn(supabase);
+
   const { data: booking, error: bErr } = await supabase
 
     .from("bookings")
 
     .select(
 
-      "id, service, service_slug, booking_snapshot, location, suburb, status, completed_at, cleaner_id, is_team_job, team_id, date, time, user_id, recurring_id, is_recurring_generated, payment_status, amount_paid_cents, total_paid_cents, total_paid_zar",
+      `id, service, service_slug, booking_snapshot, location, suburb, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id, date, time, ${ownershipColumn}, recurring_id, is_recurring_generated, payment_status, amount_paid_cents, total_paid_cents, total_paid_zar`,
 
     )
 
@@ -561,11 +564,9 @@ export async function processLifecycleJob(
   const { serviceLabel, dateLabel, timeLabel, location } = resolveBookingEmailLabelsFromRow(bookingRow);
 
   const customerId =
-    typeof bookingRow.customer_id === "string"
-      ? bookingRow.customer_id
-      : typeof bookingRow.user_id === "string"
-        ? bookingRow.user_id
-        : null;
+    ownershipColumn === "customer_id"
+      ? (typeof bookingRow.customer_id === "string" ? bookingRow.customer_id : null)
+      : (typeof bookingRow.user_id === "string" ? bookingRow.user_id : null);
 
   let firstName: string | null = null;
   if (customerId) {
