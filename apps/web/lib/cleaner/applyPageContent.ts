@@ -36,7 +36,7 @@ export const CLEANER_APPLY_WORK_TYPES: ReadonlyArray<{
     Icon: Home,
     title: "Home cleaning",
     desc: "Regular upkeep for apartments and houses across Cape Town.",
-    tasks: ["Standard cleaning", "Deep cleaning", "Kitchen & bathrooms", "Bedrooms & living areas"],
+    tasks: ["Regular cleaning", "Deep cleaning", "Kitchen & bathrooms", "Bedrooms & living areas"],
   },
   {
     Icon: BedDouble,

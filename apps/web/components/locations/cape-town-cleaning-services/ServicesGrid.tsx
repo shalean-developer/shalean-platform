@@ -13,9 +13,9 @@ const services = [
   },
   {
     href: "/services/standard-cleaning-cape-town",
-    title: "Standard Cleaning",
+    title: "Regular Cleaning",
     description:
-      "Standard home cleaning in Cape Town for weekly or once-off visits—living areas, kitchens, bathrooms, and floors on a clear checklist.",
+      "Regular home cleaning in Cape Town for weekly or once-off visits—living areas, kitchens, bathrooms, and floors on a clear checklist.",
     icon: Home,
   },
   {

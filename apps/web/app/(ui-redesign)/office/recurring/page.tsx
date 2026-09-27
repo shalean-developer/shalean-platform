@@ -717,7 +717,7 @@ export default function RecurringPage() {
                           {customer.secondary && <p className="text-xs text-slate-400">{customer.secondary}</p>}
                           <p className="mt-0.5 font-mono text-[10px] text-slate-300">{plan.id.slice(0, 8)}…</p>
                         </td>
-                        <td className="px-4 py-3 align-top text-slate-600">{plan.service_label ?? "Standard Cleaning"}</td>
+                        <td className="px-4 py-3 align-top text-slate-600">{plan.service_label ?? "Regular Cleaning"}</td>
                         <td className="px-4 py-3 align-top text-slate-600">
                           <div>{FREQ_LABELS[plan.frequency.toLowerCase()] ?? plan.frequency}</div>
                           <div className="text-xs text-slate-400">{formatDays(plan.days_of_week ?? [])}</div>

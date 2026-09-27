@@ -6,11 +6,11 @@ export const SERVICES_HUB_FAQS = [
   },
   {
     q: "Do cleaners bring supplies?",
-    a: "Supplies depend on the service. Deep Cleaning and Move In / Out Cleaning include company-provided cleaning supplies. For Standard Cleaning and Airbnb Cleaning, customers provide the usual cleaning supplies unless a separate supplies arrangement or charge has been agreed. Check the booking scope for Office Cleaning and specialist services because requirements can differ.",
+    a: "Supplies depend on the service. Deep Cleaning and Move In / Out Cleaning include company-provided cleaning supplies. For Regular Cleaning and Airbnb Cleaning, customers provide the usual cleaning supplies unless a separate supplies arrangement or charge has been agreed. Check the booking scope for Office Cleaning and specialist services because requirements can differ.",
   },
   {
     q: "Can I book same-day?",
-    a: "Same-day slots appear when your address, job size, and live cleaner capacity line up — especially for compact standard visits. Start a booking to see the earliest open times; if today isn’t available, you can lock the next window without re-entering details.",
+    a: "Same-day slots appear when your address, job size, and live cleaner capacity line up — especially for compact regular visits. Start a booking to see the earliest open times; if today isn’t available, you can lock the next window without re-entering details.",
   },
   {
     q: "How long does cleaning take?",

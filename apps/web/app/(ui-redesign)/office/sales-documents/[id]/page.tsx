@@ -63,7 +63,7 @@ type CrmOpportunity = {
 type CrmActivity = { id: string; activity_type: string; body: string | null; created_at: string };
 
 const SERVICE_LABELS: Record<string, string> = {
-  standard: "Standard cleaning",
+  standard: "Regular cleaning",
   deep: "Deep cleaning",
   move_in_out: "Move in / move out",
   office: "Office cleaning",

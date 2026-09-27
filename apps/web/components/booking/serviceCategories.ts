@@ -44,7 +44,7 @@ export type ServiceCategory = {
 };
 
 export const SERVICE_TYPE_DISPLAY: Record<BookingServiceTypeKey, string> = {
-  standard_cleaning: "Standard Cleaning",
+  standard_cleaning: "Regular Cleaning",
   airbnb_cleaning: "Airbnb Cleaning",
   deep_cleaning: "Deep Cleaning",
   move_cleaning: "Move In/Out Cleaning",
@@ -110,7 +110,7 @@ export const SERVICE_CATEGORIES: ServiceCategory[] = [
     services: [
       {
         id: "standard",
-        name: "Standard Cleaning",
+        name: "Regular Cleaning",
         description: "Most popular for weekly cleaning",
         badge: "Most popular",
         baseTimeMultiplier: 1,

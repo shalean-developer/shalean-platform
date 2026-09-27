@@ -1,6 +1,6 @@
 /** Canonical service URLs — must match `CAPE_TOWN_SERVICE_SEO` paths. */
 export const MARKETING_SERVICE_NAV_LINKS = [
-  { label: "Standard Cleaning", href: "/services/standard-cleaning-cape-town" },
+  { label: "Regular Cleaning", href: "/services/standard-cleaning-cape-town" },
   { label: "Deep Cleaning", href: "/services/deep-cleaning-cape-town" },
   { label: "Move In / Out Cleaning", href: "/services/move-out-cleaning-cape-town" },
   { label: "Office Cleaning", href: "/services/office-cleaning-cape-town" },

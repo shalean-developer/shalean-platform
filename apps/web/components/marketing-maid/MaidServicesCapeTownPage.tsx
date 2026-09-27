@@ -391,7 +391,7 @@ export function MaidServicesCapeTownPage({ seoLocationLinks = [] }: MaidServices
             What&apos;s included in maid services
           </h2>
           <p className="mt-4 leading-relaxed text-slate-600">
-            Maintenance visits focus on keeping everyday spaces reset—aligned with standard cleaning scope unless you choose add-ons or
+            Maintenance visits focus on keeping everyday spaces reset—aligned with regular cleaning scope unless you choose add-ons or
             a deeper tier.
           </p>
           <ul className="mt-6 list-disc space-y-3 pl-5 text-slate-700 marker:text-blue-600">
@@ -400,8 +400,7 @@ export function MaidServicesCapeTownPage({ seoLocationLinks = [] }: MaidServices
             ))}
           </ul>
           <p className="mt-6 leading-relaxed text-slate-600">
-            Our cleaners arrive with standard cleaning supplies. If you have preferred products, you can request their use during
-            booking.
+            For regular home cleaning, customers provide the usual products and equipment unless a separate supplies option or charge is selected or agreed during booking.
           </p>
         </div>
       </section>
@@ -413,7 +412,7 @@ export function MaidServicesCapeTownPage({ seoLocationLinks = [] }: MaidServices
             Maid service prices in Cape Town
           </h2>
           <p className="mt-4 leading-relaxed text-slate-600">
-            Indicative bands align with how Shalean quotes standard maintenance scopes—your exact total still depends on bedrooms,
+            Indicative bands align with how Shalean quotes regular maintenance scopes—your exact total still depends on bedrooms,
             bathrooms, and add-ons.
           </p>
           <p className="mt-4 leading-relaxed text-slate-600">

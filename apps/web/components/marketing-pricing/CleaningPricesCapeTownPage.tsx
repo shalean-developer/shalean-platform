@@ -146,7 +146,7 @@ function buildCleaningPricesHubJsonLd(
 const pricingTierDefinitions = [
   {
     key: "standard",
-    name: "Standard Cleaning",
+    name: "Regular Cleaning",
     description: "Reliable maintenance cleaning for occupied homes.",
     href: svc["standard-cleaning-cape-town"].path,
   },

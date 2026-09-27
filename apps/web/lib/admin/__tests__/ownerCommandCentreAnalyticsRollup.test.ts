@@ -20,7 +20,7 @@ describe("loadOwnerCommandCentreAnalyticsRollup", () => {
           distinct_customers: "3",
           returning_customers: "2",
           service_pairs: [
-            { service: "Standard Cleaning", service_slug: "standard-cleaning", count: "2" },
+            { service: "Regular Cleaning", service_slug: "standard-cleaning", count: "2" },
             { service: null, service_slug: "standard-cleaning", count: 1 },
             { service: "Deep Cleaning", service_slug: "deep-cleaning", count: 1 },
           ],
@@ -46,7 +46,7 @@ describe("loadOwnerCommandCentreAnalyticsRollup", () => {
       totalBookingsWindow: 4,
       avgBookingValueZar: 600,
       bookingServices: [
-        { label: "Standard Cleaning", count: 3, revenueZar: null },
+        { label: "Regular Cleaning", count: 3, revenueZar: null },
         { label: "Deep Cleaning", count: 1, revenueZar: null },
       ],
     });
