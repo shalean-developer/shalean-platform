@@ -28,7 +28,7 @@ export type SeoInternalLink = { href: string; anchor: string };
  * Intent: do not sprinkle this href across every post — follow `PRICING_HUB_LINKING_GOVERNANCE` in
  * `lib/seo/blogGovernance.ts` (same folder as this module).
  */
-export const CAPE_TOWN_PRICING_AUTHORITY_HREF = "/services";
+export const CAPE_TOWN_PRICING_AUTHORITY_HREF = "/cleaning-prices-cape-town";
 
 /** Methodology + indicative bands (2026) — pair with {@link CAPE_TOWN_PRICING_AUTHORITY_HREF} on service pages, not as a duplicate hub link. */
 export const CAPE_TOWN_PRICING_EDUCATION_BLOG_HREF = "/blog/how-much-does-cleaning-cost-cape-town-2026" as const;
