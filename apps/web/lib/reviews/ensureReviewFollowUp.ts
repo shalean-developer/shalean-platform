@@ -6,15 +6,30 @@ import { evaluateCustomerReviewSubmissionEligibility } from "@/lib/reviews/custo
 const REVIEW_DELAY_MS = 30 * 60 * 1000;
 
 export type EnsureReviewFollowUpResult =
-  | { ok: true; created: boolean; reason: "created" | "existing_review" | "ineligible" | "missing_email" | "duplicate_job" }
+  | {
+      ok: true;
+      created: boolean;
+      reason:
+        | "created"
+        | "revived_existing_job"
+        | "existing_active_job"
+        | "existing_sent_job"
+        | "existing_review"
+        | "ineligible"
+        | "missing_email"
+        | "duplicate_job";
+    }
   | { ok: false; error: string };
 
 /**
- * Ensures one review_request lifecycle job exists after authoritative completion.
+ * Ensures one usable review_request lifecycle job exists after authoritative completion.
  *
  * This is intentionally completion-time, not payment-time only, so recurring,
  * monthly-invoice, admin-created, repaired and other legitimate completion paths
  * converge on the same customer review follow-up.
+ *
+ * Existing terminal/cancelled/skipped rows are revived because the unique
+ * (booking_id, job_type) contract would otherwise prevent a healthy replacement.
  */
 export async function ensureReviewFollowUpForCompletedBooking(
   supabase: SupabaseClient,
@@ -46,7 +61,10 @@ export async function ensureReviewFollowUpForCompletedBooking(
     .maybeSingle();
 
   if (reviewErr) {
-    await reportOperationalIssue("warn", "ensureReviewFollowUp", reviewErr.message, { bookingId, phase: "review_lookup" });
+    await reportOperationalIssue("warn", "ensureReviewFollowUp", reviewErr.message, {
+      bookingId,
+      phase: "review_lookup",
+    });
     return { ok: false, error: reviewErr.message };
   }
   if (existingReview) {
@@ -54,6 +72,59 @@ export async function ensureReviewFollowUpForCompletedBooking(
   }
 
   const scheduledFor = new Date(Date.now() + REVIEW_DELAY_MS).toISOString();
+
+  const { data: existingJob, error: jobLookupErr } = await supabase
+    .from("booking_lifecycle_jobs")
+    .select("id, status, sent_at")
+    .eq("booking_id", bookingId)
+    .eq("job_type", "review_request")
+    .maybeSingle();
+
+  if (jobLookupErr) {
+    await reportOperationalIssue("warn", "ensureReviewFollowUp", jobLookupErr.message, {
+      bookingId,
+      phase: "job_lookup",
+    });
+    return { ok: false, error: jobLookupErr.message };
+  }
+
+  if (existingJob) {
+    const status = String((existingJob as { status?: string | null }).status ?? "").trim().toLowerCase();
+    const sentAt = String((existingJob as { sent_at?: string | null }).sent_at ?? "").trim();
+
+    if (sentAt || status === "sent") {
+      return { ok: true, created: false, reason: "existing_sent_job" };
+    }
+    if (status === "pending" || status === "processing" || status === "failed_retryable") {
+      return { ok: true, created: false, reason: "existing_active_job" };
+    }
+
+    const { error: reviveErr } = await supabase
+      .from("booking_lifecycle_jobs")
+      .update({
+        customer_email: customerEmail,
+        status: "pending",
+        attempts: 0,
+        sent_at: null,
+        last_error: null,
+        skipped_reason: null,
+        processed_at: null,
+        scheduled_for: scheduledFor,
+        payload: { source: "completion_repair_v1" },
+      })
+      .eq("id", String((existingJob as { id: string }).id));
+
+    if (reviveErr) {
+      await reportOperationalIssue("warn", "ensureReviewFollowUp", reviveErr.message, {
+        bookingId,
+        phase: "job_revive",
+      });
+      return { ok: false, error: reviveErr.message };
+    }
+
+    return { ok: true, created: false, reason: "revived_existing_job" };
+  }
+
   const { error } = await supabase.from("booking_lifecycle_jobs").insert({
     booking_id: bookingId,
     user_id: null,
@@ -69,7 +140,10 @@ export async function ensureReviewFollowUpForCompletedBooking(
     if (error.code === "23505") {
       return { ok: true, created: false, reason: "duplicate_job" };
     }
-    await reportOperationalIssue("warn", "ensureReviewFollowUp", error.message, { bookingId, phase: "job_insert" });
+    await reportOperationalIssue("warn", "ensureReviewFollowUp", error.message, {
+      bookingId,
+      phase: "job_insert",
+    });
     return { ok: false, error: error.message };
   }
 
