@@ -13,7 +13,6 @@ import { completeCleanerReferralOnFirstJob, processCustomerReferralAfterFirstPai
 import { bookingCustomerKey } from "@/lib/booking/bookingCustomerIdentity";
 import { resolveBookingOwnershipColumn } from "@/lib/customer/customerBookingsForUser";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { repairRecentMissingReviewFollowUps } from "@/lib/reviews/ensureReviewFollowUp";
 import { recordAssignmentOutcomeAndLearn } from "@/lib/marketplace-intelligence/assignmentOutcomeFeedback";
 import { buildBookingEvent } from "@/lib/booking/bookingEvents";
 import { notifyBookingEvent } from "@/lib/notifications/notifyBookingEvent";
@@ -157,18 +156,17 @@ async function markPastBookingsCompleted(): Promise<{ completed: number }> {
         externalRef: id,
         metadata: { source: "cron_auto_complete_past_date" },
       });
-      void routeBookingNotificationEvent(event, { admin }).then((nav) => {
-        if (!nav.ok) {
-          void reportOperationalIssue(
-            "warn",
-            "cron/booking-lifecycle/routeBookingNotificationEvent(completed)",
-            nav.message,
-            { bookingId: id, code: nav.code },
-          );
-        }
-      });
+      const nav = await routeBookingNotificationEvent(event, { admin });
+      if (!nav.ok) {
+        await reportOperationalIssue(
+          "warn",
+          "cron/booking-lifecycle/routeBookingNotificationEvent(completed)",
+          nav.message,
+          { bookingId: id, code: nav.code },
+        );
+      }
     } else {
-      void notifyBookingEvent({ type: "completed", supabase: admin, bookingId: id });
+      await notifyBookingEvent({ type: "completed", supabase: admin, bookingId: id });
     }
 
     try {
@@ -290,19 +288,6 @@ export async function POST(request: Request) {
   });
 
   const complete = await markPastBookingsCompleted();
-
-  const reviewRepair = await repairRecentMissingReviewFollowUps(supabase, {
-    lookbackHours: 24,
-    limit: 20,
-  });
-  if (reviewRepair.created || reviewRepair.revived || reviewRepair.failed) {
-    void logSystemEvent({
-      level: reviewRepair.failed ? "warn" : "info",
-      source: "cron/booking-lifecycle",
-      message: "review_follow_up.repair",
-      context: reviewRepair,
-    });
-  }
 
   const { data: jobs, error: jobErr } = await supabase
     .from("booking_lifecycle_jobs")
