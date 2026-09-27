@@ -11,7 +11,7 @@ const CLEANER_ID = "44444444-4444-4444-8444-444444444444";
 
 function makeSupabase(opts?: {
   reviewExists?: boolean;
-  existingJob?: { id: string; status: string; sent_at: string | null } | null;
+  existingJob?: { id: string; status: string; sent_at: string | null; processed_at?: string | null } | null;
   insertError?: { code?: string; message: string } | null;
 }) {
   const state = {
@@ -133,6 +133,37 @@ describe("ensureReviewFollowUpForCompletedBooking", () => {
       processed_at: null,
     });
     expect(state.inserted).toBeNull();
+  });
+
+  it("revives a stale processing review job after the worker lease expires", async () => {
+    const staleProcessedAt = new Date(Date.now() - 11 * 60 * 1000).toISOString();
+    const { supabase, state } = makeSupabase({
+      existingJob: {
+        id: "job-stale-processing",
+        status: "processing",
+        sent_at: null,
+        processed_at: staleProcessedAt,
+      },
+    });
+    const result = await ensureReviewFollowUpForCompletedBooking(supabase, completedBooking());
+
+    expect(result).toMatchObject({ ok: true, created: false, reason: "revived_existing_job" });
+    expect(state.revived).toMatchObject({ status: "pending", processed_at: null, attempts: 0 });
+  });
+
+  it("leaves a fresh processing review job alone", async () => {
+    const { supabase, state } = makeSupabase({
+      existingJob: {
+        id: "job-fresh-processing",
+        status: "processing",
+        sent_at: null,
+        processed_at: new Date().toISOString(),
+      },
+    });
+    const result = await ensureReviewFollowUpForCompletedBooking(supabase, completedBooking());
+
+    expect(result).toMatchObject({ ok: true, created: false, reason: "existing_active_job" });
+    expect(state.revived).toBeNull();
   });
 
   it("leaves an already active review job alone", async () => {
