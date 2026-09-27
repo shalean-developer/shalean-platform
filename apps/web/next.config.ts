@@ -170,7 +170,7 @@ const nextConfig: NextConfig = {
       },
       {
         source: "/pricing",
-        destination: "/blog/how-much-does-cleaning-cost-cape-town-2026",
+        destination: "/cleaning-prices-cape-town",
         permanent: true,
       },
       {
