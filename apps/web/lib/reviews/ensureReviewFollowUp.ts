@@ -75,7 +75,7 @@ export async function ensureReviewFollowUpForCompletedBooking(
 
   const { data: existingJob, error: jobLookupErr } = await supabase
     .from("booking_lifecycle_jobs")
-    .select("id, status, sent_at")
+    .select("id, status, sent_at, processed_at")
     .eq("booking_id", bookingId)
     .eq("job_type", "review_request")
     .maybeSingle();
@@ -95,8 +95,19 @@ export async function ensureReviewFollowUpForCompletedBooking(
     if (sentAt || status === "sent") {
       return { ok: true, created: false, reason: "existing_sent_job" };
     }
-    if (status === "pending" || status === "processing" || status === "failed_retryable") {
+    if (status === "pending" || status === "failed_retryable") {
       return { ok: true, created: false, reason: "existing_active_job" };
+    }
+    if (status === "processing") {
+      const processedAt = Date.parse(
+        String((existingJob as { processed_at?: string | null }).processed_at ?? ""),
+      );
+      const processingLeaseMs = 10 * 60 * 1000;
+      if (Number.isFinite(processedAt) && Date.now() - processedAt < processingLeaseMs) {
+        return { ok: true, created: false, reason: "existing_active_job" };
+      }
+      // Stale processing means a worker likely died after claiming the row.
+      // Fall through to the same safe revive path as other recoverable states.
     }
 
     const { error: reviveErr } = await supabase
