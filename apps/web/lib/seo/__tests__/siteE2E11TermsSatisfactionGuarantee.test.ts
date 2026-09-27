@@ -6,31 +6,32 @@ const termsSource = readFileSync(
   join(process.cwd(), "app/terms-of-service/page.tsx"),
   "utf8",
 );
+const normalizedTermsSource = termsSource.replace(/\s+/g, " ");
 
 describe("SITE-E2E-11 satisfaction guarantee terms", () => {
   it("defines the satisfaction guarantee on the Terms page", () => {
-    expect(termsSource).toContain("Satisfaction guarantee");
-    expect(termsSource).toContain("confirmed cleaning scope");
-    expect(termsSource).toContain("reasonable cleaning standard");
-    expect(termsSource).toContain("corrective clean");
+    expect(normalizedTermsSource).toContain("Satisfaction guarantee");
+    expect(normalizedTermsSource).toContain("confirmed cleaning scope");
+    expect(normalizedTermsSource).toContain("reasonable cleaning standard");
+    expect(normalizedTermsSource).toContain("corrective clean");
   });
 
   it("defines material exclusions", () => {
-    expect(termsSource).toContain("pre-existing damage");
-    expect(termsSource).toContain("permanent stains or deterioration");
-    expect(termsSource).toContain("maintenance or repairs");
-    expect(termsSource).toContain("specialist remediation");
-    expect(termsSource).toContain("items excluded from the selected service");
+    expect(normalizedTermsSource).toContain("pre-existing damage");
+    expect(normalizedTermsSource).toContain("permanent stains or deterioration");
+    expect(normalizedTermsSource).toContain("maintenance or repairs");
+    expect(normalizedTermsSource).toContain("specialist remediation");
+    expect(normalizedTermsSource).toContain("items excluded from the selected service");
   });
 
   it("does not promise an automatic refund", () => {
-    expect(termsSource).toContain("is not automatic");
-    expect(termsSource).not.toContain("full refund");
-    expect(termsSource).not.toContain("automatic refund");
+    expect(normalizedTermsSource).toContain("is not automatic");
+    expect(normalizedTermsSource).not.toContain("full refund");
+    expect(normalizedTermsSource).not.toContain("automatic refund");
   });
 
   it("keeps the existing cancellation and contact sections present", () => {
-    expect(termsSource).toContain("Cancellations &amp; rescheduling");
-    expect(termsSource).toContain(">Contact</h2>");
+    expect(normalizedTermsSource).toContain("Cancellations &amp; rescheduling");
+    expect(normalizedTermsSource).toContain(">Contact</h2>");
   });
 });
