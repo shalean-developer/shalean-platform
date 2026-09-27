@@ -50,7 +50,7 @@ describe("reviewFunnelMetrics", () => {
   });
 
   it("continues past the first 500-row page", async () => {
-    const rows = Array.from({ length: 501 }, (_, i) => ({
+    const rows: Array<Record<string, unknown>> = Array.from({ length: 501 }, (_, i) => ({
       event_type: "review_prompt_sent",
       booking_id: `b-${i}`,
       payload: { sent: true },
