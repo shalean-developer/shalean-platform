@@ -54,7 +54,7 @@ describe("customerReviewFollowUpContract", () => {
     if (!r.allowed) expect(r.skipReason).toBe("review_prompt_booking_not_completed");
   });
 
-  it("prompt allows team job with team_id and no cleaner_id", () => {
+  it("prompt blocks team job until a resolvable lead cleaner exists", () => {
     expect(
       evaluateCustomerReviewPromptEligibility({
         status: "completed",
@@ -62,8 +62,9 @@ describe("customerReviewFollowUpContract", () => {
         is_team_job: true,
         team_id: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
         cleaner_id: null,
+        payout_owner_cleaner_id: null,
       }).allowed,
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("H-8: submission allows team job with payout_owner_cleaner_id even when cleaner_id is null", () => {
@@ -118,9 +119,17 @@ describe("customerReviewFollowUpContract", () => {
   });
 
   it("bookingHasReviewAssignee", () => {
-    expect(bookingHasReviewAssignee({ cleaner_id: "x" })).toBe(true);
-    expect(bookingHasReviewAssignee({ is_team_job: true, team_id: "y" })).toBe(true);
-    expect(bookingHasReviewAssignee({ is_team_job: true })).toBe(false);
+    expect(
+      bookingHasReviewAssignee({ cleaner_id: "cccccccc-cccc-4ccc-cccc-cccccccccccc" }),
+    ).toBe(true);
+    expect(
+      bookingHasReviewAssignee({
+        is_team_job: true,
+        team_id: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa",
+        payout_owner_cleaner_id: "bbbbbbbb-bbbb-4bbb-bbbb-bbbbbbbbbbbb",
+      }),
+    ).toBe(true);
+    expect(bookingHasReviewAssignee({ is_team_job: true, team_id: "aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa" })).toBe(false);
   });
 
   it("resolveReviewCleanerIdForSubmission: returns cleaner_id when set (single-cleaner path unchanged)", () => {
@@ -215,7 +224,7 @@ describe("customerReviewFollowUpContract", () => {
     expect(
       listCustomerReviewFollowUpIssues({
         status: "completed",
-        cleaner_id: "c1",
+        cleaner_id: "cccccccc-cccc-4ccc-cccc-cccccccccccc",
       }).length,
     ).toBe(0);
   });
