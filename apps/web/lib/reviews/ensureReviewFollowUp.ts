@@ -110,7 +110,7 @@ export async function ensureReviewFollowUpForCompletedBooking(
       // Fall through to the same safe revive path as other recoverable states.
     }
 
-    const { error: reviveErr } = await supabase
+    let reviveQuery = supabase
       .from("booking_lifecycle_jobs")
       .update({
         customer_email: customerEmail,
@@ -123,7 +123,27 @@ export async function ensureReviewFollowUpForCompletedBooking(
         scheduled_for: scheduledFor,
         payload: { source: "completion_repair_v1" },
       })
-      .eq("id", String((existingJob as { id: string }).id));
+      .eq("id", String((existingJob as { id: string }).id))
+      .is("sent_at", null);
+
+    // A stale processing worker may still finish concurrently. Fence revival
+    // against the exact processing lease we observed so we never overwrite a
+    // later successful send back to pending.
+    if (status === "processing") {
+      const observedProcessedAt = String(
+        (existingJob as { processed_at?: string | null }).processed_at ?? "",
+      ).trim();
+      reviveQuery = reviveQuery.eq("status", "processing");
+      if (observedProcessedAt) {
+        reviveQuery = reviveQuery.eq("processed_at", observedProcessedAt);
+      }
+    } else {
+      reviveQuery = reviveQuery.eq("status", status);
+    }
+
+    const { data: revivedRow, error: reviveErr } = await reviveQuery
+      .select("id")
+      .maybeSingle();
 
     if (reviveErr) {
       await reportOperationalIssue("warn", "ensureReviewFollowUp", reviveErr.message, {
@@ -131,6 +151,36 @@ export async function ensureReviewFollowUpForCompletedBooking(
         phase: "job_revive",
       });
       return { ok: false, error: reviveErr.message };
+    }
+
+    if (!revivedRow) {
+      // State changed after our read (most importantly: a concurrent worker may
+      // have sent successfully). Re-read instead of forcing the row backwards.
+      const { data: latestJob, error: latestErr } = await supabase
+        .from("booking_lifecycle_jobs")
+        .select("status, sent_at")
+        .eq("id", String((existingJob as { id: string }).id))
+        .maybeSingle();
+
+      if (latestErr) {
+        await reportOperationalIssue("warn", "ensureReviewFollowUp", latestErr.message, {
+          bookingId,
+          phase: "job_revive_reread",
+        });
+        return { ok: false, error: latestErr.message };
+      }
+
+      const latestStatus = String(
+        (latestJob as { status?: string | null } | null)?.status ?? "",
+      ).trim().toLowerCase();
+      const latestSentAt = String(
+        (latestJob as { sent_at?: string | null } | null)?.sent_at ?? "",
+      ).trim();
+
+      if (latestSentAt || latestStatus === "sent") {
+        return { ok: true, created: false, reason: "existing_sent_job" };
+      }
+      return { ok: true, created: false, reason: "existing_active_job" };
     }
 
     return { ok: true, created: false, reason: "revived_existing_job" };
