@@ -30,6 +30,8 @@ const SERVICE_DETAIL_FIELD_LABELS: Record<string, string> = {
   laundryIncluded: "Laundry included",
   keyCollection: "Key collection",
   turnoverTime: "Turnover time",
+  linens: "Linen service",
+  keyAccess: "Key access",
 };
 
 const ROOM_DETAIL_KEYS = new Set(["bedrooms", "bathrooms", "extraRooms", "rooms"]);
@@ -113,6 +115,18 @@ function formatServiceDetailValue(key: string, value: unknown): string | null {
     if (s === "no") return "No";
   }
   if (key === "carpetType") return humanizeBookingToken(s);
+  if (key === "linens") {
+    if (s === "change") return "Change linens";
+    if (s === "no_change") return "No linen change";
+    return humanizeBookingToken(s);
+  }
+  if (key === "keyAccess") {
+    if (s === "smart_lock") return "Smart lock";
+    if (s === "lockbox") return "Lockbox";
+    if (s === "meet_host") return "Meet host";
+    if (s === "key_collection") return "Key collection";
+    return humanizeBookingToken(s);
+  }
   if (key === "cleaningProducts" || key === "furnished" || key === "laundryIncluded") {
     if (s === "yes") return "Yes";
     if (s === "no") return "No";
