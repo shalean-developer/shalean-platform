@@ -22,7 +22,7 @@ describe("legacyMarketingRedirectMatrix", () => {
     );
     expect(resolveLegacyMarketingExactRedirect("/cleaning-prices-cape-town")).toBeNull();
     expect(resolveLegacyMarketingExactRedirect("/pricing")?.destination).toBe(
-      "/blog/how-much-does-cleaning-cost-cape-town-2026",
+      "/cleaning-prices-cape-town",
     );
   });
 
