@@ -357,8 +357,8 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
         a: "It depends on home size, bathrooms, extras, and how much build-up there is. Larger Southern Suburb homes and post-renovation resets need more time than a compact apartment. You choose bedrooms, bathrooms, and add-ons online so we can allocate a realistic visit length before the team arrives.",
       },
       {
-        q: "What is the difference between deep cleaning and standard cleaning?",
-        a: "Standard cleaning maintains a weekly baseline—surfaces, floors, kitchens, and bathrooms on a lighter schedule. Deep cleaning spends extra time on detail zones like grout lines, appliance fronts, skirting, and bathrooms that have accumulated limescale or grease. If you are unsure, start a quote and compare what each tier includes for your rooms.",
+        q: "What is the difference between deep cleaning and regular cleaning?",
+        a: "Regular cleaning maintains a weekly baseline—surfaces, floors, kitchens, and bathrooms on a lighter schedule. Deep cleaning spends extra time on detail zones like grout lines, appliance fronts, skirting, and bathrooms that have accumulated limescale or grease. If you are unsure, start a quote and compare what each tier includes for your rooms.",
       },
       {
         q: "Do I need to be home while the cleaners work?",
@@ -377,31 +377,31 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
   "standard-cleaning-cape-town": {
     slug: "standard-cleaning-cape-town",
     path: "/services/standard-cleaning-cape-town",
-    title: "Standard Home Cleaning Cape Town | Book Online | Shalean",
+    title: "Regular Home Cleaning Cape Town | Book Online | Shalean",
     description:
       "House cleaning in Cape Town for weekly or once-off visits—kitchens, bathrooms, and floors on a checklist you confirm online. Transparent quotes with Shalean.",
     ogImage: "/images/marketing/standard-cleaning-cape-town-kitchen.webp",
-    h1: "Standard home cleaning services in Cape Town",
+    h1: "Regular home cleaning services in Cape Town",
     schemaName: "Cleaning Services Cape Town | Shalean",
-    bookingLabel: "standard cleaning",
-    introSectionHeading: "How standard cleaning works in Cape Town",
+    bookingLabel: "regular cleaning",
+    introSectionHeading: "How regular cleaning works in Cape Town",
     includedSectionHeading: "What's included in our cleaning service",
     neighbourhoodBlogGuide: {
       areaName: "Claremont",
       blogPath: "/locations/claremont-cleaning-services",
-      linkAnchorText: "standard cleaning guide for Claremont",
+      linkAnchorText: "regular cleaning guide for Claremont",
     },
     extraNeighbourhoodBlogGuides: [
       {
         areaName: "Sea Point",
         blogPath: "/locations/sea-point-cleaning-services",
-        linkAnchorText: "standard cleaning guide for Sea Point",
+        linkAnchorText: "regular cleaning guide for Sea Point",
       },
     ],
     areasSectionIntro:
       "We serve Sea Point, Claremont, Observatory, and suburbs across the metro—add your address at checkout to confirm availability and get suburb-aware routing notes.",
     explanation: [
-      "Standard cleaning keeps Cape Town apartments and houses in a steady rhythm: floors walked daily, kitchens used nightly, and bathrooms that need dependable sanitisation without booking a full deep clean every time.",
+      "Regular cleaning keeps Cape Town apartments and houses in a steady rhythm: floors walked daily, kitchens used nightly, and bathrooms that need dependable sanitisation without booking a full deep clean every time.",
       "It suits professionals near the CBD, families in the Southern Suburbs, and lock-up-and-go homes that still deserve a reliable reset on a predictable schedule.",
       "Think maintenance, not recovery: visits stay within the dwell you booked so weekly or fortnightly plans stay honest. When wet rooms or kitchens outgrow that clock, switch tier for a single deeper visit, then return here.",
     ],
@@ -428,28 +428,28 @@ export const CAPE_TOWN_SERVICE_SEO: Record<CapeTownSeoServiceSlug, CapeTownServi
     ],
     heroImage: {
       src: "/images/marketing/standard-cleaning-cape-town-kitchen.webp",
-      alt: "Professional standard home cleaning service in a Cape Town kitchen and living space",
+      alt: "Professional regular home cleaning service in a Cape Town kitchen and living space",
     },
     faqs: [
       {
-        q: "Can I book recurring standard cleaning for my Cape Town home?",
+        q: "Can I book recurring regular cleaning for my Cape Town home?",
         a: "Yes. Weekly, bi-weekly, and monthly schedules are common for apartments and family homes that want a steady baseline. You set bedrooms, bathrooms, and extras online, then adjust frequency after your first visit if your needs change.",
       },
       {
-        q: "What is typically included in a standard home clean?",
-        a: "Standard visits focus on high-use areas: kitchen surfaces and sink, bathroom sanitisation, dusting of reachable surfaces, vacuuming carpets and rugs where applicable, and mopping hard floors according to your booking scope. Exact inclusions follow the checklist tied to your quote.",
+        q: "What is typically included in a regular home clean?",
+        a: "Regular visits focus on high-use areas: kitchen surfaces and sink, bathroom sanitisation, dusting of reachable surfaces, vacuuming carpets and rugs where applicable, and mopping hard floors according to your booking scope. Exact inclusions follow the checklist tied to your quote.",
       },
       {
-        q: "How do I know what standard cleaning will cost before I pay?",
+        q: "How do I know what regular cleaning will cost before I pay?",
         a: "Pricing is based on home size, bedrooms, bathrooms, extras, and your selected time slot. Shalean shows a live total during booking so you can compare options before checkout—no surprise surcharges for items that are already in your selected scope.",
       },
       {
-        q: "Who provides supplies and equipment for standard cleaning?",
-        a: "For standard cleaning, the customer provides suitable products and equipment by default. If you need Shalean to bring supplies, select the available paid option during booking; any applicable delivery or area charge must be shown before checkout. Add surface-specific instructions to your booking notes.",
+        q: "Who provides supplies and equipment for regular cleaning?",
+        a: "For regular cleaning, the customer provides suitable products and equipment by default. If you need Shalean to bring supplies, select the available paid option during booking; any applicable delivery or area charge must be shown before checkout. Add surface-specific instructions to your booking notes.",
       },
       {
-        q: "What if my home needs more than standard cleaning this month?",
-        a: "You can book a deeper tier for a single visit when bathrooms or kitchens have extra build-up, then return to standard cadence afterwards. Compare tiers in the booking flow so time and pricing match the condition you are seeing today.",
+        q: "What if my home needs more than regular cleaning this month?",
+        a: "You can book a deeper tier for a single visit when bathrooms or kitchens have extra build-up, then return to regular cadence afterwards. Compare tiers in the booking flow so time and pricing match the condition you are seeing today.",
       },
     ],
   },
