@@ -130,7 +130,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Could not save your review. Please try again." }, { status: 500 });
   }
 
-  logReviewKpiEvent("review_submitted", { booking_id: bookingId, rating, source: "api_post" });
+  const kpi = await logReviewKpiEvent("review_submitted", {
+    booking_id: bookingId,
+    rating,
+    source: "api_post",
+  });
+  if (!kpi.ok) {
+    await reportOperationalIssue("warn", "api/bookings/review", kpi.error, {
+      bookingId,
+      phase: "review_submitted_kpi",
+    });
+  }
   return NextResponse.json({ ok: true });
 }
 
