@@ -379,7 +379,10 @@ export async function processLifecycleJob(
 
   const bookingRow = booking as Record<string, unknown>;
   const snap = (bookingRow.booking_snapshot as BookingSnapshotV1 | null | undefined) ?? null;
-  const userId = typeof bookingRow.user_id === "string" ? bookingRow.user_id : null;
+  const userId =
+    ownershipColumn === "customer_id"
+      ? (typeof bookingRow.customer_id === "string" ? bookingRow.customer_id : null)
+      : (typeof bookingRow.user_id === "string" ? bookingRow.user_id : null);
 
   if (isBookingCancelledForLifecycle(bookingRow)) {
 
