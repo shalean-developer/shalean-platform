@@ -100,7 +100,7 @@ export async function runRecurringPaymentLinkFallback(admin: SupabaseClient, boo
     .update({
       payment_link: init.authorizationUrl,
       payment_link_expires_at: expiresAt,
-      ...(preservedUserId ? { user_id: preservedUserId } : {}),
+      ...(preservedUserId ? { [ownershipColumn]: preservedUserId } : {}),
     })
     .eq("id", bookingId)
     .eq("status", "pending_payment");
