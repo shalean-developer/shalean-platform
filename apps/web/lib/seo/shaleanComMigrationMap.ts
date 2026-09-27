@@ -53,7 +53,7 @@ export type ShaleanComMigrationRule = {
   readonly note?: string;
 };
 
-const PRICING_DEST = "/blog/how-much-does-cleaning-cost-cape-town-2026";
+const PRICING_DEST = "/cleaning-prices-cape-town";
 
 /** Explicit high-value WordPress / legacy `.com` paths with known `.co.za` equivalents. */
 const EXPLICIT_COM_RULES: readonly ShaleanComMigrationRule[] = [
