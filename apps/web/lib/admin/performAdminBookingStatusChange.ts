@@ -23,6 +23,7 @@ import { persistCleanerPayoutIfUnset } from "@/lib/payout/persistCleanerPayout";
 import { logSystemEvent, reportOperationalIssue } from "@/lib/logging/systemLog";
 import { canonicalDbBookingStatus } from "@/lib/booking/canonicalBookingStatus";
 import { evaluateCleanerJobCompletionGate } from "@/lib/cleaner/cleanerJobCompletionGate";
+import { ensureReviewFollowUpForCompletedBooking } from "@/lib/reviews/ensureReviewFollowUp";
 
 export type PerformAdminBookingStatusChangeParams = {
   admin: SupabaseClient;
@@ -260,6 +261,27 @@ export async function performAdminBookingStatusChange(
 
   if (intrStatus === "completed") {
     void ensureCleanerEarningsLedgerRow({ admin, bookingId });
+
+    const { data: reviewBooking, error: reviewBookingErr } = await admin
+      .from("bookings")
+      .select(
+        "id, customer_email, status, completed_at, cleaner_id, payout_owner_cleaner_id, is_team_job, team_id",
+      )
+      .eq("id", bookingId)
+      .maybeSingle();
+    if (reviewBookingErr) {
+      void reportOperationalIssue(
+        "warn",
+        "admin_booking_change_status",
+        "review follow-up booking refetch failed",
+        { bookingId, error: reviewBookingErr.message },
+      );
+    } else if (reviewBooking) {
+      await ensureReviewFollowUpForCompletedBooking(
+        admin,
+        reviewBooking as Record<string, unknown>,
+      );
+    }
   }
 
   const bd = typeof beforeRow.date === "string" ? beforeRow.date.trim() : "";
