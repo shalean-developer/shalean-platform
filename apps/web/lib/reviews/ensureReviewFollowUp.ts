@@ -198,9 +198,6 @@ export async function repairRecentMissingReviewFollowUps(
   let offset = 0;
   let repairs = 0;
 
-  // Scan through the bounded lookback window and apply the repair limit only
-  // to rows that actually need creation/revival. Healthy recent bookings must
-  // not permanently hide older missing follow-ups below a SQL LIMIT.
   while (offset < maxScan && repairs < repairLimit) {
     const { data, error } = await supabase
       .from("bookings")
@@ -225,8 +222,73 @@ export async function repairRecentMissingReviewFollowUps(
     const rows = (data ?? []) as Record<string, unknown>[];
     if (rows.length === 0) break;
 
+    const ids = rows.map((row) => String(row.id ?? "").trim()).filter(Boolean);
+    const [{ data: existingJobs, error: jobsErr }, { data: existingReviews, error: reviewsErr }] =
+      await Promise.all([
+        supabase
+          .from("booking_lifecycle_jobs")
+          .select("booking_id, status, sent_at, processed_at")
+          .in("booking_id", ids)
+          .eq("job_type", "review_request"),
+        supabase.from("reviews").select("booking_id").in("booking_id", ids),
+      ]);
+
+    if (jobsErr || reviewsErr) {
+      const message = jobsErr?.message ?? reviewsErr?.message ?? "review repair batch lookup failed";
+      await reportOperationalIssue("warn", "repairRecentReviewFollowUps", message, {
+        phase: "batch_lookup",
+        offset,
+      });
+      out.failed++;
+      break;
+    }
+
+    const reviewed = new Set(
+      (existingReviews ?? []).map((row) => String((row as { booking_id?: string }).booking_id ?? "")).filter(Boolean),
+    );
+    const jobsByBooking = new Map<string, { status: string; sent_at: string | null; processed_at: string | null }>();
+    for (const row of existingJobs ?? []) {
+      const bookingId = String((row as { booking_id?: string }).booking_id ?? "").trim();
+      if (!bookingId) continue;
+      jobsByBooking.set(bookingId, {
+        status: String((row as { status?: string | null }).status ?? "").trim().toLowerCase(),
+        sent_at: (row as { sent_at?: string | null }).sent_at ?? null,
+        processed_at: (row as { processed_at?: string | null }).processed_at ?? null,
+      });
+    }
+
     for (const row of rows) {
       out.scanned++;
+      const bookingId = String(row.id ?? "").trim();
+      if (!bookingId) {
+        out.skipped++;
+        continue;
+      }
+
+      if (reviewed.has(bookingId)) {
+        out.skipped++;
+        continue;
+      }
+
+      const existing = jobsByBooking.get(bookingId);
+      if (existing) {
+        if (existing.sent_at || existing.status === "sent") {
+          out.alreadyHealthy++;
+          continue;
+        }
+        if (existing.status === "pending" || existing.status === "failed_retryable") {
+          out.alreadyHealthy++;
+          continue;
+        }
+        if (existing.status === "processing") {
+          const processedAt = Date.parse(String(existing.processed_at ?? ""));
+          if (Number.isFinite(processedAt) && Date.now() - processedAt < 10 * 60 * 1000) {
+            out.alreadyHealthy++;
+            continue;
+          }
+        }
+      }
+
       const result = await ensureReviewFollowUpForCompletedBooking(supabase, row);
       if (!result.ok) {
         out.failed++;
