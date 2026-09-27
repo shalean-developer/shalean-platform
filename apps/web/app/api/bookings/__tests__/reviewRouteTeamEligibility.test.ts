@@ -10,7 +10,7 @@ vi.mock("@/lib/supabase/admin", () => ({
 }));
 
 vi.mock("@/lib/reviews/reviewKpiServer", () => ({
-  logReviewKpiEvent: vi.fn(),
+  logReviewKpiEvent: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 vi.mock("@/lib/customer/customerBookingsForUser", () => ({
