@@ -266,6 +266,34 @@ describe("observed-state payment writes", () => {
       );
     }
   }
+  it("recovers an observed payment_expired booking through the same guarded finalizer", async () => {
+    const expired = { ...anchor, status: "payment_expired" };
+    const db = database(expired);
+    const result = await finalizePendingPaymentBookingFromPaystack({
+      supabase: db.client,
+      observed: expired,
+      row: {
+        customer_email: "customer@example.com",
+        customer_id: "owner-a",
+        paystack_reference: "pay_verified",
+        amount_paid_cents: 12550,
+        status: "pending",
+        payment_status: "success",
+      },
+      ownershipColumn: "customer_id",
+    });
+
+    expect(result.error).toBeNull();
+    expect(db.predicates).toContainEqual(["eq", "status", "payment_expired"]);
+    expect(db.current).toMatchObject({
+      status: "pending",
+      payment_status: "success",
+      amount_paid_cents: 12550,
+      total_paid_cents: 12550,
+      total_paid_zar: 126,
+    });
+  });
+
   it("mismatch/reconciliation writes share the same zero-row conflict contract", async () => {
     const db = database(anchor, { customer_id: "claimed-owner" });
     const result = await updateObservedPendingPaymentBooking({
